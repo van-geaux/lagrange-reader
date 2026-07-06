@@ -1,0 +1,532 @@
+package com.bookorbit.android
+
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import java.io.File
+import java.util.Locale
+
+@Composable
+fun BookOrbitApp(
+    screen: AppScreen,
+    coordinator: AppCoordinator
+) {
+    when (screen) {
+        AppScreen.Loading -> LoadingScreen()
+        AppScreen.ServerSetup -> ServerSetupScreen(onContinue = coordinator::saveServer)
+        is AppScreen.Login -> LoginScreen(
+            serverUrl = screen.serverUrl,
+            message = screen.message,
+            onChangeServer = coordinator::clearServer,
+            onAuthenticated = coordinator::refreshLoginState
+        )
+        is AppScreen.Browser -> LibraryBrowserScreen(
+            state = screen.browserState,
+            onRefresh = coordinator::loadBrowser,
+            onLibrarySelected = coordinator::selectLibrary,
+            onBookOpen = coordinator::openBook,
+            onDownload = coordinator::downloadBook
+        )
+        is AppScreen.Reader -> ReaderScreen(
+            state = screen.readerState,
+            onBack = coordinator::closeReader,
+            onProgress = coordinator::onProgress
+        )
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerSetupScreen(onContinue: (String) -> Unit) {
+    var server by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Scaffold(
+        topBar = { CenterAlignedTopAppBar(title = { Text("BookOrbit") }) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(24.dp)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("Connect to a BookOrbit server", style = MaterialTheme.typography.headlineSmall)
+            Text("Enter the base URL. The app will open the server sign-in page next.")
+            OutlinedTextField(
+                value = server,
+                onValueChange = {
+                    server = it
+                    error = null
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Server URL") },
+                placeholder = { Text("https://books.example.com") }
+            )
+            error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
+            Button(
+                onClick = {
+                    val normalized = normalizeServerUrl(server)
+                    if (normalized == null) {
+                        error = "Enter a valid server URL."
+                    } else {
+                        onContinue(normalized)
+                    }
+                }
+            ) {
+                Text("Continue")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LoginScreen(
+    serverUrl: String,
+    message: String?,
+    onChangeServer: () -> Unit,
+    onAuthenticated: () -> Unit
+) {
+    LaunchedEffect(serverUrl) {
+        while (isActive) {
+            delay(1500)
+            onAuthenticated()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Sign in") },
+                actions = { TextButton(onClick = onChangeServer) { Text("Change server") } }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            if (!message.isNullOrBlank()) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = true
+                        settings.allowContentAccess = true
+                        webChromeClient = WebChromeClient()
+                        webViewClient = WebViewClient()
+                        loadUrl(serverUrl)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryBrowserScreen(
+    state: BrowserState,
+    onRefresh: () -> Unit,
+    onLibrarySelected: (String) -> Unit,
+    onBookOpen: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Libraries") },
+                actions = { TextButton(onClick = onRefresh) { Text("Refresh") } }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    text = state.serverUrl,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+            state.message?.let { message ->
+                item {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.libraries.forEach { library ->
+                        FilterChip(
+                            selected = library.id == state.selectedLibraryId,
+                            onClick = { onLibrarySelected(library.id) },
+                            label = { Text(library.name) }
+                        )
+                    }
+                }
+            }
+            item {
+                Text(
+                    text = if (state.selectedLibraryId == null) "Select a library" else "Books",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            items(state.books) { book ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = book.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        book.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        Text(
+                            text = bookStatus(book),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onBookOpen(book) }) {
+                                Text(if (book.isDownloaded) "Open local" else "Read / Listen")
+                            }
+                            if (!book.isDownloaded && book.fileId != null) {
+                                OutlinedButton(onClick = { onDownload(book) }) {
+                                    Text("Download")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReaderScreen(
+    state: ReaderState,
+    onBack: () -> Unit,
+    onProgress: (BookSummary, Long, Int, Float?) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(state.book.title) },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            when (state.book.mediaKind) {
+                MediaKind.AUDIO -> AudioReader(
+                    file = state.localFile,
+                    streamUrl = state.streamUrl,
+                    lastKnownPosition = state.lastKnownPosition,
+                    onProgress = { position, percent ->
+                        onProgress(state.book, position, 0, percent)
+                    }
+                )
+                MediaKind.PDF -> PdfReaderView(
+                    file = state.localFile,
+                    initialPage = state.pageIndex,
+                    onProgress = { pageIndex, percent ->
+                        onProgress(state.book, 0L, pageIndex, percent)
+                    }
+                )
+                else -> GenericReaderView(
+                    title = state.book.title,
+                    file = state.localFile,
+                    streamUrl = state.streamUrl
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioReader(
+    file: File?,
+    streamUrl: String?,
+    lastKnownPosition: Long,
+    onProgress: (Long, Float?) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = remember(context) { ExoPlayer.Builder(context).build() }
+
+    DisposableEffect(player, file, streamUrl, lastKnownPosition) {
+        val uri = when {
+            file != null && file.exists() -> Uri.fromFile(file)
+            !streamUrl.isNullOrBlank() -> Uri.parse(streamUrl)
+            else -> null
+        }
+        if (uri != null) {
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.prepare()
+            if (lastKnownPosition > 0) {
+                player.seekTo(lastKnownPosition)
+            }
+            player.playWhenReady = true
+        }
+        onDispose {
+            player.release()
+        }
+    }
+
+    LaunchedEffect(player) {
+        while (isActive) {
+            val duration = player.duration
+            val percent = if (duration > 0L) player.currentPosition.toFloat() / duration.toFloat() else null
+            onProgress(player.currentPosition, percent)
+            delay(1500)
+        }
+    }
+
+    AndroidView(
+        modifier = Modifier.fillMaxWidth(),
+        factory = { viewContext ->
+            PlayerView(viewContext).apply {
+                this.player = player
+            }
+        }
+    )
+}
+
+@Composable
+private fun PdfReaderView(
+    file: File?,
+    initialPage: Int,
+    onProgress: (Int, Float?) -> Unit
+) {
+    if (file == null || !file.exists()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("This title must be downloaded before reading offline.")
+        }
+        return
+    }
+
+    val pageCount = remember(file) { readPdfPageCount(file) }
+    var currentPage by remember(file, initialPage) {
+        mutableStateOf(initialPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)))
+    }
+    val pageBitmap by produceState<Bitmap?>(initialValue = null, file, currentPage) {
+        value = renderPdfPage(file, currentPage)
+    }
+
+    LaunchedEffect(currentPage, pageCount) {
+        val percent = if (pageCount > 0) currentPage.toFloat() / pageCount.toFloat() else null
+        onProgress(currentPage, percent)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Page ${currentPage + 1} of ${pageCount.coerceAtLeast(1)}")
+        pageBitmap?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = "PDF page",
+                modifier = Modifier.fillMaxWidth()
+            )
+        } ?: Text("Unable to render PDF.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { currentPage = (currentPage - 1).coerceAtLeast(0) },
+                enabled = currentPage > 0
+            ) {
+                Text("Previous")
+            }
+            Button(
+                onClick = { currentPage = (currentPage + 1).coerceAtMost((pageCount - 1).coerceAtLeast(0)) },
+                enabled = currentPage < pageCount - 1
+            ) {
+                Text("Next")
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenericReaderView(
+    title: String,
+    file: File?,
+    streamUrl: String?
+) {
+    val target = when {
+        file != null && file.exists() -> Uri.fromFile(file).toString()
+        !streamUrl.isNullOrBlank() -> streamUrl
+        else -> null
+    }
+    if (target == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No reader target available for $title")
+        }
+        return
+    }
+
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                webViewClient = WebViewClient()
+                loadUrl(target)
+            }
+        }
+    )
+}
+
+private fun bookStatus(book: BookSummary): String {
+    val parts = mutableListOf(book.mediaKind.name.lowercase(Locale.US))
+    book.progressLabel?.takeIf { it.isNotBlank() }?.let(parts::add)
+    if (book.isDownloaded) {
+        parts += "downloaded"
+    }
+    return parts.joinToString(" | ")
+}
+
+private fun readPdfPageCount(file: File): Int {
+    return runCatching {
+        val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        try {
+            val renderer = PdfRenderer(descriptor)
+            try {
+                renderer.pageCount
+            } finally {
+                renderer.close()
+            }
+        } finally {
+            descriptor.close()
+        }
+    }.getOrDefault(0)
+}
+
+private fun renderPdfPage(file: File, pageIndex: Int): Bitmap? {
+    return runCatching {
+        val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        try {
+            val renderer = PdfRenderer(descriptor)
+            try {
+                val safeIndex = pageIndex.coerceIn(0, renderer.pageCount.coerceAtLeast(1) - 1)
+                val page = renderer.openPage(safeIndex)
+                try {
+                    Bitmap.createBitmap(
+                        page.width.coerceAtLeast(1),
+                        page.height.coerceAtLeast(1),
+                        Bitmap.Config.ARGB_8888
+                    ).also { bitmap ->
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    }
+                } finally {
+                    page.close()
+                }
+            } finally {
+                renderer.close()
+            }
+        } finally {
+            descriptor.close()
+        }
+    }.getOrNull()
+}
+
+private fun normalizeServerUrl(value: String): String? {
+    val raw = value.trim()
+    if (raw.isBlank()) {
+        return null
+    }
+    val prefixed = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
+        raw
+    } else {
+        "http://$raw"
+    }
+    val uri = Uri.parse(prefixed)
+    val scheme = uri.scheme ?: return null
+    val host = uri.host ?: return null
+    val port = if (uri.port > 0) ":${uri.port}" else ""
+    val path = uri.path?.takeIf { it.isNotBlank() && it != "/" }?.trimEnd('/') ?: ""
+    return "$scheme://$host$port$path"
+}
