@@ -160,13 +160,38 @@ class BookOrbitRepository(private val context: Context) {
             return@withContext
         }
         val survivors = mutableListOf<ProgressUpdate>()
-        pending.sortedBy { it.updatedAtMillis }.forEach { item ->
-            val synced = runCatching { postProgress(item) }.getOrDefault(false)
-            if (!synced) {
+        val orderedPending = pending.sortedBy { it.updatedAtMillis }
+        var authBlocked = false
+        orderedPending.forEachIndexed { index, item ->
+            if (authBlocked) {
                 survivors += item
+                return@forEachIndexed
             }
+            runCatching { postProgress(item) }
+                .onFailure { error ->
+                    if (error is AuthenticationRequiredException) {
+                        authBlocked = true
+                        survivors += item
+                        survivors += orderedPending.drop(index + 1)
+                    } else {
+                        survivors += item
+                    }
+                }
+                .getOrNull()
         }
         queueStore.replaceAll(survivors)
+    }
+
+    suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url(serverUrl.trimEnd('/') + "/")
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        }.getOrDefault(false)
     }
 
     private suspend fun postProgress(item: ProgressUpdate): Boolean = withContext(Dispatchers.IO) {
@@ -240,7 +265,7 @@ class BookOrbitRepository(private val context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
-                error("Authentication required.")
+                throw AuthenticationRequiredException()
             }
             if (!response.isSuccessful) {
                 error("Request failed with HTTP ${response.code}.")
@@ -408,6 +433,8 @@ class BookOrbitRepository(private val context: Context) {
         val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
+
+private class AuthenticationRequiredException : IllegalStateException("Authentication required.")
 
 private class WebViewCookieJar : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {

@@ -18,7 +18,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             _screen.value = AppScreen.Loading
             val serverUrl = repository.getServerUrl()
             if (serverUrl.isNullOrBlank()) {
-                _screen.value = AppScreen.ServerSetup
+                _screen.value = AppScreen.ServerSetup()
                 return@launch
             }
 
@@ -32,18 +32,21 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun saveServer(serverUrl: String) {
         scope.launch {
+            if (!repository.canReachServer(serverUrl)) {
+                _screen.value = AppScreen.ServerSetup(
+                    message = "Unable to reach that server. Check the URL and try again."
+                )
+                return@launch
+            }
             repository.setServerUrl(serverUrl)
-            _screen.value = AppScreen.Login(
-                serverUrl = repository.getServerUrl().orEmpty(),
-                message = "Connect to the server and complete sign in."
-            )
+            _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Connect to the server and complete sign in.")
         }
     }
 
     fun clearServer() {
         scope.launch {
             repository.clearServer()
-            _screen.value = AppScreen.ServerSetup
+            _screen.value = AppScreen.ServerSetup()
         }
     }
 
@@ -51,7 +54,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         scope.launch {
             val serverUrl = repository.getServerUrl()
             if (serverUrl.isNullOrBlank()) {
-                _screen.value = AppScreen.ServerSetup
+                _screen.value = AppScreen.ServerSetup()
                 return@launch
             }
             if (repository.isAuthenticated()) {

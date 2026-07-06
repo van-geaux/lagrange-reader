@@ -23,13 +23,15 @@ class ProgressQueueStore(context: Context) {
     }
 
     suspend fun enqueue(update: ProgressUpdate) = mutex.withLock {
-        val current = readUnlocked().toMutableList()
+        val current = readUnlocked()
+            .filterNot { it.matchesTarget(update) }
+            .toMutableList()
         current += update
         writeUnlocked(current)
     }
 
     suspend fun replaceAll(items: List<ProgressUpdate>) = mutex.withLock {
-        writeUnlocked(items)
+        writeUnlocked(compact(items))
     }
 
     suspend fun clear() = mutex.withLock {
@@ -55,7 +57,7 @@ class ProgressQueueStore(context: Context) {
 
     private fun writeUnlocked(items: List<ProgressUpdate>) {
         val array = JSONArray()
-        items.forEach { item ->
+        compact(items).forEach { item ->
             array.put(
                 JSONObject().apply {
                     put("id", item.id)
@@ -74,6 +76,14 @@ class ProgressQueueStore(context: Context) {
         file.writeText(array.toString())
     }
 
+    private fun compact(items: List<ProgressUpdate>): List<ProgressUpdate> {
+        val latestByTarget = LinkedHashMap<String, ProgressUpdate>()
+        items.sortedBy { it.updatedAtMillis }.forEach { item ->
+            latestByTarget[item.targetKey()] = item
+        }
+        return latestByTarget.values.sortedBy { it.updatedAtMillis }
+    }
+
     private fun JSONObject.toUpdate(): ProgressUpdate {
         return ProgressUpdate(
             id = optString("id"),
@@ -86,5 +96,13 @@ class ProgressQueueStore(context: Context) {
             progressPercent = if (has("progressPercent") && !isNull("progressPercent")) optDouble("progressPercent").toFloat() else null,
             updatedAtMillis = optLong("updatedAtMillis")
         )
+    }
+
+    private fun ProgressUpdate.matchesTarget(other: ProgressUpdate): Boolean {
+        return targetKey() == other.targetKey()
+    }
+
+    private fun ProgressUpdate.targetKey(): String {
+        return listOf(serverUrl, mediaKind.name, bookId, fileId.orEmpty()).joinToString("|")
     }
 }

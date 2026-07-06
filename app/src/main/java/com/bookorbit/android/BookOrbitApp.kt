@@ -59,7 +59,10 @@ fun BookOrbitApp(
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
-        AppScreen.ServerSetup -> ServerSetupScreen(onContinue = coordinator::saveServer)
+        is AppScreen.ServerSetup -> ServerSetupScreen(
+            message = screen.message,
+            onContinue = coordinator::saveServer
+        )
         is AppScreen.Login -> LoginScreen(
             serverUrl = screen.serverUrl,
             message = screen.message,
@@ -90,7 +93,10 @@ private fun LoadingScreen() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ServerSetupScreen(onContinue: (String) -> Unit) {
+private fun ServerSetupScreen(
+    message: String?,
+    onContinue: (String) -> Unit
+) {
     var server by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -106,6 +112,9 @@ private fun ServerSetupScreen(onContinue: (String) -> Unit) {
         ) {
             Text("Connect to a BookOrbit server", style = MaterialTheme.typography.headlineSmall)
             Text("Enter the base URL. The app will open the server sign-in page next.")
+            if (!message.isNullOrBlank()) {
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
             OutlinedTextField(
                 value = server,
                 onValueChange = {

@@ -38,7 +38,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] First-launch screen for server URL entry
 - [x] Persist selected server locally
 - [x] Support changing server from login flow
-- [ ] Validate server reachability before entering login
+- [x] Validate server reachability before entering login
 - [ ] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
 - [ ] Add clear server-connection error UI states
 - [ ] Add retry and recovery behavior for server failures
@@ -140,9 +140,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use newest-progress-wins policy in stored events
 - [ ] Verify queue replay against live BookOrbit server
 - [ ] Prevent duplicate or stale progress submissions
-- [ ] Collapse multiple pending updates for the same book/file
+- [x] Collapse multiple pending updates for the same book/file
 - [ ] Add backoff and retry policy for server errors
-- [ ] Distinguish auth failures from transient network failures
+- [x] Distinguish auth failures from transient network failures
 - [ ] Add queue inspection/logging for debug builds
 - [ ] Confirm behavior when server changes while queue still exists
 
@@ -200,4 +200,4 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate live BookOrbit authentication and library APIs with the server
 - [ ] Replace generic ebook fallback with a real EPUB reader
 - [ ] Test download/offline/sync end to end on real content
-- [ ] Add queue compaction and stronger sync error handling
+- [x] Add queue compaction and stronger sync error handling
