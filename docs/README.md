@@ -8,14 +8,15 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 - [Local Setup](./setup.md)
 - [BookOrbit API Contract](./bookorbit-api.md)
 - [Roadmap](./roadmap.md)
+- [Handover](./handover.md)
 
 ## Current status
 
-The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has a working scaffold for login, library browsing, downloads, local persistence, and progress sync.
+The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, library browsing, downloads, local persistence, progress sync, PDF reading, audio playback, and basic EPUB reading.
 
 The main gaps are:
 
-- production-grade EPUB/comic reading
 - end-to-end offline verification on real content
-- stronger sync queue compaction and retry behavior
+- comic/CBZ reader support if the deployed server exposes comics
+- stronger retry/backoff behavior and broader sync verification
 - broader test coverage

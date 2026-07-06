@@ -13,6 +13,7 @@ The current app flow is:
 3. The app probes the authenticated API to determine whether login has succeeded.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
+6. EPUB titles are opened from a local readable copy, extracted into app cache, and rendered chapter by chapter from the EPUB spine.
 
 ## Main components
 
@@ -29,6 +30,7 @@ The current app flow is:
 - It stores the selected server URL and selected library.
 - It loads libraries and books from the live API.
 - It resolves stream and download URLs for files.
+- It prepares readable local copies for offline-first reader flows, including EPUB cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.
 
 ### Local persistence
@@ -42,6 +44,19 @@ The current app flow is:
 - `ProgressSyncWorker` runs queued progress sync when network is available.
 - Sync is currently event-based and timestamped.
 - Conflict handling is currently newest-progress-wins.
+- Duplicate queued updates for the same server/book/file target are compacted to the newest event.
+
+### Reader implementations
+
+- Audio uses ExoPlayer against a local file or authenticated stream URL.
+- PDF uses `PdfRenderer` with simple page-by-page navigation.
+- EPUB uses a local extraction flow:
+  - the `.epub` is resolved from downloads or fetched into app cache
+  - `META-INF/container.xml` is parsed to locate the OPF package
+  - the OPF manifest and spine are parsed
+  - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
+  - progress is currently tracked at chapter granularity and translated into percentage
+- Unsupported formats still fall back to the generic file or URL reader path.
 
 ## Live BookOrbit contract currently assumed
 
@@ -58,7 +73,8 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB and comic reading are still placeholders.
+- EPUB support is functional but still minimal: no pagination, no in-chapter scroll restore, no theme or typography controls.
+- Comic/CBZ reading is not implemented yet.
 - Login completion detection is still indirect and based on API probing.
-- Sync queue behavior needs compaction and stronger failure classification.
-- Reader state restoration is basic.
+- Sync retry/backoff behavior still needs hardening and live replay verification.
+- Reader state restoration is basic outside of chapter/page/time position.

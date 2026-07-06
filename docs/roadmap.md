@@ -9,27 +9,33 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Live library and book payloads validated
 - Local build is working on this machine
 - Download and sync scaffolding are implemented
+- EPUB fallback replaced with a basic real EPUB reader path
+- Queue compaction and auth-vs-transient sync failure handling implemented
 
 ## Next execution order
 
-### 1. Sync queue hardening
-
-- Collapse multiple pending progress updates for the same book or file
-- Classify auth failures separately from retryable network failures
-- Reduce unnecessary queued writes
-
-### 2. Real reader support
-
-- Replace the generic EPUB fallback with a real EPUB reader
-- Add comic support if required by the deployed BookOrbit library
-- Preserve reader position and state more reliably
-
-### 3. End-to-end offline verification
+### 1. End-to-end offline verification
 
 - Download real books from the live server
 - Read while offline
-- Reconnect and verify progress sync
-- Verify failure and retry behavior
+- Reconnect and verify queued progress sync
+- Verify that local EPUB/PDF/audio reopen without accidental API dependency
+- Verify failure and retry behavior against real disconnect/reconnect cycles
+
+### 2. Reader quality hardening
+
+- Preserve EPUB in-chapter position instead of chapter-only progress
+- Add loading and error states for reader startup failures
+- Add comic support if required by the deployed BookOrbit library
+- Improve PDF zoom and pan behavior
+- Improve audio controls as needed within the read/listen-only scope
+
+### 3. Sync queue hardening
+
+- Add backoff and retry policy
+- Add debug-visible queue inspection/logging
+- Verify queue replay against the live BookOrbit server
+- Confirm behavior when server selection changes with pending progress
 
 ### 4. UX hardening
 

@@ -13,7 +13,7 @@ Android client for BookOrbit focused on reading and listening.
 
 ## Project status
 
-Early scaffold. The app shell, API wiring, local download tracking, and progress queue are in place, but production-grade readers for all ebook formats are not finished yet.
+Working prototype. The app shell, API wiring, local download tracking, sync queue, and a basic EPUB/PDF/audio reading path are in place. The remaining work is concentrated around end-to-end offline verification, reader quality, and release hardening.
 
 ## Documentation
 
@@ -22,3 +22,4 @@ Early scaffold. The app shell, API wiring, local download tracking, and progress
 - [docs/setup.md](./docs/setup.md)
 - [docs/bookorbit-api.md](./docs/bookorbit-api.md)
 - [docs/roadmap.md](./docs/roadmap.md)
+- [docs/handover.md](./docs/handover.md)

@@ -48,7 +48,8 @@ data class ReaderState(
     val localFile: File? = null,
     val streamUrl: String? = null,
     val lastKnownPosition: Long = 0L,
-    val pageIndex: Int = 0
+    val pageIndex: Int = 0,
+    val progressPercent: Float? = null
 )
 
 data class ProgressUpdate(

@@ -87,7 +87,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add generic fallback WebView/file path for unsupported formats
 - [ ] Verify streaming endpoint behavior with authenticated session
 - [ ] Confirm byte-range support and resume behavior for audio
-- [ ] Replace generic ebook fallback with real EPUB reader
+- [x] Replace generic ebook fallback with real EPUB reader
 - [ ] Add comic/CBZ reader support if BookOrbit exposes comic files
 - [ ] Add proper in-reader loading/error states
 - [ ] Add resume-from-last-position when streaming
@@ -198,6 +198,6 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 ## Immediate Next Stack
 
 - [x] Validate live BookOrbit authentication and library APIs with the server
-- [ ] Replace generic ebook fallback with a real EPUB reader
+- [x] Replace generic ebook fallback with a real EPUB reader
 - [ ] Test download/offline/sync end to end on real content
 - [x] Add queue compaction and stronger sync error handling

@@ -90,14 +90,15 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun buildReaderState(book: BookSummary): ReaderState = withContext(Dispatchers.IO) {
-        val localFile = resolveLocalFile(book)
+        val localFile = resolveReadableFile(book)
         val progress = queueStore.latestFor(book.id, book.fileId)
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = book.fileId?.let(::buildStreamUrl),
             lastKnownPosition = progress?.positionMs ?: 0L,
-            pageIndex = progress?.pageIndex ?: 0
+            pageIndex = progress?.pageIndex ?: 0,
+            progressPercent = progress?.progressPercent ?: book.progressPercent
         )
     }
 
@@ -240,13 +241,52 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    private suspend fun resolveLocalFile(book: BookSummary): File? {
+    private suspend fun resolveReadableFile(book: BookSummary): File? {
         val direct = book.localPath?.let(::File)?.takeIf(File::exists)
         if (direct != null) {
             return direct
         }
         val fileId = book.fileId ?: return null
-        return downloadStore.find(fileId)?.localPath?.let(::File)?.takeIf(File::exists)
+        val downloaded = downloadStore.find(fileId)?.localPath?.let(::File)?.takeIf(File::exists)
+        if (downloaded != null) {
+            return downloaded
+        }
+        return when (book.mediaKind) {
+            MediaKind.EPUB -> cacheReadableCopy(book)
+            else -> null
+        }
+    }
+
+    private fun cacheReadableCopy(book: BookSummary): File? {
+        val fileId = book.fileId ?: return null
+        val extension = when (book.mediaKind) {
+            MediaKind.EPUB -> "epub"
+            MediaKind.PDF -> "pdf"
+            MediaKind.AUDIO -> "bin"
+            MediaKind.COMIC -> "cbz"
+            MediaKind.UNKNOWN -> "bin"
+        }
+        val targetDir = File(context.cacheDir, "reader-cache").apply { mkdirs() }
+        val target = File(targetDir, "$fileId.$extension")
+        if (target.exists() && target.length() > 0L) {
+            return target
+        }
+
+        val request = Request.Builder()
+            .url(buildDownloadUrl(fileId))
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 401 || response.code == 403) {
+                throw AuthenticationRequiredException()
+            }
+            if (!response.isSuccessful) {
+                return null
+            }
+            val input = response.body?.byteStream() ?: return null
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        return target.takeIf(File::exists)
     }
 
     private fun buildStreamUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/serve"

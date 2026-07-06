@@ -7,6 +7,7 @@ import android.os.ParcelFileDescriptor
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,9 +39,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +54,7 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
+import kotlin.math.roundToInt
 import java.util.Locale
 
 @Composable
@@ -323,6 +328,15 @@ private fun ReaderScreen(
                         onProgress(state.book, 0L, pageIndex, percent)
                     }
                 )
+                MediaKind.EPUB -> EpubReaderView(
+                    title = state.book.title,
+                    file = state.localFile,
+                    initialChapter = state.pageIndex,
+                    initialPercent = state.progressPercent,
+                    onProgress = { chapterIndex, percent ->
+                        onProgress(state.book, 0L, chapterIndex, percent)
+                    }
+                )
                 else -> GenericReaderView(
                     title = state.book.title,
                     file = state.localFile,
@@ -439,6 +453,111 @@ private fun PdfReaderView(
 }
 
 @Composable
+private fun EpubReaderView(
+    title: String,
+    file: File?,
+    initialChapter: Int,
+    initialPercent: Float?,
+    onProgress: (Int, Float?) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
+    if (file == null || !file.exists()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("This EPUB is not available yet.")
+        }
+        return
+    }
+    if (epubBook == null || epubBook.chapters.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Unable to open this EPUB.")
+        }
+        return
+    }
+
+    val chapterCount = epubBook.chapters.size
+    val estimatedChapter = remember(chapterCount, initialPercent) {
+        percentToChapterIndex(initialPercent, chapterCount)
+    }
+    var currentChapter by remember(file, initialChapter, estimatedChapter) {
+        mutableStateOf(
+            when {
+                initialChapter > 0 -> initialChapter.coerceIn(0, chapterCount - 1)
+                else -> estimatedChapter
+            }
+        )
+    }
+    val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
+
+    LaunchedEffect(currentChapter, chapterCount) {
+        val percent = if (chapterCount <= 1) 100f else (currentChapter.toFloat() / (chapterCount - 1).toFloat()) * 100f
+        onProgress(currentChapter, percent)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(epubBook.title ?: title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Chapter ${currentChapter + 1} of $chapterCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.White)
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { webContext ->
+                    WebView(webContext).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = true
+                        settings.allowContentAccess = true
+                        webViewClient = WebViewClient()
+                    }
+                },
+                update = { webView ->
+                    val chapter = currentChapterState
+                    val html = chapter.file.readText()
+                    webView.loadDataWithBaseURL(
+                        chapter.file.parentFile?.toURI()?.toString(),
+                        html,
+                        "text/html",
+                        Charsets.UTF_8.name(),
+                        null
+                    )
+                }
+            )
+        }
+        Text(
+            epubBook.chapters[currentChapter].title,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { currentChapter = (currentChapter - 1).coerceAtLeast(0) },
+                enabled = currentChapter > 0
+            ) {
+                Text("Previous")
+            }
+            Button(
+                onClick = { currentChapter = (currentChapter + 1).coerceAtMost(chapterCount - 1) },
+                enabled = currentChapter < chapterCount - 1
+            ) {
+                Text("Next")
+            }
+        }
+    }
+}
+
+@Composable
 private fun GenericReaderView(
     title: String,
     file: File?,
@@ -538,4 +657,13 @@ private fun normalizeServerUrl(value: String): String? {
     val port = if (uri.port > 0) ":${uri.port}" else ""
     val path = uri.path?.takeIf { it.isNotBlank() && it != "/" }?.trimEnd('/') ?: ""
     return "$scheme://$host$port$path"
+}
+
+private fun percentToChapterIndex(percent: Float?, chapterCount: Int): Int {
+    if (chapterCount <= 1) {
+        return 0
+    }
+    val raw = percent ?: return 0
+    val normalized = if (raw in 0f..1f) raw else raw / 100f
+    return (normalized.coerceIn(0f, 1f) * (chapterCount - 1)).roundToInt()
 }
