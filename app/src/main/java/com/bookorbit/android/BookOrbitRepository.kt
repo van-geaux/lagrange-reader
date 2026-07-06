@@ -182,10 +182,18 @@ class BookOrbitRepository(private val context: Context) {
         }
 
         val payload = JSONObject().apply {
-            put("positionMs", item.positionMs)
-            put("pageIndex", item.pageIndex)
-            item.progressPercent?.let { put("progress", it.toDouble()) }
-            put("updatedAt", item.updatedAtMillis)
+            put("percentage", normalizePercentage(item.progressPercent))
+            if (item.mediaKind == MediaKind.AUDIO) {
+                put("currentFileId", item.fileId?.toIntOrNull() ?: return@withContext false)
+                put("positionSeconds", item.positionMs / 1000.0)
+            } else {
+                if (item.pageIndex > 0) {
+                    put("pageNumber", item.pageIndex + 1)
+                }
+                if (item.positionMs > 0L) {
+                    put("positionSeconds", item.positionMs / 1000.0)
+                }
+            }
         }
 
         request(path, if (item.mediaKind == MediaKind.AUDIO) "PATCH" else "POST", payload.toString().toRequestBody(JSON))
@@ -268,25 +276,42 @@ class BookOrbitRepository(private val context: Context) {
         return buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
-                val fileId = obj.stringValue("fileId", "file_id")
+                val primaryFile = obj.optJSONArray("files").selectPrimaryFile()
+                val fileId = primaryFile?.stringValue("id", "_id", "fileId")
+                    ?: obj.stringValue("fileId", "file_id")
                     ?: obj.optJSONObject("file")?.stringValue("id", "_id")
                     ?: obj.optJSONObject("bookFile")?.stringValue("id", "_id")
-                val format = obj.stringValue("format", "mimeType", "mime_type", "extension")
+                val format = primaryFile?.stringValue("format", "mimeType", "mime_type", "extension")
+                    ?: obj.stringValue("format", "mimeType", "mime_type", "extension")
                 val mediaKind = inferMediaKind(format, obj.stringValue("title", "name"))
+                val authors = obj.optJSONArray("authors")
+                val readingProgress = obj.optJSONObject("readingProgress")
                 add(
                     BookSummary(
                         libraryId = libraryId,
                         id = obj.stringValue("id", "_id", "bookId") ?: "book-$index",
                         fileId = fileId,
                         title = obj.stringValue("title", "name", "displayName") ?: "Untitled",
-                        author = obj.stringValue("author", "authorName", "creator"),
+                        author = when {
+                            authors != null && authors.length() > 0 -> buildList {
+                                for (authorIndex in 0 until authors.length()) {
+                                    authors.optString(authorIndex).takeIf { it.isNotBlank() }?.let(::add)
+                                }
+                            }.joinToString(", ").ifBlank { null }
+                            else -> obj.stringValue("author", "authorName", "creator")
+                        },
                         format = format,
                         mediaKind = mediaKind,
                         streamUrl = fileId?.let(::buildStreamUrl),
                         downloadUrl = fileId?.let(::buildDownloadUrl),
-                        coverUrl = obj.stringValue("coverUrl", "cover", "coverImage"),
+                        coverUrl = if (obj.optBoolean("hasCover")) {
+                            "${serverBase()}/api/v1/books/${obj.stringValue("id", "_id", "bookId") ?: "book-$index"}/cover"
+                        } else {
+                            obj.stringValue("coverUrl", "cover", "coverImage")
+                        },
                         localPath = fileId?.let { downloads[it]?.localPath },
-                        progressLabel = obj.progressLabel()
+                        progressLabel = readingProgress.progressLabel(),
+                        progressPercent = readingProgress.progressPercent()
                     )
                 )
             }
@@ -317,13 +342,22 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun JSONObject.progressLabel(): String? {
-        optJSONObject("progress")?.let { progress ->
-            progress.opt("percentage")?.toString()?.takeIf { it.isNotBlank() }?.let { return "$it%" }
-            progress.opt("pageIndex")?.toString()?.takeIf { it.isNotBlank() }?.let { return "page $it" }
-            progress.opt("positionMs")?.toString()?.takeIf { it.isNotBlank() }?.let { return "${it}ms" }
+    private fun JSONObject?.progressLabel(): String? {
+        this ?: return null
+        opt("percentage")?.toString()?.takeIf { it.isNotBlank() }?.let { return "$it%" }
+        opt("pageNumber")?.toString()?.takeIf { it.isNotBlank() }?.let { return "page $it" }
+        opt("positionSeconds")?.toString()?.takeIf { it.isNotBlank() }?.let { return "${it}s" }
+        opt("currentFileId")?.toString()?.takeIf { it.isNotBlank() }?.let { return "file $it" }
+        return null
+    }
+
+    private fun JSONObject?.progressPercent(): Float? {
+        this ?: return null
+        return when (val value = opt("percentage")) {
+            is Number -> value.toFloat()
+            is String -> value.toFloatOrNull()
+            else -> null
         }
-        return stringValue("readingProgress", "position", "progress")
     }
 
     private fun JSONObject.stringValue(vararg keys: String): String? {
@@ -340,6 +374,29 @@ class BookOrbitRepository(private val context: Context) {
             }
         }
         return null
+    }
+
+    private fun JSONArray?.selectPrimaryFile(): JSONObject? {
+        this ?: return null
+        for (index in 0 until length()) {
+            val candidate = optJSONObject(index) ?: continue
+            if (candidate.optString("role").equals("primary", ignoreCase = true)) {
+                return candidate
+            }
+        }
+        for (index in 0 until length()) {
+            val candidate = optJSONObject(index) ?: continue
+            if (candidate.stringValue("id", "_id", "fileId") != null) {
+                return candidate
+            }
+        }
+        return null
+    }
+
+    private fun normalizePercentage(value: Float?): Double {
+        val raw = value ?: 0f
+        val scaled = if (raw in 0f..1f) raw * 100f else raw
+        return scaled.coerceIn(0f, 100f).toDouble()
     }
 
     private object Keys {

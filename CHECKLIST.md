@@ -47,6 +47,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Open server login page inside app
 - [x] Share session cookies between WebView and API client
+- [x] Verify server-side login contract against the live BookOrbit server
 - [ ] Verify login completion detection is robust
 - [ ] Confirm session persistence after app restart
 - [ ] Confirm logout/session expiry recovery behavior
@@ -60,7 +61,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Select a library
 - [x] Load books for selected library
 - [x] Display book list in app
-- [ ] Confirm real API payload parsing against live BookOrbit responses
+- [x] Confirm real API payload parsing against live BookOrbit responses
 - [ ] Harden parsing for nullable/missing fields
 - [ ] Add loading, empty, and error states for libraries
 - [ ] Add loading, empty, and error states for books
@@ -72,8 +73,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Create `book -> fileId` aware model structure
 - [x] Infer media type from format hints
 - [x] Track local download path per file
-- [ ] Validate actual BookOrbit schema for ebooks
-- [ ] Validate actual BookOrbit schema for audiobooks
+- [x] Validate actual BookOrbit schema for ebooks
+- [x] Validate actual BookOrbit schema for audiobooks
 - [ ] Confirm multiple-file book handling strategy
 - [ ] Confirm cover image handling strategy
 - [ ] Normalize progress labels from real server responses
@@ -124,8 +125,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Capture audiobook position updates
 - [x] Capture PDF page progress updates
 - [x] Store timestamped progress records
-- [ ] Validate ebook progress payload shape against real `SaveProgressDto`
-- [ ] Validate audiobook progress payload shape against real `UpsertAudioProgressDto`
+- [x] Validate ebook progress payload shape against real `SaveProgressDto`
+- [x] Validate audiobook progress payload shape against real `UpsertAudioProgressDto`
 - [ ] Add throttling/debouncing so progress is not queued too aggressively
 - [ ] Persist and restore last known progress on reopen
 - [ ] Normalize progress semantics across media types
@@ -196,7 +197,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ## Immediate Next Stack
 
-- [ ] Validate live BookOrbit authentication and library APIs with this app
+- [x] Validate live BookOrbit authentication and library APIs with the server
 - [ ] Replace generic ebook fallback with a real EPUB reader
 - [ ] Test download/offline/sync end to end on real content
 - [ ] Add queue compaction and stronger sync error handling

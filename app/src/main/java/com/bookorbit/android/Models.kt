@@ -28,7 +28,8 @@ data class BookSummary(
     val downloadUrl: String? = null,
     val coverUrl: String? = null,
     val localPath: String? = null,
-    val progressLabel: String? = null
+    val progressLabel: String? = null,
+    val progressPercent: Float? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
 }
