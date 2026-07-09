@@ -6,6 +6,7 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 
 - [Architecture](./architecture.md)
 - [Local Setup](./setup.md)
+- [Privacy Notes](./privacy.md)
 - [BookOrbit API Contract](./bookorbit-api.md)
 - [Testing](./testing.md)
 - [Roadmap](./roadmap.md)
