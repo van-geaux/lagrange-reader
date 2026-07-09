@@ -32,6 +32,17 @@ class ProgressUpdateConflictTest {
         assertTrue(regressed.isStaleComparedTo(baseline))
     }
 
+    @Test
+    fun `server targeting requires a non-blank exact server match`() {
+        val matching = update(pageIndex = 1, positionMs = 1_000L, progressPercent = 5f)
+        val mismatched = matching.copy(serverUrl = "https://other.example")
+        val blank = matching.copy(serverUrl = "")
+
+        assertTrue(matching.targetsServer("https://example.test"))
+        assertFalse(mismatched.targetsServer("https://example.test"))
+        assertFalse(blank.targetsServer("https://example.test"))
+    }
+
     private fun update(
         pageIndex: Int,
         positionMs: Long,

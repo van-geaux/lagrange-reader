@@ -314,6 +314,7 @@ class BookOrbitRepository(private val context: Context) {
         if (pending.isEmpty()) {
             return@withContext SyncAttemptResult.Success
         }
+        val currentServerUrl = getServerUrl().orEmpty()
         val survivors = mutableListOf<ProgressUpdate>()
         val orderedPending = pending.sortedBy { it.updatedAtMillis }
         var authBlocked = false
@@ -323,10 +324,16 @@ class BookOrbitRepository(private val context: Context) {
                 survivors += item
                 return@forEachIndexed
             }
+            if (!item.targetsServer(currentServerUrl)) {
+                survivors += item
+                return@forEachIndexed
+            }
             runCatching { postProgress(item) }
                 .onSuccess { submitted ->
                     if (submitted) {
                         lastSyncedProgressStore.save(item)
+                    } else {
+                        survivors += item
                     }
                 }
                 .onFailure { error ->
@@ -971,4 +978,8 @@ private fun ProgressUpdate.isNotAheadOf(other: ProgressUpdate): Boolean {
 internal fun ProgressUpdate.normalizedProgressPercent(): Float {
     val value = progressPercent ?: 0f
     return if (value in 0f..1f) value * 100f else value
+}
+
+internal fun ProgressUpdate.targetsServer(currentServerUrl: String): Boolean {
+    return serverUrl.isNotBlank() && serverUrl == currentServerUrl
 }

@@ -71,6 +71,7 @@ The current app flow is:
 - Audio progress is throttled before persistence through a dedicated `ProgressQueuePolicy`; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
 - The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
+- Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 
 ### Reader implementations
 
