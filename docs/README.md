@@ -21,9 +21,10 @@ The audiobook reader now includes play and pause controls, skip back and forward
 
 Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, redirect responses, timeouts, and generic HTTP/network failures with clearer user-facing messages while preserving the attempted URL for direct retry.
 
+The local release build also passes with `.\gradlew.bat assembleRelease`.
+
 The main gaps are:
 
 - end-to-end offline verification on real content
-- comic/CBZ reader support if the deployed server exposes comics
 - stronger retry/backoff behavior and broader sync verification
 - broader integration and end-to-end test coverage
