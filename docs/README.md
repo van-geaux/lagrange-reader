@@ -12,7 +12,7 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 
 ## Current status
 
-The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, library browsing, downloads, local persistence, progress sync, PDF reading, audio playback, and basic EPUB reading.
+The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, library browsing, downloads, local persistence, progress sync, PDF reading, audio playback, basic EPUB reading, and local CBZ comic reading.
 
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, and progress queue persistence.
 

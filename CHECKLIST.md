@@ -88,7 +88,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Verify streaming endpoint behavior with authenticated session
 - [ ] Confirm byte-range support and resume behavior for audio
 - [x] Replace generic ebook fallback with real EPUB reader
-- [ ] Add comic/CBZ reader support if BookOrbit exposes comic files
+- [x] Add comic/CBZ reader support if BookOrbit exposes comic files
 - [x] Add proper in-reader loading/error states
 - [ ] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path

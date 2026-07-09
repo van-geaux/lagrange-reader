@@ -2,6 +2,7 @@ package com.bookorbit.android
 
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
@@ -57,8 +58,9 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
-import kotlin.math.roundToInt
 import java.util.Locale
+import java.util.zip.ZipFile
+import kotlin.math.roundToInt
 
 @Composable
 fun BookOrbitApp(
@@ -474,9 +476,13 @@ private fun ReaderScreen(
                         onProgress(state.book, 0L, chapterIndex, percent)
                     }
                 )
-                MediaKind.COMIC -> UnsupportedReaderView(
+                MediaKind.COMIC -> ComicReaderView(
                     title = state.book.title,
-                    message = "Comic reading is not supported yet."
+                    file = state.localFile,
+                    initialPage = state.pageIndex,
+                    onProgress = { pageIndex, percent ->
+                        onProgress(state.book, 0L, pageIndex, percent)
+                    }
                 )
                 MediaKind.UNKNOWN -> UnsupportedReaderView(
                     title = state.book.title,
@@ -798,6 +804,82 @@ private fun EpubReaderView(
 }
 
 @Composable
+private fun ComicReaderView(
+    title: String,
+    file: File?,
+    initialPage: Int,
+    onProgress: (Int, Float?) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val comicPages = remember(file) { file?.takeIf(File::exists)?.let { loadComicPages(context, it) } }
+    if (file == null || !file.exists()) {
+        ReaderMessage("Unable to prepare this comic.")
+        return
+    }
+    if (comicPages.isNullOrEmpty()) {
+        ReaderMessage("Unable to open this comic.")
+        return
+    }
+
+    val pageCount = comicPages.size
+    var currentPage by remember(file, initialPage) {
+        mutableStateOf(initialPage.coerceIn(0, pageCount - 1))
+    }
+    val bitmap by produceState<Bitmap?>(initialValue = null, file, currentPage) {
+        value = runCatching {
+            BitmapFactory.decodeFile(comicPages[currentPage].absolutePath)
+        }.getOrNull()
+    }
+
+    LaunchedEffect(currentPage, pageCount) {
+        val percent = if (pageCount <= 1) 100f else (currentPage.toFloat() / (pageCount - 1).toFloat()) * 100f
+        onProgress(currentPage, percent)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Page ${currentPage + 1} of $pageCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            bitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "Comic page ${currentPage + 1}",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } ?: Text("Unable to render this comic page.")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { currentPage = (currentPage - 1).coerceAtLeast(0) },
+                enabled = currentPage > 0
+            ) {
+                Text("Previous")
+            }
+            Button(
+                onClick = { currentPage = (currentPage + 1).coerceAtMost(pageCount - 1) },
+                enabled = currentPage < pageCount - 1
+            ) {
+                Text("Next")
+            }
+        }
+    }
+}
+
+@Composable
 private fun UnsupportedReaderView(
     title: String,
     message: String
@@ -888,6 +970,53 @@ private fun renderPdfPage(file: File, pageIndex: Int): Bitmap? {
     }.getOrNull()
 }
 
+private fun loadComicPages(context: android.content.Context, file: File): List<File> {
+    val extension = file.extension.lowercase(Locale.US)
+    if (extension != "cbz") {
+        return emptyList()
+    }
+
+    val targetDir = File(context.cacheDir, "comic-pages/${file.nameWithoutExtension}").apply {
+        mkdirs()
+    }
+    val existingPages = targetDir.listFiles()
+        ?.filter { it.isFile && it.extension.lowercase(Locale.US) in COMIC_IMAGE_EXTENSIONS }
+        ?.sortedBy { it.name.lowercase(Locale.US) }
+        .orEmpty()
+    if (existingPages.isNotEmpty()) {
+        return existingPages
+    }
+
+    return runCatching {
+        ZipFile(file).use { zip ->
+            val imageEntries = mutableListOf<java.util.zip.ZipEntry>()
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (entry.isDirectory) {
+                    continue
+                }
+                val imageExtension = entry.name.substringAfterLast('.', "").lowercase(Locale.US)
+                if (imageExtension in COMIC_IMAGE_EXTENSIONS) {
+                    imageEntries += entry
+                }
+            }
+            imageEntries
+                .sortedBy { it.name.lowercase(Locale.US) }
+                .mapIndexedNotNull { index, entry ->
+                    val imageExtension = entry.name.substringAfterLast('.', "jpg").lowercase(Locale.US)
+                    val extracted = File(targetDir, "${index.toString().padStart(4, '0')}.$imageExtension")
+                    zip.getInputStream(entry).use { input ->
+                        extracted.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    extracted.takeIf(File::exists)
+                }
+        }
+    }.getOrDefault(emptyList())
+}
+
 private fun normalizeServerUrl(value: String): String? {
     val raw = value.trim()
     if (raw.isBlank()) {
@@ -936,3 +1065,4 @@ private fun formatPlaybackSpeed(speed: Float): String {
 }
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
+private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
