@@ -104,7 +104,7 @@ class BookOrbitRepository(private val context: Context) {
 
     suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: error("Book does not expose a file id.")
-        val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind)
+        val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         if (!target.exists()) {
             target.parentFile?.mkdirs()
             val request = Request.Builder()
@@ -127,7 +127,8 @@ class BookOrbitRepository(private val context: Context) {
                 bookId = book.id,
                 title = book.title,
                 localPath = target.absolutePath,
-                mediaKind = book.mediaKind
+                mediaKind = book.mediaKind,
+                mimeType = book.format
             )
         )
         target

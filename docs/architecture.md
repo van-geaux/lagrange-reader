@@ -43,6 +43,7 @@ The current app flow is:
 
 - `DataStore` stores the configured server URL and selected library ID.
 - `DownloadStore` stores downloaded file records.
+- Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
 
 ### Background sync

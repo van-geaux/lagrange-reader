@@ -101,7 +101,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Verify large-download behavior on real content
 - [x] Add progress indicator for active downloads
 - [x] Add retry/cancel behavior for failed downloads
-- [ ] Validate file naming and extension handling for all supported formats
+- [x] Validate file naming and extension handling for all supported formats
 - [ ] Add storage-space failure handling
 - [ ] Add download integrity checks
 - [ ] Add delete-local-copy action

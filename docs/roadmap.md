@@ -16,6 +16,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Server-reported page/time progress is mapped into reader resume state
 - Library and book browsing now has loading, empty, error, and refresh UI states
 - Active download progress, retry, and cancel controls are implemented
+- Download filenames preserve more specific format extensions from BookOrbit metadata
 
 ## Next execution order
 
