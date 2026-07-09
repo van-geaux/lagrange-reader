@@ -79,6 +79,7 @@ fun BookOrbitApp(
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
         is AppScreen.ServerSetup -> ServerSetupScreen(
+            initialServerUrl = screen.serverUrl,
             message = screen.message,
             onContinue = coordinator::saveServer
         )
@@ -144,10 +145,11 @@ private fun LoadingScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServerSetupScreen(
+    initialServerUrl: String,
     message: String?,
     onContinue: (String) -> Unit
 ) {
-    var server by remember { mutableStateOf("") }
+    var server by remember(initialServerUrl) { mutableStateOf(initialServerUrl) }
     var error by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -191,6 +193,13 @@ private fun ServerSetupScreen(
                 }
             ) {
                 Text("Continue")
+            }
+            if (server.isNotBlank() && !message.isNullOrBlank()) {
+                OutlinedButton(
+                    onClick = { onContinue(server) }
+                ) {
+                    Text("Retry")
+                }
             }
         }
     }

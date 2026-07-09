@@ -19,7 +19,7 @@ Focused JVM coverage now exists for repository payload parsing, nullable-field f
 
 The audiobook reader now includes play and pause controls, skip back and forward actions, resume-at-position handling, and a small playback speed selector.
 
-Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, timeouts, and generic HTTP/network failures with clearer user-facing messages.
+Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, timeouts, and generic HTTP/network failures with clearer user-facing messages while preserving the attempted URL for direct retry.
 
 The main gaps are:
 

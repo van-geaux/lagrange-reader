@@ -66,36 +66,42 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 ServerCheckResult.Reachable -> Unit
                 ServerCheckResult.MalformedUrl -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "Enter a valid server URL."
                     )
                     return@launch
                 }
                 ServerCheckResult.UnreachableHost -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "The server host could not be resolved."
                     )
                     return@launch
                 }
                 ServerCheckResult.Timeout -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "The server took too long to respond. Retry or check the network."
                     )
                     return@launch
                 }
                 ServerCheckResult.TlsFailure -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "The server TLS certificate could not be validated."
                     )
                     return@launch
                 }
                 ServerCheckResult.HttpFailure -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "The server responded, but the base URL did not open correctly."
                     )
                     return@launch
                 }
                 ServerCheckResult.NetworkFailure -> {
                     _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
                         message = "Unable to reach that server. Check the URL and try again."
                     )
                     return@launch

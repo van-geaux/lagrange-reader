@@ -3,6 +3,7 @@ package com.bookorbit.android
 sealed interface AppScreen {
     data object Loading : AppScreen
     data class ServerSetup(
+        val serverUrl: String = "",
         val message: String? = null
     ) : AppScreen
     data class Login(

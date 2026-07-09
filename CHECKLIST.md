@@ -41,7 +41,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate server reachability before entering login
 - [ ] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
 - [x] Add clear server-connection error UI states
-- [ ] Add retry and recovery behavior for server failures
+- [x] Add retry and recovery behavior for server failures
 
 ## 3. Authentication Flow
 
