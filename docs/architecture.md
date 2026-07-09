@@ -33,6 +33,7 @@ The current app flow is:
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
+- Offline-first active-reader restore uses the same local-only reader stream suppression, so startup reopen does not quietly fall back to a live audio stream.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
 
 ### Data and API layer

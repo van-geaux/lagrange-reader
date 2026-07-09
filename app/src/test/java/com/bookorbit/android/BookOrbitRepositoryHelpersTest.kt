@@ -45,4 +45,14 @@ class BookOrbitRepositoryHelpersTest {
         assertEquals("lib-a", resolveSelectedLibraryId(null, libraries))
         assertNull(resolveSelectedLibraryId("missing", emptyList()))
     }
+
+    @Test
+    fun `buildReaderStreamUrl suppresses live stream urls for local only restores`() {
+        assertNull(buildReaderStreamUrl(fileId = "file-1", serverBase = "https://example.test", localOnly = true))
+        assertNull(buildReaderStreamUrl(fileId = null, serverBase = "https://example.test", localOnly = false))
+        assertEquals(
+            "https://example.test/api/v1/books/files/file-1/serve",
+            buildReaderStreamUrl(fileId = "file-1", serverBase = "https://example.test/", localOnly = false)
+        )
+    }
 }

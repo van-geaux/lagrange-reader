@@ -154,7 +154,11 @@ class BookOrbitRepository(private val context: Context) {
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val localFile = resolveReadableFile(book, allowRemoteCache = !localOnly)
-        val streamUrl = if (localOnly) null else book.fileId?.let(::buildStreamUrl)
+        val streamUrl = buildReaderStreamUrl(
+            fileId = book.fileId,
+            serverBase = serverBase(),
+            localOnly = localOnly
+        )
         ensureReaderCanOpen(
             book = book,
             localFile = localFile,
@@ -192,7 +196,11 @@ class BookOrbitRepository(private val context: Context) {
         if (localOnly && localFile == null) {
             return@withContext null
         }
-        val streamUrl = savedBook.fileId?.let(::buildStreamUrl)
+        val streamUrl = buildReaderStreamUrl(
+            fileId = savedBook.fileId,
+            serverBase = serverBase(),
+            localOnly = localOnly
+        )
         runCatching {
             ensureReaderCanOpen(
                 book = savedBook,
@@ -979,4 +987,15 @@ internal fun ProgressUpdate.normalizedProgressPercent(): Float {
 
 internal fun ProgressUpdate.targetsServer(currentServerUrl: String): Boolean {
     return serverUrl.isNotBlank() && serverUrl == currentServerUrl
+}
+
+internal fun buildReaderStreamUrl(
+    fileId: String?,
+    serverBase: String,
+    localOnly: Boolean
+): String? {
+    if (localOnly || fileId.isNullOrBlank()) {
+        return null
+    }
+    return "${serverBase.trimEnd('/')}/api/v1/books/files/$fileId/serve"
 }
