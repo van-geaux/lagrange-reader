@@ -71,10 +71,13 @@ class BookOrbitRepository(private val context: Context) {
         queueStore.clear()
         downloadStore.clear()
         browserSnapshotStore.clear()
-        activeReaderStore.clear()
         lastSyncedProgressStore.clear()
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
+        clearSession()
+    }
+
+    suspend fun clearSession() {
+        activeReaderStore.clear()
+        clearCookies()
     }
 
     suspend fun getSelectedLibraryId(): String? = context.dataStore.data.first()[Keys.SELECTED_LIBRARY_ID]
@@ -85,11 +88,16 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun isAuthenticated(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun getSessionState(): SessionState = withContext(Dispatchers.IO) {
         runCatching {
-            loadLibraries()
-            true
-        }.getOrDefault(false)
+            request("/api/v1/auth/me", "GET", null)
+            SessionState.Authenticated
+        }.getOrElse { error ->
+            when (error) {
+                is AuthenticationRequiredException -> SessionState.Unauthenticated
+                else -> SessionState.Unavailable
+            }
+        }
     }
 
     suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
@@ -571,6 +579,11 @@ class BookOrbitRepository(private val context: Context) {
         throw UserFacingException(message)
     }
 
+    private fun clearCookies() {
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+    }
+
     private fun IOException.isLikelyLocalStorageFailure(): Boolean {
         return this is FileNotFoundException ||
             this is FileSystemException ||
@@ -595,6 +608,12 @@ enum class SyncAttemptResult {
     Success,
     AuthenticationBlocked,
     TransientFailure
+}
+
+enum class SessionState {
+    Authenticated,
+    Unauthenticated,
+    Unavailable
 }
 
 enum class ServerCheckResult {

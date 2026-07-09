@@ -10,7 +10,7 @@ The current app flow is:
 
 1. User enters a BookOrbit server URL.
 2. The app opens the server login page in a WebView.
-3. The app probes the authenticated API to determine whether login has succeeded.
+3. The app polls `GET /api/v1/auth/me` to determine whether login has succeeded and whether a persisted session is still valid.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
@@ -25,11 +25,12 @@ The current app flow is:
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
 - Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.
+- The browser top bar exposes sign-out without clearing the configured server or cached offline snapshot.
 - Book cards show active download progress, failed-download retry, and cancel controls while a download is running.
 - Downloaded book cards also expose a delete-local-copy action that removes the stored file and its persisted download record.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
-- When auth probing fails during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
+- When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
 
 ### Data and API layer
@@ -46,6 +47,7 @@ The current app flow is:
 ### Local persistence
 
 - `DataStore` stores the configured server URL and selected library ID.
+- Session reset clears cookies and active-reader state while leaving the configured server and cached browser snapshot intact.
 - `DownloadStore` stores downloaded file records.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
@@ -91,9 +93,8 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB support is functional but still minimal: no pagination, no in-chapter scroll restore, no theme or typography controls.
-- Comic/CBZ reading is not implemented yet.
-- Login completion detection is still indirect and based on API probing.
+- EPUB support is functional but still minimal: no pagination and no in-chapter scroll restore.
+- Login completion detection is still polling-based and has not yet been verified against every server auth flow.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling is implemented in coordinator memory and needs focused unit coverage.

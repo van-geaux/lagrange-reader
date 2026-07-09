@@ -52,8 +52,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Confirm session persistence after app restart
 - [ ] Confirm logout/session expiry recovery behavior
 - [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
-- [ ] Add explicit authenticated-user bootstrap check after login
-- [ ] Add clean logout/reset session behavior
+- [x] Add explicit authenticated-user bootstrap check after login
+- [x] Add clean logout/reset session behavior
 
 ## 4. Library Browsing
 

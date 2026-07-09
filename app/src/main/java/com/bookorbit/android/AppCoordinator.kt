@@ -38,23 +38,42 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 return@launch
             }
 
-            if (repository.isAuthenticated()) {
-                repository.restoreActiveReaderState()?.let { readerState ->
-                    _screen.value = AppScreen.Reader(readerState)
-                    return@launch
+            when (repository.getSessionState()) {
+                SessionState.Authenticated -> {
+                    repository.restoreActiveReaderState()?.let { readerState ->
+                        _screen.value = AppScreen.Reader(readerState)
+                        return@launch
+                    }
+                    loadBrowser()
                 }
-                loadBrowser()
-            } else {
-                val cached = repository.loadCachedBrowserState()
-                if (cached != null) {
-                    showBrowser(
-                        cached.copy(
-                            isOfflineSnapshot = true,
-                            message = "Showing the last cached library snapshot. Sign in again when the server is available."
+                SessionState.Unauthenticated -> {
+                    val cached = repository.loadCachedBrowserState()
+                    if (cached != null) {
+                        showBrowser(
+                            cached.copy(
+                                isOfflineSnapshot = true,
+                                message = "Showing the last cached library snapshot. Sign in again when the server is available."
+                            )
                         )
-                    )
-                } else {
-                    _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Sign in to access your libraries.")
+                    } else {
+                        _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Sign in to access your libraries.")
+                    }
+                }
+                SessionState.Unavailable -> {
+                    val cached = repository.loadCachedBrowserState()
+                    if (cached != null) {
+                        showBrowser(
+                            cached.copy(
+                                isOfflineSnapshot = true,
+                                message = "Showing the last cached library snapshot while the server is unavailable."
+                            )
+                        )
+                    } else {
+                        _screen.value = AppScreen.Login(
+                            serverUrl = serverUrl,
+                            message = "The server is unavailable. Keep the login page open or retry when the connection recovers."
+                        )
+                    }
                 }
             }
         }
@@ -137,20 +156,62 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 _screen.value = AppScreen.ServerSetup()
                 return@launch
             }
-            if (repository.isAuthenticated()) {
-                loadBrowser()
-            } else {
-                val cached = repository.loadCachedBrowserState()
-                if (cached != null) {
-                    showBrowser(
-                        cached.copy(
-                            isOfflineSnapshot = true,
-                            message = "Showing the last cached library snapshot while waiting for an authenticated session."
+            when (repository.getSessionState()) {
+                SessionState.Authenticated -> loadBrowser()
+                SessionState.Unauthenticated -> {
+                    val cached = repository.loadCachedBrowserState()
+                    if (cached != null) {
+                        showBrowser(
+                            cached.copy(
+                                isOfflineSnapshot = true,
+                                message = "Showing the last cached library snapshot while waiting for an authenticated session."
+                            )
                         )
-                    )
-                } else {
-                    _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Waiting for an authenticated session.")
+                    } else {
+                        _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Waiting for an authenticated session.")
+                    }
                 }
+                SessionState.Unavailable -> {
+                    val cached = repository.loadCachedBrowserState()
+                    if (cached != null) {
+                        showBrowser(
+                            cached.copy(
+                                isOfflineSnapshot = true,
+                                message = "Showing the last cached library snapshot while the server is unavailable."
+                            )
+                        )
+                    } else {
+                        _screen.value = AppScreen.Login(
+                            serverUrl = serverUrl,
+                            message = "Waiting for the server connection to recover."
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun signOut() {
+        scope.launch {
+            activeDownloads.values.forEach { it.cancel() }
+            activeDownloads.clear()
+            latestProgressByTarget.clear()
+            queuedProgressByTarget.clear()
+            repository.clearSession()
+            val serverUrl = repository.getServerUrl().orEmpty()
+            val cached = repository.loadCachedBrowserState()
+            if (cached != null) {
+                showBrowser(
+                    cached.copy(
+                        isOfflineSnapshot = true,
+                        message = "Signed out. Sign in again to refresh libraries or sync progress."
+                    )
+                )
+            } else {
+                _screen.value = AppScreen.Login(
+                    serverUrl = serverUrl,
+                    message = "Signed out. Sign in to access your libraries."
+                )
             }
         }
     }

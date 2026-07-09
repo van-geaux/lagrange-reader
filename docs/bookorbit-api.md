@@ -37,6 +37,7 @@ GET /api/v1/auth/me
 ```
 
 Used to confirm authenticated session state after login.
+The app also uses this endpoint during bootstrap and login polling instead of inferring auth state from library loading.
 
 ## Libraries
 
@@ -184,5 +185,4 @@ DTO shape:
 ## Open items
 
 - Confirm multi-file audiobook handling in the Android client
-- Confirm whether `/api/v1/auth/me` should be used directly in the app bootstrap
 - Confirm whether session cookies alone are sufficient in all OIDC flows
