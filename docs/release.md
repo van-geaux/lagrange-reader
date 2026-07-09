@@ -1,0 +1,47 @@
+# Release Policy
+
+This document defines the current package naming, versioning, and signing expectations for `Lagrange Reader`.
+
+## Package and app naming policy
+
+- repository/project name: `lagrange-reader`
+- user-facing app name: `BookOrbit`
+- current Android namespace: `com.bookorbit.android`
+- current Android application id: `com.bookorbit.android`
+
+### Short-term rule
+
+- keep `namespace` and `applicationId` aligned unless a product split requires otherwise
+- treat `com.bookorbit.android` as the current shipping id until a deliberate rename is planned and migrated
+- if the app is rebranded away from `BookOrbit`, update the repository docs, launcher label, namespace migration plan, and Play-distribution identifiers together rather than piecemeal
+
+### Rename guidance
+
+If a rename is required later:
+
+- change the launcher label and branding assets in the same release window
+- migrate package names in source deliberately rather than mixing package and branding transitions across multiple partial commits
+- treat `applicationId` changes as a breaking distribution change because Android will treat the renamed app as a different install
+
+## Versioning policy
+
+- use semantic-style `versionName` values such as `0.1.0`, `0.2.0`, and `1.0.0`
+- increment `versionCode` on every release build distributed outside local development
+- reserve `0.x` for pre-release or prototype builds
+- use patch bumps for bug-fix-only releases
+- use minor bumps for additive feature releases
+- use a major bump when the app reaches an intentionally stable public release line
+
+## Signing strategy
+
+- debug builds continue using the default Android debug keystore
+- release signing keys must not be committed to the repository
+- release keystore paths, aliases, and passwords must come from local machine configuration or CI secrets
+- keep signing material outside the repo and outside shared documentation that is meant to be committed
+- if CI later produces signed artifacts, use GitHub Actions secrets or an equivalent secret store rather than checked-in files
+
+## Current state
+
+- debug and release compilation both pass locally
+- no release keystore is committed in this repository
+- there is not yet a production signing config wired into Gradle

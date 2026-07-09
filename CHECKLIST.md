@@ -27,9 +27,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add application manifest, theme, and resources
 - [x] Add basic app coordinator/navigation state
 - [x] Add repository/data layer scaffold
-- [ ] Add proper package/version naming policy
+- [x] Add proper package/version naming policy
 - [ ] Add app icon and production branding assets
-- [ ] Add release signing strategy
+- [x] Add release signing strategy
 - [x] Add CI workflow for debug build
 - [x] Add baseline static quality checks
 

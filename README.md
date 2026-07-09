@@ -64,6 +64,7 @@ Machine-specific SDK setup and environment notes are in [docs/setup.md](./docs/s
 - [docs/architecture.md](./docs/architecture.md)
 - [docs/setup.md](./docs/setup.md)
 - [docs/privacy.md](./docs/privacy.md)
+- [docs/release.md](./docs/release.md)
 - [docs/bookorbit-api.md](./docs/bookorbit-api.md)
 - [docs/testing.md](./docs/testing.md)
 - [docs/roadmap.md](./docs/roadmap.md)
