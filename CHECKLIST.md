@@ -191,10 +191,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Audit cleartext/TLS policy
 - [ ] Confirm no secrets or internal URLs are committed
 - [ ] Add privacy notes if user data is stored locally
-- [ ] Verify release build compiles
+- [x] Verify release build compiles
 - [ ] Verify app install on physical device
 - [ ] Create first tagged release
-- [ ] Document setup, build, and test instructions in `README`
+- [x] Document setup, build, and test instructions in `README`
 
 ## Immediate Next Stack
 

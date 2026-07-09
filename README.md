@@ -15,6 +15,45 @@ Android client for BookOrbit focused on reading and listening.
 
 Working prototype. The app shell, API wiring, local download tracking, sync queue, and a basic EPUB/PDF/audio reading path are in place. The remaining work is concentrated around end-to-end offline verification, reader quality, and release hardening.
 
+## Build
+
+From the project root:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+## Test
+
+Run the local JVM unit suite with:
+
+```powershell
+.\gradlew.bat testDebugUnitTest
+```
+
+The release build also compiles locally with:
+
+```powershell
+.\gradlew.bat assembleRelease
+```
+
+## Manual app testing
+
+The current manual test entry point is documented in [docs/testing.md](./docs/testing.md).
+
+Minimum baseline before manual app testing:
+
+- `.\gradlew.bat assembleDebug` passes
+- `.\gradlew.bat testDebugUnitTest` passes
+- a reachable BookOrbit server is available
+- a test account can sign in and access real content
+
+## Local setup
+
+Machine-specific SDK setup and environment notes are in [docs/setup.md](./docs/setup.md).
+
 ## Documentation
 
 - [docs/README.md](./docs/README.md)
