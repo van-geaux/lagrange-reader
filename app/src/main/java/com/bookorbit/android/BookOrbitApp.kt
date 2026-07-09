@@ -252,7 +252,12 @@ private fun LoginScreen(
                         settings.allowFileAccess = true
                         settings.allowContentAccess = true
                         webChromeClient = WebChromeClient()
-                        webViewClient = WebViewClient()
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                onAuthenticated()
+                            }
+                        }
                         loadUrl(serverUrl)
                     }
                 }

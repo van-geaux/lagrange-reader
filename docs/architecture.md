@@ -10,7 +10,7 @@ The current app flow is:
 
 1. User enters a BookOrbit server URL.
 2. The app opens the server login page in a WebView.
-3. The app polls `GET /api/v1/auth/me` to determine whether login has succeeded and whether a persisted session is still valid.
+3. The app checks `GET /api/v1/auth/me` during login-page navigation and on a short polling interval to determine whether login has succeeded and whether a persisted session is still valid.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
@@ -98,7 +98,7 @@ Validated against the live server and BookOrbit source:
 ## Known architectural gaps
 
 - EPUB support is functional but still minimal: no pagination and no in-chapter scroll restore.
-- Login completion detection is still polling-based and has not yet been verified against every server auth flow.
+- Login completion detection now combines navigation-triggered and polling-based `/api/v1/auth/me` checks, but it has not yet been verified against every server auth flow.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling rules are extracted into a small policy object with focused JVM coverage.

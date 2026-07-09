@@ -20,6 +20,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private var lastBrowserState: BrowserState? = null
+    private var loginRefreshInFlight = false
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -158,6 +159,11 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun refreshLoginState() {
         scope.launch {
+            if (loginRefreshInFlight || _screen.value !is AppScreen.Login) {
+                return@launch
+            }
+            loginRefreshInFlight = true
+            try {
             val serverUrl = repository.getServerUrl()
             if (serverUrl.isNullOrBlank()) {
                 _screen.value = AppScreen.ServerSetup()
@@ -197,6 +203,9 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         )
                     }
                 }
+            }
+            } finally {
+                loginRefreshInFlight = false
             }
         }
     }

@@ -38,7 +38,7 @@ sdk.dir=C\:\\Users\\<user>\\AppData\\Local\\Android\\Sdk
 1. Launch the app.
 2. Enter the BookOrbit server base URL.
 3. Complete login in the embedded WebView.
-4. Wait for the app to confirm the authenticated session through `/api/v1/auth/me`.
+4. Wait for the app to confirm the authenticated session through `/api/v1/auth/me` after login-page navigation completes.
 5. Browse libraries and books.
 
 ## Known environment notes
