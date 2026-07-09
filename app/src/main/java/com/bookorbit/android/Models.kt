@@ -42,6 +42,8 @@ data class BrowserState(
     val selectedLibraryId: String?,
     val books: List<BookSummary>,
     val isRefreshing: Boolean = false,
+    val isLoadingLibraries: Boolean = false,
+    val isLoadingBooks: Boolean = false,
     val message: String? = null
 )
 

@@ -63,9 +63,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Display book list in app
 - [x] Confirm real API payload parsing against live BookOrbit responses
 - [ ] Harden parsing for nullable/missing fields
-- [ ] Add loading, empty, and error states for libraries
-- [ ] Add loading, empty, and error states for books
-- [ ] Add pull-to-refresh or equivalent refresh UX
+- [x] Add loading, empty, and error states for libraries
+- [x] Add loading, empty, and error states for books
+- [x] Add pull-to-refresh or equivalent refresh UX
 - [ ] Cache last successful library/book snapshot locally
 
 ## 5. Book Metadata Mapping

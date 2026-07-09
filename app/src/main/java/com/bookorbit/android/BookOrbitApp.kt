@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -244,7 +245,22 @@ private fun LibraryBrowserScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Libraries") },
-                actions = { TextButton(onClick = onRefresh) { Text("Refresh") } }
+                actions = {
+                    if (state.isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !state.isRefreshing
+                    ) {
+                        Text("Refresh")
+                    }
+                }
             )
         }
     ) { padding ->
@@ -273,12 +289,21 @@ private fun LibraryBrowserScreen(
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.libraries.forEach { library ->
-                        FilterChip(
-                            selected = library.id == state.selectedLibraryId,
-                            onClick = { onLibrarySelected(library.id) },
-                            label = { Text(library.name) }
+                    when {
+                        state.isLoadingLibraries -> LoadingRow("Loading libraries...")
+                        state.libraries.isEmpty() -> Text(
+                            text = "No libraries found.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
                         )
+                        else -> state.libraries.forEach { library ->
+                            FilterChip(
+                                selected = library.id == state.selectedLibraryId,
+                                onClick = { onLibrarySelected(library.id) },
+                                enabled = !state.isLoadingBooks,
+                                label = { Text(library.name) }
+                            )
+                        }
                     }
                 }
             }
@@ -287,6 +312,19 @@ private fun LibraryBrowserScreen(
                     text = if (state.selectedLibraryId == null) "Select a library" else "Books",
                     style = MaterialTheme.typography.titleMedium
                 )
+            }
+            if (state.isLoadingBooks) {
+                item {
+                    LoadingRow("Loading books...")
+                }
+            } else if (state.selectedLibraryId != null && state.books.isEmpty()) {
+                item {
+                    Text(
+                        text = "No books found in this library.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
             items(state.books) { book ->
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -318,6 +356,20 @@ private fun LibraryBrowserScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LoadingRow(text: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp
+        )
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

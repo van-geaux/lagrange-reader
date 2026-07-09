@@ -14,6 +14,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Reader/player progress events are throttled before queue persistence
 - Reader startup loading, reader error messages, unsupported-format messaging, and PDF cache-open support are implemented
 - Server-reported page/time progress is mapped into reader resume state
+- Library and book browsing now has loading, empty, error, and refresh UI states
 
 ## Next execution order
 
@@ -42,7 +43,6 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 4. UX hardening
 
-- Better loading and error states
 - Download progress and retry UI
 - Session-expiry handling
 - Cleaner unsupported-format handling

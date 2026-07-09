@@ -73,6 +73,17 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     fun loadBrowser() {
         scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
+            val previous = lastBrowserState
+            if (previous != null) {
+                showBrowser(
+                    previous.copy(
+                        isRefreshing = true,
+                        isLoadingLibraries = true,
+                        isLoadingBooks = true,
+                        message = null
+                    )
+                )
+            }
             runCatching {
                 val libraries = repository.loadLibraries()
                 val selectedLibrary = repository.getSelectedLibraryId() ?: libraries.firstOrNull()?.id
@@ -82,18 +93,32 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = selectedLibrary,
-                        books = books
+                        books = books,
+                        isRefreshing = false,
+                        isLoadingLibraries = false,
+                        isLoadingBooks = false
                     )
                 )
                 if (selectedLibrary != null) {
                     repository.setSelectedLibraryId(selectedLibrary)
                 }
                 repository.syncPendingProgress()
-            }.onFailure {
-                _screen.value = AppScreen.Login(
-                    serverUrl = serverUrl,
-                    message = "Session expired or the server is unavailable. Sign in again."
-                )
+            }.onFailure { error ->
+                if (previous != null) {
+                    showBrowser(
+                        previous.copy(
+                            isRefreshing = false,
+                            isLoadingLibraries = false,
+                            isLoadingBooks = false,
+                            message = error.message ?: "Unable to refresh libraries."
+                        )
+                    )
+                } else {
+                    _screen.value = AppScreen.Login(
+                        serverUrl = serverUrl,
+                        message = "Session expired or the server is unavailable. Sign in again."
+                    )
+                }
             }
         }
     }
@@ -101,30 +126,43 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     fun selectLibrary(libraryId: String) {
         scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
+            val currentBrowser = _screen.value as? AppScreen.Browser
+            val loadingState = currentBrowser?.browserState?.copy(
+                selectedLibraryId = libraryId,
+                books = emptyList(),
+                isRefreshing = false,
+                isLoadingLibraries = false,
+                isLoadingBooks = true,
+                message = null
+            )
+            if (loadingState != null) {
+                showBrowser(loadingState)
+            }
             runCatching {
                 repository.setSelectedLibraryId(libraryId)
-                val current = _screen.value
-                val libraries = when (current) {
-                    is AppScreen.Browser -> current.browserState.libraries
-                    else -> repository.loadLibraries()
-                }
+                val libraries = currentBrowser?.browserState?.libraries ?: repository.loadLibraries()
                 val books = repository.loadBooks(libraryId)
                 showBrowser(
                     BrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = libraryId,
-                        books = books
+                        books = books,
+                        isRefreshing = false,
+                        isLoadingLibraries = false,
+                        isLoadingBooks = false
                     )
                 )
-            }.onFailure {
+            }.onFailure { error ->
                 showBrowser(
-                    BrowserState(
+                    (loadingState ?: BrowserState(
                         serverUrl = serverUrl,
                         libraries = emptyList(),
-                        selectedLibraryId = null,
-                        books = emptyList(),
-                        message = it.message ?: "Unable to load the selected library."
+                        selectedLibraryId = libraryId,
+                        books = emptyList()
+                    )).copy(
+                        isLoadingBooks = false,
+                        message = error.message ?: "Unable to load the selected library."
                     )
                 )
             }

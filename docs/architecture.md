@@ -24,6 +24,7 @@ The current app flow is:
 - `AppCoordinator` owns screen state and orchestrates transitions.
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
+- Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 
 ### Data and API layer
