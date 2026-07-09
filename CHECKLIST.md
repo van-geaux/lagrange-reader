@@ -165,7 +165,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Basic fallback back to login on session/API failure
 - [x] Add structured user-facing error messages
 - [ ] Add recoverable network error flows
-- [ ] Add authentication-expired flow with return to intended screen
+- [x] Add authentication-expired flow with return to intended screen
 - [x] Add corrupted local file detection and recovery
 - [x] Add unsupported-format messaging
 - [x] Add crash-safe handling for malformed server responses

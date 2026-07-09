@@ -94,7 +94,7 @@ fun BookOrbitApp(
         is AppScreen.Browser -> LibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::loadBrowser,
-            onSignOut = coordinator::signOut,
+            onSessionAction = coordinator::onBrowserSessionAction,
             onLibrarySelected = coordinator::selectLibrary,
             onBookOpen = coordinator::openBook,
             onDownload = coordinator::downloadBook,
@@ -266,7 +266,7 @@ private fun LoginScreen(
 private fun LibraryBrowserScreen(
     state: BrowserState,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onSessionAction: () -> Unit,
     onLibrarySelected: (String) -> Unit,
     onBookOpen: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
@@ -294,8 +294,8 @@ private fun LibraryBrowserScreen(
                     ) {
                         Text("Refresh")
                     }
-                    TextButton(onClick = onSignOut) {
-                        Text("Sign out")
+                    TextButton(onClick = onSessionAction) {
+                        Text(if (state.isOfflineSnapshot) "Sign in" else "Sign out")
                     }
                 }
             )

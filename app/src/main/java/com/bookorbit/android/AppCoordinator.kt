@@ -23,6 +23,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
+    private var pendingPostLoginDestination: PostLoginDestination? = null
 
     fun bootstrap() {
         scope.launch {
@@ -56,7 +57,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             )
                         )
                     } else {
-                        _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Sign in to access your libraries.")
+                        showLogin(
+                            message = "Sign in to access your libraries.",
+                            destination = PostLoginDestination.Browser
+                        )
                     }
                 }
                 SessionState.Unavailable -> {
@@ -69,9 +73,9 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             )
                         )
                     } else {
-                        _screen.value = AppScreen.Login(
-                            serverUrl = serverUrl,
-                            message = "The server is unavailable. Keep the login page open or retry when the connection recovers."
+                        showLogin(
+                            message = "The server is unavailable. Keep the login page open or retry when the connection recovers.",
+                            destination = PostLoginDestination.Browser
                         )
                     }
                 }
@@ -134,7 +138,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 }
             }
             repository.setServerUrl(serverUrl)
-            _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Connect to the server and complete sign in.")
+            showLogin(
+                message = "Connect to the server and complete sign in.",
+                destination = PostLoginDestination.Browser
+            )
         }
     }
 
@@ -157,7 +164,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 return@launch
             }
             when (repository.getSessionState()) {
-                SessionState.Authenticated -> loadBrowser()
+                SessionState.Authenticated -> resumeAfterLogin()
                 SessionState.Unauthenticated -> {
                     val cached = repository.loadCachedBrowserState()
                     if (cached != null) {
@@ -168,7 +175,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             )
                         )
                     } else {
-                        _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Waiting for an authenticated session.")
+                        showLogin(
+                            message = "Waiting for an authenticated session.",
+                            destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
+                        )
                     }
                 }
                 SessionState.Unavailable -> {
@@ -181,13 +191,27 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             )
                         )
                     } else {
-                        _screen.value = AppScreen.Login(
-                            serverUrl = serverUrl,
-                            message = "Waiting for the server connection to recover."
+                        showLogin(
+                            message = "Waiting for the server connection to recover.",
+                            destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
                         )
                     }
                 }
             }
+        }
+    }
+
+    fun onBrowserSessionAction() {
+        scope.launch {
+            val current = lastBrowserState
+            if (current?.isOfflineSnapshot == true) {
+                showLogin(
+                    message = "Sign in again to refresh libraries or open online content.",
+                    destination = PostLoginDestination.Browser
+                )
+                return@launch
+            }
+            signOut()
         }
     }
 
@@ -198,21 +222,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             latestProgressByTarget.clear()
             queuedProgressByTarget.clear()
             repository.clearSession()
-            val serverUrl = repository.getServerUrl().orEmpty()
-            val cached = repository.loadCachedBrowserState()
-            if (cached != null) {
-                showBrowser(
-                    cached.copy(
-                        isOfflineSnapshot = true,
-                        message = "Signed out. Sign in again to refresh libraries or sync progress."
-                    )
-                )
-            } else {
-                _screen.value = AppScreen.Login(
-                    serverUrl = serverUrl,
-                    message = "Signed out. Sign in to access your libraries."
-                )
-            }
+            showLogin(
+                message = "Signed out. Sign in to access your libraries.",
+                destination = PostLoginDestination.Browser
+            )
         }
     }
 
@@ -259,6 +272,13 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )
                 )
             }.onFailure { error ->
+                if (error is AuthenticationRequiredException) {
+                    showLogin(
+                        message = "Your session expired. Sign in again to continue browsing.",
+                        destination = PostLoginDestination.Browser
+                    )
+                    return@onFailure
+                }
                 val cached = repository.loadCachedBrowserState()
                 if (cached != null) {
                     showBrowser(
@@ -275,11 +295,6 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             isLoadingBooks = false,
                             message = userMessage(error, "Unable to refresh libraries.")
                         )
-                    )
-                } else {
-                    _screen.value = AppScreen.Login(
-                        serverUrl = serverUrl,
-                        message = "Session expired or the server is unavailable. Sign in again."
                     )
                 }
             }
@@ -320,6 +335,13 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )
                 )
             }.onFailure { error ->
+                if (error is AuthenticationRequiredException) {
+                    showLogin(
+                        message = "Your session expired. Sign in again to continue in this library.",
+                        destination = PostLoginDestination.SelectLibrary(libraryId)
+                    )
+                    return@onFailure
+                }
                 val cachedForLibrary = repository.loadCachedBrowserState(libraryId)
                 showBrowser(
                     (cachedForLibrary ?: loadingState ?: BrowserState(
@@ -350,6 +372,13 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 repository.saveActiveReader(readerState.book)
                 _screen.value = AppScreen.Reader(readerState)
             }.onFailure { error ->
+                if (error is AuthenticationRequiredException) {
+                    showLogin(
+                        message = "Your session expired. Sign in again to reopen ${book.title}.",
+                        destination = PostLoginDestination.OpenBook(book)
+                    )
+                    return@onFailure
+                }
                 val fallback = lastBrowserState
                 if (fallback != null) {
                     showBrowser(
@@ -395,6 +424,11 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             isDownloading = false,
                             failed = false,
                             message = "Download canceled."
+                        )
+                    } else if (error is AuthenticationRequiredException) {
+                        showLogin(
+                            message = "Your session expired. Sign in again to continue downloading ${book.title}.",
+                            destination = PostLoginDestination.DownloadBook(book)
                         )
                     } else {
                         updateDownloadState(
@@ -521,6 +555,25 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         _screen.value = AppScreen.Browser(browserState = state)
     }
 
+    private suspend fun showLogin(message: String, destination: PostLoginDestination) {
+        pendingPostLoginDestination = destination
+        _screen.value = AppScreen.Login(
+            serverUrl = repository.getServerUrl().orEmpty(),
+            message = message
+        )
+    }
+
+    private fun resumeAfterLogin() {
+        val destination = pendingPostLoginDestination
+        pendingPostLoginDestination = null
+        when (destination) {
+            PostLoginDestination.Browser, null -> loadBrowser()
+            is PostLoginDestination.SelectLibrary -> selectLibrary(destination.libraryId)
+            is PostLoginDestination.OpenBook -> openBook(destination.book)
+            is PostLoginDestination.DownloadBook -> downloadBook(destination.book)
+        }
+    }
+
     private suspend fun flushCurrentReaderProgress() {
         val reader = _screen.value as? AppScreen.Reader ?: return
         val key = reader.readerState.book.progressKey()
@@ -571,5 +624,12 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         val progressPercent: Float?,
         val observedAtMillis: Long
     )
+
+    private sealed interface PostLoginDestination {
+        data object Browser : PostLoginDestination
+        data class SelectLibrary(val libraryId: String) : PostLoginDestination
+        data class OpenBook(val book: BookSummary) : PostLoginDestination
+        data class DownloadBook(val book: BookSummary) : PostLoginDestination
+    }
 
 }

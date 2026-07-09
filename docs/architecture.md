@@ -25,13 +25,14 @@ The current app flow is:
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
 - Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.
-- The browser top bar exposes sign-out without clearing the configured server or cached offline snapshot.
+- The browser top bar exposes sign-out for live sessions and a direct sign-in path from cached offline snapshots.
 - Book cards show active download progress, failed-download retry, and cancel controls while a download is running.
 - Downloaded book cards also expose a delete-local-copy action that removes the stored file and its persisted download record.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
+- When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
 
 ### Data and API layer
 
