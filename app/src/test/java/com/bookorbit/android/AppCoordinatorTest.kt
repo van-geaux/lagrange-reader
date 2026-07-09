@@ -286,7 +286,16 @@ class AppCoordinatorTest {
 
     @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
-        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
 
         coordinator.bootstrapIntoBrowser(
@@ -305,6 +314,12 @@ class AppCoordinatorTest {
         val loginScreen = coordinator.screen.value as AppScreen.Login
         assertTrue(loginScreen.message.orEmpty().contains("Signed out"))
         assertEquals(1, repository.clearSessionCalls)
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val refreshedLogin = coordinator.screen.value as AppScreen.Login
+        assertTrue(refreshedLogin.message.orEmpty().contains("Waiting for an authenticated session."))
     }
 }
 

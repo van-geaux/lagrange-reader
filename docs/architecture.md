@@ -55,7 +55,7 @@ The current app flow is:
 
 - `DataStore` stores the configured server URL and selected library ID.
 - Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
-- Session reset now waits for cookie removal to complete before the app settles on the login screen, while leaving the configured server and cached browser snapshot intact.
+- Session reset now waits for cookie removal to complete before the app settles on the login screen, and explicit sign-out suppresses cached offline-browser fallback until a fresh login succeeds.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.

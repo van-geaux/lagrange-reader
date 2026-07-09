@@ -29,6 +29,7 @@ class AppCoordinator(
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private var pendingPostLoginDestination: PostLoginDestination? = null
+    private var allowCachedLoginFallback = true
 
     fun bootstrap() {
         scope.launch {
@@ -46,6 +47,7 @@ class AppCoordinator(
 
             when (repository.getSessionState()) {
                 SessionState.Authenticated -> {
+                    allowCachedLoginFallback = true
                     repository.restoreActiveReaderState()?.let { readerState ->
                         _screen.value = AppScreen.Reader(readerState)
                         return@launch
@@ -53,7 +55,7 @@ class AppCoordinator(
                     loadBrowser()
                 }
                 SessionState.Unauthenticated -> {
-                    val cached = repository.loadCachedBrowserState()
+                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -69,7 +71,7 @@ class AppCoordinator(
                     }
                 }
                 SessionState.Unavailable -> {
-                    val cached = repository.loadCachedBrowserState()
+                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -171,9 +173,12 @@ class AppCoordinator(
                 return@launch
             }
             when (repository.getSessionState()) {
-                SessionState.Authenticated -> resumeAfterLogin()
+                SessionState.Authenticated -> {
+                    allowCachedLoginFallback = true
+                    resumeAfterLogin()
+                }
                 SessionState.Unauthenticated -> {
-                    val cached = repository.loadCachedBrowserState()
+                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -189,7 +194,7 @@ class AppCoordinator(
                     }
                 }
                 SessionState.Unavailable -> {
-                    val cached = repository.loadCachedBrowserState()
+                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -228,6 +233,7 @@ class AppCoordinator(
     fun signOut() {
         scope.launch {
             resetTransientState(clearBrowserState = true)
+            allowCachedLoginFallback = false
             repository.clearSession()
             showLogin(
                 message = "Signed out. Sign in to access your libraries.",
@@ -588,6 +594,7 @@ class AppCoordinator(
         queuedProgressByTarget.clear()
         pendingPostLoginDestination = null
         loginRefreshInFlight = false
+        allowCachedLoginFallback = true
         if (clearBrowserState) {
             lastBrowserState = null
         }
