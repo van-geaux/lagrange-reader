@@ -51,6 +51,7 @@ The current app flow is:
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
+- Corrupted local EPUB/PDF/CBZ files are rejected before reader startup, and invalid persisted download records are dropped before falling back to authenticated cache copies when possible.
 - Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.
 - `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.

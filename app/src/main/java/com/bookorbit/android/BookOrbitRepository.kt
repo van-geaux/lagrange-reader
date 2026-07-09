@@ -440,12 +440,19 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     private suspend fun resolveReadableFile(book: BookSummary, allowRemoteCache: Boolean = true): File? {
-        val direct = book.localPath?.let(::File)?.takeIf(File::exists)
+        val direct = book.localPath
+            ?.let(::File)
+            ?.takeIf(File::exists)
+            ?.takeIf { it.isReadableLocalReaderFile(book) }
         if (direct != null) {
             return direct
         }
         val fileId = book.fileId ?: return null
-        val downloaded = downloadStore.find(getServerUrl().orEmpty(), fileId)?.localPath?.let(::File)?.takeIf(File::exists)
+        val downloaded = downloadStore.find(getServerUrl().orEmpty(), fileId)
+            ?.localPath
+            ?.let(::File)
+            ?.takeIf(File::exists)
+            ?.takeIf { it.isReadableLocalReaderFile(book) }
         if (downloaded != null) {
             return downloaded
         }
@@ -579,6 +586,16 @@ class BookOrbitRepository(private val context: Context) {
         }
         target.delete()
         throw UserFacingException(message)
+    }
+
+    private suspend fun File.isReadableLocalReaderFile(book: BookSummary): Boolean {
+        val readable = ReaderFileValidator.isReadable(book.mediaKind, this)
+        if (!readable) {
+            book.fileId?.let { fileId ->
+                downloadStore.delete(getServerUrl().orEmpty(), fileId)
+            }
+        }
+        return readable
     }
 
     private fun clearCookies() {
