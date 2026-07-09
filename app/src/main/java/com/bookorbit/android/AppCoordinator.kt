@@ -502,7 +502,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     progressPercent = progressPercent ?: book.progressPercent
                 )
             )
-            if (shouldQueueProgress(progress, queuedProgressByTarget[key])) {
+            if (ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
                 queueProgress(key, progress)
             }
         }
@@ -525,7 +525,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         val reader = _screen.value as? AppScreen.Reader ?: return
         val key = reader.readerState.book.progressKey()
         val progress = latestProgressByTarget[key] ?: return
-        if (progress.isMeaningfullyDifferentFrom(queuedProgressByTarget[key])) {
+        if (ProgressQueuePolicy.isMeaningfullyDifferent(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
             queueProgress(key, progress)
         }
     }
@@ -540,38 +540,14 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         queuedProgressByTarget[key] = progress
     }
 
-    private fun shouldQueueProgress(progress: PendingProgress, lastQueued: PendingProgress?): Boolean {
-        if (lastQueued == null) {
-            return true
-        }
-        if (!progress.isMeaningfullyDifferentFrom(lastQueued)) {
-            return false
-        }
-        if (progress.book.mediaKind != MediaKind.AUDIO) {
-            return true
-        }
-        val elapsedMillis = progress.observedAtMillis - lastQueued.observedAtMillis
-        val positionDeltaMillis = kotlin.math.abs(progress.position - lastQueued.position)
-        return elapsedMillis >= MIN_AUDIO_PROGRESS_QUEUE_INTERVAL_MS ||
-            positionDeltaMillis >= MIN_AUDIO_POSITION_DELTA_MS ||
-            progress.percentDeltaFrom(lastQueued) >= MIN_PERCENT_DELTA
-    }
-
-    private fun PendingProgress.isMeaningfullyDifferentFrom(other: PendingProgress?): Boolean {
-        other ?: return true
-        return pageIndex != other.pageIndex ||
-            kotlin.math.abs(position - other.position) >= MIN_POSITION_DELTA_MS ||
-            percentDeltaFrom(other) >= MIN_PERCENT_DELTA
-    }
-
-    private fun PendingProgress.percentDeltaFrom(other: PendingProgress): Float {
-        val current = progressPercent ?: return 0f
-        val previous = other.progressPercent ?: return 0f
-        return kotlin.math.abs(normalizeProgressPercent(current) - normalizeProgressPercent(previous))
-    }
-
-    private fun normalizeProgressPercent(value: Float): Float {
-        return if (value in 0f..1f) value * 100f else value
+    private fun PendingProgress.toSnapshot(): ProgressSnapshot {
+        return ProgressSnapshot(
+            mediaKind = book.mediaKind,
+            positionMs = position,
+            pageIndex = pageIndex,
+            progressPercent = progressPercent,
+            observedAtMillis = observedAtMillis
+        )
     }
 
     private fun BookSummary.progressKey(): BookProgressKey {
@@ -596,10 +572,4 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         val observedAtMillis: Long
     )
 
-    private companion object {
-        const val MIN_AUDIO_PROGRESS_QUEUE_INTERVAL_MS = 15_000L
-        const val MIN_AUDIO_POSITION_DELTA_MS = 15_000L
-        const val MIN_POSITION_DELTA_MS = 1_000L
-        const val MIN_PERCENT_DELTA = 1f
-    }
 }

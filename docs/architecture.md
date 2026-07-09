@@ -62,7 +62,7 @@ The current app flow is:
 - Sync is currently event-based and timestamped.
 - Conflict handling is currently newest-progress-wins.
 - Duplicate queued updates for the same server/book/file target are compacted to the newest event.
-- Audio progress is throttled before persistence; page/chapter updates are queued only when the target position changes meaningfully.
+- Audio progress is throttled before persistence through a dedicated `ProgressQueuePolicy`; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
 - The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
 
@@ -97,4 +97,4 @@ Validated against the live server and BookOrbit source:
 - Login completion detection is still polling-based and has not yet been verified against every server auth flow.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
-- Progress throttling is implemented in coordinator memory and needs focused unit coverage.
+- Progress throttling rules are extracted into a small policy object with focused JVM coverage.

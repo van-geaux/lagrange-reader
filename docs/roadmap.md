@@ -47,7 +47,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 3. Sync queue hardening
 
-- Add tests for progress throttling and queue compaction behavior
+- Add more integration coverage around queue compaction behavior
 - Add backoff and retry policy
 - Add debug-visible queue inspection/logging
 - Verify queue replay against the live BookOrbit server
