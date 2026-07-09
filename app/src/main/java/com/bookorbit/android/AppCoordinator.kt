@@ -148,10 +148,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun clearServer() {
         scope.launch {
-            activeDownloads.values.forEach { it.cancel() }
-            activeDownloads.clear()
-            latestProgressByTarget.clear()
-            queuedProgressByTarget.clear()
+            resetTransientState(clearBrowserState = true)
             repository.clearServer()
             _screen.value = AppScreen.ServerSetup()
         }
@@ -226,10 +223,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun signOut() {
         scope.launch {
-            activeDownloads.values.forEach { it.cancel() }
-            activeDownloads.clear()
-            latestProgressByTarget.clear()
-            queuedProgressByTarget.clear()
+            resetTransientState(clearBrowserState = true)
             repository.clearSession()
             showLogin(
                 message = "Signed out. Sign in to access your libraries.",
@@ -565,6 +559,18 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private fun showBrowser(state: BrowserState) {
         lastBrowserState = state
         _screen.value = AppScreen.Browser(browserState = state)
+    }
+
+    private fun resetTransientState(clearBrowserState: Boolean) {
+        activeDownloads.values.forEach { it.cancel() }
+        activeDownloads.clear()
+        latestProgressByTarget.clear()
+        queuedProgressByTarget.clear()
+        pendingPostLoginDestination = null
+        loginRefreshInFlight = false
+        if (clearBrowserState) {
+            lastBrowserState = null
+        }
     }
 
     private suspend fun showLogin(message: String, destination: PostLoginDestination) {
