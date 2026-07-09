@@ -146,11 +146,17 @@ class BookOrbitRepository(private val context: Context) {
 
     suspend fun buildReaderState(book: BookSummary): ReaderState = withContext(Dispatchers.IO) {
         val localFile = resolveReadableFile(book)
+        val streamUrl = book.fileId?.let(::buildStreamUrl)
+        ensureReaderCanOpen(
+            book = book,
+            localFile = localFile,
+            streamUrl = streamUrl
+        )
         val progress = queueStore.latestFor(book.id, book.fileId)
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
-            streamUrl = book.fileId?.let(::buildStreamUrl),
+            streamUrl = streamUrl,
             lastKnownPosition = progress?.positionMs ?: book.progressPositionMs ?: 0L,
             pageIndex = progress?.pageIndex ?: book.progressPageIndex ?: 0,
             progressPercent = progress?.progressPercent ?: book.progressPercent
@@ -178,11 +184,21 @@ class BookOrbitRepository(private val context: Context) {
         if (localOnly && localFile == null) {
             return@withContext null
         }
+        val streamUrl = savedBook.fileId?.let(::buildStreamUrl)
+        runCatching {
+            ensureReaderCanOpen(
+                book = savedBook,
+                localFile = localFile,
+                streamUrl = streamUrl
+            )
+        }.getOrElse {
+            return@withContext null
+        }
         val progress = queueStore.latestFor(savedBook.id, savedBook.fileId)
         ReaderState(
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
-            streamUrl = savedBook.fileId?.let(::buildStreamUrl),
+            streamUrl = streamUrl,
             lastKnownPosition = progress?.positionMs ?: savedBook.progressPositionMs ?: 0L,
             pageIndex = progress?.pageIndex ?: savedBook.progressPageIndex ?: 0,
             progressPercent = progress?.progressPercent ?: savedBook.progressPercent
@@ -428,6 +444,40 @@ class BookOrbitRepository(private val context: Context) {
             MediaKind.PDF,
             MediaKind.COMIC -> if (allowRemoteCache) cacheReadableCopy(book) else null
             else -> null
+        }
+    }
+
+    private fun ensureReaderCanOpen(
+        book: BookSummary,
+        localFile: File?,
+        streamUrl: String?
+    ) {
+        when (book.mediaKind) {
+            MediaKind.AUDIO -> {
+                if (localFile == null && streamUrl.isNullOrBlank()) {
+                    throw UserFacingException("This audiobook is missing both a local file and a playable stream.")
+                }
+            }
+            MediaKind.PDF -> {
+                if (localFile == null) {
+                    throw UserFacingException("This PDF could not be prepared for reading. Download it first or reconnect to the server.")
+                }
+            }
+            MediaKind.EPUB -> {
+                if (localFile == null) {
+                    throw UserFacingException("This EPUB could not be prepared for reading. Download it first or reconnect to the server.")
+                }
+            }
+            MediaKind.COMIC -> {
+                if (localFile == null) {
+                    throw UserFacingException("This comic could not be prepared for reading. Download it first or reconnect to the server.")
+                }
+            }
+            MediaKind.UNKNOWN -> {
+                if (localFile == null && streamUrl.isNullOrBlank()) {
+                    throw UserFacingException("This title does not expose a readable local file or stream.")
+                }
+            }
         }
     }
 
