@@ -74,6 +74,7 @@ The current app flow is:
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
+- Debug queue counts shown in the browser are scoped to the active server, even when pending updates for other saved servers still exist on disk.
 
 ### Reader implementations
 

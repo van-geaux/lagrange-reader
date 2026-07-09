@@ -177,6 +177,41 @@ class ProgressQueueStoreTest {
         assertEquals(listOf("server-one", "server-two"), items.map { it.id })
     }
 
+    @Test
+    fun `countFor returns only items for the requested server`() = runBlocking {
+        val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-count").toFile())
+
+        store.replaceAll(
+            listOf(
+                update(
+                    id = "server-one-a",
+                    bookId = "book-1",
+                    fileId = "file-1",
+                    mediaKind = MediaKind.EPUB,
+                    updatedAtMillis = 10L
+                ),
+                update(
+                    id = "server-one-b",
+                    bookId = "book-2",
+                    fileId = "file-2",
+                    mediaKind = MediaKind.PDF,
+                    updatedAtMillis = 20L
+                ),
+                update(
+                    id = "server-two",
+                    bookId = "book-3",
+                    fileId = "file-3",
+                    mediaKind = MediaKind.AUDIO,
+                    updatedAtMillis = 30L
+                ).copy(serverUrl = "https://other.example")
+            )
+        )
+
+        assertEquals(2, store.countFor("https://example.test"))
+        assertEquals(1, store.countFor("https://other.example"))
+        assertEquals(0, store.countFor("https://missing.example"))
+    }
+
     private fun update(
         id: String,
         bookId: String,

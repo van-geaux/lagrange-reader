@@ -66,6 +66,10 @@ class ProgressQueueStore private constructor(
             .maxByOrNull { it.updatedAtMillis }
     }
 
+    suspend fun countFor(serverUrl: String): Int = mutex.withLock {
+        readUnlocked().count { it.serverUrl == serverUrl }
+    }
+
     private fun readUnlocked(): List<ProgressUpdate> {
         if (!file.exists()) return emptyList()
         val array = JSONArray(file.readText())

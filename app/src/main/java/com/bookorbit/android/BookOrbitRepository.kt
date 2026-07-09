@@ -303,7 +303,7 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun pendingProgressCount(): Int = withContext(Dispatchers.IO) {
-        queueStore.readAll().size
+        queueStore.countFor(getServerUrl().orEmpty())
     }
 
     suspend fun syncPendingProgress(): SyncAttemptResult = withContext(Dispatchers.IO) {
