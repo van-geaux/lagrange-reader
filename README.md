@@ -39,7 +39,7 @@ The release build also compiles locally with:
 .\gradlew.bat assembleRelease
 ```
 
-The repository now also includes a GitHub Actions workflow that runs `testDebugUnitTest`, `lintDebug`, and `assembleDebug` on pushes to `main` and on pull requests.
+The repository now also includes a GitHub Actions workflow that runs `testDebugUnitTest`, `lintDebug`, `assembleDebugAndroidTest`, and `assembleDebug` on pushes to `main` and on pull requests.
 
 Server policy: production-style server URLs must use `https://`. Plain `http://` is only accepted for local development targets such as `localhost` and common Android emulator loopback aliases.
 

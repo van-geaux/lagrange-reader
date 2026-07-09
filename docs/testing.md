@@ -8,6 +8,7 @@ You can begin manual testing once these conditions are true:
 
 - `.\gradlew.bat assembleDebug` passes
 - `.\gradlew.bat testDebugUnitTest` passes
+- `.\gradlew.bat assembleDebugAndroidTest` passes if you plan to run instrumentation tests
 - a reachable BookOrbit server URL is available
 - at least one account can sign in and access a library with real content
 
