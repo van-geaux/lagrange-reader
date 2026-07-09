@@ -14,6 +14,10 @@ sealed interface AppScreen {
         val browserState: BrowserState
     ) : AppScreen
 
+    data class ReaderLoading(
+        val book: BookSummary
+    ) : AppScreen
+
     data class Reader(
         val readerState: ReaderState
     ) : AppScreen

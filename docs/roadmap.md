@@ -12,6 +12,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - EPUB fallback replaced with a basic real EPUB reader path
 - Queue compaction and auth-vs-transient sync failure handling implemented
 - Reader/player progress events are throttled before queue persistence
+- Reader startup loading, reader error messages, unsupported-format messaging, and PDF cache-open support are implemented
 
 ## Next execution order
 
@@ -26,7 +27,6 @@ This roadmap summarizes the next practical engineering sequence for the project.
 ### 2. Reader quality hardening
 
 - Preserve EPUB in-chapter position instead of chapter-only progress
-- Add loading and error states for reader startup failures
 - Add comic support if required by the deployed BookOrbit library
 - Improve PDF zoom and pan behavior
 - Improve audio controls as needed within the read/listen-only scope

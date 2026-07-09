@@ -13,7 +13,8 @@ The current app flow is:
 3. The app probes the authenticated API to determine whether login has succeeded.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
-6. EPUB titles are opened from a local readable copy, extracted into app cache, and rendered chapter by chapter from the EPUB spine.
+6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
+7. EPUB titles are extracted into app cache and rendered chapter by chapter from the EPUB spine.
 
 ## Main components
 
@@ -23,6 +24,7 @@ The current app flow is:
 - `AppCoordinator` owns screen state and orchestrates transitions.
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
+- Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 
 ### Data and API layer
 
@@ -30,7 +32,7 @@ The current app flow is:
 - It stores the selected server URL and selected library.
 - It loads libraries and books from the live API.
 - It resolves stream and download URLs for files.
-- It prepares readable local copies for offline-first reader flows, including EPUB cache copies for authenticated reads before download.
+- It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.
 - Progress queue writes are dispatched on `Dispatchers.IO`; `AppCoordinator` debounces noisy reader/player progress events before calling the repository.
 
@@ -51,14 +53,14 @@ The current app flow is:
 ### Reader implementations
 
 - Audio uses ExoPlayer against a local file or authenticated stream URL.
-- PDF uses `PdfRenderer` with simple page-by-page navigation.
+- PDF uses `PdfRenderer` with simple page-by-page navigation against local downloads or authenticated cache copies.
 - EPUB uses a local extraction flow:
   - the `.epub` is resolved from downloads or fetched into app cache
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
   - progress is currently tracked at chapter granularity and translated into percentage
-- Unsupported formats still fall back to the generic file or URL reader path.
+- Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
 

@@ -252,7 +252,8 @@ class BookOrbitRepository(private val context: Context) {
             return downloaded
         }
         return when (book.mediaKind) {
-            MediaKind.EPUB -> cacheReadableCopy(book)
+            MediaKind.EPUB,
+            MediaKind.PDF -> cacheReadableCopy(book)
             else -> null
         }
     }

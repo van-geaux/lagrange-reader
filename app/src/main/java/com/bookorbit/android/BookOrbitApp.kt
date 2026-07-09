@@ -81,11 +81,40 @@ fun BookOrbitApp(
             onBookOpen = coordinator::openBook,
             onDownload = coordinator::downloadBook
         )
+        is AppScreen.ReaderLoading -> ReaderLoadingScreen(
+            book = screen.book,
+            onBack = coordinator::closeReader
+        )
         is AppScreen.Reader -> ReaderScreen(
             state = screen.readerState,
             onBack = coordinator::closeReader,
             onProgress = coordinator::onProgress
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReaderLoadingScreen(
+    book: BookSummary,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(book.title) },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
     }
 }
 
@@ -337,10 +366,13 @@ private fun ReaderScreen(
                         onProgress(state.book, 0L, chapterIndex, percent)
                     }
                 )
-                else -> GenericReaderView(
+                MediaKind.COMIC -> UnsupportedReaderView(
                     title = state.book.title,
-                    file = state.localFile,
-                    streamUrl = state.streamUrl
+                    message = "Comic reading is not supported yet."
+                )
+                MediaKind.UNKNOWN -> UnsupportedReaderView(
+                    title = state.book.title,
+                    message = "This file format is not supported yet."
                 )
             }
         }
@@ -376,6 +408,12 @@ private fun AudioReader(
         }
     }
 
+    val hasTarget = (file != null && file.exists()) || !streamUrl.isNullOrBlank()
+    if (!hasTarget) {
+        ReaderMessage("Unable to prepare audio playback.")
+        return
+    }
+
     LaunchedEffect(player) {
         while (isActive) {
             val duration = player.duration
@@ -402,9 +440,7 @@ private fun PdfReaderView(
     onProgress: (Int, Float?) -> Unit
 ) {
     if (file == null || !file.exists()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("This title must be downloaded before reading offline.")
-        }
+        ReaderMessage("Unable to prepare this PDF.")
         return
     }
 
@@ -428,6 +464,10 @@ private fun PdfReaderView(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Page ${currentPage + 1} of ${pageCount.coerceAtLeast(1)}")
+        if (pageCount <= 0) {
+            ReaderMessage("Unable to read pages from this PDF.")
+            return@Column
+        }
         pageBitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),
@@ -463,15 +503,11 @@ private fun EpubReaderView(
     val context = androidx.compose.ui.platform.LocalContext.current
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
     if (file == null || !file.exists()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("This EPUB is not available yet.")
-        }
+        ReaderMessage("Unable to prepare this EPUB.")
         return
     }
     if (epubBook == null || epubBook.chapters.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Unable to open this EPUB.")
-        }
+        ReaderMessage("Unable to open this EPUB.")
         return
     }
 
@@ -558,34 +594,39 @@ private fun EpubReaderView(
 }
 
 @Composable
-private fun GenericReaderView(
+private fun UnsupportedReaderView(
     title: String,
-    file: File?,
-    streamUrl: String?
+    message: String
 ) {
-    val target = when {
-        file != null && file.exists() -> Uri.fromFile(file).toString()
-        !streamUrl.isNullOrBlank() -> streamUrl
-        else -> null
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = message,
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error
+        )
     }
-    if (target == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No reader target available for $title")
-        }
-        return
-    }
+}
 
-    AndroidView(
+@Composable
+private fun ReaderMessage(message: String) {
+    Box(
         modifier = Modifier.fillMaxSize(),
-        factory = { context ->
-            WebView(context).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                webViewClient = WebViewClient()
-                loadUrl(target)
-            }
-        }
-    )
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(24.dp),
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
 }
 
 private fun bookStatus(book: BookSummary): String {

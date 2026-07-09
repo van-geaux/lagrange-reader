@@ -89,9 +89,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Confirm byte-range support and resume behavior for audio
 - [x] Replace generic ebook fallback with real EPUB reader
 - [ ] Add comic/CBZ reader support if BookOrbit exposes comic files
-- [ ] Add proper in-reader loading/error states
+- [x] Add proper in-reader loading/error states
 - [ ] Add resume-from-last-position when streaming
-- [ ] Ensure opening a non-downloaded book always chooses streaming path
+- [x] Ensure opening a non-downloaded book always chooses streaming path
 
 ## 7. Download For Offline Use
 
@@ -166,7 +166,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add recoverable network error flows
 - [ ] Add authentication-expired flow with return to intended screen
 - [ ] Add corrupted local file detection and recovery
-- [ ] Add unsupported-format messaging
+- [x] Add unsupported-format messaging
 - [ ] Add crash-safe handling for malformed server responses
 
 ## 13. Testing

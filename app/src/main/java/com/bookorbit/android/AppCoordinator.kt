@@ -12,6 +12,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
+    private var lastBrowserState: BrowserState? = null
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
 
@@ -76,8 +77,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 val libraries = repository.loadLibraries()
                 val selectedLibrary = repository.getSelectedLibraryId() ?: libraries.firstOrNull()?.id
                 val books = selectedLibrary?.let { repository.loadBooks(it) }.orEmpty()
-                _screen.value = AppScreen.Browser(
-                    browserState = BrowserState(
+                showBrowser(
+                    BrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = selectedLibrary,
@@ -108,8 +109,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     else -> repository.loadLibraries()
                 }
                 val books = repository.loadBooks(libraryId)
-                _screen.value = AppScreen.Browser(
-                    browserState = BrowserState(
+                showBrowser(
+                    BrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = libraryId,
@@ -117,8 +118,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )
                 )
             }.onFailure {
-                _screen.value = AppScreen.Browser(
-                    browserState = BrowserState(
+                showBrowser(
+                    BrowserState(
                         serverUrl = serverUrl,
                         libraries = emptyList(),
                         selectedLibraryId = null,
@@ -132,11 +133,17 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun openBook(book: BookSummary) {
         scope.launch {
+            _screen.value = AppScreen.ReaderLoading(book)
             runCatching {
                 val readerState = repository.buildReaderState(book)
                 _screen.value = AppScreen.Reader(readerState)
-            }.onFailure {
-                loadBrowser()
+            }.onFailure { error ->
+                val fallback = lastBrowserState
+                if (fallback != null) {
+                    showBrowser(fallback.copy(message = error.message ?: "Unable to open ${book.title}."))
+                } else {
+                    loadBrowser()
+                }
             }
         }
     }
@@ -172,6 +179,11 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             flushCurrentReaderProgress()
             loadBrowser()
         }
+    }
+
+    private fun showBrowser(state: BrowserState) {
+        lastBrowserState = state
+        _screen.value = AppScreen.Browser(browserState = state)
     }
 
     private suspend fun flushCurrentReaderProgress() {
