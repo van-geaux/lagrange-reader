@@ -104,7 +104,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate file naming and extension handling for all supported formats
 - [ ] Add storage-space failure handling
 - [ ] Add download integrity checks
-- [ ] Add delete-local-copy action
+- [x] Add delete-local-copy action
 - [ ] Add redownload/update behavior if server file changes
 
 ## 8. Offline Reading / Listening

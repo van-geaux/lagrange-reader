@@ -81,7 +81,8 @@ fun BookOrbitApp(
             onLibrarySelected = coordinator::selectLibrary,
             onBookOpen = coordinator::openBook,
             onDownload = coordinator::downloadBook,
-            onCancelDownload = coordinator::cancelDownload
+            onCancelDownload = coordinator::cancelDownload,
+            onDeleteLocalCopy = coordinator::deleteLocalCopy
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,
@@ -241,7 +242,8 @@ private fun LibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     onBookOpen: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
-    onCancelDownload: (BookSummary) -> Unit
+    onCancelDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -354,7 +356,14 @@ private fun LibraryBrowserScreen(
                             ) {
                                 Text(if (book.isDownloaded) "Open local" else "Read / Listen")
                             }
-                            if (!book.isDownloaded && fileId != null) {
+                            if (book.isDownloaded) {
+                                OutlinedButton(
+                                    onClick = { onDeleteLocalCopy(book) },
+                                    enabled = !isDownloading
+                                ) {
+                                    Text("Delete local")
+                                }
+                            } else if (fileId != null) {
                                 if (isDownloading) {
                                     Button(
                                         onClick = {},

@@ -19,6 +19,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Download filenames preserve more specific format extensions from BookOrbit metadata
 - User-facing error messages are normalized from typed repository/network failures
 - Last successful libraries and per-library book lists are cached locally for browser fallback
+- Downloaded items can now remove their local copy and persisted download record
 
 ## Next execution order
 

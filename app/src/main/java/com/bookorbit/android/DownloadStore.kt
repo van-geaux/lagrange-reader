@@ -22,6 +22,16 @@ class DownloadStore(context: Context) {
         readUnlocked().firstOrNull { it.fileId == fileId }
     }
 
+    suspend fun delete(fileId: String): Boolean = mutex.withLock {
+        val records = readUnlocked()
+        val record = records.firstOrNull { it.fileId == fileId } ?: return@withLock false
+        val target = File(record.localPath)
+        val deletedFile = !target.exists() || target.delete()
+        val remaining = records.filterNot { it.fileId == fileId }
+        writeUnlocked(remaining)
+        deletedFile
+    }
+
     suspend fun readAll(): List<DownloadRecord> = mutex.withLock {
         readUnlocked()
     }

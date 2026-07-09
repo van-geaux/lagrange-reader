@@ -270,6 +270,18 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         )
     }
 
+    fun deleteLocalCopy(book: BookSummary) {
+        scope.launch {
+            runCatching {
+                repository.deleteLocalCopy(book)
+            }.onSuccess {
+                loadBrowser()
+            }.onFailure { error ->
+                showBrowserMessage(userMessage(error, "Unable to remove the local copy."))
+            }
+        }
+    }
+
     private fun updateDownloadState(
         fileId: String,
         isDownloading: Boolean,

@@ -169,6 +169,14 @@ class BookOrbitRepository(private val context: Context) {
         target
     }
 
+    suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
+        val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
+        val deleted = downloadStore.delete(fileId)
+        if (!deleted) {
+            throw UserFacingException("Unable to remove the local copy for this title.")
+        }
+    }
+
     suspend fun queueProgress(
         book: BookSummary,
         position: Long,

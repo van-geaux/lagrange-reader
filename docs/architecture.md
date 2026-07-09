@@ -26,6 +26,7 @@ The current app flow is:
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
 - Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.
 - Book cards show active download progress, failed-download retry, and cancel controls while a download is running.
+- Downloaded book cards also expose a delete-local-copy action that removes the stored file and its persisted download record.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 
