@@ -467,7 +467,6 @@ class BookOrbitRepository(private val context: Context) {
                 val format = primaryFile?.stringValue("format", "mimeType", "mime_type", "extension")
                     ?: obj.stringValue("format", "mimeType", "mime_type", "extension")
                 val mediaKind = inferMediaKind(format, obj.stringValue("title", "name"))
-                val authors = obj.optJSONArray("authors")
                 val readingProgress = obj.optJSONObject("readingProgress")
                 add(
                     BookSummary(
@@ -475,19 +474,12 @@ class BookOrbitRepository(private val context: Context) {
                         id = obj.stringValue("id", "_id", "bookId") ?: "book-$index",
                         fileId = fileId,
                         title = obj.stringValue("title", "name", "displayName") ?: "Untitled",
-                        author = when {
-                            authors != null && authors.length() > 0 -> buildList {
-                                for (authorIndex in 0 until authors.length()) {
-                                    authors.optString(authorIndex).takeIf { it.isNotBlank() }?.let(::add)
-                                }
-                            }.joinToString(", ").ifBlank { null }
-                            else -> obj.stringValue("author", "authorName", "creator")
-                        },
+                        author = obj.authorDisplayName(),
                         format = format,
                         mediaKind = mediaKind,
                         streamUrl = fileId?.let(::buildStreamUrl),
                         downloadUrl = fileId?.let(::buildDownloadUrl),
-                        coverUrl = if (obj.optBoolean("hasCover")) {
+                        coverUrl = if (obj.booleanValue("hasCover", "has_cover")) {
                             "${serverBase()}/api/v1/books/${obj.stringValue("id", "_id", "bookId") ?: "book-$index"}/cover"
                         } else {
                             obj.stringValue("coverUrl", "cover", "coverImage")
@@ -583,6 +575,42 @@ class BookOrbitRepository(private val context: Context) {
             }
         }
         return null
+    }
+
+    private fun JSONObject.booleanValue(vararg keys: String): Boolean {
+        keys.forEach { key ->
+            when (val value = opt(key)) {
+                is Boolean -> return value
+                is Number -> return value.toInt() != 0
+                is String -> {
+                    when (value.trim().lowercase(Locale.US)) {
+                        "true", "1", "yes" -> return true
+                        "false", "0", "no" -> return false
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun JSONObject.authorDisplayName(): String? {
+        optJSONArray("authors")?.let { authors ->
+            val values = buildList {
+                for (authorIndex in 0 until authors.length()) {
+                    when (val author = authors.opt(authorIndex)) {
+                        is String -> author.takeIf { it.isNotBlank() }?.let(::add)
+                        is Number -> add(author.toString())
+                        is JSONObject -> author.stringValue("name", "author", "displayName", "fullName", "title")
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(::add)
+                    }
+                }
+            }
+            if (values.isNotEmpty()) {
+                return values.joinToString(", ")
+            }
+        }
+        return stringValue("author", "authorName", "creator")
     }
 
     private fun JSONArray?.selectPrimaryFile(): JSONObject? {
