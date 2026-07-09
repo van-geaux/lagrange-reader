@@ -168,7 +168,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add authentication-expired flow with return to intended screen
 - [ ] Add corrupted local file detection and recovery
 - [x] Add unsupported-format messaging
-- [ ] Add crash-safe handling for malformed server responses
+- [x] Add crash-safe handling for malformed server responses
 
 ## 13. Testing
 

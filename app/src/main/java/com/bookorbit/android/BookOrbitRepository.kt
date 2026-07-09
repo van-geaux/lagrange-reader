@@ -420,7 +420,7 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     private fun parseLibraries(payload: String): List<LibrarySummary> {
-        val array = extractArray(payload)
+        val array = extractArray(payload, "load libraries")
         return buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
@@ -442,7 +442,7 @@ class BookOrbitRepository(private val context: Context) {
         payload: String,
         downloads: Map<String, DownloadRecord>
     ): List<BookSummary> {
-        val array = extractArray(payload)
+        val array = extractArray(payload, "load books")
         return buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
@@ -501,16 +501,20 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun extractArray(payload: String): JSONArray {
-        return when (val root = JSONTokener(payload).nextValue()) {
-            is JSONArray -> root
-            is JSONObject -> root.optJSONArray("items")
-                ?: root.optJSONArray("data")
-                ?: root.optJSONArray("libraries")
-                ?: root.optJSONArray("books")
-                ?: root.optJSONArray("results")
-                ?: JSONArray()
-            else -> JSONArray()
+    private fun extractArray(payload: String, action: String): JSONArray {
+        return runCatching {
+            when (val root = JSONTokener(payload).nextValue()) {
+                is JSONArray -> root
+                is JSONObject -> root.optJSONArray("items")
+                    ?: root.optJSONArray("data")
+                    ?: root.optJSONArray("libraries")
+                    ?: root.optJSONArray("books")
+                    ?: root.optJSONArray("results")
+                    ?: JSONArray()
+                else -> JSONArray()
+            }
+        }.getOrElse {
+            throw UserFacingException("The server returned malformed data while trying to $action.")
         }
     }
 
