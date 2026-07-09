@@ -7,9 +7,21 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class ProgressQueueStore(context: Context) {
+class ProgressQueueStore private constructor(
+    private val file: File,
+    @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
+) {
     private val mutex = Mutex()
-    private val file = File(context.filesDir, "pending_progress.json")
+
+    constructor(context: Context) : this(
+        file = File(context.filesDir, "pending_progress.json"),
+        directFileConstructor = true
+    )
+
+    internal constructor(filesDir: File) : this(
+        file = File(filesDir, "pending_progress.json"),
+        directFileConstructor = true
+    )
 
     suspend fun readAll(): List<ProgressUpdate> = mutex.withLock {
         if (!file.exists()) return emptyList()
