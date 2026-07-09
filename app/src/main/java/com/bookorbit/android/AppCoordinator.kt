@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -15,8 +16,11 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
-class AppCoordinator(private val repository: BookOrbitRepository) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+class AppCoordinator(
+    private val repository: BookOrbitDataSource,
+    dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
+) {
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private var lastBrowserState: BrowserState? = null

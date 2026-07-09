@@ -179,6 +179,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add unit tests for download store
 - [x] Add unit tests for progress queue store
 - [x] Add unit tests for sync conflict resolution
+- [x] Add unit tests for coordinator bootstrap and login recovery
 - [ ] Add integration tests for login bootstrap
 - [ ] Add integration tests for library/book loading
 - [ ] Add integration tests for offline queue replay

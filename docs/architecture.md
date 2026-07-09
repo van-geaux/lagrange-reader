@@ -22,6 +22,7 @@ The current app flow is:
 
 - `MainActivity` boots the app and wires the graph.
 - `AppCoordinator` owns screen state and orchestrates transitions.
+- `AppCoordinator` now depends on a small repository-facing interface so bootstrap, login recovery, and browser fallback behavior can be covered by focused JVM tests without changing runtime wiring.
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
 - Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.

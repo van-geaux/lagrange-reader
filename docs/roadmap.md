@@ -62,6 +62,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 - Unit tests for repository parsing and progress DTO generation
 - Integration tests for login bootstrap and library loading
+- Broaden coordinator and repository JVM coverage around session persistence and expiry recovery before moving to device-only test gaps
 - Offline sync verification matrix
 - Physical device validation
 

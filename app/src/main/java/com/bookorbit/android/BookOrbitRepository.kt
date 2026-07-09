@@ -43,7 +43,31 @@ import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 
-class BookOrbitRepository(private val context: Context) {
+interface BookOrbitDataSource {
+    suspend fun getServerUrl(): String?
+    suspend fun setServerUrl(serverUrl: String)
+    suspend fun clearServer()
+    suspend fun clearSession()
+    suspend fun getSelectedLibraryId(): String?
+    suspend fun setSelectedLibraryId(libraryId: String)
+    suspend fun getSessionState(): SessionState
+    suspend fun loadLibraries(): List<LibrarySummary>
+    suspend fun loadBooks(libraryId: String): List<BookSummary>
+    suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
+    suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
+    suspend fun saveActiveReader(book: BookSummary)
+    suspend fun clearActiveReader()
+    suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
+    suspend fun downloadBook(book: BookSummary): File
+    suspend fun deleteLocalCopy(book: BookSummary)
+    suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
+    suspend fun pendingProgressCount(): Int
+    suspend fun syncPendingProgress(): SyncAttemptResult
+    suspend fun canReachServer(serverUrl: String): Boolean
+    suspend fun checkServer(serverUrl: String): ServerCheckResult
+}
+
+class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
@@ -55,15 +79,15 @@ class BookOrbitRepository(private val context: Context) {
         .followSslRedirects(true)
         .build()
 
-    suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
+    override suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
 
-    suspend fun setServerUrl(serverUrl: String) {
+    override suspend fun setServerUrl(serverUrl: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
         }
     }
 
-    suspend fun clearServer() {
+    override suspend fun clearServer() {
         context.dataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
@@ -71,20 +95,20 @@ class BookOrbitRepository(private val context: Context) {
         clearSession()
     }
 
-    suspend fun clearSession() {
+    override suspend fun clearSession() {
         activeReaderStore.clear()
         clearCookies()
     }
 
-    suspend fun getSelectedLibraryId(): String? = context.dataStore.data.first()[Keys.SELECTED_LIBRARY_ID]
+    override suspend fun getSelectedLibraryId(): String? = context.dataStore.data.first()[Keys.SELECTED_LIBRARY_ID]
 
-    suspend fun setSelectedLibraryId(libraryId: String) {
+    override suspend fun setSelectedLibraryId(libraryId: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.SELECTED_LIBRARY_ID] = libraryId
         }
     }
 
-    suspend fun getSessionState(): SessionState = withContext(Dispatchers.IO) {
+    override suspend fun getSessionState(): SessionState = withContext(Dispatchers.IO) {
         runCatching {
             request("/api/v1/auth/me", "GET", null)
             SessionState.Authenticated
@@ -96,7 +120,7 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
+    override suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
         BookOrbitPayloadParser.parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
             browserSnapshotStore.saveLibraries(
                 serverUrl = getServerUrl().orEmpty(),
@@ -106,7 +130,7 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
+    override suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val body = JSONObject().toString().toRequestBody(JSON)
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
@@ -125,7 +149,7 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState? = withContext(Dispatchers.IO) {
+    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
@@ -151,7 +175,7 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState = withContext(Dispatchers.IO) {
+    override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val localFile = resolveReadableFile(book, allowRemoteCache = !localOnly)
         val streamUrl = buildReaderStreamUrl(
@@ -175,18 +199,18 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    suspend fun saveActiveReader(book: BookSummary) = withContext(Dispatchers.IO) {
+    override suspend fun saveActiveReader(book: BookSummary) = withContext(Dispatchers.IO) {
         activeReaderStore.save(
             serverUrl = getServerUrl().orEmpty(),
             book = book
         )
     }
 
-    suspend fun clearActiveReader() = withContext(Dispatchers.IO) {
+    override suspend fun clearActiveReader() = withContext(Dispatchers.IO) {
         activeReaderStore.clear()
     }
 
-    suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState? = withContext(Dispatchers.IO) {
+    override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         if (serverUrl.isBlank()) {
             return@withContext null
@@ -221,7 +245,7 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
+    override suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
         val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         if (!target.exists() || target.length() <= 0L) {
@@ -277,7 +301,7 @@ class BookOrbitRepository(private val context: Context) {
         target
     }
 
-    suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
+    override suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
         val deleted = downloadStore.delete(getServerUrl().orEmpty(), fileId)
         if (!deleted) {
@@ -285,7 +309,7 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun queueProgress(
+    override suspend fun queueProgress(
         book: BookSummary,
         position: Long,
         pageIndex: Int,
@@ -310,11 +334,11 @@ class BookOrbitRepository(private val context: Context) {
         enqueueSyncWorker()
     }
 
-    suspend fun pendingProgressCount(): Int = withContext(Dispatchers.IO) {
+    override suspend fun pendingProgressCount(): Int = withContext(Dispatchers.IO) {
         queueStore.countFor(getServerUrl().orEmpty())
     }
 
-    suspend fun syncPendingProgress(): SyncAttemptResult = withContext(Dispatchers.IO) {
+    override suspend fun syncPendingProgress(): SyncAttemptResult = withContext(Dispatchers.IO) {
         val pending = queueStore.readAll()
         if (pending.isEmpty()) {
             return@withContext SyncAttemptResult.Success
@@ -361,11 +385,11 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
         checkServer(serverUrl) == ServerCheckResult.Reachable
     }
 
-    suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
+    override suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
                 .url(serverUrl.trimEnd('/') + "/")
