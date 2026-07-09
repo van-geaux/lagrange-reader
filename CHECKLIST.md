@@ -62,7 +62,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Load books for selected library
 - [x] Display book list in app
 - [x] Confirm real API payload parsing against live BookOrbit responses
-- [ ] Harden parsing for nullable/missing fields
+- [x] Harden parsing for nullable/missing fields
 - [x] Add loading, empty, and error states for libraries
 - [x] Add loading, empty, and error states for books
 - [x] Add pull-to-refresh or equivalent refresh UX
@@ -76,7 +76,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate actual BookOrbit schema for ebooks
 - [x] Validate actual BookOrbit schema for audiobooks
 - [x] Confirm multiple-file book handling strategy
-- [ ] Confirm cover image handling strategy
+- [x] Confirm cover image handling strategy
 - [x] Normalize progress labels from real server responses
 
 ## 6. Streaming Read / Listen

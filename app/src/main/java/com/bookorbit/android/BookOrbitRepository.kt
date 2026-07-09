@@ -558,11 +558,7 @@ internal object BookOrbitPayloadParser {
                         mediaKind = mediaKind,
                         streamUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/serve" },
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
-                        coverUrl = if (obj.booleanValue("hasCover", "has_cover")) {
-                            "$serverBase/api/v1/books/$bookId/cover"
-                        } else {
-                            obj.stringValue("coverUrl", "cover", "coverImage")
-                        },
+                        coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
                         localPath = fileId?.let { downloads[it]?.localPath },
                         progressLabel = readingProgress.progressLabel(),
                         progressPercent = readingProgress.progressPercent(),
@@ -690,6 +686,37 @@ internal object BookOrbitPayloadParser {
             }
         }
         return stringValue("author", "authorName", "creator")
+    }
+
+    private fun JSONObject.resolveCoverUrl(serverBase: String, bookId: String): String? {
+        val explicit = stringValue("coverUrl", "cover", "coverImage")
+            ?.takeIf {
+                it.startsWith("http://", ignoreCase = true) ||
+                    it.startsWith("https://", ignoreCase = true) ||
+                    it.startsWith("/")
+            }
+            ?: optJSONObject("cover")?.stringValue("url", "href", "path")
+            ?: optJSONObject("coverImage")?.stringValue("url", "href", "path")
+        if (!explicit.isNullOrBlank()) {
+            if (explicit.startsWith("http://", ignoreCase = true) || explicit.startsWith("https://", ignoreCase = true)) {
+                return explicit
+            }
+            if (explicit.startsWith("/")) {
+                return "$serverBase$explicit"
+            }
+            return "$serverBase/${explicit.trimStart('/')}"
+        }
+
+        val hasResolvableCover = booleanValue("hasCover", "has_cover") ||
+            optJSONObject("cover") != null ||
+            optJSONObject("coverImage") != null ||
+            opt("coverFileId") != null ||
+            opt("cover_file_id") != null
+        return if (hasResolvableCover) {
+            "$serverBase/api/v1/books/$bookId/cover"
+        } else {
+            null
+        }
     }
 
     private fun JSONArray?.selectPrimaryFile(): JSONObject? {

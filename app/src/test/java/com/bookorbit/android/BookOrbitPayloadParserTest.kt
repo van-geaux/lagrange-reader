@@ -64,10 +64,11 @@ class BookOrbitPayloadParserTest {
                   "data": [
                     {
                       "_id": "book-2",
-                      "name": "Loose PDF",
-                      "author": "Author Name",
+                      "displayName": "Loose PDF",
+                      "creator": {"name": "Author Name"},
                       "bookFile": {"id": 987},
-                      "format": "pdf"
+                      "format": "pdf",
+                      "cover": {"path": "/images/covers/book-2.jpg"}
                     }
                   ]
                 }
@@ -80,8 +81,9 @@ class BookOrbitPayloadParserTest {
         assertEquals("book-2", book.id)
         assertEquals("987", book.fileId)
         assertEquals(MediaKind.PDF, book.mediaKind)
+        assertEquals("Loose PDF", book.title)
         assertEquals("Author Name", book.author)
-        assertNull(book.coverUrl)
+        assertEquals("https://example.test/images/covers/book-2.jpg", book.coverUrl)
     }
 
     @Test
@@ -150,6 +152,31 @@ class BookOrbitPayloadParserTest {
 
         assertEquals("37.5%", books[0].progressLabel)
         assertEquals("Page 9", books[1].progressLabel)
+    }
+
+    @Test
+    fun `parseBooks falls back to cover endpoint when cover metadata exists without a url`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-5",
+            payload = """
+                {
+                  "items": [
+                    {
+                      "id": "book-6",
+                      "title": "Derived Cover",
+                      "files": [
+                        {"id": "file-6", "format": "application/epub+zip"}
+                      ],
+                      "coverImage": {"id": "cover-asset"}
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/api/v1/books/book-6/cover", books.single().coverUrl)
     }
 
     @Test(expected = UserFacingException::class)
