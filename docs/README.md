@@ -21,6 +21,14 @@ The app manifest now uses a project-owned adaptive launcher icon instead of the 
 
 Session clearing now waits for WebView cookie removal before returning to login, and explicit sign-out suppresses cached-browser fallback so the app stays on login until a fresh authenticated session exists. Reader reopen can fall back to last-synced local progress after the pending queue drains, and the EPUB WebView is configured to allow local file-backed image resources from extracted books.
 
+Recent manual device validation confirmed:
+
+- offline downloads reopen correctly in airplane mode
+- queued progress sync reaches the live BookOrbit web app after reconnect
+- reader resume now restores the tested last position
+- downloaded EPUB local images now render correctly
+- physical-device launcher icon wiring is correct
+
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, progress queue persistence, progress throttling policy behavior, and coordinator bootstrap/login/browser recovery flows.
 
 Initial live-browser load failures without a cached snapshot now fall back to an empty browser state with a user-facing retryable error instead of leaving the app stranded on a loading path.
@@ -39,6 +47,6 @@ Basic Compose instrumentation coverage now exists for server-setup validation an
 
 The main gaps are:
 
-- end-to-end offline verification on real content
 - broader session-persistence and expiry-recovery verification on real servers
+- real offline audiobook restart validation after process death
 - broader integration and end-to-end test coverage
