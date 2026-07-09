@@ -17,8 +17,22 @@ You can begin manual testing once these conditions are true:
 
 1. Launch the app on an emulator or device.
 2. Enter the BookOrbit server URL.
-3. Verify the login page opens in the in-app WebView.
-4. Complete sign in and confirm the app reaches the library browser.
+3. Verify a non-local `http://` URL is rejected and that a local development URL such as `http://10.0.2.2:3000` is still accepted when appropriate.
+4. Verify the login page opens in the in-app WebView.
+5. Complete sign in and confirm the app reaches the library browser.
+
+### 1a. Session Recovery
+
+1. While signed in, fully close and relaunch the app.
+2. Confirm an already-valid session returns to the reader or browser without forcing a fresh login.
+3. Sign out from the browser screen and confirm the app returns to login cleanly.
+4. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
+
+### 1b. Physical Device Install
+
+1. Install the latest debug APK on a physical Android device.
+2. Confirm the launcher icon is the app-specific adaptive icon instead of the Android default placeholder.
+3. Launch the app from the device home screen and verify first-run setup still works.
 
 ### 2. Library Browsing
 
