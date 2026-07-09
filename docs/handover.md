@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-07-06
+Last updated: 2026-07-09
 
 ## Repository
 
@@ -28,9 +28,22 @@ Last updated: 2026-07-06
 - Offline support is partially implemented:
   - downloads are stored locally
   - local files are preferred when present
+  - stale or zero-byte local download records are pruned before reuse
+  - EPUB and PDF can be reopened from authenticated cache copies before full download
+  - cached library and book browser state is used for offline fallback
+  - cached offline browser states disable live-only actions for non-downloaded titles
   - progress updates are queued locally and replayed later
   - sync queue compaction is implemented
+- Queue and storage hardening is implemented:
+  - transient sync failures use WorkManager retry backoff
+  - auth-blocked sync queues remain persisted without burning retries
+  - last-synced progress markers suppress duplicate or stale submissions
+  - malformed library/book payloads are surfaced as user-facing errors
+- Focused JVM unit coverage exists for:
+  - `DownloadStore`
+  - `ProgressQueueStore`
 - The Android debug build is passing on this machine with `.\gradlew.bat assembleDebug`
+- The local JVM unit test task is passing on this machine with `.\gradlew.bat testDebugUnitTest`
 
 ## Handover maintenance rule
 
@@ -63,17 +76,18 @@ Last updated: 2026-07-06
 
 - [CHECKLIST.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/CHECKLIST.md)
 - [app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt)
-- [app/src/main/java/com/bookorbit/android/BookOrbitApp.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/BookOrbitApp.kt)
-- [app/src/main/java/com/bookorbit/android/EpubSupport.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/EpubSupport.kt)
-- [docs/bookorbit-api.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/bookorbit-api.md)
+- [app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt)
+- [app/src/main/java/com/bookorbit/android/DownloadStore.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/DownloadStore.kt)
+- [app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt)
+- [app/src/test/java/com/bookorbit/android/DownloadStoreTest.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/test/java/com/bookorbit/android/DownloadStoreTest.kt)
 
 ## Highest-priority next steps
 
 1. Run end-to-end offline tests against real content.
 2. Verify progress replay to the live BookOrbit server after reconnect.
-3. Improve EPUB progress restoration beyond chapter-level resume.
-4. Add reader loading/error states and unsupported-format handling.
-5. Add tests for parsing, progress mapping, and queue behavior.
+3. Add unit tests for sync conflict resolution and repository payload parsing.
+4. Improve EPUB progress restoration beyond chapter-level resume.
+5. Verify reader behavior has no accidental API dependency during offline local reopen.
 
 ## Suggested next manual validation pass
 
@@ -90,3 +104,4 @@ Last updated: 2026-07-06
 - Comic/CBZ support is not implemented.
 - Login completion detection is still based on polling authenticated APIs.
 - Queue replay behavior has not yet been fully verified end to end on real reading activity.
+- Parsing hardening is improved but not complete across every nullable or variant BookOrbit payload shape.
