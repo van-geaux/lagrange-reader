@@ -21,5 +21,6 @@ Working prototype. The app shell, API wiring, local download tracking, sync queu
 - [docs/architecture.md](./docs/architecture.md)
 - [docs/setup.md](./docs/setup.md)
 - [docs/bookorbit-api.md](./docs/bookorbit-api.md)
+- [docs/testing.md](./docs/testing.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/handover.md](./docs/handover.md)

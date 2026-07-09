@@ -30,6 +30,8 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileSystemException
 import java.nio.file.NoSuchFileException
@@ -37,6 +39,7 @@ import java.text.DecimalFormat
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
+import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 
@@ -319,15 +322,32 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
+        checkServer(serverUrl) == ServerCheckResult.Reachable
+    }
+
+    suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
                 .url(serverUrl.trimEnd('/') + "/")
                 .get()
                 .build()
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                if (response.isSuccessful) {
+                    ServerCheckResult.Reachable
+                } else {
+                    ServerCheckResult.HttpFailure
+                }
             }
-        }.getOrDefault(false)
+        }.getOrElse { error ->
+            when (error) {
+                is IllegalArgumentException -> ServerCheckResult.MalformedUrl
+                is UnknownHostException -> ServerCheckResult.UnreachableHost
+                is SocketTimeoutException -> ServerCheckResult.Timeout
+                is SSLException -> ServerCheckResult.TlsFailure
+                is IOException -> ServerCheckResult.NetworkFailure
+                else -> ServerCheckResult.NetworkFailure
+            }
+        }
     }
 
     private suspend fun postProgress(item: ProgressUpdate): Boolean = withContext(Dispatchers.IO) {
@@ -516,6 +536,16 @@ enum class SyncAttemptResult {
     Success,
     AuthenticationBlocked,
     TransientFailure
+}
+
+enum class ServerCheckResult {
+    Reachable,
+    MalformedUrl,
+    UnreachableHost,
+    Timeout,
+    TlsFailure,
+    HttpFailure,
+    NetworkFailure
 }
 
 class AuthenticationRequiredException : IllegalStateException("Authentication required.")

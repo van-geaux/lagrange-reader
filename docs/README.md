@@ -7,6 +7,7 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 - [Architecture](./architecture.md)
 - [Local Setup](./setup.md)
 - [BookOrbit API Contract](./bookorbit-api.md)
+- [Testing](./testing.md)
 - [Roadmap](./roadmap.md)
 - [Handover](./handover.md)
 
@@ -17,6 +18,8 @@ The Android project builds locally with `assembleDebug`, can connect to a BookOr
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, and progress queue persistence.
 
 The audiobook reader now includes play and pause controls, skip back and forward actions, resume-at-position handling, and a small playback speed selector.
+
+Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, timeouts, and generic HTTP/network failures with clearer user-facing messages.
 
 The main gaps are:
 

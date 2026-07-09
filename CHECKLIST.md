@@ -40,7 +40,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Support changing server from login flow
 - [x] Validate server reachability before entering login
 - [ ] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
-- [ ] Add clear server-connection error UI states
+- [x] Add clear server-connection error UI states
 - [ ] Add retry and recovery behavior for server failures
 
 ## 3. Authentication Flow
@@ -183,7 +183,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add integration tests for library/book loading
 - [ ] Add integration tests for offline queue replay
 - [ ] Add instrumentation tests for reader/player flows
-- [ ] Add at least one end-to-end manual test matrix
+- [x] Add at least one end-to-end manual test matrix
 
 ## 14. Release Readiness
 
@@ -197,6 +197,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Document setup, build, and test instructions in `README`
 
 ## Immediate Next Stack
+
+Manual app testing can start here:
+
+- Build + JVM baseline is ready.
+- Use [docs/testing.md](./docs/testing.md) as the current manual test entry point.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server
 - [x] Replace generic ebook fallback with a real EPUB reader
