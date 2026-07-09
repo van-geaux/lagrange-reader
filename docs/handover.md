@@ -40,12 +40,14 @@ Last updated: 2026-07-09
   - EPUB, PDF, and CBZ can be reopened from authenticated cache copies before full download
   - cached library and book browser state is used for offline fallback
   - cached offline browser states disable live-only actions for non-downloaded titles
+  - offline-first browser opens and startup reader restore now suppress live stream fallback when a local-only reopen is intended
   - progress updates are queued locally and replayed later
   - sync queue compaction is implemented
 - Queue and storage hardening is implemented:
   - transient sync failures use WorkManager retry backoff
   - auth-blocked sync queues remain persisted without burning retries
   - last-synced progress markers suppress duplicate or stale submissions
+  - pending progress counts shown in debug browser UI are scoped to the active server instead of counting saved queues for every server
   - malformed library/book payloads are surfaced as user-facing errors
   - stored progress percentages are normalized to a consistent 0-100 scale across media types
   - reader opening fails earlier with explicit user-facing messages when no readable local or cached content can be prepared
@@ -95,6 +97,7 @@ Last updated: 2026-07-09
 - [app/src/main/java/com/bookorbit/android/AppCoordinator.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/AppCoordinator.kt)
 - [app/src/main/java/com/bookorbit/android/ActiveReaderStore.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/ActiveReaderStore.kt)
 - [app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt)
+- [app/src/test/java/com/bookorbit/android/BookOrbitRepositoryHelpersTest.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/test/java/com/bookorbit/android/BookOrbitRepositoryHelpersTest.kt)
 - [app/src/main/java/com/bookorbit/android/DownloadStore.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/DownloadStore.kt)
 - [app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt)
 - [app/src/test/java/com/bookorbit/android/DownloadStoreTest.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/test/java/com/bookorbit/android/DownloadStoreTest.kt)
@@ -103,7 +106,7 @@ Last updated: 2026-07-09
 
 1. Run end-to-end offline tests against real content.
 2. Verify progress replay to the live BookOrbit server after reconnect.
-3. Verify reader behavior has no accidental API dependency during offline local reopen.
+3. Confirm local-only reopen behavior on a real offline audiobook flow after process restart.
 4. Confirm session persistence and login recovery behavior after app restart.
 5. Add integration or instrumentation coverage for login, browser loading, and reader flows.
 
@@ -122,4 +125,5 @@ Last updated: 2026-07-09
 - Comic support is limited to local or authenticated-cache CBZ rendering; CBR is still not implemented.
 - Login completion detection is still based on polling authenticated APIs.
 - Queue replay behavior has not yet been fully verified end to end on real reading activity.
+- The local-only bootstrap/open logic is covered by JVM tests, but it still needs device-side validation with real offline audio content.
 - Parsing hardening is improved but not complete across every nullable or variant BookOrbit payload shape.

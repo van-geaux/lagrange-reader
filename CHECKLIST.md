@@ -90,7 +90,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replace generic ebook fallback with real EPUB reader
 - [x] Add comic/CBZ reader support if BookOrbit exposes comic files
 - [x] Add proper in-reader loading/error states
-- [ ] Add resume-from-last-position when streaming
+- [x] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path
 
 ## 7. Download For Offline Use
@@ -145,7 +145,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures
 - [x] Add queue inspection/logging for debug builds
-- [ ] Confirm behavior when server changes while queue still exists
+- [x] Confirm behavior when server changes while queue still exists
 
 ## 11. Reader / Player Quality
 
