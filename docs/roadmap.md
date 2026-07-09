@@ -15,6 +15,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Reader startup loading, reader error messages, unsupported-format messaging, and PDF cache-open support are implemented
 - Server-reported page/time progress is mapped into reader resume state
 - Library and book browsing now has loading, empty, error, and refresh UI states
+- Active download progress, retry, and cancel controls are implemented
 
 ## Next execution order
 
@@ -43,7 +44,6 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 4. UX hardening
 
-- Download progress and retry UI
 - Session-expiry handling
 - Cleaner unsupported-format handling
 

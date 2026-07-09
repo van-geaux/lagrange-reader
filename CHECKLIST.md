@@ -99,8 +99,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Persist download record locally
 - [x] Expose downloaded status in UI
 - [ ] Verify large-download behavior on real content
-- [ ] Add progress indicator for active downloads
-- [ ] Add retry/cancel behavior for failed downloads
+- [x] Add progress indicator for active downloads
+- [x] Add retry/cancel behavior for failed downloads
 - [ ] Validate file naming and extension handling for all supported formats
 - [ ] Add storage-space failure handling
 - [ ] Add download integrity checks

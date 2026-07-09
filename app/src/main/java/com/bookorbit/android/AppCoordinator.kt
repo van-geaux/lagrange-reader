@@ -2,17 +2,21 @@ package com.bookorbit.android
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineStart
 
 class AppCoordinator(private val repository: BookOrbitRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private var lastBrowserState: BrowserState? = null
+    private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
 
@@ -48,6 +52,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun clearServer() {
         scope.launch {
+            activeDownloads.values.forEach { it.cancel() }
+            activeDownloads.clear()
             latestProgressByTarget.clear()
             queuedProgressByTarget.clear()
             repository.clearServer()
@@ -187,12 +193,93 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     }
 
     fun downloadBook(book: BookSummary) {
-        scope.launch {
-            runCatching {
+        val fileId = book.fileId ?: run {
+            showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
+            return
+        }
+        if (activeDownloads.containsKey(fileId)) {
+            return
+        }
+
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            updateDownloadState(
+                fileId = fileId,
+                isDownloading = true,
+                failed = false,
+                message = null
+            )
+            val result = runCatching {
                 repository.downloadBook(book)
             }
-            loadBrowser()
+            activeDownloads.remove(fileId)
+            result
+                .onSuccess {
+                    loadBrowser()
+                }
+                .onFailure { error ->
+                    if (error is CancellationException) {
+                        updateDownloadState(
+                            fileId = fileId,
+                            isDownloading = false,
+                            failed = false,
+                            message = "Download canceled."
+                        )
+                    } else {
+                        updateDownloadState(
+                            fileId = fileId,
+                            isDownloading = false,
+                            failed = true,
+                            message = error.message ?: "Download failed for ${book.title}."
+                        )
+                    }
+                }
         }
+        activeDownloads[fileId] = job
+        job.start()
+    }
+
+    fun cancelDownload(book: BookSummary) {
+        val fileId = book.fileId ?: return
+        activeDownloads.remove(fileId)?.cancel()
+        updateDownloadState(
+            fileId = fileId,
+            isDownloading = false,
+            failed = false,
+            message = "Download canceled."
+        )
+    }
+
+    private fun updateDownloadState(
+        fileId: String,
+        isDownloading: Boolean,
+        failed: Boolean,
+        message: String?
+    ) {
+        val current = lastBrowserState ?: return
+        val downloading = current.downloadingFileIds.toMutableSet()
+        val failedDownloads = current.failedDownloadFileIds.toMutableSet()
+        if (isDownloading) {
+            downloading += fileId
+        } else {
+            downloading -= fileId
+        }
+        if (failed) {
+            failedDownloads += fileId
+        } else {
+            failedDownloads -= fileId
+        }
+        showBrowser(
+            current.copy(
+                downloadingFileIds = downloading,
+                failedDownloadFileIds = failedDownloads,
+                message = message
+            )
+        )
+    }
+
+    private fun showBrowserMessage(message: String) {
+        val current = lastBrowserState ?: return
+        showBrowser(current.copy(message = message))
     }
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {

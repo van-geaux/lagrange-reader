@@ -80,7 +80,8 @@ fun BookOrbitApp(
             onRefresh = coordinator::loadBrowser,
             onLibrarySelected = coordinator::selectLibrary,
             onBookOpen = coordinator::openBook,
-            onDownload = coordinator::downloadBook
+            onDownload = coordinator::downloadBook,
+            onCancelDownload = coordinator::cancelDownload
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,
@@ -239,7 +240,8 @@ private fun LibraryBrowserScreen(
     onRefresh: () -> Unit,
     onLibrarySelected: (String) -> Unit,
     onBookOpen: (BookSummary) -> Unit,
-    onDownload: (BookSummary) -> Unit
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -327,6 +329,9 @@ private fun LibraryBrowserScreen(
                 }
             }
             items(state.books) { book ->
+                val fileId = book.fileId
+                val isDownloading = fileId != null && state.downloadingFileIds.contains(fileId)
+                val downloadFailed = fileId != null && state.failedDownloadFileIds.contains(fileId)
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -343,12 +348,34 @@ private fun LibraryBrowserScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onBookOpen(book) }) {
+                            Button(
+                                onClick = { onBookOpen(book) },
+                                enabled = !isDownloading
+                            ) {
                                 Text(if (book.isDownloaded) "Open local" else "Read / Listen")
                             }
-                            if (!book.isDownloaded && book.fileId != null) {
-                                OutlinedButton(onClick = { onDownload(book) }) {
-                                    Text("Download")
+                            if (!book.isDownloaded && fileId != null) {
+                                if (isDownloading) {
+                                    Button(
+                                        onClick = {},
+                                        enabled = false
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Text(
+                                            text = "Downloading",
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
+                                    }
+                                    OutlinedButton(onClick = { onCancelDownload(book) }) {
+                                        Text("Cancel")
+                                    }
+                                } else {
+                                    OutlinedButton(onClick = { onDownload(book) }) {
+                                        Text(if (downloadFailed) "Retry" else "Download")
+                                    }
                                 }
                             }
                         }
