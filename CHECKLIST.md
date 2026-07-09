@@ -173,9 +173,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 ## 13. Testing
 
 - [x] Local debug build passes
-- [ ] Add unit tests for URL normalization
+- [x] Add unit tests for URL normalization
 - [x] Add unit tests for payload parsing
-- [ ] Add unit tests for media kind inference
+- [x] Add unit tests for media kind inference
 - [x] Add unit tests for download store
 - [x] Add unit tests for progress queue store
 - [x] Add unit tests for sync conflict resolution

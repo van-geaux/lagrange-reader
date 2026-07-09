@@ -54,7 +54,7 @@ class BookOrbitRepository(private val context: Context) {
 
     suspend fun setServerUrl(serverUrl: String) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.SERVER_URL] = serverUrl.trimEnd('/')
+            prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
         }
     }
 
@@ -570,7 +570,7 @@ internal object BookOrbitPayloadParser {
     }
 
     fun inferMediaKind(format: String?, title: String?): MediaKind {
-        val token = (format ?: title ?: "").lowercase(Locale.US)
+        val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
         return when {
             token.endsWith(".mp3") || token.endsWith(".m4b") || token.contains("audio") -> MediaKind.AUDIO
             token.endsWith(".pdf") || token.contains("pdf") -> MediaKind.PDF
@@ -703,6 +703,10 @@ internal object BookOrbitPayloadParser {
         }
         return null
     }
+}
+
+internal fun normalizeStoredServerUrl(serverUrl: String): String {
+    return serverUrl.trim().trimEnd('/')
 }
 
 internal fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
