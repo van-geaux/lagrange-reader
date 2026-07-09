@@ -27,6 +27,8 @@ The local release build also passes with `.\gradlew.bat assembleRelease`.
 
 The repository now includes a basic GitHub Actions workflow for debug CI that runs the JVM unit suite, Android lint, and debug APK build on `main` pushes and pull requests.
 
+Network policy is now explicit: cleartext HTTP is blocked by default and only allowed for local development hosts such as `localhost`, `127.0.0.1`, `10.0.2.2`, and `10.0.3.2`.
+
 The main gaps are:
 
 - end-to-end offline verification on real content

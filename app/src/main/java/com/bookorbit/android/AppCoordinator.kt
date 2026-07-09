@@ -95,7 +95,7 @@ class AppCoordinator(
                 ServerCheckResult.MalformedUrl -> {
                     _screen.value = AppScreen.ServerSetup(
                         serverUrl = serverUrl,
-                        message = "Enter a valid server URL."
+                        message = invalidServerUrlMessage()
                     )
                     return@launch
                 }

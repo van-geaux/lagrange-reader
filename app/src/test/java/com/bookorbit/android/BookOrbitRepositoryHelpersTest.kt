@@ -2,6 +2,7 @@ package com.bookorbit.android
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
@@ -31,6 +32,26 @@ class BookOrbitRepositoryHelpersTest {
     fun `normalizeServerUrl rejects unsupported schemes`() {
         assertNull(normalizeServerUrl("ftp://example.test"))
         assertNull(normalizeServerUrl("mailto:user@example.test"))
+    }
+
+    @Test
+    fun `normalizeServerUrl requires https for non-local hosts`() {
+        assertEquals("https://example.test", normalizeServerUrl("https://example.test/"))
+        assertNull(normalizeServerUrl("http://example.test"))
+        assertNull(normalizeServerUrl("books.example.test"))
+    }
+
+    @Test
+    fun `normalizeServerUrl still allows cleartext for local development hosts`() {
+        assertEquals("http://localhost:3000", normalizeServerUrl("localhost:3000"))
+        assertEquals("http://127.0.0.1:8080", normalizeServerUrl("http://127.0.0.1:8080"))
+        assertEquals("http://10.0.2.2:3000", normalizeServerUrl("10.0.2.2:3000"))
+        assertEquals("http://10.0.3.2:3000", normalizeServerUrl("http://10.0.3.2:3000/"))
+    }
+
+    @Test
+    fun `invalidServerUrlMessage explains https requirement`() {
+        assertTrue(invalidServerUrlMessage().contains("HTTPS"))
     }
 
     @Test

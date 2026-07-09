@@ -69,6 +69,7 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
+import java.net.URI
 import java.util.Locale
 import java.util.zip.ZipFile
 import kotlin.math.roundToInt
@@ -189,7 +190,7 @@ private fun ServerSetupScreen(
                 onClick = {
                     val normalized = normalizeServerUrl(server)
                     if (normalized == null) {
-                        error = "Enter a valid server URL."
+                        error = invalidServerUrlMessage()
                     } else {
                         onContinue(normalized)
                     }
@@ -1241,7 +1242,8 @@ internal fun normalizeServerUrl(value: String): String? {
     if (raw.isBlank()) {
         return null
     }
-    val explicitScheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").find(raw)?.value?.removeSuffix(":")
+    val explicitScheme = raw.substringBefore("://", missingDelimiterValue = "")
+        .takeIf { raw.contains("://") }
     if (explicitScheme != null && !explicitScheme.equals("http", ignoreCase = true) && !explicitScheme.equals("https", ignoreCase = true)) {
         return null
     }
@@ -1250,15 +1252,29 @@ internal fun normalizeServerUrl(value: String): String? {
     } else {
         "http://$raw"
     }
-    val uri = Uri.parse(prefixed)
+    val uri = runCatching { URI(prefixed) }.getOrNull() ?: return null
     val scheme = uri.scheme ?: return null
     if (!scheme.equals("http", ignoreCase = true) && !scheme.equals("https", ignoreCase = true)) {
         return null
     }
     val host = uri.host ?: return null
+    if (scheme.equals("http", ignoreCase = true) && !isAllowedCleartextHost(host)) {
+        return null
+    }
     val port = if (uri.port > 0) ":${uri.port}" else ""
     val path = uri.path?.takeIf { it.isNotBlank() && it != "/" }?.trimEnd('/') ?: ""
-    return "$scheme://$host$port$path"
+    return "${scheme.lowercase(Locale.US)}://$host$port$path"
+}
+
+internal fun invalidServerUrlMessage(): String {
+    return "Enter a valid server URL. Use HTTPS unless this is a local development server."
+}
+
+internal fun isAllowedCleartextHost(host: String): Boolean {
+    return host.equals("localhost", ignoreCase = true) ||
+        host == "127.0.0.1" ||
+        host == "10.0.2.2" ||
+        host == "10.0.3.2"
 }
 
 private fun percentToChapterIndex(percent: Float?, chapterCount: Int): Int {

@@ -42,6 +42,7 @@ The current app flow is:
 
 - `BookOrbitRepository` is the main integration layer with the BookOrbit server.
 - It stores the selected server URL and selected library.
+- Server URL validation now requires HTTPS for non-local hosts; cleartext HTTP is reserved for local development targets only.
 - It loads libraries and books from the live API.
 - Stored selected-library ids are validated against the latest available library list before the browser chooses a library to load.
 - It resolves stream and download URLs for files.
@@ -53,6 +54,7 @@ The current app flow is:
 ### Local persistence
 
 - `DataStore` stores the configured server URL and selected library ID.
+- Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
 - Session reset clears cookies and active-reader state while leaving the configured server and cached browser snapshot intact.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.

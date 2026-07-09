@@ -46,3 +46,4 @@ sdk.dir=C\:\\Users\\<user>\\AppData\\Local\\Android\\Sdk
 - The current project compiles with Android Gradle Plugin `8.5.2`.
 - `compileSdk` is set to `35`.
 - The build currently suppresses the unsupported compile SDK warning in `gradle.properties`.
+- Non-local BookOrbit servers are expected to use `https://`. Plain `http://` is reserved for local development targets such as `localhost` and emulator loopback addresses.
