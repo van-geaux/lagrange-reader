@@ -114,7 +114,14 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 }
                 repository.syncPendingProgress()
             }.onFailure { error ->
-                if (previous != null) {
+                val cached = repository.loadCachedBrowserState()
+                if (cached != null) {
+                    showBrowser(
+                        cached.copy(
+                            message = "Showing the last cached library snapshot. ${userMessage(error, "Refresh failed.")}"
+                        )
+                    )
+                } else if (previous != null) {
                     showBrowser(
                         previous.copy(
                             isRefreshing = false,
@@ -164,15 +171,21 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )
                 )
             }.onFailure { error ->
+                val cachedForLibrary = repository.loadCachedBrowserState(libraryId)
                 showBrowser(
-                    (loadingState ?: BrowserState(
+                    (cachedForLibrary ?: loadingState ?: BrowserState(
                         serverUrl = serverUrl,
                         libraries = emptyList(),
                         selectedLibraryId = libraryId,
                         books = emptyList()
                     )).copy(
+                        selectedLibraryId = libraryId,
                         isLoadingBooks = false,
-                        message = userMessage(error, "Unable to load the selected library.")
+                        message = if (cachedForLibrary != null) {
+                            "Showing cached books for this library. ${userMessage(error, "Unable to load the selected library.")}"
+                        } else {
+                            userMessage(error, "Unable to load the selected library.")
+                        }
                     )
                 )
             }

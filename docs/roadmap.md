@@ -18,6 +18,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Active download progress, retry, and cancel controls are implemented
 - Download filenames preserve more specific format extensions from BookOrbit metadata
 - User-facing error messages are normalized from typed repository/network failures
+- Last successful libraries and per-library book lists are cached locally for browser fallback
 
 ## Next execution order
 

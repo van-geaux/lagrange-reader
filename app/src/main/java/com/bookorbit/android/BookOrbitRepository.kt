@@ -36,6 +36,7 @@ private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 class BookOrbitRepository(private val context: Context) {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
+    private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
         .followRedirects(true)
@@ -57,6 +58,7 @@ class BookOrbitRepository(private val context: Context) {
         }
         queueStore.clear()
         downloadStore.clear()
+        browserSnapshotStore.clear()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
     }
@@ -77,7 +79,13 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
-        parseLibraries(request("/api/v1/libraries", "GET", null))
+        parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
+            browserSnapshotStore.saveLibraries(
+                serverUrl = getServerUrl().orEmpty(),
+                selectedLibraryId = getSelectedLibraryId(),
+                libraries = libraries
+            )
+        }
     }
 
     suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
@@ -87,6 +95,28 @@ class BookOrbitRepository(private val context: Context) {
             libraryId = libraryId,
             payload = request("/api/v1/libraries/$libraryId/books", "POST", body),
             downloads = downloads
+        ).also { books ->
+            browserSnapshotStore.saveBooks(
+                serverUrl = getServerUrl().orEmpty(),
+                selectedLibraryId = libraryId,
+                libraryId = libraryId,
+                books = books
+            )
+        }
+    }
+
+    suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState? = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
+        val selectedLibraryId = libraryId
+            ?: getSelectedLibraryId()
+            ?: snapshot.selectedLibraryId
+            ?: snapshot.libraries.firstOrNull()?.id
+        BrowserState(
+            serverUrl = serverUrl,
+            libraries = snapshot.libraries,
+            selectedLibraryId = selectedLibraryId,
+            books = selectedLibraryId?.let { snapshot.booksByLibraryId[it] }.orEmpty()
         )
     }
 
