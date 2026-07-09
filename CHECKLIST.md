@@ -139,7 +139,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replay queued progress when online
 - [x] Use newest-progress-wins policy in stored events
 - [ ] Verify queue replay against live BookOrbit server
-- [ ] Prevent duplicate or stale progress submissions
+- [x] Prevent duplicate or stale progress submissions
 - [x] Collapse multiple pending updates for the same book/file
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures

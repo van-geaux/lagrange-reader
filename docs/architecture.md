@@ -58,6 +58,7 @@ The current app flow is:
 - Duplicate queued updates for the same server/book/file target are compacted to the newest event.
 - Audio progress is throttled before persistence; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
+- The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
 
 ### Reader implementations
 

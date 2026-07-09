@@ -22,6 +22,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Downloaded items can now remove their local copy and persisted download record
 - Debug builds expose the pending sync queue count in the browser view
 - Progress sync worker now applies exponential backoff for transient server failures
+- Last-synced progress markers now suppress duplicate or stale queue submissions
 
 ## Next execution order
 

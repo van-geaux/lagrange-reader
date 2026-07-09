@@ -39,6 +39,7 @@ class BookOrbitRepository(private val context: Context) {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
+    private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
         .followRedirects(true)
@@ -61,6 +62,7 @@ class BookOrbitRepository(private val context: Context) {
         queueStore.clear()
         downloadStore.clear()
         browserSnapshotStore.clear()
+        lastSyncedProgressStore.clear()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
     }
@@ -186,19 +188,22 @@ class BookOrbitRepository(private val context: Context) {
         pageIndex: Int,
         progressPercent: Float?
     ) = withContext(Dispatchers.IO) {
-        queueStore.enqueue(
-            ProgressUpdate(
-                id = UUID.randomUUID().toString(),
-                serverUrl = getServerUrl().orEmpty(),
-                bookId = book.id,
-                fileId = book.fileId,
-                mediaKind = book.mediaKind,
-                positionMs = position,
-                pageIndex = pageIndex,
-                progressPercent = progressPercent,
-                updatedAtMillis = System.currentTimeMillis()
-            )
+        val update = ProgressUpdate(
+            id = UUID.randomUUID().toString(),
+            serverUrl = getServerUrl().orEmpty(),
+            bookId = book.id,
+            fileId = book.fileId,
+            mediaKind = book.mediaKind,
+            positionMs = position,
+            pageIndex = pageIndex,
+            progressPercent = progressPercent,
+            updatedAtMillis = System.currentTimeMillis()
         )
+        val lastSynced = lastSyncedProgressStore.read(update.progressKey())
+        if (lastSynced != null && update.isStaleComparedTo(lastSynced)) {
+            return@withContext
+        }
+        queueStore.enqueue(update)
         enqueueSyncWorker()
     }
 
@@ -221,6 +226,11 @@ class BookOrbitRepository(private val context: Context) {
                 return@forEachIndexed
             }
             runCatching { postProgress(item) }
+                .onSuccess { submitted ->
+                    if (submitted) {
+                        lastSyncedProgressStore.save(item)
+                    }
+                }
                 .onFailure { error ->
                     if (error is AuthenticationRequiredException) {
                         authBlocked = true
@@ -255,6 +265,10 @@ class BookOrbitRepository(private val context: Context) {
 
     private suspend fun postProgress(item: ProgressUpdate): Boolean = withContext(Dispatchers.IO) {
         if (item.serverUrl.isBlank() || item.serverUrl != getServerUrl().orEmpty()) {
+            return@withContext false
+        }
+        val lastSynced = lastSyncedProgressStore.read(item.progressKey())
+        if (lastSynced != null && item.isStaleComparedTo(lastSynced)) {
             return@withContext false
         }
 
@@ -561,6 +575,27 @@ class BookOrbitRepository(private val context: Context) {
             path.contains("/audio-progress") -> "sync listening progress"
             else -> "complete this request"
         }
+    }
+
+    private fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
+        return sameProgressAs(other) || isNotAheadOf(other)
+    }
+
+    private fun ProgressUpdate.sameProgressAs(other: ProgressUpdate): Boolean {
+        return pageIndex == other.pageIndex &&
+            positionMs == other.positionMs &&
+            normalizedProgressPercent() == other.normalizedProgressPercent()
+    }
+
+    private fun ProgressUpdate.isNotAheadOf(other: ProgressUpdate): Boolean {
+        return pageIndex <= other.pageIndex &&
+            positionMs <= other.positionMs &&
+            normalizedProgressPercent() <= other.normalizedProgressPercent()
+    }
+
+    private fun ProgressUpdate.normalizedProgressPercent(): Float {
+        val value = progressPercent ?: 0f
+        return if (value in 0f..1f) value * 100f else value
     }
 
     private object Keys {
