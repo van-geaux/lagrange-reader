@@ -103,7 +103,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add retry/cancel behavior for failed downloads
 - [x] Validate file naming and extension handling for all supported formats
 - [x] Add storage-space failure handling
-- [ ] Add download integrity checks
+- [x] Add download integrity checks
 - [x] Add delete-local-copy action
 - [x] Prune stale download records when local files are missing
 - [ ] Add redownload/update behavior if server file changes

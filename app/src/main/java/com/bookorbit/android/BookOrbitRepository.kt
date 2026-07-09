@@ -153,7 +153,10 @@ class BookOrbitRepository(private val context: Context) {
     suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
         val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
-        if (!target.exists()) {
+        if (!target.exists() || target.length() <= 0L) {
+            if (target.exists() && target.length() <= 0L) {
+                target.delete()
+            }
             val parent = target.parentFile
             parent?.mkdirs()
             if (parent != null && !parent.exists()) {
@@ -183,6 +186,10 @@ class BookOrbitRepository(private val context: Context) {
                     }
                     throw error
                 }
+                ensureNonEmptyFile(
+                    target = target,
+                    message = "The server returned an empty download."
+                )
             }
         }
         downloadStore.save(
@@ -373,6 +380,9 @@ class BookOrbitRepository(private val context: Context) {
         if (target.exists() && target.length() > 0L) {
             return target
         }
+        if (target.exists() && target.length() <= 0L) {
+            target.delete()
+        }
 
         val request = Request.Builder()
             .url(buildDownloadUrl(fileId))
@@ -388,7 +398,10 @@ class BookOrbitRepository(private val context: Context) {
             val input = response.body?.byteStream() ?: return null
             target.outputStream().use { output -> input.copyTo(output) }
         }
-        return target.takeIf(File::exists)
+        return runCatching {
+            ensureNonEmptyFile(target, "The server returned an empty reader file.")
+            target
+        }.getOrNull()
     }
 
     private fun buildStreamUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/serve"
@@ -603,6 +616,14 @@ class BookOrbitRepository(private val context: Context) {
             path.contains("/audio-progress") -> "sync listening progress"
             else -> "complete this request"
         }
+    }
+
+    private fun ensureNonEmptyFile(target: File, message: String) {
+        if (target.length() > 0L) {
+            return
+        }
+        target.delete()
+        throw UserFacingException(message)
     }
 
     private fun IOException.isLikelyLocalStorageFailure(): Boolean {

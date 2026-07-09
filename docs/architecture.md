@@ -49,6 +49,7 @@ The current app flow is:
 - `DownloadStore` stores downloaded file records.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
+- Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.
 - `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
 - Debug builds show the current pending progress queue count directly in the browser screen.

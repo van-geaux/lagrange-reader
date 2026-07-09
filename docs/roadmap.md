@@ -21,6 +21,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Last successful libraries and per-library book lists are cached locally for browser fallback
 - Downloaded items can now remove their local copy and persisted download record
 - Missing local download files are now pruned from persisted download state and cached browser snapshots
+- Zero-byte local download and reader-cache files are now treated as invalid and redownloaded
 - Debug builds expose the pending sync queue count in the browser view
 - Progress sync worker now applies exponential backoff for transient server failures
 - Last-synced progress markers now suppress duplicate or stale queue submissions
