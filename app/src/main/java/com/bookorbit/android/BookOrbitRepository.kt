@@ -87,7 +87,7 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
-        parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
+        BookOrbitPayloadParser.parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
             browserSnapshotStore.saveLibraries(
                 serverUrl = getServerUrl().orEmpty(),
                 selectedLibraryId = getSelectedLibraryId(),
@@ -99,10 +99,11 @@ class BookOrbitRepository(private val context: Context) {
     suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
         val body = JSONObject().toString().toRequestBody(JSON)
         val downloads = downloadStore.readAll().associateBy { it.fileId }
-        parseBooks(
+        BookOrbitPayloadParser.parseBooks(
             libraryId = libraryId,
             payload = request("/api/v1/libraries/$libraryId/books", "POST", body),
-            downloads = downloads
+            downloads = downloads,
+            serverBase = serverBase()
         ).also { books ->
             browserSnapshotStore.saveBooks(
                 serverUrl = getServerUrl().orEmpty(),
@@ -432,7 +433,78 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun parseLibraries(payload: String): List<LibrarySummary> {
+    private fun normalizePercentage(value: Float?): Double {
+        val raw = value ?: 0f
+        val scaled = if (raw in 0f..1f) raw * 100f else raw
+        return scaled.coerceIn(0f, 100f).toDouble()
+    }
+
+    private fun requestAction(path: String, method: String): String {
+        return when {
+            path == "/api/v1/libraries" -> "load libraries"
+            path.contains("/books") && method == "POST" -> "load books"
+            path.contains("/progress") -> "sync reading progress"
+            path.contains("/audio-progress") -> "sync listening progress"
+            else -> "complete this request"
+        }
+    }
+
+    private fun ensureNonEmptyFile(target: File, message: String) {
+        if (target.length() > 0L) {
+            return
+        }
+        target.delete()
+        throw UserFacingException(message)
+    }
+
+    private fun IOException.isLikelyLocalStorageFailure(): Boolean {
+        return this is FileNotFoundException ||
+            this is FileSystemException ||
+            this is AccessDeniedException ||
+            this is NoSuchFileException ||
+            message.orEmpty().contains("no space", ignoreCase = true) ||
+            message.orEmpty().contains("not enough space", ignoreCase = true) ||
+            message.orEmpty().contains("enospc", ignoreCase = true)
+    }
+
+    private object Keys {
+        val SERVER_URL = stringPreferencesKey("server_url")
+        val SELECTED_LIBRARY_ID = stringPreferencesKey("selected_library_id")
+    }
+
+    private companion object {
+        val JSON = "application/json; charset=utf-8".toMediaType()
+    }
+}
+
+enum class SyncAttemptResult {
+    Success,
+    AuthenticationBlocked,
+    TransientFailure
+}
+
+class AuthenticationRequiredException : IllegalStateException("Authentication required.")
+class UserFacingException(message: String) : IllegalStateException(message)
+class HttpRequestException(
+    val code: Int,
+    val action: String
+) : IOException("HTTP $code while trying to $action.")
+
+private class WebViewCookieJar : CookieJar {
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        val manager = CookieManager.getInstance()
+        cookies.forEach { manager.setCookie(url.toString(), it.toString()) }
+        manager.flush()
+    }
+
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val raw = CookieManager.getInstance().getCookie(url.toString()) ?: return emptyList()
+        return raw.split(';').mapNotNull { Cookie.parse(url, it.trim()) }
+    }
+}
+
+internal object BookOrbitPayloadParser {
+    fun parseLibraries(payload: String): List<LibrarySummary> {
         val array = extractArray(payload, "load libraries")
         return buildList {
             for (index in 0 until array.length()) {
@@ -450,10 +522,11 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun parseBooks(
+    fun parseBooks(
         libraryId: String,
         payload: String,
-        downloads: Map<String, DownloadRecord>
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
     ): List<BookSummary> {
         val array = extractArray(payload, "load books")
         return buildList {
@@ -467,20 +540,21 @@ class BookOrbitRepository(private val context: Context) {
                 val format = primaryFile?.stringValue("format", "mimeType", "mime_type", "extension")
                     ?: obj.stringValue("format", "mimeType", "mime_type", "extension")
                 val mediaKind = inferMediaKind(format, obj.stringValue("title", "name"))
+                val bookId = obj.stringValue("id", "_id", "bookId") ?: "book-$index"
                 val readingProgress = obj.optJSONObject("readingProgress")
                 add(
                     BookSummary(
                         libraryId = libraryId,
-                        id = obj.stringValue("id", "_id", "bookId") ?: "book-$index",
+                        id = bookId,
                         fileId = fileId,
                         title = obj.stringValue("title", "name", "displayName") ?: "Untitled",
                         author = obj.authorDisplayName(),
                         format = format,
                         mediaKind = mediaKind,
-                        streamUrl = fileId?.let(::buildStreamUrl),
-                        downloadUrl = fileId?.let(::buildDownloadUrl),
+                        streamUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/serve" },
+                        downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
                         coverUrl = if (obj.booleanValue("hasCover", "has_cover")) {
-                            "${serverBase()}/api/v1/books/${obj.stringValue("id", "_id", "bookId") ?: "book-$index"}/cover"
+                            "$serverBase/api/v1/books/$bookId/cover"
                         } else {
                             obj.stringValue("coverUrl", "cover", "coverImage")
                         },
@@ -495,7 +569,7 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun inferMediaKind(format: String?, title: String?): MediaKind {
+    fun inferMediaKind(format: String?, title: String?): MediaKind {
         val token = (format ?: title ?: "").lowercase(Locale.US)
         return when {
             token.endsWith(".mp3") || token.endsWith(".m4b") || token.contains("audio") -> MediaKind.AUDIO
@@ -629,94 +703,25 @@ class BookOrbitRepository(private val context: Context) {
         }
         return null
     }
-
-    private fun normalizePercentage(value: Float?): Double {
-        val raw = value ?: 0f
-        val scaled = if (raw in 0f..1f) raw * 100f else raw
-        return scaled.coerceIn(0f, 100f).toDouble()
-    }
-
-    private fun requestAction(path: String, method: String): String {
-        return when {
-            path == "/api/v1/libraries" -> "load libraries"
-            path.contains("/books") && method == "POST" -> "load books"
-            path.contains("/progress") -> "sync reading progress"
-            path.contains("/audio-progress") -> "sync listening progress"
-            else -> "complete this request"
-        }
-    }
-
-    private fun ensureNonEmptyFile(target: File, message: String) {
-        if (target.length() > 0L) {
-            return
-        }
-        target.delete()
-        throw UserFacingException(message)
-    }
-
-    private fun IOException.isLikelyLocalStorageFailure(): Boolean {
-        return this is FileNotFoundException ||
-            this is FileSystemException ||
-            this is AccessDeniedException ||
-            this is NoSuchFileException ||
-            message.orEmpty().contains("no space", ignoreCase = true) ||
-            message.orEmpty().contains("not enough space", ignoreCase = true) ||
-            message.orEmpty().contains("enospc", ignoreCase = true)
-    }
-
-    private fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
-        return sameProgressAs(other) || isNotAheadOf(other)
-    }
-
-    private fun ProgressUpdate.sameProgressAs(other: ProgressUpdate): Boolean {
-        return pageIndex == other.pageIndex &&
-            positionMs == other.positionMs &&
-            normalizedProgressPercent() == other.normalizedProgressPercent()
-    }
-
-    private fun ProgressUpdate.isNotAheadOf(other: ProgressUpdate): Boolean {
-        return pageIndex <= other.pageIndex &&
-            positionMs <= other.positionMs &&
-            normalizedProgressPercent() <= other.normalizedProgressPercent()
-    }
-
-    private fun ProgressUpdate.normalizedProgressPercent(): Float {
-        val value = progressPercent ?: 0f
-        return if (value in 0f..1f) value * 100f else value
-    }
-
-    private object Keys {
-        val SERVER_URL = stringPreferencesKey("server_url")
-        val SELECTED_LIBRARY_ID = stringPreferencesKey("selected_library_id")
-    }
-
-    private companion object {
-        val JSON = "application/json; charset=utf-8".toMediaType()
-    }
 }
 
-enum class SyncAttemptResult {
-    Success,
-    AuthenticationBlocked,
-    TransientFailure
+internal fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
+    return sameProgressAs(other) || isNotAheadOf(other)
 }
 
-class AuthenticationRequiredException : IllegalStateException("Authentication required.")
-class UserFacingException(message: String) : IllegalStateException(message)
-class HttpRequestException(
-    val code: Int,
-    val action: String
-) : IOException("HTTP $code while trying to $action.")
+private fun ProgressUpdate.sameProgressAs(other: ProgressUpdate): Boolean {
+    return pageIndex == other.pageIndex &&
+        positionMs == other.positionMs &&
+        normalizedProgressPercent() == other.normalizedProgressPercent()
+}
 
-private class WebViewCookieJar : CookieJar {
-    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val manager = CookieManager.getInstance()
-        cookies.forEach { manager.setCookie(url.toString(), it.toString()) }
-        manager.flush()
-    }
+private fun ProgressUpdate.isNotAheadOf(other: ProgressUpdate): Boolean {
+    return pageIndex <= other.pageIndex &&
+        positionMs <= other.positionMs &&
+        normalizedProgressPercent() <= other.normalizedProgressPercent()
+}
 
-    override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val raw = CookieManager.getInstance().getCookie(url.toString()) ?: return emptyList()
-        return raw.split(';').mapNotNull { Cookie.parse(url, it.trim()) }
-    }
+internal fun ProgressUpdate.normalizedProgressPercent(): Float {
+    val value = progressPercent ?: 0f
+    return if (value in 0f..1f) value * 100f else value
 }

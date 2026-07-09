@@ -14,9 +14,11 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 
 The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, library browsing, downloads, local persistence, progress sync, PDF reading, audio playback, and basic EPUB reading.
 
+Focused JVM coverage now exists for repository payload parsing, sync conflict resolution, download record persistence, and progress queue persistence.
+
 The main gaps are:
 
 - end-to-end offline verification on real content
 - comic/CBZ reader support if the deployed server exposes comics
 - stronger retry/backoff behavior and broader sync verification
-- broader test coverage
+- broader integration and end-to-end test coverage
