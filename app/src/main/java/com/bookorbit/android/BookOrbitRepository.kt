@@ -498,7 +498,8 @@ class BookOrbitRepository(private val context: Context) {
         }
     }
 
-    private fun cacheReadableCopy(book: BookSummary): File? {
+    private suspend fun cacheReadableCopy(book: BookSummary): File? {
+        val serverUrl = getServerUrl().orEmpty()
         val fileId = book.fileId ?: return null
         val extension = when (book.mediaKind) {
             MediaKind.EPUB -> "epub"
@@ -508,11 +509,11 @@ class BookOrbitRepository(private val context: Context) {
             MediaKind.UNKNOWN -> "bin"
         }
         val targetDir = File(context.cacheDir, "reader-cache").apply { mkdirs() }
-        val target = File(targetDir, "$fileId.$extension")
-        if (target.exists() && target.length() > 0L) {
+        val target = File(targetDir, ReaderCacheKey.build(serverUrl, fileId, extension))
+        if (target.exists() && target.length() > 0L && ReaderFileValidator.isReadable(book.mediaKind, target)) {
             return target
         }
-        if (target.exists() && target.length() <= 0L) {
+        if (target.exists()) {
             target.delete()
         }
 

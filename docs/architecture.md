@@ -54,6 +54,7 @@ The current app flow is:
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
 - Corrupted local EPUB/PDF/CBZ files are rejected before reader startup, and invalid persisted download records are dropped before falling back to authenticated cache copies when possible.
 - Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.
+- Authenticated reader-cache copies are also scoped by server-derived cache keys so server changes do not reuse unrelated cached files with the same `fileId`.
 - `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
 - Debug builds show the current pending progress queue count directly in the browser screen.
