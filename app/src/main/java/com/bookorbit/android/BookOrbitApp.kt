@@ -53,6 +53,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -167,7 +171,9 @@ private fun ServerSetupScreen(
                     server = it
                     error = null
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "BookOrbit server URL" },
                 label = { Text("Server URL") },
                 placeholder = { Text("https://books.example.com") }
             )
@@ -362,6 +368,7 @@ private fun LibraryBrowserScreen(
                     ) {
                         Text(
                             text = book.title,
+                            modifier = Modifier.semantics { heading() },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -567,10 +574,20 @@ private fun AudioReader(
         )
         Text(
             text = "${formatPlaybackTime(currentPosition)} / ${formatPlaybackTime(duration)}",
+            modifier = Modifier.semantics {
+                contentDescription = "Playback position ${formatPlaybackTime(currentPosition)} of ${formatPlaybackTime(duration)}"
+            },
             style = MaterialTheme.typography.bodyMedium
         )
         Text(
             text = if (isPlaying) "Playing at ${formatPlaybackSpeed(playbackSpeed)}" else "Paused at ${formatPlaybackSpeed(playbackSpeed)}",
+            modifier = Modifier.semantics {
+                stateDescription = if (isPlaying) {
+                    "Playing at ${formatPlaybackSpeed(playbackSpeed)}"
+                } else {
+                    "Paused at ${formatPlaybackSpeed(playbackSpeed)}"
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -584,7 +601,9 @@ private fun AudioReader(
                     player.seekTo(target)
                     currentPosition = target
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Skip back 15 seconds" }
             ) {
                 Text("-15s")
             }
@@ -598,7 +617,11 @@ private fun AudioReader(
                         isPlaying = true
                     }
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics {
+                        contentDescription = if (isPlaying) "Pause playback" else "Resume playback"
+                    }
             ) {
                 Text(if (isPlaying) "Pause" else "Play")
             }
@@ -611,7 +634,9 @@ private fun AudioReader(
                     player.seekTo(target)
                     currentPosition = target
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Skip forward 30 seconds" }
             ) {
                 Text("+30s")
             }
@@ -628,7 +653,12 @@ private fun AudioReader(
                             player.playbackParameters = PlaybackParameters(speed)
                             playbackSpeed = speed
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics {
+                                contentDescription = "Playback speed ${formatPlaybackSpeed(speed)}"
+                                stateDescription = "Selected"
+                            }
                     ) {
                         Text(formatPlaybackSpeed(speed))
                     }
@@ -638,7 +668,9 @@ private fun AudioReader(
                             player.playbackParameters = PlaybackParameters(speed)
                             playbackSpeed = speed
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { contentDescription = "Playback speed ${formatPlaybackSpeed(speed)}" }
                     ) {
                         Text(formatPlaybackSpeed(speed))
                     }
@@ -686,7 +718,13 @@ private fun PdfReaderView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Page ${currentPage + 1} of ${pageCount.coerceAtLeast(1)}")
+        Text(
+            "Page ${currentPage + 1} of ${pageCount.coerceAtLeast(1)}",
+            modifier = Modifier.semantics {
+                heading()
+                contentDescription = "PDF page ${currentPage + 1} of ${pageCount.coerceAtLeast(1)}"
+            }
+        )
         if (pageCount <= 0) {
             ReaderMessage("Unable to read pages from this PDF.")
             return@Column
@@ -712,6 +750,10 @@ private fun PdfReaderView(
                             translationY = offsetY
                         }
                         .transformable(state = transformState)
+                        .semantics {
+                            contentDescription = "PDF page ${currentPage + 1}"
+                            stateDescription = "Zoom ${formatZoomLevel(zoom)}"
+                        }
                 )
             }
         } ?: Text("Unable to render PDF.")
@@ -815,6 +857,10 @@ private fun EpubReaderView(
         Text(epubBook.title ?: title, style = MaterialTheme.typography.titleMedium)
         Text(
             "Chapter ${currentChapter + 1} of $chapterCount",
+            modifier = Modifier.semantics {
+                heading()
+                contentDescription = "Chapter ${currentChapter + 1} of $chapterCount"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -822,11 +868,20 @@ private fun EpubReaderView(
             EPUB_THEME_OPTIONS.forEach { theme ->
                 val selected = theme == selectedTheme
                 if (selected) {
-                    Button(onClick = { selectedTheme = theme }) {
+                    Button(
+                        onClick = { selectedTheme = theme },
+                        modifier = Modifier.semantics {
+                            contentDescription = "EPUB theme ${theme.label}"
+                            stateDescription = "Selected"
+                        }
+                    ) {
                         Text(theme.label)
                     }
                 } else {
-                    OutlinedButton(onClick = { selectedTheme = theme }) {
+                    OutlinedButton(
+                        onClick = { selectedTheme = theme },
+                        modifier = Modifier.semantics { contentDescription = "EPUB theme ${theme.label}" }
+                    ) {
                         Text(theme.label)
                     }
                 }
@@ -834,17 +889,20 @@ private fun EpubReaderView(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(
-                onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) }
+                onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) },
+                modifier = Modifier.semantics { contentDescription = "Decrease EPUB text size" }
             ) {
                 Text("A-")
             }
             Text(
                 "Text ${formatEpubFontScale(fontScale)}",
+                modifier = Modifier.semantics { contentDescription = "EPUB text size ${formatEpubFontScale(fontScale)}" },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
             OutlinedButton(
-                onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) }
+                onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) },
+                modifier = Modifier.semantics { contentDescription = "Increase EPUB text size" }
             ) {
                 Text("A+")
             }
@@ -856,7 +914,9 @@ private fun EpubReaderView(
                 .background(Color(selectedTheme.backgroundColor))
         ) {
             AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { contentDescription = "EPUB chapter reader" },
                 factory = { webContext ->
                     WebView(webContext).apply {
                         settings.javaScriptEnabled = true
@@ -948,6 +1008,10 @@ private fun ComicReaderView(
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             "Page ${currentPage + 1} of $pageCount",
+            modifier = Modifier.semantics {
+                heading()
+                contentDescription = "Comic page ${currentPage + 1} of $pageCount"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )

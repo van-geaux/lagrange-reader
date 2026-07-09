@@ -158,7 +158,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add EPUB pagination/theme/font handling
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death
-- [ ] Improve accessibility for controls and reader screens
+- [x] Improve accessibility for controls and reader screens
 
 ## 12. Error Handling And Recovery
 
