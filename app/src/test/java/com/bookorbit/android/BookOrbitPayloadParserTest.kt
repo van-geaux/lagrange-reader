@@ -151,6 +151,7 @@ class BookOrbitPayloadParserTest {
         )
 
         assertEquals("37.5%", books[0].progressLabel)
+        assertEquals(37.5f, books[0].progressPercent)
         assertEquals("Page 9", books[1].progressLabel)
     }
 

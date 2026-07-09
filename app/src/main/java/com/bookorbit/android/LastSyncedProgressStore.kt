@@ -52,7 +52,7 @@ class LastSyncedProgressStore(context: Context) {
                     put("mediaKind", item.mediaKind.name)
                     put("positionMs", item.positionMs)
                     put("pageIndex", item.pageIndex)
-                    put("progressPercent", item.progressPercent)
+                    put("progressPercent", normalizeStoredProgressPercent(item.progressPercent))
                     put("updatedAtMillis", item.updatedAtMillis)
                 }
             )
@@ -70,7 +70,7 @@ class LastSyncedProgressStore(context: Context) {
             mediaKind = runCatching { MediaKind.valueOf(optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
             positionMs = optLong("positionMs"),
             pageIndex = optInt("pageIndex"),
-            progressPercent = if (has("progressPercent") && !isNull("progressPercent")) optDouble("progressPercent").toFloat() else null,
+            progressPercent = if (has("progressPercent") && !isNull("progressPercent")) normalizeStoredProgressPercent(optDouble("progressPercent").toFloat()) else null,
             updatedAtMillis = optLong("updatedAtMillis")
         )
     }

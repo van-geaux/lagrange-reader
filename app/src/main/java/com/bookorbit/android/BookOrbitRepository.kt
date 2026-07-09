@@ -266,7 +266,7 @@ class BookOrbitRepository(private val context: Context) {
             mediaKind = book.mediaKind,
             positionMs = position,
             pageIndex = pageIndex,
-            progressPercent = progressPercent,
+            progressPercent = normalizeStoredProgressPercent(progressPercent),
             updatedAtMillis = System.currentTimeMillis()
         )
         val lastSynced = lastSyncedProgressStore.read(update.progressKey())
@@ -626,7 +626,7 @@ internal object BookOrbitPayloadParser {
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
                         localPath = fileId?.let { downloads[it]?.localPath },
                         progressLabel = readingProgress.progressLabel(),
-                        progressPercent = readingProgress.progressPercent(),
+                        progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent()),
                         progressPositionMs = readingProgress.progressPositionMs(),
                         progressPageIndex = readingProgress.progressPageIndex()
                     )
@@ -834,6 +834,12 @@ internal object BookOrbitPayloadParser {
 
 internal fun normalizeStoredServerUrl(serverUrl: String): String {
     return serverUrl.trim().trimEnd('/')
+}
+
+internal fun normalizeStoredProgressPercent(value: Float?): Float? {
+    value ?: return null
+    val normalized = if (value in 0f..1f) value * 100f else value
+    return normalized.coerceIn(0f, 100f)
 }
 
 internal fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {

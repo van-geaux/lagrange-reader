@@ -109,7 +109,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("coverUrl", book.coverUrl)
                                     put("localPath", book.localPath)
                                     put("progressLabel", book.progressLabel)
-                                    put("progressPercent", book.progressPercent)
+                                    put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
                                     put("progressPositionMs", book.progressPositionMs)
                                     put("progressPageIndex", book.progressPageIndex)
                                 }
@@ -160,7 +160,7 @@ class BrowserSnapshotStore(context: Context) {
                         coverUrl = item.optString("coverUrl").takeIf { it.isNotBlank() },
                         localPath = item.optString("localPath").takeIf { it.isNotBlank() },
                         progressLabel = item.optString("progressLabel").takeIf { it.isNotBlank() },
-                        progressPercent = item.optFloat("progressPercent"),
+                        progressPercent = normalizeStoredProgressPercent(item.optFloat("progressPercent")),
                         progressPositionMs = item.optLongOrNull("progressPositionMs"),
                         progressPageIndex = item.optIntOrNull("progressPageIndex")
                     )

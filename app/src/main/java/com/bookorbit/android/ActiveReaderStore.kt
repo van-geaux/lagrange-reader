@@ -38,7 +38,7 @@ class ActiveReaderStore private constructor(
                 put("coverUrl", book.coverUrl)
                 put("localPath", book.localPath)
                 put("progressLabel", book.progressLabel)
-                put("progressPercent", book.progressPercent)
+                put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
                 put("progressPositionMs", book.progressPositionMs)
                 put("progressPageIndex", book.progressPageIndex)
             })
@@ -69,7 +69,7 @@ class ActiveReaderStore private constructor(
             coverUrl = book.optString("coverUrl").takeIf { it.isNotBlank() },
             localPath = book.optString("localPath").takeIf { it.isNotBlank() },
             progressLabel = book.optString("progressLabel").takeIf { it.isNotBlank() },
-            progressPercent = if (book.has("progressPercent") && !book.isNull("progressPercent")) book.optDouble("progressPercent").toFloat() else null,
+            progressPercent = if (book.has("progressPercent") && !book.isNull("progressPercent")) normalizeStoredProgressPercent(book.optDouble("progressPercent").toFloat()) else null,
             progressPositionMs = if (book.has("progressPositionMs") && !book.isNull("progressPositionMs")) book.optLong("progressPositionMs") else null,
             progressPageIndex = if (book.has("progressPageIndex") && !book.isNull("progressPageIndex")) book.optInt("progressPageIndex") else null
         )
