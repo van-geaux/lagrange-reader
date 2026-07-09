@@ -29,6 +29,7 @@ The current app flow is:
 - Downloaded book cards also expose a delete-local-copy action that removes the stored file and its persisted download record.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
+- When auth probing fails during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 
 ### Data and API layer
 

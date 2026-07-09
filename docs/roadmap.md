@@ -23,6 +23,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Debug builds expose the pending sync queue count in the browser view
 - Progress sync worker now applies exponential backoff for transient server failures
 - Last-synced progress markers now suppress duplicate or stale queue submissions
+- Offline startup and login-refresh paths now fall back to cached browser state when available
 
 ## Next execution order
 

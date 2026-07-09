@@ -113,7 +113,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Prefer local file when available
 - [x] Keep queued progress locally while offline
 - [ ] Test full airplane-mode behavior with downloaded books
-- [ ] Confirm app startup behavior when offline
+- [x] Confirm app startup behavior when offline
 - [ ] Confirm library list fallback when offline
 - [ ] Define and implement offline UX for books not downloaded
 - [ ] Ensure reader screens degrade gracefully without network

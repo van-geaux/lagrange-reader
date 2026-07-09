@@ -36,7 +36,16 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             if (repository.isAuthenticated()) {
                 loadBrowser()
             } else {
-                _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Sign in to access your libraries.")
+                val cached = repository.loadCachedBrowserState()
+                if (cached != null) {
+                    showBrowser(
+                        cached.copy(
+                            message = "Showing the last cached library snapshot. Sign in again when the server is available."
+                        )
+                    )
+                } else {
+                    _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Sign in to access your libraries.")
+                }
             }
         }
     }
@@ -75,7 +84,16 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             if (repository.isAuthenticated()) {
                 loadBrowser()
             } else {
-                _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Waiting for an authenticated session.")
+                val cached = repository.loadCachedBrowserState()
+                if (cached != null) {
+                    showBrowser(
+                        cached.copy(
+                            message = "Showing the last cached library snapshot while waiting for an authenticated session."
+                        )
+                    )
+                } else {
+                    _screen.value = AppScreen.Login(serverUrl = serverUrl, message = "Waiting for an authenticated session.")
+                }
             }
         }
     }
