@@ -32,6 +32,7 @@ The current app flow is:
 - It resolves stream and download URLs for files.
 - It prepares readable local copies for offline-first reader flows, including EPUB cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.
+- Progress queue writes are dispatched on `Dispatchers.IO`; `AppCoordinator` debounces noisy reader/player progress events before calling the repository.
 
 ### Local persistence
 
@@ -45,6 +46,7 @@ The current app flow is:
 - Sync is currently event-based and timestamped.
 - Conflict handling is currently newest-progress-wins.
 - Duplicate queued updates for the same server/book/file target are compacted to the newest event.
+- Audio progress is throttled before persistence; page/chapter updates are queued only when the target position changes meaningfully.
 
 ### Reader implementations
 
@@ -78,3 +80,4 @@ Validated against the live server and BookOrbit source:
 - Login completion detection is still indirect and based on API probing.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration is basic outside of chapter/page/time position.
+- Progress throttling is implemented in coordinator memory and needs focused unit coverage.

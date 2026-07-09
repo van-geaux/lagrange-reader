@@ -12,6 +12,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
+    private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
+    private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
 
     fun bootstrap() {
         scope.launch {
@@ -45,6 +47,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun clearServer() {
         scope.launch {
+            latestProgressByTarget.clear()
+            queuedProgressByTarget.clear()
             repository.clearServer()
             _screen.value = AppScreen.ServerSetup()
         }
@@ -148,18 +152,107 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
         scope.launch {
-            repository.queueProgress(
+            val key = book.progressKey()
+            val progress = PendingProgress(
                 book = book,
                 position = position,
                 pageIndex = pageIndex,
-                progressPercent = progressPercent
+                progressPercent = progressPercent,
+                observedAtMillis = System.currentTimeMillis()
             )
+            latestProgressByTarget[key] = progress
+            if (shouldQueueProgress(progress, queuedProgressByTarget[key])) {
+                queueProgress(key, progress)
+            }
         }
     }
 
     fun closeReader() {
         scope.launch {
+            flushCurrentReaderProgress()
             loadBrowser()
         }
+    }
+
+    private suspend fun flushCurrentReaderProgress() {
+        val reader = _screen.value as? AppScreen.Reader ?: return
+        val key = reader.readerState.book.progressKey()
+        val progress = latestProgressByTarget[key] ?: return
+        if (progress.isMeaningfullyDifferentFrom(queuedProgressByTarget[key])) {
+            queueProgress(key, progress)
+        }
+    }
+
+    private suspend fun queueProgress(key: BookProgressKey, progress: PendingProgress) {
+        repository.queueProgress(
+            book = progress.book,
+            position = progress.position,
+            pageIndex = progress.pageIndex,
+            progressPercent = progress.progressPercent
+        )
+        queuedProgressByTarget[key] = progress
+    }
+
+    private fun shouldQueueProgress(progress: PendingProgress, lastQueued: PendingProgress?): Boolean {
+        if (lastQueued == null) {
+            return true
+        }
+        if (!progress.isMeaningfullyDifferentFrom(lastQueued)) {
+            return false
+        }
+        if (progress.book.mediaKind != MediaKind.AUDIO) {
+            return true
+        }
+        val elapsedMillis = progress.observedAtMillis - lastQueued.observedAtMillis
+        val positionDeltaMillis = kotlin.math.abs(progress.position - lastQueued.position)
+        return elapsedMillis >= MIN_AUDIO_PROGRESS_QUEUE_INTERVAL_MS ||
+            positionDeltaMillis >= MIN_AUDIO_POSITION_DELTA_MS ||
+            progress.percentDeltaFrom(lastQueued) >= MIN_PERCENT_DELTA
+    }
+
+    private fun PendingProgress.isMeaningfullyDifferentFrom(other: PendingProgress?): Boolean {
+        other ?: return true
+        return pageIndex != other.pageIndex ||
+            kotlin.math.abs(position - other.position) >= MIN_POSITION_DELTA_MS ||
+            percentDeltaFrom(other) >= MIN_PERCENT_DELTA
+    }
+
+    private fun PendingProgress.percentDeltaFrom(other: PendingProgress): Float {
+        val current = progressPercent ?: return 0f
+        val previous = other.progressPercent ?: return 0f
+        return kotlin.math.abs(normalizeProgressPercent(current) - normalizeProgressPercent(previous))
+    }
+
+    private fun normalizeProgressPercent(value: Float): Float {
+        return if (value in 0f..1f) value * 100f else value
+    }
+
+    private fun BookSummary.progressKey(): BookProgressKey {
+        return BookProgressKey(
+            bookId = id,
+            fileId = fileId,
+            mediaKind = mediaKind
+        )
+    }
+
+    private data class BookProgressKey(
+        val bookId: String,
+        val fileId: String?,
+        val mediaKind: MediaKind
+    )
+
+    private data class PendingProgress(
+        val book: BookSummary,
+        val position: Long,
+        val pageIndex: Int,
+        val progressPercent: Float?,
+        val observedAtMillis: Long
+    )
+
+    private companion object {
+        const val MIN_AUDIO_PROGRESS_QUEUE_INTERVAL_MS = 15_000L
+        const val MIN_AUDIO_POSITION_DELTA_MS = 15_000L
+        const val MIN_POSITION_DELTA_MS = 1_000L
+        const val MIN_PERCENT_DELTA = 1f
     }
 }

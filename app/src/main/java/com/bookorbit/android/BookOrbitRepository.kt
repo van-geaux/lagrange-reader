@@ -138,7 +138,7 @@ class BookOrbitRepository(private val context: Context) {
         position: Long,
         pageIndex: Int,
         progressPercent: Float?
-    ) {
+    ) = withContext(Dispatchers.IO) {
         queueStore.enqueue(
             ProgressUpdate(
                 id = UUID.randomUUID().toString(),

@@ -11,6 +11,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Download and sync scaffolding are implemented
 - EPUB fallback replaced with a basic real EPUB reader path
 - Queue compaction and auth-vs-transient sync failure handling implemented
+- Reader/player progress events are throttled before queue persistence
 
 ## Next execution order
 
@@ -32,6 +33,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 3. Sync queue hardening
 
+- Add tests for progress throttling and queue compaction behavior
 - Add backoff and retry policy
 - Add debug-visible queue inspection/logging
 - Verify queue replay against the live BookOrbit server

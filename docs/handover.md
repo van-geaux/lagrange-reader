@@ -32,6 +32,11 @@ Last updated: 2026-07-06
   - sync queue compaction is implemented
 - The Android debug build is passing on this machine with `.\gradlew.bat assembleDebug`
 
+## Handover maintenance rule
+
+- Update this handover only when explicitly told to do so before ending a session.
+- A general instruction to update docs means update the relevant project docs, excluding this handover.
+
 ## Live BookOrbit assumptions already validated
 
 - Authentication:
