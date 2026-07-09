@@ -27,8 +27,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.AccessDeniedException
+import java.nio.file.FileSystemException
+import java.nio.file.NoSuchFileException
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
@@ -150,7 +154,11 @@ class BookOrbitRepository(private val context: Context) {
         val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
         val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         if (!target.exists()) {
-            target.parentFile?.mkdirs()
+            val parent = target.parentFile
+            parent?.mkdirs()
+            if (parent != null && !parent.exists()) {
+                throw UserFacingException("Unable to prepare local storage for this download.")
+            }
             val request = Request.Builder()
                 .url(buildDownloadUrl(fileId))
                 .get()
@@ -164,8 +172,16 @@ class BookOrbitRepository(private val context: Context) {
                 }
                 val input = response.body?.byteStream()
                     ?: throw UserFacingException("The server returned an empty download.")
-                FileOutputStream(target).use { output ->
-                    input.copyTo(output)
+                try {
+                    FileOutputStream(target).use { output ->
+                        input.copyTo(output)
+                    }
+                } catch (error: IOException) {
+                    target.delete()
+                    if (error.isLikelyLocalStorageFailure()) {
+                        throw UserFacingException("Local storage could not save this download. Check free space and file access, then try again.")
+                    }
+                    throw error
                 }
             }
         }
@@ -583,6 +599,16 @@ class BookOrbitRepository(private val context: Context) {
             path.contains("/audio-progress") -> "sync listening progress"
             else -> "complete this request"
         }
+    }
+
+    private fun IOException.isLikelyLocalStorageFailure(): Boolean {
+        return this is FileNotFoundException ||
+            this is FileSystemException ||
+            this is AccessDeniedException ||
+            this is NoSuchFileException ||
+            message.orEmpty().contains("no space", ignoreCase = true) ||
+            message.orEmpty().contains("not enough space", ignoreCase = true) ||
+            message.orEmpty().contains("enospc", ignoreCase = true)
     }
 
     private fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
