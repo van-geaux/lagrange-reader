@@ -27,6 +27,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.Locale
 import java.util.UUID
 
@@ -103,7 +104,7 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
-        val fileId = book.fileId ?: error("Book does not expose a file id.")
+        val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
         val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         if (!target.exists()) {
             target.parentFile?.mkdirs()
@@ -113,9 +114,13 @@ class BookOrbitRepository(private val context: Context) {
                 .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    error("Download failed with HTTP ${response.code}.")
+                    throw HttpRequestException(
+                        code = response.code,
+                        action = "download this title"
+                    )
                 }
-                val input = response.body?.byteStream() ?: error("No download body returned.")
+                val input = response.body?.byteStream()
+                    ?: throw UserFacingException("The server returned an empty download.")
                 FileOutputStream(target).use { output ->
                     input.copyTo(output)
                 }
@@ -298,7 +303,7 @@ class BookOrbitRepository(private val context: Context) {
     private fun serverBase(): String = runBlocking { getServerUrl() }.orEmpty()
 
     private fun request(path: String, method: String, body: RequestBody?): String {
-        val base = serverBase().ifBlank { error("No BookOrbit server configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
         val request = Request.Builder()
             .url(base.trimEnd('/') + path)
             .method(method, body)
@@ -310,7 +315,10 @@ class BookOrbitRepository(private val context: Context) {
                 throw AuthenticationRequiredException()
             }
             if (!response.isSuccessful) {
-                error("Request failed with HTTP ${response.code}.")
+                throw HttpRequestException(
+                    code = response.code,
+                    action = requestAction(path, method)
+                )
             }
             return response.body?.string().orEmpty()
         }
@@ -488,6 +496,16 @@ class BookOrbitRepository(private val context: Context) {
         return scaled.coerceIn(0f, 100f).toDouble()
     }
 
+    private fun requestAction(path: String, method: String): String {
+        return when {
+            path == "/api/v1/libraries" -> "load libraries"
+            path.contains("/books") && method == "POST" -> "load books"
+            path.contains("/progress") -> "sync reading progress"
+            path.contains("/audio-progress") -> "sync listening progress"
+            else -> "complete this request"
+        }
+    }
+
     private object Keys {
         val SERVER_URL = stringPreferencesKey("server_url")
         val SELECTED_LIBRARY_ID = stringPreferencesKey("selected_library_id")
@@ -498,7 +516,12 @@ class BookOrbitRepository(private val context: Context) {
     }
 }
 
-private class AuthenticationRequiredException : IllegalStateException("Authentication required.")
+class AuthenticationRequiredException : IllegalStateException("Authentication required.")
+class UserFacingException(message: String) : IllegalStateException(message)
+class HttpRequestException(
+    val code: Int,
+    val action: String
+) : IOException("HTTP $code while trying to $action.")
 
 private class WebViewCookieJar : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {

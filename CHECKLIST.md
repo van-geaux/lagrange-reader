@@ -162,7 +162,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 ## 12. Error Handling And Recovery
 
 - [x] Basic fallback back to login on session/API failure
-- [ ] Add structured user-facing error messages
+- [x] Add structured user-facing error messages
 - [ ] Add recoverable network error flows
 - [ ] Add authentication-expired flow with return to intended screen
 - [ ] Add corrupted local file detection and recovery

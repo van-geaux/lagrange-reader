@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineStart
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 class AppCoordinator(private val repository: BookOrbitRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -116,7 +120,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             isRefreshing = false,
                             isLoadingLibraries = false,
                             isLoadingBooks = false,
-                            message = error.message ?: "Unable to refresh libraries."
+                            message = userMessage(error, "Unable to refresh libraries.")
                         )
                     )
                 } else {
@@ -168,7 +172,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         books = emptyList()
                     )).copy(
                         isLoadingBooks = false,
-                        message = error.message ?: "Unable to load the selected library."
+                        message = userMessage(error, "Unable to load the selected library.")
                     )
                 )
             }
@@ -184,7 +188,11 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             }.onFailure { error ->
                 val fallback = lastBrowserState
                 if (fallback != null) {
-                    showBrowser(fallback.copy(message = error.message ?: "Unable to open ${book.title}."))
+                    showBrowser(
+                        fallback.copy(
+                            message = userMessage(error, "Unable to open ${book.title}.")
+                        )
+                    )
                 } else {
                     loadBrowser()
                 }
@@ -229,7 +237,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                             fileId = fileId,
                             isDownloading = false,
                             failed = true,
-                            message = error.message ?: "Download failed for ${book.title}."
+                            message = userMessage(error, "Download failed for ${book.title}.")
                         )
                     }
                 }
@@ -280,6 +288,24 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     private fun showBrowserMessage(message: String) {
         val current = lastBrowserState ?: return
         showBrowser(current.copy(message = message))
+    }
+
+    private fun userMessage(error: Throwable, fallback: String): String {
+        return when (error) {
+            is AuthenticationRequiredException -> "Your session expired. Sign in again."
+            is UserFacingException -> error.message ?: fallback
+            is HttpRequestException -> when {
+                error.code == 404 -> "The server could not find the requested content."
+                error.code == 429 -> "The server is rate limiting requests. Try again shortly."
+                error.code in 500..599 -> "The server failed while trying to ${error.action}."
+                else -> "The server could not ${error.action}."
+            }
+            is UnknownHostException -> "The server host could not be resolved."
+            is SocketTimeoutException -> "The server took too long to respond."
+            is SSLException -> "The server's TLS configuration could not be validated."
+            is IOException -> "A network error interrupted the request."
+            else -> fallback
+        }
     }
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
