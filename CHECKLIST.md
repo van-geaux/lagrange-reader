@@ -105,6 +105,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add storage-space failure handling
 - [ ] Add download integrity checks
 - [x] Add delete-local-copy action
+- [x] Prune stale download records when local files are missing
 - [ ] Add redownload/update behavior if server file changes
 
 ## 8. Offline Reading / Listening

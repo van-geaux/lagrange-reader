@@ -112,6 +112,7 @@ class BookOrbitRepository(private val context: Context) {
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
+        val downloads = downloadStore.readAll().associateBy { it.fileId }
         val selectedLibraryId = libraryId
             ?: getSelectedLibraryId()
             ?: snapshot.selectedLibraryId
@@ -120,7 +121,14 @@ class BookOrbitRepository(private val context: Context) {
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
             selectedLibraryId = selectedLibraryId,
-            books = selectedLibraryId?.let { snapshot.booksByLibraryId[it] }.orEmpty(),
+            books = selectedLibraryId
+                ?.let { snapshot.booksByLibraryId[it] }
+                .orEmpty()
+                .map { book ->
+                    val fileId = book.fileId
+                    val localPath = fileId?.let { downloads[it]?.localPath }
+                    if (localPath == book.localPath) book else book.copy(localPath = localPath)
+                },
             debugPendingProgressCount = pendingProgressCount()
         )
     }

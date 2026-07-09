@@ -13,13 +13,13 @@ class DownloadStore(context: Context) {
     private val downloadDir = File(context.filesDir, "downloads")
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
-        val records = readUnlocked().filterNot { it.fileId == record.fileId }.toMutableList()
+        val records = readSanitizedUnlocked().filterNot { it.fileId == record.fileId }.toMutableList()
         records += record
         writeUnlocked(records)
     }
 
     suspend fun find(fileId: String): DownloadRecord? = mutex.withLock {
-        readUnlocked().firstOrNull { it.fileId == fileId }
+        readSanitizedUnlocked().firstOrNull { it.fileId == fileId }
     }
 
     suspend fun delete(fileId: String): Boolean = mutex.withLock {
@@ -33,7 +33,7 @@ class DownloadStore(context: Context) {
     }
 
     suspend fun readAll(): List<DownloadRecord> = mutex.withLock {
-        readUnlocked()
+        readSanitizedUnlocked()
     }
 
     suspend fun clear() = mutex.withLock {
@@ -70,6 +70,15 @@ class DownloadStore(context: Context) {
                 )
             }
         }
+    }
+
+    private fun readSanitizedUnlocked(): List<DownloadRecord> {
+        val records = readUnlocked()
+        val validRecords = records.filter { File(it.localPath).exists() }
+        if (validRecords.size != records.size) {
+            writeUnlocked(validRecords)
+        }
+        return validRecords
     }
 
     private fun writeUnlocked(records: List<DownloadRecord>) {
