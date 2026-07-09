@@ -46,6 +46,7 @@ data class BrowserState(
     val isLoadingBooks: Boolean = false,
     val downloadingFileIds: Set<String> = emptySet(),
     val failedDownloadFileIds: Set<String> = emptySet(),
+    val debugPendingProgressCount: Int = 0,
     val message: String? = null
 )
 

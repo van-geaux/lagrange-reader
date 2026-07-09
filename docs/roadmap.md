@@ -20,6 +20,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - User-facing error messages are normalized from typed repository/network failures
 - Last successful libraries and per-library book lists are cached locally for browser fallback
 - Downloaded items can now remove their local copy and persisted download record
+- Debug builds expose the pending sync queue count in the browser view
 
 ## Next execution order
 

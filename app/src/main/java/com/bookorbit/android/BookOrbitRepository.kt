@@ -116,7 +116,8 @@ class BookOrbitRepository(private val context: Context) {
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
             selectedLibraryId = selectedLibraryId,
-            books = selectedLibraryId?.let { snapshot.booksByLibraryId[it] }.orEmpty()
+            books = selectedLibraryId?.let { snapshot.booksByLibraryId[it] }.orEmpty(),
+            debugPendingProgressCount = pendingProgressCount()
         )
     }
 
@@ -197,6 +198,10 @@ class BookOrbitRepository(private val context: Context) {
             )
         )
         enqueueSyncWorker()
+    }
+
+    suspend fun pendingProgressCount(): Int = withContext(Dispatchers.IO) {
+        queueStore.readAll().size
     }
 
     suspend fun syncPendingProgress() = withContext(Dispatchers.IO) {

@@ -48,6 +48,7 @@ The current app flow is:
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
+- Debug builds show the current pending progress queue count directly in the browser screen.
 
 ### Background sync
 

@@ -143,7 +143,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Collapse multiple pending updates for the same book/file
 - [ ] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures
-- [ ] Add queue inspection/logging for debug builds
+- [x] Add queue inspection/logging for debug builds
 - [ ] Confirm behavior when server changes while queue still exists
 
 ## 11. Reader / Player Quality

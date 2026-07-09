@@ -98,6 +98,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 val libraries = repository.loadLibraries()
                 val selectedLibrary = repository.getSelectedLibraryId() ?: libraries.firstOrNull()?.id
                 val books = selectedLibrary?.let { repository.loadBooks(it) }.orEmpty()
+                val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
                     BrowserState(
                         serverUrl = serverUrl,
@@ -106,13 +107,20 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         books = books,
                         isRefreshing = false,
                         isLoadingLibraries = false,
-                        isLoadingBooks = false
+                        isLoadingBooks = false,
+                        debugPendingProgressCount = pendingProgressCount
                     )
                 )
                 if (selectedLibrary != null) {
                     repository.setSelectedLibraryId(selectedLibrary)
                 }
                 repository.syncPendingProgress()
+                val refreshed = lastBrowserState ?: return@runCatching
+                showBrowser(
+                    refreshed.copy(
+                        debugPendingProgressCount = repository.pendingProgressCount()
+                    )
+                )
             }.onFailure { error ->
                 val cached = repository.loadCachedBrowserState()
                 if (cached != null) {
@@ -159,6 +167,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 repository.setSelectedLibraryId(libraryId)
                 val libraries = currentBrowser?.browserState?.libraries ?: repository.loadLibraries()
                 val books = repository.loadBooks(libraryId)
+                val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
                     BrowserState(
                         serverUrl = serverUrl,
@@ -167,7 +176,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         books = books,
                         isRefreshing = false,
                         isLoadingLibraries = false,
-                        isLoadingBooks = false
+                        isLoadingBooks = false,
+                        debugPendingProgressCount = pendingProgressCount
                     )
                 )
             }.onFailure { error ->

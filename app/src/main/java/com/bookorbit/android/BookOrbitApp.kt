@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -245,6 +246,8 @@ private fun LibraryBrowserScreen(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isDebugBuild = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -281,6 +284,15 @@ private fun LibraryBrowserScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+            }
+            if (isDebugBuild) {
+                item {
+                    Text(
+                        text = "Pending sync queue: ${state.debugPendingProgressCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
             state.message?.let { message ->
                 item {
