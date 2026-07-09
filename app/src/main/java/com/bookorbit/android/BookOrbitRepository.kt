@@ -417,7 +417,8 @@ class BookOrbitRepository(private val context: Context) {
         }
         return when (book.mediaKind) {
             MediaKind.EPUB,
-            MediaKind.PDF -> if (allowRemoteCache) cacheReadableCopy(book) else null
+            MediaKind.PDF,
+            MediaKind.COMIC -> if (allowRemoteCache) cacheReadableCopy(book) else null
             else -> null
         }
     }
