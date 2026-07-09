@@ -33,6 +33,7 @@ import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileSystemException
 import java.nio.file.NoSuchFileException
+import java.text.DecimalFormat
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
@@ -539,7 +540,11 @@ internal object BookOrbitPayloadParser {
                     ?: obj.optJSONObject("bookFile")?.stringValue("id", "_id")
                 val format = primaryFile?.stringValue("format", "mimeType", "mime_type", "extension")
                     ?: obj.stringValue("format", "mimeType", "mime_type", "extension")
-                val mediaKind = inferMediaKind(format, obj.stringValue("title", "name"))
+                val mediaKind = inferMediaKind(
+                    format = format,
+                    title = primaryFile?.stringValue("name", "title", "path", "filename")
+                        ?: obj.stringValue("title", "name")
+                )
                 val bookId = obj.stringValue("id", "_id", "bookId") ?: "book-$index"
                 val readingProgress = obj.optJSONObject("readingProgress")
                 add(
@@ -599,10 +604,10 @@ internal object BookOrbitPayloadParser {
 
     private fun JSONObject?.progressLabel(): String? {
         this ?: return null
-        opt("percentage")?.toString()?.takeIf { it.isNotBlank() }?.let { return "$it%" }
-        opt("pageNumber")?.toString()?.takeIf { it.isNotBlank() }?.let { return "page $it" }
-        opt("positionSeconds")?.toString()?.takeIf { it.isNotBlank() }?.let { return "${it}s" }
-        opt("currentFileId")?.toString()?.takeIf { it.isNotBlank() }?.let { return "file $it" }
+        progressPercent()?.let { return "${formatProgressValue(normalizeProgressValue(it))}%" }
+        progressPageIndex()?.let { return "Page ${it + 1}" }
+        progressPositionMs()?.let { return formatDurationLabel(it) }
+        opt("currentFileId")?.toString()?.takeIf { it.isNotBlank() }?.let { return "File $it" }
         return null
     }
 
@@ -695,13 +700,43 @@ internal object BookOrbitPayloadParser {
                 return candidate
             }
         }
-        for (index in 0 until length()) {
-            val candidate = optJSONObject(index) ?: continue
-            if (candidate.stringValue("id", "_id", "fileId") != null) {
-                return candidate
+        return (0 until length())
+            .asSequence()
+            .mapNotNull { index -> optJSONObject(index) }
+            .filter { it.stringValue("id", "_id", "fileId") != null }
+            .maxByOrNull { candidate ->
+                val mediaKind = inferMediaKind(
+                    format = candidate.stringValue("format", "mimeType", "mime_type", "extension"),
+                    title = candidate.stringValue("name", "title", "path", "filename")
+                )
+                when (mediaKind) {
+                    MediaKind.EPUB -> 4
+                    MediaKind.PDF -> 3
+                    MediaKind.AUDIO -> 2
+                    MediaKind.COMIC -> 1
+                    MediaKind.UNKNOWN -> 0
+                }
             }
+    }
+
+    private fun normalizeProgressValue(value: Float): Float {
+        return if (value in 0f..1f) value * 100f else value
+    }
+
+    private fun formatProgressValue(value: Float): String {
+        return DecimalFormat("0.##").format(value.coerceIn(0f, 100f).toDouble())
+    }
+
+    private fun formatDurationLabel(positionMs: Long): String {
+        val totalSeconds = (positionMs / 1000L).coerceAtLeast(0L)
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return if (hours > 0L) {
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%d:%02d", minutes, seconds)
         }
-        return null
     }
 }
 

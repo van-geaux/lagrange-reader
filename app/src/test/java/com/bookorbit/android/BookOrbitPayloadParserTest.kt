@@ -84,6 +84,74 @@ class BookOrbitPayloadParserTest {
         assertNull(book.coverUrl)
     }
 
+    @Test
+    fun `parseBooks prefers the best supported file when no primary role is present`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-3",
+            payload = """
+                {
+                  "books": [
+                    {
+                      "id": "book-3",
+                      "title": "Mixed Attachments",
+                      "files": [
+                        {"id": "raw-bin", "format": "application/octet-stream", "filename": "artifact.bin"},
+                        {"id": "ebook", "format": "application/octet-stream", "filename": "mixed-attachments.epub"},
+                        {"id": "pdf-copy", "format": "application/pdf", "filename": "mixed-attachments.pdf"}
+                      ]
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        val book = books.single()
+        assertEquals("ebook", book.fileId)
+        assertEquals(MediaKind.EPUB, book.mediaKind)
+        assertEquals("https://example.test/api/v1/books/files/ebook/download", book.downloadUrl)
+    }
+
+    @Test
+    fun `parseBooks normalizes progress labels from fractional percentages and seconds`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-4",
+            payload = """
+                {
+                  "results": [
+                    {
+                      "id": "book-4",
+                      "title": "Progress Label Example",
+                      "files": [
+                        {"id": "file-4", "format": "application/epub+zip"}
+                      ],
+                      "readingProgress": {
+                        "percentage": 0.375,
+                        "positionSeconds": 3723
+                      }
+                    },
+                    {
+                      "id": "book-5",
+                      "title": "Page Label Example",
+                      "files": [
+                        {"id": "file-5", "format": "application/pdf"}
+                      ],
+                      "readingProgress": {
+                        "pageNumber": 9
+                      }
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("37.5%", books[0].progressLabel)
+        assertEquals("Page 9", books[1].progressLabel)
+    }
+
     @Test(expected = UserFacingException::class)
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")

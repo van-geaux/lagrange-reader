@@ -75,9 +75,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Track local download path per file
 - [x] Validate actual BookOrbit schema for ebooks
 - [x] Validate actual BookOrbit schema for audiobooks
-- [ ] Confirm multiple-file book handling strategy
+- [x] Confirm multiple-file book handling strategy
 - [ ] Confirm cover image handling strategy
-- [ ] Normalize progress labels from real server responses
+- [x] Normalize progress labels from real server responses
 
 ## 6. Streaming Read / Listen
 
