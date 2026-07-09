@@ -21,6 +21,7 @@ class DownloadStoreTest {
             """
             [
               {
+                "serverUrl":"https://example.test",
                 "fileId":"keep",
                 "bookId":"book-1",
                 "title":"Keep",
@@ -30,6 +31,7 @@ class DownloadStoreTest {
                 "downloadedAtMillis":1
               },
               {
+                "serverUrl":"https://example.test",
                 "fileId":"drop",
                 "bookId":"book-2",
                 "title":"Drop",
@@ -42,11 +44,11 @@ class DownloadStoreTest {
             """.trimIndent()
         )
 
-        val records = store.readAll()
+        val records = store.readAll("https://example.test")
 
         assertEquals(listOf("keep"), records.map { it.fileId })
-        assertNotNull(store.find("keep"))
-        assertNull(store.find("drop"))
+        assertNotNull(store.find("https://example.test", "keep"))
+        assertNull(store.find("https://example.test", "drop"))
     }
 
     @Test
@@ -62,5 +64,45 @@ class DownloadStoreTest {
         )
 
         assertEquals("Example_Audio-123.m4b", target.name)
+    }
+
+    @Test
+    fun `readAll and find are scoped by server url`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-server-scope").toFile()
+        val store = DownloadStore(filesDir)
+        val firstFile = File(filesDir, "downloads/first.epub").apply {
+            parentFile?.mkdirs()
+            writeText("one")
+        }
+        val secondFile = File(filesDir, "downloads/second.epub").apply {
+            parentFile?.mkdirs()
+            writeText("two")
+        }
+
+        store.save(
+            DownloadRecord(
+                serverUrl = "https://one.example",
+                fileId = "shared-file",
+                bookId = "book-1",
+                title = "Book One",
+                localPath = firstFile.absolutePath,
+                mediaKind = MediaKind.EPUB
+            )
+        )
+        store.save(
+            DownloadRecord(
+                serverUrl = "https://two.example",
+                fileId = "shared-file",
+                bookId = "book-2",
+                title = "Book Two",
+                localPath = secondFile.absolutePath,
+                mediaKind = MediaKind.EPUB
+            )
+        )
+
+        assertEquals(listOf("https://one.example"), store.readAll("https://one.example").map { it.serverUrl })
+        assertEquals(listOf("https://two.example"), store.readAll("https://two.example").map { it.serverUrl })
+        assertEquals(firstFile.absolutePath, store.find("https://one.example", "shared-file")?.localPath)
+        assertEquals(secondFile.absolutePath, store.find("https://two.example", "shared-file")?.localPath)
     }
 }

@@ -111,8 +111,9 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
         val body = JSONObject().toString().toRequestBody(JSON)
-        val downloads = downloadStore.readAll().associateBy { it.fileId }
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
         BookOrbitPayloadParser.parseBooks(
             libraryId = libraryId,
             payload = request("/api/v1/libraries/$libraryId/books", "POST", body),
@@ -120,7 +121,7 @@ class BookOrbitRepository(private val context: Context) {
             serverBase = serverBase()
         ).also { books ->
             browserSnapshotStore.saveBooks(
-                serverUrl = getServerUrl().orEmpty(),
+                serverUrl = serverUrl,
                 selectedLibraryId = libraryId,
                 libraryId = libraryId,
                 books = books
@@ -131,7 +132,7 @@ class BookOrbitRepository(private val context: Context) {
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
-        val downloads = downloadStore.readAll().associateBy { it.fileId }
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
         val selectedLibraryId = libraryId
             ?: getSelectedLibraryId()
             ?: snapshot.selectedLibraryId
@@ -257,6 +258,7 @@ class BookOrbitRepository(private val context: Context) {
         }
         downloadStore.save(
             DownloadRecord(
+                serverUrl = getServerUrl().orEmpty(),
                 fileId = fileId,
                 bookId = book.id,
                 title = book.title,
@@ -270,7 +272,7 @@ class BookOrbitRepository(private val context: Context) {
 
     suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
-        val deleted = downloadStore.delete(fileId)
+        val deleted = downloadStore.delete(getServerUrl().orEmpty(), fileId)
         if (!deleted) {
             throw UserFacingException("Unable to remove the local copy for this title.")
         }
@@ -443,7 +445,7 @@ class BookOrbitRepository(private val context: Context) {
             return direct
         }
         val fileId = book.fileId ?: return null
-        val downloaded = downloadStore.find(fileId)?.localPath?.let(::File)?.takeIf(File::exists)
+        val downloaded = downloadStore.find(getServerUrl().orEmpty(), fileId)?.localPath?.let(::File)?.takeIf(File::exists)
         if (downloaded != null) {
             return downloaded
         }

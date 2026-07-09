@@ -32,6 +32,7 @@ class BookOrbitPayloadParserTest {
             """.trimIndent(),
             downloads = mapOf(
                 "file-primary" to DownloadRecord(
+                    serverUrl = "https://example.test",
                     fileId = "file-primary",
                     bookId = "book-1",
                     title = "Example EPUB",

@@ -51,7 +51,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Add backoff and retry policy
 - Add debug-visible queue inspection/logging
 - Verify queue replay against the live BookOrbit server
-- Confirm behavior when server selection changes with pending progress
+- Confirm end-to-end server-switch behavior on a real device, including queued progress and server-scoped local downloads
 
 ### 4. UX hardening
 

@@ -73,6 +73,7 @@ data class ProgressUpdate(
 )
 
 data class DownloadRecord(
+    val serverUrl: String,
     val fileId: String,
     val bookId: String,
     val title: String,

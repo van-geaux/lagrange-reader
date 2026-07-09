@@ -48,7 +48,7 @@ The current app flow is:
 
 - `DataStore` stores the configured server URL and selected library ID.
 - Session reset clears cookies and active-reader state while leaving the configured server and cached browser snapshot intact.
-- `DownloadStore` stores downloaded file records.
+- `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
 - Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.

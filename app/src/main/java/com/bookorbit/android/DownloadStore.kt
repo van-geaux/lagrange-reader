@@ -24,27 +24,30 @@ class DownloadStore private constructor(
     )
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
-        val records = readSanitizedUnlocked().filterNot { it.fileId == record.fileId }.toMutableList()
+        val records = readSanitizedUnlocked()
+            .filterNot { it.serverUrl == record.serverUrl && it.fileId == record.fileId }
+            .toMutableList()
         records += record
         writeUnlocked(records)
     }
 
-    suspend fun find(fileId: String): DownloadRecord? = mutex.withLock {
-        readSanitizedUnlocked().firstOrNull { it.fileId == fileId }
+    suspend fun find(serverUrl: String, fileId: String): DownloadRecord? = mutex.withLock {
+        readSanitizedUnlocked().firstOrNull { it.serverUrl == serverUrl && it.fileId == fileId }
     }
 
-    suspend fun delete(fileId: String): Boolean = mutex.withLock {
+    suspend fun delete(serverUrl: String, fileId: String): Boolean = mutex.withLock {
         val records = readUnlocked()
-        val record = records.firstOrNull { it.fileId == fileId } ?: return@withLock false
+        val record = records.firstOrNull { it.serverUrl == serverUrl && it.fileId == fileId } ?: return@withLock false
         val target = File(record.localPath)
         val deletedFile = !target.exists() || target.delete()
-        val remaining = records.filterNot { it.fileId == fileId }
+        val remaining = records.filterNot { it.serverUrl == serverUrl && it.fileId == fileId }
         writeUnlocked(remaining)
         deletedFile
     }
 
-    suspend fun readAll(): List<DownloadRecord> = mutex.withLock {
-        readSanitizedUnlocked()
+    suspend fun readAll(serverUrl: String? = null): List<DownloadRecord> = mutex.withLock {
+        val records = readSanitizedUnlocked()
+        if (serverUrl == null) records else records.filter { it.serverUrl == serverUrl }
     }
 
     suspend fun clear() = mutex.withLock {
@@ -70,6 +73,7 @@ class DownloadStore private constructor(
                 val obj = array.optJSONObject(i) ?: continue
                 add(
                     DownloadRecord(
+                        serverUrl = obj.optString("serverUrl"),
                         fileId = obj.optString("fileId"),
                         bookId = obj.optString("bookId"),
                         title = obj.optString("title"),
@@ -97,6 +101,7 @@ class DownloadStore private constructor(
         records.forEach { record ->
             array.put(
                 JSONObject().apply {
+                    put("serverUrl", record.serverUrl)
                     put("fileId", record.fileId)
                     put("bookId", record.bookId)
                     put("title", record.title)
