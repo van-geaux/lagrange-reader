@@ -117,8 +117,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Confirm app startup behavior when offline
 - [x] Confirm library list fallback when offline
 - [x] Define and implement offline UX for books not downloaded
-- [ ] Ensure reader screens degrade gracefully without network
-- [ ] Verify no accidental API dependency during local playback/reading
+- [x] Ensure reader screens degrade gracefully without network
+- [x] Verify no accidental API dependency during local playback/reading
 
 ## 9. Progress Tracking
 

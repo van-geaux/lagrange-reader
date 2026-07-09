@@ -32,6 +32,7 @@ The current app flow is:
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
+- Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
 
 ### Data and API layer

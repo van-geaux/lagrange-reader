@@ -153,9 +153,9 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    suspend fun buildReaderState(book: BookSummary): ReaderState = withContext(Dispatchers.IO) {
-        val localFile = resolveReadableFile(book)
-        val streamUrl = book.fileId?.let(::buildStreamUrl)
+    suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState = withContext(Dispatchers.IO) {
+        val localFile = resolveReadableFile(book, allowRemoteCache = !localOnly)
+        val streamUrl = if (localOnly) null else book.fileId?.let(::buildStreamUrl)
         ensureReaderCanOpen(
             book = book,
             localFile = localFile,

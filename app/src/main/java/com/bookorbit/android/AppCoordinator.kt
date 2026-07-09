@@ -368,7 +368,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
         scope.launch {
             _screen.value = AppScreen.ReaderLoading(book)
             runCatching {
-                val readerState = repository.buildReaderState(book)
+                val readerState = repository.buildReaderState(
+                    book = book,
+                    localOnly = lastBrowserState?.isOfflineSnapshot == true
+                )
                 repository.saveActiveReader(readerState.book)
                 _screen.value = AppScreen.Reader(readerState)
             }.onFailure { error ->
