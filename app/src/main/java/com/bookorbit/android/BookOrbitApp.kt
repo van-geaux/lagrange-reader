@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.webkit.WebSettings
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -796,6 +797,8 @@ private fun EpubReaderView(
             }
         )
     }
+    var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
+    var fontScale by remember(file) { mutableStateOf(1f) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
 
     LaunchedEffect(currentChapter, chapterCount) {
@@ -815,11 +818,42 @@ private fun EpubReaderView(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            EPUB_THEME_OPTIONS.forEach { theme ->
+                val selected = theme == selectedTheme
+                if (selected) {
+                    Button(onClick = { selectedTheme = theme }) {
+                        Text(theme.label)
+                    }
+                } else {
+                    OutlinedButton(onClick = { selectedTheme = theme }) {
+                        Text(theme.label)
+                    }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(
+                onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) }
+            ) {
+                Text("A-")
+            }
+            Text(
+                "Text ${formatEpubFontScale(fontScale)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            OutlinedButton(
+                onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) }
+            ) {
+                Text("A+")
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color.White)
+                .background(Color(selectedTheme.backgroundColor))
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -829,15 +863,21 @@ private fun EpubReaderView(
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = true
                         settings.allowContentAccess = true
+                        settings.cacheMode = WebSettings.LOAD_DEFAULT
                         webViewClient = WebViewClient()
                     }
                 },
                 update = { webView ->
                     val chapter = currentChapterState
                     val html = chapter.file.readText()
+                    webView.setBackgroundColor(selectedTheme.backgroundColor)
                     webView.loadDataWithBaseURL(
                         chapter.file.parentFile?.toURI()?.toString(),
-                        html,
+                        styleEpubHtml(
+                            html = html,
+                            theme = selectedTheme,
+                            fontScale = fontScale
+                        ),
                         "text/html",
                         Charsets.UTF_8.name(),
                         null
@@ -1131,5 +1171,89 @@ private fun formatZoomLevel(zoom: Float): String {
     return String.format(Locale.US, "%.0f%%", zoom * 100f)
 }
 
+private fun styleEpubHtml(
+    html: String,
+    theme: EpubReaderTheme,
+    fontScale: Float
+): String {
+    val fontPercent = (fontScale * 100f).roundToInt()
+    val stylesheet = """
+        <style>
+        :root { color-scheme: light; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: ${theme.backgroundCss};
+            color: ${theme.foregroundCss};
+            font-size: ${fontPercent}%;
+            line-height: 1.7;
+        }
+        body {
+            padding: 20px 18px 28px;
+            max-width: 44rem;
+            margin: 0 auto;
+            word-wrap: break-word;
+        }
+        img, svg {
+            max-width: 100%;
+            height: auto;
+        }
+        a { color: ${theme.linkCss}; }
+        pre, code {
+            white-space: pre-wrap;
+        }
+        </style>
+    """.trimIndent()
+    return if (html.contains("</head>", ignoreCase = true)) {
+        html.replaceFirst("</head>", "$stylesheet</head>", ignoreCase = true)
+    } else {
+        """
+        <html>
+          <head>$stylesheet</head>
+          <body>$html</body>
+        </html>
+        """.trimIndent()
+    }
+}
+
+private fun formatEpubFontScale(fontScale: Float): String {
+    return String.format(Locale.US, "%.0f%%", fontScale * 100f)
+}
+
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
+private val EPUB_THEME_OPTIONS = listOf(
+    EpubReaderTheme.Light,
+    EpubReaderTheme.Sepia,
+    EpubReaderTheme.Dark
+)
+
+private enum class EpubReaderTheme(
+    val label: String,
+    val backgroundColor: Int,
+    val backgroundCss: String,
+    val foregroundCss: String,
+    val linkCss: String
+) {
+    Light(
+        label = "Light",
+        backgroundColor = 0xFFF7F4EE.toInt(),
+        backgroundCss = "#F7F4EE",
+        foregroundCss = "#1F1C17",
+        linkCss = "#2457A6"
+    ),
+    Sepia(
+        label = "Sepia",
+        backgroundColor = 0xFFF1E6D2.toInt(),
+        backgroundCss = "#F1E6D2",
+        foregroundCss = "#3B2E1E",
+        linkCss = "#7A4B00"
+    ),
+    Dark(
+        label = "Dark",
+        backgroundColor = 0xFF181512.toInt(),
+        backgroundCss = "#181512",
+        foregroundCss = "#ECE4D8",
+        linkCss = "#8DB5FF"
+    )
+}

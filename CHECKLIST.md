@@ -155,7 +155,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add skip forward/back actions
 - [x] Add playback speed controls if allowed within read/listen scope
 - [ ] Add chapter support if API/file format exposes it
-- [ ] Add EPUB pagination/theme/font handling
+- [x] Add EPUB pagination/theme/font handling
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death
 - [ ] Improve accessibility for controls and reader screens
