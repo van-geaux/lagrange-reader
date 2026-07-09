@@ -133,10 +133,12 @@ class BookOrbitRepository(private val context: Context) {
         val serverUrl = getServerUrl().orEmpty()
         val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        val selectedLibraryId = libraryId
-            ?: getSelectedLibraryId()
-            ?: snapshot.selectedLibraryId
-            ?: snapshot.libraries.firstOrNull()?.id
+        val selectedLibraryId = resolveSelectedLibraryId(
+            preferredId = libraryId
+                ?: getSelectedLibraryId()
+                ?: snapshot.selectedLibraryId,
+            libraries = snapshot.libraries
+        )
         BrowserState(
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
@@ -932,6 +934,16 @@ internal object BookOrbitPayloadParser {
 
 internal fun normalizeStoredServerUrl(serverUrl: String): String {
     return serverUrl.trim().trimEnd('/')
+}
+
+internal fun resolveSelectedLibraryId(
+    preferredId: String?,
+    libraries: List<LibrarySummary>
+): String? {
+    val validPreferred = preferredId?.takeIf { candidate ->
+        libraries.any { it.id == candidate }
+    }
+    return validPreferred ?: libraries.firstOrNull()?.id
 }
 
 internal fun normalizeStoredProgressPercent(value: Float?): Float? {

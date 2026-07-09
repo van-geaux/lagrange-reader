@@ -32,4 +32,17 @@ class BookOrbitRepositoryHelpersTest {
         assertNull(normalizeServerUrl("ftp://example.test"))
         assertNull(normalizeServerUrl("mailto:user@example.test"))
     }
+
+    @Test
+    fun `resolveSelectedLibraryId keeps valid ids and falls back when stale`() {
+        val libraries = listOf(
+            LibrarySummary(id = "lib-a", name = "A"),
+            LibrarySummary(id = "lib-b", name = "B")
+        )
+
+        assertEquals("lib-b", resolveSelectedLibraryId("lib-b", libraries))
+        assertEquals("lib-a", resolveSelectedLibraryId("missing", libraries))
+        assertEquals("lib-a", resolveSelectedLibraryId(null, libraries))
+        assertNull(resolveSelectedLibraryId("missing", emptyList()))
+    }
 }

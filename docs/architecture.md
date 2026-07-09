@@ -40,6 +40,7 @@ The current app flow is:
 - `BookOrbitRepository` is the main integration layer with the BookOrbit server.
 - It stores the selected server URL and selected library.
 - It loads libraries and books from the live API.
+- Stored selected-library ids are validated against the latest available library list before the browser chooses a library to load.
 - It resolves stream and download URLs for files.
 - It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.

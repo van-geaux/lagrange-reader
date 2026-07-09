@@ -248,7 +248,10 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             }
             runCatching {
                 val libraries = repository.loadLibraries()
-                val selectedLibrary = repository.getSelectedLibraryId() ?: libraries.firstOrNull()?.id
+                val selectedLibrary = resolveSelectedLibraryId(
+                    preferredId = repository.getSelectedLibraryId(),
+                    libraries = libraries
+                )
                 val books = selectedLibrary?.let { repository.loadBooks(it) }.orEmpty()
                 val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
