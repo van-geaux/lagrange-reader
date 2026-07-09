@@ -10,8 +10,11 @@ class ProgressSyncWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         return runCatching {
-            BookOrbitRepository(applicationContext).syncPendingProgress()
-            Result.success()
+            when (BookOrbitRepository(applicationContext).syncPendingProgress()) {
+                SyncAttemptResult.Success,
+                SyncAttemptResult.AuthenticationBlocked -> Result.success()
+                SyncAttemptResult.TransientFailure -> Result.retry()
+            }
         }.getOrElse {
             Result.retry()
         }

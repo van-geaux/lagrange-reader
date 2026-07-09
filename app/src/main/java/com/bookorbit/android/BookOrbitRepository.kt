@@ -5,6 +5,7 @@ import android.webkit.CookieManager
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -28,6 +29,7 @@ import org.json.JSONTokener
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
 
@@ -204,14 +206,15 @@ class BookOrbitRepository(private val context: Context) {
         queueStore.readAll().size
     }
 
-    suspend fun syncPendingProgress() = withContext(Dispatchers.IO) {
+    suspend fun syncPendingProgress(): SyncAttemptResult = withContext(Dispatchers.IO) {
         val pending = queueStore.readAll()
         if (pending.isEmpty()) {
-            return@withContext
+            return@withContext SyncAttemptResult.Success
         }
         val survivors = mutableListOf<ProgressUpdate>()
         val orderedPending = pending.sortedBy { it.updatedAtMillis }
         var authBlocked = false
+        var transientFailure = false
         orderedPending.forEachIndexed { index, item ->
             if (authBlocked) {
                 survivors += item
@@ -224,12 +227,18 @@ class BookOrbitRepository(private val context: Context) {
                         survivors += item
                         survivors += orderedPending.drop(index + 1)
                     } else {
+                        transientFailure = true
                         survivors += item
                     }
                 }
                 .getOrNull()
         }
         queueStore.replaceAll(survivors)
+        when {
+            authBlocked -> SyncAttemptResult.AuthenticationBlocked
+            transientFailure && survivors.isNotEmpty() -> SyncAttemptResult.TransientFailure
+            else -> SyncAttemptResult.Success
+        }
     }
 
     suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
@@ -281,6 +290,11 @@ class BookOrbitRepository(private val context: Context) {
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                15,
+                TimeUnit.SECONDS
             )
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -557,6 +571,12 @@ class BookOrbitRepository(private val context: Context) {
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
     }
+}
+
+enum class SyncAttemptResult {
+    Success,
+    AuthenticationBlocked,
+    TransientFailure
 }
 
 class AuthenticationRequiredException : IllegalStateException("Authentication required.")

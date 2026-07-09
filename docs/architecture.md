@@ -57,6 +57,7 @@ The current app flow is:
 - Conflict handling is currently newest-progress-wins.
 - Duplicate queued updates for the same server/book/file target are compacted to the newest event.
 - Audio progress is throttled before persistence; page/chapter updates are queued only when the target position changes meaningfully.
+- Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
 
 ### Reader implementations
 
