@@ -30,8 +30,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add proper package/version naming policy
 - [ ] Add app icon and production branding assets
 - [ ] Add release signing strategy
-- [ ] Add CI workflow for debug build
-- [ ] Add baseline static quality checks
+- [x] Add CI workflow for debug build
+- [x] Add baseline static quality checks
 
 ## 2. Server Connection Flow
 

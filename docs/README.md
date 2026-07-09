@@ -25,6 +25,8 @@ Manual app testing can now start from [Testing](./testing.md), and the server se
 
 The local release build also passes with `.\gradlew.bat assembleRelease`.
 
+The repository now includes a basic GitHub Actions workflow for debug CI that runs the JVM unit suite, Android lint, and debug APK build on `main` pushes and pull requests.
+
 The main gaps are:
 
 - end-to-end offline verification on real content

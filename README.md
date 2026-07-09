@@ -39,6 +39,8 @@ The release build also compiles locally with:
 .\gradlew.bat assembleRelease
 ```
 
+The repository now also includes a GitHub Actions workflow that runs `testDebugUnitTest`, `lintDebug`, and `assembleDebug` on pushes to `main` and on pull requests.
+
 ## Manual app testing
 
 The current manual test entry point is documented in [docs/testing.md](./docs/testing.md).
