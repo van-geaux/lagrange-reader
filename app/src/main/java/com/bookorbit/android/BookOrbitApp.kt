@@ -14,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -850,6 +852,7 @@ private fun EpubReaderView(
     }
     var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
     var fontScale by remember(file) { mutableStateOf(1f) }
+    var showChapterPicker by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
 
     LaunchedEffect(currentChapter, chapterCount) {
@@ -873,6 +876,36 @@ private fun EpubReaderView(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
+        TextButton(
+            onClick = { showChapterPicker = !showChapterPicker },
+            modifier = Modifier.semantics {
+                contentDescription = if (showChapterPicker) {
+                    "Hide chapter picker"
+                } else {
+                    "Show chapter picker"
+                }
+            }
+        ) {
+            Text(if (showChapterPicker) "Hide chapters" else "Show chapters")
+        }
+        if (showChapterPicker) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                epubBook.chapters.forEachIndexed { index, chapter ->
+                    FilterChip(
+                        selected = index == currentChapter,
+                        onClick = { currentChapter = index },
+                        label = {
+                            Text(
+                                chapter.title.ifBlank { "Chapter ${index + 1}" }
+                            )
+                        }
+                    )
+                }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             EPUB_THEME_OPTIONS.forEach { theme ->
                 val selected = theme == selectedTheme
