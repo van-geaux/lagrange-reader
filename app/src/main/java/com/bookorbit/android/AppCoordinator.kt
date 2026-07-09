@@ -33,7 +33,16 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 return@launch
             }
 
+            repository.restoreActiveReaderState(localOnly = true)?.let { readerState ->
+                _screen.value = AppScreen.Reader(readerState)
+                return@launch
+            }
+
             if (repository.isAuthenticated()) {
+                repository.restoreActiveReaderState()?.let { readerState ->
+                    _screen.value = AppScreen.Reader(readerState)
+                    return@launch
+                }
                 loadBrowser()
             } else {
                 val cached = repository.loadCachedBrowserState()
@@ -231,6 +240,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
             _screen.value = AppScreen.ReaderLoading(book)
             runCatching {
                 val readerState = repository.buildReaderState(book)
+                repository.saveActiveReader(readerState.book)
                 _screen.value = AppScreen.Reader(readerState)
             }.onFailure { error ->
                 val fallback = lastBrowserState
@@ -378,6 +388,13 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 observedAtMillis = System.currentTimeMillis()
             )
             latestProgressByTarget[key] = progress
+            repository.saveActiveReader(
+                book.copy(
+                    progressPositionMs = position.takeIf { it > 0L } ?: book.progressPositionMs,
+                    progressPageIndex = pageIndex.takeIf { it > 0 } ?: book.progressPageIndex,
+                    progressPercent = progressPercent ?: book.progressPercent
+                )
+            )
             if (shouldQueueProgress(progress, queuedProgressByTarget[key])) {
                 queueProgress(key, progress)
             }
@@ -387,6 +404,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
     fun closeReader() {
         scope.launch {
             flushCurrentReaderProgress()
+            repository.clearActiveReader()
             loadBrowser()
         }
     }

@@ -44,6 +44,7 @@ class BookOrbitRepository(private val context: Context) {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
+    private val activeReaderStore = ActiveReaderStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
@@ -67,6 +68,7 @@ class BookOrbitRepository(private val context: Context) {
         queueStore.clear()
         downloadStore.clear()
         browserSnapshotStore.clear()
+        activeReaderStore.clear()
         lastSyncedProgressStore.clear()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
@@ -149,6 +151,38 @@ class BookOrbitRepository(private val context: Context) {
             lastKnownPosition = progress?.positionMs ?: book.progressPositionMs ?: 0L,
             pageIndex = progress?.pageIndex ?: book.progressPageIndex ?: 0,
             progressPercent = progress?.progressPercent ?: book.progressPercent
+        )
+    }
+
+    suspend fun saveActiveReader(book: BookSummary) = withContext(Dispatchers.IO) {
+        activeReaderStore.save(
+            serverUrl = getServerUrl().orEmpty(),
+            book = book
+        )
+    }
+
+    suspend fun clearActiveReader() = withContext(Dispatchers.IO) {
+        activeReaderStore.clear()
+    }
+
+    suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState? = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) {
+            return@withContext null
+        }
+        val savedBook = activeReaderStore.read(serverUrl) ?: return@withContext null
+        val localFile = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
+        if (localOnly && localFile == null) {
+            return@withContext null
+        }
+        val progress = queueStore.latestFor(savedBook.id, savedBook.fileId)
+        ReaderState(
+            book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
+            localFile = localFile,
+            streamUrl = savedBook.fileId?.let(::buildStreamUrl),
+            lastKnownPosition = progress?.positionMs ?: savedBook.progressPositionMs ?: 0L,
+            pageIndex = progress?.pageIndex ?: savedBook.progressPageIndex ?: 0,
+            progressPercent = progress?.progressPercent ?: savedBook.progressPercent
         )
     }
 
@@ -351,7 +385,7 @@ class BookOrbitRepository(private val context: Context) {
         )
     }
 
-    private suspend fun resolveReadableFile(book: BookSummary): File? {
+    private suspend fun resolveReadableFile(book: BookSummary, allowRemoteCache: Boolean = true): File? {
         val direct = book.localPath?.let(::File)?.takeIf(File::exists)
         if (direct != null) {
             return direct
@@ -363,7 +397,7 @@ class BookOrbitRepository(private val context: Context) {
         }
         return when (book.mediaKind) {
             MediaKind.EPUB,
-            MediaKind.PDF -> cacheReadableCopy(book)
+            MediaKind.PDF -> if (allowRemoteCache) cacheReadableCopy(book) else null
             else -> null
         }
     }
