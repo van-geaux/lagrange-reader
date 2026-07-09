@@ -13,6 +13,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Queue compaction and auth-vs-transient sync failure handling implemented
 - Reader/player progress events are throttled before queue persistence
 - Reader startup loading, reader error messages, unsupported-format messaging, and PDF cache-open support are implemented
+- Server-reported page/time progress is mapped into reader resume state
 
 ## Next execution order
 

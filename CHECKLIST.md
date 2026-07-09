@@ -128,7 +128,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate ebook progress payload shape against real `SaveProgressDto`
 - [x] Validate audiobook progress payload shape against real `UpsertAudioProgressDto`
 - [x] Add throttling/debouncing so progress is not queued too aggressively
-- [ ] Persist and restore last known progress on reopen
+- [x] Persist and restore last known progress on reopen
 - [ ] Normalize progress semantics across media types
 - [ ] Add session event support if `sessions` endpoint is useful
 

@@ -34,6 +34,7 @@ The current app flow is:
 - It resolves stream and download URLs for files.
 - It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.
+- It maps server `readingProgress` page and time-position fields back into reader resume state.
 - Progress queue writes are dispatched on `Dispatchers.IO`; `AppCoordinator` debounces noisy reader/player progress events before calling the repository.
 
 ### Local persistence
@@ -81,5 +82,5 @@ Validated against the live server and BookOrbit source:
 - Comic/CBZ reading is not implemented yet.
 - Login completion detection is still indirect and based on API probing.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
-- Reader state restoration is basic outside of chapter/page/time position.
+- Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling is implemented in coordinator memory and needs focused unit coverage.

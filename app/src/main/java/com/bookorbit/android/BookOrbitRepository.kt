@@ -96,8 +96,8 @@ class BookOrbitRepository(private val context: Context) {
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = book.fileId?.let(::buildStreamUrl),
-            lastKnownPosition = progress?.positionMs ?: 0L,
-            pageIndex = progress?.pageIndex ?: 0,
+            lastKnownPosition = progress?.positionMs ?: book.progressPositionMs ?: 0L,
+            pageIndex = progress?.pageIndex ?: book.progressPageIndex ?: 0,
             progressPercent = progress?.progressPercent ?: book.progressPercent
         )
     }
@@ -377,7 +377,9 @@ class BookOrbitRepository(private val context: Context) {
                         },
                         localPath = fileId?.let { downloads[it]?.localPath },
                         progressLabel = readingProgress.progressLabel(),
-                        progressPercent = readingProgress.progressPercent()
+                        progressPercent = readingProgress.progressPercent(),
+                        progressPositionMs = readingProgress.progressPositionMs(),
+                        progressPageIndex = readingProgress.progressPageIndex()
                     )
                 )
             }
@@ -424,6 +426,26 @@ class BookOrbitRepository(private val context: Context) {
             is String -> value.toFloatOrNull()
             else -> null
         }
+    }
+
+    private fun JSONObject?.progressPositionMs(): Long? {
+        this ?: return null
+        val seconds = when (val value = opt("positionSeconds")) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull()
+            else -> null
+        } ?: return null
+        return (seconds * 1000.0).toLong().coerceAtLeast(0L)
+    }
+
+    private fun JSONObject?.progressPageIndex(): Int? {
+        this ?: return null
+        val pageNumber = when (val value = opt("pageNumber")) {
+            is Number -> value.toInt()
+            is String -> value.toIntOrNull()
+            else -> null
+        } ?: return null
+        return (pageNumber - 1).coerceAtLeast(0)
     }
 
     private fun JSONObject.stringValue(vararg keys: String): String? {
