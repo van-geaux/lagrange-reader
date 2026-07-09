@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -127,6 +128,117 @@ class AppCoordinatorTest {
         assertTrue(screen.browserState.message.orEmpty().contains("Showing the last cached library snapshot."))
         assertTrue(screen.browserState.message.orEmpty().contains("network error"))
     }
+
+    @Test
+    fun `save server surfaces url validation failures without persisting the server`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            checkServerResult = ServerCheckResult.Redirected
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.saveServer("https://redirected.example.test")
+        advanceUntilIdle()
+
+        assertEquals(
+            AppScreen.ServerSetup(
+                serverUrl = "https://redirected.example.test",
+                message = "The server redirected this URL. Enter the final base URL directly."
+            ),
+            coordinator.screen.value
+        )
+        assertNull(repository.serverUrl)
+    }
+
+    @Test
+    fun `select library resumes after authentication recovers`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadBooksError = AuthenticationRequiredException()
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(book)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.selectLibrary(library.id)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("continue in this library"))
+
+        repository.loadBooksError = null
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val browserScreen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(library.id, browserScreen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), browserScreen.browserState.books)
+    }
+
+    @Test
+    fun `download resumes after authentication recovers`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            downloadError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.downloadBook(book)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("continue downloading ${book.title}"))
+
+        repository.downloadError = null
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        assertEquals(listOf(book, book), repository.downloadedBooks)
+    }
+
+    @Test
+    fun `load browser redirects to login when browsing session expires`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, loginScreen.serverUrl)
+        assertTrue(loginScreen.message.orEmpty().contains("continue browsing"))
+    }
+
+    @Test
+    fun `offline browser session action routes back to sign in instead of clearing the server`() = runTest {
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                isOfflineSnapshot = true
+            )
+        )
+
+        coordinator.onBrowserSessionAction()
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("Sign in again"))
+        assertEquals(0, repository.clearSessionCalls)
+    }
 }
 
 private class FakeBookOrbitDataSource(
@@ -144,6 +256,7 @@ private class FakeBookOrbitDataSource(
         )
     ),
     var buildReaderError: Throwable? = null,
+    var downloadError: Throwable? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
     var loadLibrariesError: Throwable? = null,
@@ -155,6 +268,8 @@ private class FakeBookOrbitDataSource(
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
     val savedActiveReaders = mutableListOf<BookSummary>()
+    val downloadedBooks = mutableListOf<BookSummary>()
+    var clearSessionCalls = 0
     var sessionStateRequested = false
     var selectedLibraryId: String? = null
 
@@ -169,7 +284,9 @@ private class FakeBookOrbitDataSource(
         selectedLibraryId = null
     }
 
-    override suspend fun clearSession() = Unit
+    override suspend fun clearSession() {
+        clearSessionCalls += 1
+    }
 
     override suspend fun getSelectedLibraryId(): String? = selectedLibraryId
 
@@ -211,7 +328,11 @@ private class FakeBookOrbitDataSource(
         return if (localOnly) restoreActiveReaderLocalOnlyResult else restoreActiveReaderResult
     }
 
-    override suspend fun downloadBook(book: BookSummary): File = error("not needed")
+    override suspend fun downloadBook(book: BookSummary): File {
+        downloadedBooks += book
+        downloadError?.let { throw it }
+        return File("downloaded.bin")
+    }
 
     override suspend fun deleteLocalCopy(book: BookSummary) = Unit
 
@@ -224,4 +345,16 @@ private class FakeBookOrbitDataSource(
     override suspend fun canReachServer(serverUrl: String): Boolean = checkServerResult == ServerCheckResult.Reachable
 
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = checkServerResult
+}
+
+private fun AppCoordinator.bootstrapIntoBrowser(state: BrowserState) {
+    val field = AppCoordinator::class.java.getDeclaredField("lastBrowserState")
+    field.isAccessible = true
+    field.set(this, state)
+
+    val screenField = AppCoordinator::class.java.getDeclaredField("_screen")
+    screenField.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val screen = screenField.get(this) as kotlinx.coroutines.flow.MutableStateFlow<AppScreen>
+    screen.value = AppScreen.Browser(state)
 }
