@@ -125,6 +125,34 @@ class ProgressQueueStoreTest {
         assertNull(latest)
     }
 
+    @Test
+    fun `enqueue keeps separate items for different servers`() = runBlocking {
+        val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-server-scope").toFile())
+
+        store.enqueue(
+            update(
+                id = "server-one",
+                bookId = "book-1",
+                fileId = "file-1",
+                mediaKind = MediaKind.EPUB,
+                updatedAtMillis = 10L
+            )
+        )
+        store.enqueue(
+            update(
+                id = "server-two",
+                bookId = "book-1",
+                fileId = "file-1",
+                mediaKind = MediaKind.EPUB,
+                updatedAtMillis = 20L
+            ).copy(serverUrl = "https://other.example")
+        )
+
+        val items = store.readAll()
+
+        assertEquals(listOf("server-one", "server-two"), items.map { it.id })
+    }
+
     private fun update(
         id: String,
         bookId: String,

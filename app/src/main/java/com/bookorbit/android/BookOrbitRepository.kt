@@ -68,10 +68,6 @@ class BookOrbitRepository(private val context: Context) {
             prefs.remove(Keys.SERVER_URL)
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
         }
-        queueStore.clear()
-        downloadStore.clear()
-        browserSnapshotStore.clear()
-        lastSyncedProgressStore.clear()
         clearSession()
     }
 
