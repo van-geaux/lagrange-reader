@@ -17,6 +17,8 @@ The Android project builds locally with `assembleDebug`, can connect to a BookOr
 
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, progress queue persistence, progress throttling policy behavior, and coordinator bootstrap/login/browser recovery flows.
 
+Initial live-browser load failures without a cached snapshot now fall back to an empty browser state with a user-facing retryable error instead of leaving the app stranded on a loading path.
+
 The audiobook reader now includes play and pause controls, skip back and forward actions, resume-at-position handling, and a small playback speed selector.
 
 Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, redirect responses, timeouts, and generic HTTP/network failures with clearer user-facing messages while preserving the attempted URL for direct retry.

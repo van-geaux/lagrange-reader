@@ -130,6 +130,50 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `load browser shows recoverable empty browser state when initial load fails without cache`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(serverUrl, screen.browserState.serverUrl)
+        assertTrue(screen.browserState.libraries.isEmpty())
+        assertTrue(screen.browserState.books.isEmpty())
+        assertFalse(screen.browserState.isOfflineSnapshot)
+        assertEquals("A network error interrupted the request.", screen.browserState.message)
+    }
+
+    @Test
+    fun `load browser can recover from empty error state on retry`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        repository.loadLibrariesError = null
+        repository.loadLibrariesResult = listOf(library)
+        repository.loadBooksResult = listOf(book)
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(library), screen.browserState.libraries)
+        assertEquals(library.id, screen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), screen.browserState.books)
+        assertNull(screen.browserState.message)
+    }
+
+    @Test
     fun `save server surfaces url validation failures without persisting the server`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = null,

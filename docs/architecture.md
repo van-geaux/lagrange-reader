@@ -31,6 +31,7 @@ The current app flow is:
 - Downloaded book cards also expose a delete-local-copy action that removes the stored file and its persisted download record.
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
+- If the first live browser load fails and no cached browser snapshot exists, the coordinator now shows an empty browser state with a recoverable error message so the refresh action can retry cleanly.
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.

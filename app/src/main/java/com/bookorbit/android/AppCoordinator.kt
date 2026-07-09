@@ -306,6 +306,19 @@ class AppCoordinator(
                             message = userMessage(error, "Unable to refresh libraries.")
                         )
                     )
+                } else {
+                    showBrowser(
+                        BrowserState(
+                            serverUrl = serverUrl,
+                            libraries = emptyList(),
+                            selectedLibraryId = null,
+                            books = emptyList(),
+                            isRefreshing = false,
+                            isLoadingLibraries = false,
+                            isLoadingBooks = false,
+                            message = userMessage(error, "Unable to load libraries.")
+                        )
+                    )
                 }
             }
         }
