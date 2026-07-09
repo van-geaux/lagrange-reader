@@ -79,30 +79,49 @@ class ProgressQueueStoreTest {
     }
 
     @Test
-    fun `latestFor matches by file id when book id differs`() = runBlocking {
+    fun `latestFor matches the exact server media book and file target`() = runBlocking {
         val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-latest").toFile())
         store.replaceAll(
             listOf(
                 update(
-                    id = "audio-1",
+                    id = "different-server",
                     bookId = "book-1",
                     fileId = "shared-file",
                     mediaKind = MediaKind.AUDIO,
                     updatedAtMillis = 10L
+                ).copy(serverUrl = "https://other.example"),
+                update(
+                    id = "different-media",
+                    bookId = "book-1",
+                    fileId = "shared-file",
+                    mediaKind = MediaKind.EPUB,
+                    updatedAtMillis = 20L
                 ),
                 update(
-                    id = "audio-2",
+                    id = "different-book",
                     bookId = "book-2",
                     fileId = "shared-file",
                     mediaKind = MediaKind.AUDIO,
-                    updatedAtMillis = 20L
+                    updatedAtMillis = 30L
+                ),
+                update(
+                    id = "exact-match",
+                    bookId = "book-1",
+                    fileId = "shared-file",
+                    mediaKind = MediaKind.AUDIO,
+                    updatedAtMillis = 40L
                 )
             )
         )
 
-        val latest = store.latestFor(bookId = "book-missing", fileId = "shared-file")
+        val latest = store.latestFor(
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "shared-file",
+            mediaKind = MediaKind.AUDIO
+        )
 
-        assertEquals("audio-2", latest?.id)
+        assertEquals("exact-match", latest?.id)
     }
 
     @Test
@@ -120,7 +139,12 @@ class ProgressQueueStoreTest {
             )
         )
 
-        val latest = store.latestFor(bookId = "book-2", fileId = "file-2")
+        val latest = store.latestFor(
+            serverUrl = "https://example.test",
+            bookId = "book-2",
+            fileId = "file-2",
+            mediaKind = MediaKind.PDF
+        )
 
         assertNull(latest)
     }

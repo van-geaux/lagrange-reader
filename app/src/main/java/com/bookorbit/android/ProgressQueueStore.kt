@@ -50,9 +50,19 @@ class ProgressQueueStore private constructor(
         if (file.exists()) file.delete()
     }
 
-    suspend fun latestFor(bookId: String, fileId: String?): ProgressUpdate? = mutex.withLock {
+    suspend fun latestFor(
+        serverUrl: String,
+        bookId: String,
+        fileId: String?,
+        mediaKind: MediaKind
+    ): ProgressUpdate? = mutex.withLock {
         readUnlocked()
-            .filter { it.bookId == bookId || (fileId != null && it.fileId == fileId) }
+            .filter {
+                it.serverUrl == serverUrl &&
+                    it.mediaKind == mediaKind &&
+                    it.bookId == bookId &&
+                    it.fileId == fileId
+            }
             .maxByOrNull { it.updatedAtMillis }
     }
 

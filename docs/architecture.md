@@ -73,6 +73,7 @@ The current app flow is:
 - The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
+- Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
 
 ### Reader implementations
 

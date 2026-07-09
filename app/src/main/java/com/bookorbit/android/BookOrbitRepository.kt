@@ -152,6 +152,7 @@ class BookOrbitRepository(private val context: Context) {
     }
 
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
         val localFile = resolveReadableFile(book, allowRemoteCache = !localOnly)
         val streamUrl = if (localOnly) null else book.fileId?.let(::buildStreamUrl)
         ensureReaderCanOpen(
@@ -159,7 +160,7 @@ class BookOrbitRepository(private val context: Context) {
             localFile = localFile,
             streamUrl = streamUrl
         )
-        val progress = queueStore.latestFor(book.id, book.fileId)
+        val progress = queueStore.latestFor(serverUrl, book.id, book.fileId, book.mediaKind)
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
@@ -201,7 +202,7 @@ class BookOrbitRepository(private val context: Context) {
         }.getOrElse {
             return@withContext null
         }
-        val progress = queueStore.latestFor(savedBook.id, savedBook.fileId)
+        val progress = queueStore.latestFor(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
         ReaderState(
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
