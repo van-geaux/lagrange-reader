@@ -19,6 +19,8 @@ The Android project builds locally with `assembleDebug`, can connect to a BookOr
 
 The app manifest now uses a project-owned adaptive launcher icon instead of the Android system placeholder.
 
+Session clearing now waits for WebView cookie removal before returning to login, reader reopen can fall back to last-synced local progress after the pending queue drains, and the EPUB WebView is configured to allow local file-backed image resources from extracted books.
+
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, progress queue persistence, progress throttling policy behavior, and coordinator bootstrap/login/browser recovery flows.
 
 Initial live-browser load failures without a cached snapshot now fall back to an empty browser state with a user-facing retryable error instead of leaving the app stranded on a loading path.

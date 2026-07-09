@@ -55,7 +55,7 @@ The current app flow is:
 
 - `DataStore` stores the configured server URL and selected library ID.
 - Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
-- Session reset clears cookies and active-reader state while leaving the configured server and cached browser snapshot intact.
+- Session reset now waits for cookie removal to complete before the app settles on the login screen, while leaving the configured server and cached browser snapshot intact.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
@@ -76,6 +76,7 @@ The current app flow is:
 - Audio progress is throttled before persistence through a dedicated `ProgressQueuePolicy`; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
 - The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
+- Reader reopen now consults the persisted last-synced progress marker when no newer queued progress exists, so local resume survives successful queue replay.
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
@@ -90,6 +91,7 @@ The current app flow is:
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
+  - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress is currently tracked at chapter granularity and translated into percentage
 - Unsupported formats show an explicit unsupported-format message.
 

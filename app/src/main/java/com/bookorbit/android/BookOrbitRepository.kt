@@ -14,6 +14,7 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -39,6 +40,7 @@ import java.text.DecimalFormat
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
+import kotlin.coroutines.resume
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
@@ -188,7 +190,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             localFile = localFile,
             streamUrl = streamUrl
         )
-        val progress = queueStore.latestFor(serverUrl, book.id, book.fileId, book.mediaKind)
+        val progress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
@@ -234,7 +236,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }.getOrElse {
             return@withContext null
         }
-        val progress = queueStore.latestFor(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
+        val progress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
         ReaderState(
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
@@ -579,6 +581,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     private fun buildDownloadUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/download"
 
+    private suspend fun latestKnownProgress(
+        serverUrl: String,
+        bookId: String,
+        fileId: String?,
+        mediaKind: MediaKind
+    ): ProgressUpdate? {
+        val key = ProgressKey(
+            serverUrl = serverUrl,
+            bookId = bookId,
+            fileId = fileId,
+            mediaKind = mediaKind
+        )
+        return queueStore.latestFor(serverUrl, bookId, fileId, mediaKind)
+            ?: lastSyncedProgressStore.read(key)
+    }
+
     private fun serverBase(): String = runBlocking { getServerUrl() }.orEmpty()
 
     private fun request(path: String, method: String, body: RequestBody?): String {
@@ -637,9 +655,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         return readable
     }
 
-    private fun clearCookies() {
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
+    private suspend fun clearCookies() {
+        suspendCancellableCoroutine { continuation ->
+            val manager = CookieManager.getInstance()
+            manager.removeSessionCookies(null)
+            manager.removeAllCookies {
+                manager.flush()
+                if (continuation.isActive) {
+                    continuation.resume(Unit)
+                }
+            }
+        }
     }
 
     private fun IOException.isLikelyLocalStorageFailure(): Boolean {

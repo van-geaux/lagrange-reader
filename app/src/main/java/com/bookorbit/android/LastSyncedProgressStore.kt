@@ -7,9 +7,21 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class LastSyncedProgressStore(context: Context) {
+class LastSyncedProgressStore private constructor(
+    private val file: File,
+    @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
+) {
     private val mutex = Mutex()
-    private val file = File(context.filesDir, "last_synced_progress.json")
+
+    constructor(context: Context) : this(
+        file = File(context.filesDir, "last_synced_progress.json"),
+        directFileConstructor = true
+    )
+
+    internal constructor(filesDir: File) : this(
+        file = File(filesDir, "last_synced_progress.json"),
+        directFileConstructor = true
+    )
 
     suspend fun read(key: ProgressKey): ProgressUpdate? = mutex.withLock {
         readUnlocked()[key.storageKey()]
