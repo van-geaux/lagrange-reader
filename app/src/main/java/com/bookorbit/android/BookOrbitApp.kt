@@ -11,6 +11,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,10 +46,12 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -658,8 +662,16 @@ private fun PdfReaderView(
     var currentPage by remember(file, initialPage) {
         mutableStateOf(initialPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)))
     }
+    var zoom by remember(file, currentPage) { mutableStateOf(1f) }
+    var offsetX by remember(file, currentPage) { mutableStateOf(0f) }
+    var offsetY by remember(file, currentPage) { mutableStateOf(0f) }
     val pageBitmap by produceState<Bitmap?>(initialValue = null, file, currentPage) {
         value = renderPdfPage(file, currentPage)
+    }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        zoom = (zoom * zoomChange).coerceIn(1f, 4f)
+        offsetX += panChange.x
+        offsetY += panChange.y
     }
 
     LaunchedEffect(currentPage, pageCount) {
@@ -679,12 +691,34 @@ private fun PdfReaderView(
             return@Column
         }
         pageBitmap?.let {
-            Image(
-                bitmap = it.asImageBitmap(),
-                contentDescription = "PDF page",
-                modifier = Modifier.fillMaxWidth()
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(Color.White)
+                    .clipToBounds(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "PDF page",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = offsetX
+                            translationY = offsetY
+                        }
+                        .transformable(state = transformState)
+                )
+            }
         } ?: Text("Unable to render PDF.")
+        Text(
+            text = "Zoom ${formatZoomLevel(zoom)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = { currentPage = (currentPage - 1).coerceAtLeast(0) },
@@ -697,6 +731,35 @@ private fun PdfReaderView(
                 enabled = currentPage < pageCount - 1
             ) {
                 Text("Next")
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    zoom = (zoom - 0.25f).coerceAtLeast(1f)
+                    if (zoom == 1f) {
+                        offsetX = 0f
+                        offsetY = 0f
+                    }
+                }
+            ) {
+                Text("Zoom out")
+            }
+            OutlinedButton(
+                onClick = {
+                    zoom = (zoom + 0.25f).coerceAtMost(4f)
+                }
+            ) {
+                Text("Zoom in")
+            }
+            TextButton(
+                onClick = {
+                    zoom = 1f
+                    offsetX = 0f
+                    offsetY = 0f
+                }
+            ) {
+                Text("Reset")
             }
         }
     }
@@ -1062,6 +1125,10 @@ private fun formatPlaybackSpeed(speed: Float): String {
     } else {
         String.format(Locale.US, "%.1fx", speed)
     }
+}
+
+private fun formatZoomLevel(zoom: Float): String {
+    return String.format(Locale.US, "%.0f%%", zoom * 100f)
 }
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
