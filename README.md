@@ -13,7 +13,7 @@ Android client for BookOrbit focused on reading and listening.
 
 ## Project status
 
-Working prototype. The app shell, API wiring, local download tracking, sync queue, explicit authenticated-session bootstrap via `/api/v1/auth/me`, sign-out/session reset behavior, and EPUB/PDF/audio/CBZ reading paths are in place. Focused JVM coverage now also exercises coordinator bootstrap, cached offline fallback, post-login resume flows, and recoverable initial browser-load failure handling. The remaining work is concentrated around end-to-end offline verification, reader quality, and release hardening.
+Working prototype. The app shell, API wiring, local download tracking, sync queue, explicit authenticated-session bootstrap via `/api/v1/auth/me`, sign-out/session reset behavior, and EPUB/PDF/audio/CBZ reading paths are in place. Focused JVM coverage now also exercises coordinator bootstrap, cached offline fallback, post-login resume flows, and recoverable initial browser-load failure handling. The app now also ships with a custom adaptive launcher icon instead of the default Android placeholder. The remaining work is concentrated around end-to-end offline verification, reader quality, and release hardening.
 
 ## Build
 
