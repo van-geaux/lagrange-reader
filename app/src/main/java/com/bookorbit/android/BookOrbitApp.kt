@@ -1226,9 +1226,13 @@ private fun loadComicPages(context: android.content.Context, file: File): List<F
     }.getOrDefault(emptyList())
 }
 
-private fun normalizeServerUrl(value: String): String? {
+internal fun normalizeServerUrl(value: String): String? {
     val raw = value.trim()
     if (raw.isBlank()) {
+        return null
+    }
+    val explicitScheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").find(raw)?.value?.removeSuffix(":")
+    if (explicitScheme != null && !explicitScheme.equals("http", ignoreCase = true) && !explicitScheme.equals("https", ignoreCase = true)) {
         return null
     }
     val prefixed = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
@@ -1238,6 +1242,9 @@ private fun normalizeServerUrl(value: String): String? {
     }
     val uri = Uri.parse(prefixed)
     val scheme = uri.scheme ?: return null
+    if (!scheme.equals("http", ignoreCase = true) && !scheme.equals("https", ignoreCase = true)) {
+        return null
+    }
     val host = uri.host ?: return null
     val port = if (uri.port > 0) ":${uri.port}" else ""
     val path = uri.path?.takeIf { it.isNotBlank() && it != "/" }?.trimEnd('/') ?: ""

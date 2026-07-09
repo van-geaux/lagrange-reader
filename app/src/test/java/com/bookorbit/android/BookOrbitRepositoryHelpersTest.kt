@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
@@ -24,5 +25,11 @@ class BookOrbitRepositoryHelpersTest {
     fun `inferMediaKind falls back to unknown for unsupported tokens`() {
         assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind("application/octet-stream", "mystery.bin"))
         assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, null))
+    }
+
+    @Test
+    fun `normalizeServerUrl rejects unsupported schemes`() {
+        assertNull(normalizeServerUrl("ftp://example.test"))
+        assertNull(normalizeServerUrl("mailto:user@example.test"))
     }
 }

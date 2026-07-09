@@ -92,6 +92,13 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )
                     return@launch
                 }
+                ServerCheckResult.Redirected -> {
+                    _screen.value = AppScreen.ServerSetup(
+                        serverUrl = serverUrl,
+                        message = "The server redirected this URL. Enter the final base URL directly."
+                    )
+                    return@launch
+                }
                 ServerCheckResult.HttpFailure -> {
                     _screen.value = AppScreen.ServerSetup(
                         serverUrl = serverUrl,

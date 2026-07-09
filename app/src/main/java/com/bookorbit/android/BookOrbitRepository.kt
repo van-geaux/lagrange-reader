@@ -331,8 +331,16 @@ class BookOrbitRepository(private val context: Context) {
                 .url(serverUrl.trimEnd('/') + "/")
                 .get()
                 .build()
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
+            client.newBuilder()
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build()
+                .newCall(request)
+                .execute()
+                .use { response ->
+                if (response.isRedirect) {
+                    ServerCheckResult.Redirected
+                } else if (response.isSuccessful) {
                     ServerCheckResult.Reachable
                 } else {
                     ServerCheckResult.HttpFailure
@@ -545,6 +553,7 @@ enum class ServerCheckResult {
     UnreachableHost,
     Timeout,
     TlsFailure,
+    Redirected,
     HttpFailure,
     NetworkFailure
 }

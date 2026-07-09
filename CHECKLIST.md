@@ -39,7 +39,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Persist selected server locally
 - [x] Support changing server from login flow
 - [x] Validate server reachability before entering login
-- [ ] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
+- [x] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
 - [x] Add clear server-connection error UI states
 - [x] Add retry and recovery behavior for server failures
 
