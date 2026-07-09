@@ -176,7 +176,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add unit tests for URL normalization
 - [ ] Add unit tests for payload parsing
 - [ ] Add unit tests for media kind inference
-- [ ] Add unit tests for download store
+- [x] Add unit tests for download store
 - [ ] Add unit tests for progress queue store
 - [ ] Add unit tests for sync conflict resolution
 - [ ] Add integration tests for login bootstrap

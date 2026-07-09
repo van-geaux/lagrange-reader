@@ -7,10 +7,21 @@ import java.io.File
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class DownloadStore(context: Context) {
+class DownloadStore private constructor(
+    private val file: File,
+    private val downloadDir: File
+) {
     private val mutex = Mutex()
-    private val file = File(context.filesDir, "downloads.json")
-    private val downloadDir = File(context.filesDir, "downloads")
+
+    constructor(context: Context) : this(
+        file = File(context.filesDir, "downloads.json"),
+        downloadDir = File(context.filesDir, "downloads")
+    )
+
+    internal constructor(filesDir: File) : this(
+        file = File(filesDir, "downloads.json"),
+        downloadDir = File(filesDir, "downloads")
+    )
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
         val records = readSanitizedUnlocked().filterNot { it.fileId == record.fileId }.toMutableList()
