@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
@@ -495,6 +496,10 @@ private fun AudioReader(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(context) { ExoPlayer.Builder(context).build() }
+    var isPlaying by remember(player) { mutableStateOf(false) }
+    var currentPosition by remember(player) { mutableStateOf(lastKnownPosition.coerceAtLeast(0L)) }
+    var duration by remember(player) { mutableStateOf(0L) }
+    var playbackSpeed by remember(player) { mutableStateOf(1f) }
 
     DisposableEffect(player, file, streamUrl, lastKnownPosition) {
         val uri = when {
@@ -523,21 +528,113 @@ private fun AudioReader(
 
     LaunchedEffect(player) {
         while (isActive) {
-            val duration = player.duration
-            val percent = if (duration > 0L) player.currentPosition.toFloat() / duration.toFloat() else null
-            onProgress(player.currentPosition, percent)
+            val playerDuration = player.duration.takeIf { it > 0L } ?: 0L
+            val playerPosition = player.currentPosition.coerceAtLeast(0L)
+            currentPosition = playerPosition
+            duration = playerDuration
+            isPlaying = player.isPlaying
+            playbackSpeed = player.playbackParameters.speed
+            val percent = if (playerDuration > 0L) playerPosition.toFloat() / playerDuration.toFloat() else null
+            onProgress(playerPosition, percent)
             delay(1500)
         }
     }
 
-    AndroidView(
-        modifier = Modifier.fillMaxWidth(),
-        factory = { viewContext ->
-            PlayerView(viewContext).apply {
-                this.player = player
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    this.player = player
+                }
+            }
+        )
+        Text(
+            text = "${formatPlaybackTime(currentPosition)} / ${formatPlaybackTime(duration)}",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = if (isPlaying) "Playing at ${formatPlaybackSpeed(playbackSpeed)}" else "Paused at ${formatPlaybackSpeed(playbackSpeed)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = {
+                    val target = (player.currentPosition - 15_000L).coerceAtLeast(0L)
+                    player.seekTo(target)
+                    currentPosition = target
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("-15s")
+            }
+            Button(
+                onClick = {
+                    if (player.isPlaying) {
+                        player.pause()
+                        isPlaying = false
+                    } else {
+                        player.play()
+                        isPlaying = true
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(if (isPlaying) "Pause" else "Play")
+            }
+            OutlinedButton(
+                onClick = {
+                    val safeDuration = player.duration.takeIf { it > 0L }
+                    val target = (player.currentPosition + 30_000L).let { position ->
+                        safeDuration?.let { position.coerceAtMost(it) } ?: position
+                    }
+                    player.seekTo(target)
+                    currentPosition = target
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("+30s")
             }
         }
-    )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AUDIO_SPEED_OPTIONS.forEach { speed ->
+                val selected = kotlin.math.abs(playbackSpeed - speed) < 0.01f
+                if (selected) {
+                    Button(
+                        onClick = {
+                            player.playbackParameters = PlaybackParameters(speed)
+                            playbackSpeed = speed
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(formatPlaybackSpeed(speed))
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            player.playbackParameters = PlaybackParameters(speed)
+                            playbackSpeed = speed
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(formatPlaybackSpeed(speed))
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -817,3 +914,25 @@ private fun percentToChapterIndex(percent: Float?, chapterCount: Int): Int {
     val normalized = if (raw in 0f..1f) raw else raw / 100f
     return (normalized.coerceIn(0f, 1f) * (chapterCount - 1)).roundToInt()
 }
+
+private fun formatPlaybackTime(millis: Long): String {
+    val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
+}
+
+private fun formatPlaybackSpeed(speed: Float): String {
+    return if (speed % 1f == 0f) {
+        String.format(Locale.US, "%.0fx", speed)
+    } else {
+        String.format(Locale.US, "%.1fx", speed)
+    }
+}
+
+private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)

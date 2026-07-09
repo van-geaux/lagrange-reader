@@ -151,9 +151,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Basic audio playback UI
 - [x] Basic PDF page navigation
-- [ ] Add proper playback controls for audiobooks
-- [ ] Add skip forward/back actions
-- [ ] Add playback speed controls if allowed within read/listen scope
+- [x] Add proper playback controls for audiobooks
+- [x] Add skip forward/back actions
+- [x] Add playback speed controls if allowed within read/listen scope
 - [ ] Add chapter support if API/file format exposes it
 - [ ] Add EPUB pagination/theme/font handling
 - [ ] Add better PDF zoom/pan behavior

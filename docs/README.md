@@ -16,6 +16,8 @@ The Android project builds locally with `assembleDebug`, can connect to a BookOr
 
 Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, and progress queue persistence.
 
+The audiobook reader now includes play and pause controls, skip back and forward actions, resume-at-position handling, and a small playback speed selector.
+
 The main gaps are:
 
 - end-to-end offline verification on real content
