@@ -346,6 +346,7 @@ private fun LibraryBrowserScreen(
                 val fileId = book.fileId
                 val isDownloading = fileId != null && state.downloadingFileIds.contains(fileId)
                 val downloadFailed = fileId != null && state.failedDownloadFileIds.contains(fileId)
+                val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -358,15 +359,21 @@ private fun LibraryBrowserScreen(
                         )
                         book.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         Text(
-                            text = bookStatus(book),
+                            text = bookStatus(book, state.isOfflineSnapshot),
                             style = MaterialTheme.typography.bodySmall
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { onBookOpen(book) },
-                                enabled = !isDownloading
+                                enabled = !isDownloading && !unavailableOffline
                             ) {
-                                Text(if (book.isDownloaded) "Open local" else "Read / Listen")
+                                Text(
+                                    when {
+                                        book.isDownloaded -> "Open local"
+                                        unavailableOffline -> "Unavailable offline"
+                                        else -> "Read / Listen"
+                                    }
+                                )
                             }
                             if (book.isDownloaded) {
                                 OutlinedButton(
@@ -375,7 +382,7 @@ private fun LibraryBrowserScreen(
                                 ) {
                                     Text("Delete local")
                                 }
-                            } else if (fileId != null) {
+                            } else if (fileId != null && !state.isOfflineSnapshot) {
                                 if (isDownloading) {
                                     Button(
                                         onClick = {},
@@ -729,11 +736,13 @@ private fun ReaderMessage(message: String) {
     }
 }
 
-private fun bookStatus(book: BookSummary): String {
+private fun bookStatus(book: BookSummary, isOfflineSnapshot: Boolean): String {
     val parts = mutableListOf(book.mediaKind.name.lowercase(Locale.US))
     book.progressLabel?.takeIf { it.isNotBlank() }?.let(parts::add)
     if (book.isDownloaded) {
         parts += "downloaded"
+    } else if (isOfflineSnapshot) {
+        parts += "not available offline"
     }
     return parts.joinToString(" | ")
 }

@@ -24,6 +24,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Progress sync worker now applies exponential backoff for transient server failures
 - Last-synced progress markers now suppress duplicate or stale queue submissions
 - Offline startup and login-refresh paths now fall back to cached browser state when available
+- Cached offline browser views now disable live-only actions for books without a local copy
 
 ## Next execution order
 

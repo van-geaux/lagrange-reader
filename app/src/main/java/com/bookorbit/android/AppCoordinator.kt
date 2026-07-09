@@ -40,6 +40,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 if (cached != null) {
                     showBrowser(
                         cached.copy(
+                            isOfflineSnapshot = true,
                             message = "Showing the last cached library snapshot. Sign in again when the server is available."
                         )
                     )
@@ -88,6 +89,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 if (cached != null) {
                     showBrowser(
                         cached.copy(
+                            isOfflineSnapshot = true,
                             message = "Showing the last cached library snapshot while waiting for an authenticated session."
                         )
                     )
@@ -126,7 +128,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         isRefreshing = false,
                         isLoadingLibraries = false,
                         isLoadingBooks = false,
-                        debugPendingProgressCount = pendingProgressCount
+                        debugPendingProgressCount = pendingProgressCount,
+                        isOfflineSnapshot = false
                     )
                 )
                 if (selectedLibrary != null) {
@@ -144,6 +147,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                 if (cached != null) {
                     showBrowser(
                         cached.copy(
+                            isOfflineSnapshot = true,
                             message = "Showing the last cached library snapshot. ${userMessage(error, "Refresh failed.")}"
                         )
                     )
@@ -195,7 +199,8 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                         isRefreshing = false,
                         isLoadingLibraries = false,
                         isLoadingBooks = false,
-                        debugPendingProgressCount = pendingProgressCount
+                        debugPendingProgressCount = pendingProgressCount,
+                        isOfflineSnapshot = false
                     )
                 )
             }.onFailure { error ->
@@ -209,6 +214,7 @@ class AppCoordinator(private val repository: BookOrbitRepository) {
                     )).copy(
                         selectedLibraryId = libraryId,
                         isLoadingBooks = false,
+                        isOfflineSnapshot = cachedForLibrary != null,
                         message = if (cachedForLibrary != null) {
                             "Showing cached books for this library. ${userMessage(error, "Unable to load the selected library.")}"
                         } else {

@@ -30,6 +30,7 @@ The current app flow is:
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 - When auth probing fails during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
+- Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
 
 ### Data and API layer
 
