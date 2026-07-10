@@ -32,7 +32,9 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 - Add intentional empty, loading, offline, and failure presentations.
 - Keep actions usable with long titles, large font scales, and narrow phone widths.
 
-Implementation candidate: the post-login screen now opens on a native Home feed with a hamburger drawer and integrated search. The drawer contains Home, Libraries, library children, and sign-in/log-out. Home supports Keep Reading, On Deck, Recently Added Books, Recently Added Series, Recently Updated Series, and Recently Read Books when the loaded BookOrbit payload contains the required progress, series, and timestamp metadata. Search and shelves are currently scoped to the selected library page returned by BookOrbit.
+Implementation candidate: the post-login screen now opens on a native Home feed with a hamburger drawer and integrated search. The drawer contains Home, Libraries, library children, and sign-in/log-out. Home supports Keep Reading, On Deck, Recently Added Books, Recently Added Series, Recently Updated Series, and Recently Read Books when the loaded BookOrbit payload contains the required progress, series, and timestamp metadata. Home shelves are scoped to the selected library page returned by BookOrbit.
+
+Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search now uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The Android status bar is hidden with transient swipe reveal for an immersive window.
 
 ### Checkpoint 4: EPUB reader - ready with current sample content
 

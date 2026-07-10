@@ -101,6 +101,8 @@ fun BookOrbitApp(
             onRefresh = coordinator::loadBrowser,
             onSessionAction = coordinator::onBrowserSessionAction,
             onLibrarySelected = coordinator::selectLibrary,
+            searchBooks = coordinator::searchBooks,
+            coverLoader = coordinator::loadBookCover,
             onBookOpen = coordinator::openBook,
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,

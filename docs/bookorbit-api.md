@@ -106,6 +106,26 @@ Important notes:
 - The Android client also tolerantly maps optional series identity/order, read state, and created/updated/last-read timestamps when present. These fields drive native Home shelves but are not assumed to exist on every server payload.
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
 
+### Global book search
+
+Endpoint:
+
+```text
+POST /api/v1/books/query
+```
+
+The Android client sends `q`, an empty `sort` list, and pagination capped at 100 results. Search results retain their returned `libraryId` so details and reading actions target the correct library.
+
+### Book cover
+
+Endpoint:
+
+```text
+GET /api/v1/books/{id}/cover
+```
+
+Cover requests use the same authenticated cookie-aware HTTP client as the rest of the API and are cached in memory for the active app process.
+
 ## Files
 
 ### Stream a file

@@ -183,6 +183,18 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks resolves a cover endpoint from cover source metadata`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-cover",
+            payload = """{"items":[{"id":"book-cover","title":"Covered","coverSource":"extracted"}]}""",
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/api/v1/books/book-cover/cover", books.single().coverUrl)
+    }
+
+    @Test
     fun `parseBooks maps series read state and shelf timestamps`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-6",

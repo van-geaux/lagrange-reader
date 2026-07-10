@@ -204,6 +204,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Implement the first design-system candidate for review
 - [x] Implement native Home, search, and drawer navigation candidate
 - [x] Add metadata-aware Keep Reading, On Deck, recent book, and recent series shelves
+- [x] Add server-backed global search and authenticated cover loading
+- [x] Add native series and book details before reader launch
+- [x] Hide the Android status bar for an immersive app window
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

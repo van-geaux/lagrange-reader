@@ -45,8 +45,13 @@ Current Compose instrumentation coverage includes server setup validation, login
 2. Open the drawer and confirm Home, Libraries, each available library, and Log out are present.
 3. Select a library child and confirm its book list loads.
 4. Return Home and confirm shelves only appear when they contain matching books.
-5. Search by book title, author, and series name, then clear the query to return to Home.
-6. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
+5. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
+6. Confirm real book covers load on Home, search results, library lists, and detail screens.
+7. Open a series card and confirm it shows the ordered books in that series instead of opening a reader.
+8. Open a book and confirm its details appear; use Read or Continue reading to enter the reader.
+9. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
+10. Confirm the status bar is hidden and can be revealed transiently with a system-edge swipe.
+11. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 

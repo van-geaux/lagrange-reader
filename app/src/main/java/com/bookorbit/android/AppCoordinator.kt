@@ -20,6 +20,14 @@ class AppCoordinator(
     private val repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
 ) {
+    suspend fun searchBooks(query: String): List<BookSummary> = runCatching {
+        repository.searchBooks(query)
+    }.getOrDefault(emptyList())
+
+    suspend fun loadBookCover(book: BookSummary): ByteArray? = runCatching {
+        repository.loadBookCover(book)
+    }.getOrNull()
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()

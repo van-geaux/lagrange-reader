@@ -1,6 +1,10 @@
 package com.bookorbit.android
 
 import android.content.pm.ApplicationInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -46,18 +50,22 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private enum class BrowserDestination { HOME, LIBRARY }
 
@@ -74,6 +83,8 @@ internal fun NativeLibraryBrowserScreen(
     onRefresh: () -> Unit,
     onSessionAction: () -> Unit,
     onLibrarySelected: (String) -> Unit,
+    searchBooks: suspend (String) -> List<BookSummary>,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookOpen: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
@@ -83,12 +94,22 @@ internal fun NativeLibraryBrowserScreen(
     val scope = rememberCoroutineScope()
     var destination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
     var query by rememberSaveable { mutableStateOf("") }
-    val filteredBooks = remember(state.books, query) {
-        if (query.isBlank()) state.books else state.books.filter { book ->
-            listOf(book.title, book.author, book.seriesName)
-                .filterNotNull()
-                .any { it.contains(query.trim(), ignoreCase = true) }
+    var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
+    var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
+    var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
+    val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
+        value = null
+        if (query.isNotBlank()) {
+            delay(300)
+            value = searchBooks(query)
         }
+    }
+    val filteredBooks = remoteSearchResults.orEmpty()
+
+    BackHandler(enabled = selectedBook != null || selectedSeriesKey != null) {
+        selectedBook = null
+        selectedSeriesKey = null
+        destination = detailReturnDestination
     }
 
     ModalNavigationDrawer(
@@ -122,22 +143,55 @@ internal fun NativeLibraryBrowserScreen(
     ) {
         Scaffold(
             topBar = {
-                BrowserSearchBar(
-                    query = query,
-                    isRefreshing = state.isRefreshing,
-                    onQueryChange = { query = it },
-                    onMenu = { scope.launch { drawerState.open() } },
-                    onRefresh = onRefresh
-                )
+                when {
+                    selectedBook != null -> BookOrbitTopBar(
+                        title = "Book details",
+                        navigationIcon = { TextButton(onClick = { selectedBook = null }) { Text("Back") } }
+                    )
+                    selectedSeriesKey != null -> BookOrbitTopBar(
+                        title = "Series",
+                        navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text("Back") } }
+                    )
+                    else -> BrowserSearchBar(
+                        query = query,
+                        isRefreshing = state.isRefreshing,
+                        onQueryChange = { query = it },
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onRefresh = onRefresh
+                    )
+                }
             },
             containerColor = MaterialTheme.colorScheme.background
         ) { padding ->
             when {
+                selectedBook != null -> BookDetails(
+                    book = selectedBook!!,
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    coverLoader = coverLoader,
+                    onRead = onBookOpen,
+                    onDownload = onDownload,
+                    onCancelDownload = onCancelDownload,
+                    onDeleteLocalCopy = onDeleteLocalCopy
+                )
+                selectedSeriesKey != null -> SeriesDetails(
+                    seriesKey = selectedSeriesKey!!,
+                    books = state.books,
+                    modifier = Modifier.padding(padding),
+                    coverLoader = coverLoader,
+                    onBookSelected = { selectedBook = it }
+                )
                 query.isNotBlank() -> SearchResults(
                     books = filteredBooks,
                     state = state,
                     modifier = Modifier.padding(padding),
-                    onBookOpen = onBookOpen,
+                    isSearching = remoteSearchResults == null,
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        detailReturnDestination = destination
+                        query = ""
+                        selectedBook = book
+                    },
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = onDeleteLocalCopy
@@ -145,12 +199,24 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.HOME -> HomeFeed(
                     state = state,
                     modifier = Modifier.padding(padding),
-                    onBookOpen = onBookOpen
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        detailReturnDestination = BrowserDestination.HOME
+                        selectedBook = book
+                    },
+                    onSeriesSelected = { seriesKey ->
+                        detailReturnDestination = BrowserDestination.HOME
+                        selectedSeriesKey = seriesKey
+                    }
                 )
                 else -> LibraryBooks(
                     state = state,
                     modifier = Modifier.padding(padding),
-                    onBookOpen = onBookOpen,
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        detailReturnDestination = BrowserDestination.LIBRARY
+                        selectedBook = book
+                    },
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = onDeleteLocalCopy
@@ -259,7 +325,13 @@ private fun BrowserDrawer(
 }
 
 @Composable
-private fun HomeFeed(state: BrowserState, modifier: Modifier, onBookOpen: (BookSummary) -> Unit) {
+private fun HomeFeed(
+    state: BrowserState,
+    modifier: Modifier,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit
+) {
     val keepReading = state.books
         .filter { (it.progressPercent ?: 0f) > 0f && !it.isRead }
         .sortedByDescending { it.lastReadAtMillis ?: it.progressPercent?.toLong() ?: 0L }
@@ -302,12 +374,12 @@ private fun HomeFeed(state: BrowserState, modifier: Modifier, onBookOpen: (BookS
                 )
             }
         }
-        if (keepReading.isNotEmpty()) item { BookShelf("Keep reading", keepReading, onBookOpen) }
-        if (onDeck.isNotEmpty()) item { BookShelf("On deck", onDeck, onBookOpen) }
-        if (recentlyAddedBooks.isNotEmpty()) item { BookShelf("Recently added books", recentlyAddedBooks, onBookOpen) }
-        if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, onBookOpen) }
-        if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, onBookOpen) }
-        if (recentlyRead.isNotEmpty()) item { BookShelf("Recently read books", recentlyRead, onBookOpen) }
+        if (keepReading.isNotEmpty()) item { BookShelf("Keep reading", keepReading, coverLoader, onBookSelected) }
+        if (onDeck.isNotEmpty()) item { BookShelf("On deck", onDeck, coverLoader, onBookSelected) }
+        if (recentlyAddedBooks.isNotEmpty()) item { BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected) }
+        if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
+        if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected) }
+        if (recentlyRead.isNotEmpty()) item { BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected) }
         if (state.isLoadingBooks) item { LoadingFeedRow("Loading books...") }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item {
@@ -332,7 +404,12 @@ private fun HomeFeed(state: BrowserState, modifier: Modifier, onBookOpen: (BookS
 }
 
 @Composable
-private fun BookShelf(title: String, books: List<BookSummary>, onBookOpen: (BookSummary) -> Unit) {
+private fun BookShelf(
+    title: String,
+    books: List<BookSummary>,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ShelfTitle(title)
         LazyRow(
@@ -340,14 +417,19 @@ private fun BookShelf(title: String, books: List<BookSummary>, onBookOpen: (Book
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(books, key = { "$title-${it.id}" }) { book ->
-                ShelfBookCard(book = book, onClick = { onBookOpen(book) })
+                ShelfBookCard(book = book, coverLoader = coverLoader, onClick = { onBookSelected(book) })
             }
         }
     }
 }
 
 @Composable
-private fun SeriesShelf(title: String, series: List<Pair<String, BookSummary>>, onBookOpen: (BookSummary) -> Unit) {
+private fun SeriesShelf(
+    title: String,
+    series: List<Pair<String, BookSummary>>,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onSeriesSelected: (String) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ShelfTitle(title)
         LazyRow(
@@ -355,7 +437,12 @@ private fun SeriesShelf(title: String, series: List<Pair<String, BookSummary>>, 
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(series, key = { "$title-${it.first}" }) { (name, book) ->
-                ShelfBookCard(book = book, displayTitle = name, onClick = { onBookOpen(book) })
+                ShelfBookCard(
+                    book = book,
+                    displayTitle = name,
+                    coverLoader = coverLoader,
+                    onClick = { onSeriesSelected(book.seriesId ?: name) }
+                )
             }
         }
     }
@@ -374,20 +461,21 @@ private fun ShelfTitle(title: String) {
 private fun ShelfBookCard(
     book: BookSummary,
     displayTitle: String = book.title,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
-            .width(124.dp)
+            .width(84.dp)
             .clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        BookCoverPlaceholder(book)
+        BookCover(book, coverLoader)
         Text(
             displayTitle,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.bodyMedium
         )
         book.author?.let {
             Text(
@@ -402,7 +490,13 @@ private fun ShelfBookCard(
 }
 
 @Composable
-private fun BookCoverPlaceholder(book: BookSummary) {
+private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> ByteArray?) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl) {
+        val bytes = coverLoader(book)
+        value = bytes?.takeIf { it.isNotEmpty() }?.let {
+            BitmapFactory.decodeByteArray(it, 0, it.size)
+        }
+    }
     val colors = listOf(
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.tertiaryContainer
@@ -416,11 +510,20 @@ private fun BookCoverPlaceholder(book: BookSummary) {
             .semantics { contentDescription = "Cover for ${book.title}" },
         contentAlignment = Alignment.Center
     ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = "Cover for ${book.title}",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
         Text(
             book.title.take(1).uppercase(),
             color = MaterialTheme.colorScheme.onPrimaryContainer,
             style = MaterialTheme.typography.displaySmall
         )
+        }
         book.progressPercent?.takeIf { it > 0f }?.let { progress ->
             Box(
                 modifier = Modifier
@@ -438,7 +541,9 @@ private fun SearchResults(
     books: List<BookSummary>,
     state: BrowserState,
     modifier: Modifier,
-    onBookOpen: (BookSummary) -> Unit,
+    isSearching: Boolean,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -448,7 +553,9 @@ private fun SearchResults(
         books = books,
         state = state,
         modifier = modifier,
-        onBookOpen = onBookOpen,
+        isLoading = isSearching,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
         onDownload = onDownload,
         onCancelDownload = onCancelDownload,
         onDeleteLocalCopy = onDeleteLocalCopy
@@ -459,7 +566,8 @@ private fun SearchResults(
 private fun LibraryBooks(
     state: BrowserState,
     modifier: Modifier,
-    onBookOpen: (BookSummary) -> Unit,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -470,7 +578,9 @@ private fun LibraryBooks(
         books = state.books,
         state = state,
         modifier = modifier,
-        onBookOpen = onBookOpen,
+        isLoading = state.isLoadingBooks,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
         onDownload = onDownload,
         onCancelDownload = onCancelDownload,
         onDeleteLocalCopy = onDeleteLocalCopy
@@ -483,7 +593,9 @@ private fun LibraryBookList(
     books: List<BookSummary>,
     state: BrowserState,
     modifier: Modifier,
-    onBookOpen: (BookSummary) -> Unit,
+    isLoading: Boolean,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -494,7 +606,7 @@ private fun LibraryBookList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Text(title, style = MaterialTheme.typography.headlineSmall) }
-        if (state.isLoadingBooks) item { LoadingFeedRow("Loading books...") }
+        if (isLoading) item { LoadingFeedRow("Loading books...") }
         state.message?.let { message ->
             item {
                 OrbitMessage(
@@ -503,14 +615,15 @@ private fun LibraryBookList(
                 )
             }
         }
-        if (!state.isLoadingBooks && books.isEmpty()) {
+        if (!isLoading && books.isEmpty()) {
             item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(books, key = { it.id }) { book ->
             LibraryBookCard(
                 book = book,
                 state = state,
-                onBookOpen = onBookOpen,
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
                 onDownload = onDownload,
                 onCancelDownload = onCancelDownload,
                 onDeleteLocalCopy = onDeleteLocalCopy
@@ -523,7 +636,8 @@ private fun LibraryBookList(
 private fun LibraryBookCard(
     book: BookSummary,
     state: BrowserState,
-    onBookOpen: (BookSummary) -> Unit,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -540,7 +654,7 @@ private fun LibraryBookCard(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Box(modifier = Modifier.width(72.dp)) { BookCoverPlaceholder(book) }
+            Box(modifier = Modifier.width(56.dp)) { BookCover(book, coverLoader) }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(7.dp)
@@ -553,16 +667,10 @@ private fun LibraryBookCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = { onBookOpen(book) },
+                        onClick = { onBookSelected(book) },
                         enabled = !isDownloading && !unavailableOffline
                     ) {
-                        Text(
-                            when {
-                                book.isDownloaded -> "Open local"
-                                unavailableOffline -> "Unavailable offline"
-                                else -> "Read / Listen"
-                            }
-                        )
+                        Text(if (unavailableOffline) "Unavailable offline" else "Details")
                     }
                     when {
                         book.isDownloaded -> OutlinedButton(
@@ -574,6 +682,128 @@ private fun LibraryBookCard(
                             Text(if (failed) "Retry" else "Download")
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookDetails(
+    book: BookSummary,
+    state: BrowserState,
+    modifier: Modifier,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onRead: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit
+) {
+    val fileId = book.fileId
+    val isDownloading = fileId != null && fileId in state.downloadingFileIds
+    val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Box(modifier = Modifier.width(116.dp)) { BookCover(book, coverLoader) }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    book.seriesName?.let { OrbitEyebrow(it) }
+                    Text(book.title, style = MaterialTheme.typography.headlineSmall)
+                    book.author?.let {
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(nativeBookStatus(book, state.isOfflineSnapshot), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = { onRead(book) },
+                    enabled = !isDownloading && !unavailableOffline
+                ) {
+                    Text(if (book.progressPercent?.let { it > 0f } == true) "Continue reading" else "Read")
+                }
+                when {
+                    book.isDownloaded -> OutlinedButton(
+                        onClick = { onDeleteLocalCopy(book) },
+                        enabled = !isDownloading
+                    ) { Text("Delete local") }
+                    isDownloading -> OutlinedButton(onClick = { onCancelDownload(book) }) { Text("Cancel download") }
+                    fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
+                        Text("Download")
+                    }
+                }
+            }
+        }
+        item {
+            HorizontalDivider()
+            Column(
+                modifier = Modifier.padding(top = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Book details", style = MaterialTheme.typography.titleLarge)
+                book.seriesName?.let { Text("Series: $it${book.seriesIndex?.let { index -> " #${index.toInt()}" }.orEmpty()}") }
+                book.format?.let { Text("Format: ${it.uppercase()}") }
+                if (book.isDownloaded) Text("Available offline")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeriesDetails(
+    seriesKey: String,
+    books: List<BookSummary>,
+    modifier: Modifier,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit
+) {
+    val seriesBooks = books
+        .filter { (it.seriesId ?: it.seriesName) == seriesKey }
+        .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
+    val seriesName = seriesBooks.firstOrNull()?.seriesName ?: "Series"
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            OrbitEyebrow("Series")
+            Text(seriesName, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "${seriesBooks.size} ${if (seriesBooks.size == 1) "book" else "books"}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        items(seriesBooks, key = { "series-detail-${it.id}" }) { book ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onBookSelected(book) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.width(48.dp)) { BookCover(book, coverLoader) }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(book.title, style = MaterialTheme.typography.titleMedium)
+                        book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                    Text(book.seriesIndex?.let { "#${it.toInt()}" }.orEmpty())
                 }
             }
         }

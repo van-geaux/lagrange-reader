@@ -56,6 +56,8 @@ interface BookOrbitDataSource {
     suspend fun getSessionState(): SessionState
     suspend fun loadLibraries(): List<LibrarySummary>
     suspend fun loadBooks(libraryId: String): List<BookSummary>
+    suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
+    suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
     suspend fun saveActiveReader(book: BookSummary)
@@ -76,6 +78,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
+    private val coverCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
         .followRedirects(true)
@@ -150,6 +153,39 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 books = books
             )
         }
+    }
+
+    override suspend fun searchBooks(query: String): List<BookSummary> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val serverUrl = getServerUrl().orEmpty()
+        val body = JSONObject().apply {
+            put("q", query.trim())
+            put("sort", JSONArray())
+            put("pagination", JSONObject().apply {
+                put("page", 0)
+                put("size", 100)
+            })
+        }.toString().toRequestBody(JSON)
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        BookOrbitPayloadParser.parseBooks(
+            libraryId = getSelectedLibraryId().orEmpty(),
+            payload = request("/api/v1/books/query", "POST", body),
+            downloads = downloads,
+            serverBase = serverBase()
+        )
+    }
+
+    override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
+        val url = book.coverUrl ?: return@withContext null
+        synchronized(coverCache) { coverCache[url] }?.let { return@withContext it }
+        val bytes = requestBytes(url)
+        synchronized(coverCache) {
+            coverCache[url] = bytes
+            while (coverCache.size > 32) {
+                coverCache.remove(coverCache.entries.first().key)
+            }
+        }
+        bytes
     }
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
@@ -628,6 +664,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    private fun requestBytes(url: String): ByteArray {
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "image/*")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 401 || response.code == 403) {
+                throw AuthenticationRequiredException()
+            }
+            if (!response.isSuccessful) {
+                throw HttpRequestException(response.code, "load a book cover")
+            }
+            return response.body?.bytes() ?: ByteArray(0)
+        }
+    }
+
     private fun normalizePercentage(value: Float?): Double {
         val raw = value ?: 0f
         val scaled = if (raw in 0f..1f) raw * 100f else raw
@@ -786,7 +839,7 @@ internal object BookOrbitPayloadParser {
                 val progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent())
                 add(
                     BookSummary(
-                        libraryId = libraryId,
+                        libraryId = obj.stringValue("libraryId", "library_id") ?: libraryId,
                         id = bookId,
                         fileId = fileId,
                         title = obj.stringValue("title", "name", "displayName") ?: "Untitled",
@@ -987,6 +1040,7 @@ internal object BookOrbitPayloadParser {
         }
 
         val hasResolvableCover = booleanValue("hasCover", "has_cover") ||
+            stringValue("coverSource", "cover_source") != null ||
             optJSONObject("cover") != null ||
             optJSONObject("coverImage") != null ||
             opt("coverFileId") != null ||

@@ -28,7 +28,11 @@ Last updated: 2026-07-10
   - the post-login browser now opens on a native Home feed with an integrated search bar and hamburger drawer
   - the drawer contains Home, Libraries with library children, and sign-in/log-out
   - Home derives Keep Reading, On Deck, recent book, and recent series shelves from optional progress, series, read-state, and timestamp metadata
-  - Home shelves and search are currently scoped to the selected library page returned by BookOrbit
+  - Home shelves are scoped to the selected library page, while search uses the global BookOrbit book-query endpoint
+  - authenticated book covers load through the shared cookie-aware API client
+  - series shelf cards open series details, and books open details with explicit Read/Continue and download actions
+  - shelf cards were reduced to roughly two-thirds of the original candidate size after device feedback
+  - the Android status bar is hidden for an immersive app window with transient swipe reveal
 - Reading and listening paths are implemented:
   - audio uses ExoPlayer
   - audio UI includes play/pause, skip, speed, and resume support
@@ -149,9 +153,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Install and review the native Home/search/drawer candidate on device.
-2. Confirm which BookOrbit payloads populate On Deck and the recent series/read shelves on the live server.
-3. Adjust shelf density, card sizing, drawer behavior, and search behavior from device feedback.
+1. Install and review global search, authenticated covers, smaller shelf cards, and immersive mode on device.
+2. Validate Home -> series details -> book details -> reader navigation and Android Back behavior.
+3. Confirm cover and search behavior during offline fallback and session expiry.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 
