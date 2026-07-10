@@ -167,11 +167,13 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Install the new debug APK and verify series details populate with read/total, synopsis, genres/tags, gaps, and all books, including series requiring multiple 100-item pages.
-2. Validate EPUB fullscreen pagination, left/center/right tap zones, chapter transitions, overlay controls, typography, images, and theme/text repagination.
-3. Recheck EPUB offline images, progress sync, chapter restore, and immersive system-bar behavior.
-4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
-5. Validate server-forced session expiry on a real deployment when practical.
+1. Fix the EPUB pagination regression in commit `fb1b650`: the tap bridge works and left/right taps change chapters, but book content is completely blank and the overlay always reports page `1/1`.
+2. Replace the current document-level CSS column scrolling with an explicit viewport-sized page wrapper. On DOM load, move body content into the wrapper, give it viewport-height CSS columns, calculate pages from the wrapper's `scrollWidth`, and navigate by translating the wrapper horizontally instead of calling `window.scrollTo` on an overflow-hidden document.
+3. Rebuild and test the EPUB sample for visible text/images, correct page totals, single-page tap navigation, chapter-boundary navigation, center overlay toggling, theme/font repagination, offline images, progress sync, and chapter restore.
+4. Limit synopsis/description text on both book and series detail screens to four lines by default. Show `Expand` only when the text actually overflows, and show `Collapse` when expanded.
+5. Verify series details populate with read/total, synopsis, genres/tags, gaps, and all books, including series requiring multiple 100-item pages.
+6. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
+7. Validate server-forced session expiry on a real deployment when practical.
 
 ## Suggested next UI validation pass
 
@@ -183,7 +185,10 @@ Last updated: 2026-07-10
 
 ## Known limitations
 
-- EPUB is paginated and fullscreen, but exact in-chapter page restore and RTL direction controls remain unimplemented.
+- The fullscreen EPUB pagination candidate currently has a blocking display regression: taps and chapter changes work, but no chapter content renders and the page counter remains `1/1`. Do not treat the reader checkpoint as device-valid until this is fixed.
+- The likely cause is the current `styleEpubHtml` implementation applying columns and `overflow: hidden` directly to `html/body`, then measuring `documentElement.scrollWidth` and using `window.scrollTo`; the WebView is not exposing the column overflow through that document scroll geometry.
+- Exact in-chapter page restore and RTL direction controls also remain unimplemented.
+- Book and series descriptions currently render without a four-line collapsed state; add overflow-aware Expand/Collapse controls in the next session.
 - Comic support is limited to local or authenticated-cache CBZ rendering; CBR is still not implemented.
 - Login completion detection is still based on polling authenticated APIs.
 - Queue replay behavior is validated for the tested real content flow, but it has not yet been broadened across every media type and restart path.
