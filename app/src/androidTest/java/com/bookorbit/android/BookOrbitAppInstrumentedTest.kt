@@ -2,6 +2,7 @@ package com.bookorbit.android
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -62,12 +63,98 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Unavailable offline").assertIsDisplayed()
         composeRule.onNodeWithText("Sign in").assertIsEnabled()
     }
+
+    @Test
+    fun loginScreenShowsRecoveryMessageAndCanChangeServer() {
+        val dataSource = InstrumentedFakeDataSource()
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Login(
+                        serverUrl = "about:blank",
+                        message = "Sign in again to continue browsing."
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Sign in").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign in again to continue browsing.").assertIsDisplayed()
+        composeRule.onNodeWithText("Change server").performClick()
+        composeRule.waitUntil { dataSource.clearServerCalls == 1 }
+    }
+
+    @Test
+    fun liveBrowserShowsLibrariesBooksAndAvailableActions() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "The Test Book",
+            author = "Test Author",
+            mediaKind = MediaKind.EPUB
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Main").assertIsDisplayed().assertIsEnabled()
+        composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
+        composeRule.onNodeWithText("Test Author").assertIsDisplayed()
+        composeRule.onNodeWithText("Read / Listen").assertIsEnabled()
+        composeRule.onNodeWithText("Download").assertIsEnabled()
+        composeRule.onNodeWithText("Sign out").assertIsEnabled()
+    }
+
+    @Test
+    fun browserLoadingStateDisablesRefreshAndLibrarySelection() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList(),
+                            isRefreshing = true,
+                            isLoadingBooks = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Refresh").assertIsNotEnabled()
+        composeRule.onNodeWithText("Main").assertIsNotEnabled()
+        composeRule.onNodeWithText("Loading books...").assertIsDisplayed()
+    }
 }
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
+    var clearServerCalls = 0
+
     override suspend fun getServerUrl(): String? = null
     override suspend fun setServerUrl(serverUrl: String) = Unit
-    override suspend fun clearServer() = Unit
+    override suspend fun clearServer() {
+        clearServerCalls += 1
+    }
     override suspend fun clearSession() = Unit
     override suspend fun getSelectedLibraryId(): String? = null
     override suspend fun setSelectedLibraryId(libraryId: String) = Unit

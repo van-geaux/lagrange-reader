@@ -13,7 +13,7 @@ Android client for BookOrbit focused on reading and listening.
 
 ## Project status
 
-Working prototype. The app shell, API wiring, local download tracking, sync queue, explicit authenticated-session bootstrap via `/api/v1/auth/me`, sign-out/session reset behavior, and EPUB/PDF/audio/CBZ reading paths are in place. Focused JVM coverage now also exercises coordinator bootstrap, cached offline fallback, post-login resume flows, and recoverable initial browser-load failure handling. The app now also ships with a custom adaptive launcher icon instead of the default Android placeholder. Recent device-side validation confirmed offline downloads, offline reopen, progress replay, EPUB local images, and reader resume are working, while broader real-server session persistence and additional live flow coverage still need verification.
+Working prototype. The app shell, API wiring, local download tracking, sync queue, authenticated-session bootstrap, sign-out/session reset behavior, and EPUB/PDF/audio/CBZ reading paths are in place. Focused JVM coverage exercises coordinator bootstrap, cached offline fallback, post-login resume flows, progress restoration, and recoverable browser-load failures. Compose instrumentation coverage now includes setup, login recovery, live/loading browser states, and cached offline behavior. Device testing confirms EPUB download, offline reopen, progress replay, local images, session persistence, and last-session reader restore. UI/UX work can now begin; other media-specific validation remains deferred until representative samples are available.
 
 ## Build
 
@@ -67,5 +67,6 @@ Machine-specific SDK setup and environment notes are in [docs/setup.md](./docs/s
 - [docs/release.md](./docs/release.md)
 - [docs/bookorbit-api.md](./docs/bookorbit-api.md)
 - [docs/testing.md](./docs/testing.md)
+- [docs/ui-ux.md](./docs/ui-ux.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/handover.md](./docs/handover.md)

@@ -115,3 +115,7 @@ Validated against the live server and BookOrbit source:
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling rules are extracted into a small policy object with focused JVM coverage.
+
+## UI/UX phase boundary
+
+The functional architecture is stable enough for UI/UX changes to begin. Theme tokens and shared shell components should be established before screen-specific restyling, followed by setup/login, library browsing, and the EPUB reader. Format-specific audiobook, PDF, and CBZ adjustments remain deferred until representative files are available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.

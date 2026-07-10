@@ -10,6 +10,7 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 - [Release Policy](./release.md)
 - [BookOrbit API Contract](./bookorbit-api.md)
 - [Testing](./testing.md)
+- [UI/UX Workstream](./ui-ux.md)
 - [Roadmap](./roadmap.md)
 - [Handover](./handover.md)
 
@@ -43,10 +44,12 @@ The repository now includes a basic GitHub Actions workflow for debug CI that ru
 
 Network policy is now explicit: cleartext HTTP is blocked by default and only allowed for local development hosts such as `localhost`, `127.0.0.1`, `10.0.2.2`, and `10.0.3.2`.
 
-Basic Compose instrumentation coverage now exists for server-setup validation and cached-offline browser UI behavior, and the `androidTest` target compiles locally.
+Compose instrumentation coverage now exists for server-setup validation, login recovery and server-change routing, populated and loading browser states, and cached-offline browser behavior. The `androidTest` target compiles locally.
+
+The functional baseline is now sufficient to begin UI/UX work. The discussion and implementation gates are defined in [UI/UX Workstream](./ui-ux.md); setup/login/browser and EPUB work can proceed without waiting for unavailable audiobook, PDF, or CBZ samples.
 
 The main gaps are:
 
-- broader session-persistence and expiry-recovery verification on real servers
-- real offline audiobook restart validation after process death
+- server-forced session-expiry recovery verification on a real server
+- audiobook, PDF, and CBZ device validation when representative samples are available
 - broader integration and end-to-end test coverage

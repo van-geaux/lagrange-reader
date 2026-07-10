@@ -49,7 +49,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Share session cookies between WebView and API client
 - [x] Verify server-side login contract against the live BookOrbit server
 - [ ] Verify login completion detection is robust
-- [ ] Confirm session persistence after app restart
+- [x] Confirm session persistence after app restart
 - [ ] Confirm logout/session expiry recovery behavior
 - [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
 - [x] Add explicit authenticated-user bootstrap check after login
@@ -139,7 +139,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add worker-triggered sync attempt
 - [x] Replay queued progress when online
 - [x] Use newest-progress-wins policy in stored events
-- [ ] Verify queue replay against live BookOrbit server
+- [x] Verify queue replay against live BookOrbit server for the tested EPUB flow
 - [x] Prevent duplicate or stale progress submissions
 - [x] Collapse multiple pending updates for the same book/file
 - [x] Add backoff and retry policy for server errors
@@ -193,18 +193,33 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Confirm no secrets or internal URLs are committed
 - [x] Add privacy notes if user data is stored locally
 - [x] Verify release build compiles
-- [ ] Verify app install on physical device
+- [x] Verify app install on physical device
 - [ ] Create first tagged release
 - [x] Document setup, build, and test instructions in `README`
 
+## 15. UI/UX Workstream
+
+- [x] Reach a stable functional baseline for UI/UX work
+- [x] Mark UI/UX discussion as ready to begin
+- [ ] Checkpoint 1: agree on product direction and design-system tokens
+- [ ] Checkpoint 2: refine server setup, login, and shared app shell
+- [ ] Checkpoint 3: refine library selection, book cards, and browser states
+- [ ] Checkpoint 4: refine the EPUB reader with available sample content
+- [ ] Checkpoint 5: refine audiobook, PDF, and CBZ readers when samples are available
+- [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
+
+Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
+
 ## Immediate Next Stack
 
-Manual app testing can start here:
+UI/UX discussion and design-system work can start now:
 
-- Build + JVM baseline is ready.
-- Use [docs/testing.md](./docs/testing.md) as the current manual test entry point.
+- The functional and JVM baseline is ready.
+- EPUB is the validated representative reader path.
+- Audiobook, PDF, and CBZ-specific work is deferred until sample files are available.
+- Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server
 - [x] Replace generic ebook fallback with a real EPUB reader
-- [ ] Test download/offline/sync end to end on real content
+- [x] Test EPUB download/offline/sync end to end on real content
 - [x] Add queue compaction and stronger sync error handling

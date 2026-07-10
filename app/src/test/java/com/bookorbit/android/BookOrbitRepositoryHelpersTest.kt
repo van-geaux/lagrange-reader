@@ -76,4 +76,62 @@ class BookOrbitRepositoryHelpersTest {
             buildReaderStreamUrl(fileId = "file-1", serverBase = "https://example.test/", localOnly = false)
         )
     }
+
+    @Test
+    fun `resolveRestoredReaderProgress keeps saved reader progress when queued progress is older`() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Example",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 62f,
+            progressPageIndex = 12
+        )
+        val queuedProgress = ProgressUpdate(
+            id = "progress-1",
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "file-1",
+            mediaKind = MediaKind.EPUB,
+            positionMs = 0L,
+            pageIndex = 9,
+            progressPercent = 48f,
+            updatedAtMillis = 1L
+        )
+
+        val restored = resolveRestoredReaderProgress(book, queuedProgress)
+
+        assertEquals(12, restored.pageIndex)
+        assertEquals(62f, restored.progressPercent)
+    }
+
+    @Test
+    fun `resolveRestoredReaderProgress uses queued progress when it is ahead`() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Example",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 40f,
+            progressPageIndex = 7
+        )
+        val queuedProgress = ProgressUpdate(
+            id = "progress-1",
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "file-1",
+            mediaKind = MediaKind.EPUB,
+            positionMs = 0L,
+            pageIndex = 10,
+            progressPercent = 55f,
+            updatedAtMillis = 1L
+        )
+
+        val restored = resolveRestoredReaderProgress(book, queuedProgress)
+
+        assertEquals(10, restored.pageIndex)
+        assertEquals(55f, restored.progressPercent)
+    }
 }

@@ -20,6 +20,7 @@ Last updated: 2026-07-10
   - WebView and API client share cookies
   - login completion is inferred by probing authenticated endpoints
   - explicit sign-out now waits for cookie clearing to complete and stays on login instead of bouncing into cached browser state
+  - app restart now preserves the authenticated session in manual testing and returns to the app without forcing a fresh login
 - Library browsing is implemented:
   - libraries load from `GET /api/v1/libraries`
   - books load from `POST /api/v1/libraries/{id}/books`
@@ -35,6 +36,7 @@ Last updated: 2026-07-10
   - CBZ comics can be opened from local downloads or authenticated cache copies
   - active reader state is persisted and can be restored after recreation or restart
   - reader reopen now falls back to last-synced progress after queue replay, so tested resume state survives successful sync
+  - restore precedence now prefers the furthest-ahead local active-reader progress over older queued or last-synced progress snapshots
   - reader controls and status surfaces have improved accessibility semantics
 - Offline support is partially implemented:
   - downloads are stored locally
@@ -64,6 +66,8 @@ Last updated: 2026-07-10
   - coordinator bootstrap, login recovery, and sign-out behavior
 - Basic Compose instrumentation coverage exists for:
   - server setup validation UI
+  - login recovery UI and change-server routing
+  - populated live-browser and browser-loading states
   - cached offline browser UI behavior
 - The Android debug build is passing on this machine with `.\gradlew.bat assembleDebug`
 - The local JVM unit test task is passing on this machine with `.\gradlew.bat testDebugUnitTest`
@@ -77,6 +81,18 @@ Last updated: 2026-07-10
   - tested reader resume now restores the last position
   - downloaded EPUB images now render correctly
   - the previous sign-out cached-browser fallback bug was reproduced and then fixed in code after testing
+  - explicit sign-out now returns to login with the `Change server` action visible
+  - app relaunch after sign-in now returns to the app without forcing a fresh login
+  - closing and reopening the tested EPUB, and fully closing and relaunching the app, both restore the last reading session correctly after the restore-precedence fix
+  - audiobook, PDF, and CBZ-specific testing is deferred because representative sample files are not currently available
+
+## UI/UX workstream status
+
+- UI/UX discussion can begin now; the functional baseline is no longer a blocker.
+- Checkpoint 1 is product direction and shared design-system tokens.
+- Checkpoints 2-4 cover setup/login/app shell, library browsing, and the EPUB reader.
+- Audiobook, PDF, and CBZ-specific UI work remains deferred until representative samples are available.
+- Detailed checkpoints and regression guardrails are in [ui-ux.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/ui-ux.md).
 
 ## Handover maintenance rule
 
@@ -110,6 +126,7 @@ Last updated: 2026-07-10
 - [CHECKLIST.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/CHECKLIST.md)
 - [docs/testing.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/testing.md)
 - [docs/architecture.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/architecture.md)
+- [docs/ui-ux.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/ui-ux.md)
 - [app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt)
 - [app/src/main/java/com/bookorbit/android/BookOrbitApp.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/BookOrbitApp.kt)
 - [app/src/main/java/com/bookorbit/android/AppCoordinator.kt](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/app/src/main/java/com/bookorbit/android/AppCoordinator.kt)
@@ -125,20 +142,19 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Retest explicit sign-out on device after commit `863b659` to confirm the cached-browser fallback is fully fixed.
-2. Confirm session persistence and login recovery behavior after app restart on a live server.
-3. Confirm local-only reopen behavior on a real offline audiobook flow after process restart.
-4. Add broader integration or instrumentation coverage for login, browser loading, and reader flows.
-5. Verify queue replay and resume behavior again on additional real media types beyond the already-tested content.
+1. Start UI/UX Checkpoint 1 by agreeing on the product direction and design-system tokens.
+2. Audit and refine setup, login, and shared app-shell presentation without changing flow behavior.
+3. Refine library-browser hierarchy and states, then the EPUB reader using available content.
+4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
+5. Validate server-forced session expiry on a real deployment when practical.
 
-## Suggested next manual validation pass
+## Suggested next UI validation pass
 
-1. Install the latest debug APK built from commit `863b659`.
-2. Log into the live server.
-3. Tap `Sign out` and confirm the app remains on login instead of opening the cached browser snapshot.
-4. Re-sign in and relaunch the app to confirm session persistence behavior.
-5. Repeat the tested offline resume/sync flow for an audiobook after process restart.
-6. Repeat the same offline reopen and sync flow for a PDF and CBZ if available.
+1. Agree on a visual direction before broad screen-level styling changes.
+2. Apply shared theme tokens and app-shell components first.
+3. Validate setup, login, browser, and EPUB screens at narrow width and large font scale.
+4. Recheck offline indicators, session actions, download actions, and EPUB resume after UI changes.
+5. Defer format-specific audiobook, PDF, and CBZ validation until sample files are available.
 
 ## Known limitations
 
@@ -146,5 +162,5 @@ Last updated: 2026-07-10
 - Comic support is limited to local or authenticated-cache CBZ rendering; CBR is still not implemented.
 - Login completion detection is still based on polling authenticated APIs.
 - Queue replay behavior is validated for the tested real content flow, but it has not yet been broadened across every media type and restart path.
-- The local-only bootstrap/open logic is covered by JVM tests, but it still needs device-side validation with real offline audio content after restart.
+- The local-only bootstrap/open logic is covered by JVM tests, but audiobook, PDF, and CBZ device validation is deferred until representative files are available.
 - Parsing hardening is improved but not complete across every nullable or variant BookOrbit payload shape.

@@ -52,6 +52,44 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bootstrap restores authenticated reader state after relaunch when offline only restore misses`() = runTest {
+        val readerState = ReaderState(book = book, streamUrl = "$serverUrl/stream")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated,
+            restoreActiveReaderResult = readerState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertEquals(AppScreen.Reader(readerState), coordinator.screen.value)
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+    }
+
+    @Test
+    fun `bootstrap loads browser for authenticated session when no reader state can be restored`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(book)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+        assertEquals(listOf(library), screen.browserState.libraries)
+        assertEquals(library.id, screen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), screen.browserState.books)
+    }
+
+    @Test
     fun `bootstrap shows cached offline browser snapshot when unauthenticated`() = runTest {
         val cachedState = BrowserState(
             serverUrl = serverUrl,

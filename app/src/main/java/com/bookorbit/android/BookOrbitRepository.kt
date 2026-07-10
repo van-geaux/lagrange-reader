@@ -190,14 +190,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             localFile = localFile,
             streamUrl = streamUrl
         )
-        val progress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
+        val restoredProgress = resolveRestoredReaderProgress(
+            book = book,
+            latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
+        )
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = streamUrl,
-            lastKnownPosition = progress?.positionMs ?: book.progressPositionMs ?: 0L,
-            pageIndex = progress?.pageIndex ?: book.progressPageIndex ?: 0,
-            progressPercent = progress?.progressPercent ?: book.progressPercent
+            lastKnownPosition = restoredProgress.positionMs,
+            pageIndex = restoredProgress.pageIndex,
+            progressPercent = restoredProgress.progressPercent
         )
     }
 
@@ -236,14 +239,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }.getOrElse {
             return@withContext null
         }
-        val progress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
+        val restoredProgress = resolveRestoredReaderProgress(
+            book = savedBook,
+            latestProgress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
+        )
         ReaderState(
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
             streamUrl = streamUrl,
-            lastKnownPosition = progress?.positionMs ?: savedBook.progressPositionMs ?: 0L,
-            pageIndex = progress?.pageIndex ?: savedBook.progressPageIndex ?: 0,
-            progressPercent = progress?.progressPercent ?: savedBook.progressPercent
+            lastKnownPosition = restoredProgress.positionMs,
+            pageIndex = restoredProgress.pageIndex,
+            progressPercent = restoredProgress.progressPercent
         )
     }
 
@@ -1048,4 +1054,48 @@ internal fun buildReaderStreamUrl(
         return null
     }
     return "${serverBase.trimEnd('/')}/api/v1/books/files/$fileId/serve"
+}
+
+internal fun resolveRestoredReaderProgress(
+    book: BookSummary,
+    latestProgress: ProgressUpdate?
+): ReaderProgressState {
+    val savedProgress = ReaderProgressState(
+        positionMs = book.progressPositionMs ?: 0L,
+        pageIndex = book.progressPageIndex ?: 0,
+        progressPercent = normalizeStoredProgressPercent(book.progressPercent)
+    )
+    val queuedOrSyncedProgress = latestProgress?.let {
+        ReaderProgressState(
+            positionMs = it.positionMs,
+            pageIndex = it.pageIndex,
+            progressPercent = normalizeStoredProgressPercent(it.progressPercent)
+        )
+    }
+    return when {
+        queuedOrSyncedProgress == null -> savedProgress
+        queuedOrSyncedProgress.isAheadOf(savedProgress) -> queuedOrSyncedProgress
+        else -> savedProgress
+    }
+}
+
+internal data class ReaderProgressState(
+    val positionMs: Long,
+    val pageIndex: Int,
+    val progressPercent: Float?
+)
+
+internal fun ReaderProgressState.isAheadOf(other: ReaderProgressState): Boolean {
+    if (pageIndex != other.pageIndex) {
+        return pageIndex > other.pageIndex
+    }
+    if (positionMs != other.positionMs) {
+        return positionMs > other.positionMs
+    }
+    return normalizedProgressPercent() > other.normalizedProgressPercent()
+}
+
+private fun ReaderProgressState.normalizedProgressPercent(): Float {
+    val value = progressPercent ?: 0f
+    return if (value in 0f..1f) value * 100f else value
 }

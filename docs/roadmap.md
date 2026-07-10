@@ -30,44 +30,43 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-### 1. End-to-end offline verification
+### 1. UI/UX direction and design system
 
-- Download real books from the live server
-- Read while offline
-- Reconnect and verify queued progress sync
-- Verify that local EPUB/PDF/audio reopen without accidental API dependency
-- Verify failure and retry behavior against real disconnect/reconnect cycles
+- Agree on the product's visual character, density, and accessibility goals
+- Define Compose theme tokens for color, typography, spacing, shape, elevation, and motion
+- Establish reusable app-shell, loading, error, offline, and session-state components
+- Use [ui-ux.md](./ui-ux.md) as the checkpoint source of truth
 
-### 2. Reader quality hardening
+### 2. Primary screen refinement
 
-- Preserve EPUB in-chapter position instead of chapter-only progress
-- Add comic support if required by the deployed BookOrbit library
-- Improve PDF zoom and pan behavior
-- Improve audio controls as needed within the read/listen-only scope
+- Refine server setup and the login WebView container
+- Refine library selection, book-card hierarchy, and download/offline actions
+- Refine the EPUB reader using the currently available sample content
+- Preserve existing session, offline, progress-sync, and reader-resume behavior
 
-### 3. Sync queue hardening
+### 3. Automated coverage and recovery hardening
 
-- Add more integration coverage around queue compaction behavior
-- Add backoff and retry policy
-- Add debug-visible queue inspection/logging
-- Verify queue replay against the live BookOrbit server
-- Confirm end-to-end server-switch behavior on a real device, including queued progress and server-scoped local downloads
+- Add integration coverage for login bootstrap and library/book loading
+- Add integration coverage around offline queue replay
+- Execute Compose instrumentation tests on a connected emulator or device
+- Validate server-forced session expiry and return-to-intended-action recovery on a real deployment
 
-### 4. UX hardening
+### 4. Deferred media-specific validation
 
-- Session-expiry handling
-- Cleaner unsupported-format handling
+- Obtain representative audiobook, PDF, and CBZ files
+- Validate offline reopen, restart resume, streaming/range behavior, and progress sync for each format
+- Adjust format-specific controls only after their behavior can be exercised on device
 
-### 5. Testing and release readiness
+### 5. Release readiness
 
-- Unit tests for repository parsing and progress DTO generation
-- Integration tests for login bootstrap and library loading
-- Broaden coordinator and repository JVM coverage around session persistence and expiry recovery before moving to device-only test gaps
-- Offline sync verification matrix
-- Physical device validation
+- Complete accessibility, large-text, narrow-screen, rotation, and theme checks
+- Run unit, lint, debug, instrumentation-compile, and release build gates
+- Confirm no secrets or internal URLs are committed
+- Create the first tagged release
 
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
 
 - [../CHECKLIST.md](../CHECKLIST.md)
+- [ui-ux.md](./ui-ux.md)

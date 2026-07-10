@@ -12,6 +12,8 @@ You can begin manual testing once these conditions are true:
 - a reachable BookOrbit server URL is available
 - at least one account can sign in and access a library with real content
 
+Current Compose instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, browser loading states, and cached offline browser actions. `assembleDebugAndroidTest` compiles this coverage; run the connected test task when a device or emulator is available.
+
 ## Manual Test Matrix
 
 ### 1. Server And Login
@@ -27,7 +29,9 @@ You can begin manual testing once these conditions are true:
 1. While signed in, fully close and relaunch the app.
 2. Confirm an already-valid session returns to the reader or browser without forcing a fresh login.
 3. Sign out from the browser screen and confirm the app returns to login cleanly.
-4. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
+4. Latest manual device result on July 10, 2026: explicit sign-out returned to login with the `Change server` action visible, which matches the intended fix for the cached-browser fallback bug.
+5. Latest manual device result on July 10, 2026: after signing back in and fully relaunching the app, the existing session returned to the app without forcing a fresh login.
+6. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
 
 ### 1b. Physical Device Install
 
@@ -43,16 +47,15 @@ You can begin manual testing once these conditions are true:
 
 ### 3. Reading And Listening
 
-1. Open one audiobook and verify play, pause, skip, speed, and resume behavior.
-2. Open one PDF and verify paging plus zoom and pan behavior.
-3. Open one EPUB and verify chapter navigation plus theme and font controls.
-4. Open one CBZ if available and verify page navigation.
+1. EPUB chapter navigation, theme and font controls, local reopen, and session restore are the currently validated reading paths.
+2. Latest manual device result on July 10, 2026: closing and reopening the tested EPUB, and fully closing and relaunching the app, both restored the last reading session correctly.
+3. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
 
 ### 4. Downloads And Offline Reopen
 
-1. Download one audiobook, one PDF, and one EPUB if available.
-2. Reopen each downloaded item from local storage.
-3. Confirm the browser shows the downloaded state correctly.
+1. EPUB download and local reopen are the currently validated paths.
+2. Confirm the browser shows the downloaded state correctly.
+3. Defer audiobook, PDF, and CBZ download testing until representative sample files are available.
 
 ### 5. Offline Recovery
 
