@@ -33,6 +33,7 @@ The current app flow is:
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 - If the first live browser load fails and no cached browser snapshot exists, the coordinator now shows an empty browser state with a recoverable error message so the refresh action can retry cleanly.
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
+- A server-unavailable result may use cached offline Home, but an explicit unauthenticated response now opens Login because the reachable server rejected the saved session.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
 - Offline-first active-reader restore uses the same local-only reader stream suppression, so startup reopen does not quietly fall back to a live audio stream.

@@ -21,6 +21,8 @@ Last updated: 2026-07-10
   - login completion is inferred by probing authenticated endpoints
   - explicit sign-out now waits for cookie clearing to complete and stays on login instead of bouncing into cached browser state
   - app restart now preserves the authenticated session in manual testing and returns to the app without forcing a fresh login
+  - reachable-but-unauthenticated startup now opens Login instead of incorrectly treating cached Home as an offline fallback
+  - explicit Sign in from cached Home disables cached fallback until authentication succeeds, preventing the login screen from immediately bouncing away
 - Library browsing is implemented:
   - libraries load from `GET /api/v1/libraries`
   - books load from `POST /api/v1/libraries/{id}/books`
@@ -153,9 +155,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Install and review global search, authenticated covers, smaller shelf cards, and immersive mode on device.
-2. Validate Home -> series details -> book details -> reader navigation and Android Back behavior.
-3. Confirm cover and search behavior during offline fallback and session expiry.
+1. Retest cold app restart with a still-valid session and with a rejected or expired session.
+2. From cached offline Home, tap Sign in and confirm Login stays open and accepts authentication.
+3. Continue validation of global search, authenticated covers, details navigation, and immersive mode.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 

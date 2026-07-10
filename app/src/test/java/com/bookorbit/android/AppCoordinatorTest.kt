@@ -90,7 +90,7 @@ class AppCoordinatorTest {
     }
 
     @Test
-    fun `bootstrap shows cached offline browser snapshot when unauthenticated`() = runTest {
+    fun `bootstrap opens login instead of cached browser when server rejects saved session`() = runTest {
         val cachedState = BrowserState(
             serverUrl = serverUrl,
             libraries = listOf(library),
@@ -107,13 +107,9 @@ class AppCoordinatorTest {
         coordinator.bootstrap()
         advanceUntilIdle()
 
-        val screen = coordinator.screen.value as AppScreen.Browser
-        assertTrue(screen.browserState.isOfflineSnapshot)
-        assertEquals(cachedState.books, screen.browserState.books)
-        assertEquals(
-            "Showing the last cached library snapshot. Sign in again when the server is available.",
-            screen.browserState.message
-        )
+        val screen = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, screen.serverUrl)
+        assertTrue(screen.message.orEmpty().contains("no longer authenticated"))
     }
 
     @Test
@@ -319,6 +315,35 @@ class AppCoordinatorTest {
 
         val loginScreen = coordinator.screen.value as AppScreen.Login
         assertTrue(loginScreen.message.orEmpty().contains("Sign in again"))
+        assertEquals(0, repository.clearSessionCalls)
+    }
+
+    @Test
+    fun `explicit sign in from cached browser stays on login until authentication succeeds`() = runTest {
+        val cachedState = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book),
+            isOfflineSnapshot = true
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            cachedBrowserState = cachedState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(cachedState)
+
+        coordinator.beginSignIn()
+        advanceUntilIdle()
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertTrue(login.message.orEmpty().contains("Waiting for an authenticated session"))
         assertEquals(0, repository.clearSessionCalls)
     }
 

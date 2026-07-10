@@ -63,20 +63,11 @@ class AppCoordinator(
                     loadBrowser()
                 }
                 SessionState.Unauthenticated -> {
-                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
-                    if (cached != null) {
-                        showBrowser(
-                            cached.copy(
-                                isOfflineSnapshot = true,
-                                message = "Showing the last cached library snapshot. Sign in again when the server is available."
-                            )
-                        )
-                    } else {
-                        showLogin(
-                            message = "Sign in to access your libraries.",
-                            destination = PostLoginDestination.Browser
-                        )
-                    }
+                    allowCachedLoginFallback = false
+                    showLogin(
+                        message = "Your saved session is no longer authenticated. Sign in to continue.",
+                        destination = PostLoginDestination.Browser
+                    )
                 }
                 SessionState.Unavailable -> {
                     val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
@@ -228,6 +219,7 @@ class AppCoordinator(
         scope.launch {
             val current = lastBrowserState
             if (current?.isOfflineSnapshot == true) {
+                allowCachedLoginFallback = false
                 showLogin(
                     message = "Sign in again to refresh libraries or open online content.",
                     destination = PostLoginDestination.Browser
@@ -235,6 +227,16 @@ class AppCoordinator(
                 return@launch
             }
             signOut()
+        }
+    }
+
+    fun beginSignIn() {
+        scope.launch {
+            allowCachedLoginFallback = false
+            showLogin(
+                message = "Sign in to refresh your libraries and online content.",
+                destination = PostLoginDestination.Browser
+            )
         }
     }
 

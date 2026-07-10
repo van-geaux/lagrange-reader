@@ -99,7 +99,8 @@ fun BookOrbitApp(
         is AppScreen.Browser -> NativeLibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::loadBrowser,
-            onSessionAction = coordinator::onBrowserSessionAction,
+            onSignIn = coordinator::beginSignIn,
+            onSignOut = coordinator::signOut,
             onLibrarySelected = coordinator::selectLibrary,
             searchBooks = coordinator::searchBooks,
             coverLoader = coordinator::loadBookCover,

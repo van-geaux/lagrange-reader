@@ -50,6 +50,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Verify server-side login contract against the live BookOrbit server
 - [ ] Verify login completion detection is robust
 - [x] Confirm session persistence after app restart
+- [x] Keep explicit Sign in on the login screen instead of bouncing to cached Home
 - [ ] Confirm logout/session expiry recovery behavior
 - [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
 - [x] Add explicit authenticated-user bootstrap check after login

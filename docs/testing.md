@@ -31,7 +31,9 @@ Current Compose instrumentation coverage includes server setup validation, login
 3. Sign out from the browser screen and confirm the app returns to login cleanly.
 4. Latest manual device result on July 10, 2026: explicit sign-out returned to login with the `Change server` action visible, which matches the intended fix for the cached-browser fallback bug.
 5. Latest manual device result on July 10, 2026: after signing back in and fully relaunching the app, the existing session returned to the app without forcing a fresh login.
-6. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
+6. If cached Home appears because the server is unavailable, open the drawer and tap `Sign in`; confirm Login remains visible until authentication succeeds.
+7. If the reachable server rejects the saved session, confirm cold start opens Login instead of presenting cached Home as if it were merely offline.
+8. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
 
 ### 1b. Physical Device Install
 

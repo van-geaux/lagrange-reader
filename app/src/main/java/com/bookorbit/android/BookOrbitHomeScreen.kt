@@ -81,7 +81,8 @@ private enum class BrowserDestination { HOME, LIBRARY }
 internal fun NativeLibraryBrowserScreen(
     state: BrowserState,
     onRefresh: () -> Unit,
-    onSessionAction: () -> Unit,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
@@ -134,9 +135,13 @@ internal fun NativeLibraryBrowserScreen(
                     onLibrarySelected(libraryId)
                     scope.launch { drawerState.close() }
                 },
-                onSessionAction = {
+                onSignIn = {
                     scope.launch { drawerState.close() }
-                    onSessionAction()
+                    onSignIn()
+                },
+                onSignOut = {
+                    scope.launch { drawerState.close() }
+                    onSignOut()
                 }
             )
         }
@@ -271,7 +276,8 @@ private fun BrowserDrawer(
     onHome: () -> Unit,
     onLibraries: () -> Unit,
     onLibrarySelected: (String) -> Unit,
-    onSessionAction: () -> Unit
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit
 ) {
     ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
         Column(
@@ -317,7 +323,7 @@ private fun BrowserDrawer(
             NavigationDrawerItem(
                 label = { Text(if (state.isOfflineSnapshot) "Sign in" else "Log out") },
                 selected = false,
-                onClick = onSessionAction,
+                onClick = if (state.isOfflineSnapshot) onSignIn else onSignOut,
                 icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) }
             )
         }
