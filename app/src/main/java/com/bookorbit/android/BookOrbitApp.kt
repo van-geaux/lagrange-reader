@@ -1,11 +1,15 @@
 package com.bookorbit.android
 
+import android.app.Activity
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -64,8 +68,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
@@ -513,6 +522,19 @@ private fun ReaderScreen(
     onBack: () -> Unit,
     onProgress: (BookSummary, Long, Int, Float?) -> Unit
 ) {
+    if (state.book.mediaKind == MediaKind.EPUB) {
+        EpubReaderView(
+            title = state.book.title,
+            file = state.localFile,
+            initialChapter = state.pageIndex,
+            initialPercent = state.progressPercent,
+            onBack = onBack,
+            onProgress = { chapterIndex, percent ->
+                onProgress(state.book, 0L, chapterIndex, percent)
+            }
+        )
+        return
+    }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -542,15 +564,7 @@ private fun ReaderScreen(
                         onProgress(state.book, 0L, pageIndex, percent)
                     }
                 )
-                MediaKind.EPUB -> EpubReaderView(
-                    title = state.book.title,
-                    file = state.localFile,
-                    initialChapter = state.pageIndex,
-                    initialPercent = state.progressPercent,
-                    onProgress = { chapterIndex, percent ->
-                        onProgress(state.book, 0L, chapterIndex, percent)
-                    }
-                )
+                MediaKind.EPUB -> Unit
                 MediaKind.COMIC -> ComicReaderView(
                     title = state.book.title,
                     file = state.localFile,
@@ -877,9 +891,21 @@ private fun EpubReaderView(
     file: File?,
     initialChapter: Int,
     initialPercent: Float?,
+    onBack: () -> Unit,
     onProgress: (Int, Float?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
+            controller?.hide(WindowInsetsCompat.Type.statusBars())
+        }
+    }
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
     if (file == null || !file.exists()) {
         ReaderMessage("Unable to prepare this EPUB.")
@@ -904,129 +930,78 @@ private fun EpubReaderView(
     }
     var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
     var fontScale by remember(file) { mutableStateOf(1f) }
+    var showControls by remember(file) { mutableStateOf(false) }
     var showChapterPicker by remember(file) { mutableStateOf(false) }
+    var currentPage by remember(file) { mutableStateOf(0) }
+    var currentPageCount by remember(file) { mutableStateOf(1) }
+    var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
+    val centerTap = rememberUpdatedState {
+        showControls = !showControls
+        if (!showControls) showChapterPicker = false
+    }
+    val pageChanged = rememberUpdatedState { page: Int, count: Int ->
+        currentPage = page.coerceAtLeast(0)
+        currentPageCount = count.coerceAtLeast(1)
+    }
+    val chapterBoundary = rememberUpdatedState { direction: Int ->
+        when {
+            direction < 0 && currentChapter > 0 -> {
+                openChapterAtEnd = true
+                currentChapter--
+            }
+            direction > 0 && currentChapter < chapterCount - 1 -> {
+                openChapterAtEnd = false
+                currentChapter++
+            }
+            else -> Unit
+        }
+    }
 
-    LaunchedEffect(currentChapter, chapterCount) {
-        val percent = if (chapterCount <= 1) 100f else (currentChapter.toFloat() / (chapterCount - 1).toFloat()) * 100f
+    LaunchedEffect(currentChapter, currentPage, currentPageCount, chapterCount) {
+        val chapterProgress = (currentPage + 1f) / currentPageCount.coerceAtLeast(1)
+        val percent = ((currentChapter + chapterProgress) / chapterCount.toFloat()) * 100f
         onProgress(currentChapter, percent)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(epubBook.title ?: title, style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Chapter ${currentChapter + 1} of $chapterCount",
-            modifier = Modifier.semantics {
-                heading()
-                contentDescription = "Chapter ${currentChapter + 1} of $chapterCount"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline
-        )
-        TextButton(
-            onClick = { showChapterPicker = !showChapterPicker },
-            modifier = Modifier.semantics {
-                contentDescription = if (showChapterPicker) {
-                    "Hide chapter picker"
-                } else {
-                    "Show chapter picker"
-                }
-            }
-        ) {
-            Text(if (showChapterPicker) "Hide chapters" else "Show chapters")
-        }
-        if (showChapterPicker) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                epubBook.chapters.forEachIndexed { index, chapter ->
-                    FilterChip(
-                        selected = index == currentChapter,
-                        onClick = { currentChapter = index },
-                        label = {
-                            Text(
-                                chapter.title.ifBlank { "Chapter ${index + 1}" }
-                            )
-                        }
+    Box(modifier = Modifier.fillMaxSize().background(Color(selectedTheme.backgroundColor))) {
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics { contentDescription = "Paginated EPUB reader" },
+            factory = { webContext ->
+                WebView(webContext).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    settings.setSupportZoom(false)
+                    @Suppress("DEPRECATION")
+                    settings.allowFileAccessFromFileURLs = true
+                    @Suppress("DEPRECATION")
+                    settings.allowUniversalAccessFromFileURLs = true
+                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    isHorizontalScrollBarEnabled = false
+                    isVerticalScrollBarEnabled = false
+                    overScrollMode = WebView.OVER_SCROLL_NEVER
+                    webViewClient = WebViewClient()
+                    addJavascriptInterface(
+                        EpubReaderBridge(
+                            onCenterTap = { centerTap.value.invoke() },
+                            onPageChanged = { page, count -> pageChanged.value.invoke(page, count) },
+                            onChapterBoundary = { direction -> chapterBoundary.value.invoke(direction) }
+                        ),
+                        EPUB_READER_BRIDGE
                     )
                 }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EPUB_THEME_OPTIONS.forEach { theme ->
-                val selected = theme == selectedTheme
-                if (selected) {
-                    Button(
-                        onClick = { selectedTheme = theme },
-                        modifier = Modifier.semantics {
-                            contentDescription = "EPUB theme ${theme.label}"
-                            stateDescription = "Selected"
-                        }
-                    ) {
-                        Text(theme.label)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { selectedTheme = theme },
-                        modifier = Modifier.semantics { contentDescription = "EPUB theme ${theme.label}" }
-                    ) {
-                        Text(theme.label)
-                    }
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(
-                onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) },
-                modifier = Modifier.semantics { contentDescription = "Decrease EPUB text size" }
-            ) {
-                Text("A-")
-            }
-            Text(
-                "Text ${formatEpubFontScale(fontScale)}",
-                modifier = Modifier.semantics { contentDescription = "EPUB text size ${formatEpubFontScale(fontScale)}" },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            OutlinedButton(
-                onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) },
-                modifier = Modifier.semantics { contentDescription = "Increase EPUB text size" }
-            ) {
-                Text("A+")
-            }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(Color(selectedTheme.backgroundColor))
-        ) {
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .semantics { contentDescription = "EPUB chapter reader" },
-                factory = { webContext ->
-                    WebView(webContext).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.allowFileAccess = true
-                        settings.allowContentAccess = true
-                        @Suppress("DEPRECATION")
-                        settings.allowFileAccessFromFileURLs = true
-                        @Suppress("DEPRECATION")
-                        settings.allowUniversalAccessFromFileURLs = true
-                        settings.cacheMode = WebSettings.LOAD_DEFAULT
-                        webViewClient = WebViewClient()
-                    }
-                },
-                update = { webView ->
-                    val chapter = currentChapterState
+            },
+            update = { webView ->
+                val chapter = currentChapterState
+                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|$openChapterAtEnd"
+                if (webView.tag != renderKey) {
+                    webView.tag = renderKey
+                    currentPage = 0
+                    currentPageCount = 1
                     val html = chapter.file.readText()
                     webView.setBackgroundColor(selectedTheme.backgroundColor)
                     webView.loadDataWithBaseURL(
@@ -1034,33 +1009,118 @@ private fun EpubReaderView(
                         styleEpubHtml(
                             html = html,
                             theme = selectedTheme,
-                            fontScale = fontScale
+                            fontScale = fontScale,
+                            startAtEnd = openChapterAtEnd
                         ),
                         "text/html",
                         Charsets.UTF_8.name(),
                         null
                     )
                 }
-            )
-        }
-        Text(
-            epubBook.chapters[currentChapter].title,
-            style = MaterialTheme.typography.bodyMedium
+            }
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { currentChapter = (currentChapter - 1).coerceAtLeast(0) },
-                enabled = currentChapter > 0
+
+        if (showControls) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+                shadowElevation = 6.dp
             ) {
-                Text("Previous")
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onBack) { Text("Back") }
+                    Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        Text(
+                            epubBook.title ?: title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            "Chapter ${currentChapter + 1}/$chapterCount · Page ${currentPage + 1}/$currentPageCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = { showChapterPicker = !showChapterPicker }) { Text("Chapters") }
+                }
             }
-            Button(
-                onClick = { currentChapter = (currentChapter + 1).coerceAtMost(chapterCount - 1) },
-                enabled = currentChapter < chapterCount - 1
+
+            Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+                shadowElevation = 8.dp
             ) {
-                Text("Next")
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (showChapterPicker) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            epubBook.chapters.forEachIndexed { index, chapter ->
+                                FilterChip(
+                                    selected = index == currentChapter,
+                                    onClick = {
+                                        openChapterAtEnd = false
+                                        currentChapter = index
+                                        showChapterPicker = false
+                                    },
+                                    label = { Text(chapter.title.ifBlank { "Chapter ${index + 1}" }) }
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        EPUB_THEME_OPTIONS.forEach { theme ->
+                            FilterChip(
+                                selected = theme == selectedTheme,
+                                onClick = { selectedTheme = theme },
+                                label = { Text(theme.label) }
+                            )
+                        }
+                        OutlinedButton(onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) }) {
+                            Text("A-")
+                        }
+                        Text(formatEpubFontScale(fontScale), style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) }) {
+                            Text("A+")
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+private class EpubReaderBridge(
+    private val onCenterTap: () -> Unit,
+    private val onPageChanged: (Int, Int) -> Unit,
+    private val onChapterBoundary: (Int) -> Unit
+) {
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun centerTap() {
+        mainHandler.post(onCenterTap)
+    }
+
+    @JavascriptInterface
+    fun pageChanged(page: Int, count: Int) {
+        mainHandler.post { onPageChanged(page, count) }
+    }
+
+    @JavascriptInterface
+    fun chapterBoundary(direction: Int) {
+        mainHandler.post { onChapterBoundary(direction) }
     }
 }
 
@@ -1358,42 +1418,81 @@ private fun formatZoomLevel(zoom: Float): String {
 private fun styleEpubHtml(
     html: String,
     theme: EpubReaderTheme,
-    fontScale: Float
+    fontScale: Float,
+    startAtEnd: Boolean
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
-    val stylesheet = """
+    val readerAssets = """
         <style>
         :root { color-scheme: light; }
         html, body {
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             background: ${theme.backgroundCss};
             color: ${theme.foregroundCss};
             font-size: ${fontPercent}%;
             line-height: 1.7;
         }
         body {
-            padding: 20px 18px 28px;
-            max-width: 44rem;
-            margin: 0 auto;
+            box-sizing: border-box;
+            padding: 28px 22px 34px;
+            column-width: calc(100vw - 44px);
+            column-gap: 44px;
+            column-fill: auto;
             word-wrap: break-word;
         }
         img, svg {
             max-width: 100%;
             height: auto;
+            break-inside: avoid;
         }
         a { color: ${theme.linkCss}; }
         pre, code {
             white-space: pre-wrap;
         }
         </style>
+        <script>
+        (() => {
+          let page = 0;
+          const bridge = window.$EPUB_READER_BRIDGE;
+          const pageCount = () => Math.max(1, Math.ceil(document.documentElement.scrollWidth / window.innerWidth));
+          const publish = () => bridge.pageChanged(page, pageCount());
+          const moveTo = (next) => {
+            const count = pageCount();
+            if (next < 0) return bridge.chapterBoundary(-1);
+            if (next >= count) return bridge.chapterBoundary(1);
+            page = next;
+            window.scrollTo(page * window.innerWidth, 0);
+            publish();
+          };
+          window.addEventListener('load', () => {
+            requestAnimationFrame(() => {
+              page = ${if (startAtEnd) "pageCount() - 1" else "0"};
+              window.scrollTo(page * window.innerWidth, 0);
+              publish();
+            });
+          });
+          window.addEventListener('resize', () => requestAnimationFrame(() => moveTo(Math.min(page, pageCount() - 1))));
+          document.addEventListener('click', (event) => {
+            if (event.target.closest && event.target.closest('a')) return;
+            event.preventDefault();
+            const zone = event.clientX / window.innerWidth;
+            if (zone < 0.25) return moveTo(page - 1);
+            if (zone > 0.75) return moveTo(page + 1);
+            bridge.centerTap();
+          }, true);
+        })();
+        </script>
     """.trimIndent()
     return if (html.contains("</head>", ignoreCase = true)) {
-        html.replaceFirst("</head>", "$stylesheet</head>", ignoreCase = true)
+        html.replaceFirst("</head>", "$readerAssets</head>", ignoreCase = true)
     } else {
         """
         <html>
-          <head>$stylesheet</head>
+          <head>$readerAssets</head>
           <body>$html</body>
         </html>
         """.trimIndent()
@@ -1406,6 +1505,7 @@ private fun formatEpubFontScale(fontScale: Float): String {
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
+private const val EPUB_READER_BRIDGE = "BookOrbitReader"
 private val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,

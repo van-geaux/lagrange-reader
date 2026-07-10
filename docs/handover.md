@@ -36,6 +36,8 @@ Last updated: 2026-07-10
   - series shelf cards open series details, and books open details with explicit Read/Continue and download actions
   - book details now load BookOrbit's full detail payload and render subtitle, creators, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata when available
   - series details now load the complete ordered server series with authors, book/read counts, completion, possible gaps, and first-book synopsis instead of relying on the current shelf page
+  - series requests now respect BookOrbit's 100-item maximum and merge additional pages; the previous 200-item request was rejected by the server and caused blank series details
+  - series details also show genre/tag context from the first book
   - Back from a book opened inside a series now returns to that series before leaving the detail flow
   - shelf cards were reduced to roughly two-thirds of the original candidate size after device feedback
   - the Android status bar is hidden for an immersive app window with transient swipe reveal
@@ -46,6 +48,9 @@ Last updated: 2026-07-10
   - PDF reader includes zoom, pan, and reset controls
   - EPUB uses local extraction plus OPF spine parsing and chapter-by-chapter `WebView` rendering
   - EPUB reader includes chapter picking plus theme and font-size controls
+  - EPUB now uses fullscreen viewport pagination rather than vertical chapter scrolling
+  - left/right outer-quarter taps navigate pages and the center toggles transient reader controls, following Komga's EPUB interaction model
+  - EPUB progress percentage includes the current paginated screen, but reopen still restores to the chapter rather than the exact in-chapter page
   - downloaded EPUB local images now render correctly in the reader WebView
   - CBZ comics can be opened from local downloads or authenticated cache copies
   - active reader state is persisted and can be restored after recreation or restart
@@ -162,9 +167,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Install the new debug APK and compare book/series metadata, hierarchy, density, actions, complete-series population, and Back behavior against the main BookOrbit app.
-2. Stress-test long synopsis/metadata values, missing fields, and series with many books or possible gaps.
-3. Continue validation of global search and immersive mode.
+1. Install the new debug APK and verify series details populate with read/total, synopsis, genres/tags, gaps, and all books, including series requiring multiple 100-item pages.
+2. Validate EPUB fullscreen pagination, left/center/right tap zones, chapter transitions, overlay controls, typography, images, and theme/text repagination.
+3. Recheck EPUB offline images, progress sync, chapter restore, and immersive system-bar behavior.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 
@@ -178,7 +183,7 @@ Last updated: 2026-07-10
 
 ## Known limitations
 
-- EPUB support is still basic despite theme, font, and chapter controls.
+- EPUB is paginated and fullscreen, but exact in-chapter page restore and RTL direction controls remain unimplemented.
 - Comic support is limited to local or authenticated-cache CBZ rendering; CBR is still not implemented.
 - Login completion detection is still based on polling authenticated APIs.
 - Queue replay behavior is validated for the tested real content flow, but it has not yet been broadened across every media type and restart path.

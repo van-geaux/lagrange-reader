@@ -141,10 +141,10 @@ The native detail screen maps the returned title, subtitle, authors, narrators, 
 Endpoint:
 
 ```text
-GET /api/v1/series/{seriesId}/books?page=0&size=200&sort=seriesIndex&order=asc
+GET /api/v1/series/{seriesId}/books?page=0&size=100&sort=seriesIndex&order=asc
 ```
 
-The response contains `items` plus `seriesInfo`. The client maps the complete ordered book list, series name, book/read counts, authors, and possible index gaps. It also loads the first book detail to provide the series synopsis when available.
+The response contains `items` plus `seriesInfo`. BookOrbit limits `size` to 100, so the client requests and merges additional pages until `seriesInfo.bookCount` is reached. It maps the complete ordered book list, series name, book/read counts, authors, and possible index gaps, then loads the first book detail for synopsis and genre/tag context.
 
 ## Files
 

@@ -50,7 +50,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 5. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
 6. Confirm real book covers load on Home, search results, library lists, and detail screens.
 7. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
-8. Open a series card and confirm it loads the complete ordered series, name/authors, book/read counts, completion bar, any reported gaps, first-book synopsis, and book list instead of opening a reader.
+8. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
 9. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
 10. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work.
 11. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
@@ -59,9 +59,13 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 ### 3. Reading And Listening
 
-1. EPUB chapter navigation, theme and font controls, local reopen, and session restore are the currently validated reading paths.
-2. Latest manual device result on July 10, 2026: closing and reopening the tested EPUB, and fully closing and relaunching the app, both restored the last reading session correctly.
-3. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
+1. Open an EPUB and confirm the content fills the screen with no permanent app toolbar or system bars.
+2. Tap the left and right outer quarters and confirm they move exactly one paginated screen; confirm navigation crosses chapter boundaries.
+3. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
+4. Confirm changing theme or text size repaginates without enabling vertical scrolling, and images remain constrained to the page.
+5. Close and reopen the EPUB and confirm it returns to the saved chapter. Exact in-chapter page restore is not implemented yet.
+6. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
+7. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
 
 ### 4. Downloads And Offline Reopen
 

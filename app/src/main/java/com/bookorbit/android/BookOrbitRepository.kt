@@ -203,18 +203,32 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        val detail = BookOrbitPayloadParser.parseSeriesDetail(
-            seriesId = seriesId,
-            payload = request(
-                "/api/v1/series/$seriesId/books?page=0&size=200&sort=seriesIndex&order=asc",
-                "GET",
-                null
-            ),
-            downloads = downloads,
-            serverBase = serverBase()
+        var page = 0
+        var detail: SeriesDetailInfo? = null
+        val books = mutableListOf<BookSummary>()
+        do {
+            val pageDetail = BookOrbitPayloadParser.parseSeriesDetail(
+                seriesId = seriesId,
+                payload = request(
+                    "/api/v1/series/$seriesId/books?page=$page&size=100&sort=seriesIndex&order=asc",
+                    "GET",
+                    null
+                ),
+                downloads = downloads,
+                serverBase = serverBase()
+            )
+            if (detail == null) detail = pageDetail
+            books += pageDetail.books
+            page++
+        } while (pageDetail.books.isNotEmpty() && books.size < pageDetail.bookCount)
+
+        val completeDetail = requireNotNull(detail).copy(
+            books = books
+                .distinctBy { it.id }
+                .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
         )
-        detail.copy(
-            firstBook = detail.books.firstOrNull()?.let { first ->
+        completeDetail.copy(
+            firstBook = completeDetail.books.firstOrNull()?.let { first ->
                 runCatching {
                     BookOrbitPayloadParser.parseBookDetail(
                         fallback = first,

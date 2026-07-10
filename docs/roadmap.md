@@ -42,6 +42,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Refine server setup and the login WebView container
 - Refine library selection, book-card hierarchy, and download/offline actions
 - Refine the EPUB reader using the currently available sample content
+- Validate the fullscreen paginated EPUB candidate and add exact in-chapter page restore after layout behavior is stable
 - Preserve existing session, offline, progress-sync, and reader-resume behavior
 
 ### 3. Automated coverage and recovery hardening

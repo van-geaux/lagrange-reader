@@ -314,6 +314,35 @@ class BookOrbitPayloadParserTest {
         assertEquals(listOf("First", "Second"), detail.books.map { it.title })
     }
 
+    @Test
+    fun `parseSeriesDetail retains server totals when a page contains fewer books`() {
+        val detail = BookOrbitPayloadParser.parseSeriesDetail(
+            seriesId = "series-large",
+            payload = """
+                {
+                  "items": [{"id":"book-1","title":"First","seriesIndex":1}],
+                  "total": 125,
+                  "page": 0,
+                  "size": 100,
+                  "seriesInfo": {
+                    "id": "series-large",
+                    "name": "Long Series",
+                    "bookCount": 125,
+                    "readCount": 37,
+                    "authors": [],
+                    "possibleGaps": []
+                  }
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(125, detail.bookCount)
+        assertEquals(37, detail.readCount)
+        assertEquals(1, detail.books.size)
+    }
+
     @Test(expected = UserFacingException::class)
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")

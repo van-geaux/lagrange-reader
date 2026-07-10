@@ -944,6 +944,24 @@ private fun SeriesDetails(
                     }
                 }
             }
+            val labels = (first.genres + first.tags).distinct()
+            if (labels.isNotEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Genres and tags", style = MaterialTheme.typography.titleLarge)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            labels.forEach { label ->
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                                    Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         item {
             Text("Books", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))

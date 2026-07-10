@@ -44,6 +44,8 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
+Implementation candidate: EPUB now follows Komga's paginated interaction pattern. Reading is fullscreen with permanent chrome removed; left/right outer-quarter taps change pages and center taps toggle transient top/bottom controls for Back, location, chapters, theme, and text size. Device validation is required for typography, page breaks, images, chapter boundaries, and tap-zone comfort before Checkpoint 4 is complete.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

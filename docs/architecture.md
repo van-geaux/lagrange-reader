@@ -93,8 +93,11 @@ The current app flow is:
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
+  - reflowable chapter content is split into viewport-width CSS columns instead of vertically scrolling
+  - the left and right outer quarters move pages, while the center toggles overlay controls
+  - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
-  - progress is currently tracked at chapter granularity and translated into percentage
+  - progress percentage includes the current in-chapter page, while persisted page identity still restores at chapter granularity
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
@@ -114,7 +117,7 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB support is functional but still minimal: no pagination and no in-chapter scroll restore.
+- EPUB support is functional and paginated, but exact in-chapter page restore and RTL direction controls are not implemented yet.
 - Login completion detection now combines navigation-triggered and polling-based `/api/v1/auth/me` checks, but it has not yet been verified against every server auth flow.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
