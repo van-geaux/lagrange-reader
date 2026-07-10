@@ -50,11 +50,12 @@ Current Compose instrumentation coverage includes server setup validation, login
 5. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
 6. Confirm real book covers load on Home, search results, library lists, and detail screens.
 7. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
-8. Open a series card and confirm it shows the ordered books in that series instead of opening a reader.
-9. Open a book and confirm its details appear; use Read or Continue reading to enter the reader.
-10. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
-11. Confirm the status bar is hidden and can be revealed transiently with a system-edge swipe.
-12. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
+8. Open a series card and confirm it loads the complete ordered series, name/authors, book/read counts, completion bar, any reported gaps, first-book synopsis, and book list instead of opening a reader.
+9. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
+10. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work.
+11. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
+12. Confirm the status bar is hidden and can be revealed transiently with a system-edge swipe.
+13. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 

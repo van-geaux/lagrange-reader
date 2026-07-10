@@ -43,6 +43,37 @@ data class BookSummary(
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
 }
 
+data class BookDetailInfo(
+    val book: BookSummary,
+    val libraryName: String? = null,
+    val subtitle: String? = null,
+    val synopsis: String? = null,
+    val publisher: String? = null,
+    val publishedDate: String? = null,
+    val language: String? = null,
+    val pageCount: Int? = null,
+    val isbn10: String? = null,
+    val isbn13: String? = null,
+    val genres: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val rating: Double? = null,
+    val narrators: List<String> = emptyList(),
+    val fileCount: Int = 0,
+    val totalSizeBytes: Long? = null,
+    val durationSeconds: Long? = null
+)
+
+data class SeriesDetailInfo(
+    val id: String,
+    val name: String,
+    val bookCount: Int,
+    val readCount: Int,
+    val authors: List<String> = emptyList(),
+    val possibleGaps: List<Double> = emptyList(),
+    val books: List<BookSummary> = emptyList(),
+    val firstBook: BookDetailInfo? = null
+)
+
 data class BrowserState(
     val serverUrl: String,
     val libraries: List<LibrarySummary>,

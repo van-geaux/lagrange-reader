@@ -228,6 +228,92 @@ class BookOrbitPayloadParserTest {
         assertTrue(book.lastReadAtMillis!! > book.updatedAtMillis!!)
     }
 
+    @Test
+    fun `parseBookDetail maps descriptive publication and file metadata`() {
+        val fallback = BookSummary(
+            libraryId = "lib-7",
+            id = "book-8",
+            fileId = "file-8",
+            title = "Fallback title",
+            localPath = "/downloads/book-8.epub"
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-8",
+                  "libraryId": "lib-7",
+                  "libraryName": "Fiction",
+                  "title": "The Native Orbit",
+                  "subtitle": "A Reader Story",
+                  "description": "<p>A detailed <strong>synopsis</strong>.</p>",
+                  "publisher": "Orbit Press",
+                  "publishedDate": "2026-06-20",
+                  "language": "en",
+                  "pageCount": 321,
+                  "isbn10": "1234567890",
+                  "isbn13": "9781234567897",
+                  "rating": 4.25,
+                  "authors": [{"name": "Ada Reader"}],
+                  "narrators": [{"name": "Nora Voice"}],
+                  "genres": ["Science Fiction", {"name": "Adventure"}],
+                  "tags": ["Owned"],
+                  "files": [
+                    {"id": "file-8", "role": "primary", "format": "epub", "sizeBytes": 1048576},
+                    {"id": "audio-8", "format": "mp3", "sizeBytes": 2097152, "durationSeconds": 7200}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("The Native Orbit", detail.book.title)
+        assertEquals("Ada Reader", detail.book.author)
+        assertEquals("/downloads/book-8.epub", detail.book.localPath)
+        assertEquals("A Reader Story", detail.subtitle)
+        assertEquals("Orbit Press", detail.publisher)
+        assertEquals(321, detail.pageCount)
+        assertEquals(listOf("Science Fiction", "Adventure"), detail.genres)
+        assertEquals(listOf("Nora Voice"), detail.narrators)
+        assertEquals(2, detail.fileCount)
+        assertEquals(3_145_728L, detail.totalSizeBytes)
+        assertEquals(7_200L, detail.durationSeconds)
+    }
+
+    @Test
+    fun `parseSeriesDetail maps server summary and orders all books`() {
+        val detail = BookOrbitPayloadParser.parseSeriesDetail(
+            seriesId = "series-2",
+            payload = """
+                {
+                  "items": [
+                    {"id":"book-10","title":"Second","seriesId":"series-2","seriesName":"Orbit Run","seriesIndex":2},
+                    {"id":"book-9","title":"First","seriesId":"series-2","seriesName":"Orbit Run","seriesIndex":1}
+                  ],
+                  "seriesInfo": {
+                    "id": "series-2",
+                    "name": "Orbit Run",
+                    "bookCount": 3,
+                    "readCount": 1,
+                    "authors": ["Ada Reader", "Lin Author"],
+                    "possibleGaps": [1.5, 3]
+                  }
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("Orbit Run", detail.name)
+        assertEquals(3, detail.bookCount)
+        assertEquals(1, detail.readCount)
+        assertEquals(listOf("Ada Reader", "Lin Author"), detail.authors)
+        assertEquals(listOf(1.5, 3.0), detail.possibleGaps)
+        assertEquals(listOf("First", "Second"), detail.books.map { it.title })
+    }
+
     @Test(expected = UserFacingException::class)
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")

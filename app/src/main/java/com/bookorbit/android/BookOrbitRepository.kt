@@ -58,6 +58,8 @@ interface BookOrbitDataSource {
     suspend fun loadBooks(libraryId: String): List<BookSummary>
     suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
+    suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
+    suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
     suspend fun saveActiveReader(book: BookSummary)
@@ -186,6 +188,43 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             }
         }
         bytes
+    }
+
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        BookOrbitPayloadParser.parseBookDetail(
+            fallback = book,
+            payload = request("/api/v1/books/${book.id}", "GET", null),
+            downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId },
+            serverBase = serverBase()
+        )
+    }
+
+    override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        val detail = BookOrbitPayloadParser.parseSeriesDetail(
+            seriesId = seriesId,
+            payload = request(
+                "/api/v1/series/$seriesId/books?page=0&size=200&sort=seriesIndex&order=asc",
+                "GET",
+                null
+            ),
+            downloads = downloads,
+            serverBase = serverBase()
+        )
+        detail.copy(
+            firstBook = detail.books.firstOrNull()?.let { first ->
+                runCatching {
+                    BookOrbitPayloadParser.parseBookDetail(
+                        fallback = first,
+                        payload = request("/api/v1/books/${first.id}", "GET", null),
+                        downloads = downloads,
+                        serverBase = serverBase()
+                    )
+                }.getOrNull()
+            }
+        )
     }
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
@@ -875,6 +914,87 @@ internal object BookOrbitPayloadParser {
         }
     }
 
+    fun parseBookDetail(
+        fallback: BookSummary,
+        payload: String,
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
+    ): BookDetailInfo {
+        val obj = extractObject(payload, "load book details")
+        val parsedBook = parseBooks(
+            libraryId = fallback.libraryId,
+            payload = JSONObject().put("items", JSONArray().put(obj)).toString(),
+            downloads = downloads,
+            serverBase = serverBase
+        ).singleOrNull()
+        val book = parsedBook?.copy(
+            fileId = parsedBook.fileId ?: fallback.fileId,
+            author = parsedBook.author ?: fallback.author,
+            format = parsedBook.format ?: fallback.format,
+            mediaKind = parsedBook.mediaKind.takeUnless { it == MediaKind.UNKNOWN } ?: fallback.mediaKind,
+            streamUrl = parsedBook.streamUrl ?: fallback.streamUrl,
+            downloadUrl = parsedBook.downloadUrl ?: fallback.downloadUrl,
+            coverUrl = parsedBook.coverUrl ?: fallback.coverUrl,
+            localPath = parsedBook.localPath ?: fallback.localPath,
+            progressLabel = parsedBook.progressLabel ?: fallback.progressLabel,
+            progressPercent = parsedBook.progressPercent ?: fallback.progressPercent,
+            progressPositionMs = parsedBook.progressPositionMs ?: fallback.progressPositionMs,
+            progressPageIndex = parsedBook.progressPageIndex ?: fallback.progressPageIndex,
+            seriesId = parsedBook.seriesId ?: fallback.seriesId,
+            seriesName = parsedBook.seriesName ?: fallback.seriesName,
+            seriesIndex = parsedBook.seriesIndex ?: fallback.seriesIndex,
+            isRead = parsedBook.isRead || fallback.isRead
+        ) ?: fallback
+        val files = obj.optJSONArray("files")
+        val publishedDate = obj.stringValue("publishedDate", "publicationDate")
+            ?: obj.numberValue("publishedYear", "publicationYear")?.toInt()?.toString()
+        return BookDetailInfo(
+            book = book,
+            libraryName = obj.stringValue("libraryName"),
+            subtitle = obj.stringValue("subtitle"),
+            synopsis = obj.stringValue("description", "synopsis", "summary"),
+            publisher = obj.stringValue("publisher"),
+            publishedDate = publishedDate,
+            language = obj.stringValue("language"),
+            pageCount = obj.numberValue("pageCount", "pages")?.toInt(),
+            isbn10 = obj.stringValue("isbn10"),
+            isbn13 = obj.stringValue("isbn13", "isbn"),
+            genres = obj.stringList("genres"),
+            tags = obj.stringList("tags"),
+            rating = obj.numberValue("rating"),
+            narrators = obj.stringList("narrators"),
+            fileCount = files?.length() ?: 0,
+            totalSizeBytes = files.sumLong("sizeBytes", "size"),
+            durationSeconds = files.maxLong("durationSeconds", "duration")
+                ?: obj.optJSONObject("audioMetadata")?.numberValue("durationSeconds", "duration")?.toLong()
+        )
+    }
+
+    fun parseSeriesDetail(
+        seriesId: String,
+        payload: String,
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
+    ): SeriesDetailInfo {
+        val root = extractObject(payload, "load series details")
+        val books = parseBooks(
+            libraryId = "",
+            payload = root.toString(),
+            downloads = downloads,
+            serverBase = serverBase
+        ).sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
+        val info = root.optJSONObject("seriesInfo") ?: JSONObject()
+        return SeriesDetailInfo(
+            id = info.stringValue("id") ?: seriesId,
+            name = info.stringValue("name", "title") ?: books.firstOrNull()?.seriesName ?: "Series",
+            bookCount = info.numberValue("bookCount")?.toInt() ?: books.size,
+            readCount = info.numberValue("readCount")?.toInt() ?: books.count { it.isRead },
+            authors = info.stringList("authors"),
+            possibleGaps = info.numberList("possibleGaps"),
+            books = books
+        )
+    }
+
     fun inferMediaKind(format: String?, title: String?): MediaKind {
         val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
         return when {
@@ -897,6 +1017,17 @@ internal object BookOrbitPayloadParser {
                     ?: root.optJSONArray("results")
                     ?: JSONArray()
                 else -> JSONArray()
+            }
+        }.getOrElse {
+            throw UserFacingException("The server returned malformed data while trying to $action.")
+        }
+    }
+
+    private fun extractObject(payload: String, action: String): JSONObject {
+        return runCatching {
+            when (val root = JSONTokener(payload).nextValue()) {
+                is JSONObject -> root.optJSONObject("data") ?: root
+                else -> JSONObject()
             }
         }.getOrElse {
             throw UserFacingException("The server returned malformed data while trying to $action.")
@@ -982,6 +1113,50 @@ internal object BookOrbitPayloadParser {
             }
         }
         return null
+    }
+
+    private fun JSONObject.stringList(key: String): List<String> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                when (val value = array.opt(index)) {
+                    is String -> value.takeIf { it.isNotBlank() }?.let(::add)
+                    is Number -> add(value.toString())
+                    is JSONObject -> value.stringValue("name", "title", "value", "label")?.let(::add)
+                }
+            }
+        }.distinct()
+    }
+
+    private fun JSONObject.numberList(key: String): List<Double> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                when (val value = array.opt(index)) {
+                    is Number -> add(value.toDouble())
+                    is String -> value.toDoubleOrNull()?.let(::add)
+                }
+            }
+        }
+    }
+
+    private fun JSONArray?.sumLong(vararg keys: String): Long? {
+        this ?: return null
+        var found = false
+        var total = 0L
+        for (index in 0 until length()) {
+            val value = optJSONObject(index)?.numberValue(*keys)?.toLong() ?: continue
+            found = true
+            total += value
+        }
+        return total.takeIf { found }
+    }
+
+    private fun JSONArray?.maxLong(vararg keys: String): Long? {
+        this ?: return null
+        return (0 until length()).mapNotNull { index ->
+            optJSONObject(index)?.numberValue(*keys)?.toLong()
+        }.maxOrNull()
     }
 
     private fun JSONObject?.timestampValue(vararg keys: String): Long? {

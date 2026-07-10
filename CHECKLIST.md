@@ -208,10 +208,13 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add server-backed global search and authenticated cover loading
 - [x] Move cover decoding off the UI thread and bound decoded-cover memory
 - [x] Add native series and book details before reader launch
+- [x] Populate book details from BookOrbit metadata (synopsis, creator, publication, identifiers, genres, files)
+- [x] Populate series details from the complete server series page with reading completion and gap context
 - [x] Hide the Android status bar for an immersive app window
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
+- [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [ ] Checkpoint 5: refine audiobook, PDF, and CBZ readers when samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
@@ -225,6 +228,7 @@ UI/UX discussion and design-system work can start now:
 - The functional and JVM baseline is ready.
 - EPUB is the validated representative reader path.
 - Audiobook, PDF, and CBZ-specific work is deferred until sample files are available.
+- The immediate device pass is rich book/series details: verify metadata accuracy, full-series population, action placement, and Back behavior.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server

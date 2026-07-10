@@ -3,6 +3,7 @@ package com.bookorbit.android
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.text.Html
 import android.util.LruCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -43,6 +44,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -97,6 +99,8 @@ internal fun NativeLibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
+    bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onBookOpen: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
@@ -119,9 +123,12 @@ internal fun NativeLibraryBrowserScreen(
     val filteredBooks = remoteSearchResults.orEmpty()
 
     BackHandler(enabled = selectedBook != null || selectedSeriesKey != null) {
-        selectedBook = null
-        selectedSeriesKey = null
-        destination = detailReturnDestination
+        if (selectedBook != null) {
+            selectedBook = null
+        } else {
+            selectedSeriesKey = null
+            destination = detailReturnDestination
+        }
     }
 
     ModalNavigationDrawer(
@@ -185,6 +192,7 @@ internal fun NativeLibraryBrowserScreen(
                     state = state,
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
+                    detailLoader = bookDetailLoader,
                     onRead = onBookOpen,
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
@@ -195,6 +203,7 @@ internal fun NativeLibraryBrowserScreen(
                     books = state.books,
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
+                    detailLoader = seriesDetailLoader,
                     onBookSelected = { selectedBook = it }
                 )
                 query.isNotBlank() -> SearchResults(
@@ -763,14 +772,19 @@ private fun BookDetails(
     state: BrowserState,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
+    detailLoader: suspend (BookSummary) -> BookDetailInfo?,
     onRead: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
 ) {
-    val fileId = book.fileId
+    val detail by produceState(initialValue = BookDetailInfo(book), book.id) {
+        value = detailLoader(book) ?: value
+    }
+    val displayBook = detail.book
+    val fileId = displayBook.fileId
     val isDownloading = fileId != null && fileId in state.downloadingFileIds
-    val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
+    val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -778,17 +792,23 @@ private fun BookDetails(
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Box(modifier = Modifier.width(116.dp)) { BookCover(book, coverLoader) }
+                Box(modifier = Modifier.width(116.dp)) { BookCover(displayBook, coverLoader) }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    book.seriesName?.let { OrbitEyebrow(it) }
-                    Text(book.title, style = MaterialTheme.typography.headlineSmall)
-                    book.author?.let {
-                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    displayBook.seriesName?.let { OrbitEyebrow(it) }
+                    Text(displayBook.title, style = MaterialTheme.typography.headlineSmall)
+                    detail.subtitle?.let {
+                        Text(it, style = MaterialTheme.typography.titleMedium)
                     }
-                    Text(nativeBookStatus(book, state.isOfflineSnapshot), style = MaterialTheme.typography.bodyMedium)
+                    displayBook.author?.let {
+                        Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    detail.narrators.takeIf { it.isNotEmpty() }?.let {
+                        Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(nativeBookStatus(displayBook, state.isOfflineSnapshot), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -798,33 +818,63 @@ private fun BookDetails(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
-                    onClick = { onRead(book) },
+                    onClick = { onRead(displayBook) },
                     enabled = !isDownloading && !unavailableOffline
                 ) {
-                    Text(if (book.progressPercent?.let { it > 0f } == true) "Continue reading" else "Read")
+                    Text(if (displayBook.progressPercent?.let { it > 0f } == true) "Continue reading" else "Read")
                 }
                 when {
-                    book.isDownloaded -> OutlinedButton(
-                        onClick = { onDeleteLocalCopy(book) },
+                    displayBook.isDownloaded -> OutlinedButton(
+                        onClick = { onDeleteLocalCopy(displayBook) },
                         enabled = !isDownloading
                     ) { Text("Delete local") }
-                    isDownloading -> OutlinedButton(onClick = { onCancelDownload(book) }) { Text("Cancel download") }
-                    fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
+                    isDownloading -> OutlinedButton(onClick = { onCancelDownload(displayBook) }) { Text("Cancel download") }
+                    fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(displayBook) }) {
                         Text("Download")
+                    }
+                }
+            }
+        }
+        detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
+            item { DetailSection("Synopsis", plainText(synopsis)) }
+        }
+        if (detail.genres.isNotEmpty() || detail.tags.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Genres and tags", style = MaterialTheme.typography.titleLarge)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        (detail.genres + detail.tags).distinct().forEach { label ->
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                                Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                            }
+                        }
                     }
                 }
             }
         }
         item {
             HorizontalDivider()
-            Column(
-                modifier = Modifier.padding(top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Column(modifier = Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Book details", style = MaterialTheme.typography.titleLarge)
-                book.seriesName?.let { Text("Series: $it${book.seriesIndex?.let { index -> " #${index.toInt()}" }.orEmpty()}") }
-                book.format?.let { Text("Format: ${it.uppercase()}") }
-                if (book.isDownloaded) Text("Available offline")
+                displayBook.seriesName?.let {
+                    MetadataLine("Series", "$it${displayBook.seriesIndex?.let(::formatSeriesIndex)?.let { index -> " #$index" }.orEmpty()}")
+                }
+                detail.publisher?.let { MetadataLine("Publisher", it) }
+                detail.publishedDate?.let { MetadataLine("Published", it) }
+                detail.language?.let { MetadataLine("Language", it) }
+                detail.pageCount?.let { MetadataLine("Pages", it.toString()) }
+                detail.isbn13?.let { MetadataLine("ISBN-13", it) }
+                detail.isbn10?.let { MetadataLine("ISBN-10", it) }
+                detail.rating?.let { MetadataLine("Rating", String.format(java.util.Locale.US, "%.1f / 5", it)) }
+                detail.libraryName?.let { MetadataLine("Library", it) }
+                displayBook.format?.let { MetadataLine("Format", it.uppercase()) }
+                detail.durationSeconds?.takeIf { it > 0 }?.let { MetadataLine("Duration", formatDetailDuration(it)) }
+                detail.totalSizeBytes?.takeIf { it > 0 }?.let { MetadataLine("File size", formatFileSize(it)) }
+                if (detail.fileCount > 1) MetadataLine("Files", detail.fileCount.toString())
+                if (displayBook.isDownloaded) MetadataLine("Offline", "Available")
             }
         }
     }
@@ -836,12 +886,24 @@ private fun SeriesDetails(
     books: List<BookSummary>,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
+    detailLoader: suspend (String) -> SeriesDetailInfo?,
     onBookSelected: (BookSummary) -> Unit
 ) {
-    val seriesBooks = books
+    val localBooks = books
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
         .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
-    val seriesName = seriesBooks.firstOrNull()?.seriesName ?: "Series"
+    val localDetail = SeriesDetailInfo(
+        id = seriesKey,
+        name = localBooks.firstOrNull()?.seriesName ?: "Series",
+        bookCount = localBooks.size,
+        readCount = localBooks.count { it.isRead },
+        authors = localBooks.mapNotNull { it.author }.distinct(),
+        books = localBooks
+    )
+    val detail by produceState(initialValue = localDetail, seriesKey) {
+        value = detailLoader(seriesKey) ?: value
+    }
+    val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -849,13 +911,44 @@ private fun SeriesDetails(
     ) {
         item {
             OrbitEyebrow("Series")
-            Text(seriesName, style = MaterialTheme.typography.headlineSmall)
+            Text(detail.name, style = MaterialTheme.typography.headlineSmall)
+            detail.authors.takeIf { it.isNotEmpty() }?.let {
+                Text("by ${it.joinToString()}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
-                "${seriesBooks.size} ${if (seriesBooks.size == 1) "book" else "books"}",
+                "${detail.bookCount} ${if (detail.bookCount == 1) "book" else "books"} · ${detail.readCount} read",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            LinearProgressIndicator(
+                progress = { completion.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            )
         }
-        items(seriesBooks, key = { "series-detail-${it.id}" }) { book ->
+        if (detail.possibleGaps.isNotEmpty()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Text(
+                        "Possible missing positions: ${detail.possibleGaps.joinToString { formatSeriesIndex(it) }}",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+        detail.firstBook?.let { first ->
+            first.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("About this series", style = MaterialTheme.typography.titleLarge)
+                        Text(plainText(synopsis), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        item {
+            Text("Books", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
+        }
+        items(detail.books, key = { "series-detail-${it.id}" }) { book ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -872,11 +965,48 @@ private fun SeriesDetails(
                         Text(book.title, style = MaterialTheme.typography.titleMedium)
                         book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     }
-                    Text(book.seriesIndex?.let { "#${it.toInt()}" }.orEmpty())
+                    Text(book.seriesIndex?.let { "#${formatSeriesIndex(it)}" }.orEmpty())
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DetailSection(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun MetadataLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, modifier = Modifier.width(92.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, modifier = Modifier.weight(1f))
+    }
+}
+
+private fun plainText(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+
+private fun formatSeriesIndex(value: Double): String {
+    return if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
+}
+
+private fun formatFileSize(bytes: Long): String {
+    val megabytes = bytes / (1024.0 * 1024.0)
+    return if (megabytes >= 1024.0) {
+        String.format(java.util.Locale.US, "%.1f GB", megabytes / 1024.0)
+    } else {
+        String.format(java.util.Locale.US, "%.1f MB", megabytes)
+    }
+}
+
+private fun formatDetailDuration(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
 @Composable

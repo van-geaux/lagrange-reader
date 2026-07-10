@@ -36,6 +36,8 @@ Implementation candidate: the post-login screen now opens on a native Home feed 
 
 Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search now uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The Android status bar is hidden with transient swipe reveal for an immersive window.
 
+Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
+
 ### Checkpoint 4: EPUB reader - ready with current sample content
 
 - Refine reading chrome, chapter navigation, theme controls, typography controls, and distraction-free states.

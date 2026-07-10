@@ -45,6 +45,7 @@ The current app flow is:
 - It stores the selected server URL and selected library.
 - Server URL validation now requires HTTPS for non-local hosts; cleartext HTTP is reserved for local development targets only.
 - It loads libraries and books from the live API.
+- It loads rich book details and complete ordered series pages on demand while preserving the selected cached summary as a failure fallback.
 - Stored selected-library ids are validated against the latest available library list before the browser chooses a library to load.
 - It resolves stream and download URLs for files.
 - It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
@@ -104,6 +105,8 @@ Validated against the live server and BookOrbit source:
 - `GET /api/v1/auth/me`
 - `GET /api/v1/libraries`
 - `POST /api/v1/libraries/{id}/books`
+- `GET /api/v1/books/{id}`
+- `GET /api/v1/series/{seriesId}/books`
 - `GET /api/v1/books/files/{fileId}/serve`
 - `GET /api/v1/books/files/{fileId}/download`
 - `POST /api/v1/books/files/{fileId}/progress`
@@ -126,5 +129,7 @@ The first design-system candidate uses explicit BookOrbit light/dark color schem
 The browser presentation now uses a native Compose modal drawer and starts on a Home feed. Home shelf derivation is deterministic from `BookSummary` progress, series identity/order, read state, and added/updated/read timestamps. Those optional fields are parsed tolerantly and persisted in browser snapshots and active-reader state. Home remains scoped to the selected library page because the repository loads one library page at a time.
 
 Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Browser-local navigation owns series and book detail destinations; only the book-detail Read/Continue action calls the coordinator reader flow. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
+
+Book details are enriched on demand with descriptive, creator, publication, identifier, genre/tag, and file metadata. Series details no longer depend on the current shelf page: they request the server's ordered series page, show completion and possible gaps, and optionally use the first book synopsis as series context. Hardware and top-bar Back preserve the series destination when a book was opened from within it.
 
 Card covers use BookOrbit's thumbnail endpoint when available. Network fetches are serialized for initial fill, decoding runs off the Compose main thread with downsampling and `RGB_565`, and decoded bitmaps share a 16 MB LRU cache across repeated Home shelves. Missing covers are remembered for the process lifetime to avoid repeated failed work while scrolling.

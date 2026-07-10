@@ -126,6 +126,26 @@ GET /api/v1/books/{id}/cover
 
 Cover requests use the same authenticated cookie-aware HTTP client as the rest of the API and are cached in memory for the active app process.
 
+### Book detail
+
+Endpoint:
+
+```text
+GET /api/v1/books/{id}
+```
+
+The native detail screen maps the returned title, subtitle, authors, narrators, description, publisher, publication date/year, language, page count, ISBN-10, ISBN-13, rating, genres, tags, library name, series identity/order, and file metadata. The selected shelf summary remains the fallback if the detail request fails, so reader and offline actions remain usable.
+
+### Series detail
+
+Endpoint:
+
+```text
+GET /api/v1/series/{seriesId}/books?page=0&size=200&sort=seriesIndex&order=asc
+```
+
+The response contains `items` plus `seriesInfo`. The client maps the complete ordered book list, series name, book/read counts, authors, and possible index gaps. It also loads the first book detail to provide the series synopsis when available.
+
 ## Files
 
 ### Stream a file

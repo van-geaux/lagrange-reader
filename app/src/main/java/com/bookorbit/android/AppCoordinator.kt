@@ -28,6 +28,14 @@ class AppCoordinator(
         repository.loadBookCover(book)
     }.getOrNull()
 
+    suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = runCatching {
+        repository.loadBookDetail(book)
+    }.getOrNull()
+
+    suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = runCatching {
+        repository.loadSeriesDetail(seriesId)
+    }.getOrNull()
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()

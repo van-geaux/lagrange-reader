@@ -34,6 +34,9 @@ Last updated: 2026-07-10
   - authenticated book covers load through the shared cookie-aware API client
   - card covers use thumbnails, background downsampling, serialized initial loading, and a shared 16 MB bitmap cache to avoid scroll jank and unbounded decoded-image memory
   - series shelf cards open series details, and books open details with explicit Read/Continue and download actions
+  - book details now load BookOrbit's full detail payload and render subtitle, creators, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata when available
+  - series details now load the complete ordered server series with authors, book/read counts, completion, possible gaps, and first-book synopsis instead of relying on the current shelf page
+  - Back from a book opened inside a series now returns to that series before leaving the detail flow
   - shelf cards were reduced to roughly two-thirds of the original candidate size after device feedback
   - the Android status bar is hidden for an immersive app window with transient swipe reveal
 - Reading and listening paths are implemented:
@@ -104,6 +107,7 @@ Last updated: 2026-07-10
 - An editorial-observatory design-system candidate is implemented with explicit light/dark palettes, typography, shapes, shared top bars, and shared status surfaces.
 - Setup, login, and browser screens use the candidate; it still needs on-device visual review before Checkpoint 1 is marked complete.
 - A native mobile Home/search/drawer candidate based on the requested Komga information hierarchy and Audiobookshelf-style mobile interaction pattern is implemented and awaiting device review.
+- Rich native book/series detail candidates based on the main BookOrbit content hierarchy are implemented and ready for device review and UI adjustment.
 - Checkpoints 2-4 cover setup/login/app shell, library browsing, and the EPUB reader.
 - Audiobook, PDF, and CBZ-specific UI work remains deferred until representative samples are available.
 - Detailed checkpoints and regression guardrails are in [ui-ux.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/ui-ux.md).
@@ -121,6 +125,8 @@ Last updated: 2026-07-10
 - Library and book loading:
   - `GET /api/v1/libraries`
   - `POST /api/v1/libraries/{id}/books`
+  - `GET /api/v1/books/{id}`
+  - `GET /api/v1/series/{seriesId}/books`
 - File access:
   - `GET /api/v1/books/files/{fileId}/serve`
   - `GET /api/v1/books/files/{fileId}/download`
@@ -156,9 +162,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Stress-test vertical and horizontal scrolling while many covers are loading and after the bitmap cache has filled.
-2. Retest cold app restart and explicit Sign in from cached offline Home.
-3. Continue validation of global search, details navigation, and immersive mode.
+1. Install the new debug APK and compare book/series metadata, hierarchy, density, actions, complete-series population, and Back behavior against the main BookOrbit app.
+2. Stress-test long synopsis/metadata values, missing fields, and series with many books or possible gaps.
+3. Continue validation of global search and immersive mode.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 
