@@ -3,6 +3,7 @@ package com.bookorbit.android
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -74,8 +75,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 private enum class BrowserDestination { HOME, LIBRARY }
+
+private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+}
+private val coverBitmapMutex = Mutex()
+private val missingCoverKeys = mutableSetOf<String>()
 
 @Composable
 internal fun NativeLibraryBrowserScreen(
@@ -498,10 +509,7 @@ private fun ShelfBookCard(
 @Composable
 private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> ByteArray?) {
     val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl) {
-        val bytes = coverLoader(book)
-        value = bytes?.takeIf { it.isNotEmpty() }?.let {
-            BitmapFactory.decodeByteArray(it, 0, it.size)
-        }
+        value = loadScaledCover(book, coverLoader)
     }
     val colors = listOf(
         MaterialTheme.colorScheme.primaryContainer,
@@ -540,6 +548,61 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
             )
         }
     }
+}
+
+private suspend fun loadScaledCover(
+    book: BookSummary,
+    coverLoader: suspend (BookSummary) -> ByteArray?
+): Bitmap? {
+    val key = book.coverUrl ?: return null
+    coverBitmapCache.get(key)?.let { return it }
+    return coverBitmapMutex.withLock {
+        coverBitmapCache.get(key)?.let { return@withLock it }
+        if (key in missingCoverKeys) return@withLock null
+        val bytes = coverLoader(book)
+        if (bytes == null || bytes.isEmpty()) {
+            missingCoverKeys += key
+            return@withLock null
+        }
+        val bitmap = withContext(Dispatchers.Default) {
+            decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
+        }
+        if (bitmap == null) {
+            missingCoverKeys += key
+        } else {
+            coverBitmapCache.put(key, bitmap)
+        }
+        bitmap
+    }
+}
+
+internal fun decodeCoverBitmap(bytes: ByteArray, targetWidth: Int, targetHeight: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = calculateCoverSampleSize(
+            width = bounds.outWidth,
+            height = bounds.outHeight,
+            targetWidth = targetWidth,
+            targetHeight = targetHeight
+        )
+        inPreferredConfig = Bitmap.Config.RGB_565
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+}
+
+internal fun calculateCoverSampleSize(
+    width: Int,
+    height: Int,
+    targetWidth: Int,
+    targetHeight: Int
+): Int {
+    var sampleSize = 1
+    while (width / (sampleSize * 2) >= targetWidth && height / (sampleSize * 2) >= targetHeight) {
+        sampleSize *= 2
+    }
+    return sampleSize
 }
 
 @Composable

@@ -32,6 +32,7 @@ Last updated: 2026-07-10
   - Home derives Keep Reading, On Deck, recent book, and recent series shelves from optional progress, series, read-state, and timestamp metadata
   - Home shelves are scoped to the selected library page, while search uses the global BookOrbit book-query endpoint
   - authenticated book covers load through the shared cookie-aware API client
+  - card covers use thumbnails, background downsampling, serialized initial loading, and a shared 16 MB bitmap cache to avoid scroll jank and unbounded decoded-image memory
   - series shelf cards open series details, and books open details with explicit Read/Continue and download actions
   - shelf cards were reduced to roughly two-thirds of the original candidate size after device feedback
   - the Android status bar is hidden for an immersive app window with transient swipe reveal
@@ -155,9 +156,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Retest cold app restart with a still-valid session and with a rejected or expired session.
-2. From cached offline Home, tap Sign in and confirm Login stays open and accepts authentication.
-3. Continue validation of global search, authenticated covers, details navigation, and immersive mode.
+1. Stress-test vertical and horizontal scrolling while many covers are loading and after the bitmap cache has filled.
+2. Retest cold app restart and explicit Sign in from cached offline Home.
+3. Continue validation of global search, details navigation, and immersive mode.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 

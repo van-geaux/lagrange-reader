@@ -78,6 +78,18 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `coverThumbnailUrl uses BookOrbit thumbnail endpoint and preserves external urls`() {
+        assertEquals(
+            "https://example.test/api/v1/books/book-1/thumbnail",
+            coverThumbnailUrl("https://example.test/api/v1/books/book-1/cover")
+        )
+        assertEquals(
+            "https://cdn.example.test/covers/book-1.jpg",
+            coverThumbnailUrl("https://cdn.example.test/covers/book-1.jpg")
+        )
+    }
+
+    @Test
     fun `resolveRestoredReaderProgress keeps saved reader progress when queued progress is older`() {
         val book = BookSummary(
             libraryId = "lib-1",

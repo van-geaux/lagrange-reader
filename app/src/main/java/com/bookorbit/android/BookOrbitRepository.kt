@@ -176,7 +176,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
-        val url = book.coverUrl ?: return@withContext null
+        val url = book.coverUrl?.let(::coverThumbnailUrl) ?: return@withContext null
         synchronized(coverCache) { coverCache[url] }?.let { return@withContext it }
         val bytes = requestBytes(url)
         synchronized(coverCache) {
@@ -1102,6 +1102,14 @@ internal object BookOrbitPayloadParser {
 
 internal fun normalizeStoredServerUrl(serverUrl: String): String {
     return serverUrl.trim().trimEnd('/')
+}
+
+internal fun coverThumbnailUrl(coverUrl: String): String {
+    return if (coverUrl.matches(Regex(".*/api/v1/books/[^/]+/cover$"))) {
+        coverUrl.removeSuffix("/cover") + "/thumbnail"
+    } else {
+        coverUrl
+    }
 }
 
 internal fun resolveSelectedLibraryId(
