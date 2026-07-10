@@ -2,6 +2,7 @@ package com.bookorbit.android
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BookOrbitPayloadParserTest {
@@ -179,6 +180,40 @@ class BookOrbitPayloadParserTest {
         )
 
         assertEquals("https://example.test/api/v1/books/book-6/cover", books.single().coverUrl)
+    }
+
+    @Test
+    fun `parseBooks maps series read state and shelf timestamps`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-6",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-7",
+                    "title": "Orbit Two",
+                    "files": [{"id": "file-7", "format": "epub"}],
+                    "series": {"id": "series-1", "name": "Orbit Saga", "position": 2},
+                    "createdAt": "2026-07-01T10:00:00Z",
+                    "updatedAt": "2026-07-02T10:00:00Z",
+                    "readingProgress": {
+                      "percentage": 100,
+                      "completedAt": "2026-07-03T10:00:00Z"
+                    }
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        val book = books.single()
+        assertEquals("series-1", book.seriesId)
+        assertEquals("Orbit Saga", book.seriesName)
+        assertEquals(2.0, book.seriesIndex)
+        assertTrue(book.isRead)
+        assertTrue(book.addedAtMillis != null)
+        assertTrue(book.updatedAtMillis!! > book.addedAtMillis!!)
+        assertTrue(book.lastReadAtMillis!! > book.updatedAtMillis!!)
     }
 
     @Test(expected = UserFacingException::class)

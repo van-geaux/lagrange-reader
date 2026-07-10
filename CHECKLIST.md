@@ -202,9 +202,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Reach a stable functional baseline for UI/UX work
 - [x] Mark UI/UX discussion as ready to begin
 - [x] Implement the first design-system candidate for review
+- [x] Implement native Home, search, and drawer navigation candidate
+- [x] Add metadata-aware Keep Reading, On Deck, recent book, and recent series shelves
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
-- [ ] Checkpoint 3: refine library selection, book cards, and browser states
+- [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [ ] Checkpoint 5: refine audiobook, PDF, and CBZ readers when samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation

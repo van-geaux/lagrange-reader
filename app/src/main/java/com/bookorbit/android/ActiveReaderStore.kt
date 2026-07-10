@@ -41,6 +41,13 @@ class ActiveReaderStore private constructor(
                 put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
                 put("progressPositionMs", book.progressPositionMs)
                 put("progressPageIndex", book.progressPageIndex)
+                put("seriesId", book.seriesId)
+                put("seriesName", book.seriesName)
+                put("seriesIndex", book.seriesIndex)
+                put("isRead", book.isRead)
+                put("addedAtMillis", book.addedAtMillis)
+                put("updatedAtMillis", book.updatedAtMillis)
+                put("lastReadAtMillis", book.lastReadAtMillis)
             })
         }
         file.parentFile?.mkdirs()
@@ -71,7 +78,14 @@ class ActiveReaderStore private constructor(
             progressLabel = book.optString("progressLabel").takeIf { it.isNotBlank() },
             progressPercent = if (book.has("progressPercent") && !book.isNull("progressPercent")) normalizeStoredProgressPercent(book.optDouble("progressPercent").toFloat()) else null,
             progressPositionMs = if (book.has("progressPositionMs") && !book.isNull("progressPositionMs")) book.optLong("progressPositionMs") else null,
-            progressPageIndex = if (book.has("progressPageIndex") && !book.isNull("progressPageIndex")) book.optInt("progressPageIndex") else null
+            progressPageIndex = if (book.has("progressPageIndex") && !book.isNull("progressPageIndex")) book.optInt("progressPageIndex") else null,
+            seriesId = book.optString("seriesId").takeIf { it.isNotBlank() },
+            seriesName = book.optString("seriesName").takeIf { it.isNotBlank() },
+            seriesIndex = if (book.has("seriesIndex") && !book.isNull("seriesIndex")) book.optDouble("seriesIndex") else null,
+            isRead = book.optBoolean("isRead"),
+            addedAtMillis = if (book.has("addedAtMillis") && !book.isNull("addedAtMillis")) book.optLong("addedAtMillis") else null,
+            updatedAtMillis = if (book.has("updatedAtMillis") && !book.isNull("updatedAtMillis")) book.optLong("updatedAtMillis") else null,
+            lastReadAtMillis = if (book.has("lastReadAtMillis") && !book.isNull("lastReadAtMillis")) book.optLong("lastReadAtMillis") else null
         )
     }
 

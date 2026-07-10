@@ -112,6 +112,13 @@ class BrowserSnapshotStore(context: Context) {
                                     put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
                                     put("progressPositionMs", book.progressPositionMs)
                                     put("progressPageIndex", book.progressPageIndex)
+                                    put("seriesId", book.seriesId)
+                                    put("seriesName", book.seriesName)
+                                    put("seriesIndex", book.seriesIndex)
+                                    put("isRead", book.isRead)
+                                    put("addedAtMillis", book.addedAtMillis)
+                                    put("updatedAtMillis", book.updatedAtMillis)
+                                    put("lastReadAtMillis", book.lastReadAtMillis)
                                 }
                             )
                         }
@@ -162,7 +169,14 @@ class BrowserSnapshotStore(context: Context) {
                         progressLabel = item.optString("progressLabel").takeIf { it.isNotBlank() },
                         progressPercent = normalizeStoredProgressPercent(item.optFloat("progressPercent")),
                         progressPositionMs = item.optLongOrNull("progressPositionMs"),
-                        progressPageIndex = item.optIntOrNull("progressPageIndex")
+                        progressPageIndex = item.optIntOrNull("progressPageIndex"),
+                        seriesId = item.optString("seriesId").takeIf { it.isNotBlank() },
+                        seriesName = item.optString("seriesName").takeIf { it.isNotBlank() },
+                        seriesIndex = item.optDoubleOrNull("seriesIndex"),
+                        isRead = item.optBoolean("isRead"),
+                        addedAtMillis = item.optLongOrNull("addedAtMillis"),
+                        updatedAtMillis = item.optLongOrNull("updatedAtMillis"),
+                        lastReadAtMillis = item.optLongOrNull("lastReadAtMillis")
                     )
                 )
             }
@@ -188,6 +202,13 @@ class BrowserSnapshotStore(context: Context) {
             return null
         }
         return optInt(key)
+    }
+
+    private fun JSONObject.optDoubleOrNull(key: String): Double? {
+        if (!has(key) || isNull(key)) {
+            return null
+        }
+        return optDouble(key)
     }
 
     data class BrowserSnapshot(

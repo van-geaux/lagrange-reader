@@ -103,6 +103,7 @@ Important notes:
 - If no file is marked `primary`, the client now ranks supported reading/listening formats ahead of unknown attachments.
 - `authors` is an array, not a scalar string.
 - `readingProgress` is the progress object for ebook progress display.
+- The Android client also tolerantly maps optional series identity/order, read state, and created/updated/last-read timestamps when present. These fields drive native Home shelves but are not assumed to exist on every server payload.
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
 
 ## Files

@@ -25,6 +25,10 @@ Last updated: 2026-07-10
   - libraries load from `GET /api/v1/libraries`
   - books load from `POST /api/v1/libraries/{id}/books`
   - live payload parsing has been validated against a working BookOrbit deployment
+  - the post-login browser now opens on a native Home feed with an integrated search bar and hamburger drawer
+  - the drawer contains Home, Libraries with library children, and sign-in/log-out
+  - Home derives Keep Reading, On Deck, recent book, and recent series shelves from optional progress, series, read-state, and timestamp metadata
+  - Home shelves and search are currently scoped to the selected library page returned by BookOrbit
 - Reading and listening paths are implemented:
   - audio uses ExoPlayer
   - audio UI includes play/pause, skip, speed, and resume support
@@ -92,6 +96,7 @@ Last updated: 2026-07-10
 - Checkpoint 1 is product direction and shared design-system tokens.
 - An editorial-observatory design-system candidate is implemented with explicit light/dark palettes, typography, shapes, shared top bars, and shared status surfaces.
 - Setup, login, and browser screens use the candidate; it still needs on-device visual review before Checkpoint 1 is marked complete.
+- A native mobile Home/search/drawer candidate based on the requested Komga information hierarchy and Audiobookshelf-style mobile interaction pattern is implemented and awaiting device review.
 - Checkpoints 2-4 cover setup/login/app shell, library browsing, and the EPUB reader.
 - Audiobook, PDF, and CBZ-specific UI work remains deferred until representative samples are available.
 - Detailed checkpoints and regression guardrails are in [ui-ux.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/ui-ux.md).
@@ -144,9 +149,9 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Start UI/UX Checkpoint 1 by agreeing on the product direction and design-system tokens.
-2. Audit and refine setup, login, and shared app-shell presentation without changing flow behavior.
-3. Refine library-browser hierarchy and states, then the EPUB reader using available content.
+1. Install and review the native Home/search/drawer candidate on device.
+2. Confirm which BookOrbit payloads populate On Deck and the recent series/read shelves on the live server.
+3. Adjust shelf density, card sizing, drawer behavior, and search behavior from device feedback.
 4. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
 5. Validate server-forced session expiry on a real deployment when practical.
 

@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -60,8 +61,10 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Unavailable offline").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open navigation").performClick()
         composeRule.onNodeWithText("Sign in").assertIsEnabled()
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Unavailable offline").assertIsDisplayed()
     }
 
     @Test
@@ -113,12 +116,15 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Main").assertIsDisplayed().assertIsEnabled()
+        composeRule.onNodeWithText("Recently added books").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open navigation").performClick()
+        composeRule.onNodeWithText("Log out").assertIsEnabled()
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Main").assertIsDisplayed()
         composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
         composeRule.onNodeWithText("Test Author").assertIsDisplayed()
         composeRule.onNodeWithText("Read / Listen").assertIsEnabled()
         composeRule.onNodeWithText("Download").assertIsEnabled()
-        composeRule.onNodeWithText("Sign out").assertIsEnabled()
     }
 
     @Test
@@ -141,7 +147,7 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Refresh").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("Open navigation").performClick()
         composeRule.onNodeWithText("Main").assertIsNotEnabled()
         composeRule.onNodeWithText("Loading books...").assertIsDisplayed()
     }

@@ -37,6 +37,7 @@ import java.nio.file.AccessDeniedException
 import java.nio.file.FileSystemException
 import java.nio.file.NoSuchFileException
 import java.text.DecimalFormat
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
@@ -780,6 +781,9 @@ internal object BookOrbitPayloadParser {
                 )
                 val bookId = obj.stringValue("id", "_id", "bookId") ?: "book-$index"
                 val readingProgress = obj.optJSONObject("readingProgress")
+                val series = obj.optJSONObject("series")
+                    ?: obj.optJSONArray("series")?.optJSONObject(0)
+                val progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent())
                 add(
                     BookSummary(
                         libraryId = libraryId,
@@ -794,9 +798,24 @@ internal object BookOrbitPayloadParser {
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
                         localPath = fileId?.let { downloads[it]?.localPath },
                         progressLabel = readingProgress.progressLabel(),
-                        progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent()),
+                        progressPercent = progressPercent,
                         progressPositionMs = readingProgress.progressPositionMs(),
-                        progressPageIndex = readingProgress.progressPageIndex()
+                        progressPageIndex = readingProgress.progressPageIndex(),
+                        seriesId = series?.stringValue("id", "_id", "seriesId")
+                            ?: obj.stringValue("seriesId", "series_id"),
+                        seriesName = series?.stringValue("name", "title")
+                            ?: obj.stringValue("seriesName", "series_name")
+                            ?: obj.optString("series").takeIf { it.isNotBlank() },
+                        seriesIndex = obj.numberValue("seriesIndex", "seriesNumber", "sequence")
+                            ?: series?.numberValue("index", "number", "position"),
+                        isRead = progressPercent?.let { it >= 99.5f } == true ||
+                            readingProgress.booleanValue("completed", "isRead", "read") ||
+                            obj.booleanValue("isRead", "read"),
+                        addedAtMillis = obj.timestampValue("createdAt", "addedAt", "dateAdded"),
+                        updatedAtMillis = obj.timestampValue("updatedAt", "modifiedAt", "dateModified"),
+                        lastReadAtMillis = readingProgress.timestampValue(
+                            "updatedAt", "lastReadAt", "finishedAt", "completedAt"
+                        ) ?: obj.timestampValue("lastReadAt", "lastReadDate")
                     )
                 )
             }
@@ -885,7 +904,8 @@ internal object BookOrbitPayloadParser {
         return null
     }
 
-    private fun JSONObject.booleanValue(vararg keys: String): Boolean {
+    private fun JSONObject?.booleanValue(vararg keys: String): Boolean {
+        this ?: return false
         keys.forEach { key ->
             when (val value = opt(key)) {
                 is Boolean -> return value
@@ -899,6 +919,32 @@ internal object BookOrbitPayloadParser {
             }
         }
         return false
+    }
+
+    private fun JSONObject.numberValue(vararg keys: String): Double? {
+        keys.forEach { key ->
+            when (val value = opt(key)) {
+                is Number -> return value.toDouble()
+                is String -> value.toDoubleOrNull()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun JSONObject?.timestampValue(vararg keys: String): Long? {
+        this ?: return null
+        keys.forEach { key ->
+            val parsed = when (val value = opt(key)) {
+                is Number -> value.toLong()
+                is String -> value.toLongOrNull()
+                    ?: runCatching { Instant.parse(value).toEpochMilli() }.getOrNull()
+                else -> null
+            }
+            if (parsed != null) {
+                return if (parsed in 1..9_999_999_999L) parsed * 1000L else parsed
+            }
+        }
+        return null
     }
 
     private fun JSONObject.authorDisplayName(): String? {

@@ -96,7 +96,7 @@ fun BookOrbitApp(
             onChangeServer = coordinator::clearServer,
             onAuthenticated = coordinator::refreshLoginState
         )
-        is AppScreen.Browser -> LibraryBrowserScreen(
+        is AppScreen.Browser -> NativeLibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::loadBrowser,
             onSessionAction = coordinator::onBrowserSessionAction,

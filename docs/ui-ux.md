@@ -32,6 +32,8 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 - Add intentional empty, loading, offline, and failure presentations.
 - Keep actions usable with long titles, large font scales, and narrow phone widths.
 
+Implementation candidate: the post-login screen now opens on a native Home feed with a hamburger drawer and integrated search. The drawer contains Home, Libraries, library children, and sign-in/log-out. Home supports Keep Reading, On Deck, Recently Added Books, Recently Added Series, Recently Updated Series, and Recently Read Books when the loaded BookOrbit payload contains the required progress, series, and timestamp metadata. Search and shelves are currently scoped to the selected library page returned by BookOrbit.
+
 ### Checkpoint 4: EPUB reader - ready with current sample content
 
 - Refine reading chrome, chapter navigation, theme controls, typography controls, and distraction-free states.

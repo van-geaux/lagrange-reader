@@ -41,9 +41,12 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 ### 2. Library Browsing
 
-1. Refresh the library browser.
-2. Switch between at least two libraries if available.
-3. Confirm loading, empty, and error states behave sensibly.
+1. Confirm the post-login screen opens on Home with the menu button and search field visible.
+2. Open the drawer and confirm Home, Libraries, each available library, and Log out are present.
+3. Select a library child and confirm its book list loads.
+4. Return Home and confirm shelves only appear when they contain matching books.
+5. Search by book title, author, and series name, then clear the query to return to Home.
+6. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 

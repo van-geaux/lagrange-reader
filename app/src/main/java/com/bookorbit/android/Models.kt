@@ -31,7 +31,14 @@ data class BookSummary(
     val progressLabel: String? = null,
     val progressPercent: Float? = null,
     val progressPositionMs: Long? = null,
-    val progressPageIndex: Int? = null
+    val progressPageIndex: Int? = null,
+    val seriesId: String? = null,
+    val seriesName: String? = null,
+    val seriesIndex: Double? = null,
+    val isRead: Boolean = false,
+    val addedAtMillis: Long? = null,
+    val updatedAtMillis: Long? = null,
+    val lastReadAtMillis: Long? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
 }
