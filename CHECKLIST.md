@@ -201,6 +201,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Reach a stable functional baseline for UI/UX work
 - [x] Mark UI/UX discussion as ready to begin
+- [x] Implement the first design-system candidate for review
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: refine library selection, book cards, and browser states

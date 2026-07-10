@@ -119,3 +119,5 @@ Validated against the live server and BookOrbit source:
 ## UI/UX phase boundary
 
 The functional architecture is stable enough for UI/UX changes to begin. Theme tokens and shared shell components should be established before screen-specific restyling, followed by setup/login, library browsing, and the EPUB reader. Format-specific audiobook, PDF, and CBZ adjustments remain deferred until representative files are available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
+
+The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.

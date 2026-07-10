@@ -18,6 +18,8 @@ The functional prototype is stable enough for UI/UX work to begin. EPUB is the c
 - Confirm the information hierarchy and navigation model for setup, login, library browsing, and reading.
 - Coding can begin with theme tokens and shared app-shell components once the direction is agreed.
 
+Implementation candidate: an editorial-observatory direction is now coded for review, using navy ink, warm paper surfaces, amber accents, serif display typography, restrained rounded geometry, and shared top-bar/status components. Setup, login, and browser surfaces use the candidate without changing flow behavior. Checkpoint 1 remains open until the direction is reviewed on device.
+
 ### Checkpoint 2: Setup, login, and app shell - ready after Checkpoint 1
 
 - Refine server setup guidance, validation feedback, and retry states.

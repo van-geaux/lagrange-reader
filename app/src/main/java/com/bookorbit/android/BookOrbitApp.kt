@@ -24,12 +24,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -157,52 +161,72 @@ private fun ServerSetupScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("BookOrbit") }) }
+        topBar = { BookOrbitTopBar(title = "Connect") },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
-                .padding(24.dp)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentAlignment = Alignment.TopCenter
         ) {
-            Text("Connect to a BookOrbit server", style = MaterialTheme.typography.headlineSmall)
-            Text("Enter the base URL. The app will open the server sign-in page next.")
-            if (!message.isNullOrBlank()) {
-                Text(message, color = MaterialTheme.colorScheme.error)
-            }
-            OutlinedTextField(
-                value = server,
-                onValueChange = {
-                    server = it
-                    error = null
-                },
+            Column(
                 modifier = Modifier
+                    .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .semantics { contentDescription = "BookOrbit server URL" },
-                label = { Text("Server URL") },
-                placeholder = { Text("https://books.example.com") }
-            )
-            error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
-            Button(
-                onClick = {
-                    val normalized = normalizeServerUrl(server)
-                    if (normalized == null) {
-                        error = invalidServerUrlMessage()
-                    } else {
-                        onContinue(normalized)
-                    }
-                }
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Continue")
-            }
-            if (server.isNotBlank() && !message.isNullOrBlank()) {
-                OutlinedButton(
-                    onClick = { onContinue(server) }
+                OrbitEyebrow("Private reader")
+                Text("Your library, in orbit.", style = MaterialTheme.typography.displaySmall)
+                Text(
+                    "Connect securely to your BookOrbit server. Your library stays on your server; this app is your reading window.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                if (!message.isNullOrBlank()) {
+                    OrbitMessage(message, tone = OrbitMessageTone.ERROR)
+                }
+                OutlinedTextField(
+                    value = server,
+                    onValueChange = {
+                        server = it
+                        error = null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "BookOrbit server URL" },
+                    label = { Text("Server URL") },
+                    placeholder = { Text("https://books.example.com") },
+                    singleLine = true
+                )
+                error?.let {
+                    OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                }
+                Button(
+                    onClick = {
+                        val normalized = normalizeServerUrl(server)
+                        if (normalized == null) {
+                            error = invalidServerUrlMessage()
+                        } else {
+                            onContinue(normalized)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
                 ) {
-                    Text("Retry")
+                    Text("Continue")
+                }
+                if (server.isNotBlank() && !message.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = { onContinue(server) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Text("Retry")
+                    }
                 }
             }
         }
@@ -226,43 +250,50 @@ private fun LoginScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Sign in") },
+            BookOrbitTopBar(
+                title = "Sign in",
                 actions = { TextButton(onClick = onChangeServer) { Text("Change server") } }
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
+                .padding(horizontal = 12.dp, vertical = 12.dp)
                 .fillMaxSize()
         ) {
             if (!message.isNullOrBlank()) {
-                Text(
+                OrbitMessage(
                     text = message,
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
             }
-            AndroidView(
+            Surface(
                 modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.allowFileAccess = true
-                        settings.allowContentAccess = true
-                        webChromeClient = WebChromeClient()
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                super.onPageFinished(view, url)
-                                onAuthenticated()
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 1.dp
+            ) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccess = true
+                            settings.allowContentAccess = true
+                            webChromeClient = WebChromeClient()
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    onAuthenticated()
+                                }
                             }
+                            loadUrl(serverUrl)
                         }
-                        loadUrl(serverUrl)
                     }
-                }
-            )
+                )
+            }
         }
     }
 }
@@ -283,8 +314,8 @@ private fun LibraryBrowserScreen(
     val isDebugBuild = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Libraries") },
+            BookOrbitTopBar(
+                title = "Libraries",
                 actions = {
                     if (state.isRefreshing) {
                         CircularProgressIndicator(
@@ -305,7 +336,8 @@ private fun LibraryBrowserScreen(
                     }
                 }
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -315,11 +347,8 @@ private fun LibraryBrowserScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text(
-                    text = state.serverUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
+                OrbitEyebrow("Connected server")
+                Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
             }
             if (isDebugBuild) {
                 item {
@@ -332,10 +361,13 @@ private fun LibraryBrowserScreen(
             }
             state.message?.let { message ->
                 item {
-                    Text(
+                    OrbitMessage(
                         text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
+                        tone = if (state.isOfflineSnapshot) {
+                            OrbitMessageTone.OFFLINE
+                        } else {
+                            OrbitMessageTone.ERROR
+                        }
                     )
                 }
             }
@@ -383,7 +415,11 @@ private fun LibraryBrowserScreen(
                 val isDownloading = fileId != null && state.downloadingFileIds.contains(fileId)
                 val downloadFailed = fileId != null && state.failedDownloadFileIds.contains(fileId)
                 val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)

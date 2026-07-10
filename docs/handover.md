@@ -90,6 +90,8 @@ Last updated: 2026-07-10
 
 - UI/UX discussion can begin now; the functional baseline is no longer a blocker.
 - Checkpoint 1 is product direction and shared design-system tokens.
+- An editorial-observatory design-system candidate is implemented with explicit light/dark palettes, typography, shapes, shared top bars, and shared status surfaces.
+- Setup, login, and browser screens use the candidate; it still needs on-device visual review before Checkpoint 1 is marked complete.
 - Checkpoints 2-4 cover setup/login/app shell, library browsing, and the EPUB reader.
 - Audiobook, PDF, and CBZ-specific UI work remains deferred until representative samples are available.
 - Detailed checkpoints and regression guardrails are in [ui-ux.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/ui-ux.md).
