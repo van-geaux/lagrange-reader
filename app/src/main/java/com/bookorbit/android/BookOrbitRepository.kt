@@ -1,6 +1,8 @@
 package com.bookorbit.android
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.util.Log
 import android.webkit.CookieManager
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -54,10 +56,15 @@ interface BookOrbitDataSource {
     suspend fun getSelectedLibraryId(): String?
     suspend fun setSelectedLibraryId(libraryId: String)
     suspend fun getSessionState(): SessionState
+    suspend fun login(username: String, password: String)
     suspend fun loadLibraries(): List<LibrarySummary>
     suspend fun loadBooks(libraryId: String): List<BookSummary>
+    suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
+    suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
+    suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
     suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
+    suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
@@ -78,6 +85,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
+    private val catalogSnapshotStore = CatalogSnapshotStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val coverCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
@@ -128,6 +136,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    override suspend fun login(username: String, password: String) = withContext(Dispatchers.IO) {
+        if (username.isBlank() || password.isBlank()) {
+            throw InvalidCredentialsException()
+        }
+        val body = JSONObject()
+            .put("username", username)
+            .put("password", password)
+            .toString()
+            .toRequestBody(JSON)
+        requestLogin(body)
+    }
+
     override suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
         BookOrbitPayloadParser.parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
             browserSnapshotStore.saveLibraries(
@@ -154,6 +174,64 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 libraryId = libraryId,
                 books = books
             )
+        }
+    }
+
+    override suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val serverBase = serverBase()
+        val path = catalogPath("/api/v1/series", query, page, "name")
+        try {
+            val payload = request(path, "GET", null)
+            catalogSnapshotStore.saveSeries(serverUrl, query, page, payload)
+            BookOrbitPayloadParser.parseSeriesCatalogPage(payload, serverBase)
+        } catch (error: Throwable) {
+            if (error is AuthenticationRequiredException) throw error
+            catalogSnapshotStore.readSeries(serverUrl, query, page)?.let { cached ->
+                return@withContext BookOrbitPayloadParser.parseSeriesCatalogPage(cached, serverBase)
+            }
+            throw error
+        }
+    }
+
+    override suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val serverBase = serverBase()
+        val path = catalogPath("/api/v1/authors", query, page, "name")
+        try {
+            val payload = request(path, "GET", null)
+            catalogSnapshotStore.saveAuthors(serverUrl, query, page, payload)
+            BookOrbitPayloadParser.parseAuthorCatalogPage(payload, serverBase)
+        } catch (error: Throwable) {
+            if (error is AuthenticationRequiredException) throw error
+            catalogSnapshotStore.readAuthors(serverUrl, query, page)?.let { cached ->
+                return@withContext BookOrbitPayloadParser.parseAuthorCatalogPage(cached, serverBase)
+            }
+            throw error
+        }
+    }
+
+    override suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val serverBase = serverBase()
+        val encodedAuthorId = java.net.URLEncoder.encode(authorId, Charsets.UTF_8.name())
+        val path = catalogPath("/api/v1/authors/$encodedAuthorId/books", null, page, "title")
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        try {
+            val payload = request(path, "GET", null)
+            catalogSnapshotStore.saveAuthorBooks(serverUrl, authorId, page, payload)
+            BookOrbitPayloadParser.parseAuthorBooksPage(authorId, payload, downloads, serverBase)
+        } catch (error: Throwable) {
+            if (error is AuthenticationRequiredException) throw error
+            catalogSnapshotStore.readAuthorBooks(serverUrl, authorId, page)?.let { cached ->
+                return@withContext BookOrbitPayloadParser.parseAuthorBooksPage(
+                    authorId,
+                    cached,
+                    downloads,
+                    serverBase
+                )
+            }
+            throw error
         }
     }
 
@@ -190,6 +268,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         bytes
     }
 
+    override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        requestBytes(url)
+    }
+
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         BookOrbitPayloadParser.parseBookDetail(
@@ -203,11 +285,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        var page = 0
-        var detail: SeriesDetailInfo? = null
-        val books = mutableListOf<BookSummary>()
-        do {
-            val pageDetail = BookOrbitPayloadParser.parseSeriesDetail(
+        val pages = loadCompleteSeriesPages { page ->
+            BookOrbitPayloadParser.parseSeriesBooksPage(
                 seriesId = seriesId,
                 payload = request(
                     "/api/v1/series/$seriesId/books?page=$page&size=100&sort=seriesIndex&order=asc",
@@ -217,15 +296,21 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 downloads = downloads,
                 serverBase = serverBase()
             )
-            if (detail == null) detail = pageDetail
-            books += pageDetail.books
-            page++
-        } while (pageDetail.books.isNotEmpty() && books.size < pageDetail.bookCount)
-
-        val completeDetail = requireNotNull(detail).copy(
-            books = books
-                .distinctBy { it.id }
-                .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
+        }
+        val firstPage = requireNotNull(pages.firstOrNull())
+        val responseTotal = pages.mapNotNull { it.total }.maxOrNull()
+        val metadataBookCount = firstPage.seriesInfo.metadataBookCount
+        val isDebuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (isDebuggable && responseTotal != null && metadataBookCount != null && responseTotal != metadataBookCount) {
+            Log.d(
+                "BookOrbit",
+                "Series $seriesId reports total=$responseTotal but seriesInfo.bookCount=$metadataBookCount"
+            )
+        }
+        val completeDetail = firstPage.seriesInfo.copy(
+            bookCount = responseTotal ?: firstPage.seriesInfo.bookCount,
+            responseTotal = responseTotal ?: firstPage.seriesInfo.responseTotal,
+            books = mergeSeriesBooks(pages)
         )
         completeDetail.copy(
             firstBook = completeDetail.books.firstOrNull()?.let { first ->
@@ -695,6 +780,28 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     private fun serverBase(): String = runBlocking { getServerUrl() }.orEmpty()
 
+    private fun catalogPath(
+        path: String,
+        query: String?,
+        page: Int,
+        sort: String
+    ): String {
+        val encodedQuery = query?.trim()?.takeIf { it.isNotBlank() }
+            ?.let { java.net.URLEncoder.encode(it, Charsets.UTF_8.name()) }
+        return buildString {
+            append(path)
+            append("?page=")
+            append(page.coerceAtLeast(0))
+            append("&size=100&sort=")
+            append(sort)
+            append("&order=asc")
+            if (encodedQuery != null) {
+                append("&search=")
+                append(encodedQuery)
+            }
+        }
+    }
+
     private fun request(path: String, method: String, body: RequestBody?): String {
         val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
         val request = Request.Builder()
@@ -714,6 +821,24 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 )
             }
             return response.body?.string().orEmpty()
+        }
+    }
+
+    private fun requestLogin(body: RequestBody) {
+        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val request = Request.Builder()
+            .url(base.trimEnd('/') + "/api/v1/auth/login")
+            .post(body)
+            .header("Accept", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            when {
+                response.code == 401 || response.code == 403 -> throw InvalidCredentialsException()
+                response.code == 429 -> throw LoginRateLimitedException()
+                !response.isSuccessful -> throw HttpRequestException(response.code, "sign in")
+                else -> Unit
+            }
         }
     }
 
@@ -826,6 +951,9 @@ enum class ServerCheckResult {
 
 class AuthenticationRequiredException : IllegalStateException("Authentication required.")
 class UserFacingException(message: String) : IllegalStateException(message)
+class InvalidCredentialsException : IOException("Invalid credentials.")
+class LoginRateLimitedException : IOException("Login rate limited.")
+class LoginVerificationException : IOException("The server did not confirm the new session.")
 class HttpRequestException(
     val code: Int,
     val action: String
@@ -989,7 +1117,19 @@ internal object BookOrbitPayloadParser {
         payload: String,
         downloads: Map<String, DownloadRecord>,
         serverBase: String
-    ): SeriesDetailInfo {
+    ): SeriesDetailInfo = parseSeriesBooksPage(
+        seriesId = seriesId,
+        payload = payload,
+        downloads = downloads,
+        serverBase = serverBase
+    ).seriesInfo
+
+    fun parseSeriesBooksPage(
+        seriesId: String,
+        payload: String,
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
+    ): SeriesBooksPage {
         val root = extractObject(payload, "load series details")
         val books = parseBooks(
             libraryId = "",
@@ -998,14 +1138,128 @@ internal object BookOrbitPayloadParser {
             serverBase = serverBase
         ).sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
         val info = root.optJSONObject("seriesInfo") ?: JSONObject()
-        return SeriesDetailInfo(
+        val responseTotal = root.numberValue("total")?.toInt()?.takeIf { it >= 0 }
+        val metadataBookCount = info.numberValue("bookCount")?.toInt()?.takeIf { it >= 0 }
+        val seriesInfo = SeriesDetailInfo(
             id = info.stringValue("id") ?: seriesId,
             name = info.stringValue("name", "title") ?: books.firstOrNull()?.seriesName ?: "Series",
-            bookCount = info.numberValue("bookCount")?.toInt() ?: books.size,
+            bookCount = responseTotal ?: metadataBookCount ?: books.size,
             readCount = info.numberValue("readCount")?.toInt() ?: books.count { it.isRead },
             authors = info.stringList("authors"),
             possibleGaps = info.numberList("possibleGaps"),
-            books = books
+            books = books,
+            responseTotal = responseTotal,
+            metadataBookCount = metadataBookCount
+        )
+        return SeriesBooksPage(
+            books = books,
+            total = responseTotal,
+            page = root.numberValue("page")?.toInt(),
+            size = root.numberValue("size")?.toInt(),
+            seriesInfo = seriesInfo
+        )
+    }
+
+    fun parseSeriesCatalogPage(
+        payload: String,
+        serverBase: String
+    ): SeriesCatalogPage {
+        val root = extractObject(payload, "load series")
+        val array = root.catalogArray("items", "series", "results")
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val info = item.optJSONObject("seriesInfo") ?: item
+                val id = info.stringValue("id", "_id", "seriesId") ?: "series-$index"
+                add(
+                    SeriesSummary(
+                        id = id,
+                        name = info.stringValue("name", "title", "displayName") ?: "Series ${index + 1}",
+                        authors = info.stringList("authors").ifEmpty {
+                            info.authorDisplayName()?.split(",")?.map(String::trim).orEmpty()
+                        },
+                        bookCount = info.numberValue("bookCount", "totalBooks", "booksCount")?.toInt() ?: 0,
+                        readCount = info.numberValue("readCount", "booksRead")?.toInt() ?: 0,
+                        coverUrl = info.resolveCatalogImageUrl(
+                            serverBase = serverBase,
+                            fallbackPath = "/api/v1/series/$id/cover",
+                            keys = arrayOf("coverUrl", "cover", "coverImage")
+                        )
+                    )
+                )
+            }
+        }
+        return SeriesCatalogPage(
+            items = items,
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            size = root.numberValue("size")?.toInt()
+        )
+    }
+
+    fun parseAuthorCatalogPage(
+        payload: String,
+        serverBase: String
+    ): AuthorCatalogPage {
+        val root = extractObject(payload, "load authors")
+        val array = root.catalogArray("items", "authors", "results")
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.stringValue("id", "_id", "authorId") ?: "author-$index"
+                add(
+                    AuthorSummary(
+                        id = id,
+                        name = item.stringValue("name", "displayName", "fullName", "title") ?: "Author ${index + 1}",
+                        bookCount = item.numberValue("bookCount", "booksCount", "totalBooks")?.toInt() ?: 0,
+                        photoUrl = item.resolveCatalogImageUrl(
+                            serverBase = serverBase,
+                            fallbackPath = "/api/v1/authors/$id/photo",
+                            keys = arrayOf("photoUrl", "photo", "avatarUrl", "avatar", "imageUrl")
+                        )
+                    )
+                )
+            }
+        }
+        return AuthorCatalogPage(
+            items = items,
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            size = root.numberValue("size")?.toInt()
+        )
+    }
+
+    fun parseAuthorBooksPage(
+        authorId: String,
+        payload: String,
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
+    ): AuthorBooksPage {
+        val root = extractObject(payload, "load author books")
+        val authorObject = root.optJSONObject("author") ?: root.optJSONObject("authorInfo") ?: JSONObject()
+        val author = AuthorSummary(
+            id = authorObject.stringValue("id", "_id", "authorId") ?: authorId,
+            name = authorObject.stringValue("name", "displayName", "fullName", "title") ?: "Author",
+            bookCount = authorObject.numberValue("bookCount", "booksCount", "totalBooks")?.toInt()
+                ?: root.numberValue("total")?.toInt()
+                ?: 0,
+            photoUrl = authorObject.resolveCatalogImageUrl(
+                serverBase = serverBase,
+                fallbackPath = "/api/v1/authors/$authorId/photo",
+                keys = arrayOf("photoUrl", "photo", "avatarUrl", "avatar", "imageUrl")
+            )
+        )
+        return AuthorBooksPage(
+            author = author,
+            items = parseBooks(
+                libraryId = "",
+                payload = root.toString(),
+                downloads = downloads,
+                serverBase = serverBase
+            ),
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            size = root.numberValue("size")?.toInt()
         )
     }
 
@@ -1046,6 +1300,13 @@ internal object BookOrbitPayloadParser {
         }.getOrElse {
             throw UserFacingException("The server returned malformed data while trying to $action.")
         }
+    }
+
+    private fun JSONObject.catalogArray(vararg keys: String): JSONArray {
+        return keys.asSequence()
+            .mapNotNull { key -> optJSONArray(key) }
+            .firstOrNull()
+            ?: JSONArray()
     }
 
     private fun JSONObject?.progressLabel(): String? {
@@ -1241,6 +1502,31 @@ internal object BookOrbitPayloadParser {
         }
     }
 
+    private fun JSONObject.resolveCatalogImageUrl(
+        serverBase: String,
+        fallbackPath: String,
+        keys: Array<String>
+    ): String? {
+        val explicit = keys.asSequence()
+            .mapNotNull { key ->
+                when (val value = opt(key)) {
+                    is String -> value.takeIf { it.isNotBlank() }
+                    is JSONObject -> value.stringValue("url", "href", "path")
+                    else -> null
+                }
+            }
+            .firstOrNull()
+        if (!explicit.isNullOrBlank()) {
+            return if (explicit.startsWith("http://", ignoreCase = true) || explicit.startsWith("https://", ignoreCase = true)) {
+                explicit
+            } else {
+                "$serverBase/${explicit.trimStart('/')}"
+            }
+        }
+        val hasImageMetadata = keys.any { key -> has(key) && !isNull(key) }
+        return if (hasImageMetadata) "$serverBase$fallbackPath" else null
+    }
+
     private fun JSONArray?.selectPrimaryFile(): JSONObject? {
         this ?: return null
         for (index in 0 until length()) {
@@ -1291,6 +1577,46 @@ internal object BookOrbitPayloadParser {
 
 internal fun normalizeStoredServerUrl(serverUrl: String): String {
     return serverUrl.trim().trimEnd('/')
+}
+
+internal suspend fun loadCompleteSeriesPages(
+    loadPage: suspend (Int) -> SeriesBooksPage
+): List<SeriesBooksPage> {
+    val pages = mutableListOf<SeriesBooksPage>()
+    val accumulatedIds = linkedSetOf<String>()
+    var targetTotal: Int? = null
+    var fallbackTotal: Int? = null
+    var pageNumber = 0
+
+    while (true) {
+        val page = loadPage(pageNumber)
+        pages += page
+        targetTotal = targetTotal ?: page.total?.takeIf { it >= 0 }
+        fallbackTotal = fallbackTotal ?: page.seriesInfo.metadataBookCount ?: page.seriesInfo.bookCount
+
+        val idsBeforePage = accumulatedIds.size
+        page.books.forEach { book -> accumulatedIds += book.id }
+        val addedIds = accumulatedIds.size - idsBeforePage
+
+        if (page.books.isEmpty() || addedIds == 0) {
+            break
+        }
+
+        val expectedTotal = targetTotal ?: fallbackTotal
+        if (accumulatedIds.size >= expectedTotal) {
+            break
+        }
+        pageNumber += 1
+    }
+
+    return pages
+}
+
+internal fun mergeSeriesBooks(pages: List<SeriesBooksPage>): List<BookSummary> {
+    return pages
+        .flatMap { it.books }
+        .distinctBy { it.id }
+        .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
 }
 
 internal fun coverThumbnailUrl(coverUrl: String): String {

@@ -348,6 +348,88 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `submit login verifies the session and resumes the browser`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.submitLogin("reader", "secret")
+        advanceUntilIdle()
+
+        assertEquals(listOf("reader" to "secret"), repository.loginCalls)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(library), browser.browserState.libraries)
+        assertEquals(listOf(book), browser.browserState.books)
+        assertTrue(repository.sessionStateRequested)
+    }
+
+    @Test
+    fun `submit login keeps credentials failure on login`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            loginError = InvalidCredentialsException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.submitLogin("reader", "wrong")
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertTrue(login.message.orEmpty().contains("username or password"))
+        assertFalse(login.isSubmitting)
+    }
+
+    @Test
+    fun `preview starts at the beginning and does not persist reader state or progress`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            buildReaderResult = ReaderState(
+                book = book,
+                lastKnownPosition = 84_000L,
+                pageIndex = 8,
+                progressPercent = 42f
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.previewBook(book)
+        advanceUntilIdle()
+
+        val preview = coordinator.screen.value as AppScreen.Reader
+        assertEquals(ReaderLaunchMode.PREVIEW, preview.readerState.launchMode)
+        assertEquals(0L, preview.readerState.lastKnownPosition)
+        assertEquals(0, preview.readerState.pageIndex)
+        assertNull(preview.readerState.progressPercent)
+        assertTrue(repository.savedActiveReaders.isEmpty())
+
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+        advanceUntilIdle()
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        assertTrue(repository.savedActiveReaders.isEmpty())
+        assertTrue(repository.queuedProgress.isEmpty())
+        assertEquals(0, repository.clearActiveReaderCalls)
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -406,6 +488,7 @@ private class FakeBookOrbitDataSource(
     var loadBooksResult: List<BookSummary> = emptyList(),
     var loadLibrariesError: Throwable? = null,
     var loadBooksError: Throwable? = null,
+    var loginError: Throwable? = null,
     var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
     var pendingProgressCountResult: Int = 0,
     var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success
@@ -414,9 +497,12 @@ private class FakeBookOrbitDataSource(
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
+    val queuedProgress = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
+    var clearActiveReaderCalls = 0
     var sessionStateRequested = false
     var selectedLibraryId: String? = null
+    val loginCalls = mutableListOf<Pair<String, String>>()
 
     override suspend fun getServerUrl(): String? = serverUrl
 
@@ -444,6 +530,12 @@ private class FakeBookOrbitDataSource(
         return sessionState
     }
 
+    override suspend fun login(username: String, password: String) {
+        loginCalls += username to password
+        loginError?.let { throw it }
+        sessionState = SessionState.Authenticated
+    }
+
     override suspend fun loadLibraries(): List<LibrarySummary> {
         loadLibrariesError?.let { throw it }
         return loadLibrariesResult
@@ -466,7 +558,9 @@ private class FakeBookOrbitDataSource(
         savedActiveReaders += book
     }
 
-    override suspend fun clearActiveReader() = Unit
+    override suspend fun clearActiveReader() {
+        clearActiveReaderCalls += 1
+    }
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? {
         restoreActiveReaderCalls += localOnly
@@ -481,7 +575,9 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun deleteLocalCopy(book: BookSummary) = Unit
 
-    override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = Unit
+    override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        queuedProgress += book
+    }
 
     override suspend fun pendingProgressCount(): Int = pendingProgressCountResult
 

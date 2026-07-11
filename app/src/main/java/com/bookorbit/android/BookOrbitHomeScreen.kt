@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -56,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,7 +87,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private enum class BrowserDestination { HOME, LIBRARY }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, OPTIONS }
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -101,7 +106,12 @@ internal fun NativeLibraryBrowserScreen(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
+    seriesCatalogLoader: suspend (String?, Int) -> SeriesCatalogPage,
+    authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
+    authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
+    catalogImageLoader: suspend (String) -> ByteArray?,
     onBookOpen: (BookSummary) -> Unit,
+    onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -112,6 +122,7 @@ internal fun NativeLibraryBrowserScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
     var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
+    var selectedAuthor by remember { mutableStateOf<AuthorSummary?>(null) }
     var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
     val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
         value = null
@@ -122,9 +133,12 @@ internal fun NativeLibraryBrowserScreen(
     }
     val filteredBooks = remoteSearchResults.orEmpty()
 
-    BackHandler(enabled = selectedBook != null || selectedSeriesKey != null) {
+    BackHandler(enabled = selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
         if (selectedBook != null) {
             selectedBook = null
+        } else if (selectedAuthor != null) {
+            selectedAuthor = null
+            destination = BrowserDestination.AUTHORS
         } else {
             selectedSeriesKey = null
             destination = detailReturnDestination
@@ -140,17 +154,44 @@ internal fun NativeLibraryBrowserScreen(
                 onHome = {
                     destination = BrowserDestination.HOME
                     query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
                     scope.launch { drawerState.close() }
                 },
                 onLibraries = {
                     destination = BrowserDestination.LIBRARY
                     query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
                     scope.launch { drawerState.close() }
                 },
                 onLibrarySelected = { libraryId ->
                     destination = BrowserDestination.LIBRARY
                     query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
                     onLibrarySelected(libraryId)
+                    scope.launch { drawerState.close() }
+                },
+                onSeries = {
+                    destination = BrowserDestination.SERIES
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
+                    scope.launch { drawerState.close() }
+                },
+                onAuthors = {
+                    destination = BrowserDestination.AUTHORS
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
+                    scope.launch { drawerState.close() }
+                },
+                onOptions = {
+                    destination = BrowserDestination.OPTIONS
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
                     scope.launch { drawerState.close() }
                 },
                 onSignIn = {
@@ -175,6 +216,29 @@ internal fun NativeLibraryBrowserScreen(
                         title = "Series",
                         navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text("Back") } }
                     )
+                    selectedAuthor != null -> BookOrbitTopBar(
+                        title = "Author",
+                        navigationIcon = { TextButton(onClick = { selectedAuthor = null; destination = BrowserDestination.AUTHORS }) { Text("Back") } }
+                    )
+                    destination == BrowserDestination.SERIES -> CatalogHeader(
+                        title = "Series",
+                        query = query,
+                        onQueryChange = { query = it },
+                        onMenu = { scope.launch { drawerState.open() } }
+                    )
+                    destination == BrowserDestination.AUTHORS -> CatalogHeader(
+                        title = "Authors",
+                        query = query,
+                        onQueryChange = { query = it },
+                        onMenu = { scope.launch { drawerState.open() } }
+                    )
+                    destination == BrowserDestination.OPTIONS -> CatalogHeader(
+                        title = "Options",
+                        query = "",
+                        onQueryChange = {},
+                        onMenu = { scope.launch { drawerState.open() } },
+                        showSearch = false
+                    )
                     else -> BrowserSearchBar(
                         query = query,
                         isRefreshing = state.isRefreshing,
@@ -194,6 +258,7 @@ internal fun NativeLibraryBrowserScreen(
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
                     onRead = onBookOpen,
+                    onPreview = onPreview,
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = onDeleteLocalCopy
@@ -206,7 +271,34 @@ internal fun NativeLibraryBrowserScreen(
                     detailLoader = seriesDetailLoader,
                     onBookSelected = { selectedBook = it }
                 )
-                query.isNotBlank() -> SearchResults(
+                selectedAuthor != null -> AuthorDetails(
+                    author = selectedAuthor!!,
+                    modifier = Modifier.padding(padding),
+                    booksLoader = authorBooksLoader,
+                    coverLoader = coverLoader,
+                    onBookSelected = { selectedBook = it }
+                )
+                destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
+                    query = query,
+                    modifier = Modifier.padding(padding),
+                    loader = seriesCatalogLoader,
+                    imageLoader = catalogImageLoader,
+                    onSeriesSelected = { series ->
+                        selectedSeriesKey = series.id
+                        detailReturnDestination = BrowserDestination.SERIES
+                    }
+                )
+                destination == BrowserDestination.AUTHORS -> AuthorsCatalogScreen(
+                    query = query,
+                    modifier = Modifier.padding(padding),
+                    loader = authorsCatalogLoader,
+                    imageLoader = catalogImageLoader,
+                    onAuthorSelected = { author -> selectedAuthor = author }
+                )
+                destination == BrowserDestination.OPTIONS -> OptionsScreen(
+                    modifier = Modifier.padding(padding)
+                )
+                (destination == BrowserDestination.HOME || destination == BrowserDestination.LIBRARY) && query.isNotBlank() -> SearchResults(
                     books = filteredBooks,
                     state = state,
                     modifier = Modifier.padding(padding),
@@ -290,12 +382,328 @@ private fun BrowserSearchBar(
 }
 
 @Composable
+private fun CatalogHeader(
+    title: String,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onMenu: () -> Unit,
+    showSearch: Boolean = true
+) {
+    Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Default.Menu, contentDescription = "Open navigation")
+            }
+            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+        }
+        if (showSearch) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                placeholder = { Text("Search $title") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                shape = MaterialTheme.shapes.extraLarge
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeriesCatalogScreen(
+    query: String,
+    modifier: Modifier,
+    loader: suspend (String?, Int) -> SeriesCatalogPage,
+    imageLoader: suspend (String) -> ByteArray?,
+    onSeriesSelected: (SeriesSummary) -> Unit
+) {
+    var items by remember(query) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var total by remember(query) { mutableStateOf(0) }
+    var nextPage by remember(query) { mutableStateOf(1) }
+    var isLoading by remember(query) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(query) {
+        isLoading = true
+        if (query.isNotBlank()) delay(300)
+        val page = loader(query.takeIf { it.isNotBlank() }, 0)
+        items = page.items
+        total = page.total ?: page.items.size
+        nextPage = 1
+        isLoading = false
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("Series", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (total > 0) "$total series" else "Browse every accessible series",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading series...") }
+        if (!isLoading && items.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("No series found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        gridItems(items, key = { "catalog-series-${it.id}" }) { series ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSeriesSelected(series) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CatalogImage(
+                        url = series.coverUrl,
+                        label = "Cover for ${series.name}",
+                        loader = imageLoader,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                    )
+                    Text(series.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (series.authors.isNotEmpty()) {
+                        Text(series.authors.joinToString(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        "${series.bookCount} books · ${series.readCount} read",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        if (!isLoading && items.size < total) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            isLoading = true
+                            val page = loader(query.takeIf { it.isNotBlank() }, nextPage)
+                            items = (items + page.items).distinctBy { it.id }
+                            total = page.total ?: total
+                            nextPage += 1
+                            isLoading = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Load more") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthorsCatalogScreen(
+    query: String,
+    modifier: Modifier,
+    loader: suspend (String?, Int) -> AuthorCatalogPage,
+    imageLoader: suspend (String) -> ByteArray?,
+    onAuthorSelected: (AuthorSummary) -> Unit
+) {
+    var items by remember(query) { mutableStateOf<List<AuthorSummary>>(emptyList()) }
+    var total by remember(query) { mutableStateOf(0) }
+    var nextPage by remember(query) { mutableStateOf(1) }
+    var isLoading by remember(query) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(query) {
+        isLoading = true
+        if (query.isNotBlank()) delay(300)
+        val page = loader(query.takeIf { it.isNotBlank() }, 0)
+        items = page.items
+        total = page.total ?: page.items.size
+        nextPage = 1
+        isLoading = false
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("Authors", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (total > 0) "$total authors" else "Browse every accessible author",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading authors...") }
+        if (!isLoading && items.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("No authors found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        gridItems(items, key = { "catalog-author-${it.id}" }) { author ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAuthorSelected(author) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CatalogImage(
+                        url = author.photoUrl,
+                        label = "Photo of ${author.name}",
+                        loader = imageLoader,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                    )
+                    Text(author.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "${author.bookCount} books",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        if (!isLoading && items.size < total) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            isLoading = true
+                            val page = loader(query.takeIf { it.isNotBlank() }, nextPage)
+                            items = (items + page.items).distinctBy { it.id }
+                            total = page.total ?: total
+                            nextPage += 1
+                            isLoading = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Load more") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthorDetails(
+    author: AuthorSummary,
+    modifier: Modifier,
+    booksLoader: suspend (String, Int) -> AuthorBooksPage?,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit
+) {
+    val page by produceState<AuthorBooksPage?>(initialValue = null, author.id) {
+        value = booksLoader(author.id, 0)
+    }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            OrbitEyebrow("Author")
+            Text(author.name, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "${page?.total ?: author.bookCount} books",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (page == null) item { LoadingFeedRow("Loading books...") }
+        if (page != null && page!!.items.isEmpty()) {
+            item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(page?.items.orEmpty(), key = { "author-book-${it.id}" }) { book ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onBookSelected(book) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.width(48.dp)) { BookCover(book, coverLoader) }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(book.title, style = MaterialTheme.typography.titleMedium)
+                        book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionsScreen(modifier: Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OrbitEyebrow("Options")
+        Text("Options", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Reader and app options will appear here later.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun CatalogImage(
+    url: String?,
+    label: String,
+    loader: suspend (String) -> ByteArray?,
+    modifier: Modifier
+) {
+    val bytes by produceState<ByteArray?>(initialValue = null, url) {
+        value = url?.let { loader(it) }
+    }
+    val bitmap = remember(bytes) {
+        bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = label,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Text(label.substringAfterLast(" ").take(1).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun BrowserDrawer(
     state: BrowserState,
     destination: BrowserDestination,
     onHome: () -> Unit,
     onLibraries: () -> Unit,
     onLibrarySelected: (String) -> Unit,
+    onSeries: () -> Unit,
+    onAuthors: () -> Unit,
+    onOptions: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit
 ) {
@@ -338,6 +746,23 @@ private fun BrowserDrawer(
                         }
                 )
             }
+            NavigationDrawerItem(
+                label = { Text("Series") },
+                selected = destination == BrowserDestination.SERIES,
+                onClick = onSeries,
+                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+            )
+            NavigationDrawerItem(
+                label = { Text("Authors") },
+                selected = destination == BrowserDestination.AUTHORS,
+                onClick = onAuthors,
+                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+            )
+            NavigationDrawerItem(
+                label = { Text("Options") },
+                selected = destination == BrowserDestination.OPTIONS,
+                onClick = onOptions
+            )
             Spacer(Modifier.weight(1f))
             HorizontalDivider()
             NavigationDrawerItem(
@@ -774,6 +1199,7 @@ private fun BookDetails(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
     onRead: (BookSummary) -> Unit,
+    onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
@@ -822,6 +1248,12 @@ private fun BookDetails(
                     enabled = !isDownloading && !unavailableOffline
                 ) {
                     Text(if (displayBook.progressPercent?.let { it > 0f } == true) "Continue reading" else "Read")
+                }
+                OutlinedButton(
+                    onClick = { onPreview(displayBook) },
+                    enabled = !isDownloading && !unavailableOffline
+                ) {
+                    Text("Preview")
                 }
                 when {
                     displayBook.isDownloaded -> OutlinedButton(

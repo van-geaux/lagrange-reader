@@ -71,7 +71,55 @@ data class SeriesDetailInfo(
     val authors: List<String> = emptyList(),
     val possibleGaps: List<Double> = emptyList(),
     val books: List<BookSummary> = emptyList(),
-    val firstBook: BookDetailInfo? = null
+    val firstBook: BookDetailInfo? = null,
+    val responseTotal: Int? = null,
+    val metadataBookCount: Int? = null
+)
+
+data class SeriesBooksPage(
+    val books: List<BookSummary>,
+    val total: Int? = null,
+    val page: Int? = null,
+    val size: Int? = null,
+    val seriesInfo: SeriesDetailInfo
+)
+
+data class SeriesSummary(
+    val id: String,
+    val name: String,
+    val authors: List<String> = emptyList(),
+    val bookCount: Int = 0,
+    val readCount: Int = 0,
+    val coverUrl: String? = null
+)
+
+data class AuthorSummary(
+    val id: String,
+    val name: String,
+    val bookCount: Int = 0,
+    val photoUrl: String? = null
+)
+
+data class SeriesCatalogPage(
+    val items: List<SeriesSummary> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val size: Int? = null
+)
+
+data class AuthorCatalogPage(
+    val items: List<AuthorSummary> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val size: Int? = null
+)
+
+data class AuthorBooksPage(
+    val author: AuthorSummary,
+    val items: List<BookSummary> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val size: Int? = null
 )
 
 data class BrowserState(
@@ -89,13 +137,19 @@ data class BrowserState(
     val message: String? = null
 )
 
+enum class ReaderLaunchMode {
+    NORMAL,
+    PREVIEW
+}
+
 data class ReaderState(
     val book: BookSummary,
     val localFile: File? = null,
     val streamUrl: String? = null,
     val lastKnownPosition: Long = 0L,
     val pageIndex: Int = 0,
-    val progressPercent: Float? = null
+    val progressPercent: Float? = null,
+    val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
 )
 
 data class ProgressUpdate(

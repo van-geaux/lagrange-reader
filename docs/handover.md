@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 ## Repository
 
@@ -49,6 +49,8 @@ Last updated: 2026-07-10
   - EPUB uses local extraction plus OPF spine parsing and chapter-by-chapter `WebView` rendering
   - EPUB reader includes chapter picking plus theme and font-size controls
   - EPUB now uses fullscreen viewport pagination rather than vertical chapter scrolling
+  - EPUB pagination now uses an explicit viewport-height column wrapper, measures that wrapper's horizontal overflow, and navigates by translating it horizontally; this replaces the document-level column scrolling that rendered blank content
+  - pagination is recalculated after fonts, images, and viewport changes, and backward chapter-boundary navigation remains pinned to the previous chapter's final page while resources finish loading
   - left/right outer-quarter taps navigate pages and the center toggles transient reader controls, following Komga's EPUB interaction model
   - EPUB progress percentage includes the current paginated screen, but reopen still restores to the chapter rather than the exact in-chapter page
   - downloaded EPUB local images now render correctly in the reader WebView
@@ -91,6 +93,7 @@ Last updated: 2026-07-10
 - The Android debug build is passing on this machine with `.\gradlew.bat assembleDebug`
 - The local JVM unit test task is passing on this machine with `.\gradlew.bat testDebugUnitTest`
 - The Android instrumentation test target compiles on this machine with `.\gradlew.bat assembleDebugAndroidTest`
+- The EPUB pagination fix passes `.\gradlew.bat assembleDebug`, `.\gradlew.bat testDebugUnitTest`, and `.\gradlew.bat assembleDebugAndroidTest`; real-device EPUB validation remains pending because no Android device was attached during the fix
 - The Android release build is passing on this machine with `.\gradlew.bat assembleRelease`
 - A manual app test matrix now exists in [testing.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/testing.md)
 - Recent manual device validation results:
@@ -108,6 +111,7 @@ Last updated: 2026-07-10
 ## UI/UX workstream status
 
 - UI/UX discussion can begin now; the functional baseline is no longer a blocker.
+- A dark-first, system-aware Audiobookshelf/Plex-inspired direction is now approved for the next workstream; the detailed behavior and visual constraints are recorded in [native-app-expansion-plan.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/native-app-expansion-plan.md).
 - Checkpoint 1 is product direction and shared design-system tokens.
 - An editorial-observatory design-system candidate is implemented with explicit light/dark palettes, typography, shapes, shared top bars, and shared status surfaces.
 - Setup, login, and browser screens use the candidate; it still needs on-device visual review before Checkpoint 1 is marked complete.
@@ -167,26 +171,23 @@ Last updated: 2026-07-10
 
 ## Highest-priority next steps
 
-1. Fix the EPUB pagination regression in commit `fb1b650`: the tap bridge works and left/right taps change chapters, but book content is completely blank and the overlay always reports page `1/1`.
-2. Replace the current document-level CSS column scrolling with an explicit viewport-sized page wrapper. On DOM load, move body content into the wrapper, give it viewport-height CSS columns, calculate pages from the wrapper's `scrollWidth`, and navigate by translating the wrapper horizontally instead of calling `window.scrollTo` on an overflow-hidden document.
-3. Rebuild and test the EPUB sample for visible text/images, correct page totals, single-page tap navigation, chapter-boundary navigation, center overlay toggling, theme/font repagination, offline images, progress sync, and chapter restore.
-4. Limit synopsis/description text on both book and series detail screens to four lines by default. Show `Expand` only when the text actually overflows, and show `Collapse` when expanded.
-5. Verify series details populate with read/total, synopsis, genres/tags, gaps, and all books, including series requiring multiple 100-item pages.
-6. Add integration coverage for login bootstrap, library/book loading, and offline queue replay.
-7. Validate server-forced session expiry on a real deployment when practical.
+1. Implement the approved native-app expansion plan in [native-app-expansion-plan.md](C:/Users/vangeaux/Desktop/.git_projects/bookorbit-android/docs/native-app-expansion-plan.md). The next agent should read that document completely before changing code and follow its recommended implementation order.
+2. Start with the data contracts and series pagination fix. The reported Accel World case shows 22 books but must show 27; paginate against the series response `total`, add mismatch fixtures, and verify all distinct IDs before moving to UI work.
+3. Replace the login WebView with the planned native credential screen, then implement non-syncing Preview mode before broad navigation and styling changes.
+4. Add global Series and Authors card catalogs, Plex-style series book grids, the main-drawer Options placeholder, shared Audiobookshelf/Plex-inspired tokens, and the existing-mark splash as specified in the plan.
+5. Test the fixed EPUB pagination on the real sample for visible text/images, correct page totals, single-page tap navigation, chapter-boundary navigation, center overlay toggling, theme/font repagination, offline images, progress sync, and chapter restore.
+6. Run the plan's complete automated and manual regression matrix, including login/session recovery, offline behavior, Preview progress isolation, all 27 Accel World books, and server-forced session expiry.
 
 ## Suggested next UI validation pass
 
-1. Agree on a visual direction before broad screen-level styling changes.
-2. Apply shared theme tokens and app-shell components first.
-3. Validate setup, login, browser, and EPUB screens at narrow width and large font scale.
-4. Recheck offline indicators, session actions, download actions, and EPUB resume after UI changes.
-5. Defer format-specific audiobook, PDF, and CBZ validation until sample files are available.
+1. Apply the approved dark-first theme tokens and shared media-card/app-shell components before screen-specific polish.
+2. Validate setup, native login, Home, Libraries, Series, Authors, Options, details, and EPUB at narrow width and large font scale.
+3. Recheck offline indicators, session actions, Preview isolation, download actions, and EPUB resume after UI changes.
+4. Defer format-specific audiobook, PDF, and CBZ visual validation until sample files are available.
 
 ## Known limitations
 
-- The fullscreen EPUB pagination candidate currently has a blocking display regression: taps and chapter changes work, but no chapter content renders and the page counter remains `1/1`. Do not treat the reader checkpoint as device-valid until this is fixed.
-- The likely cause is the current `styleEpubHtml` implementation applying columns and `overflow: hidden` directly to `html/body`, then measuring `documentElement.scrollWidth` and using `window.scrollTo`; the WebView is not exposing the column overflow through that document scroll geometry.
+- The fullscreen EPUB pagination display regression has been fixed in code by replacing document-level columns and `window.scrollTo` with an explicit translated page wrapper. Do not treat the reader checkpoint as device-valid until visible content, page totals, navigation, images, and repagination are confirmed against the real sample.
 - Exact in-chapter page restore and RTL direction controls also remain unimplemented.
 - Book and series descriptions currently render without a four-line collapsed state; add overflow-aware Expand/Collapse controls in the next session.
 - Comic support is limited to local or authenticated-cache CBZ rendering; CBR is still not implemented.

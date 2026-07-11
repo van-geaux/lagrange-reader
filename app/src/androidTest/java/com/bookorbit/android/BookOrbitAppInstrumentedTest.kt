@@ -166,6 +166,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun getSelectedLibraryId(): String? = null
     override suspend fun setSelectedLibraryId(libraryId: String) = Unit
     override suspend fun getSessionState(): SessionState = SessionState.Unauthenticated
+    override suspend fun login(username: String, password: String) = Unit
     override suspend fun loadLibraries(): List<LibrarySummary> = emptyList()
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = emptyList()
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null

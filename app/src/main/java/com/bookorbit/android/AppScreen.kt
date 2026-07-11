@@ -8,7 +8,8 @@ sealed interface AppScreen {
     ) : AppScreen
     data class Login(
         val serverUrl: String,
-        val message: String? = null
+        val message: String? = null,
+        val isSubmitting: Boolean = false
     ) : AppScreen
 
     data class Browser(
@@ -16,7 +17,8 @@ sealed interface AppScreen {
     ) : AppScreen
 
     data class ReaderLoading(
-        val book: BookSummary
+        val book: BookSummary,
+        val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
     ) : AppScreen
 
     data class Reader(

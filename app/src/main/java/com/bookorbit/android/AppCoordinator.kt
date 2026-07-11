@@ -36,11 +36,28 @@ class AppCoordinator(
         repository.loadSeriesDetail(seriesId)
     }.getOrNull()
 
+    suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage = runCatching {
+        repository.loadSeriesCatalog(query, page)
+    }.getOrDefault(SeriesCatalogPage())
+
+    suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = runCatching {
+        repository.loadAuthorsCatalog(query, page)
+    }.getOrDefault(AuthorCatalogPage())
+
+    suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage? = runCatching {
+        repository.loadAuthorBooks(authorId, page)
+    }.getOrNull()
+
+    suspend fun loadCatalogImage(url: String): ByteArray? = runCatching {
+        repository.loadCatalogImage(url)
+    }.getOrNull()
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private var lastBrowserState: BrowserState? = null
     private var loginRefreshInFlight = false
+    private var loginSubmitInFlight = false
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -219,6 +236,37 @@ class AppCoordinator(
             }
             } finally {
                 loginRefreshInFlight = false
+            }
+        }
+    }
+
+    fun submitLogin(username: String, password: String) {
+        scope.launch {
+            val current = _screen.value as? AppScreen.Login ?: return@launch
+            if (loginSubmitInFlight) {
+                return@launch
+            }
+            loginSubmitInFlight = true
+            _screen.value = current.copy(isSubmitting = true, message = null)
+            try {
+                repository.login(username = username, password = password)
+                when (repository.getSessionState()) {
+                    SessionState.Authenticated -> {
+                        allowCachedLoginFallback = true
+                        resumeAfterLogin()
+                    }
+                    SessionState.Unauthenticated,
+                    SessionState.Unavailable -> throw LoginVerificationException()
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                showLogin(
+                    message = userMessage(error, "Unable to sign in."),
+                    destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
+                )
+            } finally {
+                loginSubmitInFlight = false
             }
         }
     }
@@ -412,20 +460,40 @@ class AppCoordinator(
     }
 
     fun openBook(book: BookSummary) {
+        openBook(book, ReaderLaunchMode.NORMAL)
+    }
+
+    fun previewBook(book: BookSummary) {
+        openBook(book, ReaderLaunchMode.PREVIEW)
+    }
+
+    private fun openBook(book: BookSummary, launchMode: ReaderLaunchMode) {
         scope.launch {
-            _screen.value = AppScreen.ReaderLoading(book)
+            _screen.value = AppScreen.ReaderLoading(book, launchMode)
             runCatching {
-                val readerState = repository.buildReaderState(
+                val preparedState = repository.buildReaderState(
                     book = book,
                     localOnly = lastBrowserState?.isOfflineSnapshot == true
                 )
-                repository.saveActiveReader(readerState.book)
+                val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {
+                    preparedState.copy(
+                        lastKnownPosition = 0L,
+                        pageIndex = 0,
+                        progressPercent = null,
+                        launchMode = ReaderLaunchMode.PREVIEW
+                    )
+                } else {
+                    preparedState.copy(launchMode = ReaderLaunchMode.NORMAL)
+                }
+                if (launchMode == ReaderLaunchMode.NORMAL) {
+                    repository.saveActiveReader(readerState.book)
+                }
                 _screen.value = AppScreen.Reader(readerState)
             }.onFailure { error ->
                 if (error is AuthenticationRequiredException) {
                     showLogin(
                         message = "Your session expired. Sign in again to reopen ${book.title}.",
-                        destination = PostLoginDestination.OpenBook(book)
+                        destination = PostLoginDestination.OpenBook(book, launchMode)
                     )
                     return@onFailure
                 }
@@ -553,6 +621,9 @@ class AppCoordinator(
     private fun userMessage(error: Throwable, fallback: String): String {
         return when (error) {
             is AuthenticationRequiredException -> "Your session expired. Sign in again."
+            is InvalidCredentialsException -> "The username or password was not accepted."
+            is LoginRateLimitedException -> "The server is rate limiting sign-in attempts. Try again shortly."
+            is LoginVerificationException -> "The server did not confirm the new sign-in. Check the server and try again."
             is UserFacingException -> error.message ?: fallback
             is HttpRequestException -> when {
                 error.code == 404 -> "The server could not find the requested content."
@@ -570,6 +641,9 @@ class AppCoordinator(
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
         scope.launch {
+            if ((_screen.value as? AppScreen.Reader)?.readerState?.launchMode == ReaderLaunchMode.PREVIEW) {
+                return@launch
+            }
             val key = book.progressKey()
             val progress = PendingProgress(
                 book = book,
@@ -594,8 +668,11 @@ class AppCoordinator(
 
     fun closeReader() {
         scope.launch {
-            flushCurrentReaderProgress()
-            repository.clearActiveReader()
+            val reader = _screen.value as? AppScreen.Reader
+            if (reader?.readerState?.launchMode != ReaderLaunchMode.PREVIEW) {
+                flushCurrentReaderProgress()
+                repository.clearActiveReader()
+            }
             loadBrowser()
         }
     }
@@ -612,6 +689,7 @@ class AppCoordinator(
         queuedProgressByTarget.clear()
         pendingPostLoginDestination = null
         loginRefreshInFlight = false
+        loginSubmitInFlight = false
         allowCachedLoginFallback = true
         if (clearBrowserState) {
             lastBrowserState = null
@@ -632,7 +710,7 @@ class AppCoordinator(
         when (destination) {
             PostLoginDestination.Browser, null -> loadBrowser()
             is PostLoginDestination.SelectLibrary -> selectLibrary(destination.libraryId)
-            is PostLoginDestination.OpenBook -> openBook(destination.book)
+            is PostLoginDestination.OpenBook -> openBook(destination.book, destination.launchMode)
             is PostLoginDestination.DownloadBook -> downloadBook(destination.book)
         }
     }
@@ -691,7 +769,10 @@ class AppCoordinator(
     private sealed interface PostLoginDestination {
         data object Browser : PostLoginDestination
         data class SelectLibrary(val libraryId: String) : PostLoginDestination
-        data class OpenBook(val book: BookSummary) : PostLoginDestination
+        data class OpenBook(
+            val book: BookSummary,
+            val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
+        ) : PostLoginDestination
         data class DownloadBook(val book: BookSummary) : PostLoginDestination
     }
 

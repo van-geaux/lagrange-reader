@@ -9,8 +9,8 @@
 The current app flow is:
 
 1. User enters a BookOrbit server URL.
-2. The app opens the server login page in a WebView.
-3. The app checks `GET /api/v1/auth/me` during login-page navigation and on a short polling interval to determine whether login has succeeded and whether a persisted session is still valid.
+2. The app presents native username/password credentials and submits them to the BookOrbit login API.
+3. The app verifies `GET /api/v1/auth/me` before resuming the pending browser, library, reader, or download destination.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
@@ -38,6 +38,8 @@ The current app flow is:
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
 - Offline-first active-reader restore uses the same local-only reader stream suppression, so startup reopen does not quietly fall back to a live audio stream.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
+- The login screen no longer uses a WebView or login polling; WebView remains only for reader content that requires it.
+- Preview reader launches start at the beginning and do not write active-reader or progress state.
 
 ### Data and API layer
 
@@ -68,6 +70,7 @@ The current app flow is:
 - `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
 - Debug builds show the current pending progress queue count directly in the browser screen.
+- `CatalogSnapshotStore` stores versioned raw Series, Authors, and author-book pages keyed by server URL for offline catalog fallback without mixing servers.
 
 ### Background sync
 
@@ -93,8 +96,8 @@ The current app flow is:
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
-  - reflowable chapter content is split into viewport-width CSS columns instead of vertically scrolling
-  - the left and right outer quarters move pages, while the center toggles overlay controls
+  - reflowable chapter content is laid out in an explicit full-viewport page strip instead of relying on WebView document scrolling
+  - left and right outer-quarter taps, plus left/right swipes, move one page; the center toggles overlay controls
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, while persisted page identity still restores at chapter granularity
@@ -117,8 +120,8 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB support is functional and paginated, but exact in-chapter page restore and RTL direction controls are not implemented yet.
-- Login completion detection now combines navigation-triggered and polling-based `/api/v1/auth/me` checks, but it has not yet been verified against every server auth flow.
+- EPUB exact in-chapter page restore and RTL direction controls are not implemented yet; the full-viewport pagination and swipe fix still require real-device validation against the representative sample.
+- Native login has not yet been verified against every server auth flow or real rate-limit response.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling rules are extracted into a small policy object with focused JVM coverage.
@@ -131,7 +134,7 @@ The first design-system candidate uses explicit BookOrbit light/dark color schem
 
 The browser presentation now uses a native Compose modal drawer and starts on a Home feed. Home shelf derivation is deterministic from `BookSummary` progress, series identity/order, read state, and added/updated/read timestamps. Those optional fields are parsed tolerantly and persisted in browser snapshots and active-reader state. Home remains scoped to the selected library page because the repository loads one library page at a time.
 
-Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Browser-local navigation owns series and book detail destinations; only the book-detail Read/Continue action calls the coordinator reader flow. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
+Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Browser-local navigation owns series, author, and book detail destinations; book-detail Read/Continue and Preview actions call the coordinator reader flow. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
 
 Book details are enriched on demand with descriptive, creator, publication, identifier, genre/tag, and file metadata. Series details no longer depend on the current shelf page: they request the server's ordered series page, show completion and possible gaps, and optionally use the first book synopsis as series context. Hardware and top-bar Back preserve the series destination when a book was opened from within it.
 

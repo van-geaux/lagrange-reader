@@ -68,6 +68,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
@@ -102,8 +106,9 @@ fun BookOrbitApp(
         is AppScreen.Login -> LoginScreen(
             serverUrl = screen.serverUrl,
             message = screen.message,
+            isSubmitting = screen.isSubmitting,
             onChangeServer = coordinator::clearServer,
-            onAuthenticated = coordinator::refreshLoginState
+            onSubmit = coordinator::submitLogin
         )
         is AppScreen.Browser -> NativeLibraryBrowserScreen(
             state = screen.browserState,
@@ -115,13 +120,19 @@ fun BookOrbitApp(
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
             seriesDetailLoader = coordinator::loadSeriesDetail,
+            seriesCatalogLoader = coordinator::loadSeriesCatalog,
+            authorsCatalogLoader = coordinator::loadAuthorsCatalog,
+            authorBooksLoader = coordinator::loadAuthorBooks,
+            catalogImageLoader = coordinator::loadCatalogImage,
             onBookOpen = coordinator::openBook,
+            onPreview = coordinator::previewBook,
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,
             onDeleteLocalCopy = coordinator::deleteLocalCopy
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,
+            launchMode = screen.launchMode,
             onBack = coordinator::closeReader
         )
         is AppScreen.Reader -> ReaderScreen(
@@ -136,12 +147,15 @@ fun BookOrbitApp(
 @Composable
 private fun ReaderLoadingScreen(
     book: BookSummary,
+    launchMode: ReaderLaunchMode,
     onBack: () -> Unit
 ) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(book.title) },
+                title = {
+                    Text(if (launchMode == ReaderLaunchMode.PREVIEW) "Preview · ${book.title}" else book.title)
+                },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
             )
         }
@@ -252,13 +266,22 @@ private fun ServerSetupScreen(
 private fun LoginScreen(
     serverUrl: String,
     message: String?,
+    isSubmitting: Boolean,
     onChangeServer: () -> Unit,
-    onAuthenticated: () -> Unit
+    onSubmit: (String, String) -> Unit
 ) {
-    LaunchedEffect(serverUrl) {
-        while (isActive) {
-            delay(1500)
-            onAuthenticated()
+    var username by remember(serverUrl) { mutableStateOf("") }
+    var password by remember(serverUrl) { mutableStateOf("") }
+    var passwordVisible by remember(serverUrl) { mutableStateOf(false) }
+    var validationMessage by remember(serverUrl) { mutableStateOf<String?>(null) }
+    val submit = {
+        when {
+            username.isBlank() -> validationMessage = "Enter your username."
+            password.isBlank() -> validationMessage = "Enter your password."
+            else -> {
+                validationMessage = null
+                onSubmit(username.trim(), password)
+            }
         }
     }
 
@@ -280,33 +303,91 @@ private fun LoginScreen(
             if (!message.isNullOrBlank()) {
                 OrbitMessage(
                     text = message,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    tone = OrbitMessageTone.ERROR
                 )
             }
             Surface(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 1.dp
             ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { context ->
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.allowFileAccess = true
-                            settings.allowContentAccess = true
-                            webChromeClient = WebChromeClient()
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    super.onPageFinished(view, url)
-                                    onAuthenticated()
-                                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    OrbitEyebrow("BookOrbit server")
+                    Text(serverUrl, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = {
+                            username = it
+                            validationMessage = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "BookOrbit username" },
+                        label = { Text("Username") },
+                        singleLine = true,
+                        enabled = !isSubmitting,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next
+                        )
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            validationMessage = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "BookOrbit password" },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        enabled = !isSubmitting,
+                        visualTransformation = if (passwordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            TextButton(
+                                onClick = { passwordVisible = !passwordVisible },
+                                enabled = !isSubmitting
+                            ) {
+                                Text(if (passwordVisible) "Hide" else "Show")
                             }
-                            loadUrl(serverUrl)
+                        },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
+                    )
+                    validationMessage?.let {
+                        OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                    }
+                    Button(
+                        onClick = submit,
+                        enabled = !isSubmitting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                    ) {
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Sign in")
                         }
                     }
-                )
+                }
             }
         }
     }
@@ -522,15 +603,22 @@ private fun ReaderScreen(
     onBack: () -> Unit,
     onProgress: (BookSummary, Long, Int, Float?) -> Unit
 ) {
+    val isPreview = state.launchMode == ReaderLaunchMode.PREVIEW
+    val readerProgress: (BookSummary, Long, Int, Float?) -> Unit = if (isPreview) {
+        { _, _, _, _ -> }
+    } else {
+        onProgress
+    }
     if (state.book.mediaKind == MediaKind.EPUB) {
         EpubReaderView(
             title = state.book.title,
             file = state.localFile,
-            initialChapter = state.pageIndex,
-            initialPercent = state.progressPercent,
+            initialChapter = if (isPreview) 0 else state.pageIndex,
+            initialPercent = if (isPreview) null else state.progressPercent,
+            isPreview = isPreview,
             onBack = onBack,
             onProgress = { chapterIndex, percent ->
-                onProgress(state.book, 0L, chapterIndex, percent)
+                readerProgress(state.book, 0L, chapterIndex, percent)
             }
         )
         return
@@ -538,7 +626,9 @@ private fun ReaderScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(state.book.title) },
+                title = {
+                    Text(if (isPreview) "Preview · ${state.book.title}" else state.book.title)
+                },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
             )
         }
@@ -554,14 +644,14 @@ private fun ReaderScreen(
                     streamUrl = state.streamUrl,
                     lastKnownPosition = state.lastKnownPosition,
                     onProgress = { position, percent ->
-                        onProgress(state.book, position, 0, percent)
+                        readerProgress(state.book, position, 0, percent)
                     }
                 )
                 MediaKind.PDF -> PdfReaderView(
                     file = state.localFile,
                     initialPage = state.pageIndex,
                     onProgress = { pageIndex, percent ->
-                        onProgress(state.book, 0L, pageIndex, percent)
+                        readerProgress(state.book, 0L, pageIndex, percent)
                     }
                 )
                 MediaKind.EPUB -> Unit
@@ -570,7 +660,7 @@ private fun ReaderScreen(
                     file = state.localFile,
                     initialPage = state.pageIndex,
                     onProgress = { pageIndex, percent ->
-                        onProgress(state.book, 0L, pageIndex, percent)
+                        readerProgress(state.book, 0L, pageIndex, percent)
                     }
                 )
                 MediaKind.UNKNOWN -> UnsupportedReaderView(
@@ -891,6 +981,7 @@ private fun EpubReaderView(
     file: File?,
     initialChapter: Int,
     initialPercent: Float?,
+    isPreview: Boolean,
     onBack: () -> Unit,
     onProgress: (Int, Float?) -> Unit
 ) {
@@ -917,12 +1008,13 @@ private fun EpubReaderView(
     }
 
     val chapterCount = epubBook.chapters.size
-    val estimatedChapter = remember(chapterCount, initialPercent) {
-        percentToChapterIndex(initialPercent, chapterCount)
+    val estimatedChapter = remember(chapterCount, initialPercent, isPreview) {
+        if (isPreview) 0 else percentToChapterIndex(initialPercent, chapterCount)
     }
-    var currentChapter by remember(file, initialChapter, estimatedChapter) {
+    var currentChapter by remember(file, initialChapter, estimatedChapter, isPreview) {
         mutableStateOf(
             when {
+                isPreview -> 0
                 initialChapter > 0 -> initialChapter.coerceIn(0, chapterCount - 1)
                 else -> estimatedChapter
             }
@@ -968,7 +1060,13 @@ private fun EpubReaderView(
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
-                .semantics { contentDescription = "Paginated EPUB reader" },
+                .semantics {
+                    contentDescription = if (isPreview) {
+                        "Preview paginated EPUB reader; progress is not saved"
+                    } else {
+                        "Paginated EPUB reader"
+                    }
+                },
             factory = { webContext ->
                 WebView(webContext).apply {
                     settings.javaScriptEnabled = true
@@ -1033,7 +1131,7 @@ private fun EpubReaderView(
                     TextButton(onClick = onBack) { Text("Back") }
                     Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
                         Text(
-                            epubBook.title ?: title,
+                            if (isPreview) "Preview · ${epubBook.title ?: title}" else (epubBook.title ?: title),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleMedium
@@ -1415,7 +1513,7 @@ private fun formatZoomLevel(zoom: Float): String {
     return String.format(Locale.US, "%.0f%%", zoom * 100f)
 }
 
-private fun styleEpubHtml(
+internal fun styleEpubHtml(
     html: String,
     theme: EpubReaderTheme,
     fontScale: Float,
@@ -1436,16 +1534,20 @@ private fun styleEpubHtml(
             font-size: ${fontPercent}%;
             line-height: 1.7;
         }
-        body {
+        #bookorbit-page-strip {
+            position: absolute;
+            top: 28px;
+            left: 22px;
             box-sizing: border-box;
-            padding: 28px 22px 34px;
-            column-width: calc(100vw - 44px);
-            column-gap: 44px;
-            column-fill: auto;
+            width: calc(100vw - 44px);
+            min-height: calc(100vh - 62px);
+            overflow: visible;
             word-wrap: break-word;
+            will-change: transform;
         }
         img, svg {
             max-width: 100%;
+            max-height: calc(100vh - 62px);
             height: auto;
             break-inside: avoid;
         }
@@ -1457,26 +1559,72 @@ private fun styleEpubHtml(
         <script>
         (() => {
           let page = 0;
+          let strip = null;
+          let pinToEnd = ${startAtEnd.toString()};
           const bridge = window.$EPUB_READER_BRIDGE;
-          const pageCount = () => Math.max(1, Math.ceil(document.documentElement.scrollWidth / window.innerWidth));
+          const pageHeight = () => Math.max(1, window.innerHeight - 62);
+          const pageCount = () => strip
+            ? Math.max(1, Math.ceil(strip.scrollHeight / pageHeight()))
+            : 1;
           const publish = () => bridge.pageChanged(page, pageCount());
+          const renderPage = () => {
+            if (!strip) return;
+            strip.style.transform = `translate3d(0, ${'$'}{-page * pageHeight()}px, 0)`;
+          };
           const moveTo = (next) => {
+            pinToEnd = false;
             const count = pageCount();
             if (next < 0) return bridge.chapterBoundary(-1);
             if (next >= count) return bridge.chapterBoundary(1);
             page = next;
-            window.scrollTo(page * window.innerWidth, 0);
+            renderPage();
             publish();
           };
+          const repaginate = () => requestAnimationFrame(() => {
+            page = pinToEnd ? pageCount() - 1 : Math.min(page, pageCount() - 1);
+            renderPage();
+            publish();
+          });
           window.addEventListener('load', () => {
-            requestAnimationFrame(() => {
-              page = ${if (startAtEnd) "pageCount() - 1" else "0"};
-              window.scrollTo(page * window.innerWidth, 0);
+            strip = document.createElement('main');
+            strip.id = 'bookorbit-page-strip';
+            Array.from(document.body.childNodes).forEach((node) => strip.appendChild(node));
+            document.body.appendChild(strip);
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              page = pinToEnd ? pageCount() - 1 : 0;
+              renderPage();
               publish();
+            }));
+            if (document.fonts && document.fonts.ready) {
+              document.fonts.ready.then(repaginate);
+            }
+            Array.from(strip.querySelectorAll('img')).forEach((image) => {
+              if (!image.complete) image.addEventListener('load', repaginate, { once: true });
             });
           });
-          window.addEventListener('resize', () => requestAnimationFrame(() => moveTo(Math.min(page, pageCount() - 1))));
+          window.addEventListener('resize', repaginate);
+          let touchStartX = 0;
+          let touchStartY = 0;
+          let suppressClick = false;
+          document.addEventListener('touchstart', (event) => {
+            const touch = event.changedTouches && event.changedTouches[0];
+            if (!touch) return;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+          }, { passive: true });
+          document.addEventListener('touchend', (event) => {
+            const touch = event.changedTouches && event.changedTouches[0];
+            if (!touch) return;
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+            if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
+            event.preventDefault();
+            suppressClick = true;
+            moveTo(deltaX < 0 ? page + 1 : page - 1);
+            window.setTimeout(() => { suppressClick = false; }, 350);
+          }, { passive: false });
           document.addEventListener('click', (event) => {
+            if (suppressClick) return;
             if (event.target.closest && event.target.closest('a')) return;
             event.preventDefault();
             const zone = event.clientX / window.innerWidth;
@@ -1512,7 +1660,7 @@ private val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Dark
 )
 
-private enum class EpubReaderTheme(
+internal enum class EpubReaderTheme(
     val label: String,
     val backgroundColor: Int,
     val backgroundCss: String,

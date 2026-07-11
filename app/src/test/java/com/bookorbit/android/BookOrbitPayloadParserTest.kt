@@ -343,6 +343,84 @@ class BookOrbitPayloadParserTest {
         assertEquals(1, detail.books.size)
     }
 
+    @Test
+    fun `parseSeriesBooksPage keeps response pagination separate from series metadata`() {
+        val page = BookOrbitPayloadParser.parseSeriesBooksPage(
+            seriesId = "accel-world",
+            payload = """
+                {
+                  "items": [
+                    {"id":"book-1","title":"First","seriesIndex":1},
+                    {"id":"book-2","title":"Second","seriesIndex":2}
+                  ],
+                  "total": 27,
+                  "page": 0,
+                  "size": 100,
+                  "seriesInfo": {
+                    "id": "accel-world",
+                    "name": "Accel World",
+                    "bookCount": 22,
+                    "readCount": 4
+                  }
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(27, page.total)
+        assertEquals(0, page.page)
+        assertEquals(100, page.size)
+        assertEquals(27, page.seriesInfo.bookCount)
+        assertEquals(27, page.seriesInfo.responseTotal)
+        assertEquals(22, page.seriesInfo.metadataBookCount)
+        assertEquals(2, page.books.size)
+    }
+
+    @Test
+    fun `parse catalog pages maps counts and resolves relative images`() {
+        val series = BookOrbitPayloadParser.parseSeriesCatalogPage(
+            payload = """
+                {
+                  "items": [{
+                    "id": "series-1",
+                    "name": "Orbit Run",
+                    "authors": [{"name": "Ada Reader"}],
+                    "bookCount": 8,
+                    "readCount": 3,
+                    "cover": {"url": "/media/series-1.jpg"}
+                  }],
+                  "total": 1,
+                  "page": 0,
+                  "size": 100
+                }
+            """.trimIndent(),
+            serverBase = "https://example.test"
+        )
+        val authors = BookOrbitPayloadParser.parseAuthorCatalogPage(
+            payload = """
+                {
+                  "items": [{
+                    "id": "author-1",
+                    "name": "Ada Reader",
+                    "bookCount": 12,
+                    "photo": {"path": "images/ada.jpg"}
+                  }],
+                  "total": 1,
+                  "page": 0,
+                  "size": 100
+                }
+            """.trimIndent(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(1, series.total)
+        assertEquals(listOf("Ada Reader"), series.items.single().authors)
+        assertEquals("https://example.test/media/series-1.jpg", series.items.single().coverUrl)
+        assertEquals("https://example.test/images/ada.jpg", authors.items.single().photoUrl)
+        assertEquals(12, authors.items.single().bookCount)
+    }
+
     @Test(expected = UserFacingException::class)
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")
