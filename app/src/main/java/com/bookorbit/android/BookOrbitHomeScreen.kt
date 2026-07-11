@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -607,41 +608,103 @@ private fun AuthorDetails(
     val page by produceState<AuthorBooksPage?>(initialValue = null, author.id) {
         value = booksLoader(author.id, 0)
     }
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            OrbitEyebrow("Author")
-            Text(author.name, style = MaterialTheme.typography.headlineSmall)
-            Text(
-                "${page?.total ?: author.bookCount} books",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OrbitEyebrow("Author")
+                Text(author.name, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "${page?.total ?: author.bookCount} books",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        if (page == null) item { LoadingFeedRow("Loading books...") }
+        if (page == null) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
         if (page != null && page!!.items.isEmpty()) {
-            item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        items(page?.items.orEmpty(), key = { "author-book-${it.id}" }) { book ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onBookSelected(book) },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        gridItems(page?.items.orEmpty(), key = { "author-book-${it.id}" }) { book ->
+            BookPosterCard(book = book, coverLoader = coverLoader, onClick = { onBookSelected(book) })
+        }
+    }
+}
+
+@Composable
+private fun BookPosterCard(
+    book: BookSummary,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onClick: () -> Unit,
+    showSeriesIndex: Boolean = false
+) {
+    val status = when {
+        book.isRead && book.isDownloaded -> "Read · Offline"
+        book.isRead -> "Read"
+        book.isDownloaded -> "Offline"
+        book.progressPercent?.let { it > 0f } == true -> "In progress"
+        else -> null
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = buildString {
+                    append(book.title)
+                    status?.let { append(", $it") }
+                }
+            },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            BookCover(book, coverLoader)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.width(48.dp)) { BookCover(book, coverLoader) }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(book.title, style = MaterialTheme.typography.titleMedium)
-                        book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text(
+                    book.title,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                if (showSeriesIndex) {
+                    book.seriesIndex?.let { index ->
+                        Text(
+                            "#${formatSeriesIndex(index)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 }
+            }
+            book.author?.let {
+                Text(
+                    it,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            status?.let {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
         }
     }
@@ -1268,7 +1331,7 @@ private fun BookDetails(
             }
         }
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
-            item { DetailSection("Synopsis", plainText(synopsis)) }
+            item { ExpandableDescription("Synopsis", plainText(synopsis)) }
         }
         if (detail.genres.isNotEmpty() || detail.tags.isNotEmpty()) {
             item {
@@ -1336,28 +1399,32 @@ private fun SeriesDetails(
         value = detailLoader(seriesKey) ?: value
     }
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            OrbitEyebrow("Series")
-            Text(detail.name, style = MaterialTheme.typography.headlineSmall)
-            detail.authors.takeIf { it.isNotEmpty() }?.let {
-                Text("by ${it.joinToString()}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OrbitEyebrow("Series")
+                Text(detail.name, style = MaterialTheme.typography.headlineSmall)
+                detail.authors.takeIf { it.isNotEmpty() }?.let {
+                    Text("by ${it.joinToString()}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    "${detail.bookCount} ${if (detail.bookCount == 1) "book" else "books"} · ${detail.readCount} read",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LinearProgressIndicator(
+                    progress = { completion.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                )
             }
-            Text(
-                "${detail.bookCount} ${if (detail.bookCount == 1) "book" else "books"} · ${detail.readCount} read",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            LinearProgressIndicator(
-                progress = { completion.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-            )
         }
         if (detail.possibleGaps.isNotEmpty()) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Text(
                         "Possible missing positions: ${detail.possibleGaps.joinToString { formatSeriesIndex(it) }}",
@@ -1369,16 +1436,13 @@ private fun SeriesDetails(
         }
         detail.firstBook?.let { first ->
             first.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("About this series", style = MaterialTheme.typography.titleLarge)
-                        Text(plainText(synopsis), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ExpandableDescription("About this series", plainText(synopsis))
                 }
             }
             val labels = (first.genres + first.tags).distinct()
             if (labels.isNotEmpty()) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Genres and tags", style = MaterialTheme.typography.titleLarge)
                         Row(
@@ -1395,38 +1459,73 @@ private fun SeriesDetails(
                 }
             }
         }
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             Text("Books", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
         }
-        items(detail.books, key = { "series-detail-${it.id}" }) { book ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onBookSelected(book) },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.width(48.dp)) { BookCover(book, coverLoader) }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(book.title, style = MaterialTheme.typography.titleMedium)
-                        book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    }
-                    Text(book.seriesIndex?.let { "#${formatSeriesIndex(it)}" }.orEmpty())
-                }
-            }
+        gridItems(detail.books, key = { "series-detail-${it.id}" }) { book ->
+            BookPosterCard(
+                book = book,
+                coverLoader = coverLoader,
+                onClick = { onBookSelected(book) },
+                showSeriesIndex = true
+            )
         }
     }
 }
 
+private const val DESCRIPTION_COLLAPSED_LINES = 4
+
 @Composable
-private fun DetailSection(title: String, body: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+internal fun ExpandableDescription(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember(body) { mutableStateOf(false) }
+    var hasOverflow by remember(body) { mutableStateOf(false) }
+    val toggle = { expanded = !expanded }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Text(title, style = MaterialTheme.typography.titleLarge)
-        Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = body,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (hasOverflow) {
+                        Modifier
+                            .clickable(onClick = toggle)
+                            .semantics {
+                                contentDescription = "$title description"
+                                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                            }
+                    } else {
+                        Modifier
+                    }
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (expanded) Int.MAX_VALUE else DESCRIPTION_COLLAPSED_LINES,
+            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+            onTextLayout = { layoutResult ->
+                if (!expanded && layoutResult.hasVisualOverflow != hasOverflow) {
+                    hasOverflow = layoutResult.hasVisualOverflow
+                }
+            }
+        )
+        if (hasOverflow) {
+            TextButton(
+                onClick = toggle,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.semantics {
+                    contentDescription = if (expanded) "Collapse $title" else "Expand $title"
+                }
+            ) {
+                Text(if (expanded) "Collapse" else "Expand")
+            }
+        }
     }
 }
 

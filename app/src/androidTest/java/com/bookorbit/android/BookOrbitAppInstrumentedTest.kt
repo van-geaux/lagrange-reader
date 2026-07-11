@@ -152,6 +152,26 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Main").assertIsNotEnabled()
         composeRule.onNodeWithText("Loading books...").assertIsDisplayed()
     }
+
+    @Test
+    fun descriptionsExpandAndCollapseFromTextTap() {
+        val description = """
+            This is a deliberately long description that should exceed four rendered lines on a phone-sized layout. It should expose the inline expand action only after measured overflow, expand when the description itself is tapped, and collapse again when tapped a second time.
+        """.trimIndent()
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                ExpandableDescription(title = "Synopsis", body = description)
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Expand Synopsis").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Synopsis description").performClick()
+        composeRule.onNodeWithContentDescription("Collapse Synopsis").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Synopsis description").performClick()
+        composeRule.onNodeWithContentDescription("Expand Synopsis").assertIsDisplayed()
+    }
+
 }
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {

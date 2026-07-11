@@ -33,11 +33,6 @@ Preserve existing offline reading, downloads, progress synchronization, session 
 - Discard all Preview position changes on exit. Label visible reader controls and accessibility semantics as Preview.
 - Reuse normal content-preparation errors without mutating reading state.
 
-## 2a. EPUB reader follow-ups
-
-- Known issue to fix: on some EPUB samples, the current WebView pagination geometry renders only one line of text per page instead of filling the available viewport. Replace the fragile CSS multicolumn geometry with an explicit full-viewport page layout and verify text, images, page totals, repagination, and chapter boundaries on a real device.
-- Add left and right swipe gestures as EPUB reading navigation. A left swipe advances one page, a right swipe goes back one page, and a swipe must not also trigger the outer-quarter tap action. Preserve center taps, chapter-boundary behavior, accessibility labeling, and Preview progress isolation.
-
 ## 3. Global Series and Authors destinations
 
 - Extend the drawer to Home, Libraries and existing library children, Series, Authors, Options, and Sign in/Log out. Do not render Series or Authors children inside the drawer.
@@ -59,15 +54,6 @@ Preserve existing offline reading, downloads, progress synchronization, session 
 - Keep `seriesInfo.bookCount` for metadata. When it differs from `total`, prefer `total` for list completeness and emit debug-only mismatch diagnostics.
 - Validate Accel World specifically: Series Details must show 27 distinct books in the correct order.
 - Cover mismatched totals, partial pages, cross-page duplicates, empty terminal pages, and fractional or missing series indexes with fixtures.
-
-## 5. Plex-style cards and details
-
-- Replace the Series Details one-book-per-row list with an adaptive grid: two columns on narrow phones and more columns from an approximately 140 dp minimum card width.
-- Each poster card shows a portrait cover, two-line title, author, series-number badge, progress strip, downloaded/offline marker, and read state when available.
-- Reuse the card for Series Details, Author Details, and other catalog surfaces where the data permits.
-- Keep the series summary, completion, possible gaps, synopsis, genres, and Books heading as full-width grid items.
-- Opening a book from a series or author must return to the same parent detail page.
-- Limit Book and Series synopsis text to four lines initially. Show Expand only after measured overflow and Collapse while expanded.
 
 ## 6. Audiobookshelf/Plex-inspired design system
 
@@ -116,12 +102,7 @@ Preserve existing offline reading, downloads, progress synchronization, session 
 - Check splash behavior on Android 11 and Android 12+.
 - Review dark/light themes, narrow width, large font, TalkBack, offline catalogs, downloads, and progress indicators.
 
-## Recommended implementation order
+## Remaining implementation order
 
-1. Add response models and repository APIs, then fix series pagination with tests.
-2. Replace native login and update coordinator recovery tests.
-3. Add Preview launch mode and persistence-isolation tests.
-4. Add Series/Authors navigation, catalogs, details, caching, and cards.
-5. Apply shared design tokens and component styling.
-6. Add splash and Options placeholder.
-7. Run the full automated and device regression matrix, then update architecture/API/testing docs.
+1. Finish the remaining shared design-system refinements and accessibility/large-text review.
+2. Run the full automated and device regression matrix, then update architecture/API/testing docs.
