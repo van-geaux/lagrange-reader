@@ -212,7 +212,14 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Populate series details from the complete server series page with reading completion and gap context
 - [x] Page complete series requests within BookOrbit's 100-item server limit
 - [x] Add series synopsis and genre/tag context from the lead book
-- [x] Hide the Android status bar for an immersive app window
+- [x] Hide the Android status bar for the first immersive app-window candidate (superseded by device feedback)
+- [ ] Put Currently reading books in the first Home shelf
+- [ ] Replace the drawer-based browser shell with a Plex-inspired bottom navigation layout
+- [ ] Add a top-level library selector to the Libraries destination
+- [ ] Replace the persistent Home search field with a search icon and search layer
+- [ ] Restore the standard Android status bar and add intentional top breathing room on Home
+- [ ] Add reader padding controls with a more generous default text inset
+- [ ] Investigate the launch/startup visual where a spinner appears instead of the app icon
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
@@ -231,7 +238,7 @@ UI/UX discussion and design-system work can start now:
 - The functional and JVM baseline is ready.
 - EPUB is the validated representative reader path.
 - Audiobook, PDF, and CBZ-specific work is deferred until sample files are available.
-- The immediate device pass is fixed series population plus the fullscreen paginated EPUB candidate: verify metadata, tap zones, page layout, overlays, and chapter transitions.
+- The immediate implementation pass is the user-feedback workplan below: Home reading priority first, then the Plex-inspired shell, Home search/status-bar spacing, reader padding, and launch visual.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server

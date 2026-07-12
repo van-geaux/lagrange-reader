@@ -32,9 +32,9 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 - Add intentional empty, loading, offline, and failure presentations.
 - Keep actions usable with long titles, large font scales, and narrow phone widths.
 
-Implementation candidate: the post-login screen now opens on a native Home feed with a hamburger drawer and integrated search. The drawer contains Home, Libraries, library children, and sign-in/log-out. Home supports Keep Reading, On Deck, Recently Added Books, Recently Added Series, Recently Updated Series, and Recently Read Books when the loaded BookOrbit payload contains the required progress, series, and timestamp metadata. Home shelves are scoped to the selected library page returned by BookOrbit.
+The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home must put Currently reading first, while completed/recently read books remain available separately. Home shelves remain scoped to the selected library page returned by BookOrbit.
 
-Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search now uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The Android status bar is hidden with transient swipe reveal for an immersive window.
+Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The next shell pass will replace the drawer and persistent search field, restore the visible Android status bar, and add Home top spacing.
 
 Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
 
@@ -44,7 +44,16 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB now follows Komga's paginated interaction pattern. Reading is fullscreen with permanent chrome removed; left/right outer-quarter taps change pages and center taps toggle transient top/bottom controls for Back, location, chapters, theme, and text size. Device validation is required for typography, page breaks, images, chapter boundaries, and tap-zone comfort before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and center taps toggle Back, location, chapters, theme, text size, and the planned padding control. Device validation is required for typography, page breaks, images, chapter boundaries, tap-zone comfort, and the more generous default text inset before Checkpoint 4 is complete.
+
+### Device feedback workplan
+
+- Make Currently reading the first Home shelf and retain Recently read books as a distinct history shelf.
+- Replace the hamburger/drawer interaction with Plex-inspired bottom navigation and a top library selector/change action.
+- Replace Home's large persistent search field with a search icon and dedicated search layer.
+- Keep the Android status bar visible and add intentional Home top spacing.
+- Add reader padding controls and a larger default padding value.
+- Diagnose the launch spinner versus adaptive-icon presentation.
 
 ### Checkpoint 5: Other media readers - deferred
 

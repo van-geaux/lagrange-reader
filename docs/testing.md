@@ -14,6 +14,16 @@ You can begin manual testing once these conditions are true:
 
 Current Compose instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, browser loading states, and cached offline browser actions. `assembleDebugAndroidTest` compiles this coverage; run the connected test task when a device or emulator is available.
 
+## Latest device feedback — July 12, 2026
+
+- Server setup and login passed.
+- Full relaunch with an existing session passed.
+- Library browsing and navigation passed.
+- EPUB reading and the current pagination behavior passed.
+- Download, airplane-mode reopen, and progress-sync behavior passed.
+- A launch visual issue remains: a spinning loading indicator was observed instead of the expected app-specific adaptive-icon presentation.
+- The next device pass must also validate the Plex-inspired shell, first-row Currently reading shelf, visible status bar/Home spacing, search layer, and reader padding control after implementation.
+
 ## Manual Test Matrix
 
 ### 1. Server And Login
@@ -43,8 +53,8 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 ### 2. Library Browsing
 
-1. Confirm the post-login screen opens on Home with the menu button and search field visible.
-2. Open the drawer and confirm Home, Libraries, each available library, Series, Authors, Options, and Log out are present.
+1. Confirm the post-login screen opens on Home with the visible Android status bar, intentional top spacing, bottom navigation, and search icon visible.
+2. Confirm bottom navigation exposes the primary destinations without a hamburger drawer; open Libraries and verify the top-level library view and top library-change control.
 3. Select a library child and confirm its book list loads.
 4. Return Home and confirm shelves only appear when they contain matching books.
 5. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
@@ -54,16 +64,16 @@ Current Compose instrumentation coverage includes server setup validation, login
 9. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
 10. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work; use Preview separately and confirm normal progress is unchanged.
 11. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
-12. Confirm the status bar is hidden and can be revealed transiently with a system-edge swipe.
+12. Confirm the Android status bar remains visible and Home content has comfortable top spacing below it.
 13. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 
-1. Open an EPUB and confirm the text and images fill the viewport with no one-line-per-page layout, permanent app toolbar, or system bars.
+1. Open an EPUB and confirm the text and images fill the viewport with no one-line-per-page layout or permanent app toolbar; the standard Android status bar may remain visible.
 2. Tap the left and right outer quarters and swipe left and right; confirm each action moves exactly one paginated screen and navigation crosses chapter boundaries.
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
 4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
-5. Confirm changing theme or text size repaginates without enabling vertical scrolling, and images remain constrained to the page.
+5. Confirm changing theme, text size, or reader padding repaginates without enabling vertical scrolling, images remain constrained to the page, and the default text inset is comfortably away from the edges.
 6. Close and reopen the EPUB and confirm it returns to the saved chapter. Exact in-chapter page restore is not implemented yet.
 7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
 8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
