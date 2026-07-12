@@ -5,6 +5,22 @@ import org.junit.Test
 
 class HomeShelfTest {
     @Test
+    fun `currently reading includes any active progress and excludes completed books`() {
+        val current = seriesBook("book-current", index = 2.0).copy(
+            progressPercent = 25f,
+            lastReadAtMillis = 200L
+        )
+        val pageProgress = seriesBook("book-page", index = 3.0).copy(progressLabel = "Page 9")
+        val completed = seriesBook("book-complete", index = 1.0, isRead = true).copy(progressPercent = 100f)
+        val untouched = seriesBook("book-new", index = 4.0)
+
+        assertEquals(
+            listOf(current, pageProgress),
+            currentlyReadingBooks(listOf(untouched, completed, pageProgress, current))
+        )
+    }
+
+    @Test
     fun `on deck selects first unread book after a series has started`() {
         val first = seriesBook("book-1", index = 1.0, isRead = true)
         val next = seriesBook("book-2", index = 2.0)

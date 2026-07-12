@@ -846,9 +846,7 @@ private fun HomeFeed(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
 ) {
-    val keepReading = state.books
-        .filter { (it.progressPercent ?: 0f) > 0f && !it.isRead }
-        .sortedByDescending { it.lastReadAtMillis ?: it.progressPercent?.toLong() ?: 0L }
+    val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
     val onDeck = remember(state.books) { onDeckBooks(state.books) }
     val recentlyAddedBooks = state.books.sortedWith(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
@@ -888,7 +886,7 @@ private fun HomeFeed(
                 )
             }
         }
-        if (keepReading.isNotEmpty()) item { BookShelf("Keep reading", keepReading, coverLoader, onBookSelected) }
+        if (currentlyReading.isNotEmpty()) item { BookShelf("Currently reading", currentlyReading, coverLoader, onBookSelected) }
         if (onDeck.isNotEmpty()) item { BookShelf("On deck", onDeck, coverLoader, onBookSelected) }
         if (recentlyAddedBooks.isNotEmpty()) item { BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected) }
         if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
@@ -1581,6 +1579,25 @@ internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
             if (!hasStarted) null else ordered.firstOrNull { !it.isRead && (it.progressPercent ?: 0f) <= 0f }
         }
         .take(12)
+}
+
+internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> {
+    return books
+        .filter { !it.isRead && it.hasReadingActivity() }
+        .sortedWith(
+            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+                .thenByDescending { it.progressPercent ?: 0f }
+                .thenBy { it.title.lowercase() }
+        )
+        .take(12)
+}
+
+private fun BookSummary.hasReadingActivity(): Boolean {
+    return (progressPercent ?: 0f) > 0f ||
+        (progressPositionMs ?: 0L) > 0L ||
+        (progressPageIndex ?: 0) > 0 ||
+        !progressLabel.isNullOrBlank() ||
+        lastReadAtMillis != null
 }
 
 internal fun recentSeries(books: List<BookSummary>, useUpdatedAt: Boolean): List<Pair<String, BookSummary>> {

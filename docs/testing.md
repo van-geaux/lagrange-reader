@@ -22,7 +22,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - EPUB reading and the current pagination behavior passed.
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - A launch visual issue remains: a spinning loading indicator was observed instead of the expected app-specific adaptive-icon presentation.
-- The next device pass must also validate the Plex-inspired shell, first-row Currently reading shelf, visible status bar/Home spacing, search layer, and reader padding control after implementation.
+- The next device pass must validate the new first-row Currently reading shelf, then the Plex-inspired shell, visible status bar/Home spacing, search layer, and reader padding control as those items land.
 
 ## Manual Test Matrix
 
@@ -57,15 +57,16 @@ Current Compose instrumentation coverage includes server setup validation, login
 2. Confirm bottom navigation exposes the primary destinations without a hamburger drawer; open Libraries and verify the top-level library view and top library-change control.
 3. Select a library child and confirm its book list loads.
 4. Return Home and confirm shelves only appear when they contain matching books.
-5. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
-6. Confirm real book covers load on Home, search results, library lists, and detail screens.
-7. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
-8. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
-9. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
-10. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work; use Preview separately and confirm normal progress is unchanged.
-11. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
-12. Confirm the Android status bar remains visible and Home content has comfortable top spacing below it.
-13. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
+5. Confirm Currently reading is the first book shelf, active progress is shown there, completed books are excluded from it, and Recently read books remains a separate history shelf.
+6. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
+7. Confirm real book covers load on Home, search results, library lists, and detail screens.
+8. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
+9. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
+10. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
+11. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work; use Preview separately and confirm normal progress is unchanged.
+12. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
+13. Confirm the Android status bar remains visible and Home content has comfortable top spacing below it.
+14. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 

@@ -213,7 +213,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Page complete series requests within BookOrbit's 100-item server limit
 - [x] Add series synopsis and genre/tag context from the lead book
 - [x] Hide the Android status bar for the first immersive app-window candidate (superseded by device feedback)
-- [ ] Put Currently reading books in the first Home shelf
+- [x] Put Currently reading books in the first Home shelf
 - [ ] Replace the drawer-based browser shell with a Plex-inspired bottom navigation layout
 - [ ] Add a top-level library selector to the Libraries destination
 - [ ] Replace the persistent Home search field with a search icon and search layer
