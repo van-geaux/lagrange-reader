@@ -42,6 +42,19 @@ class ProgressPercentNormalizationTest {
     }
 
     @Test
+    fun `unknown percentage is not submitted as zero progress`() {
+        val payload = buildProgressPayload(
+            update(
+                mediaKind = MediaKind.EPUB,
+                fileId = "88",
+                progressPercent = null
+            )
+        )
+
+        assertEquals(null, payload)
+    }
+
+    @Test
     fun `low epub percentage restores near the beginning instead of the middle`() {
         assertEquals(0, percentToChapterIndex(0.5f, 100))
         assertEquals(1, percentToChapterIndex(1f, 100))
@@ -51,7 +64,7 @@ class ProgressPercentNormalizationTest {
     private fun update(
         mediaKind: MediaKind,
         fileId: String,
-        progressPercent: Float,
+        progressPercent: Float?,
         positionMs: Long = 0L
     ) = ProgressUpdate(
         id = "update",

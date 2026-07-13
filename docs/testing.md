@@ -123,3 +123,4 @@ Current instrumentation coverage includes server setup validation, login recover
 8. Advance that title in BookOrbit's web reader, return to Lagrange, refresh Home, and confirm the newer server percentage replaces the prior local overlay.
 9. Move backward by at least 10 percentage points in Lagrange and close the reader; confirm BookOrbit accepts the lower percentage as reread/correction progress instead of retaining an old 100% or higher marker.
 10. Repeat with a title below 1% progress and confirm neither side turns that value into 50% or 100%.
+11. Turn several pages rapidly while a sync is likely active, immediately close the reader, and confirm the last page—not an earlier in-flight page—reaches BookOrbit and the title remains in Currently Reading.

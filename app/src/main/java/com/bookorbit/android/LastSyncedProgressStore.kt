@@ -11,8 +11,6 @@ class LastSyncedProgressStore private constructor(
     private val file: File,
     @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
 ) {
-    private val mutex = Mutex()
-
     constructor(context: Context) : this(
         file = File(context.filesDir, "last_synced_progress.json"),
         directFileConstructor = true
@@ -85,6 +83,11 @@ class LastSyncedProgressStore private constructor(
             progressPercent = if (has("progressPercent") && !isNull("progressPercent")) normalizeStoredProgressPercent(optDouble("progressPercent").toFloat()) else null,
             updatedAtMillis = optLong("updatedAtMillis")
         )
+    }
+
+    private companion object {
+        // Foreground and WorkManager repositories share this file.
+        val mutex = Mutex()
     }
 }
 

@@ -92,6 +92,8 @@ The current app flow is:
 - Audio progress is throttled before persistence through a dedicated `ProgressQueuePolicy`; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
 - The repository persists the last successfully synced progress per target and skips only equivalent updates; it no longer rejects legitimate lower reread/correction events.
+- Foreground and WorkManager repository instances share queue and last-synced file locks. A replay removes only the exact event IDs it processed, preserving any newer same-book event written while the network request was in flight.
+- Rapid reader callbacks replace a short-delayed unique worker so the latest compacted event always has a trailing replay. Missing percentages are not serialized as zero-percent server updates.
 - After all current-server queue entries sync and a fresh library page loads, temporary in-memory progress overlays are cleared so BookOrbit or another client can become authoritative on refresh.
 - Reader reopen now consults the persisted last-synced progress marker when no newer queued progress exists, so local resume survives successful queue replay.
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.

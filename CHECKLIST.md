@@ -137,6 +137,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Parse BookOrbit's scalar `readingProgress` card field and nested `readStatus`
 - [x] Keep progress on one canonical 0-100 scale through readers, persistence, and API payloads
 - [x] Allow newer reread/backward events to repair stale or inflated server progress
+- [x] Preserve reader updates enqueued while foreground or WorkManager sync is in flight
+- [x] Reject unknown progress payloads instead of resetting BookOrbit to zero percent
 - [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
 - [ ] Add session event support if `sessions` endpoint is useful
 
@@ -148,6 +150,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use newest-progress-wins policy in stored events
 - [x] Verify queue replay against live BookOrbit server for the tested EPUB flow
 - [x] Prevent duplicate progress submissions without discarding valid reread/backward updates
+- [x] Share queue/marker file locks across repository instances and acknowledge posted event IDs only
+- [x] Debounce rapid reader callbacks into a trailing replacement worker
 - [x] Collapse multiple pending updates for the same book/file
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures

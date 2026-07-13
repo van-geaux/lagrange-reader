@@ -180,7 +180,9 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 2. Implemented: use one canonical 0-100 percentage scale across EPUB, PDF, comic, audiobook, persistence, conflict checks, and BookOrbit request payloads; low progress values are no longer multiplied twice.
 3. Implemented: suppress only equivalent submissions, allowing newer reread/backward events to repair stale or accidentally inflated server markers.
 4. Implemented: after successful queue replay and a fresh page load, clear temporary local progress overlays so refreshed BookOrbit progress can flow back into Lagrange.
-5. JVM tests, debug APK assembly, and Android instrumentation-test compilation pass. Physical-device validation remains required in both directions against the target BookOrbit server.
+5. Implemented after device feedback: serialize queue/marker access across foreground and WorkManager repository instances, acknowledge only posted snapshot IDs, and schedule a trailing debounced worker so an in-flight replay cannot erase the reader's newer page update.
+6. Implemented: retain the known book percentage when a callback omits it and reject any still-unknown percentage instead of submitting an accidental zero-percent update that can remove BookOrbit's reading status.
+7. Focused JVM tests pass. Physical-device validation remains required in both directions against the target BookOrbit server.
 
 ### Latest device feedback workplan - 2026-07-13 (cache-first catalog and exact jumps)
 

@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -49,6 +51,14 @@ import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 private const val LIBRARY_PAGE_SIZE = 50
+private val progressSyncMutex = Mutex()
+
+private enum class ProgressPostResult {
+    ACCEPTED,
+    ALREADY_SYNCED,
+    INVALID,
+    DEFERRED
+}
 
 internal fun extractAccessToken(payload: String): String? {
     val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
@@ -790,7 +800,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             mediaKind = book.mediaKind,
             positionMs = position,
             pageIndex = pageIndex,
-            progressPercent = normalizeStoredProgressPercent(progressPercent),
+            progressPercent = normalizeStoredProgressPercent(progressPercent ?: book.progressPercent),
             updatedAtMillis = System.currentTimeMillis()
         )
         val lastSynced = lastSyncedProgressStore.read(update.progressKey())
@@ -806,48 +816,52 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun syncPendingProgress(): SyncAttemptResult = withContext(Dispatchers.IO) {
-        val pending = queueStore.readAll()
-        if (pending.isEmpty()) {
-            return@withContext SyncAttemptResult.Success
-        }
-        val currentServerUrl = getServerUrl().orEmpty()
-        val survivors = mutableListOf<ProgressUpdate>()
-        val orderedPending = pending.sortedBy { it.updatedAtMillis }
-        var authBlocked = false
-        var transientFailure = false
-        orderedPending.forEach { item ->
-            if (authBlocked) {
-                survivors += item
-                return@forEach
+        // The foreground coordinator and WorkManager can both ask for a replay. Serialize
+        // submissions across repository instances, while still allowing the reader to enqueue
+        // a newer update during the network request.
+        progressSyncMutex.withLock {
+            val pending = queueStore.readAll()
+            if (pending.isEmpty()) {
+                return@withLock SyncAttemptResult.Success
             }
-            if (!item.targetsServer(currentServerUrl)) {
-                survivors += item
-                return@forEach
+            val currentServerUrl = getServerUrl().orEmpty()
+            val acknowledgedIds = mutableSetOf<String>()
+            val orderedPending = pending.sortedBy { it.updatedAtMillis }
+            var authBlocked = false
+            var transientFailure = false
+            orderedPending.forEach { item ->
+                if (authBlocked || !item.targetsServer(currentServerUrl)) {
+                    return@forEach
+                }
+                runCatching { postProgress(item) }
+                    .onSuccess { result ->
+                        when (result) {
+                            ProgressPostResult.ACCEPTED -> {
+                                lastSyncedProgressStore.save(item)
+                                acknowledgedIds += item.id
+                            }
+                            ProgressPostResult.ALREADY_SYNCED,
+                            ProgressPostResult.INVALID -> acknowledgedIds += item.id
+                            ProgressPostResult.DEFERRED -> Unit
+                        }
+                    }
+                    .onFailure { error ->
+                        if (error is AuthenticationRequiredException) {
+                            authBlocked = true
+                        } else {
+                            transientFailure = true
+                        }
+                    }
+                    .getOrNull()
             }
-            runCatching { postProgress(item) }
-                .onSuccess { submitted ->
-                    if (submitted) {
-                        lastSyncedProgressStore.save(item)
-                    } else {
-                        survivors += item
-                    }
-                }
-                .onFailure { error ->
-                    if (error is AuthenticationRequiredException) {
-                        authBlocked = true
-                        survivors += item
-                    } else {
-                        transientFailure = true
-                        survivors += item
-                    }
-                }
-                .getOrNull()
-        }
-        queueStore.replaceAll(survivors)
-        when {
-            authBlocked -> SyncAttemptResult.AuthenticationBlocked
-            transientFailure && survivors.isNotEmpty() -> SyncAttemptResult.TransientFailure
-            else -> SyncAttemptResult.Success
+            // Remove only the posted snapshot IDs. A newer update for the same book/file may
+            // have replaced one of them while the request was in flight and must remain queued.
+            queueStore.acknowledge(acknowledgedIds)
+            when {
+                authBlocked -> SyncAttemptResult.AuthenticationBlocked
+                transientFailure -> SyncAttemptResult.TransientFailure
+                else -> SyncAttemptResult.Success
+            }
         }
     }
 
@@ -888,26 +902,26 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    private suspend fun postProgress(item: ProgressUpdate): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun postProgress(item: ProgressUpdate): ProgressPostResult = withContext(Dispatchers.IO) {
         if (item.serverUrl.isBlank() || item.serverUrl != getServerUrl().orEmpty()) {
-            return@withContext false
+            return@withContext ProgressPostResult.DEFERRED
         }
         val lastSynced = lastSyncedProgressStore.read(item.progressKey())
         if (lastSynced != null && item.isStaleComparedTo(lastSynced)) {
-            return@withContext false
+            return@withContext ProgressPostResult.ALREADY_SYNCED
         }
 
         val path = if (item.mediaKind == MediaKind.AUDIO) {
             "/api/v1/books/${item.bookId}/audio-progress"
         } else {
-            val fileId = item.fileId ?: return@withContext false
+            val fileId = item.fileId ?: return@withContext ProgressPostResult.INVALID
             "/api/v1/books/files/$fileId/progress"
         }
 
-        val payload = buildProgressPayload(item) ?: return@withContext false
+        val payload = buildProgressPayload(item) ?: return@withContext ProgressPostResult.INVALID
 
         request(path, if (item.mediaKind == MediaKind.AUDIO) "PATCH" else "POST", payload.toString().toRequestBody(JSON))
-        true
+        ProgressPostResult.ACCEPTED
     }
 
     private fun enqueueSyncWorker() {
@@ -922,10 +936,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 15,
                 TimeUnit.SECONDS
             )
+            // Debounce rapid page callbacks into one replay of the latest compacted update.
+            .setInitialDelay(2, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             "bookorbit-progress-sync",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }
@@ -2142,8 +2158,9 @@ internal fun ProgressUpdate.normalizedProgressPercent(): Float {
 }
 
 internal fun buildProgressPayload(item: ProgressUpdate): JSONObject? {
+    val percentage = normalizeStoredProgressPercent(item.progressPercent) ?: return null
     return JSONObject().apply {
-        put("percentage", (normalizeStoredProgressPercent(item.progressPercent) ?: 0f).toDouble())
+        put("percentage", percentage.toDouble())
         if (item.mediaKind == MediaKind.AUDIO) {
             put("currentFileId", item.fileId?.toIntOrNull() ?: return null)
             put("positionSeconds", item.positionMs / 1000.0)

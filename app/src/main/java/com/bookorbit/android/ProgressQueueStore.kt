@@ -11,8 +11,6 @@ class ProgressQueueStore private constructor(
     private val file: File,
     @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
 ) {
-    private val mutex = Mutex()
-
     constructor(context: Context) : this(
         file = File(context.filesDir, "pending_progress.json"),
         directFileConstructor = true
@@ -44,6 +42,19 @@ class ProgressQueueStore private constructor(
 
     suspend fun replaceAll(items: List<ProgressUpdate>) = mutex.withLock {
         writeUnlocked(compact(items))
+    }
+
+    /**
+     * Removes only the exact updates that a sync attempt processed.
+     *
+     * A reader can enqueue a newer update for the same target while an older snapshot is
+     * being posted. Rewriting that old snapshot would erase the newer update, so sync uses
+     * stable update IDs as acknowledgements instead.
+     */
+    suspend fun acknowledge(ids: Set<String>) = mutex.withLock {
+        if (ids.isEmpty()) return@withLock
+        val remaining = readUnlocked().filterNot { it.id in ids }
+        writeUnlocked(remaining)
     }
 
     suspend fun clear() = mutex.withLock {
@@ -130,5 +141,11 @@ class ProgressQueueStore private constructor(
 
     private fun ProgressUpdate.targetKey(): String {
         return listOf(serverUrl, mediaKind.name, bookId, fileId.orEmpty()).joinToString("|")
+    }
+
+    private companion object {
+        // WorkManager and the foreground coordinator construct separate repository/store
+        // instances in the same process. They must still serialize access to this file.
+        val mutex = Mutex()
     }
 }

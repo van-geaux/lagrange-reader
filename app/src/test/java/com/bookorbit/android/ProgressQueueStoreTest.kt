@@ -79,6 +79,41 @@ class ProgressQueueStoreTest {
     }
 
     @Test
+    fun `acknowledging an older snapshot preserves a newer update for the same target`() = runBlocking {
+        val filesDir = Files.createTempDirectory("progress-queue-acknowledge").toFile()
+        val syncingStore = ProgressQueueStore(filesDir)
+        val readerStore = ProgressQueueStore(filesDir)
+
+        syncingStore.enqueue(
+            update(
+                id = "in-flight",
+                bookId = "book-1",
+                fileId = "file-1",
+                mediaKind = MediaKind.EPUB,
+                progressPercent = 10f,
+                updatedAtMillis = 10L
+            )
+        )
+        val syncingSnapshot = syncingStore.readAll().single()
+
+        readerStore.enqueue(
+            update(
+                id = "newer-page",
+                bookId = "book-1",
+                fileId = "file-1",
+                mediaKind = MediaKind.EPUB,
+                progressPercent = 20f,
+                updatedAtMillis = 20L
+            )
+        )
+        syncingStore.acknowledge(setOf(syncingSnapshot.id))
+
+        val remaining = readerStore.readAll()
+        assertEquals(listOf("newer-page"), remaining.map { it.id })
+        assertEquals(20f, remaining.single().progressPercent)
+    }
+
+    @Test
     fun `latestFor matches the exact server media book and file target`() = runBlocking {
         val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-latest").toFile())
         store.replaceAll(
