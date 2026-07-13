@@ -109,4 +109,6 @@ Current Compose instrumentation coverage includes server setup validation, login
 1. Read or listen long enough to create progress updates.
 2. Go offline and continue generating progress.
 3. Reconnect the device.
-4. Confirm queued progress leaves the debug queue and reaches the server.
+4. Close the reader immediately after a page change and confirm the final progress still leaves the debug queue and reaches the server.
+5. Fully relaunch the app and confirm the first Home render already shows the current-reading shelf without opening and closing the book first.
+6. Change Top and Bottom padding to visibly different values, close and reopen the same EPUB, and confirm both values persist independently and the text inset remains changed.

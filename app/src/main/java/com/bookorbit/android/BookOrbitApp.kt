@@ -641,6 +641,7 @@ private fun ReaderScreen(
     if (state.book.mediaKind == MediaKind.EPUB) {
         EpubReaderView(
             title = state.book.title,
+            readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
             file = state.localFile,
             initialChapter = if (isPreview) 0 else state.pageIndex,
             initialPage = if (isPreview) 0 else state.readerPageIndex,
@@ -1016,6 +1017,7 @@ private fun PdfReaderView(
 @Composable
 private fun EpubReaderView(
     title: String,
+    readerKey: String,
     file: File?,
     initialChapter: Int,
     initialPage: Int,
@@ -1036,6 +1038,7 @@ private fun EpubReaderView(
         }
     }
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
+    val paddingStore = remember(context) { EpubReaderPaddingStore(context) }
     if (file == null || !file.exists()) {
         ReaderMessage("Unable to prepare this EPUB.")
         return
@@ -1060,8 +1063,8 @@ private fun EpubReaderView(
     }
     var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
     var fontScale by remember(file) { mutableStateOf(1f) }
-    var paddingDraft by remember(file) { mutableStateOf(EpubPaddingPercentages()) }
-    var appliedPadding by remember(file) { mutableStateOf(EpubPaddingPercentages()) }
+    var paddingDraft by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
+    var appliedPadding by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
     var showControls by remember(file) { mutableStateOf(false) }
     var showChapterPicker by remember(file) { mutableStateOf(false) }
     var currentPage by remember(file, initialPage) { mutableStateOf(initialPage.coerceAtLeast(0)) }
@@ -1071,6 +1074,7 @@ private fun EpubReaderView(
     val applyPadding = { next: EpubPaddingPercentages ->
         paddingDraft = next
         appliedPadding = next
+        paddingStore.save(readerKey, next)
     }
     val centerTap = rememberUpdatedState {
         if (!showControls) {
@@ -1104,6 +1108,7 @@ private fun EpubReaderView(
     LaunchedEffect(paddingDraft) {
         delay(180)
         appliedPadding = paddingDraft
+        paddingStore.save(readerKey, paddingDraft)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(selectedTheme.backgroundColor))) {
@@ -1683,7 +1688,8 @@ internal fun styleEpubHtml(
             width: calc(100vw - ${formatEpubCssPercent(pageInsetWidth)}vw);
             height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
             min-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
-            overflow: visible;
+            overflow: hidden;
+            display: block;
             word-wrap: break-word;
             will-change: transform;
         }
@@ -1809,7 +1815,7 @@ internal data class EpubPaddingPercentages(
     val right: Float = EPUB_DEFAULT_PADDING_PERCENT
 )
 
-private const val EPUB_DEFAULT_PADDING_PERCENT = 15f
+internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")

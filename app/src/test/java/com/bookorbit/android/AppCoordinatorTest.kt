@@ -452,6 +452,29 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `reader progress is captured before close and synced before browser refresh`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        assertEquals(listOf(book), repository.queuedProgress)
+        assertTrue(repository.syncPendingProgressCalls >= 1)
+        assertEquals(1, repository.clearActiveReaderCalls)
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -523,6 +546,7 @@ private class FakeBookOrbitDataSource(
     val queuedProgress = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
     var clearActiveReaderCalls = 0
+    var syncPendingProgressCalls = 0
     var sessionStateRequested = false
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
@@ -609,11 +633,22 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun pendingProgressCount(): Int = pendingProgressCountResult
 
-    override suspend fun syncPendingProgress(): SyncAttemptResult = syncPendingProgressResult
+    override suspend fun syncPendingProgress(): SyncAttemptResult {
+        syncPendingProgressCalls += 1
+        return syncPendingProgressResult
+    }
 
     override suspend fun canReachServer(serverUrl: String): Boolean = checkServerResult == ServerCheckResult.Reachable
 
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = checkServerResult
+}
+
+private fun AppCoordinator.setScreenForTest(screen: AppScreen) {
+    val field = AppCoordinator::class.java.getDeclaredField("_screen")
+    field.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val state = field.get(this) as kotlinx.coroutines.flow.MutableStateFlow<AppScreen>
+    state.value = screen
 }
 
 private fun AppCoordinator.bootstrapIntoBrowser(state: BrowserState) {

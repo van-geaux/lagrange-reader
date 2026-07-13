@@ -340,6 +340,10 @@ class AppCoordinator(
                     preferredId = repository.getSelectedLibraryId(),
                     libraries = libraries
                 )
+                // Flush queued reader progress before loading the first page. This makes
+                // the first Home render reflect progress that was created in an earlier
+                // session instead of showing Continue reading only after a second open.
+                repository.syncPendingProgress()
                 val booksPage = selectedLibrary?.let { repository.loadBooksPage(it, 0) }
                     ?: LibraryBooksPage()
                 val pendingProgressCount = repository.pendingProgressCount()
@@ -363,13 +367,6 @@ class AppCoordinator(
                 if (selectedLibrary != null) {
                     repository.setSelectedLibraryId(selectedLibrary)
                 }
-                repository.syncPendingProgress()
-                val refreshed = lastBrowserState ?: return@runCatching
-                showBrowser(
-                    refreshed.copy(
-                        debugPendingProgressCount = repository.pendingProgressCount()
-                    )
-                )
             }.onFailure { error ->
                 if (error is AuthenticationRequiredException) {
                     showLogin(
@@ -688,19 +685,21 @@ class AppCoordinator(
     }
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        if ((_screen.value as? AppScreen.Reader)?.readerState?.launchMode == ReaderLaunchMode.PREVIEW) {
+            return
+        }
+        val key = book.progressKey()
+        val progress = PendingProgress(
+            book = book,
+            position = position,
+            pageIndex = pageIndex,
+            progressPercent = progressPercent,
+            observedAtMillis = System.currentTimeMillis()
+        )
+        // Keep this assignment outside the coroutine. A reader can be closed immediately
+        // after a page callback, and closeReader must still be able to flush this update.
+        latestProgressByTarget[key] = progress
         scope.launch {
-            if ((_screen.value as? AppScreen.Reader)?.readerState?.launchMode == ReaderLaunchMode.PREVIEW) {
-                return@launch
-            }
-            val key = book.progressKey()
-            val progress = PendingProgress(
-                book = book,
-                position = position,
-                pageIndex = pageIndex,
-                progressPercent = progressPercent,
-                observedAtMillis = System.currentTimeMillis()
-            )
-            latestProgressByTarget[key] = progress
             repository.saveActiveReader(
                 book.copy(
                     progressPositionMs = position.takeIf { it > 0L } ?: book.progressPositionMs,
@@ -735,6 +734,9 @@ class AppCoordinator(
             val reader = _screen.value as? AppScreen.Reader
             if (reader?.readerState?.launchMode != ReaderLaunchMode.PREVIEW) {
                 flushCurrentReaderProgress()
+                // Try to publish before clearing the active reader. WorkManager remains
+                // the fallback for offline/transient failures.
+                runCatching { repository.syncPendingProgress() }
                 repository.clearActiveReader()
             }
             loadBrowser()

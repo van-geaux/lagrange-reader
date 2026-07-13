@@ -151,6 +151,12 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 6. Implemented: apply all four reader padding values immediately during slider movement, with an explicit WebView viewport and page-strip height to make top/bottom changes visible.
 7. Physical-device validation remains next for session expiry, series thumbnails, Continue reading latency, card density, card row wrapping, and reader padding visibility.
 
+### Latest device feedback workplan - 2026-07-13 (progress and reader persistence)
+
+1. Implemented: capture reader progress synchronously and flush it before closing the reader; browser bootstrap now syncs queued progress before its first library load so the server and first Home render agree.
+2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file and clip the page strip to the configured viewport insets so Top and Bottom changes affect the visible page.
+3. Active next: add a server-aligned filter button to Library Browse and Series, with the same common filter controls applied locally to Local books.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
