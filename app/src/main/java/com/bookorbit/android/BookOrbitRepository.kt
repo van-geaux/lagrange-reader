@@ -702,14 +702,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val orderedPending = pending.sortedBy { it.updatedAtMillis }
         var authBlocked = false
         var transientFailure = false
-        orderedPending.forEachIndexed { index, item ->
+        orderedPending.forEach { item ->
             if (authBlocked) {
                 survivors += item
-                return@forEachIndexed
+                return@forEach
             }
             if (!item.targetsServer(currentServerUrl)) {
                 survivors += item
-                return@forEachIndexed
+                return@forEach
             }
             runCatching { postProgress(item) }
                 .onSuccess { submitted ->
@@ -723,7 +723,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     if (error is AuthenticationRequiredException) {
                         authBlocked = true
                         survivors += item
-                        survivors += orderedPending.drop(index + 1)
                     } else {
                         transientFailure = true
                         survivors += item
@@ -792,20 +791,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             "/api/v1/books/files/$fileId/progress"
         }
 
-        val payload = JSONObject().apply {
-            put("percentage", normalizePercentage(item.progressPercent))
-            if (item.mediaKind == MediaKind.AUDIO) {
-                put("currentFileId", item.fileId?.toIntOrNull() ?: return@withContext false)
-                put("positionSeconds", item.positionMs / 1000.0)
-            } else {
-                if (item.pageIndex > 0) {
-                    put("pageNumber", item.pageIndex + 1)
-                }
-                if (item.positionMs > 0L) {
-                    put("positionSeconds", item.positionMs / 1000.0)
-                }
-            }
-        }
+        val payload = buildProgressPayload(item) ?: return@withContext false
 
         request(path, if (item.mediaKind == MediaKind.AUDIO) "PATCH" else "POST", payload.toString().toRequestBody(JSON))
         true
@@ -1116,12 +1102,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }.getOrDefault(false)
     }
 
-    private fun normalizePercentage(value: Float?): Double {
-        val raw = value ?: 0f
-        val scaled = if (raw in 0f..1f) raw * 100f else raw
-        return scaled.coerceIn(0f, 100f).toDouble()
-    }
-
     private fun requestAction(path: String, method: String): String {
         return when {
             path == "/api/v1/libraries" -> "load libraries"
@@ -1287,9 +1267,26 @@ internal object BookOrbitPayloadParser {
                     ?: obj.optJSONObject("readProgress")
                     ?: obj.optJSONObject("userProgress")
                     ?: obj.optJSONObject("progress")
+                val readStatus = obj.optJSONObject("readStatus")
+                    ?: obj.optJSONObject("readingStatus")
+                    ?: obj.optJSONObject("userBookStatus")
                 val series = obj.optJSONObject("series")
                     ?: obj.optJSONArray("series")?.optJSONObject(0)
-                val progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent())
+                val progressPercent = normalizeStoredProgressPercent(
+                    readingProgress.progressPercent()
+                        ?: obj.numberValue(
+                            "readingProgress",
+                            "readProgress",
+                            "userProgress",
+                            "progressPercent"
+                        )?.toFloat()
+                )
+                val progressLabel = progressPercent
+                    ?.let { "${formatProgressValue(it)}%" }
+                    ?: readingProgress.progressLabel()
+                val readStatusValue = readStatus?.stringValue("status", "state")
+                    ?.trim()
+                    ?.lowercase(Locale.US)
                 add(
                     BookSummary(
                         libraryId = obj.stringValue("libraryId", "library_id") ?: libraryId,
@@ -1303,7 +1300,7 @@ internal object BookOrbitPayloadParser {
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
                         localPath = fileId?.let { downloads[it]?.localPath },
-                        progressLabel = readingProgress.progressLabel(),
+                        progressLabel = progressLabel,
                         progressPercent = progressPercent,
                         progressPositionMs = readingProgress.progressPositionMs(),
                         progressPageIndex = readingProgress.progressPageIndex(),
@@ -1316,12 +1313,15 @@ internal object BookOrbitPayloadParser {
                             ?: series?.numberValue("index", "number", "position"),
                         isRead = progressPercent?.let { it >= 99.5f } == true ||
                             readingProgress.booleanValue("completed", "isRead", "read") ||
+                            readStatusValue == "read" ||
+                            readStatusValue == "skimmed" ||
                             obj.booleanValue("isRead", "read"),
                         addedAtMillis = obj.timestampValue("createdAt", "addedAt", "dateAdded"),
                         updatedAtMillis = obj.timestampValue("updatedAt", "modifiedAt", "dateModified"),
                         lastReadAtMillis = readingProgress.timestampValue(
                             "updatedAt", "lastReadAt", "finishedAt", "completedAt"
-                        ) ?: obj.timestampValue("lastReadAt", "lastReadDate")
+                        ) ?: readStatus.timestampValue("finishedAt", "startedAt", "updatedAt")
+                            ?: obj.timestampValue("lastReadAt", "lastReadDate")
                     )
                 )
             }
@@ -1846,7 +1846,7 @@ internal object BookOrbitPayloadParser {
     }
 
     private fun normalizeProgressValue(value: Float): Float {
-        return if (value in 0f..1f) value * 100f else value
+        return value.coerceIn(0f, 100f)
     }
 
     private fun formatProgressValue(value: Float): String {
@@ -1930,12 +1930,11 @@ internal fun resolveSelectedLibraryId(
 
 internal fun normalizeStoredProgressPercent(value: Float?): Float? {
     value ?: return null
-    val normalized = if (value in 0f..1f) value * 100f else value
-    return normalized.coerceIn(0f, 100f)
+    return value.coerceIn(0f, 100f)
 }
 
 internal fun ProgressUpdate.isStaleComparedTo(other: ProgressUpdate): Boolean {
-    return sameProgressAs(other) || isNotAheadOf(other)
+    return sameProgressAs(other)
 }
 
 private fun ProgressUpdate.sameProgressAs(other: ProgressUpdate): Boolean {
@@ -1944,15 +1943,25 @@ private fun ProgressUpdate.sameProgressAs(other: ProgressUpdate): Boolean {
         normalizedProgressPercent() == other.normalizedProgressPercent()
 }
 
-private fun ProgressUpdate.isNotAheadOf(other: ProgressUpdate): Boolean {
-    return pageIndex <= other.pageIndex &&
-        positionMs <= other.positionMs &&
-        normalizedProgressPercent() <= other.normalizedProgressPercent()
+internal fun ProgressUpdate.normalizedProgressPercent(): Float {
+    return normalizeStoredProgressPercent(progressPercent) ?: 0f
 }
 
-internal fun ProgressUpdate.normalizedProgressPercent(): Float {
-    val value = progressPercent ?: 0f
-    return if (value in 0f..1f) value * 100f else value
+internal fun buildProgressPayload(item: ProgressUpdate): JSONObject? {
+    return JSONObject().apply {
+        put("percentage", (normalizeStoredProgressPercent(item.progressPercent) ?: 0f).toDouble())
+        if (item.mediaKind == MediaKind.AUDIO) {
+            put("currentFileId", item.fileId?.toIntOrNull() ?: return null)
+            put("positionSeconds", item.positionMs / 1000.0)
+        } else {
+            if (item.pageIndex > 0) {
+                put("pageNumber", item.pageIndex + 1)
+            }
+            if (item.positionMs > 0L) {
+                put("positionSeconds", item.positionMs / 1000.0)
+            }
+        }
+    }
 }
 
 internal fun ProgressUpdate.targetsServer(currentServerUrl: String): Boolean {
@@ -2010,6 +2019,5 @@ internal fun ReaderProgressState.isAheadOf(other: ReaderProgressState): Boolean 
 }
 
 private fun ReaderProgressState.normalizedProgressPercent(): Float {
-    val value = progressPercent ?: 0f
-    return if (value in 0f..1f) value * 100f else value
+    return normalizeStoredProgressPercent(progressPercent) ?: 0f
 }

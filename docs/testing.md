@@ -28,6 +28,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, the placeholder About destination, swipe-down refresh, and persistent cover-thumbnail caching are implemented. Physical-device validation remains required for the new behavior.
 - The latest reader follow-up restores the same single visible-overflow strip used before the blank-screen regression. Target-device testing confirms that EPUB content renders and that Top/Bottom WebView resizing plus Left/Right in-page updates visibly change the reader padding.
 - The July 13 follow-up adds refresh-cookie retry before session-expired recovery, deterministic/retried Series catalog covers with in-memory image caching, immediate Continue reading updates, smaller shared typography, and title/series/index card metadata rows. These changes require physical-device validation.
+- The progress reconciliation follow-up parses BookOrbit's numeric `readingProgress` and nested `readStatus`, keeps all reader and API values on a single 0-100 scale, and permits newer reread/backward corrections. JVM tests, debug assembly, and instrumentation-test compilation pass; target-server bidirectional validation is required.
 
 ## Manual Test Matrix
 
@@ -116,3 +117,7 @@ Current instrumentation coverage includes server setup validation, login recover
 4. Close the reader immediately after a page change and confirm the final progress still leaves the debug queue and reaches the server.
 5. Fully relaunch the app and confirm the first Home render already shows the current-reading shelf without opening and closing the book first.
 6. Change Top and Bottom padding to visibly different values, close and reopen the same EPUB, and confirm both values persist independently and the text inset remains changed.
+7. Read an unfinished EPUB in Lagrange, close the reader, refresh BookOrbit's web app, and confirm the same title and approximate percentage appear in BookOrbit's Currently Reading view.
+8. Advance that title in BookOrbit's web reader, return to Lagrange, refresh Home, and confirm the newer server percentage replaces the prior local overlay.
+9. Move backward by at least 10 percentage points in Lagrange and close the reader; confirm BookOrbit accepts the lower percentage as reread/correction progress instead of retaining an old 100% or higher marker.
+10. Repeat with a title below 1% progress and confirm neither side turns that value into 50% or 100%.

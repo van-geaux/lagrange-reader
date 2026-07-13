@@ -475,6 +475,35 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `successful sync lets refreshed server progress replace the local overlay`() = runTest {
+        val serverBook = book.copy(progressPercent = 72f, progressLabel = "72%")
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(serverBook)
+        ).apply {
+            selectedLibraryId = library.id
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+
+        coordinator.onProgress(book, position = 0L, pageIndex = 2, progressPercent = 25f)
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        val refreshed = coordinator.screen.value as AppScreen.Browser
+        assertEquals(72f, refreshed.browserState.books.single().progressPercent)
+        assertEquals("72%", refreshed.browserState.books.single().progressLabel)
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,

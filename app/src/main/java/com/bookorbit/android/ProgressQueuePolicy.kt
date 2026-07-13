@@ -42,7 +42,7 @@ internal object ProgressQueuePolicy {
     }
 
     private fun normalizeProgressPercent(value: Float): Float {
-        return if (value in 0f..1f) value * 100f else value
+        return value.coerceIn(0f, 100f)
     }
 
     private const val MIN_AUDIO_PROGRESS_QUEUE_INTERVAL_MS = 15_000L

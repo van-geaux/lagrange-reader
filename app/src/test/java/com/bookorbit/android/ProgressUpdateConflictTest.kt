@@ -14,22 +14,30 @@ class ProgressUpdateConflictTest {
     }
 
     @Test
-    fun `stale comparison normalizes fractional percentages`() {
+    fun `stale comparison preserves low canonical percentages`() {
         val baseline = update(pageIndex = 10, positionMs = 90_000L, progressPercent = 50f)
-        val fractional = update(pageIndex = 10, positionMs = 90_000L, progressPercent = 0.5f)
+        val lowPercent = update(pageIndex = 10, positionMs = 90_000L, progressPercent = 0.5f)
 
-        assertEqualsWithTolerance(50f, fractional.normalizedProgressPercent())
-        assertTrue(fractional.isStaleComparedTo(baseline))
+        assertEqualsWithTolerance(0.5f, lowPercent.normalizedProgressPercent())
+        assertFalse(lowPercent.isStaleComparedTo(baseline))
     }
 
     @Test
-    fun `stale comparison keeps newer progress when any dimension moves forward`() {
+    fun `stale comparison only suppresses equivalent progress`() {
         val baseline = update(pageIndex = 4, positionMs = 30_000L, progressPercent = 50f)
         val ahead = update(pageIndex = 5, positionMs = 30_000L, progressPercent = 50f)
         val regressed = update(pageIndex = 3, positionMs = 25_000L, progressPercent = 45f)
 
         assertFalse(ahead.isStaleComparedTo(baseline))
-        assertTrue(regressed.isStaleComparedTo(baseline))
+        assertFalse(regressed.isStaleComparedTo(baseline))
+    }
+
+    @Test
+    fun `lower reread progress can repair an inflated last synced marker`() {
+        val inflated = update(pageIndex = 0, positionMs = 0L, progressPercent = 100f)
+        val reread = update(pageIndex = 0, positionMs = 0L, progressPercent = 2.5f)
+
+        assertFalse(reread.isStaleComparedTo(inflated))
     }
 
     @Test

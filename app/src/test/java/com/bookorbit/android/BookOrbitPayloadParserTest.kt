@@ -142,7 +142,7 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
-    fun `parseBooks normalizes progress labels from fractional percentages and seconds`() {
+    fun `parseBooks preserves low server percentages and formats seconds`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-4",
             payload = """
@@ -176,9 +176,57 @@ class BookOrbitPayloadParserTest {
             serverBase = "https://example.test"
         )
 
-        assertEquals("37.5%", books[0].progressLabel)
-        assertEquals(37.5f, books[0].progressPercent)
+        assertEquals("0.38%", books[0].progressLabel)
+        assertEquals(0.375f, books[0].progressPercent)
         assertEquals("Page 9", books[1].progressLabel)
+    }
+
+    @Test
+    fun `parseBooks accepts current scalar reading progress and read status contract`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-current-contract",
+            payload = """
+                {
+                  "items": [
+                    {
+                      "id": 41,
+                      "title": "Server Progress",
+                      "authors": ["Server Author"],
+                      "files": [{"id": 88, "format": "epub", "role": "primary"}],
+                      "readingProgress": 42.5,
+                      "readStatus": {
+                        "status": "reading",
+                        "source": "auto",
+                        "startedAt": "2026-07-10T12:34:56Z",
+                        "finishedAt": null
+                      }
+                    },
+                    {
+                      "id": 42,
+                      "title": "Server Finished",
+                      "files": [{"id": 89, "format": "epub", "role": "primary"}],
+                      "readingProgress": 100,
+                      "readStatus": {
+                        "status": "read",
+                        "source": "auto",
+                        "startedAt": "2026-07-01T00:00:00Z",
+                        "finishedAt": "2026-07-11T00:00:00Z"
+                      }
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(42.5f, books[0].progressPercent)
+        assertEquals("42.5%", books[0].progressLabel)
+        assertEquals(1_783_686_896_000L, books[0].lastReadAtMillis)
+        assertEquals(false, books[0].isRead)
+        assertEquals(100f, books[1].progressPercent)
+        assertTrue(books[1].isRead)
+        assertEquals(1_783_728_000_000L, books[1].lastReadAtMillis)
     }
 
     @Test

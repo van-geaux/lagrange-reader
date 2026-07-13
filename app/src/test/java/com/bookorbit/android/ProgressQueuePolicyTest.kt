@@ -78,7 +78,7 @@ class ProgressQueuePolicyTest {
     }
 
     @Test
-    fun `audio progress normalizes fractional percentages before comparing`() {
+    fun `audio progress preserves low canonical percentages when comparing`() {
         val previous = snapshot(
             mediaKind = MediaKind.AUDIO,
             positionMs = 30_000L,
@@ -92,7 +92,7 @@ class ProgressQueuePolicyTest {
             observedAtMillis = 5_000L
         )
 
-        assertFalse(ProgressQueuePolicy.isMeaningfullyDifferent(current, previous))
+        assertTrue(ProgressQueuePolicy.isMeaningfullyDifferent(current, previous))
     }
 
     private fun snapshot(

@@ -212,6 +212,24 @@ class ProgressQueueStoreTest {
         assertEquals(0, store.countFor("https://missing.example"))
     }
 
+    @Test
+    fun `stored low percentages remain canonical percentages`() = runBlocking {
+        val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-low-percent").toFile())
+
+        store.enqueue(
+            update(
+                id = "low-percent",
+                bookId = "book-low",
+                fileId = "file-low",
+                mediaKind = MediaKind.EPUB,
+                progressPercent = 0.375f,
+                updatedAtMillis = 10L
+            )
+        )
+
+        assertEquals(0.375f, store.readAll().single().progressPercent)
+    }
+
     private fun update(
         id: String,
         bookId: String,

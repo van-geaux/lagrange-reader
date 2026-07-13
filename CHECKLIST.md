@@ -134,6 +134,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add throttling/debouncing so progress is not queued too aggressively
 - [x] Persist and restore last known progress on reopen
 - [x] Normalize progress semantics across media types
+- [x] Parse BookOrbit's scalar `readingProgress` card field and nested `readStatus`
+- [x] Keep progress on one canonical 0-100 scale through readers, persistence, and API payloads
+- [x] Allow newer reread/backward events to repair stale or inflated server progress
+- [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
 - [ ] Add session event support if `sessions` endpoint is useful
 
 ## 10. Offline Sync Queue
@@ -143,7 +147,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replay queued progress when online
 - [x] Use newest-progress-wins policy in stored events
 - [x] Verify queue replay against live BookOrbit server for the tested EPUB flow
-- [x] Prevent duplicate or stale progress submissions
+- [x] Prevent duplicate progress submissions without discarding valid reread/backward updates
 - [x] Collapse multiple pending updates for the same book/file
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures

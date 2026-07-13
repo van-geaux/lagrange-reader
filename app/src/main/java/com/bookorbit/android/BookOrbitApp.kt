@@ -759,7 +759,11 @@ private fun AudioReader(
             duration = playerDuration
             isPlaying = player.isPlaying
             playbackSpeed = player.playbackParameters.speed
-            val percent = if (playerDuration > 0L) playerPosition.toFloat() / playerDuration.toFloat() else null
+            val percent = if (playerDuration > 0L) {
+                (playerPosition.toFloat() / playerDuration.toFloat()) * 100f
+            } else {
+                null
+            }
             onProgress(playerPosition, percent)
             delay(1500)
         }
@@ -915,7 +919,11 @@ private fun PdfReaderView(
     }
 
     LaunchedEffect(currentPage, pageCount) {
-        val percent = if (pageCount > 0) currentPage.toFloat() / pageCount.toFloat() else null
+        val percent = if (pageCount > 0) {
+            (currentPage.toFloat() / pageCount.toFloat()) * 100f
+        } else {
+            null
+        }
         onProgress(currentPage, percent)
     }
 
@@ -1633,12 +1641,12 @@ internal fun isAllowedCleartextHost(host: String): Boolean {
         host == "10.0.3.2"
 }
 
-private fun percentToChapterIndex(percent: Float?, chapterCount: Int): Int {
+internal fun percentToChapterIndex(percent: Float?, chapterCount: Int): Int {
     if (chapterCount <= 1) {
         return 0
     }
     val raw = percent ?: return 0
-    val normalized = if (raw in 0f..1f) raw else raw / 100f
+    val normalized = raw / 100f
     return (normalized.coerceIn(0f, 1f) * (chapterCount - 1)).roundToInt()
 }
 

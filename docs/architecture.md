@@ -52,7 +52,8 @@ The current app flow is:
 - It resolves stream and download URLs for files.
 - It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
 - It translates local progress events into the server DTO shapes.
-- It maps server `readingProgress` page and time-position fields back into reader resume state.
+- It maps BookOrbit's current scalar `readingProgress` card value, nested `readStatus`, and legacy nested page/time progress fields back into browser and reader state.
+- Reader callbacks, persisted snapshots, queue entries, last-synced markers, and API payloads all use one canonical 0-100 percentage scale; low values are not reinterpreted as fractions.
 - Progress queue writes are dispatched on `Dispatchers.IO`; the coordinator records the newest reader/player event synchronously before persisting it so an immediate reader close cannot lose the final update.
 - Browser bootstrap flushes pending progress before loading the first library page, and reader close attempts a foreground sync before clearing active-reader state; WorkManager remains the offline/transient fallback.
 
@@ -79,11 +80,12 @@ The current app flow is:
 
 - `ProgressSyncWorker` runs queued progress sync when network is available.
 - Sync is currently event-based and timestamped.
-- Conflict handling is currently newest-progress-wins.
+- Conflict handling is newest-event-wins: equivalent updates are suppressed, while a newer lower-position event is retained so rereads and corrections can reach BookOrbit.
 - Duplicate queued updates for the same server/book/file target are compacted to the newest event.
 - Audio progress is throttled before persistence through a dedicated `ProgressQueuePolicy`; page/chapter updates are queued only when the target position changes meaningfully.
 - Worker retries now use WorkManager backoff only for transient sync failures; auth-blocked queues remain persisted without consuming retries.
-- The repository persists the last successfully synced progress per target and skips re-queueing or re-posting stale/equivalent updates.
+- The repository persists the last successfully synced progress per target and skips only equivalent updates; it no longer rejects legitimate lower reread/correction events.
+- After all current-server queue entries sync and a fresh library page loads, temporary in-memory progress overlays are cleared so BookOrbit or another client can become authoritative on refresh.
 - Reader reopen now consults the persisted last-synced progress marker when no newer queued progress exists, so local resume survives successful queue replay.
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.

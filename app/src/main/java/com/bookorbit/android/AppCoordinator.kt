@@ -356,9 +356,16 @@ class AppCoordinator(
                 // Flush queued reader progress before loading the first page. This makes
                 // the first Home render reflect progress that was created in an earlier
                 // session instead of showing Continue reading only after a second open.
-                repository.syncPendingProgress()
+                val progressSyncResult = repository.syncPendingProgress()
                 val booksPage = selectedLibrary?.let { repository.loadBooksPage(it, 0) }
                     ?: LibraryBooksPage()
+                if (progressSyncResult == SyncAttemptResult.Success) {
+                    // Once the server has accepted every current-server update and the
+                    // fresh page has loaded, its progress is authoritative again. This
+                    // allows progress made in BookOrbit or another client to flow back.
+                    latestProgressByTarget.clear()
+                    queuedProgressByTarget.clear()
+                }
                 val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
                     BrowserState(

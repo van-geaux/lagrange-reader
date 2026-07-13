@@ -173,6 +173,14 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 2. Superseded after device feedback: clipping the fixed WebView body still produced a blank real EPUB. The current candidate restores the last device-known-good single visible-overflow page strip and moves Top/Bottom padding entirely outside the HTML renderer by resizing the Android `WebView`; Left/Right still update the strip in place. JVM coverage passes, and the Android WebView regression now models the external resize plus translated-page visibility.
 3. Device result on July 13, 2026: the restored EPUB content renders and the independent padding changes are visible. Reader padding is complete; broader reader regression checks remain covered by the manual matrix.
 
+### Latest device feedback workplan - 2026-07-13 (bidirectional progress reconciliation)
+
+1. Implemented: parse BookOrbit's current scalar `readingProgress` card field and nested `readStatus` so server-side progress can populate Lagrange Home and reader state.
+2. Implemented: use one canonical 0-100 percentage scale across EPUB, PDF, comic, audiobook, persistence, conflict checks, and BookOrbit request payloads; low progress values are no longer multiplied twice.
+3. Implemented: suppress only equivalent submissions, allowing newer reread/backward events to repair stale or accidentally inflated server markers.
+4. Implemented: after successful queue replay and a fresh page load, clear temporary local progress overlays so refreshed BookOrbit progress can flow back into Lagrange.
+5. JVM tests, debug APK assembly, and Android instrumentation-test compilation pass. Physical-device validation remains required in both directions against the target BookOrbit server.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
