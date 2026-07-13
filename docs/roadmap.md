@@ -118,6 +118,11 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 1. Implemented: replace Browse's Load more button with automatic page loading as the user approaches the end of the current grid.
 2. Implemented: add a right-side title-initial jump rail for fast movement through loaded library content.
 
+## Latest device feedback workplan â€” 2026-07-13 (reader spacing)
+
+1. Implemented: keep the existing overall Compact/Comfortable/Wide reader padding presets and add independent Top and Bottom controls using the same levels.
+2. Implemented: keep Comfortable as the default for all three controls and repaginate the current EPUB chapter whenever any padding value changes.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

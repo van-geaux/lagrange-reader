@@ -22,7 +22,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - EPUB reading and the current pagination behavior passed.
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
-- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, Home-only logo/search/profile actions, the tappable Library name selector, Recommended/Browse tabs, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
+- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, Home-only logo/search/profile actions, the tappable Library name selector, Recommended/Browse tabs, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide overall reader padding, independent Top and Bottom padding, the Comfortable defaults, repagination after changing each control, and the branded launch state.
 - Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, the placeholder About destination, swipe-down refresh, and persistent cover-thumbnail caching are implemented. Physical-device validation remains required for the new behavior.
 
 ## Manual Test Matrix
@@ -79,7 +79,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 2. Tap the left and right outer quarters and swipe left and right; confirm each action moves exactly one paginated screen and navigation crosses chapter boundaries.
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
 4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
-5. Confirm changing theme, text size, or reader padding repaginates without enabling vertical scrolling, images remain constrained to the page, and the default text inset is comfortably away from the edges.
+5. Confirm the reader menu exposes overall Padding plus independent Top and Bottom controls. Change each edge separately and confirm the page repaginates without enabling vertical scrolling, images remain constrained to the page, and Comfortable defaults leave the text comfortably away from every edge.
 6. Close and reopen the EPUB and confirm it returns to the exact saved page within the saved chapter; repeat after fully closing and relaunching the app.
 7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
 8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.

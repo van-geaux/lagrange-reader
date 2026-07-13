@@ -42,6 +42,23 @@ class EpubPaginationTest {
     }
 
     @Test
+    fun `epub top and bottom padding can be configured independently`() {
+        val rendered = styleEpubHtml(
+            html = "<p>Readable chapter text</p>",
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1f,
+            startAtEnd = false,
+            padding = EpubReaderPadding.Comfortable,
+            topPaddingPx = 64,
+            bottomPaddingPx = 88
+        )
+
+        assertTrue(rendered.contains("left: 36px"))
+        assertTrue(rendered.contains("top: 64px"))
+        assertTrue(rendered.contains("window.innerHeight - 152"))
+    }
+
+    @Test
     fun `epub html starts at the requested page`() {
         val rendered = styleEpubHtml(
             html = "<p>Readable chapter text</p>",

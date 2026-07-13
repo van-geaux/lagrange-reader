@@ -219,6 +219,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replace the persistent Home search field with a search icon and search layer
 - [x] Restore the standard Android status bar and add intentional top breathing room on Home
 - [x] Add reader padding controls with a more generous default text inset
+- [x] Add independent Top and Bottom reader padding controls with repagination
 - [x] Replace the launch/startup spinner with the branded adaptive-icon loading state
 - [ ] Validate the branded launch state on a physical device
 - [x] Restore the exact in-chapter EPUB page on reopen and restart

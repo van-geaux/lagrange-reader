@@ -1059,6 +1059,8 @@ private fun EpubReaderView(
     var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
     var fontScale by remember(file) { mutableStateOf(1f) }
     var selectedPadding by remember(file) { mutableStateOf(EpubReaderPadding.Comfortable) }
+    var selectedTopPadding by remember(file) { mutableStateOf(EpubReaderPadding.Comfortable) }
+    var selectedBottomPadding by remember(file) { mutableStateOf(EpubReaderPadding.Comfortable) }
     var showControls by remember(file) { mutableStateOf(false) }
     var showChapterPicker by remember(file) { mutableStateOf(false) }
     var currentPage by remember(file, initialPage) { mutableStateOf(initialPage.coerceAtLeast(0)) }
@@ -1132,7 +1134,7 @@ private fun EpubReaderView(
             },
             update = { webView ->
                 val chapter = currentChapterState
-                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|${selectedPadding.name}|$openChapterAtEnd"
+                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|${selectedPadding.name}|${selectedTopPadding.name}|${selectedBottomPadding.name}|$openChapterAtEnd"
                 if (webView.tag != renderKey) {
                     val firstRender = webView.tag == null
                     webView.tag = renderKey
@@ -1147,6 +1149,8 @@ private fun EpubReaderView(
                             theme = selectedTheme,
                             fontScale = fontScale,
                             padding = selectedPadding,
+                            topPaddingPx = selectedTopPadding.verticalPx,
+                            bottomPaddingPx = selectedBottomPadding.verticalPx,
                             initialPage = if (firstRender) initialPage else 0,
                             startAtEnd = openChapterAtEnd
                         ),
@@ -1228,8 +1232,30 @@ private fun EpubReaderView(
                         Text("Padding", style = MaterialTheme.typography.labelMedium)
                         EPUB_PADDING_OPTIONS.forEach { padding ->
                             FilterChip(
-                                selected = padding == selectedPadding,
-                                onClick = { selectedPadding = padding },
+                                selected = padding == selectedPadding &&
+                                    padding == selectedTopPadding &&
+                                    padding == selectedBottomPadding,
+                                onClick = {
+                                    selectedPadding = padding
+                                    selectedTopPadding = padding
+                                    selectedBottomPadding = padding
+                                },
+                                label = { Text(padding.label) }
+                            )
+                        }
+                        Text("Top", style = MaterialTheme.typography.labelMedium)
+                        EPUB_PADDING_OPTIONS.forEach { padding ->
+                            FilterChip(
+                                selected = padding == selectedTopPadding,
+                                onClick = { selectedTopPadding = padding },
+                                label = { Text(padding.label) }
+                            )
+                        }
+                        Text("Bottom", style = MaterialTheme.typography.labelMedium)
+                        EPUB_PADDING_OPTIONS.forEach { padding ->
+                            FilterChip(
+                                selected = padding == selectedBottomPadding,
+                                onClick = { selectedBottomPadding = padding },
                                 label = { Text(padding.label) }
                             )
                         }
@@ -1567,10 +1593,12 @@ internal fun styleEpubHtml(
     fontScale: Float,
     startAtEnd: Boolean,
     padding: EpubReaderPadding = EpubReaderPadding.Comfortable,
+    topPaddingPx: Int = padding.verticalPx,
+    bottomPaddingPx: Int = padding.verticalPx,
     initialPage: Int = 0
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
-    val pageInsetHeight = padding.verticalPx * 2
+    val pageInsetHeight = topPaddingPx + bottomPaddingPx
     val readerAssets = """
         <style>
         :root { color-scheme: light; }
@@ -1587,7 +1615,7 @@ internal fun styleEpubHtml(
         }
         #bookorbit-page-strip {
             position: absolute;
-            top: ${padding.verticalPx}px;
+            top: ${topPaddingPx}px;
             left: ${padding.horizontalPx}px;
             box-sizing: border-box;
             width: calc(100vw - ${padding.horizontalPx * 2}px);
