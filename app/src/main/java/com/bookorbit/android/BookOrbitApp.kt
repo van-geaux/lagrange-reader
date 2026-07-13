@@ -1021,6 +1021,7 @@ private fun EpubReaderView(
     }
     var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
     var fontScale by remember(file) { mutableStateOf(1f) }
+    var selectedPadding by remember(file) { mutableStateOf(EpubReaderPadding.Comfortable) }
     var showControls by remember(file) { mutableStateOf(false) }
     var showChapterPicker by remember(file) { mutableStateOf(false) }
     var currentPage by remember(file) { mutableStateOf(0) }
@@ -1094,7 +1095,7 @@ private fun EpubReaderView(
             },
             update = { webView ->
                 val chapter = currentChapterState
-                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|$openChapterAtEnd"
+                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|${selectedPadding.name}|$openChapterAtEnd"
                 if (webView.tag != renderKey) {
                     webView.tag = renderKey
                     currentPage = 0
@@ -1107,6 +1108,7 @@ private fun EpubReaderView(
                             html = html,
                             theme = selectedTheme,
                             fontScale = fontScale,
+                            padding = selectedPadding,
                             startAtEnd = openChapterAtEnd
                         ),
                         "text/html",
@@ -1182,6 +1184,14 @@ private fun EpubReaderView(
                                 selected = theme == selectedTheme,
                                 onClick = { selectedTheme = theme },
                                 label = { Text(theme.label) }
+                            )
+                        }
+                        Text("Padding", style = MaterialTheme.typography.labelMedium)
+                        EPUB_PADDING_OPTIONS.forEach { padding ->
+                            FilterChip(
+                                selected = padding == selectedPadding,
+                                onClick = { selectedPadding = padding },
+                                label = { Text(padding.label) }
                             )
                         }
                         OutlinedButton(onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) }) {
@@ -1516,9 +1526,11 @@ internal fun styleEpubHtml(
     html: String,
     theme: EpubReaderTheme,
     fontScale: Float,
-    startAtEnd: Boolean
+    startAtEnd: Boolean,
+    padding: EpubReaderPadding = EpubReaderPadding.Comfortable
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
+    val pageInsetHeight = padding.verticalPx * 2
     val readerAssets = """
         <style>
         :root { color-scheme: light; }
@@ -1535,18 +1547,18 @@ internal fun styleEpubHtml(
         }
         #bookorbit-page-strip {
             position: absolute;
-            top: 28px;
-            left: 22px;
+            top: ${padding.verticalPx}px;
+            left: ${padding.horizontalPx}px;
             box-sizing: border-box;
-            width: calc(100vw - 44px);
-            min-height: calc(100vh - 62px);
+            width: calc(100vw - ${padding.horizontalPx * 2}px);
+            min-height: calc(100vh - ${pageInsetHeight}px);
             overflow: visible;
             word-wrap: break-word;
             will-change: transform;
         }
         img, svg {
             max-width: 100%;
-            max-height: calc(100vh - 62px);
+            max-height: calc(100vh - ${pageInsetHeight}px);
             height: auto;
             break-inside: avoid;
         }
@@ -1561,7 +1573,7 @@ internal fun styleEpubHtml(
           let strip = null;
           let pinToEnd = ${startAtEnd.toString()};
           const bridge = window.$EPUB_READER_BRIDGE;
-          const pageHeight = () => Math.max(1, window.innerHeight - 62);
+          const pageHeight = () => Math.max(1, window.innerHeight - ${pageInsetHeight});
           const pageCount = () => strip
             ? Math.max(1, Math.ceil(strip.scrollHeight / pageHeight()))
             : 1;
@@ -1657,6 +1669,22 @@ private val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,
     EpubReaderTheme.Dark
+)
+
+internal enum class EpubReaderPadding(
+    val label: String,
+    val horizontalPx: Int,
+    val verticalPx: Int
+) {
+    Compact("Compact", horizontalPx = 24, verticalPx = 32),
+    Comfortable("Comfortable", horizontalPx = 36, verticalPx = 40),
+    Wide("Wide", horizontalPx = 48, verticalPx = 52)
+}
+
+private val EPUB_PADDING_OPTIONS = listOf(
+    EpubReaderPadding.Compact,
+    EpubReaderPadding.Comfortable,
+    EpubReaderPadding.Wide
 )
 
 internal enum class EpubReaderTheme(

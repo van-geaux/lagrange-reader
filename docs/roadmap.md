@@ -72,7 +72,7 @@ The latest debug APK passed login, session relaunch, browsing, EPUB reading, dow
 1. Completed: put currently reading books in the first Home shelf, with completed/recently read titles remaining available as a separate shelf.
 2. Completed: replace the hamburger/drawer browser shell with a Plex-inspired native bottom-navigation layout. Libraries open at the top-level library view, with a library-change control at the top of that screen; More expands to Series, Authors, and Options.
 3. Completed: add breathing room below the system status bar on Home, replace the persistent large search field with a top search icon, and open search in a dedicated layer. The standard Android status bar remains visible.
-4. Add a reader padding option and use a more generous default text inset so EPUB text does not cling to the screen edges.
+4. Completed: add Compact, Comfortable, and Wide reader padding options, using Comfortable as the more generous default and repaginating when the setting changes.
 5. Investigate the launch/startup state where a spinning loading indicator is seen instead of the app-specific adaptive icon.
 
 Each item must preserve session recovery, offline behavior, progress sync, Preview isolation, and reader resume.

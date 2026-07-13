@@ -46,7 +46,7 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and center taps toggle Back, location, chapters, theme, text size, and the planned padding control. Device validation is required for typography, page breaks, images, chapter boundaries, tap-zone comfort, and the more generous default text inset before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and center taps toggle Back, location, chapters, theme, text size, and Compact/Comfortable/Wide padding controls. Comfortable is the default, and changing padding repaginates the current chapter. Device validation is required for typography, page breaks, images, chapter boundaries, tap-zone comfort, and the default text inset before Checkpoint 4 is complete.
 
 ### Device feedback workplan
 
@@ -54,7 +54,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Replace the hamburger/drawer interaction with Plex-inspired bottom navigation and a top library selector/change action.
 - [x] Replace Home's large persistent search field with a search icon and dedicated search layer.
 - [x] Keep the Android status bar visible and add intentional Home top spacing.
-- Add reader padding controls and a larger default padding value.
+- [x] Add reader padding controls and a larger default padding value.
 - Diagnose the launch spinner versus adaptive-icon presentation.
 
 ### Checkpoint 5: Other media readers - deferred

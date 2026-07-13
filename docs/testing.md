@@ -22,7 +22,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - EPUB reading and the current pagination behavior passed.
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - A launch visual issue remains: a spinning loading indicator was observed instead of the expected app-specific adaptive-icon presentation.
-- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. Reader padding remains to be implemented.
+- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, and repagination after changing it.
 
 ## Manual Test Matrix
 
