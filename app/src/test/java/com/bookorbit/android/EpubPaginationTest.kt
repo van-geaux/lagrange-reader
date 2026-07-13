@@ -23,14 +23,12 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("deltaX < 0 ? page + 1 : page - 1"))
         assertTrue(rendered.contains("suppressClick"))
         assertTrue(rendered.contains("const initialPage = 0"))
-        assertTrue(rendered.contains("#bookorbit-page-viewport"))
         assertTrue(rendered.contains("#bookorbit-page-strip"))
         assertTrue(rendered.contains("left: 3.75vw"))
         assertTrue(rendered.contains("top: 3.75vh"))
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
         assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
-        assertTrue(rendered.contains("min-height: 100%"))
-        assertTrue(rendered.contains("viewport ? viewport.clientHeight"))
+        assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
         assertFalse(rendered.contains("column-width"))
     }
 
@@ -53,7 +51,7 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("top: 2.50vh"))
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
         assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
-        assertTrue(rendered.contains("overflow: hidden"))
+        assertTrue(rendered.contains("overflow: visible"))
     }
 
     @Test

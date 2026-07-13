@@ -1680,7 +1680,7 @@ internal fun styleEpubHtml(
             font-size: ${fontPercent}%;
             line-height: 1.7;
         }
-        #bookorbit-page-viewport {
+        #bookorbit-page-strip {
             position: absolute;
             top: ${formatEpubCssPercent(topInset)}vh;
             left: ${formatEpubCssPercent(leftInset)}vw;
@@ -1688,13 +1688,6 @@ internal fun styleEpubHtml(
             width: calc(100vw - ${formatEpubCssPercent(pageInsetWidth)}vw);
             height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
             min-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
-            overflow: hidden;
-            display: block;
-        }
-        #bookorbit-page-strip {
-            position: relative;
-            width: 100%;
-            min-height: 100%;
             overflow: visible;
             word-wrap: break-word;
             will-change: transform;
@@ -1713,15 +1706,11 @@ internal fun styleEpubHtml(
         <script>
         (() => {
           let page = 0;
-          let viewport = null;
           let strip = null;
           let pinToEnd = ${startAtEnd.toString()};
           const initialPage = ${initialPage.coerceAtLeast(0)};
           const bridge = window.$EPUB_READER_BRIDGE;
-          const pageHeight = () => Math.max(
-            1,
-            viewport ? viewport.clientHeight : window.innerHeight * ${formatEpubCssPercent(pageHeightScale)}
-          );
+          const pageHeight = () => Math.max(1, window.innerHeight * ${formatEpubCssPercent(pageHeightScale)});
           const pageCount = () => strip
             ? Math.max(1, Math.ceil(strip.scrollHeight / pageHeight()))
             : 1;
@@ -1745,13 +1734,10 @@ internal fun styleEpubHtml(
             publish();
           });
           window.addEventListener('load', () => {
-            viewport = document.createElement('main');
-            viewport.id = 'bookorbit-page-viewport';
-            strip = document.createElement('div');
+            strip = document.createElement('main');
             strip.id = 'bookorbit-page-strip';
             Array.from(document.body.childNodes).forEach((node) => strip.appendChild(node));
-            viewport.appendChild(strip);
-            document.body.appendChild(viewport);
+            document.body.appendChild(strip);
             requestAnimationFrame(() => requestAnimationFrame(() => {
               page = pinToEnd ? pageCount() - 1 : Math.min(initialPage, pageCount() - 1);
               renderPage();

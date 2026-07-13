@@ -164,7 +164,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### Latest device feedback workplan - 2026-07-13 (reader rendering regression)
 
-1. Implemented: restore EPUB chapter content by separating the clipped padding viewport from the translated pagination strip; physical-device confirmation remains required.
+1. Implemented: restore EPUB chapter content by returning to the previously device-validated translated page-strip geometry while retaining independent padding persistence; physical-device confirmation remains required.
 2. Next validation: verify the four independent reader padding controls now that normal EPUB content renders again.
 
 ## Source of truth

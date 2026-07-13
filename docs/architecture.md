@@ -100,7 +100,7 @@ The current app flow is:
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
-  - reflowable chapter content is laid out in an explicit page viewport with a separately translated content strip instead of relying on WebView document scrolling; the viewport clips configured edge insets without clipping the translated strip itself
+  - reflowable chapter content is laid out in the previously validated explicit translated page strip instead of relying on WebView document scrolling; edge percentages continue to control the strip's viewport position and height without clipping the translated content
   - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls, and the top-right Close action is the only way to dismiss them
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
