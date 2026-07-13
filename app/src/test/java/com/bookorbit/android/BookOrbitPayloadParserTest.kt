@@ -182,6 +182,30 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks accepts alternate progress containers and percentage names`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-progress",
+            payload = """
+                {
+                  "items": [
+                    {
+                      "id": "book-progress",
+                      "title": "Alternate Progress",
+                      "files": [{"id":"file-progress","format":"epub"}],
+                      "progress": {"progressPercent": 42}
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(42f, books.single().progressPercent)
+        assertEquals("42%", books.single().progressLabel)
+    }
+
+    @Test
     fun `parseBooks falls back to cover endpoint when cover metadata exists without a url`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-5",

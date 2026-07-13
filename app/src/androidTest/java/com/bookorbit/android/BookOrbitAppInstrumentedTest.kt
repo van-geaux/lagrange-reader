@@ -183,8 +183,10 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Options").assertCountEquals(0)
+        composeRule.onNodeWithText("About").performClick()
+        composeRule.onNodeWithContentDescription("User profile").performClick()
         composeRule.onNodeWithText("Options").assertIsDisplayed()
-        composeRule.onNodeWithText("About").assertIsDisplayed()
     }
 
     @Test

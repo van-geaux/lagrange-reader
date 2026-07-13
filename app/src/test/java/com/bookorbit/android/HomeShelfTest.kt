@@ -10,14 +10,25 @@ class HomeShelfTest {
             progressPercent = 25f,
             lastReadAtMillis = 200L
         )
+        val serverMarkedReadButInProgress = seriesBook("book-server-progress", index = 5.0, isRead = true).copy(
+            progressPercent = 42f,
+            lastReadAtMillis = 300L
+        )
         val pageProgress = seriesBook("book-page", index = 3.0).copy(progressLabel = "Page 9")
         val completed = seriesBook("book-complete", index = 1.0, isRead = true).copy(progressPercent = 100f)
         val untouched = seriesBook("book-new", index = 4.0)
 
         assertEquals(
-            listOf(current, pageProgress),
-            currentlyReadingBooks(listOf(untouched, completed, pageProgress, current))
+            listOf(serverMarkedReadButInProgress, current, pageProgress),
+            currentlyReadingBooks(listOf(untouched, completed, pageProgress, current, serverMarkedReadButInProgress))
         )
+    }
+
+    @Test
+    fun `library series count waits for all books before deriving a partial total`() {
+        assertEquals(null, librarySeriesCount(100, 50, null, 12))
+        assertEquals(18, librarySeriesCount(100, 100, null, 18))
+        assertEquals(24, librarySeriesCount(100, 50, 24, 12))
     }
 
     @Test

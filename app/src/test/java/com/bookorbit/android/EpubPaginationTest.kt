@@ -25,6 +25,7 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("left: 3.75vw"))
         assertTrue(rendered.contains("top: 3.75vh"))
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
+        assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
         assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
         assertFalse(rendered.contains("column-width"))
     }
@@ -47,6 +48,7 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("left: 1.25vw"))
         assertTrue(rendered.contains("top: 2.50vh"))
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
+        assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
         assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
     }
 

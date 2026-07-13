@@ -1069,8 +1069,9 @@ private fun EpubReaderView(
     var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
     val centerTap = rememberUpdatedState {
-        showControls = !showControls
-        if (!showControls) showChapterPicker = false
+        if (!showControls) {
+            showControls = true
+        }
     }
     val pageChanged = rememberUpdatedState { page: Int, count: Int ->
         currentPage = page.coerceAtLeast(0)
@@ -1094,6 +1095,11 @@ private fun EpubReaderView(
         val chapterProgress = (currentPage + 1f) / currentPageCount.coerceAtLeast(1)
         val percent = ((currentChapter + chapterProgress) / chapterCount.toFloat()) * 100f
         onProgress(currentChapter, currentPage, currentPageCount, percent)
+    }
+
+    LaunchedEffect(paddingDraft) {
+        delay(180)
+        appliedPadding = paddingDraft
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(selectedTheme.backgroundColor))) {
@@ -1188,7 +1194,12 @@ private fun EpubReaderView(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    TextButton(onClick = { showChapterPicker = !showChapterPicker }) { Text("Chapters") }
+                    TextButton(
+                        onClick = {
+                            showControls = false
+                            showChapterPicker = false
+                        }
+                    ) { Text("Close") }
                 }
             }
 
@@ -1230,6 +1241,9 @@ private fun EpubReaderView(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            OutlinedButton(onClick = { showChapterPicker = !showChapterPicker }) {
+                                Text("Chapters")
+                            }
                             EPUB_THEME_OPTIONS.forEach { theme ->
                                 FilterChip(
                                     selected = theme == selectedTheme,
@@ -1662,6 +1676,7 @@ internal fun styleEpubHtml(
             left: ${formatEpubCssPercent(leftInset)}vw;
             box-sizing: border-box;
             width: calc(100vw - ${formatEpubCssPercent(pageInsetWidth)}vw);
+            height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
             min-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
             overflow: visible;
             word-wrap: break-word;

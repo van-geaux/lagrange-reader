@@ -216,6 +216,14 @@ internal fun NativeLibraryBrowserScreen(
     }
     val filteredBooks = remoteSearchResults.orEmpty()
     val sessionActionLabel = if (state.isOfflineSnapshot) "Sign in" else "Log out"
+    val openOptions = {
+        showProfileMenu = false
+        showMoreMenu = false
+        destination = BrowserDestination.OPTIONS
+        query = ""
+        selectedAuthor = null
+        selectedSeriesKey = null
+    }
 
     BackHandler(enabled = isSearchOpen || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
         if (isSearchOpen) {
@@ -256,13 +264,6 @@ internal fun NativeLibraryBrowserScreen(
                     selectedAuthor = null
                     selectedSeriesKey = null
                 },
-                onOptions = {
-                    showMoreMenu = false
-                    destination = BrowserDestination.OPTIONS
-                    query = ""
-                    selectedAuthor = null
-                    selectedSeriesKey = null
-                },
                 onAbout = {
                     showMoreMenu = false
                     destination = BrowserDestination.ABOUT
@@ -294,7 +295,8 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
-                    sessionActionLabel = sessionActionLabel
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
                 )
                 selectedBook != null -> BrowserTopBar(
                     title = "Book details",
@@ -307,7 +309,8 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
-                    sessionActionLabel = sessionActionLabel
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
                 )
                 selectedSeriesKey != null -> BrowserTopBar(
                     title = "Series",
@@ -320,7 +323,8 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
-                    sessionActionLabel = sessionActionLabel
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
                 )
                 selectedAuthor != null -> BrowserTopBar(
                     title = "Author",
@@ -333,7 +337,8 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
-                    sessionActionLabel = sessionActionLabel
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
                 )
                 else -> BrowserTopBar(
                     title = when {
@@ -363,7 +368,8 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
-                    sessionActionLabel = sessionActionLabel
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
                 )
             }
         },
@@ -546,6 +552,7 @@ private fun BrowserTopBar(
     onDismissProfile: () -> Unit,
     onSessionAction: () -> Unit,
     sessionActionLabel: String,
+    onOptions: () -> Unit = {},
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
     onTitleClick: (() -> Unit)? = null
@@ -569,6 +576,14 @@ private fun BrowserTopBar(
                     expanded = profileExpanded,
                     onDismissRequest = onDismissProfile
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Options") },
+                        leadingIcon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
+                        onClick = {
+                            onDismissProfile()
+                            onOptions()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(sessionActionLabel) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) },
@@ -618,14 +633,13 @@ private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
     onLocalBooks: () -> Unit,
-    onOptions: () -> Unit,
     onAbout: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 24.dp)
+            .padding(top = 16.dp, bottom = 72.dp)
     ) {
         Text(
             "More",
@@ -646,11 +660,6 @@ private fun MoreMenu(
             headlineContent = { Text("Local books") },
             leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
             modifier = Modifier.clickable(onClick = onLocalBooks)
-        )
-        ListItem(
-            headlineContent = { Text("Options") },
-            leadingContent = { Icon(Icons.Default.MoreVert, contentDescription = null) },
-            modifier = Modifier.clickable(onClick = onOptions)
         )
         ListItem(
             headlineContent = { Text("About") },
@@ -1136,7 +1145,8 @@ private fun HomeFeed(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
-    onSeriesSelected: (String) -> Unit
+    onSeriesSelected: (String) -> Unit,
+    showHeader: Boolean = true
 ) {
     val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
     val onDeck = remember(state.books) { onDeckBooks(state.books) }
@@ -1158,15 +1168,17 @@ private fun HomeFeed(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("Home", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
-                        ?: "Your library",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+        if (showHeader) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text("Home", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
+                            ?: "Your library",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
         state.message?.let { message ->
@@ -1488,7 +1500,8 @@ private fun LibraryContentScreen(
                     modifier = Modifier.weight(1f),
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
-                    onSeriesSelected = onSeriesSelected
+                    onSeriesSelected = onSeriesSelected,
+                    showHeader = false
                 )
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
                     state = state,
@@ -1606,7 +1619,12 @@ private fun LibraryBooks(
         .mapNotNull { it.seriesId ?: it.seriesName }
         .filter { it.isNotBlank() }
         .distinct()
-    val seriesCount = totalSeries ?: seriesKeys.size
+    val seriesCount = librarySeriesCount(
+        totalBooks = totalBooks,
+        loadedBookCount = state.books.size,
+        serverSeriesTotal = totalSeries,
+        loadedSeriesCount = seriesKeys.size
+    )
     val displayedBooks: List<Pair<BookSummary, String?>> = if (allowSeriesCollapse && seriesCollapsed) {
         collapsedLibraryBooks(state.books)
     } else {
@@ -1676,7 +1694,7 @@ private fun LibraryBooks(
                         buildString {
                             val bookCount = totalBooks ?: state.books.size
                             append("$bookCount ${if (bookCount == 1) "book" else "books"}")
-                            if (seriesCount > 0) append(" · $seriesCount series")
+                            if (seriesCount != null && seriesCount > 0) append(" · $seriesCount series")
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2246,7 +2264,7 @@ internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
 
 internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> {
     return books
-        .filter { !it.isRead && it.hasReadingActivity() }
+        .filter { it.hasReadingActivity() && it.isStillInProgress() }
         .sortedWith(
             compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
                 .thenByDescending { it.progressPercent ?: 0f }
@@ -2261,6 +2279,24 @@ private fun BookSummary.hasReadingActivity(): Boolean {
         (progressPageIndex ?: 0) > 0 ||
         !progressLabel.isNullOrBlank() ||
         lastReadAtMillis != null
+}
+
+private fun BookSummary.isStillInProgress(): Boolean {
+    return when {
+        progressPercent != null -> progressPercent < 99.5f
+        else -> !isRead
+    }
+}
+
+internal fun librarySeriesCount(
+    totalBooks: Int?,
+    loadedBookCount: Int,
+    serverSeriesTotal: Int?,
+    loadedSeriesCount: Int
+): Int? {
+    return serverSeriesTotal ?: loadedSeriesCount.takeIf {
+        totalBooks == null || loadedBookCount >= totalBooks
+    }
 }
 
 internal fun recentSeries(books: List<BookSummary>, useUpdatedAt: Boolean): List<Pair<String, BookSummary>> {

@@ -28,6 +28,8 @@ Server behavior:
 - Sets `access_token` cookie on `/api`
 - Sets `refresh_token` cookie on `/api/v1/auth`
 
+The Android client persists `accessToken` for the configured server and sends it as a Bearer credential on authenticated API and media requests, while retaining the shared cookie jar for cookie-based and refresh-capable server flows.
+
 ### Current user
 
 Endpoint:

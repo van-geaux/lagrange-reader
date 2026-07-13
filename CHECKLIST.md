@@ -55,6 +55,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
 - [x] Add explicit authenticated-user bootstrap check after login
 - [x] Add clean logout/reset session behavior
+- [x] Persist the login access token and attach it to authenticated API/media requests
 
 ## 4. Library Browsing
 
@@ -157,6 +158,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
+- [x] Add independently applied percentage padding controls for all EPUB reader edges
+- [x] Keep reader options open until the explicit Close action is tapped
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death
 - [x] Improve accessibility for controls and reader screens
@@ -218,6 +221,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a top-level library selector to the Libraries destination
 - [x] Replace the persistent Home search field with a search icon and search layer
 - [x] Restore the standard Android status bar and add intentional top breathing room on Home
+- [x] Keep Continue reading visible for tolerant in-progress server progress payloads
+- [x] Remove the duplicate Home/library heading from Library Recommended
+- [x] Move Options from More into the profile menu above Log out
+- [x] Add extra top/bottom spacing to the More sheet
+- [x] Avoid showing a partial derived series count while Browse is still paginating
 - [x] Add reader padding controls with a more generous default text inset
 - [x] Add independent Top and Bottom reader padding controls with repagination
 - [x] Replace reader padding presets with independent Top/Bottom/Left/Right percentage controls; default each edge to 15%

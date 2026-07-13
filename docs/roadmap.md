@@ -131,6 +131,16 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 4. Implemented: alphabetize collapsed library representatives by their series name and restore the nearest book/series scroll anchor when switching between collapsed and expanded views.
 5. Implemented: route authentication failures from background search, cover, catalog, detail, and paginated library loads through the login recovery screen instead of silently returning empty content. Physical-device expiry testing remains required.
 
+## Latest device feedback workplan — 2026-07-13 (reader, Home, and session follow-up)
+
+1. Implemented: apply Top, Bottom, Left, and Right reader padding changes continuously with a short debounce and an explicit page-strip height so slider changes visibly repaginate the chapter.
+2. Implemented: change the reader overlay's top-right action to Close; center taps and taps elsewhere no longer dismiss the open reader options.
+3. Implemented: restore the Home Continue reading shelf for active progress even when the server marks the item read, and tolerate alternate progress container/field names.
+4. Implemented: remove the duplicate Home/library heading from Library Recommended.
+5. Implemented: suppress a derived Browse series count until all books are loaded when the server does not provide a complete series total.
+6. Implemented: persist the login access token and attach it to authenticated API, cover, download, and reader-cache requests; explicit session clearing removes the token.
+7. Implemented: move Options from More into the profile menu above Log out and add extra vertical spacing to the More sheet.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

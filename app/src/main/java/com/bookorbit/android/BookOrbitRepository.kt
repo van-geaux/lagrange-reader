@@ -49,6 +49,22 @@ import javax.net.ssl.SSLException
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 private const val LIBRARY_PAGE_SIZE = 50
 
+internal fun extractAccessToken(payload: String): String? {
+    val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+
+    fun tokenFrom(obj: JSONObject?): String? {
+        obj ?: return null
+        return listOf("accessToken", "access_token", "token")
+            .firstNotNullOfOrNull { key ->
+                obj.optString(key).takeIf { it.isNotBlank() }
+            }
+    }
+
+    return tokenFrom(root)
+        ?: tokenFrom(root.optJSONObject("data"))
+        ?: tokenFrom(root.optJSONObject("result"))
+}
+
 interface BookOrbitDataSource {
     suspend fun getServerUrl(): String?
     suspend fun setServerUrl(serverUrl: String)
@@ -125,6 +141,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun clearSession() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.ACCESS_TOKEN)
+        }
         activeReaderStore.clear()
         epubReaderPositionStore.clear()
         clearCookies()
@@ -542,8 +561,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             val request = Request.Builder()
                 .url(buildDownloadUrl(fileId))
                 .get()
+                .addSessionAccessToken()
                 .build()
             client.newCall(request).execute().use { response ->
+                if (response.code == 401 || response.code == 403) {
+                    throw AuthenticationRequiredException()
+                }
                 if (!response.isSuccessful) {
                     throw HttpRequestException(
                         code = response.code,
@@ -844,6 +867,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val request = Request.Builder()
             .url(buildDownloadUrl(fileId))
             .get()
+            .addSessionAccessToken()
             .build()
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
@@ -911,6 +935,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .url(base.trimEnd('/') + path)
             .method(method, body)
             .header("Accept", "application/json")
+            .addSessionAccessToken()
             .build()
 
         client.newCall(request).execute().use { response ->
@@ -927,7 +952,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    private fun requestLogin(body: RequestBody) {
+    private suspend fun requestLogin(body: RequestBody) {
         val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
         val request = Request.Builder()
             .url(base.trimEnd('/') + "/api/v1/auth/login")
@@ -936,11 +961,21 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .build()
 
         client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
             when {
                 response.code == 401 || response.code == 403 -> throw InvalidCredentialsException()
                 response.code == 429 -> throw LoginRateLimitedException()
                 !response.isSuccessful -> throw HttpRequestException(response.code, "sign in")
-                else -> Unit
+                else -> {
+                    val accessToken = extractAccessToken(responseBody)
+                    context.dataStore.edit { prefs ->
+                        if (accessToken.isNullOrBlank()) {
+                            prefs.remove(Keys.ACCESS_TOKEN)
+                        } else {
+                            prefs[Keys.ACCESS_TOKEN] = accessToken
+                        }
+                    }
+                }
             }
         }
     }
@@ -950,6 +985,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .url(url)
             .get()
             .header("Accept", "image/*")
+            .addSessionAccessToken()
             .build()
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
@@ -1022,6 +1058,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private object Keys {
         val SERVER_URL = stringPreferencesKey("server_url")
         val SELECTED_LIBRARY_ID = stringPreferencesKey("selected_library_id")
+        val ACCESS_TOKEN = stringPreferencesKey("access_token")
+    }
+
+    private fun sessionAccessToken(): String? = runBlocking {
+        context.dataStore.data.first()[Keys.ACCESS_TOKEN]
+    }
+
+    private fun Request.Builder.addSessionAccessToken(): Request.Builder {
+        sessionAccessToken()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { header("Authorization", "Bearer $it") }
+        return this
     }
 
     private companion object {
@@ -1118,6 +1166,9 @@ internal object BookOrbitPayloadParser {
                 )
                 val bookId = obj.stringValue("id", "_id", "bookId") ?: "book-$index"
                 val readingProgress = obj.optJSONObject("readingProgress")
+                    ?: obj.optJSONObject("readProgress")
+                    ?: obj.optJSONObject("userProgress")
+                    ?: obj.optJSONObject("progress")
                 val series = obj.optJSONObject("series")
                     ?: obj.optJSONArray("series")?.optJSONObject(0)
                 val progressPercent = normalizeStoredProgressPercent(readingProgress.progressPercent())
@@ -1439,10 +1490,13 @@ internal object BookOrbitPayloadParser {
 
     private fun JSONObject?.progressPercent(): Float? {
         this ?: return null
-        return when (val value = opt("percentage")) {
-            is Number -> value.toFloat()
-            is String -> value.toFloatOrNull()
-            else -> null
+        val keys = listOf("percentage", "percent", "progressPercent", "progress", "completion")
+        return keys.firstNotNullOfOrNull { key ->
+            when (val value = opt(key)) {
+                is Number -> value.toFloat()
+                is String -> value.toFloatOrNull()
+                else -> null
+            }
         }
     }
 

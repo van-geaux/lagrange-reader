@@ -348,7 +348,7 @@ class AppCoordinator(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = selectedLibrary,
-                        books = booksPage.items,
+                        books = mergeKnownProgress(booksPage.items),
                         booksTotal = booksPage.total,
                         booksSeriesTotal = booksPage.seriesTotal,
                         booksPage = booksPage.page ?: 0,
@@ -438,7 +438,7 @@ class AppCoordinator(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = libraryId,
-                        books = booksPage.items,
+                        books = mergeKnownProgress(booksPage.items),
                         booksTotal = booksPage.total,
                         booksSeriesTotal = booksPage.seriesTotal,
                         booksPage = booksPage.page ?: 0,
@@ -710,6 +710,30 @@ class AppCoordinator(
                     progressPercent = progressPercent ?: book.progressPercent
                 )
             )
+            lastBrowserState?.let { browser ->
+                val updatedBook = book.copy(
+                    progressPositionMs = position.takeIf { it > 0L } ?: book.progressPositionMs,
+                    progressPageIndex = if (book.mediaKind == MediaKind.EPUB) pageIndex else {
+                        pageIndex.takeIf { it > 0 } ?: book.progressPageIndex
+                    },
+                    progressPercent = progressPercent ?: book.progressPercent,
+                    progressLabel = progressPercent?.let { "${it}%" } ?: book.progressLabel,
+                    lastReadAtMillis = System.currentTimeMillis(),
+                    isRead = progressPercent?.let { it >= 99.5f } ?: book.isRead
+                )
+                lastBrowserState = browser.copy(
+                    books = browser.books.map { existing ->
+                        if (existing.id == book.id) existing.copy(
+                            progressPositionMs = updatedBook.progressPositionMs,
+                            progressPageIndex = updatedBook.progressPageIndex,
+                            progressPercent = updatedBook.progressPercent,
+                            progressLabel = updatedBook.progressLabel,
+                            lastReadAtMillis = updatedBook.lastReadAtMillis,
+                            isRead = updatedBook.isRead
+                        ) else existing
+                    }
+                )
+            }
             if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
                 repository.saveEpubReaderPosition(
                     book.copy(
@@ -739,6 +763,20 @@ class AppCoordinator(
     private fun showBrowser(state: BrowserState) {
         lastBrowserState = state
         _screen.value = AppScreen.Browser(browserState = state)
+    }
+
+    private fun mergeKnownProgress(books: List<BookSummary>): List<BookSummary> {
+        return books.map { book ->
+            val progress = latestProgressByTarget[book.progressKey()] ?: return@map book
+            book.copy(
+                progressPositionMs = progress.position.takeIf { it > 0L } ?: book.progressPositionMs,
+                progressPageIndex = progress.pageIndex.takeIf { it > 0 } ?: book.progressPageIndex,
+                progressPercent = progress.progressPercent ?: book.progressPercent,
+                progressLabel = progress.progressPercent?.let { "${it}%" } ?: book.progressLabel,
+                lastReadAtMillis = progress.observedAtMillis,
+                isRead = progress.progressPercent?.let { it >= 99.5f } ?: book.isRead
+            )
+        }
     }
 
     private fun resetTransientState(clearBrowserState: Boolean) {

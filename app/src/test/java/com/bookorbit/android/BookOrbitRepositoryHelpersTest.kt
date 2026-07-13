@@ -7,6 +7,13 @@ import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
     @Test
+    fun `extractAccessToken accepts the login contract and nested responses`() {
+        assertEquals("access-123", extractAccessToken("{\"accessToken\":\"access-123\"}"))
+        assertEquals("access-456", extractAccessToken("{\"data\":{\"access_token\":\"access-456\"}}"))
+        assertNull(extractAccessToken("{\"user\":{\"id\":\"user-1\"}}"))
+    }
+
+    @Test
     fun `normalizeStoredServerUrl trims whitespace and trailing slashes`() {
         assertEquals("https://example.test", normalizeStoredServerUrl("  https://example.test///  "))
         assertEquals("http://localhost:3000", normalizeStoredServerUrl("http://localhost:3000/"))

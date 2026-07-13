@@ -60,6 +60,7 @@ The current app flow is:
 - `DataStore` stores the configured server URL and selected library ID.
 - Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
 - Session reset now waits for cookie removal to complete before the app settles on the login screen, and explicit sign-out suppresses cached offline-browser fallback until a fresh login succeeds.
+- Successful native login persists the returned `accessToken`; authenticated API, cover, download, and reader-cache requests send it as a Bearer credential alongside the shared cookie jar. Explicit session clearing removes the token.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
@@ -97,10 +98,11 @@ The current app flow is:
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
   - reflowable chapter content is laid out in an explicit full-viewport page strip instead of relying on WebView document scrolling
-  - left and right outer-quarter taps, plus left/right swipes, move one page; the center toggles overlay controls
+  - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls, and the top-right Close action is the only way to dismiss them
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, while persisted page identity still restores at chapter granularity
+  - Top, Bottom, Left, and Right use independent 0–100% controls; values apply with a short debounce and repaginate against an explicit inset page height
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
