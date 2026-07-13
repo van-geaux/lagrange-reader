@@ -32,6 +32,13 @@ If a rename is required later:
 - use minor bumps for additive feature releases
 - use a major bump when the app reaches an intentionally stable public release line
 
+### Current version marker
+
+- current pre-1.0 release: `versionName 0.2.0`, `versionCode 2`
+- update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
+- the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
+- remain on the `0.x` version line until the product owner explicitly approves `1.0.0`
+
 ## Signing strategy
 
 - debug builds continue using the default Android debug keystore
