@@ -72,6 +72,7 @@ interface BookOrbitDataSource {
     suspend fun saveActiveReader(book: BookSummary)
     suspend fun clearActiveReader()
     suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
+    suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary): File
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
@@ -87,6 +88,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
+    private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val coverCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
     private val client = OkHttpClient.Builder()
@@ -113,6 +115,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun clearSession() {
         activeReaderStore.clear()
+        epubReaderPositionStore.clear()
         clearCookies()
     }
 
@@ -369,12 +372,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = book,
             latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
         )
+        val epubPosition = if (book.mediaKind == MediaKind.EPUB) {
+            epubReaderPositionStore.read(serverUrl, book.id, book.fileId)
+        } else {
+            null
+        }
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = streamUrl,
             lastKnownPosition = restoredProgress.positionMs,
-            pageIndex = restoredProgress.pageIndex,
+            pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
+            readerPageIndex = epubPosition?.pageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent
         )
     }
@@ -388,6 +397,21 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun clearActiveReader() = withContext(Dispatchers.IO) {
         activeReaderStore.clear()
+    }
+
+    override suspend fun saveEpubReaderPosition(book: BookSummary) = withContext(Dispatchers.IO) {
+        if (book.mediaKind != MediaKind.EPUB || book.readerPageIndex == null) return@withContext
+        epubReaderPositionStore.save(
+            EpubReaderPosition(
+                serverUrl = getServerUrl().orEmpty(),
+                bookId = book.id,
+                fileId = book.fileId,
+                chapterIndex = book.progressPageIndex ?: 0,
+                pageIndex = book.readerPageIndex,
+                pageCount = book.readerPageCount ?: 1,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
     }
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = withContext(Dispatchers.IO) {
@@ -418,12 +442,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = savedBook,
             latestProgress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
         )
+        val epubPosition = if (savedBook.mediaKind == MediaKind.EPUB) {
+            epubReaderPositionStore.read(serverUrl, savedBook.id, savedBook.fileId)
+        } else {
+            null
+        }
         ReaderState(
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
             streamUrl = streamUrl,
             lastKnownPosition = restoredProgress.positionMs,
-            pageIndex = restoredProgress.pageIndex,
+            pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
+            readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent
         )
     }

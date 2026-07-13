@@ -48,6 +48,8 @@ class ActiveReaderStore private constructor(
                 put("addedAtMillis", book.addedAtMillis)
                 put("updatedAtMillis", book.updatedAtMillis)
                 put("lastReadAtMillis", book.lastReadAtMillis)
+                put("readerPageIndex", book.readerPageIndex)
+                put("readerPageCount", book.readerPageCount)
             })
         }
         file.parentFile?.mkdirs()
@@ -85,7 +87,9 @@ class ActiveReaderStore private constructor(
             isRead = book.optBoolean("isRead"),
             addedAtMillis = if (book.has("addedAtMillis") && !book.isNull("addedAtMillis")) book.optLong("addedAtMillis") else null,
             updatedAtMillis = if (book.has("updatedAtMillis") && !book.isNull("updatedAtMillis")) book.optLong("updatedAtMillis") else null,
-            lastReadAtMillis = if (book.has("lastReadAtMillis") && !book.isNull("lastReadAtMillis")) book.optLong("lastReadAtMillis") else null
+            lastReadAtMillis = if (book.has("lastReadAtMillis") && !book.isNull("lastReadAtMillis")) book.optLong("lastReadAtMillis") else null,
+            readerPageIndex = if (book.has("readerPageIndex") && !book.isNull("readerPageIndex")) book.optInt("readerPageIndex") else null,
+            readerPageCount = if (book.has("readerPageCount") && !book.isNull("readerPageCount")) book.optInt("readerPageCount") else null
         )
     }
 

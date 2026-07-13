@@ -38,7 +38,9 @@ data class BookSummary(
     val isRead: Boolean = false,
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
-    val lastReadAtMillis: Long? = null
+    val lastReadAtMillis: Long? = null,
+    val readerPageIndex: Int? = null,
+    val readerPageCount: Int? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
 }
@@ -148,6 +150,7 @@ data class ReaderState(
     val streamUrl: String? = null,
     val lastKnownPosition: Long = 0L,
     val pageIndex: Int = 0,
+    val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
 )

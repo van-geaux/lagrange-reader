@@ -656,10 +656,21 @@ class AppCoordinator(
             repository.saveActiveReader(
                 book.copy(
                     progressPositionMs = position.takeIf { it > 0L } ?: book.progressPositionMs,
-                    progressPageIndex = pageIndex.takeIf { it > 0 } ?: book.progressPageIndex,
+                    progressPageIndex = if (book.mediaKind == MediaKind.EPUB) pageIndex else {
+                        pageIndex.takeIf { it > 0 } ?: book.progressPageIndex
+                    },
                     progressPercent = progressPercent ?: book.progressPercent
                 )
             )
+            if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
+                repository.saveEpubReaderPosition(
+                    book.copy(
+                        progressPageIndex = pageIndex,
+                        readerPageIndex = book.readerPageIndex,
+                        readerPageCount = book.readerPageCount
+                    )
+                )
+            }
             if (ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
                 queueProgress(key, progress)
             }

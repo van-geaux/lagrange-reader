@@ -221,7 +221,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add reader padding controls with a more generous default text inset
 - [x] Replace the launch/startup spinner with the branded adaptive-icon loading state
 - [ ] Validate the branded launch state on a physical device
-- [ ] Restore the exact in-chapter EPUB page on reopen and restart
+- [x] Restore the exact in-chapter EPUB page on reopen and restart
 - [ ] Render library books with the same adaptive poster cards used by Series and Authors
 - [ ] Rename visible app branding to Lagrange with the subtitle "a BookOrbit reader"
 - [ ] Add an About destination after Options in the More menu

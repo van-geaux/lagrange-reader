@@ -20,6 +20,7 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("touchend"))
         assertTrue(rendered.contains("deltaX < 0 ? page + 1 : page - 1"))
         assertTrue(rendered.contains("suppressClick"))
+        assertTrue(rendered.contains("const initialPage = 0"))
         assertTrue(rendered.contains("left: 36px"))
         assertTrue(rendered.contains("top: 40px"))
         assertFalse(rendered.contains("column-width"))
@@ -38,5 +39,19 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("left: 48px"))
         assertTrue(rendered.contains("top: 52px"))
         assertTrue(rendered.contains("window.innerHeight - 104"))
+    }
+
+    @Test
+    fun `epub html starts at the requested page`() {
+        val rendered = styleEpubHtml(
+            html = "<p>Readable chapter text</p>",
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1f,
+            startAtEnd = false,
+            initialPage = 7
+        )
+
+        assertTrue(rendered.contains("const initialPage = 7"))
+        assertTrue(rendered.contains("Math.min(initialPage, pageCount() - 1)"))
     }
 }

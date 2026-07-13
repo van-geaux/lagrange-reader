@@ -23,7 +23,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
-- New implementation targets are exact in-chapter EPUB restore, poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader`, and a placeholder About destination after Options in More.
+- New implementation targets are poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader`, and a placeholder About destination after Options in More. Exact in-chapter EPUB restore is implemented and now needs physical-device validation.
 
 ## Manual Test Matrix
 

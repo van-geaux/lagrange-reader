@@ -634,11 +634,20 @@ private fun ReaderScreen(
             title = state.book.title,
             file = state.localFile,
             initialChapter = if (isPreview) 0 else state.pageIndex,
+            initialPage = if (isPreview) 0 else state.readerPageIndex,
             initialPercent = if (isPreview) null else state.progressPercent,
             isPreview = isPreview,
             onBack = onBack,
-            onProgress = { chapterIndex, percent ->
-                readerProgress(state.book, 0L, chapterIndex, percent)
+            onProgress = { chapterIndex, pageIndex, pageCount, percent ->
+                readerProgress(
+                    state.book.copy(
+                        readerPageIndex = pageIndex,
+                        readerPageCount = pageCount
+                    ),
+                    0L,
+                    chapterIndex,
+                    percent
+                )
             }
         )
         return
@@ -1000,10 +1009,11 @@ private fun EpubReaderView(
     title: String,
     file: File?,
     initialChapter: Int,
+    initialPage: Int,
     initialPercent: Float?,
     isPreview: Boolean,
     onBack: () -> Unit,
-    onProgress: (Int, Float?) -> Unit
+    onProgress: (Int, Int, Int, Float?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val view = LocalView.current
@@ -1044,7 +1054,7 @@ private fun EpubReaderView(
     var selectedPadding by remember(file) { mutableStateOf(EpubReaderPadding.Comfortable) }
     var showControls by remember(file) { mutableStateOf(false) }
     var showChapterPicker by remember(file) { mutableStateOf(false) }
-    var currentPage by remember(file) { mutableStateOf(0) }
+    var currentPage by remember(file, initialPage) { mutableStateOf(initialPage.coerceAtLeast(0)) }
     var currentPageCount by remember(file) { mutableStateOf(1) }
     var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
@@ -1073,7 +1083,7 @@ private fun EpubReaderView(
     LaunchedEffect(currentChapter, currentPage, currentPageCount, chapterCount) {
         val chapterProgress = (currentPage + 1f) / currentPageCount.coerceAtLeast(1)
         val percent = ((currentChapter + chapterProgress) / chapterCount.toFloat()) * 100f
-        onProgress(currentChapter, percent)
+        onProgress(currentChapter, currentPage, currentPageCount, percent)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(selectedTheme.backgroundColor))) {
@@ -1117,8 +1127,9 @@ private fun EpubReaderView(
                 val chapter = currentChapterState
                 val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|${selectedPadding.name}|$openChapterAtEnd"
                 if (webView.tag != renderKey) {
+                    val firstRender = webView.tag == null
                     webView.tag = renderKey
-                    currentPage = 0
+                    currentPage = if (firstRender) initialPage.coerceAtLeast(0) else 0
                     currentPageCount = 1
                     val html = chapter.file.readText()
                     webView.setBackgroundColor(selectedTheme.backgroundColor)
@@ -1129,6 +1140,7 @@ private fun EpubReaderView(
                             theme = selectedTheme,
                             fontScale = fontScale,
                             padding = selectedPadding,
+                            initialPage = if (firstRender) initialPage else 0,
                             startAtEnd = openChapterAtEnd
                         ),
                         "text/html",
@@ -1547,7 +1559,8 @@ internal fun styleEpubHtml(
     theme: EpubReaderTheme,
     fontScale: Float,
     startAtEnd: Boolean,
-    padding: EpubReaderPadding = EpubReaderPadding.Comfortable
+    padding: EpubReaderPadding = EpubReaderPadding.Comfortable,
+    initialPage: Int = 0
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
     val pageInsetHeight = padding.verticalPx * 2
@@ -1592,6 +1605,7 @@ internal fun styleEpubHtml(
           let page = 0;
           let strip = null;
           let pinToEnd = ${startAtEnd.toString()};
+          const initialPage = ${initialPage.coerceAtLeast(0)};
           const bridge = window.$EPUB_READER_BRIDGE;
           const pageHeight = () => Math.max(1, window.innerHeight - ${pageInsetHeight});
           const pageCount = () => strip
@@ -1622,7 +1636,7 @@ internal fun styleEpubHtml(
             Array.from(document.body.childNodes).forEach((node) => strip.appendChild(node));
             document.body.appendChild(strip);
             requestAnimationFrame(() => requestAnimationFrame(() => {
-              page = pinToEnd ? pageCount() - 1 : 0;
+              page = pinToEnd ? pageCount() - 1 : Math.min(initialPage, pageCount() - 1);
               renderPage();
               publish();
             }));
