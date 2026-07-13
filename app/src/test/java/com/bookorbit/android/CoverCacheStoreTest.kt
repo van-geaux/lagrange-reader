@@ -5,6 +5,8 @@ import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoverCacheStoreTest {
@@ -16,6 +18,8 @@ class CoverCacheStoreTest {
             val bytes = byteArrayOf(1, 2, 3)
 
             first.save("https://one.example", "book-1", "https://one.example/cover", bytes)
+            assertTrue(first.contains("https://one.example", "book-1", "https://one.example/cover"))
+            assertFalse(first.contains("https://one.example", "book-1", "https://one.example/other"))
 
             val reopened = CoverCacheStore(filesDir)
             assertArrayEquals(bytes, reopened.read("https://one.example", "book-1", "https://one.example/cover"))

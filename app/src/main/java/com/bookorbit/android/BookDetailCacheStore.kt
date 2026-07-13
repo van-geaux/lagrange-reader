@@ -21,22 +21,49 @@ class BookDetailCacheStore private constructor(
     @Suppress("UNUSED_PARAMETER")
     internal constructor(filesDir: File, marker: Unit = Unit) : this(File(filesDir, "book_detail_cache.json"))
 
-    suspend fun read(serverUrl: String, bookId: String, fileId: String?): BookDetailInfo? = withContext(Dispatchers.IO) {
+    suspend fun read(
+        serverUrl: String,
+        bookId: String,
+        fileId: String?,
+        sourceUpdatedAtMillis: Long? = null
+    ): BookDetailInfo? = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (!file.isFile) return@withLock null
             val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock null
-            root.optJSONObject(cacheKey(serverUrl, bookId, fileId))?.toBookDetail()
+            val entry = root.optJSONObject(cacheKey(serverUrl, bookId, fileId)) ?: return@withLock null
+            if (!entry.has("detail")) {
+                val legacy = entry.toBookDetail() ?: return@withLock null
+                return@withLock legacy.takeIf {
+                    sourceUpdatedAtMillis == null || legacy.book.updatedAtMillis == sourceUpdatedAtMillis
+                }
+            }
+            if (entry.optionalLong("sourceUpdatedAtMillis") != sourceUpdatedAtMillis) {
+                return@withLock null
+            }
+            entry.optJSONObject("detail")?.toBookDetail()
         }
     }
 
-    suspend fun save(serverUrl: String, bookId: String, fileId: String?, detail: BookDetailInfo) = withContext(Dispatchers.IO) {
+    suspend fun save(
+        serverUrl: String,
+        bookId: String,
+        fileId: String?,
+        detail: BookDetailInfo,
+        sourceUpdatedAtMillis: Long? = detail.book.updatedAtMillis
+    ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val root = if (file.isFile) {
                 runCatching { JSONObject(file.readText()) }.getOrElse { JSONObject() }
             } else {
                 JSONObject()
             }
-            root.put(cacheKey(serverUrl, bookId, fileId), detail.toJson())
+            root.put(
+                cacheKey(serverUrl, bookId, fileId),
+                JSONObject().apply {
+                    putNullable("sourceUpdatedAtMillis", sourceUpdatedAtMillis)
+                    put("detail", detail.toJson())
+                }
+            )
             file.parentFile?.mkdirs()
             file.writeText(root.toString())
         }

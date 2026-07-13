@@ -195,6 +195,15 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 7. Added JVM coverage for pagination termination, duplicate handling, jump parsing/index mapping, and cache-first coordinator failure recovery. Added a compiled Android Room transaction test for changed rows and deletions.
 8. Physical-device validation remains required for first sync, instant reopen, pull refresh, additions/deletions/progress changes, offline browsing, and #/A–Z jumps across a large target-server library.
 
+### Latest device feedback workplan - 2026-07-13 (large-library thumbnails and details)
+
+1. Implemented: replace process-global cover jobs with Compose-owned cancellable OkHttp calls so rapidly scrolled-off cards stop consuming server and client request capacity.
+2. Implemented: version memory/disk thumbnail keys from catalog metadata and use per-file cache locks, allowing visible foreground reads to proceed independently of background writes.
+3. Implemented: after complete catalog reconciliation, use WorkManager on unmetered connectivity to scan the selected library and download up to 50 missing/changed thumbnails per durable chained batch.
+4. Implemented: persist rich `BookDetailInfo` for every opened title, not only downloaded books, and invalidate it when the title's catalog update version changes.
+5. Deliberate boundary: keep the complete catalog and thumbnails locally, but do not prefetch one rich-detail endpoint per title; a 5k-book library would otherwise generate roughly 5k extra API calls. The summary detail screen renders immediately and the rich supplement is fetched once per changed/opened title.
+6. Verification passes: 123 JVM tests across 21 suites, Android lint, debug APK assembly, and Android instrumentation-test compilation. Physical-device validation against the 5k-book library remains required.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +41,32 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.synopsis, restored?.synopsis)
             assertEquals(detail.genres, restored?.genres)
             assertEquals(detail.pageCount, restored?.pageCount)
+            filesDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `detail cache is reused only for the matching catalog version`() {
+        runBlocking {
+            val filesDir = Files.createTempDirectory("book-detail-version-test").toFile()
+            val detail = BookDetailInfo(
+                book = BookSummary(
+                    libraryId = "library-1",
+                    id = "book-1",
+                    fileId = "file-1",
+                    title = "Versioned Book",
+                    updatedAtMillis = 100L
+                ),
+                synopsis = "Cached synopsis"
+            )
+            val store = BookDetailCacheStore(filesDir)
+            store.save("https://example.test", "book-1", "file-1", detail, 100L)
+
+            assertEquals(
+                "Cached synopsis",
+                store.read("https://example.test", "book-1", "file-1", 100L)?.synopsis
+            )
+            assertNull(store.read("https://example.test", "book-1", "file-1", 101L))
             filesDir.deleteRecursively()
         }
     }

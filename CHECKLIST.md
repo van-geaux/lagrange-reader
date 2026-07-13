@@ -261,10 +261,13 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Rename the collapsed-series action to Expand series
 - [x] Keep collapsed series ordered by series name and restore the scroll anchor when toggling collapse
 - [x] Improve thumbnail loading performance and retry failed covers
+- [x] Cancel off-screen cover requests so visible cards and details are not blocked by stale scroll work
+- [x] Warm every missing/changed selected-library thumbnail into the local cache in durable unmetered batches
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title
 - [x] Cache full downloaded-book metadata for server-free local detail screens
+- [x] Cache versioned rich details for every opened book and invalidate them when catalog metadata changes
 - [x] Show # and every A–Z label on the Library jump rail, grouping non-alphabetic titles under #
 - [x] Persist complete per-server/per-library book metadata in Room and render it before cold-start network checks finish
 - [x] Reconcile every server page atomically, writing only changed/new/reordered rows and deleting titles no longer returned by BookOrbit
@@ -272,6 +275,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use BookOrbit jump-bucket absolute indexes for default Browse navigation, with a complete-cache local fallback
 - [x] Disable the jump rail until the first full catalog is ready and for sort modes that do not support meaningful letter buckets
 - [ ] Validate cache-first reopen, catalog additions/deletions/progress changes, and exact #/A–Z jumps on the target device/server
+- [ ] Validate full thumbnail warming, rapid-scroll cancellation, and instant repeat detail opens with the 5k-book library
 - [x] Route background authenticated request failures through the login recovery flow
 - [x] Retry authenticated requests through the refresh-cookie session flow before showing session-expired login
 - [x] Retry and cache Series/Authors catalog thumbnails, including the series cover fallback endpoint

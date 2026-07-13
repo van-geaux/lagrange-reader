@@ -98,6 +98,15 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `cover cache identity changes with the catalog version`() {
+        val url = "https://example.test/api/v1/books/book-1/thumbnail"
+
+        assertEquals(url, coverCacheIdentity(url, null))
+        assertEquals("$url#updated=100", coverCacheIdentity(url, 100L))
+        assertEquals("$url#updated=101", coverCacheIdentity(url, 101L))
+    }
+
+    @Test
     fun `resolveRestoredReaderProgress keeps saved reader progress when queued progress is older`() {
         val book = BookSummary(
             libraryId = "lib-1",

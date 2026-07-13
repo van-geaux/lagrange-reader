@@ -22,6 +22,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -47,6 +49,7 @@ import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
@@ -161,6 +164,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun clearServer() {
+        CoverCacheWarmWorker.cancelAll(context)
         context.dataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
@@ -308,6 +312,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             jumpBuckets = jumpBuckets,
             refreshedAtMillis = refreshedAtMillis
         )
+        CoverCacheWarmWorker.enqueue(context, serverUrl, libraryId)
         LibraryBooksPage(
             items = books,
             total = total,
@@ -495,21 +500,59 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
         val url = book.coverUrl?.let(::coverThumbnailUrl) ?: return@withContext null
-        synchronized(coverCache) { coverCache[url] }?.let { return@withContext it }
+        val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
+        synchronized(coverCache) { coverCache[cacheIdentity] }?.let { return@withContext it }
         val serverUrl = getServerUrl().orEmpty()
-        coverCacheStore.read(serverUrl, book.id, url)?.let { bytes ->
-            synchronized(coverCache) { coverCache[url] = bytes }
-            return@withContext bytes
+        coverCacheStore.read(serverUrl, book.id, cacheIdentity)?.let { bytes ->
+            if (bytes.isNotEmpty()) {
+                synchronized(coverCache) { coverCache[cacheIdentity] = bytes }
+                return@withContext bytes
+            }
         }
         val bytes = requestBytes(url)
-        coverCacheStore.save(serverUrl, book.id, url, bytes)
+        if (bytes.isEmpty()) return@withContext null
+        coverCacheStore.save(serverUrl, book.id, cacheIdentity, bytes)
         synchronized(coverCache) {
-            coverCache[url] = bytes
+            coverCache[cacheIdentity] = bytes
             while (coverCache.size > 32) {
                 coverCache.remove(coverCache.entries.first().key)
             }
         }
         bytes
+    }
+
+    internal suspend fun warmCoverCacheBatch(
+        expectedServerUrl: String,
+        libraryId: String,
+        startIndex: Int,
+        maxDownloads: Int
+    ): Int? = withContext(Dispatchers.IO) {
+        if (getServerUrl().orEmpty() != expectedServerUrl) return@withContext null
+        val books = libraryCatalogStore.read(expectedServerUrl, libraryId)?.books
+            ?: return@withContext null
+        var index = startIndex.coerceIn(0, books.size)
+        var downloaded = 0
+        while (index < books.size && downloaded < maxDownloads.coerceAtLeast(1)) {
+            if (getServerUrl().orEmpty() != expectedServerUrl) return@withContext null
+            val book = books[index]
+            val url = book.coverUrl?.let(::coverThumbnailUrl)
+            if (url != null) {
+                val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
+                if (!coverCacheStore.contains(expectedServerUrl, book.id, cacheIdentity)) {
+                    try {
+                        val bytes = requestBytes(url)
+                        if (bytes.isNotEmpty() && getServerUrl().orEmpty() == expectedServerUrl) {
+                            coverCacheStore.save(expectedServerUrl, book.id, cacheIdentity, bytes)
+                            downloaded += 1
+                        }
+                    } catch (error: HttpRequestException) {
+                        if (error.code != 404) throw error
+                    }
+                }
+            }
+            index += 1
+        }
+        index.takeIf { it < books.size }
     }
 
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
@@ -524,12 +567,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        if (book.isDownloaded) {
-            bookDetailCacheStore.read(serverUrl, book.id, book.fileId)?.let { cached ->
-                return@withContext cached.copy(
-                    book = cached.book.copy(localPath = book.localPath ?: cached.book.localPath)
+        bookDetailCacheStore.read(serverUrl, book.id, book.fileId, book.updatedAtMillis)?.let { cached ->
+            return@withContext cached.copy(
+                book = cached.book.copy(
+                    localPath = book.localPath ?: cached.book.localPath,
+                    progressLabel = book.progressLabel ?: cached.book.progressLabel,
+                    progressPercent = book.progressPercent ?: cached.book.progressPercent,
+                    progressPositionMs = book.progressPositionMs ?: cached.book.progressPositionMs,
+                    progressPageIndex = book.progressPageIndex ?: cached.book.progressPageIndex,
+                    lastReadAtMillis = book.lastReadAtMillis ?: cached.book.lastReadAtMillis,
+                    isRead = book.isRead
                 )
-            }
+            )
         }
         val detail = BookOrbitPayloadParser.parseBookDetail(
             fallback = book,
@@ -537,9 +586,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId },
             serverBase = serverBase()
         )
-        if (book.isDownloaded) {
-            bookDetailCacheStore.save(serverUrl, book.id, book.fileId, detail)
-        }
+        bookDetailCacheStore.save(serverUrl, book.id, book.fileId, detail, book.updatedAtMillis)
         detail
     }
 
@@ -1145,8 +1192,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    private fun requestBytes(url: String): ByteArray {
-        return executeAuthenticated(
+    private suspend fun requestBytes(url: String): ByteArray {
+        return executeAuthenticatedCancellable(
             requestFactory = {
                 Request.Builder()
                     .url(url)
@@ -1160,6 +1207,49 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             response.body?.bytes() ?: ByteArray(0)
         }
     }
+
+    private suspend fun <T> executeAuthenticatedCancellable(
+        requestFactory: () -> Request,
+        action: String,
+        onSuccess: (Response) -> T
+    ): T {
+        val tokenBeforeRequest = sessionAccessToken()
+        var response = executeCancellable(requestFactory())
+        if (response.code == 401 || response.code == 403) {
+            response.close()
+            if (refreshSession(tokenBeforeRequest)) {
+                response = executeCancellable(requestFactory())
+            }
+        }
+        response.use {
+            if (it.code == 401 || it.code == 403) {
+                throw AuthenticationRequiredException()
+            }
+            if (!it.isSuccessful) {
+                throw HttpRequestException(code = it.code, action = action)
+            }
+            return onSuccess(it)
+        }
+    }
+
+    private suspend fun executeCancellable(request: Request): Response =
+        suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (continuation.isActive) {
+                        continuation.resume(response)
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+        }
 
     private fun <T> executeAuthenticated(
         requestFactory: () -> Request,
@@ -2126,6 +2216,10 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
     } else {
         coverUrl
     }
+}
+
+internal fun coverCacheIdentity(url: String, updatedAtMillis: Long?): String {
+    return updatedAtMillis?.let { "$url#updated=$it" } ?: url
 }
 
 internal fun resolveSelectedLibraryId(

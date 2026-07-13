@@ -127,6 +127,14 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep # plus A–Z visible for eligible letter rails, fall missing letters forward, and hide the rail until the first full catalog is ready or when the selected sort has no letter buckets.
 - [ ] Validate first-sync messaging, instant reopen, refresh continuity, exact jumps, filters, and large-library scroll performance on the target device.
 
+### Large-library thumbnail/detail cache - 2026-07-13
+
+- [x] Cancel a card's authenticated thumbnail request when it leaves composition instead of retaining global scroll-era jobs.
+- [x] Persist versioned thumbnails and warm all missing/changed selected-library covers in low-priority unmetered WorkManager batches.
+- [x] Cache rich detail data for every opened title and refresh it only after the catalog version changes.
+- [x] Keep lazy Compose item rendering for bounded memory while removing network-backed lazy catalog paging.
+- [ ] Validate thumbnail warm-up, far-letter offline covers, rapid-scroll visible-card priority, and repeat detail-open latency with the 5k-book library.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

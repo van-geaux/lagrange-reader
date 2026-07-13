@@ -94,10 +94,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -204,9 +200,7 @@ internal fun collapsedLibraryBooks(
 private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
 }
-private val coverBitmapMutex = Mutex()
-private val coverLoadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-private val coverLoadJobs = mutableMapOf<String, Deferred<Bitmap?>>()
+private val coverLoadLocks = Array(32) { Mutex() }
 private val catalogImageCache = object : LruCache<String, ByteArray>(4 * 1024 * 1024) {
     override fun sizeOf(key: String, value: ByteArray): Int = value.size
 }
@@ -1572,7 +1566,7 @@ private fun ShelfBookCard(
 
 @Composable
 private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> ByteArray?) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl, book.updatedAtMillis) {
         value = loadScaledCover(book, coverLoader)
     }
     val colors = listOf(
@@ -1618,58 +1612,45 @@ private suspend fun loadScaledCover(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?
 ): Bitmap? {
-    val key = book.coverUrl ?: "book:${book.id}"
+    val key = coverBitmapCacheKey(book)
     coverBitmapCache.get(key)?.let { return it }
-    val load = coverBitmapMutex.withLock {
-        coverBitmapCache.get(key)?.let { return@withLock null }
-        val existing = coverLoadJobs[key]
-        if (existing != null && !existing.isCompleted) {
-            existing
-        } else {
-            coverLoadScope.async {
-                var bitmap: Bitmap? = null
-                repeat(2) {
-                    val bytes = try {
-                        coverLoader(book)
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (_: Throwable) {
-                        null
-                    }
-                    if (bytes != null && bytes.isNotEmpty()) {
-                        bitmap = try {
-                            withContext(Dispatchers.Default) {
-                                decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
-                            }
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (_: Throwable) {
-                            null
-                        }
-                    }
-                    if (bitmap != null) return@async bitmap
-                }
+    val lock = coverLoadLocks[(key.hashCode() and Int.MAX_VALUE) % coverLoadLocks.size]
+    return lock.withLock {
+        coverBitmapCache.get(key)?.let { return@withLock it }
+        repeat(2) { attempt ->
+            val bytes = try {
+                coverLoader(book)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
                 null
-            }.also { job ->
-                coverLoadJobs[key] = job
-                coverLoadScope.launch {
-                    val bitmap = job.await()
-                    if (bitmap != null) coverBitmapCache.put(key, bitmap)
+            }
+            val bitmap = if (bytes != null && bytes.isNotEmpty()) {
+                try {
+                    withContext(Dispatchers.Default) {
+                        decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    null
                 }
+            } else {
+                null
             }
-        }
-    } ?: return coverBitmapCache.get(key)
-    return try {
-        load.await()?.also { bitmap ->
-            coverBitmapCache.put(key, bitmap)
-        }
-    } finally {
-        if (load.isCompleted) {
-            coverBitmapMutex.withLock {
-                if (coverLoadJobs[key] === load) coverLoadJobs.remove(key)
+            if (bitmap != null) {
+                coverBitmapCache.put(key, bitmap)
+                return@withLock bitmap
             }
+            if (attempt == 0) delay(120)
         }
+        null
     }
+}
+
+internal fun coverBitmapCacheKey(book: BookSummary): String = buildString {
+    append(book.coverUrl ?: "book:${book.id}")
+    book.updatedAtMillis?.let { append("#updated=").append(it) }
 }
 
 internal fun decodeCoverBitmap(bytes: ByteArray, targetWidth: Int, targetHeight: Int): Bitmap? {
