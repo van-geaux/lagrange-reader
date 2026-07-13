@@ -97,6 +97,7 @@ Current response shape:
     }
   ],
   "total": 5012,
+  "seriesCount": 321,
   "page": 0,
   "size": 50
 }
@@ -110,6 +111,7 @@ Important notes:
 - `readingProgress` is the progress object for ebook progress display.
 - The Android client also tolerantly maps optional series identity/order, read state, and created/updated/last-read timestamps when present. These fields drive native Home shelves but are not assumed to exist on every server payload.
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
+- Library responses may include `seriesCount` (or an equivalent `totalSeries`/`seriesTotal` field); the Android client uses it for the full Browse header while book pages are loaded incrementally.
 
 ### Global book search
 

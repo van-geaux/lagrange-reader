@@ -14,6 +14,7 @@ class BookOrbitPayloadParserTest {
                 {
                   "items": [{"id":"book-1","title":"First"}],
                   "total": 5012,
+                  "seriesCount": 321,
                   "page": 2,
                   "size": 50
                 }
@@ -23,6 +24,7 @@ class BookOrbitPayloadParserTest {
         )
 
         assertEquals(5012, page.total)
+        assertEquals(321, page.seriesTotal)
         assertEquals(2, page.page)
         assertEquals(50, page.size)
         assertEquals(listOf("book-1"), page.items.map { it.id })

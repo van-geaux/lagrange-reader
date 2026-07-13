@@ -229,13 +229,19 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a Libraries control to collapse series into representative cards and restore all books
 - [x] Add Local books before Options in the More menu
 - [x] Reduce book poster-card sizing to 75% of the current device-reviewed size
-- [x] Add library Browse-tab pagination with a Load more control
+- [x] Add lazy library Browse-tab pagination as the user scrolls
 - [x] Show the Lagrange logo only on Home and make the selected library name the Library selector
 - [x] Split Library into Recommended and Browse tabs
 - [x] Make Library, Series, and Authors poster cards visibly smaller on narrow phones
 - [x] Add a downward-triangle affordance to the selected Library name
 - [x] Replace the Library refresh arrow with swipe-down-to-refresh
 - [x] Cache cover thumbnails locally for Local books
+- [x] Rename the collapsed-series action to Expand series
+- [x] Improve thumbnail loading performance and retry failed covers
+- [x] Add safe bottom spacing to the More menu
+- [x] Show full Library book/series totals while Browse is paginated
+- [x] Return from Library selection by tapping the top-left Libraries title
+- [x] Cache full downloaded-book metadata for server-free local detail screens
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

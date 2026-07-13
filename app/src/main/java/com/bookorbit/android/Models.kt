@@ -127,6 +127,7 @@ data class AuthorBooksPage(
 data class LibraryBooksPage(
     val items: List<BookSummary> = emptyList(),
     val total: Int? = null,
+    val seriesTotal: Int? = null,
     val page: Int? = null,
     val size: Int? = null
 )
@@ -137,6 +138,7 @@ data class BrowserState(
     val selectedLibraryId: String?,
     val books: List<BookSummary>,
     val booksTotal: Int? = null,
+    val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,
     val booksPageSize: Int? = null,
     val isRefreshing: Boolean = false,

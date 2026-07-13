@@ -73,7 +73,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Library refinement workplan — 2026-07-13
 
 - [x] Reduce book poster-card sizing to 75% of the current size, preserving the adaptive grid and readable metadata.
-- [x] Add a paginated Browse tab with Load more support for library books.
+- [x] Add a paginated Browse tab with automatic near-end loading for library books.
 - [x] Keep the Lagrange logo on Home only; use the selected library name as the tappable selector in Library.
 - [x] Split Library into Recommended Home-style shelves and Browse's complete book grid.
 
@@ -83,6 +83,17 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Add a downward-triangle affordance beside the tappable Library name selector.
 - [x] Replace the Library refresh action with swipe-down-to-refresh over Recommended and Browse content.
 - [x] Persist cover thumbnails locally and prefer the local cache for Local books.
+
+### Follow-up browser polish — 2026-07-13
+
+- [x] Use Expand series as the inverse action after a series has been collapsed.
+- [x] Keep cover loading responsive and retry transient/decode failures instead of permanently pinning a first-letter placeholder.
+- [x] Keep the More sheet's final action above the Android navigation area with explicit bottom inset spacing.
+- [x] Show full Library book/series totals in the Browse header while additional pages are available.
+- [x] Make the top-left Libraries title return from the picker to the selected library page.
+- [x] Replace Browse's Load more action with automatic near-end page loading.
+- [x] Add a right-side title-initial jump rail while preserving the left side for normal scrolling.
+- [x] Show downloaded-book details from cached metadata without requiring a server request.
 
 ### Checkpoint 5: Other media readers - deferred
 

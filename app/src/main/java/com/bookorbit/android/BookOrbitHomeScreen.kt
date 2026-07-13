@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,8 +28,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -70,6 +73,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,19 +93,26 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private val BOOK_CARD_MIN_SIZE = 88.dp
 
-private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
 }
 private val coverBitmapMutex = Mutex()
-private val missingCoverKeys = mutableSetOf<String>()
+private val coverLoadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+private val coverLoadJobs = mutableMapOf<String, Deferred<Bitmap?>>()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -282,11 +294,13 @@ internal fun NativeLibraryBrowserScreen(
                     profileExpanded = showProfileMenu,
                     onDismissProfile = { showProfileMenu = false },
                     showBrand = destination == BrowserDestination.HOME,
-                    onTitleClick = if (destination == BrowserDestination.LIBRARY && !showLibraryPicker) {
-                        { showLibraryPicker = true }
-                    } else {
-                        null
-                    },
+                    onTitleClick = if (destination == BrowserDestination.LIBRARY) {
+                        if (showLibraryPicker) {
+                            { showLibraryPicker = false }
+                        } else {
+                            { showLibraryPicker = true }
+                        }
+                    } else null,
                     onSessionAction = {
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
@@ -549,7 +563,12 @@ private fun MoreMenu(
     onOptions: () -> Unit,
     onAbout: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = 24.dp)
+    ) {
         Text(
             "More",
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -1264,25 +1283,57 @@ private suspend fun loadScaledCover(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?
 ): Bitmap? {
-    val key = book.coverUrl ?: return null
+    val key = book.coverUrl ?: "book:${book.id}"
     coverBitmapCache.get(key)?.let { return it }
-    return coverBitmapMutex.withLock {
-        coverBitmapCache.get(key)?.let { return@withLock it }
-        if (key in missingCoverKeys) return@withLock null
-        val bytes = coverLoader(book)
-        if (bytes == null || bytes.isEmpty()) {
-            missingCoverKeys += key
-            return@withLock null
-        }
-        val bitmap = withContext(Dispatchers.Default) {
-            decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
-        }
-        if (bitmap == null) {
-            missingCoverKeys += key
+    val load = coverBitmapMutex.withLock {
+        coverBitmapCache.get(key)?.let { return@withLock null }
+        val existing = coverLoadJobs[key]
+        if (existing != null && !existing.isCompleted) {
+            existing
         } else {
+            coverLoadScope.async {
+                var bitmap: Bitmap? = null
+                repeat(2) {
+                    val bytes = try {
+                        coverLoader(book)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        bitmap = try {
+                            withContext(Dispatchers.Default) {
+                                decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
+                            }
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Throwable) {
+                            null
+                        }
+                    }
+                    if (bitmap != null) return@async bitmap
+                }
+                null
+            }.also { job ->
+                coverLoadJobs[key] = job
+                coverLoadScope.launch {
+                    val bitmap = job.await()
+                    if (bitmap != null) coverBitmapCache.put(key, bitmap)
+                }
+            }
+        }
+    } ?: return coverBitmapCache.get(key)
+    return try {
+        load.await()?.also { bitmap ->
             coverBitmapCache.put(key, bitmap)
         }
-        bitmap
+    } finally {
+        if (load.isCompleted) {
+            coverBitmapMutex.withLock {
+                if (coverLoadJobs[key] === load) coverLoadJobs.remove(key)
+            }
+        }
     }
 }
 
@@ -1430,13 +1481,15 @@ private fun LibraryBrowseScreen(
     val libraryId = state.selectedLibraryId
     var books by remember(libraryId) { mutableStateOf(state.books) }
     var total by remember(libraryId) { mutableStateOf(state.booksTotal ?: state.books.size) }
+    var seriesTotal by remember(libraryId) { mutableStateOf(state.booksSeriesTotal) }
     var nextPage by remember(libraryId) { mutableStateOf((state.booksPage + 1).coerceAtLeast(1)) }
     var isLoadingMore by remember(libraryId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksPage) {
+    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksSeriesTotal, state.booksPage) {
         books = state.books
         total = state.booksTotal ?: state.books.size
+        seriesTotal = state.booksSeriesTotal
         nextPage = (state.booksPage + 1).coerceAtLeast(1)
     }
 
@@ -1444,6 +1497,7 @@ private fun LibraryBrowseScreen(
         state = state.copy(
             books = books,
             booksTotal = total,
+            booksSeriesTotal = seriesTotal,
             isLoadingBooks = state.isLoadingBooks && books.isEmpty()
         ),
         modifier = modifier,
@@ -1451,6 +1505,7 @@ private fun LibraryBrowseScreen(
         onBookSelected = onBookSelected,
         onSeriesSelected = onSeriesSelected,
         totalBooks = total,
+        totalSeries = seriesTotal,
         isLoadingMore = isLoadingMore,
         onLoadMore = {
             if (libraryId != null && !isLoadingMore && books.size < total) {
@@ -1460,6 +1515,7 @@ private fun LibraryBrowseScreen(
                     val existingIds = books.mapTo(mutableSetOf()) { it.id }
                     books = books + page.items.filter { existingIds.add(it.id) }
                     total = page.total ?: total
+                    seriesTotal = page.seriesTotal ?: seriesTotal
                     nextPage += 1
                     isLoadingMore = false
                 }
@@ -1480,6 +1536,7 @@ private fun LibraryBooks(
     emptyMessage: String = "No books found.",
     allowSeriesCollapse: Boolean = true,
     totalBooks: Int? = null,
+    totalSeries: Int? = null,
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {}
 ) {
@@ -1491,6 +1548,7 @@ private fun LibraryBooks(
         .mapNotNull { it.seriesId ?: it.seriesName }
         .filter { it.isNotBlank() }
         .distinct()
+    val seriesCount = totalSeries ?: seriesKeys.size
     val displayedBooks: List<Pair<BookSummary, String?>> = if (allowSeriesCollapse && seriesCollapsed) {
         buildList<Pair<BookSummary, String?>> {
             state.books.groupBy { it.seriesId ?: it.seriesName }
@@ -1509,13 +1567,45 @@ private fun LibraryBooks(
     } else {
         state.books.map { Pair(it, null) }
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
+    val gridState = rememberLazyGridState()
+    val loadMore by rememberUpdatedState(onLoadMore)
+    val scope = rememberCoroutineScope()
+    val jumpTargets = remember(displayedBooks) {
+        displayedBooks.mapIndexedNotNull { index, (book, seriesKey) ->
+            val label = (if (seriesKey != null) book.seriesName else book.title)
+                ?.trim()
+                ?.firstOrNull()
+                ?.uppercaseChar()
+                ?: return@mapIndexedNotNull null
+            label to index
+        }.distinctBy { it.first }
+    }
+
+    LaunchedEffect(gridState, state.books.size, totalBooks, isLoadingMore) {
+        if (totalBooks == null) return@LaunchedEffect
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .distinctUntilChanged()
+            .collect { lastVisibleIndex ->
+                val totalItems = gridState.layoutInfo.totalItemsCount
+                if (
+                    !isLoadingMore &&
+                    state.books.size < totalBooks &&
+                    lastVisibleIndex >= totalItems - 4
+                ) {
+                    loadMore()
+                }
+            }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1530,8 +1620,9 @@ private fun LibraryBooks(
                     Text(title, style = MaterialTheme.typography.headlineSmall)
                     Text(
                         buildString {
-                            append("${state.books.size} ${if (state.books.size == 1) "book" else "books"}")
-                            if (seriesKeys.isNotEmpty()) append(" · ${seriesKeys.size} series")
+                            val bookCount = totalBooks ?: state.books.size
+                            append("$bookCount ${if (bookCount == 1) "book" else "books"}")
+                            if (seriesCount > 0) append(" · $seriesCount series")
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1543,7 +1634,7 @@ private fun LibraryBooks(
                             contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
                         }
                     ) {
-                        Text(if (seriesCollapsed) "Show all" else "Collapse series")
+                        Text(if (seriesCollapsed) "Expand series" else "Collapse series")
                     }
                 }
             }
@@ -1578,12 +1669,52 @@ private fun LibraryBooks(
         }
         if (isLoadingMore) {
             item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading more books...") }
-        } else if (totalBooks != null && state.books.size < totalBooks) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedButton(
-                    onClick = onLoadMore,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Load more") }
+        }
+        }
+        if (jumpTargets.isNotEmpty()) {
+            LibraryJumpRail(
+                targets = jumpTargets,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp, bottom = 12.dp),
+                onJump = { index ->
+                    scope.launch {
+                        gridState.animateScrollToItem(index + 1)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryJumpRail(
+    targets: List<Pair<Char, Int>>,
+    modifier: Modifier,
+    onJump: (Int) -> Unit
+) {
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        targets.forEach { (label, index) ->
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clickable { onJump(index) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Jump to $label"
+                    }
+                )
             }
         }
     }

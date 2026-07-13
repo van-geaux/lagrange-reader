@@ -95,6 +95,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
     private val coverCacheStore = CoverCacheStore(context)
+    private val bookDetailCacheStore = BookDetailCacheStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
@@ -119,6 +120,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
         }
         coverCacheStore.clear()
+        bookDetailCacheStore.clear()
         clearSession()
     }
 
@@ -333,12 +335,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        BookOrbitPayloadParser.parseBookDetail(
+        if (book.isDownloaded) {
+            bookDetailCacheStore.read(serverUrl, book.id, book.fileId)?.let { cached ->
+                return@withContext cached.copy(
+                    book = cached.book.copy(localPath = book.localPath ?: cached.book.localPath)
+                )
+            }
+        }
+        val detail = BookOrbitPayloadParser.parseBookDetail(
             fallback = book,
             payload = request("/api/v1/books/${book.id}", "GET", null),
             downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId },
             serverBase = serverBase()
         )
+        if (book.isDownloaded) {
+            bookDetailCacheStore.save(serverUrl, book.id, book.fileId, detail)
+        }
+        detail
     }
 
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo = withContext(Dispatchers.IO) {
@@ -567,6 +580,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 mimeType = book.format
             )
         )
+        val downloadedBook = book.copy(localPath = target.absolutePath)
+        val detail = runCatching { loadBookDetail(downloadedBook) }
+            .getOrElse { BookDetailInfo(downloadedBook) }
+        bookDetailCacheStore.save(getServerUrl().orEmpty(), book.id, fileId, detail)
         target
     }
 
@@ -1152,6 +1169,7 @@ internal object BookOrbitPayloadParser {
         return LibraryBooksPage(
             items = parseBooks(libraryId, payload, downloads, serverBase),
             total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            seriesTotal = root.numberValue("seriesTotal", "totalSeries", "seriesCount")?.toInt()?.takeIf { it >= 0 },
             page = root.numberValue("page")?.toInt(),
             size = root.numberValue("size")?.toInt()
         )

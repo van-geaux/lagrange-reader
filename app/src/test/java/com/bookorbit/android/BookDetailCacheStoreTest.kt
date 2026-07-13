@@ -1,0 +1,46 @@
+package com.bookorbit.android
+
+import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class BookDetailCacheStoreTest {
+    @Test
+    fun `downloaded book detail survives reopening the cache`() {
+        runBlocking {
+            val filesDir = Files.createTempDirectory("book-detail-cache-test").toFile()
+            val detail = BookDetailInfo(
+                book = BookSummary(
+                    libraryId = "library-1",
+                    id = "book-1",
+                    fileId = "file-1",
+                    title = "Cached Book",
+                    author = "Reader",
+                    mediaKind = MediaKind.EPUB,
+                    localPath = File(filesDir, "cached.epub").absolutePath
+                ),
+                synopsis = "Cached synopsis",
+                genres = listOf("Fiction"),
+                tags = listOf("Local"),
+                narrators = listOf("Narrator"),
+                fileCount = 1,
+                pageCount = 320
+            )
+            val first = BookDetailCacheStore(filesDir)
+            first.save("https://example.test", "book-1", "file-1", detail)
+
+            val reopened = BookDetailCacheStore(filesDir)
+            val restored = reopened.read("https://example.test", "book-1", "file-1")
+
+            assertTrue(restored != null)
+            assertEquals(detail.book.title, restored?.book?.title)
+            assertEquals(detail.synopsis, restored?.synopsis)
+            assertEquals(detail.genres, restored?.genres)
+            assertEquals(detail.pageCount, restored?.pageCount)
+            filesDir.deleteRecursively()
+        }
+    }
+}

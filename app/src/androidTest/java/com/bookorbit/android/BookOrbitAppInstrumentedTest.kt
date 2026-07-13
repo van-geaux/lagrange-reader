@@ -144,7 +144,10 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Main").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Open library selector").assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("Refresh").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("Open library selector").performClick()
+        composeRule.onNodeWithContentDescription("Open library selector").performClick()
         composeRule.onNodeWithText("Browse").performClick()
+        composeRule.onNodeWithContentDescription("Jump to T").assertIsDisplayed()
         composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
         composeRule.onNodeWithText("Test Author").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("The Test Book").performClick()
@@ -222,7 +225,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Browse").performClick()
         composeRule.onNodeWithText("Collapse series").performClick()
         composeRule.onNodeWithText("Test Series").assertIsDisplayed()
-        composeRule.onNodeWithText("Show all").performClick()
+        composeRule.onNodeWithText("Expand series").performClick()
         composeRule.onNodeWithText("Series Book Two").assertIsDisplayed()
     }
 
@@ -267,7 +270,6 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithText("Libraries").performClick()
         composeRule.onNodeWithText("Browse").performClick()
-        composeRule.onNodeWithText("Load more").performClick()
         composeRule.onNodeWithText("Page Two").assertIsDisplayed()
     }
 
