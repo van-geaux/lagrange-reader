@@ -92,6 +92,11 @@ interface BookOrbitDataSource {
         page: Int,
         filter: BookBrowseFilter
     ): LibraryBooksPage = loadBooksPage(libraryId, page)
+    suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = null
+    suspend fun refreshLibraryCatalog(
+        libraryId: String,
+        firstPage: LibraryBooksPage? = null
+    ): LibraryBooksPage = (firstPage ?: loadBooksPage(libraryId, 0)).copy(isComplete = true)
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -122,6 +127,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
+    private val libraryCatalogStore = LibraryCatalogStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
     private val coverCacheStore = CoverCacheStore(context)
     private val bookDetailCacheStore = BookDetailCacheStore(context)
@@ -219,7 +225,124 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         filter: BookBrowseFilter
     ): LibraryBooksPage = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        val body = JSONObject().apply {
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        requestLibraryBooksPage(libraryId, page, filter, downloads)
+    }
+
+    override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? =
+        withContext(Dispatchers.IO) {
+            val serverUrl = getServerUrl().orEmpty()
+            val cached = libraryCatalogStore.read(serverUrl, libraryId) ?: return@withContext null
+            val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+            LibraryBooksPage(
+                items = cached.books.withCurrentDownloads(downloads),
+                total = cached.total,
+                seriesTotal = cached.seriesTotal,
+                page = 0,
+                size = cached.pageSize,
+                isComplete = true,
+                refreshedAtMillis = cached.refreshedAtMillis,
+                jumpBuckets = cached.jumpBuckets
+            )
+        }
+
+    override suspend fun refreshLibraryCatalog(
+        libraryId: String,
+        firstPage: LibraryBooksPage?
+    ): LibraryBooksPage = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        suspend fun loadPages(seed: LibraryBooksPage?): List<LibraryBooksPage> = loadCompleteLibraryPages(seed) { page ->
+            requestLibraryBooksPage(
+                libraryId = libraryId,
+                page = page,
+                filter = BookBrowseFilter(),
+                downloads = downloads
+            )
+        }
+
+        var pages = loadPages(firstPage)
+        var books = mergeLibraryBooks(pages)
+        if (!libraryCatalogPagesAreStable(pages, books)) {
+            // The library changed while page offsets were being traversed. Retry once
+            // from page zero so a shifted deletion/addition cannot create a partial cache.
+            pages = loadPages(null)
+            books = mergeLibraryBooks(pages)
+        }
+        if (!libraryCatalogPagesAreStable(pages, books)) {
+            throw UserFacingException(
+                "The library changed while it was refreshing. Pull to refresh again."
+            )
+        }
+        val reportedTotal = pages.mapNotNull { it.total }.lastOrNull()
+        val total = reportedTotal ?: books.size
+        val seriesTotal = pages.mapNotNull { it.seriesTotal }.maxOrNull()
+        val pageSize = pages.firstOrNull()?.size?.takeIf { it > 0 } ?: LIBRARY_PAGE_SIZE
+        val jumpResponse = runCatching { requestLibraryJumpBuckets(libraryId, BookBrowseFilter()) }
+            .getOrElse { error ->
+                if (error is AuthenticationRequiredException) throw error
+                LibraryJumpBucketsResponse(emptyList(), total)
+            }
+        val jumpBuckets = jumpResponse.buckets
+            .filter { bucket -> bucket.index in books.indices }
+            .takeIf { jumpResponse.total == total }
+            .orEmpty()
+        val refreshedAtMillis = System.currentTimeMillis()
+        libraryCatalogStore.replace(
+            serverUrl = serverUrl,
+            libraryId = libraryId,
+            pageSize = pageSize,
+            total = total,
+            seriesTotal = seriesTotal,
+            books = books,
+            jumpBuckets = jumpBuckets,
+            refreshedAtMillis = refreshedAtMillis
+        )
+        LibraryBooksPage(
+            items = books,
+            total = total,
+            seriesTotal = seriesTotal,
+            page = 0,
+            size = pageSize,
+            isComplete = true,
+            refreshedAtMillis = refreshedAtMillis,
+            jumpBuckets = jumpBuckets
+        )
+    }
+
+    private fun requestLibraryBooksPage(
+        libraryId: String,
+        page: Int,
+        filter: BookBrowseFilter,
+        downloads: Map<String, DownloadRecord>
+    ): LibraryBooksPage {
+        return BookOrbitPayloadParser.parseLibraryBooksPage(
+            libraryId = libraryId,
+            payload = request(
+                path = "/api/v1/libraries/$libraryId/books",
+                method = "POST",
+                body = libraryQueryPayload(filter, page).toRequestBody(JSON)
+            ),
+            downloads = downloads,
+            serverBase = serverBase()
+        )
+    }
+
+    private fun requestLibraryJumpBuckets(
+        libraryId: String,
+        filter: BookBrowseFilter
+    ): LibraryJumpBucketsResponse {
+        return BookOrbitPayloadParser.parseLibraryJumpBuckets(
+            request(
+                path = "/api/v1/libraries/$libraryId/books/jump-buckets",
+                method = "POST",
+                body = libraryQueryPayload(filter, 0).toRequestBody(JSON)
+            )
+        )
+    }
+
+    private fun libraryQueryPayload(filter: BookBrowseFilter, page: Int): String {
+        return JSONObject().apply {
             put("sort", JSONArray().apply {
                 filter.sort.serverField?.let { field ->
                     put(JSONObject().put("field", field).put("dir", filter.direction.serverValue))
@@ -227,36 +350,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             })
             filter.toServerFilter()?.let { put("filter", it) }
             put("pagination", JSONObject().apply {
-                put("page", page)
+                put("page", page.coerceAtLeast(0))
                 put("size", LIBRARY_PAGE_SIZE)
             })
-        }.toString().toRequestBody(JSON)
-        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        BookOrbitPayloadParser.parseLibraryBooksPage(
-            libraryId = libraryId,
-            payload = request("/api/v1/libraries/$libraryId/books", "POST", body),
-            downloads = downloads,
-            serverBase = serverBase()
-        ).also { books ->
-            if (page == 0) {
-                browserSnapshotStore.saveBooks(
-                    serverUrl = serverUrl,
-                    selectedLibraryId = libraryId,
-                    libraryId = libraryId,
-                    books = books.items
-                )
-            }
-        }
+        }.toString()
     }
 
     override suspend fun loadLocalBooks(): List<BookSummary> = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val downloads = downloadStore.readAll(serverUrl)
-        val snapshotBooks = browserSnapshotStore.read(serverUrl)
-            ?.booksByLibraryId
-            ?.values
-            ?.flatten()
-            .orEmpty()
+        val catalogBooks = libraryCatalogStore.readAllBooks(serverUrl)
+        val snapshotBooks = catalogBooks.ifEmpty {
+            browserSnapshotStore.read(serverUrl)
+                ?.booksByLibraryId
+                ?.values
+                ?.flatten()
+                .orEmpty()
+        }
         downloads
             .sortedByDescending { it.downloadedAtMillis }
             .map { record ->
@@ -477,18 +587,21 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 ?: snapshot.selectedLibraryId,
             libraries = snapshot.libraries
         )
+        val cachedCatalog = selectedLibraryId?.let { libraryCatalogStore.read(serverUrl, it) }
+        val books = cachedCatalog?.books
+            ?: selectedLibraryId?.let { snapshot.booksByLibraryId[it] }
+            .orEmpty()
         BrowserState(
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
             selectedLibraryId = selectedLibraryId,
-            books = selectedLibraryId
-                ?.let { snapshot.booksByLibraryId[it] }
-                .orEmpty()
-                .map { book ->
-                    val fileId = book.fileId
-                    val localPath = fileId?.let { downloads[it]?.localPath }
-                    if (localPath == book.localPath) book else book.copy(localPath = localPath)
-                },
+            books = books.withCurrentDownloads(downloads),
+            booksTotal = cachedCatalog?.total ?: books.size,
+            booksSeriesTotal = cachedCatalog?.seriesTotal,
+            booksPageSize = cachedCatalog?.pageSize,
+            isCatalogComplete = cachedCatalog != null,
+            catalogRefreshedAtMillis = cachedCatalog?.refreshedAtMillis,
+            libraryJumpBuckets = cachedCatalog?.jumpBuckets.orEmpty(),
             debugPendingProgressCount = pendingProgressCount()
         )
     }
@@ -1208,6 +1321,11 @@ class HttpRequestException(
     val action: String
 ) : IOException("HTTP $code while trying to $action.")
 
+internal data class LibraryJumpBucketsResponse(
+    val buckets: List<LibraryJumpBucket>,
+    val total: Int
+)
+
 private class WebViewCookieJar : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         val manager = CookieManager.getInstance()
@@ -1341,6 +1459,29 @@ internal object BookOrbitPayloadParser {
             seriesTotal = root.numberValue("seriesTotal", "totalSeries", "seriesCount")?.toInt()?.takeIf { it >= 0 },
             page = root.numberValue("page")?.toInt(),
             size = root.numberValue("size")?.toInt()
+        )
+    }
+
+    fun parseLibraryJumpBuckets(payload: String): LibraryJumpBucketsResponse {
+        val root = extractObject(payload, "load library jump targets")
+        val array = root.optJSONArray("buckets") ?: JSONArray()
+        val buckets = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val key = item.stringValue("key") ?: continue
+                val targetIndex = item.numberValue("index")?.toInt()?.takeIf { it >= 0 } ?: continue
+                add(
+                    LibraryJumpBucket(
+                        key = key,
+                        label = item.stringValue("label") ?: key,
+                        index = targetIndex
+                    )
+                )
+            }
+        }
+        return LibraryJumpBucketsResponse(
+            buckets = buckets,
+            total = root.numberValue("total")?.toInt()?.coerceAtLeast(0) ?: 0
         )
     }
 
@@ -1901,6 +2042,59 @@ internal suspend fun loadCompleteSeriesPages(
     }
 
     return pages
+}
+
+internal suspend fun loadCompleteLibraryPages(
+    firstPage: LibraryBooksPage? = null,
+    loadPage: suspend (Int) -> LibraryBooksPage
+): List<LibraryBooksPage> {
+    val pages = mutableListOf<LibraryBooksPage>()
+    val accumulatedIds = linkedSetOf<String>()
+    var targetTotal: Int? = null
+    var pageNumber = 0
+
+    while (true) {
+        val page = if (pageNumber == 0 && firstPage != null) firstPage else loadPage(pageNumber)
+        pages += page
+        targetTotal = listOfNotNull(targetTotal, page.total?.takeIf { it >= 0 }).maxOrNull()
+
+        val idsBeforePage = accumulatedIds.size
+        page.items.forEach { book -> accumulatedIds += book.id }
+        val addedIds = accumulatedIds.size - idsBeforePage
+        val pageSize = page.size?.takeIf { it > 0 } ?: LIBRARY_PAGE_SIZE
+
+        if (
+            page.items.isEmpty() ||
+            addedIds == 0 ||
+            targetTotal?.let { accumulatedIds.size >= it } == true ||
+            page.items.size < pageSize
+        ) {
+            break
+        }
+        pageNumber += 1
+    }
+
+    return pages
+}
+
+internal fun mergeLibraryBooks(pages: List<LibraryBooksPage>): List<BookSummary> {
+    val seenIds = mutableSetOf<String>()
+    return pages.flatMap { page -> page.items }.filter { book -> seenIds.add(book.id) }
+}
+
+internal fun libraryCatalogPagesAreStable(
+    pages: List<LibraryBooksPage>,
+    mergedBooks: List<BookSummary>
+): Boolean {
+    val totals = pages.mapNotNull { it.total }
+    return totals.distinct().size <= 1 && totals.lastOrNull()?.let { it == mergedBooks.size } != false
+}
+
+private fun List<BookSummary>.withCurrentDownloads(
+    downloads: Map<String, DownloadRecord>
+): List<BookSummary> = map { book ->
+    val localPath = book.fileId?.let { downloads[it]?.localPath }
+    if (localPath == book.localPath) book else book.copy(localPath = localPath)
 }
 
 internal fun mergeSeriesBooks(pages: List<SeriesBooksPage>): List<BookSummary> {

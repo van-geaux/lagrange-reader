@@ -76,8 +76,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,7 +102,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
@@ -118,20 +115,58 @@ internal fun libraryJumpLabel(value: String?): Char {
 }
 
 internal fun buildLibraryJumpTargets(
-    displayedBooks: List<Pair<BookSummary, String?>>
+    displayedBooks: List<Pair<BookSummary, String?>>,
+    sort: BookSortOption = BookSortOption.SERVER_DEFAULT,
+    direction: SortDirection = SortDirection.ASCENDING
 ): List<Pair<Char, Int>> {
     val labels = displayedBooks.map { (book, seriesKey) ->
-        libraryJumpLabel(if (seriesKey != null) book.seriesName else book.title)
+        libraryJumpLabel(
+            when {
+                seriesKey != null -> book.seriesName
+                sort == BookSortOption.AUTHOR -> book.author
+                else -> book.title
+            }
+        )
     }
-    return LIBRARY_JUMP_LABELS.map { target ->
+    val railLabels = if (
+        direction == SortDirection.DESCENDING &&
+        sort in setOf(BookSortOption.TITLE, BookSortOption.AUTHOR) &&
+        displayedBooks.none { it.second != null }
+    ) {
+        ('Z' downTo 'A').toList() + '#'
+    } else {
+        LIBRARY_JUMP_LABELS
+    }
+    return railLabels.mapIndexed { railIndex, target ->
         val exact = labels.indexOfFirst { it == target }
-        val fallback = when {
-            exact >= 0 -> exact
-            target == '#' -> labels.indexOfFirst { it == '#' }
-            else -> labels.indexOfFirst { it in 'A'..'Z' && it > target }
+        val fallback = if (exact >= 0) {
+            exact
+        } else {
+            labels.indexOfFirst { label -> railLabels.indexOf(label) > railIndex }
         }
         val index = fallback.takeIf { it >= 0 } ?: (labels.lastIndex.takeIf { it >= 0 } ?: 0)
         target to index
+    }
+}
+
+internal fun buildServerLibraryJumpTargets(
+    buckets: List<LibraryJumpBucket>,
+    itemCount: Int
+): List<Pair<Char, Int>> {
+    if (buckets.isEmpty() || itemCount <= 0) return emptyList()
+    val indexedBuckets = buckets.mapNotNull { bucket ->
+        val label = bucket.label.trim().firstOrNull()?.uppercaseChar()
+            ?.takeIf { it in 'A'..'Z' }
+            ?: '#'
+        bucket.copy(index = bucket.index.coerceIn(0, itemCount - 1)) to label
+    }
+    return LIBRARY_JUMP_LABELS.mapIndexed { railIndex, target ->
+        val exact = indexedBuckets.firstOrNull { it.second == target }
+        val fallback = exact ?: indexedBuckets.firstOrNull { (_, label) ->
+            LIBRARY_JUMP_LABELS.indexOf(label) > railIndex
+        }
+        val bucket = fallback ?: indexedBuckets.last()
+        target to bucket.first.index
     }
 }
 
@@ -202,7 +237,6 @@ internal fun NativeLibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
-    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
@@ -541,7 +575,6 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
-                    libraryBooksLoader = libraryBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LIBRARY
@@ -1703,7 +1736,6 @@ private fun LibraryContentScreen(
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
@@ -1738,7 +1770,6 @@ private fun LibraryContentScreen(
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
                     state = state,
                     modifier = Modifier.weight(1f),
-                    libraryBooksLoader = libraryBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected
@@ -1776,38 +1807,16 @@ private fun PullToRefreshLayout(
 private fun LibraryBrowseScreen(
     state: BrowserState,
     modifier: Modifier,
-    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
 ) {
     val libraryId = state.selectedLibraryId
-    var books by remember(libraryId) { mutableStateOf(state.books) }
-    var total by remember(libraryId) { mutableStateOf(state.booksTotal ?: state.books.size) }
-    var seriesTotal by remember(libraryId) { mutableStateOf(state.booksSeriesTotal) }
-    var nextPage by remember(libraryId) { mutableStateOf((state.booksPage + 1).coerceAtLeast(1)) }
-    var isLoadingMore by remember(libraryId) { mutableStateOf(false) }
     var filter by remember(libraryId) { mutableStateOf(BookBrowseFilter()) }
     var showFilter by rememberSaveable(libraryId) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksSeriesTotal, state.booksPage, filter) {
-        if (filter == BookBrowseFilter() && state.books.isNotEmpty()) {
-            books = state.books
-            total = state.booksTotal ?: state.books.size
-            seriesTotal = state.booksSeriesTotal
-            nextPage = (state.booksPage + 1).coerceAtLeast(1)
-            return@LaunchedEffect
-        }
-        if (libraryId == null) return@LaunchedEffect
-        isLoadingMore = true
-        val page = libraryBooksLoader(libraryId, 0, filter)
-        books = page.items
-        total = page.total ?: page.items.size
-        seriesTotal = page.seriesTotal
-        nextPage = 1
-        isLoadingMore = false
-    }
+    val books = remember(state.books, filter) { filterAndSortLocalBooks(state.books, filter) }
+    val total = if (filter.isActive) books.size else state.booksTotal ?: books.size
+    val seriesTotal = state.booksSeriesTotal.takeUnless { filter.isActive }
 
     LibraryBooks(
         state = state.copy(
@@ -1822,23 +1831,10 @@ private fun LibraryBrowseScreen(
         onSeriesSelected = onSeriesSelected,
         totalBooks = total,
         totalSeries = seriesTotal,
-        isLoadingMore = isLoadingMore,
         filter = filter,
-        onFilterClick = { showFilter = true },
-        onLoadMore = {
-            if (libraryId != null && !isLoadingMore && books.size < total) {
-                scope.launch {
-                    isLoadingMore = true
-                    val page = libraryBooksLoader(libraryId, nextPage, filter)
-                    val existingIds = books.mapTo(mutableSetOf()) { it.id }
-                    books = books + page.items.filter { existingIds.add(it.id) }
-                    total = page.total ?: total
-                    seriesTotal = page.seriesTotal ?: seriesTotal
-                    nextPage += 1
-                    isLoadingMore = false
-                }
-            }
-        }
+        jumpRailEnabled = state.isCatalogComplete,
+        serverJumpBuckets = state.libraryJumpBuckets.takeIf { filter == BookBrowseFilter() }.orEmpty(),
+        onFilterClick = { showFilter = true }
     )
     if (showFilter) {
         BookFilterSheet(
@@ -1864,9 +1860,9 @@ private fun LibraryBooks(
     allowSeriesCollapse: Boolean = true,
     totalBooks: Int? = null,
     totalSeries: Int? = null,
-    isLoadingMore: Boolean = false,
-    onLoadMore: () -> Unit = {},
     filter: BookBrowseFilter? = null,
+    jumpRailEnabled: Boolean = true,
+    serverJumpBuckets: List<LibraryJumpBucket> = emptyList(),
     onFilterClick: (() -> Unit)? = null
 ) {
     val title = titleOverride
@@ -1889,11 +1885,30 @@ private fun LibraryBooks(
         state.books.map { Pair(it, null) }
     }
     val gridState = rememberLazyGridState()
-    val loadMore by rememberUpdatedState(onLoadMore)
     val scope = rememberCoroutineScope()
     var pendingAnchor by remember(title) { mutableStateOf<LibraryGridAnchor?>(null) }
-    val jumpTargets = remember(displayedBooks) {
-        buildLibraryJumpTargets(displayedBooks)
+    val jumpSort = filter?.sort ?: BookSortOption.SERVER_DEFAULT
+    val jumpTargets = remember(
+        displayedBooks,
+        jumpRailEnabled,
+        seriesCollapsed,
+        serverJumpBuckets,
+        filter
+    ) {
+        if (
+            !jumpRailEnabled ||
+            jumpSort !in setOf(BookSortOption.SERVER_DEFAULT, BookSortOption.TITLE, BookSortOption.AUTHOR)
+        ) {
+            emptyList()
+        } else if (!seriesCollapsed && filter == BookBrowseFilter() && serverJumpBuckets.isNotEmpty()) {
+            buildServerLibraryJumpTargets(serverJumpBuckets, displayedBooks.size)
+        } else {
+            buildLibraryJumpTargets(
+                displayedBooks = displayedBooks,
+                sort = jumpSort,
+                direction = filter?.direction ?: SortDirection.ASCENDING
+            )
+        }
     }
 
     LaunchedEffect(seriesCollapsed, displayedBooks) {
@@ -1909,22 +1924,6 @@ private fun LibraryBooks(
             gridState.animateScrollToItem(targetIndex + 1)
         }
         pendingAnchor = null
-    }
-
-    LaunchedEffect(gridState, state.books.size, totalBooks, isLoadingMore) {
-        if (totalBooks == null) return@LaunchedEffect
-        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .distinctUntilChanged()
-            .collect { lastVisibleIndex ->
-                val totalItems = gridState.layoutInfo.totalItemsCount
-                if (
-                    !isLoadingMore &&
-                    state.books.size < totalBooks &&
-                    lastVisibleIndex >= totalItems - 4
-                ) {
-                    loadMore()
-                }
-            }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -1986,6 +1985,13 @@ private fun LibraryBooks(
         if (state.isLoadingBooks) {
             item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
         }
+        if (state.isCatalogSyncing) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LoadingFeedRow(
+                    if (state.isCatalogComplete) "Updating cached catalog..." else "Caching full library..."
+                )
+            }
+        }
         state.message?.let { message ->
             item(span = { GridItemSpan(maxLineSpan) }) {
                 OrbitMessage(
@@ -2010,9 +2016,6 @@ private fun LibraryBooks(
                     if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
                 }
             )
-        }
-        if (isLoadingMore) {
-            item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading more books...") }
         }
         }
         if (jumpTargets.isNotEmpty()) {

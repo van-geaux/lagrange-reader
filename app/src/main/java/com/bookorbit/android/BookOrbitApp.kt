@@ -122,7 +122,6 @@ fun BookOrbitApp(
             onLibrarySelected = coordinator::selectLibrary,
             searchBooks = coordinator::searchBooks,
             localBooksLoader = coordinator::loadLocalBooks,
-            libraryBooksLoader = coordinator::loadLibraryBooksPage,
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
             seriesDetailLoader = coordinator::loadSeriesDetail,

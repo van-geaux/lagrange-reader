@@ -117,6 +117,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 1. Implemented: replace Browse's Load more button with automatic page loading as the user approaches the end of the current grid.
 2. Implemented: add a right-side title-initial jump rail for fast movement through loaded library content.
+3. Superseded by the complete Room catalog workplan below; Browse no longer lazy-loads as the grid scrolls.
 
 ## Latest device feedback workplan â€” 2026-07-13 (reader spacing)
 
@@ -180,6 +181,17 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: suppress only equivalent submissions, allowing newer reread/backward events to repair stale or accidentally inflated server markers.
 4. Implemented: after successful queue replay and a fresh page load, clear temporary local progress overlays so refreshed BookOrbit progress can flow back into Lagrange.
 5. JVM tests, debug APK assembly, and Android instrumentation-test compilation pass. Physical-device validation remains required in both directions against the target BookOrbit server.
+
+### Latest device feedback workplan - 2026-07-13 (cache-first catalog and exact jumps)
+
+1. Implemented: replace the active first-page JSON book snapshot with a server-scoped Room 2.6.1 metadata catalog for every selected library; retain the JSON data only as a legacy fallback.
+2. Implemented: render a complete cached catalog before cold-start session/library network checks finish, then keep it usable while a background refresh reconciles the server.
+3. Implemented: retrieve every BookOrbit metadata page during reconciliation because the server has no reliable catalog delta/revision contract. Retry once from page zero if page totals shift or the deduplicated count disagrees, then compare the stable result with Room and atomically write only new, removed, reordered, or changed rows; an interrupted refresh leaves the previous complete generation intact.
+4. Implemented: remove Browse's near-end lazy loading. Browse title/author/series/read-status/format filters and supported sorts now operate against the complete local catalog.
+5. Implemented: request `/api/v1/libraries/{id}/books/jump-buckets`, persist valid default-sort bucket indexes, and scroll directly to the server's absolute index. Missing letters fall forward to the next bucket; complete-cache local indexes cover filters, author/title sorts, collapsed series, and older servers.
+6. Implemented: hide the rail while an initial full catalog is incomplete and for non-letter sort modes, preventing a rail tap from degenerating into end-of-list lazy loading.
+7. Added JVM coverage for pagination termination, duplicate handling, jump parsing/index mapping, and cache-first coordinator failure recovery. Added a compiled Android Room transaction test for changed rows and deletions.
+8. Physical-device validation remains required for first sync, instant reopen, pull refresh, additions/deletions/progress changes, offline browsing, and #/A–Z jumps across a large target-server library.
 
 ## Source of truth
 

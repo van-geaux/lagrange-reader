@@ -32,11 +32,11 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 - Add intentional empty, loading, offline, and failure presentations.
 - Keep actions usable with long titles, large font scales, and narrow phone widths.
 
-The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home must put Currently reading first, while completed/recently read books remain available separately. Home shelves remain scoped to the selected library page returned by BookOrbit.
+The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home must put Currently reading first, while completed/recently read books remain available separately. Home shelves remain scoped to the selected library's complete local metadata catalog.
 
 The first Home shelf now renders as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress and excludes completed books; Recently read books remains a separate history shelf.
 
-Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while Options lives in the profile menu above Log out. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from paginated Browse content.
+Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while Options lives in the profile menu above Log out. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from complete Room-cached Browse content.
 
 Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
 
@@ -75,7 +75,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Library refinement workplan — 2026-07-13
 
 - [x] Reduce book poster-card sizing to 75% of the current size, preserving the adaptive grid and readable metadata.
-- [x] Add a paginated Browse tab with automatic near-end loading for library books.
+- [x] Add a paginated Browse tab with automatic near-end loading for library books (superseded by complete Room caching).
 - [x] Keep the Lagrange logo on Home only; use the selected library name as the tappable selector in Library.
 - [x] Split Library into Recommended Home-style shelves and Browse's complete book grid.
 
@@ -91,9 +91,9 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Use Expand series as the inverse action after a series has been collapsed.
 - [x] Keep cover loading responsive and retry transient/decode failures instead of permanently pinning a first-letter placeholder.
 - [x] Keep the More sheet's final action above the Android navigation area with explicit bottom inset spacing.
-- [x] Show full Library book/series totals in the Browse header while additional pages are available.
+- [x] Show full Library book/series totals from the complete Browse catalog.
 - [x] Make the top-left Libraries title return from the picker to the selected library page.
-- [x] Replace Browse's Load more action with automatic near-end page loading.
+- [x] Replace Browse's Load more action with automatic near-end page loading (superseded by complete Room caching).
 - [x] Add a right-side title-initial jump rail while preserving the left side for normal scrolling.
 - [x] Keep # and every A–Z jump label visible before those pages are loaded, with # first for non-alphabetic titles.
 - [x] Order collapsed series by series name and restore the nearest scroll anchor after collapse/expand.
@@ -103,7 +103,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Restore Home Continue reading for tolerant active-progress payloads.
 - [x] Remove the duplicate Home/library heading from Library Recommended.
 - [x] Move Options into the profile menu above Log out and raise the More sheet with additional inset spacing.
-- [x] Avoid showing a partial Browse series count before lazy loading completes.
+- [x] Avoid showing a partial Browse series count before lazy loading completes (superseded by complete Room caching).
 
 ### Latest device feedback workplan - 2026-07-13 (session, catalog, and density follow-up)
 
@@ -117,6 +117,15 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Persist independent reader padding per book/file and flush the final progress update before returning to the browser.
 - [x] Add server-aligned filter controls to Library Browse and Series, with the same title/author/series, read-status, format, and sort controls applied to Local books.
 - [ ] Validate session expiry, catalog thumbnails, typography/card density, and metadata wrapping on the physical device.
+
+### Cache-first Browse and exact navigation — 2026-07-13
+
+- [x] Render a complete selected-library metadata cache before cold-start network checks finish.
+- [x] Keep cached cards interactive while refresh reconciles all server pages, and keep the prior complete catalog if refresh is interrupted.
+- [x] Remove automatic end-of-grid page loading and run Browse filters/sorts against the complete local catalog.
+- [x] Use BookOrbit's absolute jump-bucket indexes for the unfiltered default listing; use complete local indexes for filtered/title/author and collapsed-series views.
+- [x] Keep # plus A–Z visible for eligible letter rails, fall missing letters forward, and hide the rail until the first full catalog is ready or when the selected sort has no letter buckets.
+- [ ] Validate first-sync messaging, instant reopen, refresh continuity, exact jumps, filters, and large-library scroll performance on the target device.
 
 ### Checkpoint 5: Other media readers - deferred
 

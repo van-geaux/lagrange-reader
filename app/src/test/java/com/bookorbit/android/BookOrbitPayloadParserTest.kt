@@ -31,6 +31,26 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseLibraryJumpBuckets retains server absolute indexes`() {
+        val response = BookOrbitPayloadParser.parseLibraryJumpBuckets(
+            """
+                {
+                  "buckets": [
+                    {"key":"#","label":"#","index":0},
+                    {"key":"A","label":"A","index":12},
+                    {"key":"M","label":"M","index":143}
+                  ],
+                  "total": 5012
+                }
+            """.trimIndent()
+        )
+
+        assertEquals(5012, response.total)
+        assertEquals(listOf("#", "A", "M"), response.buckets.map { it.key })
+        assertEquals(listOf(0, 12, 143), response.buckets.map { it.index })
+    }
+
+    @Test
     fun `parseBooks prefers the primary file and maps reading progress`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-1",

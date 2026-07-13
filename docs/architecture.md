@@ -32,6 +32,9 @@ The current app flow is:
 - Reader startup has an explicit loading screen, and unsupported reader types render a user-facing message instead of falling through to a generic WebView.
 - Coordinator UI messages are normalized from typed auth, HTTP, TLS, timeout, DNS, and generic network failures instead of exposing raw exception text.
 - If the first live browser load fails and no cached browser snapshot exists, the coordinator now shows an empty browser state with a recoverable error message so the refresh action can retry cleanly.
+- On cold reopen, the coordinator emits the cached Room-backed browser state before session and library network checks finish. Remote-only cards stay in offline-safe mode until authentication is confirmed.
+- A complete cached library remains visible while reconciliation runs. An interrupted reconciliation clears the syncing state but keeps the prior complete catalog usable; first-time partial data does not expose the jump rail.
+- Catalog loads are cancelable at the coordinator level so selecting another library or starting another refresh cannot let an older long-running reconciliation replace the newer screen.
 - When auth state cannot be confirmed during bootstrap or login refresh, cached browser state is used as the offline fallback instead of forcing an immediate return to login.
 - A server-unavailable result may use cached offline Home, but an explicit unauthenticated response now opens Login because the reachable server rejected the saved session.
 - Cached offline browser states mark non-downloaded titles as unavailable offline and suppress live-only actions like open-stream and download.
@@ -47,6 +50,9 @@ The current app flow is:
 - It stores the selected server URL and selected library.
 - Server URL validation now requires HTTPS for non-local hosts; cleartext HTTP is reserved for local development targets only.
 - It loads libraries and books from the live API.
+- It walks every page of the selected library's default listing, deduplicates by book id while preserving server order, and only publishes the result after the full request succeeds. If totals change or the deduplicated count disagrees with the latest total, it retries once from page zero and otherwise preserves the prior cache.
+- It reads BookOrbit's `/api/v1/libraries/{id}/books/jump-buckets` response and retains absolute indexes only when its total matches the reconciled listing. Older servers or mismatched snapshots fall back to complete local index derivation.
+- BookOrbit currently has no reliable catalog revision/delta contract, so refresh must read all metadata pages to detect removals and remote progress changes. The Room reconciliation still limits local writes to changed/new/reordered rows and deletions.
 - It loads rich book details and complete ordered series pages on demand while preserving the selected cached summary as a failure fallback.
 - Stored selected-library ids are validated against the latest available library list before the browser chooses a library to load.
 - It resolves stream and download URLs for files.
@@ -55,7 +61,7 @@ The current app flow is:
 - It maps BookOrbit's current scalar `readingProgress` card value, nested `readStatus`, and legacy nested page/time progress fields back into browser and reader state.
 - Reader callbacks, persisted snapshots, queue entries, last-synced markers, and API payloads all use one canonical 0-100 percentage scale; low values are not reinterpreted as fractions.
 - Progress queue writes are dispatched on `Dispatchers.IO`; the coordinator records the newest reader/player event synchronously before persisting it so an immediate reader close cannot lose the final update.
-- Browser bootstrap flushes pending progress before loading the first library page, and reader close attempts a foreground sync before clearing active-reader state; WorkManager remains the offline/transient fallback.
+- Browser bootstrap flushes pending progress before reconciling the complete library catalog, and reader close attempts a foreground sync before clearing active-reader state; WorkManager remains the offline/transient fallback.
 
 ### Local persistence
 
@@ -71,7 +77,8 @@ The current app flow is:
 - Corrupted local EPUB/PDF/CBZ files are rejected before reader startup, and invalid persisted download records are dropped before falling back to authenticated cache copies when possible.
 - Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.
 - Authenticated reader-cache copies are also scoped by server-derived cache keys so server changes do not reuse unrelated cached files with the same `fileId`.
-- `BrowserSnapshotStore` persists the last successful library list plus per-library book snapshots for offline/browser-failure fallback.
+- `BrowserSnapshotStore` persists the last successful library list and can read legacy first-page book snapshots as a migration/failure fallback; it is no longer the active Browse book store.
+- `LibraryCatalogStore` uses Room tables scoped by server URL and library id for ordered book metadata, catalog totals, refresh timestamps, and validated jump buckets. Reconciliation compares rows, deletes missing ids in bounded batches, upserts only changed rows, and commits metadata/buckets in one transaction.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
 - Debug builds show the current pending progress queue count directly in the browser screen.
 - `CatalogSnapshotStore` stores versioned raw Series, Authors, and author-book pages keyed by server URL for offline catalog fallback without mixing servers.
@@ -139,9 +146,9 @@ The functional architecture is stable enough for UI/UX changes to begin. Theme t
 
 The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.
 
-The browser presentation now uses a native Compose modal drawer and starts on a Home feed. Home shelf derivation is deterministic from `BookSummary` progress, series identity/order, read state, and added/updated/read timestamps. Those optional fields are parsed tolerantly and persisted in browser snapshots and active-reader state. Home remains scoped to the selected library page because the repository loads one library page at a time.
+The browser presentation now uses the Plex-inspired bottom-navigation shell and starts on a Home feed. Home shelf derivation is deterministic from `BookSummary` progress, series identity/order, read state, and added/updated/read timestamps. Those optional fields are parsed tolerantly and persisted in the Room catalog and active-reader state. Home remains scoped to the selected library, but now derives shelves from its complete cached catalog instead of one server page.
 
-Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Series/Authors catalog image bytes are retried, cached, and decoded off the Compose main thread; Series also has a deterministic `/api/v1/series/{id}/cover` fallback. Browser-local navigation owns series, author, and book detail destinations; book-detail Read/Continue and Preview actions call the coordinator reader flow. Fresh reader progress is merged into the current browser state immediately, including a just-read book outside the first loaded page. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
+Home shelves remain selected-library scoped, but interactive search uses BookOrbit's global `/api/v1/books/query` contract. Browse filtering and supported sorting are local operations over the complete cached catalog; Series and Authors catalogs remain server-backed. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Series/Authors catalog image bytes are retried, cached, and decoded off the Compose main thread; Series also has a deterministic `/api/v1/series/{id}/cover` fallback. Browser-local navigation owns series, author, and book detail destinations; book-detail Read/Continue and Preview actions call the coordinator reader flow. Fresh reader progress is merged into the current browser state immediately, including a just-read book not present in an interrupted first-time sync. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
 
 Book details are enriched on demand with descriptive, creator, publication, identifier, genre/tag, and file metadata. Series details no longer depend on the current shelf page: they request the server's ordered series page, show completion and possible gaps, and optionally use the first book synopsis as series context. Hardware and top-bar Back preserve the series destination when a book was opened from within it.
 

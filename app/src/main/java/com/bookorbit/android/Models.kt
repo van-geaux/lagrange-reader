@@ -124,12 +124,21 @@ data class AuthorBooksPage(
     val size: Int? = null
 )
 
+data class LibraryJumpBucket(
+    val key: String,
+    val label: String,
+    val index: Int
+)
+
 data class LibraryBooksPage(
     val items: List<BookSummary> = emptyList(),
     val total: Int? = null,
     val seriesTotal: Int? = null,
     val page: Int? = null,
-    val size: Int? = null
+    val size: Int? = null,
+    val isComplete: Boolean = false,
+    val refreshedAtMillis: Long? = null,
+    val jumpBuckets: List<LibraryJumpBucket> = emptyList()
 )
 
 data class BrowserState(
@@ -141,6 +150,10 @@ data class BrowserState(
     val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,
     val booksPageSize: Int? = null,
+    val isCatalogComplete: Boolean = false,
+    val isCatalogSyncing: Boolean = false,
+    val catalogRefreshedAtMillis: Long? = null,
+    val libraryJumpBuckets: List<LibraryJumpBucket> = emptyList(),
     val isRefreshing: Boolean = false,
     val isLoadingLibraries: Boolean = false,
     val isLoadingBooks: Boolean = false,

@@ -83,6 +83,7 @@ class AppCoordinator(
     private var lastBrowserState: BrowserState? = null
     private var loginRefreshInFlight = false
     private var loginSubmitInFlight = false
+    private var catalogLoadJob: Job? = null
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -103,7 +104,31 @@ class AppCoordinator(
                 return@launch
             }
 
-            when (repository.getSessionState()) {
+            val startupCache = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
+            if (startupCache != null) {
+                showBrowser(
+                    startupCache.copy(
+                        isRefreshing = true,
+                        isLoadingLibraries = false,
+                        isLoadingBooks = false,
+                        isCatalogSyncing = false,
+                        isOfflineSnapshot = true,
+                        message = null
+                    )
+                )
+            }
+
+            val sessionState = repository.getSessionState()
+            if (startupCache != null) {
+                val currentBrowser = (_screen.value as? AppScreen.Browser)?.browserState
+                    ?: return@launch
+                if (currentBrowser.selectedLibraryId != startupCache.selectedLibraryId) {
+                    // A user selection made while the session check was running owns
+                    // the screen now; do not restart the old cached destination.
+                    return@launch
+                }
+            }
+            when (sessionState) {
                 SessionState.Authenticated -> {
                     allowCachedLoginFallback = true
                     repository.restoreActiveReaderState()?.let { readerState ->
@@ -334,15 +359,22 @@ class AppCoordinator(
     }
 
     fun loadBrowser() {
-        scope.launch {
+        catalogLoadJob?.cancel()
+        catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
-            val previous = lastBrowserState
-            if (previous != null) {
+            var previous = lastBrowserState
+            if (previous == null) {
+                repository.loadCachedBrowserState()?.let { cached ->
+                    previous = cached
+                }
+            }
+            previous?.let { previousState ->
                 showBrowser(
-                    previous.copy(
+                    previousState.copy(
                         isRefreshing = true,
                         isLoadingLibraries = true,
                         isLoadingBooks = true,
+                        isOfflineSnapshot = false,
                         message = null
                     )
                 )
@@ -357,41 +389,78 @@ class AppCoordinator(
                 // the first Home render reflect progress that was created in an earlier
                 // session instead of showing Continue reading only after a second open.
                 val progressSyncResult = repository.syncPendingProgress()
-                val booksPage = selectedLibrary?.let { repository.loadBooksPage(it, 0) }
-                    ?: LibraryBooksPage()
+                val pendingProgressCount = repository.pendingProgressCount()
+                if (selectedLibrary == null) {
+                    showBrowser(
+                        BrowserState(
+                            serverUrl = serverUrl,
+                            libraries = libraries,
+                            selectedLibraryId = null,
+                            books = emptyList(),
+                            isRefreshing = false,
+                            isLoadingLibraries = false,
+                            isLoadingBooks = false,
+                            debugPendingProgressCount = pendingProgressCount,
+                            isOfflineSnapshot = false
+                        )
+                    )
+                    return@runCatching
+                }
+
+                repository.setSelectedLibraryId(selectedLibrary)
+                val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
+                val firstPage = cachedCatalog ?: repository.loadBooksPage(selectedLibrary, 0)
+                showBrowser(
+                    catalogBrowserState(
+                        serverUrl = serverUrl,
+                        libraries = libraries,
+                        libraryId = selectedLibrary,
+                        page = firstPage,
+                        pendingProgressCount = pendingProgressCount,
+                        isRefreshing = true,
+                        isCatalogSyncing = true
+                    )
+                )
+
+                val refreshedCatalog = repository.refreshLibraryCatalog(
+                    libraryId = selectedLibrary,
+                    firstPage = firstPage.takeUnless { it.isComplete }
+                )
                 if (progressSyncResult == SyncAttemptResult.Success) {
                     // Once the server has accepted every current-server update and the
-                    // fresh page has loaded, its progress is authoritative again. This
-                    // allows progress made in BookOrbit or another client to flow back.
+                    // complete fresh catalog has loaded, its progress is authoritative.
                     latestProgressByTarget.clear()
                     queuedProgressByTarget.clear()
                 }
-                val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
-                    BrowserState(
+                    catalogBrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
-                        selectedLibraryId = selectedLibrary,
-                        books = mergeKnownProgress(booksPage.items, selectedLibrary),
-                        booksTotal = booksPage.total,
-                        booksSeriesTotal = booksPage.seriesTotal,
-                        booksPage = booksPage.page ?: 0,
-                        booksPageSize = booksPage.size,
+                        libraryId = selectedLibrary,
+                        page = refreshedCatalog,
+                        pendingProgressCount = pendingProgressCount,
                         isRefreshing = false,
-                        isLoadingLibraries = false,
-                        isLoadingBooks = false,
-                        debugPendingProgressCount = pendingProgressCount,
-                        isOfflineSnapshot = false
+                        isCatalogSyncing = false
                     )
                 )
-                if (selectedLibrary != null) {
-                    repository.setSelectedLibraryId(selectedLibrary)
-                }
             }.onFailure { error ->
                 if (error is AuthenticationRequiredException) {
                     showLogin(
                         message = "Your session expired. Sign in again to continue browsing.",
                         destination = PostLoginDestination.Browser
+                    )
+                    return@onFailure
+                }
+                val interruptedCatalog = lastBrowserState?.takeIf { it.isCatalogSyncing }
+                if (interruptedCatalog != null) {
+                    showBrowser(
+                        interruptedCatalog.copy(
+                            isRefreshing = false,
+                            isLoadingLibraries = false,
+                            isLoadingBooks = false,
+                            isCatalogSyncing = false,
+                            message = userMessage(error, "Unable to finish refreshing the library catalog.")
+                        )
                     )
                     return@onFailure
                 }
@@ -404,8 +473,9 @@ class AppCoordinator(
                         )
                     )
                 } else if (previous != null) {
+                    val previousState = requireNotNull(previous)
                     showBrowser(
-                        previous.copy(
+                        previousState.copy(
                             isRefreshing = false,
                             isLoadingLibraries = false,
                             isLoadingBooks = false,
@@ -431,7 +501,8 @@ class AppCoordinator(
     }
 
     fun selectLibrary(libraryId: String) {
-        scope.launch {
+        catalogLoadJob?.cancel()
+        catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
             val currentBrowser = _screen.value as? AppScreen.Browser
             val loadingState = currentBrowser?.browserState?.copy(
@@ -448,23 +519,33 @@ class AppCoordinator(
             runCatching {
                 repository.setSelectedLibraryId(libraryId)
                 val libraries = currentBrowser?.browserState?.libraries ?: repository.loadLibraries()
-                val booksPage = repository.loadBooksPage(libraryId, 0)
                 val pendingProgressCount = repository.pendingProgressCount()
+                val cachedCatalog = repository.loadCachedLibraryCatalog(libraryId)
+                val firstPage = cachedCatalog ?: repository.loadBooksPage(libraryId, 0)
                 showBrowser(
-                    BrowserState(
+                    catalogBrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
-                        selectedLibraryId = libraryId,
-                        books = mergeKnownProgress(booksPage.items, libraryId),
-                        booksTotal = booksPage.total,
-                        booksSeriesTotal = booksPage.seriesTotal,
-                        booksPage = booksPage.page ?: 0,
-                        booksPageSize = booksPage.size,
+                        libraryId = libraryId,
+                        page = firstPage,
+                        pendingProgressCount = pendingProgressCount,
+                        isRefreshing = true,
+                        isCatalogSyncing = true
+                    )
+                )
+                val refreshedCatalog = repository.refreshLibraryCatalog(
+                    libraryId = libraryId,
+                    firstPage = firstPage.takeUnless { it.isComplete }
+                )
+                showBrowser(
+                    catalogBrowserState(
+                        serverUrl = serverUrl,
+                        libraries = libraries,
+                        libraryId = libraryId,
+                        page = refreshedCatalog,
+                        pendingProgressCount = pendingProgressCount,
                         isRefreshing = false,
-                        isLoadingLibraries = false,
-                        isLoadingBooks = false,
-                        debugPendingProgressCount = pendingProgressCount,
-                        isOfflineSnapshot = false
+                        isCatalogSyncing = false
                     )
                 )
             }.onFailure { error ->
@@ -472,6 +553,20 @@ class AppCoordinator(
                     showLogin(
                         message = "Your session expired. Sign in again to continue in this library.",
                         destination = PostLoginDestination.SelectLibrary(libraryId)
+                    )
+                    return@onFailure
+                }
+                val interruptedCatalog = lastBrowserState?.takeIf { state ->
+                    state.selectedLibraryId == libraryId && state.isCatalogSyncing
+                }
+                if (interruptedCatalog != null) {
+                    showBrowser(
+                        interruptedCatalog.copy(
+                            isRefreshing = false,
+                            isLoadingBooks = false,
+                            isCatalogSyncing = false,
+                            message = userMessage(error, "Unable to finish refreshing the selected library.")
+                        )
                     )
                     return@onFailure
                 }
@@ -763,6 +858,39 @@ class AppCoordinator(
         }
     }
 
+    private fun catalogBrowserState(
+        serverUrl: String,
+        libraries: List<LibrarySummary>,
+        libraryId: String,
+        page: LibraryBooksPage,
+        pendingProgressCount: Int,
+        isRefreshing: Boolean,
+        isCatalogSyncing: Boolean
+    ): BrowserState {
+        val transient = lastBrowserState
+        return BrowserState(
+            serverUrl = serverUrl,
+            libraries = libraries,
+            selectedLibraryId = libraryId,
+            books = mergeKnownProgress(page.items, libraryId),
+            booksTotal = page.total,
+            booksSeriesTotal = page.seriesTotal,
+            booksPage = page.page ?: 0,
+            booksPageSize = page.size,
+            isCatalogComplete = page.isComplete,
+            isCatalogSyncing = isCatalogSyncing,
+            catalogRefreshedAtMillis = page.refreshedAtMillis,
+            libraryJumpBuckets = page.jumpBuckets,
+            isRefreshing = isRefreshing,
+            isLoadingLibraries = false,
+            isLoadingBooks = false,
+            downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
+            failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
+            debugPendingProgressCount = pendingProgressCount,
+            isOfflineSnapshot = false
+        )
+    }
+
     private fun showBrowser(state: BrowserState) {
         lastBrowserState = state
         _screen.value = AppScreen.Browser(browserState = state)
@@ -805,6 +933,8 @@ class AppCoordinator(
     }
 
     private fun resetTransientState(clearBrowserState: Boolean) {
+        catalogLoadJob?.cancel()
+        catalogLoadJob = null
         activeDownloads.values.forEach { it.cancel() }
         activeDownloads.clear()
         latestProgressByTarget.clear()

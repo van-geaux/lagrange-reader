@@ -233,7 +233,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Remove the duplicate Home/library heading from Library Recommended
 - [x] Move Options from More into the profile menu above Log out
 - [x] Add extra top/bottom spacing to the More sheet
-- [x] Avoid showing a partial derived series count while Browse is still paginating
+- [x] Avoid showing a partial derived series count while Browse is still paginating (superseded by complete local catalogs)
 - [x] Add reader padding controls with a more generous default text inset
 - [x] Add independent Top and Bottom reader padding controls with repagination
 - [x] Replace reader padding presets with independent Top/Bottom/Left/Right percentage controls; default each edge to 15%
@@ -247,7 +247,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a Libraries control to collapse series into representative cards and restore all books
 - [x] Add Local books before Options in the More menu
 - [x] Reduce book poster-card sizing to 75% of the current device-reviewed size
-- [x] Add lazy library Browse-tab pagination as the user scrolls
+- [x] Add lazy library Browse-tab pagination as the user scrolls (superseded by the Room-backed complete catalog)
 - [x] Show the Lagrange logo only on Home and make the selected library name the Library selector
 - [x] Split Library into Recommended and Browse tabs
 - [x] Make Library, Series, and Authors poster cards visibly smaller on narrow phones
@@ -258,10 +258,16 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Keep collapsed series ordered by series name and restore the scroll anchor when toggling collapse
 - [x] Improve thumbnail loading performance and retry failed covers
 - [x] Add safe bottom spacing to the More menu
-- [x] Show full Library book/series totals while Browse is paginated
+- [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title
 - [x] Cache full downloaded-book metadata for server-free local detail screens
 - [x] Show # and every A–Z label on the Library jump rail, grouping non-alphabetic titles under #
+- [x] Persist complete per-server/per-library book metadata in Room and render it before cold-start network checks finish
+- [x] Reconcile every server page atomically, writing only changed/new/reordered rows and deleting titles no longer returned by BookOrbit
+- [x] Remove Browse's near-end lazy loading and apply Browse filters/sorts to the complete local catalog
+- [x] Use BookOrbit jump-bucket absolute indexes for default Browse navigation, with a complete-cache local fallback
+- [x] Disable the jump rail until the first full catalog is ready and for sort modes that do not support meaningful letter buckets
+- [ ] Validate cache-first reopen, catalog additions/deletions/progress changes, and exact #/A–Z jumps on the target device/server
 - [x] Route background authenticated request failures through the login recovery flow
 - [x] Retry authenticated requests through the refresh-cookie session flow before showing session-expired login
 - [x] Retry and cache Series/Authors catalog thumbnails, including the series cover fallback endpoint

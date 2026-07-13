@@ -1,9 +1,11 @@
 package com.bookorbit.android
 
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,6 +89,80 @@ class AppCoordinatorTest {
         assertEquals(listOf(library), screen.browserState.libraries)
         assertEquals(library.id, screen.browserState.selectedLibraryId)
         assertEquals(listOf(book), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertEquals(listOf(listOf(book)), repository.refreshFirstPages.map { it?.items })
+    }
+
+    @Test
+    fun `load browser shows cached catalog before reconciling to the complete server result`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val refreshedBook = book.copy(title = "Server title")
+        val refreshGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogResult = LibraryBooksPage(
+                items = listOf(refreshedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogGate = refreshGate
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+
+        val cachedScreen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(cachedBook), cachedScreen.browserState.books)
+        assertTrue(cachedScreen.browserState.isCatalogComplete)
+        assertTrue(cachedScreen.browserState.isCatalogSyncing)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(refreshedBook), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertFalse(screen.browserState.isCatalogSyncing)
+        assertEquals(listOf(null), repository.refreshFirstPages)
+    }
+
+    @Test
+    fun `failed reconciliation keeps the complete cached catalog usable`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(cachedBook), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertFalse(screen.browserState.isCatalogSyncing)
+        assertFalse(screen.browserState.isRefreshing)
+        assertTrue(screen.browserState.message.orEmpty().contains("network error"))
     }
 
     @Test
@@ -560,6 +636,10 @@ private class FakeBookOrbitDataSource(
     var downloadError: Throwable? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
+    var cachedLibraryCatalog: LibraryBooksPage? = null,
+    var refreshLibraryCatalogResult: LibraryBooksPage? = null,
+    var refreshLibraryCatalogError: Throwable? = null,
+    var refreshLibraryCatalogGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesError: Throwable? = null,
     var loadBooksError: Throwable? = null,
     var searchBooksError: Throwable? = null,
@@ -579,6 +659,7 @@ private class FakeBookOrbitDataSource(
     var sessionStateRequested = false
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
+    val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
 
     override suspend fun getServerUrl(): String? = serverUrl
 
@@ -620,6 +701,21 @@ private class FakeBookOrbitDataSource(
     override suspend fun loadBooks(libraryId: String): List<BookSummary> {
         loadBooksError?.let { throw it }
         return loadBooksResult
+    }
+
+    override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = cachedLibraryCatalog
+
+    override suspend fun refreshLibraryCatalog(
+        libraryId: String,
+        firstPage: LibraryBooksPage?
+    ): LibraryBooksPage {
+        refreshFirstPages += firstPage
+        refreshLibraryCatalogGate?.await()
+        refreshLibraryCatalogError?.let { throw it }
+        return refreshLibraryCatalogResult
+            ?: firstPage?.copy(isComplete = true)
+            ?: cachedLibraryCatalog?.copy(isComplete = true)
+            ?: LibraryBooksPage(isComplete = true)
     }
 
     override suspend fun searchBooks(query: String): List<BookSummary> {
