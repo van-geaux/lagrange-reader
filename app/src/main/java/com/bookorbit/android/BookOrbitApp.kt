@@ -993,8 +993,7 @@ private fun EpubReaderView(
         controller?.hide(WindowInsetsCompat.Type.systemBars())
         controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         onDispose {
-            controller?.show(WindowInsetsCompat.Type.navigationBars())
-            controller?.hide(WindowInsetsCompat.Type.statusBars())
+            controller?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }

@@ -15,16 +15,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -37,28 +34,31 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,6 +96,7 @@ private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 102
 private val coverBitmapMutex = Mutex()
 private val missingCoverKeys = mutableSetOf<String>()
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NativeLibraryBrowserScreen(
     state: BrowserState,
@@ -117,10 +118,12 @@ internal fun NativeLibraryBrowserScreen(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit
 ) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     var destination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
     var query by rememberSaveable { mutableStateOf("") }
+    var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
+    var showMoreMenu by rememberSaveable { mutableStateOf(false) }
+    var showProfileMenu by rememberSaveable { mutableStateOf(false) }
+    var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
     var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
     var selectedAuthor by remember { mutableStateOf<AuthorSummary?>(null) }
@@ -133,9 +136,13 @@ internal fun NativeLibraryBrowserScreen(
         }
     }
     val filteredBooks = remoteSearchResults.orEmpty()
+    val sessionActionLabel = if (state.isOfflineSnapshot) "Sign in" else "Log out"
 
-    BackHandler(enabled = selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
-        if (selectedBook != null) {
+    BackHandler(enabled = isSearchOpen || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
+        if (isSearchOpen) {
+            isSearchOpen = false
+            query = ""
+        } else if (selectedBook != null) {
             selectedBook = null
         } else if (selectedAuthor != null) {
             selectedAuthor = null
@@ -146,112 +153,167 @@ internal fun NativeLibraryBrowserScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            BrowserDrawer(
-                state = state,
-                destination = destination,
-                onHome = {
-                    destination = BrowserDestination.HOME
-                    query = ""
-                    selectedAuthor = null
-                    selectedSeriesKey = null
-                    scope.launch { drawerState.close() }
-                },
-                onLibraries = {
-                    destination = BrowserDestination.LIBRARY
-                    query = ""
-                    selectedAuthor = null
-                    selectedSeriesKey = null
-                    scope.launch { drawerState.close() }
-                },
-                onLibrarySelected = { libraryId ->
-                    destination = BrowserDestination.LIBRARY
-                    query = ""
-                    selectedAuthor = null
-                    selectedSeriesKey = null
-                    onLibrarySelected(libraryId)
-                    scope.launch { drawerState.close() }
-                },
+    if (showMoreMenu) {
+        ModalBottomSheet(onDismissRequest = { showMoreMenu = false }) {
+            MoreMenu(
                 onSeries = {
+                    showMoreMenu = false
                     destination = BrowserDestination.SERIES
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
-                    scope.launch { drawerState.close() }
                 },
                 onAuthors = {
+                    showMoreMenu = false
                     destination = BrowserDestination.AUTHORS
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
-                    scope.launch { drawerState.close() }
                 },
                 onOptions = {
+                    showMoreMenu = false
                     destination = BrowserDestination.OPTIONS
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
-                    scope.launch { drawerState.close() }
-                },
-                onSignIn = {
-                    scope.launch { drawerState.close() }
-                    onSignIn()
-                },
-                onSignOut = {
-                    scope.launch { drawerState.close() }
-                    onSignOut()
                 }
             )
         }
-    ) {
-        Scaffold(
-            topBar = {
-                when {
-                    selectedBook != null -> BookOrbitTopBar(
-                        title = "Book details",
-                        navigationIcon = { TextButton(onClick = { selectedBook = null }) { Text("Back") } }
-                    )
-                    selectedSeriesKey != null -> BookOrbitTopBar(
-                        title = "Series",
-                        navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text("Back") } }
-                    )
-                    selectedAuthor != null -> BookOrbitTopBar(
-                        title = "Author",
-                        navigationIcon = { TextButton(onClick = { selectedAuthor = null; destination = BrowserDestination.AUTHORS }) { Text("Back") } }
-                    )
-                    destination == BrowserDestination.SERIES -> CatalogHeader(
-                        title = "Series",
-                        query = query,
-                        onQueryChange = { query = it },
-                        onMenu = { scope.launch { drawerState.open() } }
-                    )
-                    destination == BrowserDestination.AUTHORS -> CatalogHeader(
-                        title = "Authors",
-                        query = query,
-                        onQueryChange = { query = it },
-                        onMenu = { scope.launch { drawerState.open() } }
-                    )
-                    destination == BrowserDestination.OPTIONS -> CatalogHeader(
-                        title = "Options",
-                        query = "",
-                        onQueryChange = {},
-                        onMenu = { scope.launch { drawerState.open() } },
-                        showSearch = false
-                    )
-                    else -> BrowserSearchBar(
-                        query = query,
-                        isRefreshing = state.isRefreshing,
-                        onQueryChange = { query = it },
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onRefresh = onRefresh
-                    )
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) { padding ->
+    }
+
+    Scaffold(
+        topBar = {
             when {
+                isSearchOpen -> BrowserTopBar(
+                    title = "Search",
+                    navigationIcon = {
+                        TextButton(onClick = {
+                            isSearchOpen = false
+                            query = ""
+                        }) { Text("Back") }
+                    },
+                    onSearch = {},
+                    onProfile = { showProfileMenu = true },
+                    showSearchAction = false,
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
+                    sessionActionLabel = sessionActionLabel
+                )
+                selectedBook != null -> BrowserTopBar(
+                    title = "Book details",
+                    navigationIcon = { TextButton(onClick = { selectedBook = null }) { Text("Back") } },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
+                    sessionActionLabel = sessionActionLabel
+                )
+                selectedSeriesKey != null -> BrowserTopBar(
+                    title = "Series",
+                    navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text("Back") } },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
+                    sessionActionLabel = sessionActionLabel
+                )
+                selectedAuthor != null -> BrowserTopBar(
+                    title = "Author",
+                    navigationIcon = { TextButton(onClick = { selectedAuthor = null; destination = BrowserDestination.AUTHORS }) { Text("Back") } },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
+                    sessionActionLabel = sessionActionLabel
+                )
+                else -> BrowserTopBar(
+                    title = when {
+                        destination == BrowserDestination.LIBRARY && !showLibraryPicker ->
+                            state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name ?: "Library"
+                        destination == BrowserDestination.LIBRARY -> "Libraries"
+                        destination == BrowserDestination.SERIES -> "Series"
+                        destination == BrowserDestination.AUTHORS -> "Authors"
+                        destination == BrowserDestination.OPTIONS -> "Options"
+                        else -> "Home"
+                    },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    showRefresh = destination == BrowserDestination.LIBRARY,
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = onRefresh,
+                    onLibraryChange = if (destination == BrowserDestination.LIBRARY && !showLibraryPicker) {
+                        { showLibraryPicker = true }
+                    } else {
+                        null
+                    },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
+                    sessionActionLabel = sessionActionLabel
+                )
+            }
+        },
+        bottomBar = {
+            if (!isSearchOpen && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
+                BrowserBottomNavigation(
+                    destination = destination,
+                    onHome = {
+                        destination = BrowserDestination.HOME
+                        query = ""
+                        selectedAuthor = null
+                        selectedSeriesKey = null
+                    },
+                    onLibraries = {
+                        destination = BrowserDestination.LIBRARY
+                        showLibraryPicker = true
+                        query = ""
+                        selectedAuthor = null
+                        selectedSeriesKey = null
+                    },
+                    onMore = { showMoreMenu = true }
+                )
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+            when {
+                isSearchOpen -> SearchLayerContent(
+                    query = query,
+                    onQueryChange = { query = it },
+                    books = filteredBooks,
+                    isSearching = query.isNotBlank() && remoteSearchResults == null,
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        isSearchOpen = false
+                        query = ""
+                        detailReturnDestination = destination
+                        selectedBook = book
+                    },
+                    onDownload = onDownload,
+                    onCancelDownload = onCancelDownload,
+                    onDeleteLocalCopy = onDeleteLocalCopy
+                )
                 selectedBook != null -> BookDetails(
                     book = selectedBook!!,
                     state = state,
@@ -280,7 +342,7 @@ internal fun NativeLibraryBrowserScreen(
                     onBookSelected = { selectedBook = it }
                 )
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
-                    query = query,
+                    query = "",
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     imageLoader = catalogImageLoader,
@@ -290,7 +352,7 @@ internal fun NativeLibraryBrowserScreen(
                     }
                 )
                 destination == BrowserDestination.AUTHORS -> AuthorsCatalogScreen(
-                    query = query,
+                    query = "",
                     modifier = Modifier.padding(padding),
                     loader = authorsCatalogLoader,
                     imageLoader = catalogImageLoader,
@@ -327,6 +389,14 @@ internal fun NativeLibraryBrowserScreen(
                         selectedSeriesKey = seriesKey
                     }
                 )
+                destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    onLibrarySelected = { libraryId ->
+                        showLibraryPicker = false
+                        onLibrarySelected(libraryId)
+                    }
+                )
                 else -> LibraryBooks(
                     state = state,
                     modifier = Modifier.padding(padding),
@@ -340,76 +410,218 @@ internal fun NativeLibraryBrowserScreen(
                     onDeleteLocalCopy = onDeleteLocalCopy
                 )
             }
-        }
     }
 }
 
 @Composable
-private fun BrowserSearchBar(
-    query: String,
-    isRefreshing: Boolean,
-    onQueryChange: (String) -> Unit,
-    onMenu: () -> Unit,
-    onRefresh: () -> Unit
+private fun BrowserTopBar(
+    title: String,
+    navigationIcon: @Composable () -> Unit = {},
+    onSearch: () -> Unit,
+    onProfile: () -> Unit,
+    profileExpanded: Boolean,
+    onDismissProfile: () -> Unit,
+    onSessionAction: () -> Unit,
+    sessionActionLabel: String,
+    showSearchAction: Boolean = true,
+    showRefresh: Boolean = false,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
+    onLibraryChange: (() -> Unit)? = null
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onMenu) {
-            Icon(Icons.Default.Menu, contentDescription = "Open navigation")
+    BookOrbitTopBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        actions = {
+            if (showRefresh) {
+                IconButton(onClick = onRefresh, enabled = !isRefreshing) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                }
+            }
+            onLibraryChange?.let { changeLibrary ->
+                TextButton(onClick = changeLibrary) { Text("Change") }
+            }
+            if (showSearchAction) {
+                IconButton(onClick = onSearch) {
+                    Icon(Icons.Default.Search, contentDescription = "Search")
+                }
+            }
+            Box {
+                IconButton(onClick = onProfile) {
+                    Icon(Icons.Default.Person, contentDescription = "User profile")
+                }
+                DropdownMenu(
+                    expanded = profileExpanded,
+                    onDismissRequest = onDismissProfile
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(sessionActionLabel) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) },
+                        onClick = onSessionAction
+                    )
+                }
+            }
         }
+    )
+}
+
+@Composable
+private fun BrowserBottomNavigation(
+    destination: BrowserDestination,
+    onHome: () -> Unit,
+    onLibraries: () -> Unit,
+    onMore: () -> Unit
+) {
+    NavigationBar {
+        NavigationBarItem(
+            selected = destination == BrowserDestination.HOME,
+            onClick = onHome,
+            icon = { Icon(Icons.Default.Home, contentDescription = null) },
+            label = { Text("Home") }
+        )
+        NavigationBarItem(
+            selected = destination == BrowserDestination.LIBRARY,
+            onClick = onLibraries,
+            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            label = { Text("Libraries") }
+        )
+        NavigationBarItem(
+            selected = destination == BrowserDestination.SERIES ||
+                destination == BrowserDestination.AUTHORS ||
+                destination == BrowserDestination.OPTIONS,
+            onClick = onMore,
+            icon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
+            label = { Text("More") }
+        )
+    }
+}
+
+@Composable
+private fun MoreMenu(
+    onSeries: () -> Unit,
+    onAuthors: () -> Unit,
+    onOptions: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+        Text(
+            "More",
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.headlineSmall
+        )
+        ListItem(
+            headlineContent = { Text("Series") },
+            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            modifier = Modifier.clickable(onClick = onSeries)
+        )
+        ListItem(
+            headlineContent = { Text("Authors") },
+            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            modifier = Modifier.clickable(onClick = onAuthors)
+        )
+        ListItem(
+            headlineContent = { Text("Options") },
+            leadingContent = { Icon(Icons.Default.MoreVert, contentDescription = null) },
+            modifier = Modifier.clickable(onClick = onOptions)
+        )
+    }
+}
+
+@Composable
+private fun SearchLayerContent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    books: List<BookSummary>,
+    isSearching: Boolean,
+    state: BrowserState,
+    modifier: Modifier,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit
+) {
+    Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             placeholder = { Text("Search your library") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
         )
-        IconButton(onClick = onRefresh, enabled = !isRefreshing) {
-            if (isRefreshing) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-            }
+        if (query.isBlank()) {
+            Text(
+                "Search across all accessible books.",
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SearchResults(
+                books = books,
+                state = state,
+                modifier = Modifier.weight(1f),
+                isSearching = isSearching,
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onDeleteLocalCopy = onDeleteLocalCopy
+            )
         }
     }
 }
 
 @Composable
-private fun CatalogHeader(
-    title: String,
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onMenu: () -> Unit,
-    showSearch: Boolean = true
+private fun LibraryPickerScreen(
+    state: BrowserState,
+    modifier: Modifier,
+    onLibrarySelected: (String) -> Unit
 ) {
-    Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onMenu) {
-                Icon(Icons.Default.Menu, contentDescription = "Open navigation")
-            }
-            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        }
-        if (showSearch) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                placeholder = { Text("Search $title") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                shape = MaterialTheme.shapes.extraLarge
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Choose a library", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Select which library to browse.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        state.message?.let { message ->
+            item {
+                OrbitMessage(
+                    text = message,
+                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
+                )
+            }
+        }
+        if (state.isLoadingLibraries) {
+            item { LoadingFeedRow("Loading libraries...") }
+        }
+        if (!state.isLoadingLibraries && state.libraries.isEmpty()) {
+            item { Text("No libraries found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(state.libraries, key = { "library-picker-${it.id}" }) { library ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !state.isLoadingBooks) { onLibrarySelected(library.id) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(library.name, style = MaterialTheme.typography.titleMedium)
+                    library.description?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
     }
 }
@@ -753,87 +965,6 @@ private fun CatalogImage(
             )
         } else {
             Text(label.substringAfterLast(" ").take(1).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun BrowserDrawer(
-    state: BrowserState,
-    destination: BrowserDestination,
-    onHome: () -> Unit,
-    onLibraries: () -> Unit,
-    onLibrarySelected: (String) -> Unit,
-    onSeries: () -> Unit,
-    onAuthors: () -> Unit,
-    onOptions: () -> Unit,
-    onSignIn: () -> Unit,
-    onSignOut: () -> Unit
-) {
-    ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 12.dp, vertical = 20.dp)
-        ) {
-            OrbitEyebrow("BookOrbit", modifier = Modifier.padding(horizontal = 16.dp))
-            Text(
-                "Your reading space",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(Modifier.height(12.dp))
-            NavigationDrawerItem(
-                label = { Text("Home") },
-                selected = destination == BrowserDestination.HOME,
-                onClick = onHome,
-                icon = { Icon(Icons.Default.Home, contentDescription = null) }
-            )
-            NavigationDrawerItem(
-                label = { Text("Libraries") },
-                selected = destination == BrowserDestination.LIBRARY,
-                onClick = onLibraries,
-                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
-            )
-            state.libraries.forEach { library ->
-                NavigationDrawerItem(
-                    label = { Text(library.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    selected = destination == BrowserDestination.LIBRARY && library.id == state.selectedLibraryId,
-                    onClick = {
-                        if (!state.isLoadingBooks) onLibrarySelected(library.id)
-                    },
-                    modifier = Modifier
-                        .padding(start = 28.dp)
-                        .semantics {
-                            if (state.isLoadingBooks) disabled()
-                        }
-                )
-            }
-            NavigationDrawerItem(
-                label = { Text("Series") },
-                selected = destination == BrowserDestination.SERIES,
-                onClick = onSeries,
-                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
-            )
-            NavigationDrawerItem(
-                label = { Text("Authors") },
-                selected = destination == BrowserDestination.AUTHORS,
-                onClick = onAuthors,
-                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
-            )
-            NavigationDrawerItem(
-                label = { Text("Options") },
-                selected = destination == BrowserDestination.OPTIONS,
-                onClick = onOptions
-            )
-            Spacer(Modifier.weight(1f))
-            HorizontalDivider()
-            NavigationDrawerItem(
-                label = { Text(if (state.isOfflineSnapshot) "Sign in" else "Log out") },
-                selected = false,
-                onClick = if (state.isOfflineSnapshot) onSignIn else onSignOut,
-                icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) }
-            )
         }
     }
 }

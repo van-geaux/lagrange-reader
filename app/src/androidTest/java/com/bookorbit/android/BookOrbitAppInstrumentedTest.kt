@@ -35,7 +35,7 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
-    fun offlineBrowserDisablesUnavailableBookActions() {
+    fun offlineBrowserShowsProfileSignInAndLibraryPicker() {
         val unavailableBook = BookSummary(
             libraryId = "lib-1",
             id = "book-1",
@@ -61,10 +61,10 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Open navigation").performClick()
+        composeRule.onNodeWithContentDescription("User profile").performClick()
         composeRule.onNodeWithText("Sign in").assertIsEnabled()
         composeRule.onNodeWithText("Libraries").performClick()
-        composeRule.onNodeWithText("Unavailable offline").assertIsDisplayed()
+        composeRule.onNodeWithText("Main").assertIsDisplayed()
     }
 
     @Test
@@ -99,6 +99,9 @@ class BookOrbitAppInstrumentedTest {
             author = "Test Author",
             mediaKind = MediaKind.EPUB
         )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+        }
 
         composeRule.setContent {
             BookOrbitTheme {
@@ -111,21 +114,48 @@ class BookOrbitAppInstrumentedTest {
                             books = listOf(book)
                         )
                     ),
-                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
                 )
             }
         }
 
         composeRule.onNodeWithText("Recently added books").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Open navigation").performClick()
-        composeRule.onNodeWithText("Log out").assertIsEnabled()
         composeRule.onNodeWithText("Libraries").performClick()
-        composeRule.onNodeWithText("Main").assertIsDisplayed()
+        composeRule.onNodeWithText("Main").performClick()
         composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
         composeRule.onNodeWithText("Test Author").assertIsDisplayed()
         composeRule.onNodeWithText("Details").assertIsEnabled().performClick()
         composeRule.onNodeWithText("Read").assertIsEnabled()
         composeRule.onNodeWithText("Download").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        composeRule.onNodeWithText("Log out").assertIsEnabled()
+    }
+
+    @Test
+    fun homeSearchAndMoreActionsOpenNativeLayers() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Search").performClick()
+        composeRule.onNodeWithText("Search your library").assertIsDisplayed()
+        composeRule.onNodeWithText("Back").performClick()
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Series").assertIsDisplayed()
+        composeRule.onNodeWithText("Authors").assertIsDisplayed()
+        composeRule.onNodeWithText("Options").assertIsDisplayed()
     }
 
     @Test
@@ -148,9 +178,9 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Open navigation").performClick()
-        composeRule.onNodeWithText("Main").assertIsNotEnabled()
         composeRule.onNodeWithText("Loading books...").assertIsDisplayed()
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Main").assertIsNotEnabled()
     }
 
     @Test
@@ -176,6 +206,7 @@ class BookOrbitAppInstrumentedTest {
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var clearServerCalls = 0
+    var loadBooksResult: List<BookSummary> = emptyList()
 
     override suspend fun getServerUrl(): String? = null
     override suspend fun setServerUrl(serverUrl: String) = Unit
@@ -188,7 +219,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun getSessionState(): SessionState = SessionState.Unauthenticated
     override suspend fun login(username: String, password: String) = Unit
     override suspend fun loadLibraries(): List<LibrarySummary> = emptyList()
-    override suspend fun loadBooks(libraryId: String): List<BookSummary> = emptyList()
+    override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)
     override suspend fun saveActiveReader(book: BookSummary) = Unit

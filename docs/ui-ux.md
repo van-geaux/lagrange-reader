@@ -36,7 +36,7 @@ The first browser-shell candidate opened on a native Home feed with a hamburger 
 
 The first Home shelf now renders as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress and excludes completed books; Recently read books remains a separate history shelf.
 
-Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The next shell pass will replace the drawer and persistent search field, restore the visible Android status bar, and add Home top spacing.
+Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, and Options. The top bar carries the launcher mark, search, and profile actions, and the Libraries flow has a top-level picker plus Change control.
 
 Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
 
@@ -51,9 +51,9 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Device feedback workplan
 
 - [x] Make Currently reading the first Home shelf and retain Recently read books as a distinct history shelf.
-- Replace the hamburger/drawer interaction with Plex-inspired bottom navigation and a top library selector/change action.
-- Replace Home's large persistent search field with a search icon and dedicated search layer.
-- Keep the Android status bar visible and add intentional Home top spacing.
+- [x] Replace the hamburger/drawer interaction with Plex-inspired bottom navigation and a top library selector/change action.
+- [x] Replace Home's large persistent search field with a search icon and dedicated search layer.
+- [x] Keep the Android status bar visible and add intentional Home top spacing.
 - Add reader padding controls and a larger default padding value.
 - Diagnose the launch spinner versus adaptive-icon presentation.
 
