@@ -80,7 +80,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 ## Latest device feedback workplan — 2026-07-13
 
 1. Implemented: restore the exact EPUB page within the current chapter on close/reopen and full app restart, while preserving the existing server progress percentage and chapter-boundary behavior; physical-device validation remains required.
-2. Change the selected-library book browser from list rows to the adaptive poster-card grid used by Series and Authors, including the existing metadata and download actions.
+2. Implemented: change the selected-library book browser from list rows to the adaptive poster-card grid used by Series and Authors, preserving metadata, offline-disabled cards, and detail actions; physical-device validation remains required.
 3. Rename the visible app brand to `Lagrange` and add the subtitle `a BookOrbit reader` to the logo/launch presentation. BookOrbit remains the connected server/product name.
 4. Add an About destination after Options in the More menu, using placeholder app/version/server information until the About content is reviewed.
 

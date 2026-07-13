@@ -139,7 +139,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Main").performClick()
         composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
         composeRule.onNodeWithText("Test Author").assertIsDisplayed()
-        composeRule.onNodeWithText("Details").assertIsEnabled().performClick()
+        composeRule.onNodeWithContentDescription("The Test Book").performClick()
         composeRule.onNodeWithText("Read").assertIsEnabled()
         composeRule.onNodeWithText("Download").assertIsEnabled()
         composeRule.onNodeWithContentDescription("User profile").performClick()

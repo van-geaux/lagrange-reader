@@ -404,10 +404,7 @@ internal fun NativeLibraryBrowserScreen(
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedBook = book
-                    },
-                    onDownload = onDownload,
-                    onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy
+                    }
                 )
             }
     }
@@ -854,9 +851,11 @@ private fun BookPosterCard(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit,
-    showSeriesIndex: Boolean = false
+    showSeriesIndex: Boolean = false,
+    enabled: Boolean = true
 ) {
     val status = when {
+        !enabled -> "Unavailable offline"
         book.isRead && book.isDownloaded -> "Read · Offline"
         book.isRead -> "Read"
         book.isDownloaded -> "Offline"
@@ -866,12 +865,13 @@ private fun BookPosterCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 contentDescription = buildString {
                     append(book.title)
                     status?.let { append(", $it") }
                 }
+                if (!enabled) disabled()
             },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1262,24 +1262,52 @@ private fun LibraryBooks(
     state: BrowserState,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit,
-    onDownload: (BookSummary) -> Unit,
-    onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit
 ) {
     val title = state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name ?: "Library"
-    LibraryBookList(
-        title = title,
-        books = state.books,
-        state = state,
-        modifier = modifier,
-        isLoading = state.isLoadingBooks,
-        coverLoader = coverLoader,
-        onBookSelected = onBookSelected,
-        onDownload = onDownload,
-        onCancelDownload = onCancelDownload,
-        onDeleteLocalCopy = onDeleteLocalCopy
-    )
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OrbitEyebrow("Library")
+                Text(title, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "${state.books.size} ${if (state.books.size == 1) "book" else "books"}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (state.isLoadingBooks) {
+            item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
+        }
+        state.message?.let { message ->
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OrbitMessage(
+                    message,
+                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
+                )
+            }
+        }
+        if (!state.isLoadingBooks && state.books.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        gridItems(state.books, key = { "library-book-${it.id}" }) { book ->
+            val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
+            BookPosterCard(
+                book = book,
+                coverLoader = coverLoader,
+                enabled = !unavailableOffline,
+                onClick = { onBookSelected(book) }
+            )
+        }
+    }
 }
 
 @Composable
