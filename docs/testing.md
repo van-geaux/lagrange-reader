@@ -49,6 +49,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 8. If possible on the target server, expire the session server-side and confirm the app routes back through login and resumes the intended action after re-authentication.
 9. While signed in, trigger search, cover loading, or a library/detail load after expiring the session and confirm the app shows the same session-expired login recovery instead of silently displaying an empty result.
 10. If the server exposes refresh-cookie renewal, leave the app idle past the short access-token lifetime or expire only the access token, then browse, load a cover, open a detail screen, and open a downloaded reader file. Confirm the first request renews the session and completes without showing login. Repeat several times over at least 15 minutes; record the server response if login still appears.
+11. If possible, trigger two or more authenticated loads together after expiry and confirm only one refresh is needed and none of the loads routes to Login unnecessarily.
 
 ### 1b. Physical Device Install
 

@@ -62,6 +62,7 @@ The current app flow is:
 - Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
 - Session reset now waits for cookie removal to complete before the app settles on the login screen, and explicit sign-out suppresses cached offline-browser fallback until a fresh login succeeds.
 - Successful native login persists the returned `accessToken`; authenticated API, cover, download, and reader-cache requests send it as a Bearer credential alongside the shared cookie jar. A 401/403 response triggers one refresh-cookie renewal attempt and rebuilds the original request with refreshed credentials before session recovery is shown. Explicit session clearing removes the token and cookies.
+- Refresh requests include the current bearer/cookie credentials and are serialized; a request that waited behind another successful refresh reuses the newly persisted token instead of starting a second renewal.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.

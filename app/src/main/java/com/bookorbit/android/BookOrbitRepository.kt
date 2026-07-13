@@ -1051,10 +1051,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         action: String,
         onSuccess: (Response) -> T
     ): T {
+        val tokenBeforeRequest = sessionAccessToken()
         var response = client.newCall(requestFactory()).execute()
         if (response.code == 401 || response.code == 403) {
             response.close()
-            if (refreshSession()) {
+            if (refreshSession(tokenBeforeRequest)) {
                 response = client.newCall(requestFactory()).execute()
             }
         }
@@ -1069,10 +1070,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    private fun refreshSession(): Boolean {
+    private fun refreshSession(expectedToken: String?): Boolean {
         return runCatching {
             synchronized(sessionRefreshLock) {
-                val previousToken = sessionAccessToken()
+                val currentToken = sessionAccessToken()
+                if (currentToken != expectedToken && !currentToken.isNullOrBlank()) {
+                    // Another request completed the shared refresh while this request
+                    // was waiting for the lock. Reuse its token for the retry.
+                    return@synchronized true
+                }
                 val base = serverBase().ifBlank { return@synchronized false }
                 val refreshPaths = listOf(
                     "/api/v1/auth/refresh",
@@ -1083,6 +1089,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                         .url(base.trimEnd('/') + path)
                         .post("{}".toRequestBody(JSON))
                         .header("Accept", "application/json")
+                        .addSessionAccessToken()
                         .build()
                     client.newCall(request).execute().use { response ->
                         if (response.code == 404 || response.code == 405) {
@@ -1101,9 +1108,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                                 }
                             }
                         }
-                        return@synchronized true
-                    }
-                    if (sessionAccessToken() != previousToken) {
                         return@synchronized true
                     }
                 }

@@ -157,6 +157,11 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file and clip the page strip to the configured viewport insets so Top and Bottom changes affect the visible page.
 3. Implemented: add a server-aligned filter button to Library Browse and Series, with title/author/series, read-status, format, and sort controls applied locally to Local books as well.
 
+### Latest device feedback workplan - 2026-07-13 (session refresh follow-up)
+
+1. Implemented: align refresh requests with the BookOrbit client by sending the current bearer/cookie credentials and reusing a token refreshed by another concurrent request instead of renewing repeatedly.
+2. Physical-device validation remains required: allow the debug APK to run past the target server's short access-token lifetime and confirm browsing, covers, downloads, and reader progress stay authenticated without repeated login prompts.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
