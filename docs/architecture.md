@@ -88,7 +88,7 @@ The current app flow is:
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
-- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. Runtime changes now resize the reader viewport without reloading the chapter; visible target-device confirmation remains open.
+- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. Top/Bottom resize the Android `WebView` outside its HTML content, while Left/Right update the page strip in place; visible target-device confirmation remains open.
 - Debug queue counts shown in the browser are scoped to the active server, even when pending updates for other saved servers still exist on disk.
 
 ### Reader implementations
@@ -100,12 +100,12 @@ The current app flow is:
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
-  - reflowable chapter content uses the fixed `body` as a stationary clipped viewport and a separate inner page strip for translation; this keeps later/restored pages inside a fixed clipping window instead of clipping the element being moved
+  - reflowable chapter content uses the last device-known-good single absolute page strip with `overflow: visible`; page turns translate that strip without adding a clipped HTML wrapper around it
   - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls, and the top-right Close action is the only way to dismiss them
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
-  - Top, Bottom, Left, and Right use independent 0-100% controls; values persist per book/file and apply through a JavaScript layout API that updates viewport CSS variables, preserves the approximate content offset, and repaginates without reloading the chapter. Top/Bottom behavior still requires confirmation on the target device.
+  - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right still update and repaginate the page strip in place. Target-device confirmation remains required.
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
@@ -125,7 +125,7 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB exact in-chapter page restore is implemented; exact restore, fixed-viewport pagination, padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
+- EPUB exact in-chapter page restore is implemented; exact restore, visible-overflow pagination, external vertical padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
 - Native login has not yet been verified against every server auth flow or real rate-limit response.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.

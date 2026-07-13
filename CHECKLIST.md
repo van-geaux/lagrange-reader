@@ -159,8 +159,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
-- [x] Fix blank/black EPUB reader surface with a stationary clipped viewport and separately translated content strip; physical-device validation remains required
-- [ ] Validate visible Top/Bottom EPUB padding and repagination on the target device; the fixed-viewport runtime update is implemented and covered in code
+- [x] Restore the last device-known-good visible-overflow EPUB page strip after the clipped-wrapper regression; physical-device validation remains required
+- [ ] Validate visible Top/Bottom EPUB padding and repagination on the target device; vertical padding now resizes the WebView outside the known-good HTML renderer
 - [x] Persist independent EPUB padding values across reader close/reopen
 - [x] Flush the final reader progress before browser refresh and sync pending progress before first Home load
 - [x] Keep reader options open until the explicit Close action is tapped
@@ -265,7 +265,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
 - [x] Reduce app typography tokens by approximately 10% for phone density
 - [x] Render book cards with title, optional series, and series-index metadata rows
-- [ ] Validate reader edge padding while sliders move on the target device; fixed viewport sizing and in-place repagination are implemented in code
+- [ ] Validate reader edge padding while sliders move on the target device; Top/Bottom now resize the WebView externally while Left/Right remain in the known-good page strip
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

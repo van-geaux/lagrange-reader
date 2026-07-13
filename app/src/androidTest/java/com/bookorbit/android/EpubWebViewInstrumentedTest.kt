@@ -3,7 +3,10 @@ package com.bookorbit.android
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
@@ -24,41 +27,49 @@ class EpubWebViewInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun translatedPagesStayVisibleWhenRuntimePaddingResizesTheViewport() {
+    fun knownGoodTranslatedPagesStayVisibleWhenExternalVerticalPaddingResizesWebView() {
         val loaded = CountDownLatch(1)
         lateinit var webView: WebView
+        val verticalPadding = mutableStateOf(15f)
         val chapter = (1..120).joinToString(separator = "") { index ->
             "<p>Visible reader paragraph $index with enough text to span several pages.</p>"
         }
 
         composeRule.setContent {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        addJavascriptInterface(TestReaderBridge(), "BookOrbitReader")
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView, url: String?) {
-                                super.onPageFinished(view, url)
-                                loaded.countDown()
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val inset = maxHeight * (verticalPadding.value / 400f)
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = inset, bottom = inset),
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            addJavascriptInterface(TestReaderBridge(), "BookOrbitReader")
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    loaded.countDown()
+                                }
                             }
-                        }
-                        loadDataWithBaseURL(
-                            "https://reader.test/",
-                            styleEpubHtml(
-                                html = "<html><head></head><body>$chapter</body></html>",
-                                theme = EpubReaderTheme.Sepia,
-                                fontScale = 1f,
-                                startAtEnd = false
-                            ),
-                            "text/html",
-                            Charsets.UTF_8.name(),
-                            null
-                        )
-                    }.also { webView = it }
-                }
-            )
+                            loadDataWithBaseURL(
+                                "https://reader.test/",
+                                styleEpubHtml(
+                                    html = "<html><head></head><body>$chapter</body></html>",
+                                    theme = EpubReaderTheme.Sepia,
+                                    fontScale = 1f,
+                                    startAtEnd = false,
+                                    topPaddingPercent = 0f,
+                                    bottomPaddingPercent = 0f
+                                ),
+                                "text/html",
+                                Charsets.UTF_8.name(),
+                                null
+                            )
+                        }.also { webView = it }
+                    }
+                )
+            }
         }
 
         assertTrue("EPUB WebView did not finish loading", loaded.await(10, TimeUnit.SECONDS))
@@ -67,16 +78,10 @@ class EpubWebViewInstrumentedTest {
         }
         assertTrue(initial.getBoolean("visibleText"))
 
-        evaluateJavascript(
-            webView,
-            epubPaddingUpdateJavascript(
-                EpubPaddingPercentages(top = 100f, bottom = 100f, left = 15f, right = 15f)
-            )
-        )
+        composeRule.runOnIdle { verticalPadding.value = 100f }
         val resized = awaitGeometry(webView) { geometry ->
             geometry.optBoolean("ready") &&
-                geometry.optDouble("top") > initial.optDouble("top") * 4 &&
-                geometry.optDouble("height") < initial.optDouble("height") * 0.7
+                geometry.optDouble("viewportHeight") < initial.optDouble("viewportHeight") * 0.7
         }
         assertTrue(resized.getBoolean("visibleText"))
 
@@ -147,16 +152,20 @@ class EpubWebViewInstrumentedTest {
               const body = document.body;
               const strip = document.getElementById('bookorbit-page-strip');
               if (!body || !strip) return JSON.stringify({ ready: false });
-              const viewportRect = body.getBoundingClientRect();
+              const stripStyle = getComputedStyle(strip);
+              const pageTop = parseFloat(stripStyle.top);
+              const pageHeight = parseFloat(stripStyle.height);
+              const pageBottom = pageTop + pageHeight;
               const visibleText = Array.from(strip.querySelectorAll('p')).some((paragraph) => {
                 const rect = paragraph.getBoundingClientRect();
-                return rect.bottom > viewportRect.top && rect.top < viewportRect.bottom;
+                return rect.bottom > pageTop && rect.top < pageBottom;
               });
               return JSON.stringify({
                 ready: true,
-                top: viewportRect.top,
-                height: viewportRect.height,
-                pageCount: Math.ceil(strip.scrollHeight / Math.max(1, viewportRect.height)),
+                top: pageTop,
+                height: pageHeight,
+                viewportHeight: window.innerHeight,
+                pageCount: Math.ceil(strip.scrollHeight / Math.max(1, pageHeight)),
                 transform: getComputedStyle(strip).transform,
                 visibleText
               });

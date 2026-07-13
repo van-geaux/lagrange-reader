@@ -2,7 +2,7 @@
 
 This document marks the current point where manual app testing can start.
 
-Current reader-padding validation gate: the latest device test predates the stationary-viewport fix and reported that Top/Bottom changes did not move EPUB content. The new build updates the clipped viewport in place and keeps translation on a separate content strip. Treat persistence, visible inset changes, later-page visibility, and repagination as separate device checks; do not mark Top/Bottom padding complete until all pass.
+Current reader-padding validation gate: the clipped-body candidate still rendered the real EPUB blank. The new build restores the older device-known-good visible-overflow page strip and applies Top/Bottom as Android layout padding around the `WebView`, outside the EPUB HTML. Treat initial content, persistence, visible inset changes, later-page visibility, and repagination as separate device checks; do not mark Top/Bottom padding complete until all pass.
 
 ## Start Here
 
@@ -26,7 +26,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, Home-only logo/search/profile actions, the tappable Library name selector, Recommended/Browse tabs, visible status bar/Home spacing, and search layer. It must also validate four independent reader percentage sliders for Top, Bottom, Left, and Right, the 15% defaults, the 100%-equals-25%-viewport mapping, repagination after changing each control, the complete #/A–Z jump rail, series ordering after collapse/expand, session-expiry recovery, and the branded launch state.
 - Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, the placeholder About destination, swipe-down refresh, and persistent cover-thumbnail caching are implemented. Physical-device validation remains required for the new behavior.
-- The latest reader follow-up uses the fixed WebView body as a stationary clipped viewport, translates only an inner content strip, and applies slider changes through an in-page layout API instead of reloading the chapter. This addresses blank translated pages and ineffective vertical clipping in code; physical-device validation remains required.
+- The latest reader follow-up restores the same single visible-overflow strip used before the blank-screen regression. Top/Bottom now resize the Android WebView itself, so vertical padding cannot clip or reparent EPUB content; Left/Right remain in-page updates. Physical-device validation remains required.
 - The July 13 follow-up adds refresh-cookie retry before session-expired recovery, deterministic/retried Series catalog covers with in-memory image caching, immediate Continue reading updates, smaller shared typography, and title/series/index card metadata rows. These changes require physical-device validation.
 
 ## Manual Test Matrix
