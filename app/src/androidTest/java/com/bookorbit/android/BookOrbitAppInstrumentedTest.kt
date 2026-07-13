@@ -45,7 +45,7 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("BookOrbit logo").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Lagrange logo").assertIsDisplayed()
         composeRule.onNodeWithText("Loading your library…").assertIsDisplayed()
     }
 
@@ -171,6 +171,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Options").assertIsDisplayed()
+        composeRule.onNodeWithText("About").assertIsDisplayed()
     }
 
     @Test

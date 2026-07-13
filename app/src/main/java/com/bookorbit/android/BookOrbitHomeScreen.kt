@@ -88,7 +88,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, OPTIONS }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, OPTIONS, ABOUT }
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -176,6 +176,13 @@ internal fun NativeLibraryBrowserScreen(
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
+                },
+                onAbout = {
+                    showMoreMenu = false
+                    destination = BrowserDestination.ABOUT
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
                 }
             )
         }
@@ -250,6 +257,7 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.SERIES -> "Series"
                         destination == BrowserDestination.AUTHORS -> "Authors"
                         destination == BrowserDestination.OPTIONS -> "Options"
+                        destination == BrowserDestination.ABOUT -> "About"
                         else -> "Home"
                     },
                     onSearch = { isSearchOpen = true },
@@ -359,6 +367,10 @@ internal fun NativeLibraryBrowserScreen(
                     onAuthorSelected = { author -> selectedAuthor = author }
                 )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
+                    modifier = Modifier.padding(padding)
+                )
+                destination == BrowserDestination.ABOUT -> AboutScreen(
+                    state = state,
                     modifier = Modifier.padding(padding)
                 )
                 (destination == BrowserDestination.HOME || destination == BrowserDestination.LIBRARY) && query.isNotBlank() -> SearchResults(
@@ -489,7 +501,8 @@ private fun BrowserBottomNavigation(
         NavigationBarItem(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
-                destination == BrowserDestination.OPTIONS,
+                destination == BrowserDestination.OPTIONS ||
+                destination == BrowserDestination.ABOUT,
             onClick = onMore,
             icon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
             label = { Text("More") }
@@ -501,7 +514,8 @@ private fun BrowserBottomNavigation(
 private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
-    onOptions: () -> Unit
+    onOptions: () -> Unit,
+    onAbout: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Text(
@@ -523,6 +537,11 @@ private fun MoreMenu(
             headlineContent = { Text("Options") },
             leadingContent = { Icon(Icons.Default.MoreVert, contentDescription = null) },
             modifier = Modifier.clickable(onClick = onOptions)
+        )
+        ListItem(
+            headlineContent = { Text("About") },
+            leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
+            modifier = Modifier.clickable(onClick = onAbout)
         )
     }
 }
@@ -933,6 +952,38 @@ private fun OptionsScreen(modifier: Modifier) {
         Text(
             "Reader and app options will appear here later.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun AboutScreen(
+    state: BrowserState,
+    modifier: Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        OrbitEyebrow("About")
+        Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "a BookOrbit reader",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Text(
+            "A native Android reader for books hosted on BookOrbit.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+        Text("Connected server", style = MaterialTheme.typography.labelMedium)
+        Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
+        Text(
+            "About details and acknowledgements will be expanded here.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }

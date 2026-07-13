@@ -39,13 +39,18 @@ internal fun BookOrbitTopBar(
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = "BookOrbit logo",
+                    contentDescription = "Lagrange logo",
                     modifier = Modifier.size(28.dp)
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
-                        text = "BOOKORBIT",
+                        text = "LAGRANGE",
                         color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Text(
+                        text = "a BookOrbit reader",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall
                     )
                     Text(text = title, style = MaterialTheme.typography.titleLarge)

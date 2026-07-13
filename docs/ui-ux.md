@@ -61,8 +61,8 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 - [x] Restore the exact in-chapter EPUB page on reopen and restart; physical-device validation remains required.
 - [x] Use the adaptive poster-card grid for library books, matching Series and Authors; physical-device validation remains required.
-- Rename the visible app brand to Lagrange and show the subtitle `a BookOrbit reader`.
-- Add an About destination after Options in the More menu with placeholder content for review.
+- [x] Rename the visible app brand to Lagrange and show the subtitle `a BookOrbit reader`; physical-device branding validation remains required.
+- [x] Add an About destination after Options in the More menu with placeholder content for review.
 
 ### Checkpoint 5: Other media readers - deferred
 

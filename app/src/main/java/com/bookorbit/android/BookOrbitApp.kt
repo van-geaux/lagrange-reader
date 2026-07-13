@@ -186,10 +186,15 @@ private fun LoadingScreen() {
         ) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = "BookOrbit logo",
+                contentDescription = "Lagrange logo",
                 modifier = Modifier.size(96.dp)
             )
-            Text("BookOrbit", style = MaterialTheme.typography.headlineSmall)
+            Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "a BookOrbit reader",
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(
                 "Loading your library…",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
