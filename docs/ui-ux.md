@@ -46,7 +46,7 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens Back, location, chapters, theme, text size, and independent Top/Bottom/Left/Right percentage sliders until Close is tapped. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Device validation is required for typography, page breaks, images, chapter boundaries, tap-zone comfort, independent edge behavior, and default insets before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens Back, location, chapters, theme, text size, and independent Top/Bottom/Left/Right percentage sliders until Close is tapped. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Target-device testing confirms restored content rendering and visible independent edge changes. Typography, page breaks, images, chapter boundaries, and tap-zone comfort still require validation before Checkpoint 4 is complete.
 
 ### Device feedback workplan
 
@@ -112,11 +112,11 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Merge reader progress into Home immediately so Continue reading appears without waiting for a full browser reload or a later page.
 - [x] Remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books.
 - [x] Reduce shared app typography by approximately 10% and organize book card metadata as title, optional series, and series index rows.
-- [ ] Validate visible reader padding during slider movement on the target device; the last known-good visible-overflow strip is restored and Top/Bottom now resize the WebView outside the EPUB HTML, with JVM plus Android WebView regression coverage.
-- [x] Restore visible EPUB chapter content before validating reader padding changes on the device; physical-device validation remains required.
+- [x] Validate visible reader padding during slider movement on the target device; the last known-good visible-overflow strip is restored and Top/Bottom resize the WebView outside the EPUB HTML, with JVM plus Android WebView regression coverage.
+- [x] Restore and validate visible EPUB chapter content before validating reader padding changes on the device.
 - [x] Persist independent reader padding per book/file and flush the final progress update before returning to the browser.
 - [x] Add server-aligned filter controls to Library Browse and Series, with the same title/author/series, read-status, format, and sort controls applied to Local books.
-- [ ] Validate session expiry, catalog thumbnails, typography/card density, metadata wrapping, and reader padding on the physical device.
+- [ ] Validate session expiry, catalog thumbnails, typography/card density, and metadata wrapping on the physical device.
 
 ### Checkpoint 5: Other media readers - deferred
 

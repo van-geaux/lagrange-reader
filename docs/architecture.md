@@ -88,7 +88,7 @@ The current app flow is:
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
-- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. Top/Bottom resize the Android `WebView` outside its HTML content, while Left/Right update the page strip in place; visible target-device confirmation remains open.
+- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. Top/Bottom resize the Android `WebView` outside its HTML content, while Left/Right update the page strip in place; target-device testing confirms visible changes on all four edges.
 - Debug queue counts shown in the browser are scoped to the active server, even when pending updates for other saved servers still exist on disk.
 
 ### Reader implementations
@@ -105,7 +105,7 @@ The current app flow is:
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
-  - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right still update and repaginate the page strip in place. Target-device confirmation remains required.
+  - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right update and repaginate the page strip in place. Target-device testing confirms that EPUB content renders and all four controls visibly update the reading surface.
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed

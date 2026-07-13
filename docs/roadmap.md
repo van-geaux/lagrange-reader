@@ -148,13 +148,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: merge freshly observed reader progress into the browser immediately and include a recently read book even when it was outside the first server page, so Continue reading does not wait for a full reload.
 4. Implemented: remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books while preserving destination identity in the app bar/detail screens.
 5. Implemented: reduce shared Compose typography tokens by approximately 10% and reorganize book card metadata into book title, optional series, and series-index rows.
-6. Implemented in code, but unresolved on device: apply all four reader padding values immediately during slider movement, with an explicit WebView viewport and page-strip height. The latest report says Top/Bottom changes still do not visibly affect the reading surface.
-7. Physical-device validation remains next for session expiry, series thumbnails, Continue reading latency, card density, card row wrapping, and reader padding visibility.
+6. Completed and device-validated: apply all four reader padding values during slider movement. The final implementation resizes the WebView for Top/Bottom and updates the known-good page strip for Left/Right.
+7. Physical-device validation remains next for session expiry, series thumbnails, Continue reading latency, card density, and card row wrapping.
 
 ### Latest device feedback workplan - 2026-07-13 (progress and reader persistence)
 
 1. Implemented: capture reader progress synchronously and flush it before closing the reader; browser bootstrap now syncs queued progress before its first library load so the server and first Home render agree.
-2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file. Unresolved: the latest device report says Top/Bottom changes still do not affect the visible page.
+2. Implemented and device-validated: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file, with visible changes on the reading surface.
 3. Implemented: add a server-aligned filter button to Library Browse and Series, with title/author/series, read-status, format, and sort controls applied locally to Local books as well.
 
 ### Latest device feedback workplan - 2026-07-13 (session refresh follow-up)
@@ -164,14 +164,14 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### Latest device feedback workplan - 2026-07-13 (reader rendering regression)
 
-1. Implemented: restore EPUB chapter content by returning to the previously device-validated translated page-strip geometry while retaining independent padding persistence; physical-device confirmation remains required.
-2. Next validation: verify the four independent reader padding controls now that normal EPUB content renders again.
+1. Completed and device-validated: restore EPUB chapter content by returning to the previously validated translated page-strip geometry while retaining independent padding persistence.
+2. Completed and device-validated: verify that all four independent reader padding controls visibly update the reading surface after normal EPUB rendering is restored.
 
 ### Latest device feedback workplan - 2026-07-13 (padding regression)
 
 1. Previous device blocker: Top and Bottom reader padding values did not visibly affect EPUB text position or repagination even when the sliders moved away from the 15% default.
 2. Superseded after device feedback: clipping the fixed WebView body still produced a blank real EPUB. The current candidate restores the last device-known-good single visible-overflow page strip and moves Top/Bottom padding entirely outside the HTML renderer by resizing the Android `WebView`; Left/Right still update the strip in place. JVM coverage passes, and the Android WebView regression now models the external resize plus translated-page visibility.
-3. Required next validation: install the new debug APK on the target device and verify independent Top/Bottom movement, repagination, later-page visibility, images, swipe/tap navigation, exact resume, offline reopen, and progress sync before marking reader padding complete.
+3. Device result on July 13, 2026: the restored EPUB content renders and the independent padding changes are visible. Reader padding is complete; broader reader regression checks remain covered by the manual matrix.
 
 ## Source of truth
 
