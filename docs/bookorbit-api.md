@@ -81,6 +81,26 @@ Current client request body for the first page:
 
 Subsequent pages use the same body with an incremented `pagination.page` value.
 
+When Library Browse filters are applied, the client adds BookOrbit's standard filter group and sort fields while keeping the same pagination contract. For example:
+
+```json
+{
+  "filter": {
+    "type": "group",
+    "join": "AND",
+    "rules": [
+      { "type": "rule", "field": "title", "operator": "contains", "value": "Dune" },
+      { "type": "rule", "field": "readProgress", "operator": "isInProgress" },
+      { "type": "rule", "field": "format", "operator": "includesAny", "value": ["epub"] }
+    ]
+  },
+  "sort": [{ "field": "lastReadAt", "dir": "desc" }],
+  "pagination": { "page": 0, "size": 50 }
+}
+```
+
+The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Local books use the same controls against cached `BookSummary` metadata instead of sending a request.
+
 Current response shape:
 
 ```json
@@ -126,6 +146,16 @@ POST /api/v1/books/query
 ```
 
 The Android client sends `q`, an empty `sort` list, and pagination capped at 100 results. Search results retain their returned `libraryId` so details and reading actions target the correct library.
+
+### Series catalog filters
+
+Endpoint:
+
+```text
+GET /api/v1/series?q=&page=0&size=100&sort=name&order=asc
+```
+
+The Series filter sheet uses BookOrbit's `completionStatus`, `author`, `libraryId`, `sort`, and `order` query parameters. Completion values are `not_started`, `in_progress`, and `complete`; catalog sort values are `name`, `bookCount`, `lastAddedAt`, and `readProgress`.
 
 ### Book cover
 

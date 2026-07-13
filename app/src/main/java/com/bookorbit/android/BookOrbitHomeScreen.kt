@@ -49,6 +49,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -201,11 +202,11 @@ internal fun NativeLibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
-    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
+    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
-    seriesCatalogLoader: suspend (String?, Int) -> SeriesCatalogPage,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
     catalogImageLoader: suspend (String) -> ByteArray?,
@@ -464,6 +465,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
                     query = "",
+                    libraryOptions = state.libraries,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     imageLoader = catalogImageLoader,
@@ -787,8 +789,9 @@ private fun LibraryPickerScreen(
 @Composable
 private fun SeriesCatalogScreen(
     query: String,
+    libraryOptions: List<LibrarySummary>,
     modifier: Modifier,
-    loader: suspend (String?, Int) -> SeriesCatalogPage,
+    loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
@@ -796,12 +799,14 @@ private fun SeriesCatalogScreen(
     var total by remember(query) { mutableStateOf(0) }
     var nextPage by remember(query) { mutableStateOf(1) }
     var isLoading by remember(query) { mutableStateOf(false) }
+    var filter by remember(query) { mutableStateOf(SeriesCatalogFilter(query = query.takeIf { it.isNotBlank() })) }
+    var showFilter by rememberSaveable(query) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(query) {
+    LaunchedEffect(query, filter) {
         isLoading = true
         if (query.isNotBlank()) delay(300)
-        val page = loader(query.takeIf { it.isNotBlank() }, 0)
+        val page = loader(filter.copy(query = query.takeIf { it.isNotBlank() }), 0)
         items = page.items
         total = page.total ?: page.items.size
         nextPage = 1
@@ -816,10 +821,19 @@ private fun SeriesCatalogScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text(
-                if (total > 0) "$total series" else "Browse every accessible series",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (total > 0) "$total series" else "Browse every accessible series",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(onClick = { showFilter = true }) {
+                    Text(if (filter.isActive) "Filter · active" else "Filter")
+                }
+            }
         }
         if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading series...") }
         if (!isLoading && items.isEmpty()) {
@@ -862,7 +876,10 @@ private fun SeriesCatalogScreen(
                     onClick = {
                         scope.launch {
                             isLoading = true
-                            val page = loader(query.takeIf { it.isNotBlank() }, nextPage)
+                            val page = loader(
+                                filter.copy(query = query.takeIf { it.isNotBlank() }),
+                                nextPage
+                            )
                             items = (items + page.items).distinctBy { it.id }
                             total = page.total ?: total
                             nextPage += 1
@@ -872,6 +889,178 @@ private fun SeriesCatalogScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Load more") }
             }
+        }
+    }
+    if (showFilter) {
+        SeriesFilterSheet(
+            initial = filter,
+            libraries = libraryOptions,
+            onDismiss = { showFilter = false },
+            onApply = {
+                filter = it
+                showFilter = false
+            }
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun BookFilterSheet(
+    initial: BookBrowseFilter,
+    onDismiss: () -> Unit,
+    onApply: (BookBrowseFilter) -> Unit
+) {
+    var draft by remember(initial) { mutableStateOf(initial) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Filter books", style = MaterialTheme.typography.titleLarge)
+            Text("These controls map to BookOrbit's readProgress, format, and sort fields.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = draft.title.orEmpty(),
+                onValueChange = { draft = draft.copy(title = it) },
+                label = { Text("Title contains") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = draft.author.orEmpty(),
+                onValueChange = { draft = draft.copy(author = it) },
+                label = { Text("Author contains") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = draft.series.orEmpty(),
+                onValueChange = { draft = draft.copy(series = it) },
+                label = { Text("Series contains") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text("Reading status", style = MaterialTheme.typography.titleMedium)
+            FilterChoiceRow(
+                options = BookReadFilter.entries,
+                selected = draft.readStatus,
+                label = { it.label },
+                onSelected = { draft = draft.copy(readStatus = it) }
+            )
+            Text("Format", style = MaterialTheme.typography.titleMedium)
+            FilterChoiceRow(
+                options = BookFormatFilter.entries,
+                selected = draft.format,
+                label = { it.label },
+                onSelected = { draft = draft.copy(format = it) }
+            )
+            Text("Sort", style = MaterialTheme.typography.titleMedium)
+            FilterChoiceRow(
+                options = BookSortOption.entries,
+                selected = draft.sort,
+                label = { it.label },
+                onSelected = { draft = draft.copy(sort = it) }
+            )
+            if (draft.sort != BookSortOption.SERVER_DEFAULT) {
+                FilterChoiceRow(
+                    options = SortDirection.entries,
+                    selected = draft.direction,
+                    label = { it.label },
+                    onSelected = { draft = draft.copy(direction = it) }
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { draft = BookBrowseFilter() }) { Text("Reset") }
+                Button(onClick = { onApply(draft) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun SeriesFilterSheet(
+    initial: SeriesCatalogFilter,
+    libraries: List<LibrarySummary>,
+    onDismiss: () -> Unit,
+    onApply: (SeriesCatalogFilter) -> Unit
+) {
+    var draft by remember(initial) { mutableStateOf(initial) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Filter series", style = MaterialTheme.typography.titleLarge)
+            Text("These controls map to BookOrbit's completionStatus, author, and series sort fields.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = draft.author.orEmpty(),
+                onValueChange = { draft = draft.copy(author = it) },
+                label = { Text("Author") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (libraries.isNotEmpty()) {
+                Text("Library", style = MaterialTheme.typography.titleMedium)
+                val libraryIds = listOf<String?>(null) + libraries.map { it.id }
+                FilterChoiceRow(
+                    options = libraryIds,
+                    selected = draft.libraryId,
+                    label = { id -> libraries.firstOrNull { it.id == id }?.name ?: "All libraries" },
+                    onSelected = { draft = draft.copy(libraryId = it) }
+                )
+            }
+            Text("Completion", style = MaterialTheme.typography.titleMedium)
+            FilterChoiceRow(
+                options = SeriesCompletionFilter.entries,
+                selected = draft.completion,
+                label = { it.label },
+                onSelected = { draft = draft.copy(completion = it) }
+            )
+            Text("Sort", style = MaterialTheme.typography.titleMedium)
+            FilterChoiceRow(
+                options = SeriesSortOption.entries,
+                selected = draft.sort,
+                label = { it.label },
+                onSelected = { draft = draft.copy(sort = it) }
+            )
+            FilterChoiceRow(
+                options = SortDirection.entries,
+                selected = draft.direction,
+                label = { it.label },
+                onSelected = { draft = draft.copy(direction = it) }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { draft = SeriesCatalogFilter(query = draft.query) }) { Text("Reset") }
+                Button(onClick = { onApply(draft) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> FilterChoiceRow(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelected: (T) -> Unit
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { option ->
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelected(option) },
+                label = { Text(label(option)) }
+            )
         }
     }
 }
@@ -1514,7 +1703,7 @@ private fun LibraryContentScreen(
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
+    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
@@ -1587,7 +1776,7 @@ private fun PullToRefreshLayout(
 private fun LibraryBrowseScreen(
     state: BrowserState,
     modifier: Modifier,
-    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
+    libraryBooksLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
@@ -1598,13 +1787,26 @@ private fun LibraryBrowseScreen(
     var seriesTotal by remember(libraryId) { mutableStateOf(state.booksSeriesTotal) }
     var nextPage by remember(libraryId) { mutableStateOf((state.booksPage + 1).coerceAtLeast(1)) }
     var isLoadingMore by remember(libraryId) { mutableStateOf(false) }
+    var filter by remember(libraryId) { mutableStateOf(BookBrowseFilter()) }
+    var showFilter by rememberSaveable(libraryId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksSeriesTotal, state.booksPage) {
-        books = state.books
-        total = state.booksTotal ?: state.books.size
-        seriesTotal = state.booksSeriesTotal
-        nextPage = (state.booksPage + 1).coerceAtLeast(1)
+    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksSeriesTotal, state.booksPage, filter) {
+        if (filter == BookBrowseFilter() && state.books.isNotEmpty()) {
+            books = state.books
+            total = state.booksTotal ?: state.books.size
+            seriesTotal = state.booksSeriesTotal
+            nextPage = (state.booksPage + 1).coerceAtLeast(1)
+            return@LaunchedEffect
+        }
+        if (libraryId == null) return@LaunchedEffect
+        isLoadingMore = true
+        val page = libraryBooksLoader(libraryId, 0, filter)
+        books = page.items
+        total = page.total ?: page.items.size
+        seriesTotal = page.seriesTotal
+        nextPage = 1
+        isLoadingMore = false
     }
 
     LibraryBooks(
@@ -1621,11 +1823,13 @@ private fun LibraryBrowseScreen(
         totalBooks = total,
         totalSeries = seriesTotal,
         isLoadingMore = isLoadingMore,
+        filter = filter,
+        onFilterClick = { showFilter = true },
         onLoadMore = {
             if (libraryId != null && !isLoadingMore && books.size < total) {
                 scope.launch {
                     isLoadingMore = true
-                    val page = libraryBooksLoader(libraryId, nextPage)
+                    val page = libraryBooksLoader(libraryId, nextPage, filter)
                     val existingIds = books.mapTo(mutableSetOf()) { it.id }
                     books = books + page.items.filter { existingIds.add(it.id) }
                     total = page.total ?: total
@@ -1636,6 +1840,16 @@ private fun LibraryBrowseScreen(
             }
         }
     )
+    if (showFilter) {
+        BookFilterSheet(
+            initial = filter,
+            onDismiss = { showFilter = false },
+            onApply = {
+                filter = it
+                showFilter = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -1651,7 +1865,9 @@ private fun LibraryBooks(
     totalBooks: Int? = null,
     totalSeries: Int? = null,
     isLoadingMore: Boolean = false,
-    onLoadMore: () -> Unit = {}
+    onLoadMore: () -> Unit = {},
+    filter: BookBrowseFilter? = null,
+    onFilterClick: (() -> Unit)? = null
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
@@ -1738,6 +1954,12 @@ private fun LibraryBooks(
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (onFilterClick != null) {
+                    val filterAction = onFilterClick
+                    OutlinedButton(onClick = filterAction) {
+                        Text(if (filter?.isActive == true) "Filter · active" else "Filter")
+                    }
                 }
                 if (allowSeriesCollapse && seriesKeys.isNotEmpty()) {
                     TextButton(
@@ -1855,9 +2077,14 @@ private fun LocalBooksScreen(
     val books by produceState<List<BookSummary>?>(initialValue = null) {
         value = loader()
     }
+    var filter by remember { mutableStateOf(BookBrowseFilter()) }
+    var showFilter by rememberSaveable { mutableStateOf(false) }
+    val filteredBooks = remember(books, filter) {
+        filterAndSortLocalBooks(books.orEmpty(), filter)
+    }
     LibraryBooks(
         state = state.copy(
-            books = books.orEmpty(),
+            books = filteredBooks,
             isLoadingBooks = books == null,
             message = null,
             isOfflineSnapshot = false
@@ -1867,8 +2094,21 @@ private fun LocalBooksScreen(
         onBookSelected = onBookSelected,
         titleOverride = "Local books",
         emptyMessage = "No local books found.",
-        allowSeriesCollapse = false
+        allowSeriesCollapse = false,
+        totalBooks = filteredBooks.size,
+        filter = filter,
+        onFilterClick = { showFilter = true }
     )
+    if (showFilter) {
+        BookFilterSheet(
+            initial = filter,
+            onDismiss = { showFilter = false },
+            onApply = {
+                filter = it
+                showFilter = false
+            }
+        )
+    }
 }
 
 @Composable

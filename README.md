@@ -17,7 +17,7 @@ Working prototype (`0.2.0`, pre-1.0). The app shell, API wiring, local download 
 
 ## Build
 
-The current 0.2.0 pass also retries authenticated requests through a refresh-cookie renewal attempt before returning to login, retries and caches catalog thumbnails, updates Continue reading immediately after reading, flushes reader progress before the browser refreshes, uses more compact typography, and lays out book cards as title/series/index metadata rows. EPUB reader padding is stored independently per book/file and restored after close/reopen; the page strip clips to the configured viewport insets so Top and Bottom changes are visible. The refresh endpoint, long-lived session behavior, and physical padding behavior still need device validation against the target BookOrbit server.
+The current 0.2.0 pass also retries authenticated requests through a refresh-cookie renewal attempt before returning to login, retries and caches catalog thumbnails, updates Continue reading immediately after reading, flushes reader progress before the browser refreshes, and exposes server-aligned filters in Library Browse and Series with matching local filtering for Local books. It uses more compact typography and lays out book cards as title/series/index metadata rows. EPUB reader padding is stored independently per book/file and restored after close/reopen; the page strip clips to the configured viewport insets so Top and Bottom changes are visible. The refresh endpoint, long-lived session behavior, filter responses, and physical padding behavior still need device validation against the target BookOrbit server.
 
 From the project root:
 

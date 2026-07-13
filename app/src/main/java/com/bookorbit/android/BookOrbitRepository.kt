@@ -87,8 +87,15 @@ interface BookOrbitDataSource {
         val books = loadBooks(libraryId)
         return LibraryBooksPage(items = books, total = books.size, page = 0, size = books.size)
     }
+    suspend fun loadBooksPage(
+        libraryId: String,
+        page: Int,
+        filter: BookBrowseFilter
+    ): LibraryBooksPage = loadBooksPage(libraryId, page)
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
+    suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
+        loadSeriesCatalog(filter.query, page)
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
     suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
     suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
@@ -203,9 +210,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage = withContext(Dispatchers.IO) {
+        loadBooksPage(libraryId, page, BookBrowseFilter())
+    }
+
+    override suspend fun loadBooksPage(
+        libraryId: String,
+        page: Int,
+        filter: BookBrowseFilter
+    ): LibraryBooksPage = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val body = JSONObject().apply {
-            put("sort", JSONArray())
+            put("sort", JSONArray().apply {
+                filter.sort.serverField?.let { field ->
+                    put(JSONObject().put("field", field).put("dir", filter.direction.serverValue))
+                }
+            })
+            filter.toServerFilter()?.let { put("filter", it) }
             put("pagination", JSONObject().apply {
                 put("page", page)
                 put("size", LIBRARY_PAGE_SIZE)
@@ -258,17 +278,34 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             }
     }
 
-    override suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage = withContext(Dispatchers.IO) {
+    override suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage =
+        loadSeriesCatalog(SeriesCatalogFilter(query = query), page)
+
+    override suspend fun loadSeriesCatalog(
+        filter: SeriesCatalogFilter,
+        page: Int
+    ): SeriesCatalogPage = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val serverBase = serverBase()
-        val path = catalogPath("/api/v1/series", query, page, "name")
+        val path = catalogPath(
+            path = "/api/v1/series",
+            query = filter.query,
+            page = page,
+            sort = filter.sort.serverField,
+            order = filter.direction.serverValue,
+            extra = buildList {
+                filter.author?.trim()?.takeIf { it.isNotBlank() }?.let { add("author" to it) }
+                filter.libraryId?.trim()?.takeIf { it.isNotBlank() }?.let { add("libraryId" to it) }
+                filter.completion.serverValue?.let { add("completionStatus" to it) }
+            }
+        )
         try {
             val payload = request(path, "GET", null)
-            catalogSnapshotStore.saveSeries(serverUrl, query, page, payload)
+            catalogSnapshotStore.saveSeries(serverUrl, filter.query, page, payload)
             BookOrbitPayloadParser.parseSeriesCatalogPage(payload, serverBase)
         } catch (error: Throwable) {
             if (error is AuthenticationRequiredException) throw error
-            catalogSnapshotStore.readSeries(serverUrl, query, page)?.let { cached ->
+            if (!filter.isActive) catalogSnapshotStore.readSeries(serverUrl, filter.query, page)?.let { cached ->
                 return@withContext BookOrbitPayloadParser.parseSeriesCatalogPage(cached, serverBase)
             }
             throw error
@@ -921,7 +958,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         path: String,
         query: String?,
         page: Int,
-        sort: String
+        sort: String,
+        order: String = "asc",
+        extra: List<Pair<String, String>> = emptyList()
     ): String {
         val encodedQuery = query?.trim()?.takeIf { it.isNotBlank() }
             ?.let { java.net.URLEncoder.encode(it, Charsets.UTF_8.name()) }
@@ -931,10 +970,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             append(page.coerceAtLeast(0))
             append("&size=100&sort=")
             append(sort)
-            append("&order=asc")
+            append("&order=")
+            append(order)
             if (encodedQuery != null) {
-                append("&search=")
+                append("&q=")
                 append(encodedQuery)
+            }
+            extra.forEach { (key, value) ->
+                append('&')
+                append(key)
+                append('=')
+                append(java.net.URLEncoder.encode(value, Charsets.UTF_8.name()))
             }
         }
     }

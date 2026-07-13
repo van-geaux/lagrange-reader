@@ -68,6 +68,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add loading, empty, and error states for libraries
 - [x] Add loading, empty, and error states for books
 - [x] Add pull-to-refresh or equivalent refresh UX
+- [x] Add server-aligned filters to Library Browse and Series, with matching local filters for Local books
 - [x] Cache last successful library/book snapshot locally
 
 ## 5. Book Metadata Mapping

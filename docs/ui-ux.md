@@ -113,6 +113,8 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books.
 - [x] Reduce shared app typography by approximately 10% and organize book card metadata as title, optional series, and series index rows.
 - [x] Apply reader padding changes immediately during slider movement and render an explicit viewport/page height so Top and Bottom changes affect pagination visibly.
+- [x] Persist independent reader padding per book/file and flush the final progress update before returning to the browser.
+- [x] Add server-aligned filter controls to Library Browse and Series, with the same title/author/series, read-status, format, and sort controls applied to Local books.
 - [ ] Validate session expiry, catalog thumbnails, typography/card density, metadata wrapping, and reader padding on the physical device.
 
 ### Checkpoint 5: Other media readers - deferred

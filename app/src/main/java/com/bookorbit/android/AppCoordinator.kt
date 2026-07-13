@@ -37,6 +37,14 @@ class AppCoordinator(
             repository.loadBooksPage(libraryId, page)
         }
 
+    suspend fun loadLibraryBooksPage(
+        libraryId: String,
+        page: Int,
+        filter: BookBrowseFilter
+    ): LibraryBooksPage = loadWithSessionRecovery(LibraryBooksPage(page = page)) {
+        repository.loadBooksPage(libraryId, page, filter)
+    }
+
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = loadWithSessionRecovery(null) {
         repository.loadBookDetail(book)
     }
@@ -48,6 +56,11 @@ class AppCoordinator(
     suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage =
         loadWithSessionRecovery(SeriesCatalogPage()) {
             repository.loadSeriesCatalog(query, page)
+        }
+
+    suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
+        loadWithSessionRecovery(SeriesCatalogPage()) {
+            repository.loadSeriesCatalog(filter, page)
         }
 
     suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage =

@@ -155,7 +155,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 1. Implemented: capture reader progress synchronously and flush it before closing the reader; browser bootstrap now syncs queued progress before its first library load so the server and first Home render agree.
 2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file and clip the page strip to the configured viewport insets so Top and Bottom changes affect the visible page.
-3. Active next: add a server-aligned filter button to Library Browse and Series, with the same common filter controls applied locally to Local books.
+3. Implemented: add a server-aligned filter button to Library Browse and Series, with title/author/series, read-status, format, and sort controls applied locally to Local books as well.
 
 ## Source of truth
 
