@@ -84,6 +84,12 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: rename the visible app brand to `Lagrange` and add the subtitle `a BookOrbit reader` to the logo/launch presentation. BookOrbit remains the connected server/product name; physical-device branding validation remains required.
 4. Implemented: add an About destination after Options in the More menu, using placeholder app/version/server information until the About content is reviewed.
 
+## Latest device feedback workplan — 2026-07-13 (continued)
+
+1. Implemented: show the `a BookOrbit reader` subtitle only on the splash/loading presentation; the opened app top bar and About screen now show the Lagrange name without the subtitle. Physical-device presentation validation remains required.
+2. Implemented: add a Libraries content control that collapses books belonging to the same series into one representative series card, with a Show all action to restore the full book grid; physical-device validation remains required.
+3. Implemented: add Local books to More immediately before Options, loading valid downloaded titles from local storage and presenting them with the same poster-card grid.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

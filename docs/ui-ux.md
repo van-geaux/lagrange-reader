@@ -64,6 +64,12 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Rename the visible app brand to Lagrange and show the subtitle `a BookOrbit reader`; physical-device branding validation remains required.
 - [x] Add an About destination after Options in the More menu with placeholder content for review.
 
+### Continued device feedback workplan — 2026-07-13
+
+- [x] Show the `a BookOrbit reader` subtitle only on the splash/loading presentation; omit it from the opened-app top bar and About screen.
+- [x] Add a Libraries series-collapse control that reduces each series to a representative card and restores the full book grid.
+- [x] Add Local books immediately before Options in More, using the shared poster-card grid for valid downloaded files.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

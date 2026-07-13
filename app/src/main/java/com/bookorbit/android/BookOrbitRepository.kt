@@ -59,6 +59,7 @@ interface BookOrbitDataSource {
     suspend fun login(username: String, password: String)
     suspend fun loadLibraries(): List<LibrarySummary>
     suspend fun loadBooks(libraryId: String): List<BookSummary>
+    suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
     suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
@@ -178,6 +179,35 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 books = books
             )
         }
+    }
+
+    override suspend fun loadLocalBooks(): List<BookSummary> = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl)
+        val snapshotBooks = browserSnapshotStore.read(serverUrl)
+            ?.booksByLibraryId
+            ?.values
+            ?.flatten()
+            .orEmpty()
+        downloads
+            .sortedByDescending { it.downloadedAtMillis }
+            .map { record ->
+                val snapshotBook = snapshotBooks.firstOrNull { book ->
+                    book.id == record.bookId || book.fileId == record.fileId
+                }
+                snapshotBook?.copy(
+                    fileId = snapshotBook.fileId ?: record.fileId,
+                    localPath = record.localPath
+                ) ?: BookSummary(
+                    libraryId = "",
+                    id = record.bookId,
+                    fileId = record.fileId,
+                    title = record.title,
+                    format = record.mimeType,
+                    mediaKind = record.mediaKind,
+                    localPath = record.localPath
+                )
+            }
     }
 
     override suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage = withContext(Dispatchers.IO) {

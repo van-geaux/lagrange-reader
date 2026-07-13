@@ -3,9 +3,11 @@ package com.bookorbit.android
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import java.io.File
@@ -167,11 +169,52 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Search").performClick()
         composeRule.onNodeWithText("Search your library").assertIsDisplayed()
         composeRule.onNodeWithText("Back").performClick()
+        composeRule.onAllNodesWithText("a BookOrbit reader").assertCountEquals(0)
         composeRule.onNodeWithText("More").performClick()
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
+        composeRule.onNodeWithText("Local books").assertIsDisplayed()
         composeRule.onNodeWithText("Options").assertIsDisplayed()
         composeRule.onNodeWithText("About").assertIsDisplayed()
+    }
+
+    @Test
+    fun librarySeriesCanCollapseAndExpand() {
+        val first = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Series Book One",
+            seriesId = "series-1",
+            seriesName = "Test Series",
+            seriesIndex = 1.0,
+            mediaKind = MediaKind.EPUB
+        )
+        val second = first.copy(id = "book-2", fileId = "file-2", title = "Series Book Two", seriesIndex = 2.0)
+        val dataSource = InstrumentedFakeDataSource().apply { loadBooksResult = listOf(first, second) }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(first, second)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Main").performClick()
+        composeRule.onNodeWithText("Collapse series").performClick()
+        composeRule.onNodeWithText("Test Series").assertIsDisplayed()
+        composeRule.onNodeWithText("Show all").performClick()
+        composeRule.onNodeWithText("Series Book Two").assertIsDisplayed()
     }
 
     @Test
@@ -223,6 +266,7 @@ class BookOrbitAppInstrumentedTest {
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var clearServerCalls = 0
     var loadBooksResult: List<BookSummary> = emptyList()
+    var localBooksResult: List<BookSummary> = emptyList()
 
     override suspend fun getServerUrl(): String? = null
     override suspend fun setServerUrl(serverUrl: String) = Unit
@@ -236,6 +280,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun login(username: String, password: String) = Unit
     override suspend fun loadLibraries(): List<LibrarySummary> = emptyList()
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
+    override suspend fun loadLocalBooks(): List<BookSummary> = localBooksResult
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)
     override suspend fun saveActiveReader(book: BookSummary) = Unit

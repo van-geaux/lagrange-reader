@@ -88,7 +88,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, OPTIONS, ABOUT }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -105,6 +105,7 @@ internal fun NativeLibraryBrowserScreen(
     onSignOut: () -> Unit,
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
+    localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
@@ -166,6 +167,13 @@ internal fun NativeLibraryBrowserScreen(
                 onAuthors = {
                     showMoreMenu = false
                     destination = BrowserDestination.AUTHORS
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
+                },
+                onLocalBooks = {
+                    showMoreMenu = false
+                    destination = BrowserDestination.LOCAL_BOOKS
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
@@ -256,6 +264,7 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.LIBRARY -> "Libraries"
                         destination == BrowserDestination.SERIES -> "Series"
                         destination == BrowserDestination.AUTHORS -> "Authors"
+                        destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
                         destination == BrowserDestination.OPTIONS -> "Options"
                         destination == BrowserDestination.ABOUT -> "About"
                         else -> "Home"
@@ -366,6 +375,16 @@ internal fun NativeLibraryBrowserScreen(
                     imageLoader = catalogImageLoader,
                     onAuthorSelected = { author -> selectedAuthor = author }
                 )
+                destination == BrowserDestination.LOCAL_BOOKS -> LocalBooksScreen(
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    loader = localBooksLoader,
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        detailReturnDestination = BrowserDestination.LOCAL_BOOKS
+                        selectedBook = book
+                    }
+                )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     modifier = Modifier.padding(padding)
                 )
@@ -416,6 +435,10 @@ internal fun NativeLibraryBrowserScreen(
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedBook = book
+                    },
+                    onSeriesSelected = { seriesKey ->
+                        detailReturnDestination = BrowserDestination.LIBRARY
+                        selectedSeriesKey = seriesKey
                     }
                 )
             }
@@ -501,6 +524,7 @@ private fun BrowserBottomNavigation(
         NavigationBarItem(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
+                destination == BrowserDestination.LOCAL_BOOKS ||
                 destination == BrowserDestination.OPTIONS ||
                 destination == BrowserDestination.ABOUT,
             onClick = onMore,
@@ -514,6 +538,7 @@ private fun BrowserBottomNavigation(
 private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
+    onLocalBooks: () -> Unit,
     onOptions: () -> Unit,
     onAbout: () -> Unit
 ) {
@@ -532,6 +557,11 @@ private fun MoreMenu(
             headlineContent = { Text("Authors") },
             leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
             modifier = Modifier.clickable(onClick = onAuthors)
+        )
+        ListItem(
+            headlineContent = { Text("Local books") },
+            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            modifier = Modifier.clickable(onClick = onLocalBooks)
         )
         ListItem(
             headlineContent = { Text("Options") },
@@ -871,7 +901,8 @@ private fun BookPosterCard(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit,
     showSeriesIndex: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    displayTitle: String = book.title
 ) {
     val status = when {
         !enabled -> "Unavailable offline"
@@ -887,7 +918,7 @@ private fun BookPosterCard(
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 contentDescription = buildString {
-                    append(book.title)
+                    append(displayTitle)
                     status?.let { append(", $it") }
                 }
                 if (!enabled) disabled()
@@ -905,7 +936,7 @@ private fun BookPosterCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Text(
-                    book.title,
+                    displayTitle,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -967,11 +998,6 @@ private fun AboutScreen(
     ) {
         OrbitEyebrow("About")
         Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "a BookOrbit reader",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
         Text(
             "A native Android reader for books hosted on BookOrbit.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1313,9 +1339,39 @@ private fun LibraryBooks(
     state: BrowserState,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit = {},
+    titleOverride: String? = null,
+    eyebrow: String = "Library",
+    emptyMessage: String = "No books found.",
+    allowSeriesCollapse: Boolean = true
 ) {
-    val title = state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name ?: "Library"
+    val title = titleOverride
+        ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
+        ?: "Library"
+    var seriesCollapsed by rememberSaveable(title) { mutableStateOf(false) }
+    val seriesKeys = state.books
+        .mapNotNull { it.seriesId ?: it.seriesName }
+        .filter { it.isNotBlank() }
+        .distinct()
+    val displayedBooks: List<Pair<BookSummary, String?>> = if (allowSeriesCollapse && seriesCollapsed) {
+        buildList<Pair<BookSummary, String?>> {
+            state.books.groupBy { it.seriesId ?: it.seriesName }
+                .forEach { (seriesKey, books) ->
+                    if (seriesKey.isNullOrBlank()) {
+                        addAll(books.map { it to null })
+                    } else {
+                        val representative = books.minWithOrNull(
+                            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                                .thenBy { it.title }
+                        ) ?: return@forEach
+                        add(Pair(representative, seriesKey))
+                    }
+                }
+        }
+    } else {
+        state.books.map { Pair(it, null) }
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 140.dp),
         modifier = modifier.fillMaxSize(),
@@ -1324,13 +1380,35 @@ private fun LibraryBooks(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OrbitEyebrow("Library")
-                Text(title, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "${state.books.size} ${if (state.books.size == 1) "book" else "books"}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OrbitEyebrow(eyebrow)
+                    Text(title, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        buildString {
+                            append("${state.books.size} ${if (state.books.size == 1) "book" else "books"}")
+                            if (seriesKeys.isNotEmpty()) append(" · ${seriesKeys.size} series")
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (allowSeriesCollapse && seriesKeys.isNotEmpty()) {
+                    TextButton(
+                        onClick = { seriesCollapsed = !seriesCollapsed },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
+                        }
+                    ) {
+                        Text(if (seriesCollapsed) "Show all" else "Collapse series")
+                    }
+                }
             }
         }
         if (state.isLoadingBooks) {
@@ -1346,19 +1424,50 @@ private fun LibraryBooks(
         }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        gridItems(state.books, key = { "library-book-${it.id}" }) { book ->
+        gridItems(displayedBooks, key = { (book, seriesKey) -> "library-book-${book.id}-${seriesKey ?: "single"}" }) { (book, seriesKey) ->
             val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
             BookPosterCard(
                 book = book,
                 coverLoader = coverLoader,
                 enabled = !unavailableOffline,
-                onClick = { onBookSelected(book) }
+                displayTitle = if (seriesKey != null) book.seriesName ?: "Series" else book.title,
+                onClick = {
+                    if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
+                }
             )
         }
     }
+}
+
+@Composable
+private fun LocalBooksScreen(
+    state: BrowserState,
+    modifier: Modifier,
+    loader: suspend () -> List<BookSummary>,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit
+) {
+    val books by produceState<List<BookSummary>?>(initialValue = null) {
+        value = loader()
+    }
+    LibraryBooks(
+        state = state.copy(
+            books = books.orEmpty(),
+            isLoadingBooks = books == null,
+            message = null,
+            isOfflineSnapshot = false
+        ),
+        modifier = modifier,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
+        titleOverride = "Local books",
+        eyebrow = "On this device",
+        emptyMessage = "No local books found.",
+        allowSeriesCollapse = false
+    )
 }
 
 @Composable

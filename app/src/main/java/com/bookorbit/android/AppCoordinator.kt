@@ -28,6 +28,10 @@ class AppCoordinator(
         repository.loadBookCover(book)
     }.getOrNull()
 
+    suspend fun loadLocalBooks(): List<BookSummary> = runCatching {
+        repository.loadLocalBooks()
+    }.getOrDefault(emptyList())
+
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = runCatching {
         repository.loadBookDetail(book)
     }.getOrNull()

@@ -225,6 +225,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Render library books with the same adaptive poster cards used by Series and Authors
 - [x] Rename visible app branding to Lagrange with the subtitle "a BookOrbit reader"
 - [x] Add an About destination after Options in the More menu
+- [x] Show the Lagrange subtitle only on the splash/loading presentation
+- [x] Add a Libraries control to collapse series into representative cards and restore all books
+- [x] Add Local books before Options in the More menu
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

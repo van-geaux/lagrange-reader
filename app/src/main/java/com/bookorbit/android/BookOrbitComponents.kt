@@ -48,11 +48,6 @@ internal fun BookOrbitTopBar(
                         color = MaterialTheme.colorScheme.secondary,
                         style = MaterialTheme.typography.labelSmall
                     )
-                    Text(
-                        text = "a BookOrbit reader",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall
-                    )
                     Text(text = title, style = MaterialTheme.typography.titleLarge)
                 }
             }

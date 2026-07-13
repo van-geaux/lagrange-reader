@@ -23,7 +23,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
-- Exact in-chapter EPUB restore, poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader`, and the placeholder About destination after Options in More are implemented. Physical-device validation remains required for the new behavior.
+- Exact in-chapter EPUB restore, poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, and the placeholder About destination are implemented. Physical-device validation remains required for the new behavior.
 
 ## Manual Test Matrix
 
@@ -51,25 +51,26 @@ Current Compose instrumentation coverage includes server setup validation, login
 1. Install the latest debug APK on a physical Android device.
 2. Confirm the launcher icon is the app-specific adaptive icon instead of the Android default placeholder.
 3. Launch the app from the device home screen and confirm the branded adaptive-icon splash/loading state appears without the old spinning loading screen; verify first-run setup still works.
-4. Confirm the launcher/app label is Lagrange and the top/loading presentation shows the subtitle `a BookOrbit reader`.
+4. Confirm the launcher/app label is Lagrange and the splash/loading presentation shows the subtitle `a BookOrbit reader`; after the app opens, confirm the top bar and About screen do not show that subtitle.
 
 ### 2. Library Browsing
 
 1. Confirm the post-login screen opens on Home with the visible Android status bar, intentional top spacing, bottom navigation, and search icon visible.
-2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, Options, and About expand from it. Open Libraries and verify the top-level library view and top library-change control.
-3. Select a library child and confirm its books load as adaptive poster cards matching the Series and Authors grids, with metadata and download actions still available.
-4. Return Home and confirm shelves only appear when they contain matching books.
-5. Confirm Currently reading is the first book shelf, active progress is shown there, completed books are excluded from it, and Recently read books remains a separate history shelf.
-6. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
-7. Confirm real book covers load on Home, search results, library lists, and detail screens.
-8. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
-9. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
-10. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
-11. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work; use Preview separately and confirm normal progress is unchanged.
-12. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
-13. Confirm the top logo, search icon/search layer, and profile menu are present; live profile action shows Log out and cached offline profile action shows Sign in.
-14. Confirm the Android status bar remains visible and Home content has comfortable top spacing below it.
-15. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
+2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, Local books, Options, and About appear in that order. Open Libraries and verify the top-level library view and top library-change control.
+3. Select a library child and confirm its books load as adaptive poster cards matching the Series and Authors grids, with metadata and download actions still available. When series are present, tap Collapse series and confirm one representative card remains per series, then tap Show all and confirm every book returns.
+4. Open More > Local books and confirm valid downloads appear in the same poster-card grid, open locally, and can still be deleted from book details.
+5. Return Home and confirm shelves only appear when they contain matching books.
+6. Confirm Currently reading is the first book shelf, active progress is shown there, completed books are excluded from it, and Recently read books remains a separate history shelf.
+7. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
+8. Confirm real book covers load on Home, search results, library lists, and detail screens.
+9. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
+10. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
+11. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.
+12. From book details, use Read or Continue reading to enter the reader and verify Download/Delete local still work; use Preview separately and confirm normal progress is unchanged.
+13. Confirm Android Back returns from book details to series details when appropriate, then to Home or Libraries.
+14. Confirm the top logo, search icon/search layer, and profile menu are present; live profile action shows Log out and cached offline profile action shows Sign in.
+15. Confirm the Android status bar remains visible and Home content has comfortable top spacing below it.
+16. Refresh the browser and confirm loading, empty, offline, and error states behave sensibly.
 
 ### 3. Reading And Listening
 
