@@ -1,6 +1,21 @@
 # Handover
 
-Last updated: 2026-07-11
+Last updated: 2026-07-13
+
+## Latest user-reported blocker: Top/Bottom reader padding
+
+The user reports that changing the EPUB reader's Top and Bottom padding values still does not visibly move the rendered chapter content or change the usable reading area. The reader content is now expected to render, but this padding behavior remains unresolved and blocks meaningful padding validation.
+
+Reproduction on the latest debug APK:
+
+1. Open a readable EPUB.
+2. Tap the center to open reader options.
+3. Move Top or Bottom a large distance away from the 15% default.
+4. Observe the chapter text and repagination.
+
+Expected: the selected edge changes independently, the text inset changes visibly, and the chapter repaginates while the options remain open. Actual: the Top/Bottom change is not reflected on the reading surface. Do not mark this item complete until it is verified on the target device with visible content.
+
+Relevant implementation locations are `EpubReaderView` and `styleEpubHtml` in `BookOrbitApp.kt`, plus `EpubReaderPaddingStore.kt`. Padding persistence and padding application are separate concerns: reopening a book may retain the stored value while the rendered Top/Bottom inset still fails to change.
 
 ## Repository
 
@@ -37,6 +52,7 @@ Last updated: 2026-07-11
   - book details now load BookOrbit's full detail payload and render subtitle, creators, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata when available
   - series details now load the complete ordered server series with authors, book/read counts, completion, possible gaps, and first-book synopsis instead of relying on the current shelf page
   - series requests now respect BookOrbit's 100-item maximum and merge additional pages; the previous 200-item request was rejected by the server and caused blank series details
+  - Accel World pagination now returns the complete 27-book series in the expected order, with distinct-ID and mismatch coverage in the pagination tests
   - series details also show genre/tag context from the first book
   - Back from a book opened inside a series now returns to that series before leaving the detail flow
   - Series Details and Author Details now use adaptive poster-card grids with full-width headers, series numbers, progress strips, read/in-progress states, and offline markers
@@ -174,8 +190,8 @@ Last updated: 2026-07-11
 
 ## Highest-priority next steps
 
-1. Validate the latest EPUB full-viewport pagination fix and left/right swipe navigation on the real sample, including visible text/images, page totals, chapter boundaries, repagination, offline images, progress sync, and chapter restore.
-2. Run the complete automated and device regression matrix for native login/session recovery, offline catalogs, Preview isolation, all 27 Accel World books, and server-forced session expiry.
+1. Fix and validate Top/Bottom EPUB reader padding on the real sample, including visible text/image inset changes and repagination; then recheck full-viewport pagination, left/right swipes, chapter boundaries, offline images, progress sync, and chapter restore.
+2. Run the complete automated and device regression matrix for native login/session recovery, offline catalogs, Preview isolation, and server-forced session expiry.
 3. Continue UI refinement for the approved dark-first design direction, including description density, accessibility, and large-text behavior.
 4. Defer format-specific audiobook, PDF, and CBZ visual validation until representative samples are available.
 

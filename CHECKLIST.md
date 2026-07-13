@@ -160,7 +160,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
 - [x] Fix blank/black EPUB reader surface and restore visible chapter content; physical-device validation remains required
-- [x] Add independently applied percentage padding controls for all EPUB reader edges
+- [ ] Apply Top/Bottom EPUB padding visibly and repaginate; the latest device report says these changes are not reflected on the reading surface
 - [x] Persist independent EPUB padding values across reader close/reopen
 - [x] Flush the final reader progress before browser refresh and sync pending progress before first Home load
 - [x] Keep reader options open until the explicit Close action is tapped
@@ -265,7 +265,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
 - [x] Reduce app typography tokens by approximately 10% for phone density
 - [x] Render book cards with title, optional series, and series-index metadata rows
-- [x] Apply reader edge padding immediately while sliders move, with explicit viewport sizing for repagination
+- [ ] Apply reader edge padding visibly while sliders move, with explicit viewport sizing for repagination; Top/Bottom remains unresolved on device
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

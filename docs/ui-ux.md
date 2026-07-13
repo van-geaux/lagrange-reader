@@ -112,7 +112,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Merge reader progress into Home immediately so Continue reading appears without waiting for a full browser reload or a later page.
 - [x] Remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books.
 - [x] Reduce shared app typography by approximately 10% and organize book card metadata as title, optional series, and series index rows.
-- [x] Apply reader padding changes immediately during slider movement and render an explicit viewport/page height so Top and Bottom changes affect pagination visibly.
+- [ ] Apply reader padding changes visibly during slider movement and render an explicit viewport/page height so Top and Bottom changes affect pagination; the latest device report says the change is still not reflected.
 - [x] Restore visible EPUB chapter content before validating reader padding changes on the device; physical-device validation remains required.
 - [x] Persist independent reader padding per book/file and flush the final progress update before returning to the browser.
 - [x] Add server-aligned filter controls to Library Browse and Series, with the same title/author/series, read-status, format, and sort controls applied to Local books.

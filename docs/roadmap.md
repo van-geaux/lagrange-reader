@@ -148,13 +148,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: merge freshly observed reader progress into the browser immediately and include a recently read book even when it was outside the first server page, so Continue reading does not wait for a full reload.
 4. Implemented: remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books while preserving destination identity in the app bar/detail screens.
 5. Implemented: reduce shared Compose typography tokens by approximately 10% and reorganize book card metadata into book title, optional series, and series-index rows.
-6. Implemented: apply all four reader padding values immediately during slider movement, with an explicit WebView viewport and page-strip height to make top/bottom changes visible.
+6. Implemented in code, but unresolved on device: apply all four reader padding values immediately during slider movement, with an explicit WebView viewport and page-strip height. The latest report says Top/Bottom changes still do not visibly affect the reading surface.
 7. Physical-device validation remains next for session expiry, series thumbnails, Continue reading latency, card density, card row wrapping, and reader padding visibility.
 
 ### Latest device feedback workplan - 2026-07-13 (progress and reader persistence)
 
 1. Implemented: capture reader progress synchronously and flush it before closing the reader; browser bootstrap now syncs queued progress before its first library load so the server and first Home render agree.
-2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file and clip the page strip to the configured viewport insets so Top and Bottom changes affect the visible page.
+2. Implemented: persist independent EPUB Top, Bottom, Left, and Right percentage padding per book/file. Unresolved: the latest device report says Top/Bottom changes still do not affect the visible page.
 3. Implemented: add a server-aligned filter button to Library Browse and Series, with title/author/series, read-status, format, and sort controls applied locally to Local books as well.
 
 ### Latest device feedback workplan - 2026-07-13 (session refresh follow-up)
@@ -166,6 +166,11 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 1. Implemented: restore EPUB chapter content by returning to the previously device-validated translated page-strip geometry while retaining independent padding persistence; physical-device confirmation remains required.
 2. Next validation: verify the four independent reader padding controls now that normal EPUB content renders again.
+
+### Latest device feedback workplan - 2026-07-13 (padding regression)
+
+1. Active blocker: Top and Bottom reader padding values do not visibly affect EPUB text position or repagination even when the sliders move away from the 15% default.
+2. Required next investigation: trace the generated WebView CSS and page-strip geometry on the target device, then verify independent Top/Bottom changes with visible chapter content before marking reader padding complete.
 
 ## Source of truth
 

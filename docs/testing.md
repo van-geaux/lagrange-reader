@@ -2,6 +2,8 @@
 
 This document marks the current point where manual app testing can start.
 
+Current reader-padding blocker: the latest device test reports that changing the Top or Bottom percentage does not visibly move the EPUB content or change the reading geometry. Treat persistence after close/reopen and visible application while reading as separate checks; do not mark Top/Bottom padding complete until both pass.
+
 ## Start Here
 
 You can begin manual testing once these conditions are true:

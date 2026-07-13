@@ -88,7 +88,7 @@ The current app flow is:
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
-- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults.
+- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. The latest device report says Top/Bottom changes still do not visibly affect the rendered EPUB page, so CSS application and repagination remain an open issue.
 - Debug queue counts shown in the browser are scoped to the active server, even when pending updates for other saved servers still exist on disk.
 
 ### Reader implementations
@@ -105,7 +105,7 @@ The current app flow is:
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, while persisted page identity still restores at chapter granularity
-  - Top, Bottom, Left, and Right use independent 0-100% controls; values apply immediately with a short debounce, persist per book/file, and repaginate against an explicitly clipped viewport and inset page height
+  - Top, Bottom, Left, and Right use independent 0-100% controls; values persist per book/file and are intended to apply immediately with a short debounce and repaginate against an explicitly clipped viewport and inset page height. Top/Bottom visible application remains unverified and currently fails the latest device report.
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
