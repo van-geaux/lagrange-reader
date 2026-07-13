@@ -16,8 +16,10 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        var firstComposeFrameReady = false
-        splashScreen.setKeepOnScreenCondition { !firstComposeFrameReady }
+        val graph = AppGraph(this)
+        splashScreen.setKeepOnScreenCondition {
+            graph.coordinator.screen.value is AppScreen.Loading
+        }
 
         WindowCompat.setDecorFitsSystemWindows(window, true)
         WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -25,12 +27,9 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
-        val graph = AppGraph(this)
-
         setContent {
             val screen by graph.coordinator.screen.collectAsState()
             LaunchedEffect(Unit) {
-                firstComposeFrameReady = true
                 graph.coordinator.bootstrap()
             }
             BookOrbitTheme {

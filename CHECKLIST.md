@@ -219,7 +219,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replace the persistent Home search field with a search icon and search layer
 - [x] Restore the standard Android status bar and add intentional top breathing room on Home
 - [x] Add reader padding controls with a more generous default text inset
-- [ ] Investigate the launch/startup visual where a spinner appears instead of the app icon
+- [x] Replace the launch/startup spinner with the branded adaptive-icon loading state
+- [ ] Validate the branded launch state on a physical device
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

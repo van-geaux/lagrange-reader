@@ -55,7 +55,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Replace Home's large persistent search field with a search icon and dedicated search layer.
 - [x] Keep the Android status bar visible and add intentional Home top spacing.
 - [x] Add reader padding controls and a larger default padding value.
-- Diagnose the launch spinner versus adaptive-icon presentation.
+- [x] Replace the launch spinner with the branded adaptive-icon loading state; physical-device validation remains open.
 
 ### Checkpoint 5: Other media readers - deferred
 

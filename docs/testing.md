@@ -21,8 +21,8 @@ Current Compose instrumentation coverage includes server setup validation, login
 - Library browsing and navigation passed.
 - EPUB reading and the current pagination behavior passed.
 - Download, airplane-mode reopen, and progress-sync behavior passed.
-- A launch visual issue remains: a spinning loading indicator was observed instead of the expected app-specific adaptive-icon presentation.
-- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, and repagination after changing it.
+- The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
+- The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
 
 ## Manual Test Matrix
 
@@ -49,7 +49,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 1. Install the latest debug APK on a physical Android device.
 2. Confirm the launcher icon is the app-specific adaptive icon instead of the Android default placeholder.
-3. Launch the app from the device home screen and verify first-run setup still works.
+3. Launch the app from the device home screen and confirm the branded adaptive-icon splash/loading state appears without the old spinning loading screen; verify first-run setup still works.
 
 ### 2. Library Browsing
 

@@ -35,6 +35,21 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun startupLoadingStateUsesBrandedMarkInsteadOfSpinner() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Loading,
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("BookOrbit logo").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading your library…").assertIsDisplayed()
+    }
+
+    @Test
     fun offlineBrowserShowsProfileSignInAndLibraryPicker() {
         val unavailableBook = BookSummary(
             libraryId = "lib-1",

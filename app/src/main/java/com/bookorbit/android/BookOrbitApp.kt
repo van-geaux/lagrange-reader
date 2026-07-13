@@ -75,6 +75,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -173,8 +174,27 @@ private fun ReaderLoadingScreen(
 
 @Composable
 private fun LoadingScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = "BookOrbit logo",
+                modifier = Modifier.size(96.dp)
+            )
+            Text("BookOrbit", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Loading your library…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
