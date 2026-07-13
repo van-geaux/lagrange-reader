@@ -84,11 +84,11 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 ### 3. Reading And Listening
 
-1. Open an EPUB and confirm the text and images fill the viewport with no one-line-per-page layout or permanent app toolbar; the standard Android status bar may remain visible.
+1. Open an EPUB and confirm the chapter content renders instead of a blank/black reading surface, with no one-line-per-page layout or permanent app toolbar; the standard Android status bar may remain visible. This is the regression check for the latest debug build.
 2. Tap the left and right outer quarters and swipe left and right; confirm each action moves exactly one paginated screen and navigation crosses chapter boundaries.
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
 4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
-5. Confirm the reader menu exposes independent Top, Bottom, Left, and Right percentage sliders. Verify every edge starts at 15%, 100% maps to roughly one quarter of the relevant screen dimension, changing one slider does not change the others, and moving each slider visibly changes the text inset and repaginates while the menu remains open. Test top and bottom with large changes in both directions. Verify only the top-right Close action dismisses the options; center or other outside taps must not dismiss it. Images must remain constrained to the page.
+5. After content renders, confirm the reader menu exposes independent Top, Bottom, Left, and Right percentage sliders. Verify every edge starts at 15%, 100% maps to roughly one quarter of the relevant screen dimension, changing one slider does not change the others, and moving each slider visibly changes the text inset and repaginates while the menu remains open. Test top and bottom with large changes in both directions. Verify only the top-right Close action dismisses the options; center or other outside taps must not dismiss it. Images must remain constrained to the page.
 6. Close and reopen the EPUB and confirm it returns to the exact saved page within the saved chapter; repeat after fully closing and relaunching the app.
 7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
 8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.

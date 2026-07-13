@@ -159,6 +159,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
+- [x] Fix blank/black EPUB reader surface and restore visible chapter content; physical-device validation remains required
 - [x] Add independently applied percentage padding controls for all EPUB reader edges
 - [x] Persist independent EPUB padding values across reader close/reopen
 - [x] Flush the final reader progress before browser refresh and sync pending progress before first Home load

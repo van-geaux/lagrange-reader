@@ -162,6 +162,11 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 1. Implemented: align refresh requests with the BookOrbit client by sending the current bearer/cookie credentials and reusing a token refreshed by another concurrent request instead of renewing repeatedly.
 2. Physical-device validation remains required: allow the debug APK to run past the target server's short access-token lifetime and confirm browsing, covers, downloads, and reader progress stay authenticated without repeated login prompts.
 
+### Latest device feedback workplan - 2026-07-13 (reader rendering regression)
+
+1. Implemented: restore EPUB chapter content by separating the clipped padding viewport from the translated pagination strip; physical-device confirmation remains required.
+2. Next validation: verify the four independent reader padding controls now that normal EPUB content renders again.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
