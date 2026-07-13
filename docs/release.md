@@ -5,7 +5,7 @@ This document defines the current package naming, versioning, and signing expect
 ## Package and app naming policy
 
 - repository/project name: `lagrange-reader`
-- user-facing app name: `BookOrbit`
+- user-facing app name: `Lagrange`
 - current Android namespace: `com.bookorbit.android`
 - current Android application id: `com.bookorbit.android`
 
