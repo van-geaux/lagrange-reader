@@ -23,6 +23,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, top logo/search/profile actions, library picker/change control, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
+- New implementation targets are exact in-chapter EPUB restore, poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader`, and a placeholder About destination after Options in More.
 
 ## Manual Test Matrix
 
@@ -54,8 +55,8 @@ Current Compose instrumentation coverage includes server setup validation, login
 ### 2. Library Browsing
 
 1. Confirm the post-login screen opens on Home with the visible Android status bar, intentional top spacing, bottom navigation, and search icon visible.
-2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, and Options expand from it. Open Libraries and verify the top-level library view and top library-change control.
-3. Select a library child and confirm its book list loads.
+2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, Options, and About expand from it. Open Libraries and verify the top-level library view and top library-change control.
+3. Select a library child and confirm its books load as adaptive poster cards matching the Series and Authors grids, with metadata and download actions still available.
 4. Return Home and confirm shelves only appear when they contain matching books.
 5. Confirm Currently reading is the first book shelf, active progress is shown there, completed books are excluded from it, and Recently read books remains a separate history shelf.
 6. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
@@ -76,7 +77,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
 4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
 5. Confirm changing theme, text size, or reader padding repaginates without enabling vertical scrolling, images remain constrained to the page, and the default text inset is comfortably away from the edges.
-6. Close and reopen the EPUB and confirm it returns to the saved chapter. Exact in-chapter page restore is not implemented yet.
+6. Close and reopen the EPUB and confirm it returns to the exact saved page within the saved chapter; repeat after fully closing and relaunching the app.
 7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
 8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
 

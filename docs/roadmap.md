@@ -77,6 +77,13 @@ The latest debug APK passed login, session relaunch, browsing, EPUB reading, dow
 
 Each item must preserve session recovery, offline behavior, progress sync, Preview isolation, and reader resume.
 
+## Latest device feedback workplan — 2026-07-13
+
+1. Restore the exact EPUB page within the current chapter on close/reopen and full app restart, while preserving the existing server progress percentage and chapter-boundary behavior.
+2. Change the selected-library book browser from list rows to the adaptive poster-card grid used by Series and Authors, including the existing metadata and download actions.
+3. Rename the visible app brand to `Lagrange` and add the subtitle `a BookOrbit reader` to the logo/launch presentation. BookOrbit remains the connected server/product name.
+4. Add an About destination after Options in the More menu, using placeholder app/version/server information until the About content is reviewed.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

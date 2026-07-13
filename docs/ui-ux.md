@@ -57,6 +57,13 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Add reader padding controls and a larger default padding value.
 - [x] Replace the launch spinner with the branded adaptive-icon loading state; physical-device validation remains open.
 
+### Latest device feedback workplan — 2026-07-13
+
+- Restore the exact in-chapter EPUB page on reopen and restart.
+- Use the adaptive poster-card grid for library books, matching Series and Authors.
+- Rename the visible app brand to Lagrange and show the subtitle `a BookOrbit reader`.
+- Add an About destination after Options in the More menu with placeholder content for review.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.
