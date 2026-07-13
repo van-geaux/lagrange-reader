@@ -66,11 +66,16 @@ Endpoint:
 POST /api/v1/libraries/{id}/books
 ```
 
-Current client request body:
+Current client request body for the first page:
 
 ```json
-{}
+{
+  "sort": [],
+  "pagination": { "page": 0, "size": 50 }
+}
 ```
+
+Subsequent pages use the same body with an incremented `pagination.page` value.
 
 Current response shape:
 

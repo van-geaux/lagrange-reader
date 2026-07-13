@@ -90,6 +90,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 2. Implemented: add a Libraries content control that collapses books belonging to the same series into one representative series card, with a Show all action to restore the full book grid; physical-device validation remains required.
 3. Implemented: add Local books to More immediately before Options, loading valid downloaded titles from local storage and presenting them with the same poster-card grid.
 
+## Latest device feedback workplan — 2026-07-13 (library refinement)
+
+1. Implemented: reduce the current book poster-card minimum width to 75% of its current value, which is half of the original candidate size; physical-device density validation remains required.
+2. Implemented: add paginated library loading and a Browse-tab Load more control using the library response total/page metadata.
+3. Implemented: show the Lagrange logo only on Home; Library now opens the first/selected library directly, and its library name replaces the logo as a tappable library selector.
+4. Implemented: split the selected Library view into Recommended, reusing the Home-style shelves for that library, and Browse, containing the complete paginated book grid.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

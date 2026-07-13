@@ -47,6 +47,7 @@ import kotlin.coroutines.resume
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
+private const val LIBRARY_PAGE_SIZE = 50
 
 interface BookOrbitDataSource {
     suspend fun getServerUrl(): String?
@@ -59,6 +60,11 @@ interface BookOrbitDataSource {
     suspend fun login(username: String, password: String)
     suspend fun loadLibraries(): List<LibrarySummary>
     suspend fun loadBooks(libraryId: String): List<BookSummary>
+    suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
+        if (page != 0) return LibraryBooksPage(page = page)
+        val books = loadBooks(libraryId)
+        return LibraryBooksPage(items = books, total = books.size, page = 0, size = books.size)
+    }
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
@@ -162,22 +168,34 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    override suspend fun loadBooks(libraryId: String): List<BookSummary> = withContext(Dispatchers.IO) {
+    override suspend fun loadBooks(libraryId: String): List<BookSummary> {
+        return loadBooksPage(libraryId, 0).items
+    }
+
+    override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        val body = JSONObject().toString().toRequestBody(JSON)
+        val body = JSONObject().apply {
+            put("sort", JSONArray())
+            put("pagination", JSONObject().apply {
+                put("page", page)
+                put("size", LIBRARY_PAGE_SIZE)
+            })
+        }.toString().toRequestBody(JSON)
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        BookOrbitPayloadParser.parseBooks(
+        BookOrbitPayloadParser.parseLibraryBooksPage(
             libraryId = libraryId,
             payload = request("/api/v1/libraries/$libraryId/books", "POST", body),
             downloads = downloads,
             serverBase = serverBase()
         ).also { books ->
-            browserSnapshotStore.saveBooks(
-                serverUrl = serverUrl,
-                selectedLibraryId = libraryId,
-                libraryId = libraryId,
-                books = books
-            )
+            if (page == 0) {
+                browserSnapshotStore.saveBooks(
+                    serverUrl = serverUrl,
+                    selectedLibraryId = libraryId,
+                    libraryId = libraryId,
+                    books = books.items
+                )
+            }
         }
     }
 
@@ -1114,6 +1132,21 @@ internal object BookOrbitPayloadParser {
                 )
             }
         }
+    }
+
+    fun parseLibraryBooksPage(
+        libraryId: String,
+        payload: String,
+        downloads: Map<String, DownloadRecord>,
+        serverBase: String
+    ): LibraryBooksPage {
+        val root = extractObject(payload, "load books")
+        return LibraryBooksPage(
+            items = parseBooks(libraryId, payload, downloads, serverBase),
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            size = root.numberValue("size")?.toInt()
+        )
     }
 
     fun parseBookDetail(

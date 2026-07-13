@@ -7,6 +7,28 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `parseLibraryBooksPage retains response pagination metadata`() {
+        val page = BookOrbitPayloadParser.parseLibraryBooksPage(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{"id":"book-1","title":"First"}],
+                  "total": 5012,
+                  "page": 2,
+                  "size": 50
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(5012, page.total)
+        assertEquals(2, page.page)
+        assertEquals(50, page.size)
+        assertEquals(listOf("book-1"), page.items.map { it.id })
+    }
+
+    @Test
     fun `parseBooks prefers the primary file and maps reading progress`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-1",

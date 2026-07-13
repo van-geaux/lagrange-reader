@@ -228,6 +228,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Show the Lagrange subtitle only on the splash/loading presentation
 - [x] Add a Libraries control to collapse series into representative cards and restore all books
 - [x] Add Local books before Options in the More menu
+- [x] Reduce book poster-card sizing to 75% of the current device-reviewed size
+- [x] Add library Browse-tab pagination with a Load more control
+- [x] Show the Lagrange logo only on Home and make the selected library name the Library selector
+- [x] Split Library into Recommended and Browse tabs
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

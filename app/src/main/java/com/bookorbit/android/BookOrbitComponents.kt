@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -29,27 +30,37 @@ internal fun BookOrbitTopBar(
     title: String,
     modifier: Modifier = Modifier,
     navigationIcon: @Composable () -> Unit = {},
-    actions: @Composable RowScope.() -> Unit = {}
+    actions: @Composable RowScope.() -> Unit = {},
+    showBrand: Boolean = true,
+    onTitleClick: (() -> Unit)? = null
 ) {
     TopAppBar(
         title = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = "Lagrange logo",
-                    modifier = Modifier.size(28.dp)
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(
-                        text = "LAGRANGE",
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.labelSmall
+            if (showBrand) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_launcher_foreground),
+                        contentDescription = "Lagrange logo",
+                        modifier = Modifier.size(28.dp)
                     )
-                    Text(text = title, style = MaterialTheme.typography.titleLarge)
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "LAGRANGE",
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Text(text = title, style = MaterialTheme.typography.titleLarge)
+                    }
                 }
+            } else {
+                Text(
+                    text = title,
+                    modifier = onTitleClick?.let { Modifier.clickable(onClick = it) } ?: Modifier,
+                    style = MaterialTheme.typography.titleLarge
+                )
             }
         },
         modifier = modifier,

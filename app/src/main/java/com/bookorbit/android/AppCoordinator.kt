@@ -32,6 +32,10 @@ class AppCoordinator(
         repository.loadLocalBooks()
     }.getOrDefault(emptyList())
 
+    suspend fun loadLibraryBooksPage(libraryId: String, page: Int): LibraryBooksPage = runCatching {
+        repository.loadBooksPage(libraryId, page)
+    }.getOrDefault(LibraryBooksPage(page = page))
+
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = runCatching {
         repository.loadBookDetail(book)
     }.getOrNull()
@@ -332,14 +336,18 @@ class AppCoordinator(
                     preferredId = repository.getSelectedLibraryId(),
                     libraries = libraries
                 )
-                val books = selectedLibrary?.let { repository.loadBooks(it) }.orEmpty()
+                val booksPage = selectedLibrary?.let { repository.loadBooksPage(it, 0) }
+                    ?: LibraryBooksPage()
                 val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
                     BrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = selectedLibrary,
-                        books = books,
+                        books = booksPage.items,
+                        booksTotal = booksPage.total,
+                        booksPage = booksPage.page ?: 0,
+                        booksPageSize = booksPage.size,
                         isRefreshing = false,
                         isLoadingLibraries = false,
                         isLoadingBooks = false,
@@ -418,14 +426,17 @@ class AppCoordinator(
             runCatching {
                 repository.setSelectedLibraryId(libraryId)
                 val libraries = currentBrowser?.browserState?.libraries ?: repository.loadLibraries()
-                val books = repository.loadBooks(libraryId)
+                val booksPage = repository.loadBooksPage(libraryId, 0)
                 val pendingProgressCount = repository.pendingProgressCount()
                 showBrowser(
                     BrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         selectedLibraryId = libraryId,
-                        books = books,
+                        books = booksPage.items,
+                        booksTotal = booksPage.total,
+                        booksPage = booksPage.page ?: 0,
+                        booksPageSize = booksPage.size,
                         isRefreshing = false,
                         isLoadingLibraries = false,
                         isLoadingBooks = false,

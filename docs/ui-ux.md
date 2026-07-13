@@ -36,7 +36,7 @@ The first browser-shell candidate opened on a native Home feed with a hamburger 
 
 The first Home shelf now renders as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress and excludes completed books; Recently read books remains a separate history shelf.
 
-Current refinement: shelf cards are reduced to roughly two-thirds of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, and Options. The top bar carries the launcher mark, search, and profile actions, and the Libraries flow has a top-level picker plus Change control.
+Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, Options, and About. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from paginated Browse content.
 
 Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
 
@@ -69,6 +69,13 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Show the `a BookOrbit reader` subtitle only on the splash/loading presentation; omit it from the opened-app top bar and About screen.
 - [x] Add a Libraries series-collapse control that reduces each series to a representative card and restores the full book grid.
 - [x] Add Local books immediately before Options in More, using the shared poster-card grid for valid downloaded files.
+
+### Library refinement workplan — 2026-07-13
+
+- [x] Reduce book poster-card sizing to 75% of the current size, preserving the adaptive grid and readable metadata.
+- [x] Add a paginated Browse tab with Load more support for library books.
+- [x] Keep the Lagrange logo on Home only; use the selected library name as the tappable selector in Library.
+- [x] Split Library into Recommended Home-style shelves and Browse's complete book grid.
 
 ### Checkpoint 5: Other media readers - deferred
 

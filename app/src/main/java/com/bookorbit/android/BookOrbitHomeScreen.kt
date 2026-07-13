@@ -57,6 +57,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -89,6 +91,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
+private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -106,6 +109,7 @@ internal fun NativeLibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
+    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
@@ -125,6 +129,7 @@ internal fun NativeLibraryBrowserScreen(
     var showMoreMenu by rememberSaveable { mutableStateOf(false) }
     var showProfileMenu by rememberSaveable { mutableStateOf(false) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
+    var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
     var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
     var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
     var selectedAuthor by remember { mutableStateOf<AuthorSummary?>(null) }
@@ -273,10 +278,11 @@ internal fun NativeLibraryBrowserScreen(
                     onProfile = { showProfileMenu = true },
                     profileExpanded = showProfileMenu,
                     onDismissProfile = { showProfileMenu = false },
+                    showBrand = destination == BrowserDestination.HOME,
                     showRefresh = destination == BrowserDestination.LIBRARY,
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
-                    onLibraryChange = if (destination == BrowserDestination.LIBRARY && !showLibraryPicker) {
+                    onTitleClick = if (destination == BrowserDestination.LIBRARY && !showLibraryPicker) {
                         { showLibraryPicker = true }
                     } else {
                         null
@@ -301,7 +307,8 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onLibraries = {
                         destination = BrowserDestination.LIBRARY
-                        showLibraryPicker = true
+                        showLibraryPicker = state.selectedLibraryId == null
+                        libraryTab = LibraryTab.RECOMMENDED
                         query = ""
                         selectedAuthor = null
                         selectedSeriesKey = null
@@ -428,9 +435,12 @@ internal fun NativeLibraryBrowserScreen(
                         onLibrarySelected(libraryId)
                     }
                 )
-                else -> LibraryBooks(
+                destination == BrowserDestination.LIBRARY -> LibraryContentScreen(
                     state = state,
+                    tab = libraryTab,
+                    onTabChange = { libraryTab = it },
                     modifier = Modifier.padding(padding),
+                    libraryBooksLoader = libraryBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LIBRARY
@@ -440,6 +450,13 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedSeriesKey = seriesKey
                     }
+                )
+                else -> HomeFeed(
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    coverLoader = coverLoader,
+                    onBookSelected = { book -> selectedBook = book },
+                    onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey }
                 )
             }
     }
@@ -456,13 +473,16 @@ private fun BrowserTopBar(
     onSessionAction: () -> Unit,
     sessionActionLabel: String,
     showSearchAction: Boolean = true,
+    showBrand: Boolean = false,
     showRefresh: Boolean = false,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
-    onLibraryChange: (() -> Unit)? = null
+    onTitleClick: (() -> Unit)? = null
 ) {
     BookOrbitTopBar(
         title = title,
+        showBrand = showBrand,
+        onTitleClick = onTitleClick,
         navigationIcon = navigationIcon,
         actions = {
             if (showRefresh) {
@@ -473,9 +493,6 @@ private fun BrowserTopBar(
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
-            }
-            onLibraryChange?.let { changeLibrary ->
-                TextButton(onClick = changeLibrary) { Text("Change") }
             }
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
@@ -697,7 +714,7 @@ private fun SeriesCatalogScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
+        columns = GridCells.Adaptive(minSize = 105.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -790,7 +807,7 @@ private fun AuthorsCatalogScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
+        columns = GridCells.Adaptive(minSize = 105.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -867,7 +884,7 @@ private fun AuthorDetails(
         value = booksLoader(author.id, 0)
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
+        columns = GridCells.Adaptive(minSize = 105.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1335,6 +1352,101 @@ private fun SearchResults(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun LibraryContentScreen(
+    state: BrowserState,
+    tab: LibraryTab,
+    onTabChange: (LibraryTab) -> Unit,
+    modifier: Modifier,
+    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = tab.ordinal) {
+            Tab(
+                selected = tab == LibraryTab.RECOMMENDED,
+                onClick = { onTabChange(LibraryTab.RECOMMENDED) },
+                text = { Text("Recommended") }
+            )
+            Tab(
+                selected = tab == LibraryTab.BROWSE,
+                onClick = { onTabChange(LibraryTab.BROWSE) },
+                text = { Text("Browse") }
+            )
+        }
+        when (tab) {
+            LibraryTab.RECOMMENDED -> HomeFeed(
+                state = state,
+                modifier = Modifier.weight(1f),
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
+                onSeriesSelected = onSeriesSelected
+            )
+            LibraryTab.BROWSE -> LibraryBrowseScreen(
+                state = state,
+                modifier = Modifier.weight(1f),
+                libraryBooksLoader = libraryBooksLoader,
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
+                onSeriesSelected = onSeriesSelected
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryBrowseScreen(
+    state: BrowserState,
+    modifier: Modifier,
+    libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit
+) {
+    val libraryId = state.selectedLibraryId
+    var books by remember(libraryId) { mutableStateOf(state.books) }
+    var total by remember(libraryId) { mutableStateOf(state.booksTotal ?: state.books.size) }
+    var nextPage by remember(libraryId) { mutableStateOf((state.booksPage + 1).coerceAtLeast(1)) }
+    var isLoadingMore by remember(libraryId) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(libraryId, state.books, state.booksTotal, state.booksPage) {
+        books = state.books
+        total = state.booksTotal ?: state.books.size
+        nextPage = (state.booksPage + 1).coerceAtLeast(1)
+    }
+
+    LibraryBooks(
+        state = state.copy(
+            books = books,
+            booksTotal = total,
+            isLoadingBooks = state.isLoadingBooks && books.isEmpty()
+        ),
+        modifier = modifier,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
+        onSeriesSelected = onSeriesSelected,
+        totalBooks = total,
+        isLoadingMore = isLoadingMore,
+        onLoadMore = {
+            if (libraryId != null && !isLoadingMore && books.size < total) {
+                scope.launch {
+                    isLoadingMore = true
+                    val page = libraryBooksLoader(libraryId, nextPage)
+                    val existingIds = books.mapTo(mutableSetOf()) { it.id }
+                    books = books + page.items.filter { existingIds.add(it.id) }
+                    total = page.total ?: total
+                    nextPage += 1
+                    isLoadingMore = false
+                }
+            }
+        }
+    )
+}
+
+@Composable
 private fun LibraryBooks(
     state: BrowserState,
     modifier: Modifier,
@@ -1344,7 +1456,10 @@ private fun LibraryBooks(
     titleOverride: String? = null,
     eyebrow: String = "Library",
     emptyMessage: String = "No books found.",
-    allowSeriesCollapse: Boolean = true
+    allowSeriesCollapse: Boolean = true,
+    totalBooks: Int? = null,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {}
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
@@ -1373,7 +1488,7 @@ private fun LibraryBooks(
         state.books.map { Pair(it, null) }
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
+        columns = GridCells.Adaptive(minSize = 105.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1438,6 +1553,16 @@ private fun LibraryBooks(
                     if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
                 }
             )
+        }
+        if (isLoadingMore) {
+            item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading more books...") }
+        } else if (totalBooks != null && state.books.size < totalBooks) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OutlinedButton(
+                    onClick = onLoadMore,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Load more") }
+            }
         }
     }
 }
@@ -1717,7 +1842,7 @@ private fun SeriesDetails(
     }
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
+        columns = GridCells.Adaptive(minSize = 105.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
