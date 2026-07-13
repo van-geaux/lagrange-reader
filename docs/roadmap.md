@@ -123,6 +123,14 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 1. Implemented: keep the existing overall Compact/Comfortable/Wide reader padding presets and add independent Top and Bottom controls using the same levels.
 2. Implemented: keep Comfortable as the default for all three controls and repaginate the current EPUB chapter whenever any padding value changes.
 
+## Latest device feedback workplan â€” 2026-07-13 (percentage padding and recovery)
+
+1. Implemented: replace named reader padding presets with four independent percentage sliders for Top, Bottom, Left, and Right. Each slider ranges from 0–100%, where 100% maps to one quarter of the relevant viewport dimension; every edge defaults to 15%.
+2. Implemented: make edge changes independent and apply the new values when the slider is released, then repaginate the current EPUB chapter.
+3. Implemented: keep the jump rail visible for # and every A–Z label even before those titles are loaded; group every non-alphabetic title under # and place it first.
+4. Implemented: alphabetize collapsed library representatives by their series name and restore the nearest book/series scroll anchor when switching between collapsed and expanded views.
+5. Implemented: route authentication failures from background search, cover, catalog, detail, and paginated library loads through the login recovery screen instead of silently returning empty content. Physical-device expiry testing remains required.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

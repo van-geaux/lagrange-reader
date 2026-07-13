@@ -20,45 +20,49 @@ class AppCoordinator(
     private val repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
 ) {
-    suspend fun searchBooks(query: String): List<BookSummary> = runCatching {
+    suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.searchBooks(query)
-    }.getOrDefault(emptyList())
+    }
 
-    suspend fun loadBookCover(book: BookSummary): ByteArray? = runCatching {
+    suspend fun loadBookCover(book: BookSummary): ByteArray? = loadWithSessionRecovery(null) {
         repository.loadBookCover(book)
-    }.getOrNull()
+    }
 
-    suspend fun loadLocalBooks(): List<BookSummary> = runCatching {
+    suspend fun loadLocalBooks(): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.loadLocalBooks()
-    }.getOrDefault(emptyList())
+    }
 
-    suspend fun loadLibraryBooksPage(libraryId: String, page: Int): LibraryBooksPage = runCatching {
-        repository.loadBooksPage(libraryId, page)
-    }.getOrDefault(LibraryBooksPage(page = page))
+    suspend fun loadLibraryBooksPage(libraryId: String, page: Int): LibraryBooksPage =
+        loadWithSessionRecovery(LibraryBooksPage(page = page)) {
+            repository.loadBooksPage(libraryId, page)
+        }
 
-    suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = runCatching {
+    suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = loadWithSessionRecovery(null) {
         repository.loadBookDetail(book)
-    }.getOrNull()
+    }
 
-    suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = runCatching {
+    suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = loadWithSessionRecovery(null) {
         repository.loadSeriesDetail(seriesId)
-    }.getOrNull()
+    }
 
-    suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage = runCatching {
-        repository.loadSeriesCatalog(query, page)
-    }.getOrDefault(SeriesCatalogPage())
+    suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage =
+        loadWithSessionRecovery(SeriesCatalogPage()) {
+            repository.loadSeriesCatalog(query, page)
+        }
 
-    suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = runCatching {
-        repository.loadAuthorsCatalog(query, page)
-    }.getOrDefault(AuthorCatalogPage())
+    suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage =
+        loadWithSessionRecovery(AuthorCatalogPage()) {
+            repository.loadAuthorsCatalog(query, page)
+        }
 
-    suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage? = runCatching {
-        repository.loadAuthorBooks(authorId, page)
-    }.getOrNull()
+    suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage? =
+        loadWithSessionRecovery(null) {
+            repository.loadAuthorBooks(authorId, page)
+        }
 
-    suspend fun loadCatalogImage(url: String): ByteArray? = runCatching {
+    suspend fun loadCatalogImage(url: String): ByteArray? = loadWithSessionRecovery(null) {
         repository.loadCatalogImage(url)
-    }.getOrNull()
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
@@ -633,6 +637,33 @@ class AppCoordinator(
     private fun showBrowserMessage(message: String) {
         val current = lastBrowserState ?: return
         showBrowser(current.copy(message = message))
+    }
+
+    private suspend fun <T> loadWithSessionRecovery(
+        fallback: T,
+        block: suspend () -> T
+    ): T {
+        return try {
+            block()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: AuthenticationRequiredException) {
+            recoverExpiredSession()
+            fallback
+        } catch (_: Throwable) {
+            fallback
+        }
+    }
+
+    private suspend fun recoverExpiredSession() {
+        if (_screen.value is AppScreen.Login) {
+            return
+        }
+        allowCachedLoginFallback = false
+        showLogin(
+            message = "Your session expired. Sign in again to continue.",
+            destination = PostLoginDestination.Browser
+        )
     }
 
     private fun userMessage(error: Throwable, fallback: String): String {

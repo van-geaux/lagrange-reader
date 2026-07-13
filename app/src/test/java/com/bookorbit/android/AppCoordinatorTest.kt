@@ -164,6 +164,28 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `background authenticated request sends the user to login when session expires`() = runTest {
+        val repository = FakeBookOrbitDataSource().apply {
+            searchBooksError = AuthenticationRequiredException()
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        assertTrue(coordinator.searchBooks("sample").isEmpty())
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, login.serverUrl)
+        assertTrue(login.message.orEmpty().contains("session expired"))
+    }
+
+    @Test
     fun `load browser shows recoverable empty browser state when initial load fails without cache`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -488,6 +510,7 @@ private class FakeBookOrbitDataSource(
     var loadBooksResult: List<BookSummary> = emptyList(),
     var loadLibrariesError: Throwable? = null,
     var loadBooksError: Throwable? = null,
+    var searchBooksError: Throwable? = null,
     var loginError: Throwable? = null,
     var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
     var pendingProgressCountResult: Int = 0,
@@ -544,6 +567,11 @@ private class FakeBookOrbitDataSource(
     override suspend fun loadBooks(libraryId: String): List<BookSummary> {
         loadBooksError?.let { throw it }
         return loadBooksResult
+    }
+
+    override suspend fun searchBooks(query: String): List<BookSummary> {
+        searchBooksError?.let { throw it }
+        return emptyList()
     }
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState

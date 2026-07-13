@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
@@ -106,6 +108,62 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private val BOOK_CARD_MIN_SIZE = 88.dp
+
+private val LIBRARY_JUMP_LABELS = listOf('#') + ('A'..'Z').toList()
+
+internal fun libraryJumpLabel(value: String?): Char {
+    val first = value?.trim()?.firstOrNull()?.uppercaseChar() ?: return '#'
+    return if (first in 'A'..'Z') first else '#'
+}
+
+internal fun buildLibraryJumpTargets(
+    displayedBooks: List<Pair<BookSummary, String?>>
+): List<Pair<Char, Int>> {
+    val labels = displayedBooks.map { (book, seriesKey) ->
+        libraryJumpLabel(if (seriesKey != null) book.seriesName else book.title)
+    }
+    return LIBRARY_JUMP_LABELS.map { target ->
+        val exact = labels.indexOfFirst { it == target }
+        val fallback = when {
+            exact >= 0 -> exact
+            target == '#' -> labels.indexOfFirst { it == '#' }
+            else -> labels.indexOfFirst { it in 'A'..'Z' && it > target }
+        }
+        val index = fallback.takeIf { it >= 0 } ?: (labels.lastIndex.takeIf { it >= 0 } ?: 0)
+        target to index
+    }
+}
+
+private data class LibraryGridAnchor(
+    val bookId: String,
+    val seriesKey: String?
+)
+
+internal fun collapsedLibraryBooks(
+    books: List<BookSummary>
+): List<Pair<BookSummary, String?>> {
+    return buildList<Pair<BookSummary, String?>> {
+        books.groupBy { it.seriesId ?: it.seriesName }
+            .forEach { (seriesKey, seriesBooks) ->
+                if (seriesKey.isNullOrBlank()) {
+                    addAll(seriesBooks.map { it to null })
+                } else {
+                    val representative = seriesBooks.minWithOrNull(
+                        compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                            .thenBy { it.title }
+                    ) ?: return@forEach
+                    add(representative to seriesKey)
+                }
+            }
+    }.sortedWith(
+        compareBy<Pair<BookSummary, String?>> {
+            val (book, seriesKey) = it
+            (if (seriesKey != null) book.seriesName ?: seriesKey else book.title)
+                .trim()
+                .lowercase()
+        }
+    )
+}
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -1550,35 +1608,31 @@ private fun LibraryBooks(
         .distinct()
     val seriesCount = totalSeries ?: seriesKeys.size
     val displayedBooks: List<Pair<BookSummary, String?>> = if (allowSeriesCollapse && seriesCollapsed) {
-        buildList<Pair<BookSummary, String?>> {
-            state.books.groupBy { it.seriesId ?: it.seriesName }
-                .forEach { (seriesKey, books) ->
-                    if (seriesKey.isNullOrBlank()) {
-                        addAll(books.map { it to null })
-                    } else {
-                        val representative = books.minWithOrNull(
-                            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
-                                .thenBy { it.title }
-                        ) ?: return@forEach
-                        add(Pair(representative, seriesKey))
-                    }
-                }
-        }
+        collapsedLibraryBooks(state.books)
     } else {
         state.books.map { Pair(it, null) }
     }
     val gridState = rememberLazyGridState()
     val loadMore by rememberUpdatedState(onLoadMore)
     val scope = rememberCoroutineScope()
+    var pendingAnchor by remember(title) { mutableStateOf<LibraryGridAnchor?>(null) }
     val jumpTargets = remember(displayedBooks) {
-        displayedBooks.mapIndexedNotNull { index, (book, seriesKey) ->
-            val label = (if (seriesKey != null) book.seriesName else book.title)
-                ?.trim()
-                ?.firstOrNull()
-                ?.uppercaseChar()
-                ?: return@mapIndexedNotNull null
-            label to index
-        }.distinctBy { it.first }
+        buildLibraryJumpTargets(displayedBooks)
+    }
+
+    LaunchedEffect(seriesCollapsed, displayedBooks) {
+        val anchor = pendingAnchor ?: return@LaunchedEffect
+        val targetIndex = displayedBooks.indexOfFirst { (book, seriesKey) ->
+            book.id == anchor.bookId ||
+                (anchor.seriesKey != null &&
+                    (seriesKey == anchor.seriesKey ||
+                        book.seriesId == anchor.seriesKey ||
+                        book.seriesName == anchor.seriesKey))
+        }
+        if (targetIndex >= 0) {
+            gridState.animateScrollToItem(targetIndex + 1)
+        }
+        pendingAnchor = null
     }
 
     LaunchedEffect(gridState, state.books.size, totalBooks, isLoadingMore) {
@@ -1629,7 +1683,17 @@ private fun LibraryBooks(
                 }
                 if (allowSeriesCollapse && seriesKeys.isNotEmpty()) {
                     TextButton(
-                        onClick = { seriesCollapsed = !seriesCollapsed },
+                        onClick = {
+                            val contentIndex = gridState.firstVisibleItemIndex - 1
+                            val anchor = displayedBooks.getOrNull(contentIndex)
+                            pendingAnchor = anchor?.let { (book, seriesKey) ->
+                                LibraryGridAnchor(
+                                    bookId = book.id,
+                                    seriesKey = seriesKey ?: book.seriesId ?: book.seriesName
+                                )
+                            }
+                            seriesCollapsed = !seriesCollapsed
+                        },
                         modifier = Modifier.semantics {
                             contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
                         }
@@ -1697,13 +1761,15 @@ private fun LibraryJumpRail(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .heightIn(max = 560.dp)
+            .verticalScroll(rememberScrollState())
             .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         targets.forEach { (label, index) ->
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(20.dp)
                     .clickable { onJump(index) },
                 contentAlignment = Alignment.Center
             ) {

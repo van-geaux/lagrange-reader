@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,41 +22,32 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("deltaX < 0 ? page + 1 : page - 1"))
         assertTrue(rendered.contains("suppressClick"))
         assertTrue(rendered.contains("const initialPage = 0"))
-        assertTrue(rendered.contains("left: 36px"))
-        assertTrue(rendered.contains("top: 40px"))
+        assertTrue(rendered.contains("left: 3.75vw"))
+        assertTrue(rendered.contains("top: 3.75vh"))
+        assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
+        assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
         assertFalse(rendered.contains("column-width"))
     }
 
     @Test
-    fun `epub padding presets change the rendered page inset`() {
+    fun `epub padding percentages map to a quarter of the viewport`() {
         val rendered = styleEpubHtml(
             html = "<p>Readable chapter text</p>",
             theme = EpubReaderTheme.Sepia,
             fontScale = 1f,
             startAtEnd = false,
-            padding = EpubReaderPadding.Wide
+            topPaddingPercent = 10f,
+            bottomPaddingPercent = 20f,
+            leftPaddingPercent = 5f,
+            rightPaddingPercent = 25f
         )
 
-        assertTrue(rendered.contains("left: 48px"))
-        assertTrue(rendered.contains("top: 52px"))
-        assertTrue(rendered.contains("window.innerHeight - 104"))
-    }
-
-    @Test
-    fun `epub top and bottom padding can be configured independently`() {
-        val rendered = styleEpubHtml(
-            html = "<p>Readable chapter text</p>",
-            theme = EpubReaderTheme.Sepia,
-            fontScale = 1f,
-            startAtEnd = false,
-            padding = EpubReaderPadding.Comfortable,
-            topPaddingPx = 64,
-            bottomPaddingPx = 88
-        )
-
-        assertTrue(rendered.contains("left: 36px"))
-        assertTrue(rendered.contains("top: 64px"))
-        assertTrue(rendered.contains("window.innerHeight - 152"))
+        assertEquals(25f, epubPaddingViewportPercent(100f), 0f)
+        assertEquals(2.5f, epubPaddingViewportPercent(10f), 0f)
+        assertTrue(rendered.contains("left: 1.25vw"))
+        assertTrue(rendered.contains("top: 2.50vh"))
+        assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
+        assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
     }
 
     @Test
