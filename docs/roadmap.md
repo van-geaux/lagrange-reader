@@ -169,8 +169,9 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### Latest device feedback workplan - 2026-07-13 (padding regression)
 
-1. Active blocker: Top and Bottom reader padding values do not visibly affect EPUB text position or repagination even when the sliders move away from the 15% default.
-2. Required next investigation: trace the generated WebView CSS and page-strip geometry on the target device, then verify independent Top/Bottom changes with visible chapter content before marking reader padding complete.
+1. Previous device blocker: Top and Bottom reader padding values did not visibly affect EPUB text position or repagination even when the sliders moved away from the 15% default.
+2. Implemented: use the fixed WebView body as a stationary clipped viewport, translate only an inner content strip, and apply edge changes through an in-page layout API so padding repaginates without reloading the chapter. JVM coverage passes, and an Android WebView regression now checks viewport resizing plus visible translated-page content.
+3. Required next validation: install the new debug APK on the target device and verify independent Top/Bottom movement, repagination, later-page visibility, images, swipe/tap navigation, exact resume, offline reopen, and progress sync before marking reader padding complete.
 
 ## Source of truth
 

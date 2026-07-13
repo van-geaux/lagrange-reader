@@ -159,8 +159,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
-- [x] Fix blank/black EPUB reader surface and restore visible chapter content; physical-device validation remains required
-- [ ] Apply Top/Bottom EPUB padding visibly and repaginate; the latest device report says these changes are not reflected on the reading surface
+- [x] Fix blank/black EPUB reader surface with a stationary clipped viewport and separately translated content strip; physical-device validation remains required
+- [ ] Validate visible Top/Bottom EPUB padding and repagination on the target device; the fixed-viewport runtime update is implemented and covered in code
 - [x] Persist independent EPUB padding values across reader close/reopen
 - [x] Flush the final reader progress before browser refresh and sync pending progress before first Home load
 - [x] Keep reader options open until the explicit Close action is tapped
@@ -191,7 +191,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add integration tests for login bootstrap
 - [ ] Add integration tests for library/book loading
 - [ ] Add integration tests for offline queue replay
-- [ ] Add instrumentation tests for reader/player flows
+- [x] Add an Android WebView instrumentation regression for EPUB padding geometry and translated-page visibility
 - [x] Add at least one end-to-end manual test matrix
 
 ## 14. Release Readiness
@@ -265,7 +265,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
 - [x] Reduce app typography tokens by approximately 10% for phone density
 - [x] Render book cards with title, optional series, and series-index metadata rows
-- [ ] Apply reader edge padding visibly while sliders move, with explicit viewport sizing for repagination; Top/Bottom remains unresolved on device
+- [ ] Validate reader edge padding while sliders move on the target device; fixed viewport sizing and in-place repagination are implemented in code
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

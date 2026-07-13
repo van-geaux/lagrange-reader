@@ -2,7 +2,7 @@
 
 This document marks the current point where manual app testing can start.
 
-Current reader-padding blocker: the latest device test reports that changing the Top or Bottom percentage does not visibly move the EPUB content or change the reading geometry. Treat persistence after close/reopen and visible application while reading as separate checks; do not mark Top/Bottom padding complete until both pass.
+Current reader-padding validation gate: the latest device test predates the stationary-viewport fix and reported that Top/Bottom changes did not move EPUB content. The new build updates the clipped viewport in place and keeps translation on a separate content strip. Treat persistence, visible inset changes, later-page visibility, and repagination as separate device checks; do not mark Top/Bottom padding complete until all pass.
 
 ## Start Here
 
@@ -14,7 +14,7 @@ You can begin manual testing once these conditions are true:
 - a reachable BookOrbit server URL is available
 - at least one account can sign in and access a library with real content
 
-Current Compose instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, browser loading states, and cached offline browser actions. `assembleDebugAndroidTest` compiles this coverage; run the connected test task when a device or emulator is available.
+Current instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, browser loading states, cached offline browser actions, and a WebView-level EPUB regression that checks runtime padding geometry plus visible text after page translation. `assembleDebugAndroidTest` compiles this coverage with the AndroidX test runner; run the connected test task when a device or emulator is available.
 
 ## Latest device feedback — July 12, 2026
 
@@ -26,7 +26,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, Home-only logo/search/profile actions, the tappable Library name selector, Recommended/Browse tabs, visible status bar/Home spacing, and search layer. It must also validate four independent reader percentage sliders for Top, Bottom, Left, and Right, the 15% defaults, the 100%-equals-25%-viewport mapping, repagination after changing each control, the complete #/A–Z jump rail, series ordering after collapse/expand, session-expiry recovery, and the branded launch state.
 - Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, the placeholder About destination, swipe-down refresh, and persistent cover-thumbnail caching are implemented. Physical-device validation remains required for the new behavior.
-- The latest follow-up also persists the login access token for authenticated requests, restores Continue reading from tolerant progress payloads, removes the duplicate Library Recommended heading, moves Options into the profile menu, keeps reader options open until Close, applies reader padding changes while sliding, and adds more More-sheet spacing. Physical-device validation remains required.
+- The latest reader follow-up uses the fixed WebView body as a stationary clipped viewport, translates only an inner content strip, and applies slider changes through an in-page layout API instead of reloading the chapter. This addresses blank translated pages and ineffective vertical clipping in code; physical-device validation remains required.
 - The July 13 follow-up adds refresh-cookie retry before session-expired recovery, deterministic/retried Series catalog covers with in-memory image caching, immediate Continue reading updates, smaller shared typography, and title/series/index card metadata rows. These changes require physical-device validation.
 
 ## Manual Test Matrix
@@ -86,11 +86,11 @@ Current Compose instrumentation coverage includes server setup validation, login
 
 ### 3. Reading And Listening
 
-1. Open an EPUB and confirm the chapter content renders instead of a blank/black reading surface, with no one-line-per-page layout or permanent app toolbar; the standard Android status bar may remain visible. This is the regression check for the latest debug build.
+1. Open an EPUB and confirm the chapter content renders instead of a blank/black reading surface, with no one-line-per-page layout or permanent app toolbar; system bars should remain immersive with transient swipe reveal. This is the regression check for the latest debug build.
 2. Tap the left and right outer quarters and swipe left and right; confirm each action moves exactly one paginated screen and navigation crosses chapter boundaries.
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
-4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; tap the center again to hide them.
-5. After content renders, confirm the reader menu exposes independent Top, Bottom, Left, and Right percentage sliders. Verify every edge starts at 15%, 100% maps to roughly one quarter of the relevant screen dimension, changing one slider does not change the others, and moving each slider visibly changes the text inset and repaginates while the menu remains open. Test top and bottom with large changes in both directions. Verify only the top-right Close action dismisses the options; center or other outside taps must not dismiss it. Images must remain constrained to the page.
+4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; confirm additional center or outside taps leave them open until Close is tapped.
+5. After content renders, confirm the reader menu exposes independent Top, Bottom, Left, and Right percentage sliders. Verify every edge starts at 15%, 100% maps to roughly one quarter of the relevant screen dimension, changing one slider does not change the others, and moving each slider visibly changes the text inset and repaginates while the menu remains open. Test top and bottom with large changes in both directions, advance to later pages, and confirm translated pages still contain visible text rather than becoming blank. Verify only the top-right Close action dismisses the options; center or other outside taps must not dismiss it. Images must remain constrained to the page.
 6. Close and reopen the EPUB and confirm it returns to the exact saved page within the saved chapter; repeat after fully closing and relaunching the app.
 7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
 8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.

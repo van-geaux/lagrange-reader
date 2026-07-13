@@ -1071,10 +1071,10 @@ private fun EpubReaderView(
     var currentPageCount by remember(file) { mutableStateOf(1) }
     var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
+    val currentAppliedPadding by rememberUpdatedState(appliedPadding)
     val applyPadding = { next: EpubPaddingPercentages ->
         paddingDraft = next
         appliedPadding = next
-        paddingStore.save(readerKey, next)
     }
     val centerTap = rememberUpdatedState {
         if (!showControls) {
@@ -1137,7 +1137,15 @@ private fun EpubReaderView(
                     isHorizontalScrollBarEnabled = false
                     isVerticalScrollBarEnabled = false
                     overScrollMode = WebView.OVER_SCROLL_NEVER
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            super.onPageFinished(view, url)
+                            view.evaluateJavascript(
+                                epubPaddingUpdateJavascript(currentAppliedPadding),
+                                null
+                            )
+                        }
+                    }
                     addJavascriptInterface(
                         EpubReaderBridge(
                             onCenterTap = { centerTap.value.invoke() },
@@ -1150,10 +1158,12 @@ private fun EpubReaderView(
             },
             update = { webView ->
                 val chapter = currentChapterState
-                val renderKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|${appliedPadding.top}|${appliedPadding.bottom}|${appliedPadding.left}|${appliedPadding.right}|$openChapterAtEnd"
-                if (webView.tag != renderKey) {
-                    val firstRender = webView.tag == null
-                    webView.tag = renderKey
+                val documentKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|$openChapterAtEnd"
+                val previousState = webView.tag as? EpubWebViewRenderState
+                val nextState = EpubWebViewRenderState(documentKey, appliedPadding)
+                if (previousState?.documentKey != documentKey) {
+                    val firstRender = previousState == null
+                    webView.tag = nextState
                     currentPage = if (firstRender) initialPage.coerceAtLeast(0) else 0
                     currentPageCount = 1
                     val html = chapter.file.readText()
@@ -1173,6 +1183,12 @@ private fun EpubReaderView(
                         ),
                         "text/html",
                         Charsets.UTF_8.name(),
+                        null
+                    )
+                } else if (previousState.padding != appliedPadding) {
+                    webView.tag = nextState
+                    webView.evaluateJavascript(
+                        epubPaddingUpdateJavascript(appliedPadding),
                         null
                     )
                 }
@@ -1269,25 +1285,25 @@ private fun EpubReaderView(
                             label = "Top",
                             value = paddingDraft.top,
                             onValueChange = { value -> applyPadding(paddingDraft.copy(top = value)) },
-                            onValueChangeFinished = { appliedPadding = paddingDraft }
+                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
                         )
                         EpubPaddingSlider(
                             label = "Bottom",
                             value = paddingDraft.bottom,
                             onValueChange = { value -> applyPadding(paddingDraft.copy(bottom = value)) },
-                            onValueChangeFinished = { appliedPadding = paddingDraft }
+                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
                         )
                         EpubPaddingSlider(
                             label = "Left",
                             value = paddingDraft.left,
                             onValueChange = { value -> applyPadding(paddingDraft.copy(left = value)) },
-                            onValueChangeFinished = { appliedPadding = paddingDraft }
+                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
                         )
                         EpubPaddingSlider(
                             label = "Right",
                             value = paddingDraft.right,
                             onValueChange = { value -> applyPadding(paddingDraft.copy(right = value)) },
-                            onValueChangeFinished = { appliedPadding = paddingDraft }
+                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
                         )
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1664,12 +1680,19 @@ internal fun styleEpubHtml(
     val rightInset = epubPaddingViewportPercent(rightPaddingPercent)
     val pageInsetHeight = topInset + bottomInset
     val pageInsetWidth = leftInset + rightInset
-    val pageHeightScale = 1f - (pageInsetHeight / 100f)
     val readerAssets = """
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
-        :root { color-scheme: light; }
-        html, body {
+        :root {
+            color-scheme: light;
+            --bookorbit-reader-top: ${formatEpubCssPercent(topInset)}vh;
+            --bookorbit-reader-bottom: ${formatEpubCssPercent(bottomInset)}vh;
+            --bookorbit-reader-left: ${formatEpubCssPercent(leftInset)}vw;
+            --bookorbit-reader-right: ${formatEpubCssPercent(rightInset)}vw;
+            --bookorbit-reader-page-width: calc(100vw - ${formatEpubCssPercent(pageInsetWidth)}vw);
+            --bookorbit-reader-page-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
+        }
+        html {
             margin: 0;
             padding: 0;
             width: 100%;
@@ -1677,24 +1700,51 @@ internal fun styleEpubHtml(
             overflow: hidden;
             background: ${theme.backgroundCss};
             color: ${theme.foregroundCss};
+        }
+        body {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            outline: 0 !important;
+            position: fixed !important;
+            top: var(--bookorbit-reader-top) !important;
+            left: var(--bookorbit-reader-left) !important;
+            width: var(--bookorbit-reader-page-width) !important;
+            height: var(--bookorbit-reader-page-height) !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            transform: none !important;
+            background: ${theme.backgroundCss};
+            color: ${theme.foregroundCss};
             font-size: ${fontPercent}%;
             line-height: 1.7;
         }
         #bookorbit-page-strip {
-            position: absolute;
-            top: ${formatEpubCssPercent(topInset)}vh;
-            left: ${formatEpubCssPercent(leftInset)}vw;
-            box-sizing: border-box;
-            width: calc(100vw - ${formatEpubCssPercent(pageInsetWidth)}vw);
-            height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
-            min-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
-            overflow: visible;
+            position: relative !important;
+            display: flow-root !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-width: 0 !important;
+            min-height: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+            transform-origin: top left !important;
             word-wrap: break-word;
             will-change: transform;
         }
         img, svg {
             max-width: 100%;
-            max-height: calc(100vh - ${formatEpubCssPercent(pageInsetHeight)}vh);
+            max-height: var(--bookorbit-reader-page-height);
             height: auto;
             break-inside: avoid;
         }
@@ -1707,10 +1757,53 @@ internal fun styleEpubHtml(
         (() => {
           let page = 0;
           let strip = null;
+          let initialized = false;
+          let repaginationToken = 0;
+          let insets = {
+            top: ${formatEpubCssPercent(topInset)},
+            bottom: ${formatEpubCssPercent(bottomInset)},
+            left: ${formatEpubCssPercent(leftInset)},
+            right: ${formatEpubCssPercent(rightInset)}
+          };
           let pinToEnd = ${startAtEnd.toString()};
           const initialPage = ${initialPage.coerceAtLeast(0)};
           const bridge = window.$EPUB_READER_BRIDGE;
-          const pageHeight = () => Math.max(1, window.innerHeight * ${formatEpubCssPercent(pageHeightScale)});
+          const viewport = () => document.body;
+          const normalizeInset = (value) => Math.min(25, Math.max(0, Number(value) || 0));
+          const applyViewportInsets = () => {
+            const rootStyle = document.documentElement.style;
+            rootStyle.setProperty('--bookorbit-reader-top', `${'$'}{insets.top.toFixed(2)}vh`);
+            rootStyle.setProperty('--bookorbit-reader-bottom', `${'$'}{insets.bottom.toFixed(2)}vh`);
+            rootStyle.setProperty('--bookorbit-reader-left', `${'$'}{insets.left.toFixed(2)}vw`);
+            rootStyle.setProperty('--bookorbit-reader-right', `${'$'}{insets.right.toFixed(2)}vw`);
+            rootStyle.setProperty(
+              '--bookorbit-reader-page-width',
+              `calc(100vw - ${'$'}{(insets.left + insets.right).toFixed(2)}vw)`
+            );
+            rootStyle.setProperty(
+              '--bookorbit-reader-page-height',
+              `calc(100vh - ${'$'}{(insets.top + insets.bottom).toFixed(2)}vh)`
+            );
+            const body = viewport();
+            if (body) {
+              body.style.setProperty('display', 'block', 'important');
+              body.style.setProperty('position', 'fixed', 'important');
+              body.style.setProperty('top', 'var(--bookorbit-reader-top)', 'important');
+              body.style.setProperty('left', 'var(--bookorbit-reader-left)', 'important');
+              body.style.setProperty('width', 'var(--bookorbit-reader-page-width)', 'important');
+              body.style.setProperty('height', 'var(--bookorbit-reader-page-height)', 'important');
+              body.style.setProperty('margin', '0', 'important');
+              body.style.setProperty('padding', '0', 'important');
+              body.style.setProperty('overflow', 'hidden', 'important');
+              body.style.setProperty('transform', 'none', 'important');
+            }
+          };
+          const pageHeight = () => {
+            const body = viewport();
+            const fallback = window.innerHeight * (1 - (insets.top + insets.bottom) / 100);
+            const measured = body ? body.getBoundingClientRect().height : 0;
+            return Math.max(1, measured || fallback);
+          };
           const pageCount = () => strip
             ? Math.max(1, Math.ceil(strip.scrollHeight / pageHeight()))
             : 1;
@@ -1728,18 +1821,53 @@ internal fun styleEpubHtml(
             renderPage();
             publish();
           };
-          const repaginate = () => requestAnimationFrame(() => {
-            page = pinToEnd ? pageCount() - 1 : Math.min(page, pageCount() - 1);
-            renderPage();
-            publish();
-          });
+          const repaginateFromOffset = (contentOffset) => {
+            const token = ++repaginationToken;
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              if (token !== repaginationToken) return;
+              const count = pageCount();
+              page = pinToEnd
+                ? count - 1
+                : Math.min(Math.max(0, Math.floor(contentOffset / pageHeight())), count - 1);
+              renderPage();
+              publish();
+            }));
+          };
+          const repaginate = () => {
+            if (!initialized) return;
+            const contentOffset = page * pageHeight();
+            repaginateFromOffset(contentOffset);
+          };
+          const setInsets = (top, bottom, left, right) => {
+            const next = {
+              top: normalizeInset(top),
+              bottom: normalizeInset(bottom),
+              left: normalizeInset(left),
+              right: normalizeInset(right)
+            };
+            if (
+              next.top === insets.top &&
+              next.bottom === insets.bottom &&
+              next.left === insets.left &&
+              next.right === insets.right
+            ) return;
+            const contentOffset = page * pageHeight();
+            insets = next;
+            applyViewportInsets();
+            if (strip && initialized) repaginateFromOffset(contentOffset);
+          };
+          window.BookOrbitReaderLayout = Object.freeze({ setInsets });
           window.addEventListener('load', () => {
-            strip = document.createElement('main');
+            applyViewportInsets();
+            const body = viewport();
+            if (!body) return;
+            strip = document.createElement('div');
             strip.id = 'bookorbit-page-strip';
-            Array.from(document.body.childNodes).forEach((node) => strip.appendChild(node));
-            document.body.appendChild(strip);
+            Array.from(body.childNodes).forEach((node) => strip.appendChild(node));
+            body.appendChild(strip);
             requestAnimationFrame(() => requestAnimationFrame(() => {
               page = pinToEnd ? pageCount() - 1 : Math.min(initialPage, pageCount() - 1);
+              initialized = true;
               renderPage();
               publish();
             }));
@@ -1795,6 +1923,17 @@ internal fun styleEpubHtml(
     }
 }
 
+internal fun epubPaddingUpdateJavascript(padding: EpubPaddingPercentages): String {
+    val topInset = epubPaddingViewportPercent(padding.top)
+    val bottomInset = epubPaddingViewportPercent(padding.bottom)
+    val leftInset = epubPaddingViewportPercent(padding.left)
+    val rightInset = epubPaddingViewportPercent(padding.right)
+    return "window.BookOrbitReaderLayout && " +
+        "window.BookOrbitReaderLayout.setInsets(" +
+        "${formatEpubCssPercent(topInset)}, ${formatEpubCssPercent(bottomInset)}, " +
+        "${formatEpubCssPercent(leftInset)}, ${formatEpubCssPercent(rightInset)});"
+}
+
 private fun formatEpubFontScale(fontScale: Float): String {
     return String.format(Locale.US, "%.0f%%", fontScale * 100f)
 }
@@ -1812,6 +1951,11 @@ internal data class EpubPaddingPercentages(
     val bottom: Float = EPUB_DEFAULT_PADDING_PERCENT,
     val left: Float = EPUB_DEFAULT_PADDING_PERCENT,
     val right: Float = EPUB_DEFAULT_PADDING_PERCENT
+)
+
+private data class EpubWebViewRenderState(
+    val documentKey: String,
+    val padding: EpubPaddingPercentages
 )
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
