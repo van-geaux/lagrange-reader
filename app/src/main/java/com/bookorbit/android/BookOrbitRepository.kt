@@ -94,6 +94,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
+    private val coverCacheStore = CoverCacheStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
@@ -117,6 +118,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             prefs.remove(Keys.SERVER_URL)
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
         }
+        coverCacheStore.clear()
         clearSession()
     }
 
@@ -309,7 +311,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
         val url = book.coverUrl?.let(::coverThumbnailUrl) ?: return@withContext null
         synchronized(coverCache) { coverCache[url] }?.let { return@withContext it }
+        val serverUrl = getServerUrl().orEmpty()
+        coverCacheStore.read(serverUrl, book.id, url)?.let { bytes ->
+            synchronized(coverCache) { coverCache[url] = bytes }
+            return@withContext bytes
+        }
         val bytes = requestBytes(url)
+        coverCacheStore.save(serverUrl, book.id, url, bytes)
         synchronized(coverCache) {
             coverCache[url] = bytes
             while (coverCache.size > 32) {

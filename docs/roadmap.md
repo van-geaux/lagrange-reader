@@ -97,6 +97,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: show the Lagrange logo only on Home; Library now opens the first/selected library directly, and its library name replaces the logo as a tappable library selector.
 4. Implemented: split the selected Library view into Recommended, reusing the Home-style shelves for that library, and Browse, containing the complete paginated book grid.
 
+## Latest device feedback workplan — 2026-07-13 (final browser polish)
+
+1. Implemented: make the Library, Series, and Authors poster-card grids visibly smaller on narrow phones by lowering their adaptive minimum width; physical-device density validation remains required.
+2. Implemented: add a downward-triangle affordance beside the selected Library name so its tap-to-select behavior is discoverable.
+3. Implemented: remove the Library refresh arrow and add swipe-down-to-refresh to the Library content tabs.
+4. Implemented: persist fetched book cover thumbnails locally and read that cache before attempting the server, including for Local books.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

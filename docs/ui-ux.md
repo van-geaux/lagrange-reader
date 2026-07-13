@@ -77,6 +77,13 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep the Lagrange logo on Home only; use the selected library name as the tappable selector in Library.
 - [x] Split Library into Recommended Home-style shelves and Browse's complete book grid.
 
+### Final browser polish workplan — 2026-07-13
+
+- [x] Reduce Library, Series, and Authors poster-card grids enough to create an additional compact phone column where possible.
+- [x] Add a downward-triangle affordance beside the tappable Library name selector.
+- [x] Replace the Library refresh action with swipe-down-to-refresh over Recommended and Browse content.
+- [x] Persist cover thumbnails locally and prefer the local cache for Local books.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

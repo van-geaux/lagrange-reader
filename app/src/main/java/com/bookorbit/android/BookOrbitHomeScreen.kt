@@ -36,7 +36,6 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -61,6 +60,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,6 +76,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -92,6 +94,7 @@ import kotlinx.coroutines.withContext
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
+private val BOOK_CARD_MIN_SIZE = 88.dp
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -279,9 +282,6 @@ internal fun NativeLibraryBrowserScreen(
                     profileExpanded = showProfileMenu,
                     onDismissProfile = { showProfileMenu = false },
                     showBrand = destination == BrowserDestination.HOME,
-                    showRefresh = destination == BrowserDestination.LIBRARY,
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = onRefresh,
                     onTitleClick = if (destination == BrowserDestination.LIBRARY && !showLibraryPicker) {
                         { showLibraryPicker = true }
                     } else {
@@ -440,6 +440,8 @@ internal fun NativeLibraryBrowserScreen(
                     tab = libraryTab,
                     onTabChange = { libraryTab = it },
                     modifier = Modifier.padding(padding),
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = onRefresh,
                     libraryBooksLoader = libraryBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
@@ -474,9 +476,6 @@ private fun BrowserTopBar(
     sessionActionLabel: String,
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
-    showRefresh: Boolean = false,
-    isRefreshing: Boolean = false,
-    onRefresh: () -> Unit = {},
     onTitleClick: (() -> Unit)? = null
 ) {
     BookOrbitTopBar(
@@ -485,15 +484,6 @@ private fun BrowserTopBar(
         onTitleClick = onTitleClick,
         navigationIcon = navigationIcon,
         actions = {
-            if (showRefresh) {
-                IconButton(onClick = onRefresh, enabled = !isRefreshing) {
-                    if (isRefreshing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
-            }
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
                     Icon(Icons.Default.Search, contentDescription = "Search")
@@ -714,7 +704,7 @@ private fun SeriesCatalogScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 105.dp),
+        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -807,7 +797,7 @@ private fun AuthorsCatalogScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 105.dp),
+        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -884,7 +874,7 @@ private fun AuthorDetails(
         value = booksLoader(author.id, 0)
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 105.dp),
+        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1358,41 +1348,73 @@ private fun LibraryContentScreen(
     tab: LibraryTab,
     onTabChange: (LibraryTab) -> Unit,
     modifier: Modifier,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     libraryBooksLoader: suspend (String, Int) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab.ordinal) {
-            Tab(
-                selected = tab == LibraryTab.RECOMMENDED,
-                onClick = { onTabChange(LibraryTab.RECOMMENDED) },
-                text = { Text("Recommended") }
-            )
-            Tab(
-                selected = tab == LibraryTab.BROWSE,
-                onClick = { onTabChange(LibraryTab.BROWSE) },
-                text = { Text("Browse") }
-            )
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize()
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TabRow(selectedTabIndex = tab.ordinal) {
+                Tab(
+                    selected = tab == LibraryTab.RECOMMENDED,
+                    onClick = { onTabChange(LibraryTab.RECOMMENDED) },
+                    text = { Text("Recommended") }
+                )
+                Tab(
+                    selected = tab == LibraryTab.BROWSE,
+                    onClick = { onTabChange(LibraryTab.BROWSE) },
+                    text = { Text("Browse") }
+                )
+            }
+            when (tab) {
+                LibraryTab.RECOMMENDED -> HomeFeed(
+                    state = state,
+                    modifier = Modifier.weight(1f),
+                    coverLoader = coverLoader,
+                    onBookSelected = onBookSelected,
+                    onSeriesSelected = onSeriesSelected
+                )
+                LibraryTab.BROWSE -> LibraryBrowseScreen(
+                    state = state,
+                    modifier = Modifier.weight(1f),
+                    libraryBooksLoader = libraryBooksLoader,
+                    coverLoader = coverLoader,
+                    onBookSelected = onBookSelected,
+                    onSeriesSelected = onSeriesSelected
+                )
+            }
         }
-        when (tab) {
-            LibraryTab.RECOMMENDED -> HomeFeed(
-                state = state,
-                modifier = Modifier.weight(1f),
-                coverLoader = coverLoader,
-                onBookSelected = onBookSelected,
-                onSeriesSelected = onSeriesSelected
-            )
-            LibraryTab.BROWSE -> LibraryBrowseScreen(
-                state = state,
-                modifier = Modifier.weight(1f),
-                libraryBooksLoader = libraryBooksLoader,
-                coverLoader = coverLoader,
-                onBookSelected = onBookSelected,
-                onSeriesSelected = onSeriesSelected
-            )
-        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun PullToRefreshLayout(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier,
+    content: @Composable () -> Unit
+) {
+    val pullState = rememberPullToRefreshState(enabled = { !isRefreshing })
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) pullState.startRefresh() else pullState.endRefresh()
+    }
+    LaunchedEffect(pullState.isRefreshing) {
+        if (pullState.isRefreshing && !isRefreshing) onRefresh()
+    }
+    Box(modifier = modifier.nestedScroll(pullState.nestedScrollConnection)) {
+        content()
+        PullToRefreshContainer(
+            state = pullState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
@@ -1488,7 +1510,7 @@ private fun LibraryBooks(
         state.books.map { Pair(it, null) }
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 105.dp),
+        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1842,7 +1864,7 @@ private fun SeriesDetails(
     }
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 105.dp),
+        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

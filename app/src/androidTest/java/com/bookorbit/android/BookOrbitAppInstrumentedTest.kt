@@ -142,6 +142,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Lagrange logo").assertIsDisplayed()
         composeRule.onNodeWithText("Libraries").performClick()
         composeRule.onNodeWithText("Main").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open library selector").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Refresh").assertCountEquals(0)
         composeRule.onNodeWithText("Browse").performClick()
         composeRule.onNodeWithText("The Test Book").assertIsDisplayed()
         composeRule.onNodeWithText("Test Author").assertIsDisplayed()

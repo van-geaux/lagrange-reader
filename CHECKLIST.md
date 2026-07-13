@@ -232,6 +232,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add library Browse-tab pagination with a Load more control
 - [x] Show the Lagrange logo only on Home and make the selected library name the Library selector
 - [x] Split Library into Recommended and Browse tabs
+- [x] Make Library, Series, and Authors poster cards visibly smaller on narrow phones
+- [x] Add a downward-triangle affordance to the selected Library name
+- [x] Replace the Library refresh arrow with swipe-down-to-refresh
+- [x] Cache cover thumbnails locally for Local books
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

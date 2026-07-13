@@ -23,7 +23,7 @@ Current Compose instrumentation coverage includes server setup validation, login
 - Download, airplane-mode reopen, and progress-sync behavior passed.
 - The previous launch visual issue was a spinning loading indicator instead of the expected app-specific adaptive-icon presentation; it is now replaced in code with a branded splash/loading state and needs physical-device confirmation.
 - The next device pass must validate the new first-row Currently reading shelf and the implemented Plex-inspired shell: Home/Libraries/More bottom navigation, More expansion, Home-only logo/search/profile actions, the tappable Library name selector, Recommended/Browse tabs, visible status bar/Home spacing, and search layer. It must also validate Compact/Comfortable/Wide reader padding, the Comfortable default, repagination after changing it, and the branded launch state.
-- Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, and the placeholder About destination are implemented. Physical-device validation remains required for the new behavior.
+- Exact in-chapter EPUB restore, compact poster-card library browsing, Lagrange branding with the subtitle `a BookOrbit reader` on splash/loading only, the Libraries series-collapse control, Local books before Options in More, the placeholder About destination, swipe-down refresh, and persistent cover-thumbnail caching are implemented. Physical-device validation remains required for the new behavior.
 
 ## Manual Test Matrix
 
@@ -56,14 +56,14 @@ Current Compose instrumentation coverage includes server setup validation, login
 ### 2. Library Browsing
 
 1. Confirm the post-login screen opens on Home with the visible Android status bar, intentional top spacing, Lagrange logo, bottom navigation, and search icon visible.
-2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, Local books, Options, and About appear in that order. Open Libraries and verify the first/selected library opens directly, the logo is replaced by the tappable library name, and tapping it opens library selection.
+2. Confirm bottom navigation exposes Home, Libraries, and More without a hamburger drawer; open More and verify Series, Authors, Local books, Options, and About appear in that order. Open Libraries and verify the first/selected library opens directly, the logo is replaced by the tappable library name with a downward-triangle affordance, and tapping it opens library selection.
 3. Confirm Library has Recommended and Browse tabs. Recommended shows Home-style shelves scoped to the selected library; Browse shows the compact adaptive poster-card grid matching Series and Authors. When series are present, tap Collapse series and confirm one representative card remains per series, then tap Show all and confirm every book returns.
 4. Open More > Local books and confirm valid downloads appear in the same poster-card grid, open locally, and can still be deleted from book details.
-5. In Library > Browse, scroll to Load more, tap it, and confirm the next page is appended without replacing existing books; repeat until the server total is reached.
+5. In Library > Browse, scroll to Load more, tap it, and confirm the next page is appended without replacing existing books; repeat until the server total is reached. Pull down from the top of Recommended and Browse and confirm the library refreshes without a refresh arrow in the top bar.
 6. Return Home and confirm shelves only appear when they contain matching books.
 7. Confirm Currently reading is the first book shelf, active progress is shown there, completed books are excluded from it, and Recently read books remains a separate history shelf.
 8. Search for a title outside the initially loaded library page and confirm global BookOrbit results appear.
-9. Confirm real book covers load on Home, search results, library lists, and detail screens.
+9. Confirm real book covers load on Home, search results, library lists, and detail screens. After a cover has loaded, open More > Local books and verify the thumbnail remains visible without requiring a server response.
 10. While covers are filling in, rapidly scroll vertically and across several shelves; confirm gestures remain smooth and memory use does not progressively degrade.
 11. Open a series card and confirm it loads the complete ordered series, including series over 100 books, name/authors, read/total count, completion bar, any reported gaps, first-book synopsis, genres/tags, and book list instead of opening a reader.
 12. Open a book and confirm title/subtitle, author/narrator, synopsis, genres/tags, publisher, publication date, language, pages, ISBN, rating, library, format, and available file metadata match the main BookOrbit detail page; absent fields should be omitted cleanly.

@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Image
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,11 +59,21 @@ internal fun BookOrbitTopBar(
                     }
                 }
             } else {
-                Text(
-                    text = title,
-                    modifier = onTitleClick?.let { Modifier.clickable(onClick = it) } ?: Modifier,
-                    style = MaterialTheme.typography.titleLarge
-                )
+                if (onTitleClick != null) {
+                    Row(
+                        modifier = Modifier.clickable(onClick = onTitleClick),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(text = title, style = MaterialTheme.typography.titleLarge)
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Open library selector"
+                        )
+                    }
+                } else {
+                    Text(text = title, style = MaterialTheme.typography.titleLarge)
+                }
             }
         },
         modifier = modifier,
