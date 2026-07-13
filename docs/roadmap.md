@@ -141,6 +141,16 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 6. Implemented: persist the login access token and attach it to authenticated API, cover, download, and reader-cache requests; explicit session clearing removes the token.
 7. Implemented: move Options from More into the profile menu above Log out and add extra vertical spacing to the More sheet.
 
+### Latest device feedback workplan - 2026-07-13 (session, catalog, and density follow-up)
+
+1. Implemented: make session persistence the highest-priority fix by retrying 401/403 API, cover, download, and reader-cache requests after a refresh-cookie renewal attempt. The endpoint contract and long-lived behavior still require physical-device validation against the target server.
+2. Implemented: make Series catalog covers use a deterministic server cover fallback, retry failed catalog image loads, and cache successful catalog image bytes for scroll-back reuse.
+3. Implemented: merge freshly observed reader progress into the browser immediately and include a recently read book even when it was outside the first server page, so Continue reading does not wait for a full reload.
+4. Implemented: remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books while preserving destination identity in the app bar/detail screens.
+5. Implemented: reduce shared Compose typography tokens by approximately 10% and reorganize book card metadata into book title, optional series, and series-index rows.
+6. Implemented: apply all four reader padding values immediately during slider movement, with an explicit WebView viewport and page-strip height to make top/bottom changes visible.
+7. Physical-device validation remains next for session expiry, series thumbnails, Continue reading latency, card density, card row wrapping, and reader padding visibility.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

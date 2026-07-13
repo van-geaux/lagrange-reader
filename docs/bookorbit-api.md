@@ -30,6 +30,8 @@ Server behavior:
 
 The Android client persists `accessToken` for the configured server and sends it as a Bearer credential on authenticated API and media requests, while retaining the shared cookie jar for cookie-based and refresh-capable server flows.
 
+When an authenticated request receives `401` or `403`, the client closes that response, attempts `POST /api/v1/auth/refresh`, then falls back to `POST /api/v1/auth/token/renew` when the first path is not available. It stores a returned `accessToken` when present and retries the original request once. These renewal paths are client fallbacks pending confirmation against the target deployment; physical-device testing must record the actual server contract if both are unavailable.
+
 ### Current user
 
 Endpoint:

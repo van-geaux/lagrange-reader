@@ -10,6 +10,7 @@ class BookOrbitRepositoryHelpersTest {
     fun `extractAccessToken accepts the login contract and nested responses`() {
         assertEquals("access-123", extractAccessToken("{\"accessToken\":\"access-123\"}"))
         assertEquals("access-456", extractAccessToken("{\"data\":{\"access_token\":\"access-456\"}}"))
+        assertEquals("access-789", extractAccessToken("{\"accessToken\":{\"token\":\"access-789\"}}"))
         assertNull(extractAccessToken("{\"user\":{\"id\":\"user-1\"}}"))
     }
 

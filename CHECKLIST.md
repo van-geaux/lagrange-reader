@@ -255,6 +255,13 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Cache full downloaded-book metadata for server-free local detail screens
 - [x] Show # and every A–Z label on the Library jump rail, grouping non-alphabetic titles under #
 - [x] Route background authenticated request failures through the login recovery flow
+- [x] Retry authenticated requests through the refresh-cookie session flow before showing session-expired login
+- [x] Retry and cache Series/Authors catalog thumbnails, including the series cover fallback endpoint
+- [x] Surface newly recorded progress immediately in Home Continue reading, including books outside the first loaded page
+- [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
+- [x] Reduce app typography tokens by approximately 10% for phone density
+- [x] Render book cards with title, optional series, and series-index metadata rows
+- [x] Apply reader edge padding immediately while sliders move, with explicit viewport sizing for repagination
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

@@ -171,6 +171,25 @@ private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 102
 private val coverBitmapMutex = Mutex()
 private val coverLoadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 private val coverLoadJobs = mutableMapOf<String, Deferred<Bitmap?>>()
+private val catalogImageCache = object : LruCache<String, ByteArray>(4 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: ByteArray): Int = value.size
+}
+
+private suspend fun loadCatalogImageWithRetry(
+    url: String,
+    loader: suspend (String) -> ByteArray?
+): ByteArray? {
+    catalogImageCache.get(url)?.let { return it }
+    repeat(2) { attempt ->
+        val loaded = runCatching { loader(url) }.getOrNull()
+        if (loaded != null && loaded.isNotEmpty()) {
+            catalogImageCache.put(url, loaded)
+            return loaded
+        }
+        if (attempt == 0) delay(220)
+    }
+    return null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -797,7 +816,6 @@ private fun SeriesCatalogScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text("Series", style = MaterialTheme.typography.headlineSmall)
             Text(
                 if (total > 0) "$total series" else "Browse every accessible series",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -890,7 +908,6 @@ private fun AuthorsCatalogScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text("Authors", style = MaterialTheme.typography.headlineSmall)
             Text(
                 if (total > 0) "$total authors" else "Browse every accessible author",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -997,6 +1014,7 @@ private fun BookPosterCard(
     enabled: Boolean = true,
     displayTitle: String = book.title
 ) {
+    val isBookCard = displayTitle == book.title
     val status = when {
         !enabled -> "Unavailable offline"
         book.isRead && book.isDownloaded -> "Read · Offline"
@@ -1023,31 +1041,36 @@ private fun BookPosterCard(
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             BookCover(book, coverLoader)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Text(
-                    displayTitle,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                if (showSeriesIndex) {
+            Text(
+                displayTitle,
+                maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium
+            )
+            if (isBookCard) {
+                book.seriesName?.takeIf { it.isNotBlank() }?.let { seriesName ->
+                    Text(
+                        seriesName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (showSeriesIndex || !book.seriesName.isNullOrBlank()) {
                     book.seriesIndex?.let { index ->
                         Text(
                             "#${formatSeriesIndex(index)}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
                 }
-            }
-            book.author?.let {
+            } else if (!book.author.isNullOrBlank()) {
                 Text(
-                    it,
+                    book.author,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1115,7 +1138,7 @@ private fun CatalogImage(
     modifier: Modifier
 ) {
     val bytes by produceState<ByteArray?>(initialValue = null, url) {
-        value = url?.let { loader(it) }
+        value = url?.let { imageUrl -> loadCatalogImageWithRetry(imageUrl, loader) }
     }
     val bitmap = remember(bytes) {
         bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
@@ -1146,7 +1169,7 @@ private fun HomeFeed(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
-    showHeader: Boolean = true
+    showHeader: Boolean = false
 ) {
     val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
     val onDeck = remember(state.books) { onDeckBooks(state.books) }
@@ -1280,6 +1303,7 @@ private fun ShelfBookCard(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit
 ) {
+    val isBookCard = displayTitle == book.title
     Column(
         modifier = Modifier
             .width(84.dp)
@@ -1289,13 +1313,32 @@ private fun ShelfBookCard(
         BookCover(book, coverLoader)
         Text(
             displayTitle,
-            maxLines = 2,
+            maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium
         )
-        book.author?.let {
+        if (isBookCard) {
+            book.seriesName?.takeIf { it.isNotBlank() }?.let { seriesName ->
+                Text(
+                    seriesName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            book.seriesIndex?.let { index ->
+                Text(
+                    "#${formatSeriesIndex(index)}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        } else if (!book.author.isNullOrBlank()) {
             Text(
-                it,
+                book.author,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1603,7 +1646,6 @@ private fun LibraryBooks(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit = {},
     titleOverride: String? = null,
-    eyebrow: String = "Library",
     emptyMessage: String = "No books found.",
     allowSeriesCollapse: Boolean = true,
     totalBooks: Int? = null,
@@ -1688,8 +1730,6 @@ private fun LibraryBooks(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    OrbitEyebrow(eyebrow)
-                    Text(title, style = MaterialTheme.typography.headlineSmall)
                     Text(
                         buildString {
                             val bookCount = totalBooks ?: state.books.size
@@ -1826,7 +1866,6 @@ private fun LocalBooksScreen(
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
         titleOverride = "Local books",
-        eyebrow = "On this device",
         emptyMessage = "No local books found.",
         allowSeriesCollapse = false
     )

@@ -105,6 +105,16 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Move Options into the profile menu above Log out and raise the More sheet with additional inset spacing.
 - [x] Avoid showing a partial Browse series count before lazy loading completes.
 
+### Latest device feedback workplan - 2026-07-13 (session, catalog, and density follow-up)
+
+- [x] Prioritize session persistence with refresh-cookie renewal and one authenticated-request retry before returning to Login; validate the actual endpoint on the target server.
+- [x] Retry Series and Authors catalog thumbnails, use a deterministic Series cover fallback, and cache successful catalog image bytes for fast scroll-back rendering.
+- [x] Merge reader progress into Home immediately so Continue reading appears without waiting for a full browser reload or a later page.
+- [x] Remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books.
+- [x] Reduce shared app typography by approximately 10% and organize book card metadata as title, optional series, and series index rows.
+- [x] Apply reader padding changes immediately during slider movement and render an explicit viewport/page height so Top and Bottom changes affect pagination visibly.
+- [ ] Validate session expiry, catalog thumbnails, typography/card density, metadata wrapping, and reader padding on the physical device.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

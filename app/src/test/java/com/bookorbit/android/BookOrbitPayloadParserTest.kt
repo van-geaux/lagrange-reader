@@ -469,6 +469,21 @@ class BookOrbitPayloadParserTest {
         assertEquals(12, authors.items.single().bookCount)
     }
 
+    @Test
+    fun `parseSeriesCatalogPage supplies a cover endpoint when metadata omits the cover`() {
+        val series = BookOrbitPayloadParser.parseSeriesCatalogPage(
+            payload = """
+                {"items":[{"id":"series-fallback","name":"Fallback Series"}]}
+            """.trimIndent(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(
+            "https://example.test/api/v1/series/series-fallback/cover",
+            series.items.single().coverUrl
+        )
+    }
+
     @Test(expected = UserFacingException::class)
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")

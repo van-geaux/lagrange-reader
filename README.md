@@ -17,6 +17,8 @@ Working prototype (`0.2.0`, pre-1.0). The app shell, API wiring, local download 
 
 ## Build
 
+The current 0.2.0 pass also retries authenticated requests through a refresh-cookie renewal attempt before returning to login, retries and caches catalog thumbnails, updates Continue reading immediately after reading, uses more compact typography, and lays out book cards as title/series/index metadata rows. The refresh endpoint and long-lived session behavior still need physical-device validation against the target BookOrbit server.
+
 From the project root:
 
 ```powershell

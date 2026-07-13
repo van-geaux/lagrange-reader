@@ -26,6 +26,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -56,7 +57,12 @@ internal fun extractAccessToken(payload: String): String? {
         obj ?: return null
         return listOf("accessToken", "access_token", "token")
             .firstNotNullOfOrNull { key ->
-                obj.optString(key).takeIf { it.isNotBlank() }
+                when (val value = obj.opt(key)) {
+                    is JSONObject -> value.optString("token").takeIf { it.isNotBlank() }
+                        ?: value.optString("value").takeIf { it.isNotBlank() }
+                        ?: value.optString("accessToken").takeIf { it.isNotBlank() }
+                    else -> obj.optString(key).takeIf { it.isNotBlank() }
+                }
             }
     }
 
@@ -121,6 +127,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
+    private val sessionRefreshLock = Any()
 
     override suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
 
@@ -349,7 +356,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
-        requestBytes(url)
+        runCatching { requestBytes(url) }.getOrElse { error ->
+            if (error is HttpRequestException && error.code == 404 && url.endsWith("/cover")) {
+                requestBytes(url.removeSuffix("/cover") + "/thumbnail")
+            } else {
+                throw error
+            }
+        }
     }
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
@@ -558,21 +571,16 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             if (parent != null && !parent.exists()) {
                 throw UserFacingException("Unable to prepare local storage for this download.")
             }
-            val request = Request.Builder()
-                .url(buildDownloadUrl(fileId))
-                .get()
-                .addSessionAccessToken()
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (response.code == 401 || response.code == 403) {
-                    throw AuthenticationRequiredException()
-                }
-                if (!response.isSuccessful) {
-                    throw HttpRequestException(
-                        code = response.code,
-                        action = "download this title"
-                    )
-                }
+            executeAuthenticated(
+                requestFactory = {
+                    Request.Builder()
+                        .url(buildDownloadUrl(fileId))
+                        .get()
+                        .addSessionAccessToken()
+                        .build()
+                },
+                action = "download this title"
+            ) { response ->
                 val input = response.body?.byteStream()
                     ?: throw UserFacingException("The server returned an empty download.")
                 try {
@@ -864,20 +872,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             target.delete()
         }
 
-        val request = Request.Builder()
-            .url(buildDownloadUrl(fileId))
-            .get()
-            .addSessionAccessToken()
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (response.code == 401 || response.code == 403) {
-                throw AuthenticationRequiredException()
-            }
-            if (!response.isSuccessful) {
-                return null
-            }
-            val input = response.body?.byteStream() ?: return null
+        val fetched = executeAuthenticated(
+            requestFactory = {
+                Request.Builder()
+                    .url(buildDownloadUrl(fileId))
+                    .get()
+                    .addSessionAccessToken()
+                    .build()
+            },
+            action = "prepare a reader file"
+        ) { response ->
+            val input = response.body?.byteStream() ?: return@executeAuthenticated false
             target.outputStream().use { output -> input.copyTo(output) }
+            true
+        }
+        if (!fetched) {
+            return null
         }
         return runCatching {
             ensureNonEmptyFile(target, "The server returned an empty reader file.")
@@ -931,24 +941,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     private fun request(path: String, method: String, body: RequestBody?): String {
         val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
-        val request = Request.Builder()
-            .url(base.trimEnd('/') + path)
-            .method(method, body)
-            .header("Accept", "application/json")
-            .addSessionAccessToken()
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (response.code == 401 || response.code == 403) {
-                throw AuthenticationRequiredException()
-            }
-            if (!response.isSuccessful) {
-                throw HttpRequestException(
-                    code = response.code,
-                    action = requestAction(path, method)
-                )
-            }
-            return response.body?.string().orEmpty()
+        return executeAuthenticated(
+            requestFactory = {
+                Request.Builder()
+                    .url(base.trimEnd('/') + path)
+                    .method(method, body)
+                    .header("Accept", "application/json")
+                    .addSessionAccessToken()
+                    .build()
+            },
+            action = requestAction(path, method)
+        ) { response ->
+            response.body?.string().orEmpty()
         }
     }
 
@@ -981,21 +985,85 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     private fun requestBytes(url: String): ByteArray {
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .header("Accept", "image/*")
-            .addSessionAccessToken()
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (response.code == 401 || response.code == 403) {
+        return executeAuthenticated(
+            requestFactory = {
+                Request.Builder()
+                    .url(url)
+                    .get()
+                    .header("Accept", "image/*")
+                    .addSessionAccessToken()
+                    .build()
+            },
+            action = "load a book cover"
+        ) { response ->
+            response.body?.bytes() ?: ByteArray(0)
+        }
+    }
+
+    private fun <T> executeAuthenticated(
+        requestFactory: () -> Request,
+        action: String,
+        onSuccess: (Response) -> T
+    ): T {
+        var response = client.newCall(requestFactory()).execute()
+        if (response.code == 401 || response.code == 403) {
+            response.close()
+            if (refreshSession()) {
+                response = client.newCall(requestFactory()).execute()
+            }
+        }
+        response.use {
+            if (it.code == 401 || it.code == 403) {
                 throw AuthenticationRequiredException()
             }
-            if (!response.isSuccessful) {
-                throw HttpRequestException(response.code, "load a book cover")
+            if (!it.isSuccessful) {
+                throw HttpRequestException(code = it.code, action = action)
             }
-            return response.body?.bytes() ?: ByteArray(0)
+            return onSuccess(it)
         }
+    }
+
+    private fun refreshSession(): Boolean {
+        return runCatching {
+            synchronized(sessionRefreshLock) {
+                val previousToken = sessionAccessToken()
+                val base = serverBase().ifBlank { return@synchronized false }
+                val refreshPaths = listOf(
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/token/renew"
+                )
+                for (path in refreshPaths) {
+                    val request = Request.Builder()
+                        .url(base.trimEnd('/') + path)
+                        .post("{}".toRequestBody(JSON))
+                        .header("Accept", "application/json")
+                        .build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.code == 404 || response.code == 405) {
+                            return@use
+                        }
+                        if (!response.isSuccessful) {
+                            return@synchronized false
+                        }
+                        val accessToken = extractAccessToken(response.body?.string().orEmpty())
+                        runBlocking {
+                            context.dataStore.edit { prefs ->
+                                if (accessToken.isNullOrBlank()) {
+                                    prefs.remove(Keys.ACCESS_TOKEN)
+                                } else {
+                                    prefs[Keys.ACCESS_TOKEN] = accessToken
+                                }
+                            }
+                        }
+                        return@synchronized true
+                    }
+                    if (sessionAccessToken() != previousToken) {
+                        return@synchronized true
+                    }
+                }
+                false
+            }
+        }.getOrDefault(false)
     }
 
     private fun normalizePercentage(value: Float?): Double {
@@ -1354,7 +1422,7 @@ internal object BookOrbitPayloadParser {
                             serverBase = serverBase,
                             fallbackPath = "/api/v1/series/$id/cover",
                             keys = arrayOf("coverUrl", "cover", "coverImage")
-                        )
+                        ) ?: "$serverBase/api/v1/series/$id/cover"
                     )
                 )
             }

@@ -1068,6 +1068,10 @@ private fun EpubReaderView(
     var currentPageCount by remember(file) { mutableStateOf(1) }
     var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
+    val applyPadding = { next: EpubPaddingPercentages ->
+        paddingDraft = next
+        appliedPadding = next
+    }
     val centerTap = rememberUpdatedState {
         if (!showControls) {
             showControls = true
@@ -1259,25 +1263,25 @@ private fun EpubReaderView(
                         EpubPaddingSlider(
                             label = "Top",
                             value = paddingDraft.top,
-                            onValueChange = { value -> paddingDraft = paddingDraft.copy(top = value) },
+                            onValueChange = { value -> applyPadding(paddingDraft.copy(top = value)) },
                             onValueChangeFinished = { appliedPadding = paddingDraft }
                         )
                         EpubPaddingSlider(
                             label = "Bottom",
                             value = paddingDraft.bottom,
-                            onValueChange = { value -> paddingDraft = paddingDraft.copy(bottom = value) },
+                            onValueChange = { value -> applyPadding(paddingDraft.copy(bottom = value)) },
                             onValueChangeFinished = { appliedPadding = paddingDraft }
                         )
                         EpubPaddingSlider(
                             label = "Left",
                             value = paddingDraft.left,
-                            onValueChange = { value -> paddingDraft = paddingDraft.copy(left = value) },
+                            onValueChange = { value -> applyPadding(paddingDraft.copy(left = value)) },
                             onValueChangeFinished = { appliedPadding = paddingDraft }
                         )
                         EpubPaddingSlider(
                             label = "Right",
                             value = paddingDraft.right,
-                            onValueChange = { value -> paddingDraft = paddingDraft.copy(right = value) },
+                            onValueChange = { value -> applyPadding(paddingDraft.copy(right = value)) },
                             onValueChangeFinished = { appliedPadding = paddingDraft }
                         )
                         Row(
@@ -1657,6 +1661,7 @@ internal fun styleEpubHtml(
     val pageInsetWidth = leftInset + rightInset
     val pageHeightScale = 1f - (pageInsetHeight / 100f)
     val readerAssets = """
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
         :root { color-scheme: light; }
         html, body {

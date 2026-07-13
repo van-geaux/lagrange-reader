@@ -60,7 +60,7 @@ The current app flow is:
 - `DataStore` stores the configured server URL and selected library ID.
 - Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
 - Session reset now waits for cookie removal to complete before the app settles on the login screen, and explicit sign-out suppresses cached offline-browser fallback until a fresh login succeeds.
-- Successful native login persists the returned `accessToken`; authenticated API, cover, download, and reader-cache requests send it as a Bearer credential alongside the shared cookie jar. Explicit session clearing removes the token.
+- Successful native login persists the returned `accessToken`; authenticated API, cover, download, and reader-cache requests send it as a Bearer credential alongside the shared cookie jar. A 401/403 response triggers one refresh-cookie renewal attempt and rebuilds the original request with refreshed credentials before session recovery is shown. Explicit session clearing removes the token and cookies.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
 - Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
@@ -102,7 +102,7 @@ The current app flow is:
   - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, while persisted page identity still restores at chapter granularity
-  - Top, Bottom, Left, and Right use independent 0–100% controls; values apply with a short debounce and repaginate against an explicit inset page height
+  - Top, Bottom, Left, and Right use independent 0-100% controls; values apply immediately with a short debounce and repaginate against an explicit viewport and inset page height
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
@@ -136,7 +136,7 @@ The first design-system candidate uses explicit BookOrbit light/dark color schem
 
 The browser presentation now uses a native Compose modal drawer and starts on a Home feed. Home shelf derivation is deterministic from `BookSummary` progress, series identity/order, read state, and added/updated/read timestamps. Those optional fields are parsed tolerantly and persisted in browser snapshots and active-reader state. Home remains scoped to the selected library page because the repository loads one library page at a time.
 
-Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Browser-local navigation owns series, author, and book detail destinations; book-detail Read/Continue and Preview actions call the coordinator reader flow. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
+Home shelves remain selected-library scoped, but interactive search now uses BookOrbit's global `/api/v1/books/query` contract. Covers are fetched with the repository's authenticated cookie-aware client and cached in memory. Series/Authors catalog image bytes are retried, cached, and decoded off the Compose main thread; Series also has a deterministic `/api/v1/series/{id}/cover` fallback. Browser-local navigation owns series, author, and book detail destinations; book-detail Read/Continue and Preview actions call the coordinator reader flow. Fresh reader progress is merged into the current browser state immediately, including a just-read book outside the first loaded page. `MainActivity` uses immersive status-bar hiding with transient swipe reveal.
 
 Book details are enriched on demand with descriptive, creator, publication, identifier, genre/tag, and file metadata. Series details no longer depend on the current shelf page: they request the server's ordered series page, show completion and possible gaps, and optionally use the first book synopsis as series context. Hardware and top-bar Back preserve the series destination when a book was opened from within it.
 

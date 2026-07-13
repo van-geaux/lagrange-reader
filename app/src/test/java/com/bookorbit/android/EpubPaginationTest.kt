@@ -16,6 +16,7 @@ class EpubPaginationTest {
         )
 
         assertTrue(rendered.contains("const pageHeight = ()"))
+        assertTrue(rendered.contains("maximum-scale=1.0"))
         assertTrue(rendered.contains("strip.scrollHeight / pageHeight()"))
         assertTrue(rendered.contains("touchstart"))
         assertTrue(rendered.contains("touchend"))
