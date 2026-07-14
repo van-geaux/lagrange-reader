@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Current outcome
 
@@ -9,7 +9,7 @@ The latest implementation pass addresses the two current user-reported problems:
 1. Reading progress shown inside Lagrange was not reliably reaching BookOrbit, leaving BookOrbit's Currently Reading widget blank.
 2. A roughly 5,000-book library loaded covers slowly, especially after rapid scrolling and when opening book details.
 
-The complete catalog/jump-rail work, progress reconciliation, in-flight queue fix, and large-library thumbnail/detail caching are implemented and committed locally. Full automated verification passes. The remaining work is physical-device and live-server validation with the user's real library.
+The complete catalog/jump-rail work, explicit progress/status reconciliation, in-flight queue fix, and large-library thumbnail/detail caching are implemented and committed locally. Full automated verification passes. The remaining work is physical-device and live-server validation with the user's real library.
 
 ## Repository and publishing state
 
@@ -19,6 +19,7 @@ The complete catalog/jump-rail work, progress reconciliation, in-flight queue fi
 - Remote: `origin` via SSH
 - The user-owned untracked root `AGENTS.md` is intentionally untouched and must not be included in project commits.
 - Recent implementation commits:
+  - `fc6e80e fix: sync BookOrbit reading status with progress`
   - `39e409e fix: reconcile reading progress with server`
   - `6e636fd feat: cache complete library catalogs locally`
   - `6d19283 fix: preserve in-flight reading progress`
@@ -36,7 +37,9 @@ The complete catalog/jump-rail work, progress reconciliation, in-flight queue fi
 - Sync acknowledges only the exact event IDs it processed. A newer update written while an older network request is in flight is preserved instead of being erased by an old queue snapshot.
 - Rapid reader callbacks replace a short-delayed unique worker so the latest compacted event retains a trailing replay.
 - Unknown percentages inherit the known book percentage when possible and are otherwise rejected; they are no longer submitted as a valid `0%` update.
-- BookOrbit's file-progress and audio-progress handlers automatically update reading status after successful nonzero progress. A separate reading-session submission is not required for the Currently Reading widget.
+- BookOrbit's Currently Reading widget is status-backed, so Lagrange now explicitly follows every accepted file/audio progress write with `PATCH /api/v1/books/{bookId}/status`: progress below 99.5% sets `reading`, and progress at or above 99.5% sets `read`.
+- Progress and status are treated as one queued operation. The event is acknowledged only after both requests succeed, so a status failure remains retryable instead of leaving BookOrbit's Currently Reading widget empty after accepting progress.
+- A separate reading-session submission is not required for the Currently Reading widget. Existing books with no pending event require one new reader progress event to repair their server status.
 - Temporary local browser overlays are removed after successful replay and fresh catalog reconciliation so later BookOrbit-side progress can become authoritative in Lagrange.
 
 ### Complete catalog and exact jump rail
@@ -81,7 +84,7 @@ The final combined command passed:
 
 Results:
 
-- 123 JVM tests across 21 suites
+- 127 JVM tests across 21 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
@@ -102,8 +105,9 @@ No Android device was attached during the final progress/cache pass, so the late
 2. Open several unfinished EPUBs and move each to a visibly different percentage.
 3. Turn several pages rapidly in at least one title, then immediately close the reader.
 4. Confirm the debug pending-progress count drains.
-5. Refresh BookOrbit's web app and confirm each title appears in Currently Reading at approximately the final Android percentage.
+5. Refresh BookOrbit's web app and confirm each title has `Reading` status and appears in Currently Reading at approximately the final Android percentage.
 6. Repeat after reading offline and reconnecting.
+7. Finish one title at 99.5% or above and confirm BookOrbit changes it to `Read` and removes it from Currently Reading.
 
 ### 2. BookOrbit to Android progress
 
@@ -126,7 +130,9 @@ No Android device was attached during the final progress/cache pass, so the late
 - Do not restore network-backed Browse lazy paging; exact jumps rely on the complete local catalog.
 - Do not replace `LazyVerticalGrid` with eager rendering of every book; UI virtualization is still required for memory safety.
 - Do not acknowledge progress by rewriting an old queue snapshot. Use exact event-ID acknowledgement so concurrent reader writes survive.
+- Do not acknowledge a progress event until its matching BookOrbit `reading`/`read` status request succeeds.
 - Keep all progress percentages on the canonical 0-100 scale.
+- Keep the explicit status boundary at 99.5% unless the user approves a policy change.
 - Do not submit an unknown percentage as zero.
 - Keep thumbnails server-, book-, URL-, and catalog-version-scoped.
 - Keep full thumbnail warming unmetered and single-chain unless the user explicitly chooses another bandwidth policy.
@@ -157,7 +163,7 @@ No Android device was attached during the final progress/cache pass, so the late
 
 ## Known remaining limitations
 
-- Live bidirectional progress reconciliation still requires target-server validation after the in-flight queue fix.
+- Live bidirectional progress and explicit BookOrbit status reconciliation still require target-server validation.
 - Full thumbnail warming and visible-card prioritization require target-device validation with the real 5,000-book library.
 - BookOrbit metadata refresh must still request all catalog pages because the server does not expose a reliable revision/delta contract.
 - Thumbnail versions that become obsolete remain on disk; an eviction/cleanup policy can be added later if real storage measurements justify it.
@@ -171,7 +177,7 @@ No Android device was attached during the final progress/cache pass, so the late
 - JDK 17 and the Android SDK are installed and working.
 - `local.properties` points to the Android SDK.
 - Gradle requires access to the user cache under `C:\Users\vangeaux\.gradle`.
-- The Gradle daemon started during this session was stopped before this handover was updated.
+- The Gradle daemon used for this session was stopped before this handover was updated.
 - GitHub CLI is installed, but its stored API token was stale during this session. Direct Git SSH authentication is configured separately through the `origin` remote.
 
 ## Handover maintenance rule
