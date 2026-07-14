@@ -60,6 +60,7 @@ The current app flow is:
 - It translates local progress events into the server DTO shapes.
 - It maps BookOrbit's current scalar `readingProgress` card value, nested `readStatus`, and legacy nested page/time progress fields back into browser and reader state.
 - Reader callbacks, persisted snapshots, queue entries, last-synced markers, and API payloads all use one canonical 0-100 percentage scale; low values are not reinterpreted as fractions.
+- A queued progress event writes both the media progress endpoint and the book status endpoint. Progress below 99.5% sets `reading`; progress at or above 99.5% sets `read`. The event is acknowledged only after both requests succeed because BookOrbit's Currently Reading widget is status-backed and its internal automatic status promotion can fail independently after accepting progress.
 - Progress queue writes are dispatched on `Dispatchers.IO`; the coordinator records the newest reader/player event synchronously before persisting it so an immediate reader close cannot lose the final update.
 - Browser bootstrap flushes pending progress before reconciling the complete library catalog, and reader close attempts a foreground sync before clearing active-reader state; WorkManager remains the offline/transient fallback.
 
@@ -96,6 +97,7 @@ The current app flow is:
 - The repository persists the last successfully synced progress per target and skips only equivalent updates; it no longer rejects legitimate lower reread/correction events.
 - Foreground and WorkManager repository instances share queue and last-synced file locks. A replay removes only the exact event IDs it processed, preserving any newer same-book event written while the network request was in flight.
 - Rapid reader callbacks replace a short-delayed unique worker so the latest compacted event always has a trailing replay. Missing percentages are not serialized as zero-percent server updates.
+- Progress and its authoritative `reading`/`read` status form one logical replay operation; a status failure keeps the exact event queued so WorkManager retries it.
 - After all current-server queue entries sync and a fresh library page loads, temporary in-memory progress overlays are cleared so BookOrbit or another client can become authoritative on refresh.
 - Reader reopen now consults the persisted last-synced progress marker when no newer queued progress exists, so local resume survives successful queue replay.
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.

@@ -182,7 +182,8 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 4. Implemented: after successful queue replay and a fresh page load, clear temporary local progress overlays so refreshed BookOrbit progress can flow back into Lagrange.
 5. Implemented after device feedback: serialize queue/marker access across foreground and WorkManager repository instances, acknowledge only posted snapshot IDs, and schedule a trailing debounced worker so an in-flight replay cannot erase the reader's newer page update.
 6. Implemented: retain the known book percentage when a callback omits it and reject any still-unknown percentage instead of submitting an accidental zero-percent update that can remove BookOrbit's reading status.
-7. Focused JVM tests pass. Physical-device validation remains required in both directions against the target BookOrbit server.
+7. Implemented after target-device feedback: explicitly pair every accepted progress write with `reading`, or `read` at 99.5% and above, and retain the queue event until both BookOrbit requests succeed. This prevents the server's status-backed Currently Reading widget from remaining empty when automatic status promotion does not occur.
+8. Physical-device validation remains required in both directions against the target BookOrbit server.
 
 ### Latest device feedback workplan - 2026-07-13 (cache-first catalog and exact jumps)
 
@@ -202,7 +203,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 3. Implemented: after complete catalog reconciliation, use WorkManager on unmetered connectivity to scan the selected library and download up to 50 missing/changed thumbnails per durable chained batch.
 4. Implemented: persist rich `BookDetailInfo` for every opened title, not only downloaded books, and invalidate it when the title's catalog update version changes.
 5. Deliberate boundary: keep the complete catalog and thumbnails locally, but do not prefetch one rich-detail endpoint per title; a 5k-book library would otherwise generate roughly 5k extra API calls. The summary detail screen renders immediately and the rich supplement is fetched once per changed/opened title.
-6. Verification passes: 123 JVM tests across 21 suites, Android lint, debug APK assembly, and Android instrumentation-test compilation. Physical-device validation against the 5k-book library remains required.
+6. Verification passes: 127 JVM tests across 21 suites, Android lint, debug APK assembly, and Android instrumentation-test compilation. Physical-device validation against the 5k-book library remains required.
 
 ## Source of truth
 

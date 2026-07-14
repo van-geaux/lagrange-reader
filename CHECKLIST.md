@@ -139,6 +139,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Allow newer reread/backward events to repair stale or inflated server progress
 - [x] Preserve reader updates enqueued while foreground or WorkManager sync is in flight
 - [x] Reject unknown progress payloads instead of resetting BookOrbit to zero percent
+- [x] Explicitly sync BookOrbit `reading`/`read` status with each accepted progress event
 - [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
 - [ ] Add session event support if `sessions` endpoint is useful
 

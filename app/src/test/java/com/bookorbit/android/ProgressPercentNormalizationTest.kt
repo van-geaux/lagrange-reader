@@ -55,6 +55,58 @@ class ProgressPercentNormalizationTest {
     }
 
     @Test
+    fun `unfinished progress explicitly marks the BookOrbit book as reading`() {
+        val payload = buildReadStatusPayload(
+            update(
+                mediaKind = MediaKind.EPUB,
+                fileId = "88",
+                progressPercent = 42.5f
+            )
+        )
+
+        assertEquals("reading", payload?.getString("status"))
+    }
+
+    @Test
+    fun `zero progress still marks an opened BookOrbit book as reading`() {
+        val payload = buildReadStatusPayload(
+            update(
+                mediaKind = MediaKind.EPUB,
+                fileId = "88",
+                progressPercent = 0f
+            )
+        )
+
+        assertEquals("reading", payload?.getString("status"))
+    }
+
+    @Test
+    fun `completion threshold explicitly marks the BookOrbit book as read`() {
+        val payload = buildReadStatusPayload(
+            update(
+                mediaKind = MediaKind.EPUB,
+                fileId = "88",
+                progressPercent = 99.5f
+            )
+        )
+
+        assertEquals("read", payload?.getString("status"))
+    }
+
+    @Test
+    fun `unknown progress does not create a reading status payload`() {
+        val payload = buildReadStatusPayload(
+            update(
+                mediaKind = MediaKind.EPUB,
+                fileId = "88",
+                progressPercent = null
+            )
+        )
+
+        assertEquals(null, payload)
+    }
+
+    @Test
     fun `low epub percentage restores near the beginning instead of the middle`() {
         assertEquals(0, percentToChapterIndex(0.5f, 100))
         assertEquals(1, percentToChapterIndex(1f, 100))

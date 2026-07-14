@@ -54,6 +54,7 @@ import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
 private const val LIBRARY_PAGE_SIZE = 50
+private const val COMPLETED_PROGRESS_PERCENT = 99.5f
 private val progressSyncMutex = Mutex()
 
 private enum class ProgressPostResult {
@@ -966,8 +967,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
 
         val payload = buildProgressPayload(item) ?: return@withContext ProgressPostResult.INVALID
+        val readStatusPayload = buildReadStatusPayload(item) ?: return@withContext ProgressPostResult.INVALID
 
         request(path, if (item.mediaKind == MediaKind.AUDIO) "PATCH" else "POST", payload.toString().toRequestBody(JSON))
+        // BookOrbit's dashboard widget is status-backed, and some server versions can
+        // accept file progress even when their automatic status update fails. Treat the
+        // progress and status writes as one queued operation so a failed status write is
+        // retried instead of silently leaving Currently Reading empty.
+        request(
+            "/api/v1/books/${item.bookId}/status",
+            "PATCH",
+            readStatusPayload.toString().toRequestBody(JSON)
+        )
         ProgressPostResult.ACCEPTED
     }
 
@@ -1324,9 +1335,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private fun requestAction(path: String, method: String): String {
         return when {
             path == "/api/v1/libraries" -> "load libraries"
-            path.contains("/books") && method == "POST" -> "load books"
-            path.contains("/progress") -> "sync reading progress"
             path.contains("/audio-progress") -> "sync listening progress"
+            path.contains("/progress") -> "sync reading progress"
+            path.endsWith("/status") && method == "PATCH" -> "sync reading status"
+            path.contains("/books") && method == "POST" -> "load books"
             else -> "complete this request"
         }
     }
@@ -2266,6 +2278,13 @@ internal fun buildProgressPayload(item: ProgressUpdate): JSONObject? {
                 put("positionSeconds", item.positionMs / 1000.0)
             }
         }
+    }
+}
+
+internal fun buildReadStatusPayload(item: ProgressUpdate): JSONObject? {
+    val percentage = normalizeStoredProgressPercent(item.progressPercent) ?: return null
+    return JSONObject().apply {
+        put("status", if (percentage >= COMPLETED_PROGRESS_PERCENT) "read" else "reading")
     }
 }
 
