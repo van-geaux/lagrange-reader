@@ -229,7 +229,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
 - [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
 - [x] Allow explicitly entered HTTP BookOrbit server URLs and Android cleartext traffic; bare remote hostnames still default to HTTPS, while bare local development hosts retain HTTP shorthand.
-- [ ] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus.
+- [x] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus. Read status is written directly while preserving position; unread uses the normal-user reset flow so completed progress cannot immediately restore Read.
 - [ ] Redesign book-detail actions as a swipeable/compact action area, using symbols where they improve discoverability without hiding labels.
 - [ ] Make the tapped series title in book details navigate to that series detail page.
 - [ ] Redesign book-detail genres/tags and the lower metadata section for a more compact, elegant hierarchy.

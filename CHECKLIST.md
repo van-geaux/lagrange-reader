@@ -183,7 +183,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Give reader options distinct Continue reading and Close book actions
 - [ ] Improve reader-options text/background contrast across all reader themes
 - [ ] Redesign the reader options window for clearer hierarchy and controls
-- [ ] Add Mark as read and Mark as unread to book overflow and long-press actions
+- [x] Add Mark as read and Mark as unread to book overflow and long-press actions; read preserves position, while unread resets progress
 - [ ] Reduce Home initial sync/loading latency for large libraries
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death

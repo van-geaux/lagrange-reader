@@ -63,6 +63,23 @@ class BrowserSnapshotStore(context: Context) {
         )
     }
 
+    suspend fun markBookAsRead(serverUrl: String, bookId: String, markedAtMillis: Long) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl } ?: return@withLock
+        writeUnlocked(
+            current.copy(
+                booksByLibraryId = current.booksByLibraryId.mapValues { (_, books) ->
+                    books.map { book ->
+                        if (book.id == bookId) {
+                            book.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                        } else {
+                            book
+                        }
+                    }
+                }
+            )
+        )
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) {
             file.delete()

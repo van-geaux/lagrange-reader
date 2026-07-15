@@ -279,7 +279,9 @@ internal fun NativeLibraryBrowserScreen(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
-    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -519,14 +521,18 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = seriesDetailLoader,
-                    onBookSelected = { selectedBook = it }
+                    onBookSelected = { selectedBook = it },
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 selectedAuthor != null -> AuthorDetails(
                     author = selectedAuthor!!,
                     modifier = Modifier.padding(padding),
                     booksLoader = authorBooksLoader,
                     coverLoader = coverLoader,
-                    onBookSelected = { selectedBook = it }
+                    onBookSelected = { selectedBook = it },
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
                     query = "",
@@ -554,7 +560,9 @@ internal fun NativeLibraryBrowserScreen(
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LOCAL_BOOKS
                         selectedBook = book
-                    }
+                    },
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     modifier = Modifier.padding(padding)
@@ -592,7 +600,9 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.HOME
                         selectedSeriesKey = seriesKey
                     },
-                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
                     state = state,
@@ -618,7 +628,9 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedSeriesKey = seriesKey
                     },
-                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 else -> HomeFeed(
                     state = state,
@@ -626,7 +638,9 @@ internal fun NativeLibraryBrowserScreen(
                     coverLoader = coverLoader,
                     onBookSelected = { book -> selectedBook = book },
                     onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey },
-                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
             }
     }
@@ -1231,7 +1245,9 @@ private fun AuthorDetails(
     modifier: Modifier,
     booksLoader: suspend (String, Int) -> AuthorBooksPage?,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     val page by produceState<AuthorBooksPage?>(initialValue = null, author.id) {
         value = booksLoader(author.id, 0)
@@ -1260,11 +1276,18 @@ private fun AuthorDetails(
             }
         }
         gridItems(page?.items.orEmpty(), key = { "author-book-${it.id}" }) { book ->
-            BookPosterCard(book = book, coverLoader = coverLoader, onClick = { onBookSelected(book) })
+            BookPosterCard(
+                book = book,
+                coverLoader = coverLoader,
+                onClick = { onBookSelected(book) },
+                onMarkAsRead = { onMarkAsRead(book) },
+                onMarkAsUnread = { onMarkAsUnread(book) }
+            )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BookPosterCard(
     book: BookSummary,
@@ -1273,9 +1296,13 @@ private fun BookPosterCard(
     showSeriesIndex: Boolean = false,
     enabled: Boolean = true,
     displayTitle: String = book.title,
-    supportingText: String? = null
+    supportingText: String? = null,
+    onMarkAsRead: (() -> Unit)? = null,
+    onMarkAsUnread: (() -> Unit)? = null
 ) {
     val isBookCard = supportingText == null && displayTitle == book.title
+    val hasActions = enabled && (onMarkAsRead != null || onMarkAsUnread != null)
+    var showActions by remember(book.id) { mutableStateOf(false) }
     val status = when {
         !enabled -> "Unavailable offline"
         book.isRead && book.isDownloaded -> "Read · Offline"
@@ -1287,7 +1314,11 @@ private fun BookPosterCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
+            .combinedClickable(
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = if (hasActions) ({ showActions = true }) else null
+            )
             .semantics {
                 contentDescription = buildString {
                     append(displayTitle)
@@ -1302,7 +1333,45 @@ private fun BookPosterCard(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            BookCover(book, coverLoader)
+            Box {
+                BookCover(book, coverLoader)
+                if (hasActions) {
+                    Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                        IconButton(
+                            onClick = { showActions = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options for ${book.title}"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showActions,
+                            onDismissRequest = { showActions = false }
+                        ) {
+                            onMarkAsRead?.let { markAsRead ->
+                                DropdownMenuItem(
+                                    text = { Text("Mark as read") },
+                                    onClick = {
+                                        showActions = false
+                                        markAsRead()
+                                    }
+                                )
+                            }
+                            onMarkAsUnread?.let { markAsUnread ->
+                                DropdownMenuItem(
+                                    text = { Text("Mark as unread") },
+                                    onClick = {
+                                        showActions = false
+                                        markAsUnread()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Text(
                 displayTitle,
                 maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
@@ -1445,7 +1514,9 @@ private fun RefreshableHomeFeed(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
-    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -1460,7 +1531,9 @@ private fun RefreshableHomeFeed(
             coverLoader = coverLoader,
             onBookSelected = onBookSelected,
             onSeriesSelected = onSeriesSelected,
-            onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
+            onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+            onMarkAsRead = onMarkAsRead,
+            onMarkAsUnread = onMarkAsUnread
         )
     }
 }
@@ -1473,6 +1546,8 @@ private fun HomeFeed(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit,
     showHeader: Boolean = false
 ) {
     val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
@@ -1489,6 +1564,8 @@ private fun HomeFeed(
         .take(12)
     val context = androidx.compose.ui.platform.LocalContext.current
     val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    val availableMarkAsRead = onMarkAsRead.takeUnless { state.isOfflineSnapshot }
+    val availableMarkAsUnread = onMarkAsUnread.takeUnless { state.isOfflineSnapshot }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1526,15 +1603,23 @@ private fun HomeFeed(
                     onBookSelected = onBookSelected,
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading.takeUnless {
                         state.isOfflineSnapshot
-                    }
+                    },
+                    onMarkAsRead = availableMarkAsRead,
+                    onMarkAsUnread = availableMarkAsUnread
                 )
             }
         }
-        if (onDeck.isNotEmpty()) item { BookShelf("On deck", onDeck, coverLoader, onBookSelected) }
-        if (recentlyAddedBooks.isNotEmpty()) item { BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected) }
+        if (onDeck.isNotEmpty()) item {
+            BookShelf("On deck", onDeck, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+        }
+        if (recentlyAddedBooks.isNotEmpty()) item {
+            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+        }
         if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
         if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected) }
-        if (recentlyRead.isNotEmpty()) item { BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected) }
+        if (recentlyRead.isNotEmpty()) item {
+            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+        }
         if (state.isLoadingBooks) item { LoadingFeedRow("Loading books...") }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item {
@@ -1564,7 +1649,9 @@ private fun BookShelf(
     books: List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
-    onRemoveFromCurrentlyReading: ((BookSummary) -> Unit)? = null
+    onRemoveFromCurrentlyReading: ((BookSummary) -> Unit)? = null,
+    onMarkAsRead: ((BookSummary) -> Unit)? = null,
+    onMarkAsUnread: ((BookSummary) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ShelfTitle(title)
@@ -1579,7 +1666,9 @@ private fun BookShelf(
                     onClick = { onBookSelected(book) },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading?.let { remove ->
                         { remove(book) }
-                    }
+                    },
+                    onMarkAsRead = onMarkAsRead?.let { mark -> { mark(book) } },
+                    onMarkAsUnread = onMarkAsUnread?.let { mark -> { mark(book) } }
                 )
             }
         }
@@ -1627,22 +1716,26 @@ private fun ShelfBookCard(
     displayTitle: String = book.title,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit,
-    onRemoveFromCurrentlyReading: (() -> Unit)? = null
+    onRemoveFromCurrentlyReading: (() -> Unit)? = null,
+    onMarkAsRead: (() -> Unit)? = null,
+    onMarkAsUnread: (() -> Unit)? = null
 ) {
     val isBookCard = displayTitle == book.title
     var showActions by remember(book.id) { mutableStateOf(false) }
+    val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null
     Column(
         modifier = Modifier
             .width(84.dp)
+            .testTag("book_card_${book.id}")
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onRemoveFromCurrentlyReading?.let { { showActions = true } }
+                onLongClick = if (hasActions) ({ showActions = true }) else null
             ),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Box {
             BookCover(book, coverLoader)
-            if (onRemoveFromCurrentlyReading != null) {
+            if (hasActions) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(
                         onClick = { showActions = true },
@@ -1657,13 +1750,33 @@ private fun ShelfBookCard(
                         expanded = showActions,
                         onDismissRequest = { showActions = false }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Remove from Currently reading") },
-                            onClick = {
-                                showActions = false
-                                onRemoveFromCurrentlyReading()
-                            }
-                        )
+                        onMarkAsRead?.let { markAsRead ->
+                            DropdownMenuItem(
+                                text = { Text("Mark as read") },
+                                onClick = {
+                                    showActions = false
+                                    markAsRead()
+                                }
+                            )
+                        }
+                        onMarkAsUnread?.let { markAsUnread ->
+                            DropdownMenuItem(
+                                text = { Text("Mark as unread") },
+                                onClick = {
+                                    showActions = false
+                                    markAsUnread()
+                                }
+                            )
+                        }
+                        onRemoveFromCurrentlyReading?.let { remove ->
+                            DropdownMenuItem(
+                                text = { Text("Remove from Currently reading") },
+                                onClick = {
+                                    showActions = false
+                                    remove()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -1861,7 +1974,9 @@ private fun LibraryContentScreen(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
-    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -1889,6 +2004,8 @@ private fun LibraryContentScreen(
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread,
                     showHeader = false
                 )
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
@@ -1896,7 +2013,9 @@ private fun LibraryContentScreen(
                     modifier = Modifier.weight(1f),
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
-                    onSeriesSelected = onSeriesSelected
+                    onSeriesSelected = onSeriesSelected,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
             }
         }
@@ -1933,7 +2052,9 @@ private fun LibraryBrowseScreen(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
-    onSeriesSelected: (String) -> Unit
+    onSeriesSelected: (String) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     val libraryId = state.selectedLibraryId
     var filter by remember(libraryId) { mutableStateOf(BookBrowseFilter()) }
@@ -1953,6 +2074,8 @@ private fun LibraryBrowseScreen(
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
         onSeriesSelected = onSeriesSelected,
+        onMarkAsRead = onMarkAsRead,
+        onMarkAsUnread = onMarkAsUnread,
         totalBooks = total,
         totalSeries = seriesTotal,
         filter = filter,
@@ -1987,7 +2110,9 @@ private fun LibraryBooks(
     filter: BookBrowseFilter? = null,
     jumpRailEnabled: Boolean = true,
     serverJumpBuckets: List<LibraryJumpBucket> = emptyList(),
-    onFilterClick: (() -> Unit)? = null
+    onFilterClick: (() -> Unit)? = null,
+    onMarkAsRead: ((BookSummary) -> Unit)? = null,
+    onMarkAsUnread: ((BookSummary) -> Unit)? = null
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
@@ -2140,6 +2265,12 @@ private fun LibraryBooks(
                 supportingText = seriesKey?.let { key ->
                     seriesBookCountLabel(seriesBookCounts[key] ?: 1)
                 },
+                onMarkAsRead = if (seriesKey == null && !state.isOfflineSnapshot) {
+                    onMarkAsRead?.let { mark -> { mark(book) } }
+                } else null,
+                onMarkAsUnread = if (seriesKey == null && !state.isOfflineSnapshot) {
+                    onMarkAsUnread?.let { mark -> { mark(book) } }
+                } else null,
                 onClick = {
                     if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
                 }
@@ -2203,7 +2334,9 @@ private fun LocalBooksScreen(
     modifier: Modifier,
     loader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     val books by produceState<List<BookSummary>?>(initialValue = null) {
         value = loader()
@@ -2228,6 +2361,8 @@ private fun LocalBooksScreen(
         allowSeriesCollapse = false,
         totalBooks = filteredBooks.size,
         filter = filter,
+        onMarkAsRead = onMarkAsRead,
+        onMarkAsUnread = onMarkAsUnread,
         onFilterClick = { showFilter = true }
     )
     if (showFilter) {
@@ -2471,7 +2606,9 @@ private fun SeriesDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (String) -> SeriesDetailInfo?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     val localBooks = books
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
@@ -2556,7 +2693,9 @@ private fun SeriesDetails(
                 book = book,
                 coverLoader = coverLoader,
                 onClick = { onBookSelected(book) },
-                showSeriesIndex = true
+                showSeriesIndex = true,
+                onMarkAsRead = { onMarkAsRead(book) },
+                onMarkAsUnread = { onMarkAsUnread(book) }
             )
         }
     }

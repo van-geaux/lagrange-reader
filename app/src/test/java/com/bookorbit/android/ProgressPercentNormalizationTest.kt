@@ -142,6 +142,13 @@ class ProgressPercentNormalizationTest {
     }
 
     @Test
+    fun `explicit read action marks the book read`() {
+        val payload = buildMarkedReadStatusPayload()
+
+        assertEquals("read", payload.getString("status"))
+    }
+
+    @Test
     fun `low epub percentage restores near the beginning instead of the middle`() {
         assertEquals(0, percentToChapterIndex(0.5f, 100))
         assertEquals(1, percentToChapterIndex(1f, 100))

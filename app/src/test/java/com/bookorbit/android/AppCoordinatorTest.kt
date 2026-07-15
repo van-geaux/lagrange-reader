@@ -621,6 +621,72 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `mark as read updates repository and browser status without clearing progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.markBookAsRead(current)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current), repository.markedReadBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val marked = browser.browserState.books.single()
+        assertTrue(marked.isRead)
+        assertTrue((marked.lastReadAtMillis ?: 0L) > 0L)
+        assertEquals("42%", marked.progressLabel)
+        assertEquals(42f, marked.progressPercent)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("as read"))
+    }
+
+    @Test
+    fun `mark as unread resets repository and browser progress`() = runTest {
+        val completed = book.copy(
+            progressLabel = "100%",
+            progressPercent = 100f,
+            isRead = true,
+            lastReadAtMillis = 200L
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(completed)
+            )
+        )
+
+        coordinator.markBookAsUnread(completed)
+        advanceUntilIdle()
+
+        assertEquals(listOf(completed), repository.resetReadingStateBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val reset = browser.browserState.books.single()
+        assertFalse(reset.isRead)
+        assertNull(reset.progressPercent)
+        assertNull(reset.progressLabel)
+        assertNull(reset.lastReadAtMillis)
+        assertTrue(browser.browserState.message.orEmpty().contains("as unread"))
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -694,6 +760,7 @@ private class FakeBookOrbitDataSource(
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
     val queuedProgress = mutableListOf<BookSummary>()
+    val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
     var clearActiveReaderCalls = 0
@@ -779,6 +846,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun clearActiveReader() {
         clearActiveReaderCalls += 1
+    }
+
+    override suspend fun markBookAsRead(book: BookSummary) {
+        markedReadBooks += book
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) {

@@ -159,7 +159,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [ ] Give reader options distinct Continue reading and Close book actions.
 - [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
 - [x] Allow explicit HTTP server entry when required by the configured BookOrbit deployment while retaining HTTPS as the bare remote-host default.
-- [ ] Add Mark as read and Mark as unread to the shared three-dot/long-press book actions.
+- [x] Add Mark as read and Mark as unread to shared three-dot/long-press actions on Home shelves and individual Library, Series, Author, and Local Books posters; keep collapsed series cards as series navigation rather than single-book actions.
 - [ ] Replace oversized book-detail actions with a swipeable compact action area and selective symbol buttons.
 - [ ] Make the book-detail series title a navigation affordance to series details.
 - [ ] Redesign the book-detail genres/tags and lower metadata hierarchy.

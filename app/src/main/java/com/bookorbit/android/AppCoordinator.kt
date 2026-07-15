@@ -719,6 +719,55 @@ class AppCoordinator(
     }
 
     fun removeFromCurrentlyReading(book: BookSummary) {
+        resetBookReadingState(
+            book = book,
+            successMessage = "Removed ${book.title} from Currently reading and reset its progress.",
+            failureMessage = "Unable to remove ${book.title} from Currently reading."
+        )
+    }
+
+    fun markBookAsRead(book: BookSummary) {
+        scope.launch {
+            try {
+                repository.markBookAsRead(book)
+                latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                val current = lastBrowserState ?: return@launch
+                val markedAtMillis = System.currentTimeMillis()
+                showBrowser(
+                    current.copy(
+                        books = current.books.map { currentBook ->
+                            if (currentBook.id == book.id) {
+                                currentBook.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                            } else {
+                                currentBook
+                            }
+                        },
+                        debugPendingProgressCount = repository.pendingProgressCount(),
+                        message = "Marked ${book.title} as read."
+                    )
+                )
+            } catch (_: AuthenticationRequiredException) {
+                recoverExpiredSession()
+            } catch (error: Throwable) {
+                showBrowserMessage(userMessage(error, "Unable to mark ${book.title} as read."))
+            }
+        }
+    }
+
+    fun markBookAsUnread(book: BookSummary) {
+        resetBookReadingState(
+            book = book,
+            successMessage = "Marked ${book.title} as unread and reset its progress.",
+            failureMessage = "Unable to mark ${book.title} as unread."
+        )
+    }
+
+    private fun resetBookReadingState(
+        book: BookSummary,
+        successMessage: String,
+        failureMessage: String
+    ) {
         scope.launch {
             try {
                 repository.resetBookReadingState(book)
@@ -731,13 +780,13 @@ class AppCoordinator(
                             if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
                         },
                         debugPendingProgressCount = repository.pendingProgressCount(),
-                        message = "Removed ${book.title} from Currently reading and reset its progress."
+                        message = successMessage
                     )
                 )
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
-                showBrowserMessage(userMessage(error, "Unable to remove ${book.title} from Currently reading."))
+                showBrowserMessage(userMessage(error, failureMessage))
             }
         }
     }

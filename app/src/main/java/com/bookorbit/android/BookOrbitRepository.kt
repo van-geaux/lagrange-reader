@@ -133,6 +133,7 @@ interface BookOrbitDataSource {
     suspend fun clearActiveReader()
     suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
+    suspend fun markBookAsRead(book: BookSummary) = Unit
     suspend fun resetBookReadingState(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary): File
     suspend fun deleteLocalCopy(book: BookSummary)
@@ -727,6 +728,28 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 updatedAtMillis = System.currentTimeMillis()
             )
         )
+    }
+
+    override suspend fun markBookAsRead(book: BookSummary) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+
+        // A queued progress update posts a status of "reading". Let any active replay
+        // finish, send the explicit "read" status, then discard older updates before
+        // releasing the lock so a background worker cannot undo the user's choice.
+        progressSyncMutex.withLock {
+            request(
+                "/api/v1/books/${book.id}/status",
+                "PATCH",
+                buildMarkedReadStatusPayload().toString().toRequestBody(JSON)
+            )
+            queueStore.removeForBook(serverUrl, book.id)
+        }
+
+        val markedAtMillis = System.currentTimeMillis()
+        bookDetailCacheStore.remove(serverUrl, book.id, book.fileId)
+        libraryCatalogStore.markBookAsRead(serverUrl, book.id, markedAtMillis)
+        browserSnapshotStore.markBookAsRead(serverUrl, book.id, markedAtMillis)
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) = withContext(Dispatchers.IO) {
@@ -2442,6 +2465,10 @@ internal fun buildUnreadStatusPayload(): JSONObject = JSONObject().apply {
     put("status", "unread")
     put("startedAt", JSONObject.NULL)
     put("finishedAt", JSONObject.NULL)
+}
+
+internal fun buildMarkedReadStatusPayload(): JSONObject = JSONObject().apply {
+    put("status", "read")
 }
 
 internal fun ProgressUpdate.targetsServer(currentServerUrl: String): Boolean {

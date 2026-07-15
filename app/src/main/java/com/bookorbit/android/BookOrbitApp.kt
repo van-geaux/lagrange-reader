@@ -137,7 +137,9 @@ fun BookOrbitApp(
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,
             onDeleteLocalCopy = coordinator::deleteLocalCopy,
-            onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading
+            onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
+            onMarkAsRead = coordinator::markBookAsRead,
+            onMarkAsUnread = coordinator::markBookAsUnread
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,

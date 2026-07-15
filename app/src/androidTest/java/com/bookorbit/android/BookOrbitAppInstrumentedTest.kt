@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -180,6 +182,7 @@ class BookOrbitAppInstrumentedTest {
 
     @Test
     fun currentlyReadingCardExposesRemoveAction() {
+        val dataSource = InstrumentedFakeDataSource()
         val current = BookSummary(
             libraryId = "lib-1",
             id = "book-current",
@@ -201,14 +204,26 @@ class BookOrbitAppInstrumentedTest {
                             books = listOf(current)
                         )
                     ),
-                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
                 )
             }
         }
 
         composeRule.onNodeWithText("Currently reading").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("More options for Current Book").performClick()
+        composeRule.onAllNodesWithContentDescription("More options for Current Book")[0].performClick()
+        composeRule.onNodeWithText("Mark as read").assertIsDisplayed()
+        composeRule.onNodeWithText("Mark as unread").assertIsDisplayed()
         composeRule.onNodeWithText("Remove from Currently reading").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Mark as read").performClick()
+        composeRule.waitUntil { dataSource.markedReadBooks == listOf(current) }
+
+        composeRule.onAllNodesWithContentDescription("More options for Current Book")[0].performClick()
+        composeRule.onNodeWithText("Mark as unread").performClick()
+        composeRule.waitUntil { dataSource.resetReadingStateBooks == listOf(current) }
+
+        composeRule.onAllNodesWithTag("book_card_${current.id}")[0].performTouchInput { longClick() }
+        composeRule.onNodeWithText("Mark as read").assertIsDisplayed()
     }
 
     @Test
@@ -488,6 +503,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
     val savedServerUrls = mutableListOf<String>()
+    val markedReadBooks = mutableListOf<BookSummary>()
+    val resetReadingStateBooks = mutableListOf<BookSummary>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
@@ -521,6 +538,12 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)
     override suspend fun saveActiveReader(book: BookSummary) = Unit
     override suspend fun clearActiveReader() = Unit
+    override suspend fun markBookAsRead(book: BookSummary) {
+        markedReadBooks += book
+    }
+    override suspend fun resetBookReadingState(book: BookSummary) {
+        resetReadingStateBooks += book
+    }
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
     override suspend fun downloadBook(book: BookSummary): File = File("unused")
     override suspend fun deleteLocalCopy(book: BookSummary) = Unit

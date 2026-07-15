@@ -86,6 +86,30 @@ class LibraryCatalogDatabaseTest {
         assertNull(reset.readerPageCount)
     }
 
+    @Test
+    fun mark_read_updates_cached_status_without_discarding_progress() = runBlocking {
+        dao.insertBooks(
+            listOf(
+                book("a", 0, "Alpha").copy(
+                    progressLabel = "42%",
+                    progressPercent = 42f,
+                    progressPositionMs = 10_000L,
+                    progressPageIndex = 4
+                )
+            )
+        )
+
+        dao.markBookAsRead(SERVER, "a", markedAtMillis = 500L)
+
+        val marked = dao.readBooks(SERVER, LIBRARY).single()
+        assertEquals(true, marked.isRead)
+        assertEquals(500L, marked.lastReadAtMillis)
+        assertEquals("42%", marked.progressLabel)
+        assertEquals(42f, marked.progressPercent)
+        assertEquals(10_000L, marked.progressPositionMs)
+        assertEquals(4, marked.progressPageIndex)
+    }
+
     private fun metadata(total: Int, refreshedAtMillis: Long) = LibraryCatalogMetadataEntity(
         serverUrl = SERVER,
         libraryId = LIBRARY,
