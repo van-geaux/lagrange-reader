@@ -63,4 +63,28 @@ class LastSyncedProgressStoreTest {
 
         assertNull(restored)
     }
+
+    @Test
+    fun `removeForBook clears synced markers so reading can restart from zero`() = runBlocking {
+        val store = LastSyncedProgressStore(Files.createTempDirectory("last-synced-progress-remove").toFile())
+        val target = ProgressUpdate(
+            id = "target",
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "file-1",
+            mediaKind = MediaKind.EPUB,
+            positionMs = 0L,
+            pageIndex = 5,
+            progressPercent = 50f,
+            updatedAtMillis = 1L
+        )
+        val other = target.copy(bookId = "book-2", fileId = "file-2", updatedAtMillis = 2L)
+        store.save(target)
+        store.save(other)
+
+        store.removeForBook(target.serverUrl, target.bookId)
+
+        assertNull(store.read(target.progressKey()))
+        assertEquals(other.progressPercent, store.read(other.progressKey())?.progressPercent)
+    }
 }

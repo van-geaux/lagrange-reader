@@ -207,8 +207,8 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### New user feedback workplan - 2026-07-15
 
-- [ ] Add a Currently reading action menu or long-press action that removes a title from the shelf and synchronizes the removal with BookOrbit's Currently reading state.
-- [ ] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
+- [x] Add visible overflow and long-press actions to Currently reading cards. Removal calls BookOrbit's full reading-state reset endpoint and clears matching local queued, synced, resume, and cached progress so the title cannot be restored by stale work.
+- [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
 - [ ] Add pull-down refresh to Home.
 - [ ] Fix missing thumbnails on Series cards.
 - [ ] Add a jump rail to Series and replace its Load more pagination with complete/local navigation.

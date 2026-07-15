@@ -43,4 +43,26 @@ class EpubReaderPositionStoreTest {
         assertNull(store.read("https://two.example", "book-1", "file-1"))
         assertNull(store.read("https://one.example", "book-1", "file-2"))
     }
+
+    @Test
+    fun `removeForBook clears exact local resume across files`() = runBlocking {
+        val store = EpubReaderPositionStore(Files.createTempDirectory("epub-reader-position-remove").toFile())
+        val target = EpubReaderPosition(
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "file-1",
+            chapterIndex = 2,
+            pageIndex = 3,
+            pageCount = 8,
+            updatedAtMillis = 1L
+        )
+        val other = target.copy(bookId = "book-2", fileId = "file-2")
+        store.save(target)
+        store.save(other)
+
+        store.removeForBook(target.serverUrl, target.bookId)
+
+        assertNull(store.read(target.serverUrl, target.bookId, target.fileId))
+        assertEquals(other, store.read(other.serverUrl, other.bookId, other.fileId))
+    }
 }

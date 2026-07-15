@@ -718,6 +718,30 @@ class AppCoordinator(
         }
     }
 
+    fun removeFromCurrentlyReading(book: BookSummary) {
+        scope.launch {
+            try {
+                repository.resetBookReadingState(book)
+                latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                val current = lastBrowserState ?: return@launch
+                showBrowser(
+                    current.copy(
+                        books = current.books.map { currentBook ->
+                            if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
+                        },
+                        debugPendingProgressCount = repository.pendingProgressCount(),
+                        message = "Removed ${book.title} from Currently reading and reset its progress."
+                    )
+                )
+            } catch (_: AuthenticationRequiredException) {
+                recoverExpiredSession()
+            } catch (error: Throwable) {
+                showBrowserMessage(userMessage(error, "Unable to remove ${book.title} from Currently reading."))
+            }
+        }
+    }
+
     private fun updateDownloadState(
         fileId: String,
         isDownloading: Boolean,

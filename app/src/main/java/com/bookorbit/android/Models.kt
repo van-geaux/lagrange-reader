@@ -45,6 +45,17 @@ data class BookSummary(
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
 }
 
+internal fun BookSummary.withReadingStateReset(): BookSummary = copy(
+    progressLabel = null,
+    progressPercent = null,
+    progressPositionMs = null,
+    progressPageIndex = null,
+    isRead = false,
+    lastReadAtMillis = null,
+    readerPageIndex = null,
+    readerPageCount = null
+)
+
 data class BookDetailInfo(
     val book: BookSummary,
     val libraryName: String? = null,

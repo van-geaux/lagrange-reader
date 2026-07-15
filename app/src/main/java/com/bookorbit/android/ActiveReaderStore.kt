@@ -93,6 +93,15 @@ class ActiveReaderStore private constructor(
         )
     }
 
+    suspend fun clearIfMatches(serverUrl: String, bookId: String) = mutex.withLock {
+        if (!file.exists()) return@withLock
+        val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock
+        val savedBookId = root.optJSONObject("book")?.optString("id")
+        if (root.optString("serverUrl") == serverUrl && savedBookId == bookId) {
+            file.delete()
+        }
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) {
             file.delete()

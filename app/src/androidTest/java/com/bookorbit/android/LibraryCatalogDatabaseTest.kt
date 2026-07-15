@@ -7,6 +7,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,6 +54,36 @@ class LibraryCatalogDatabaseTest {
         assertEquals("Beta updated", dao.readBooks(SERVER, LIBRARY).first().title)
         assertEquals(2L, dao.readMetadata(SERVER, LIBRARY)?.refreshedAtMillis)
         assertEquals(listOf("B", "C"), dao.readJumpBuckets(SERVER, LIBRARY).map { it.bucketKey })
+    }
+
+    @Test
+    fun reset_reading_state_clears_cached_progress_without_removing_the_book() = runBlocking {
+        dao.insertBooks(
+            listOf(
+                book("a", 0, "Alpha").copy(
+                    progressLabel = "42%",
+                    progressPercent = 42f,
+                    progressPositionMs = 10_000L,
+                    progressPageIndex = 4,
+                    isRead = true,
+                    lastReadAtMillis = 100L,
+                    readerPageIndex = 2,
+                    readerPageCount = 8
+                )
+            )
+        )
+
+        dao.resetBookReadingState(SERVER, "a")
+
+        val reset = dao.readBooks(SERVER, LIBRARY).single()
+        assertNull(reset.progressLabel)
+        assertNull(reset.progressPercent)
+        assertNull(reset.progressPositionMs)
+        assertNull(reset.progressPageIndex)
+        assertFalse(reset.isRead)
+        assertNull(reset.lastReadAtMillis)
+        assertNull(reset.readerPageIndex)
+        assertNull(reset.readerPageCount)
     }
 
     private fun metadata(total: Int, refreshedAtMillis: Long) = LibraryCatalogMetadataEntity(

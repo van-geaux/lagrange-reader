@@ -31,6 +31,13 @@ class LastSyncedProgressStore private constructor(
         writeUnlocked(current)
     }
 
+    suspend fun removeForBook(serverUrl: String, bookId: String) = mutex.withLock {
+        val remaining = readUnlocked().filterValues { update ->
+            update.serverUrl != serverUrl || update.bookId != bookId
+        }
+        writeUnlocked(remaining)
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) {
             file.delete()

@@ -69,6 +69,15 @@ class BookDetailCacheStore private constructor(
         }
     }
 
+    suspend fun remove(serverUrl: String, bookId: String, fileId: String?) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (!file.isFile) return@withLock
+            val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock
+            root.remove(cacheKey(serverUrl, bookId, fileId))
+            file.writeText(root.toString())
+        }
+    }
+
     suspend fun clear() = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (file.exists()) file.delete()

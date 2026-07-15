@@ -265,6 +265,24 @@ class ProgressQueueStoreTest {
         assertEquals(0.375f, store.readAll().single().progressPercent)
     }
 
+    @Test
+    fun `removeForBook clears every file for only the requested server book`() = runBlocking {
+        val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-remove-book").toFile())
+        store.replaceAll(
+            listOf(
+                update("target-epub", "book-1", "file-1", MediaKind.EPUB, updatedAtMillis = 10L),
+                update("target-audio", "book-1", "file-2", MediaKind.AUDIO, updatedAtMillis = 20L),
+                update("other-book", "book-2", "file-3", MediaKind.EPUB, updatedAtMillis = 30L),
+                update("other-server", "book-1", "file-1", MediaKind.EPUB, updatedAtMillis = 40L)
+                    .copy(serverUrl = "https://other.example")
+            )
+        )
+
+        store.removeForBook("https://example.test", "book-1")
+
+        assertEquals(listOf("other-book", "other-server"), store.readAll().map { it.id })
+    }
+
     private fun update(
         id: String,
         bookId: String,

@@ -7,7 +7,9 @@ import android.text.Html
 import android.util.LruCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -242,7 +244,8 @@ internal fun NativeLibraryBrowserScreen(
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -552,7 +555,8 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey ->
                         detailReturnDestination = BrowserDestination.HOME
                         selectedSeriesKey = seriesKey
-                    }
+                    },
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
                 )
                 destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
                     state = state,
@@ -577,14 +581,16 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey ->
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedSeriesKey = seriesKey
-                    }
+                    },
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
                 )
                 else -> HomeFeed(
                     state = state,
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     onBookSelected = { book -> selectedBook = book },
-                    onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey }
+                    onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey },
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
                 )
             }
     }
@@ -1385,6 +1391,7 @@ private fun HomeFeed(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     showHeader: Boolean = false
 ) {
     val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
@@ -1429,7 +1436,19 @@ private fun HomeFeed(
                 )
             }
         }
-        if (currentlyReading.isNotEmpty()) item { BookShelf("Currently reading", currentlyReading, coverLoader, onBookSelected) }
+        if (currentlyReading.isNotEmpty()) {
+            item {
+                BookShelf(
+                    title = "Currently reading",
+                    books = currentlyReading,
+                    coverLoader = coverLoader,
+                    onBookSelected = onBookSelected,
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading.takeUnless {
+                        state.isOfflineSnapshot
+                    }
+                )
+            }
+        }
         if (onDeck.isNotEmpty()) item { BookShelf("On deck", onDeck, coverLoader, onBookSelected) }
         if (recentlyAddedBooks.isNotEmpty()) item { BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected) }
         if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
@@ -1463,7 +1482,8 @@ private fun BookShelf(
     title: String,
     books: List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onRemoveFromCurrentlyReading: ((BookSummary) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ShelfTitle(title)
@@ -1472,7 +1492,14 @@ private fun BookShelf(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(books, key = { "$title-${it.id}" }) { book ->
-                ShelfBookCard(book = book, coverLoader = coverLoader, onClick = { onBookSelected(book) })
+                ShelfBookCard(
+                    book = book,
+                    coverLoader = coverLoader,
+                    onClick = { onBookSelected(book) },
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading?.let { remove ->
+                        { remove(book) }
+                    }
+                )
             }
         }
     }
@@ -1512,21 +1539,54 @@ private fun ShelfTitle(title: String) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShelfBookCard(
     book: BookSummary,
     displayTitle: String = book.title,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRemoveFromCurrentlyReading: (() -> Unit)? = null
 ) {
     val isBookCard = displayTitle == book.title
+    var showActions by remember(book.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .width(84.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onRemoveFromCurrentlyReading?.let { { showActions = true } }
+            ),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        BookCover(book, coverLoader)
+        Box {
+            BookCover(book, coverLoader)
+            if (onRemoveFromCurrentlyReading != null) {
+                Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                    IconButton(
+                        onClick = { showActions = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options for ${book.title}"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showActions,
+                        onDismissRequest = { showActions = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from Currently reading") },
+                            onClick = {
+                                showActions = false
+                                onRemoveFromCurrentlyReading()
+                            }
+                        )
+                    }
+                }
+            }
+        }
         Text(
             displayTitle,
             maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
@@ -1719,7 +1779,8 @@ private fun LibraryContentScreen(
     onRefresh: () -> Unit,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
-    onSeriesSelected: (String) -> Unit
+    onSeriesSelected: (String) -> Unit,
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -1746,6 +1807,7 @@ private fun LibraryContentScreen(
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
+                    onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     showHeader = false
                 )
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
@@ -2519,10 +2581,18 @@ internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
         .values
         .mapNotNull { seriesBooks ->
             val ordered = seriesBooks.sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
-            val hasStarted = ordered.any { it.isRead || (it.progressPercent ?: 0f) > 0f }
-            if (!hasStarted) null else ordered.firstOrNull { !it.isRead && (it.progressPercent ?: 0f) <= 0f }
+            val hasCompletedBook = ordered.any(BookSummary::isCompletedForSeriesProgression)
+            if (!hasCompletedBook) return@mapNotNull null
+
+            ordered
+                .firstOrNull { !it.isCompletedForSeriesProgression() }
+                ?.takeUnless { it.hasReadingActivity() && it.isStillInProgress() }
         }
         .take(12)
+}
+
+private fun BookSummary.isCompletedForSeriesProgression(): Boolean {
+    return isRead || progressPercent?.let { it >= 99.5f } == true
 }
 
 internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> {

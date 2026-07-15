@@ -132,6 +132,22 @@ internal interface LibraryCatalogDao {
     @Query("DELETE FROM library_catalog_jump_buckets WHERE serverUrl = :serverUrl AND libraryId = :libraryId")
     suspend fun deleteJumpBuckets(serverUrl: String, libraryId: String)
 
+    @Query(
+        """
+        UPDATE library_catalog_books
+        SET progressLabel = NULL,
+            progressPercent = NULL,
+            progressPositionMs = NULL,
+            progressPageIndex = NULL,
+            isRead = 0,
+            lastReadAtMillis = NULL,
+            readerPageIndex = NULL,
+            readerPageCount = NULL
+        WHERE serverUrl = :serverUrl AND bookId = :bookId
+        """
+    )
+    suspend fun resetBookReadingState(serverUrl: String, bookId: String)
+
     @Transaction
     suspend fun reconcileLibrary(
         metadata: LibraryCatalogMetadataEntity,
@@ -200,6 +216,10 @@ internal class LibraryCatalogStore(context: Context) {
         reconcileMutex.withLock {
             dao.readAllBooks(serverUrl).map(LibraryCatalogBookEntity::toBookSummary)
         }
+
+    suspend fun resetBookReadingState(serverUrl: String, bookId: String) = reconcileMutex.withLock {
+        dao.resetBookReadingState(serverUrl, bookId)
+    }
 
     suspend fun replace(
         serverUrl: String,

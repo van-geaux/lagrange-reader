@@ -49,6 +49,23 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `on deck requires a completed book rather than progress alone`() {
+        val current = seriesBook("book-1", index = 1.0).copy(progressPercent = 40f)
+        val next = seriesBook("book-2", index = 2.0)
+
+        assertEquals(emptyList<BookSummary>(), onDeckBooks(listOf(current, next)))
+    }
+
+    @Test
+    fun `on deck hides the next volume while it is currently reading`() {
+        val completed = seriesBook("book-1", index = 1.0, isRead = true)
+        val current = seriesBook("book-2", index = 2.0).copy(progressPercent = 25f)
+        val later = seriesBook("book-3", index = 3.0)
+
+        assertEquals(emptyList<BookSummary>(), onDeckBooks(listOf(completed, current, later)))
+    }
+
+    @Test
     fun `recent series keeps one representative ordered by activity`() {
         val older = seriesBook("book-1", index = 1.0, addedAt = 100L)
         val newer = seriesBook("book-2", index = 2.0, addedAt = 200L)

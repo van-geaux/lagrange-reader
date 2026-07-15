@@ -50,6 +50,19 @@ class BrowserSnapshotStore(context: Context) {
         readUnlocked()?.takeIf { it.serverUrl == serverUrl }
     }
 
+    suspend fun resetBookReadingState(serverUrl: String, bookId: String) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl } ?: return@withLock
+        writeUnlocked(
+            current.copy(
+                booksByLibraryId = current.booksByLibraryId.mapValues { (_, books) ->
+                    books.map { book ->
+                        if (book.id == bookId) book.withReadingStateReset() else book
+                    }
+                }
+            )
+        )
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) {
             file.delete()

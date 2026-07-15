@@ -158,6 +158,39 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun currentlyReadingCardExposesRemoveAction() {
+        val current = BookSummary(
+            libraryId = "lib-1",
+            id = "book-current",
+            fileId = "file-current",
+            title = "Current Book",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 35f,
+            lastReadAtMillis = 100L
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(current)
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Currently reading").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("More options for Current Book").performClick()
+        composeRule.onNodeWithText("Remove from Currently reading").assertIsDisplayed()
+    }
+
+    @Test
     fun homeSearchAndMoreActionsOpenNativeLayers() {
         composeRule.setContent {
             BookOrbitTheme {

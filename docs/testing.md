@@ -14,7 +14,7 @@ You can begin manual testing once these conditions are true:
 - a reachable BookOrbit server URL is available
 - at least one account can sign in and access a library with real content
 
-Current instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, browser loading states, cached offline browser actions, an in-memory Room reconciliation transaction, and a WebView-level EPUB regression that checks runtime padding geometry plus visible text after page translation. `assembleDebugAndroidTest` compiles this coverage with the AndroidX test runner; run the connected test task when a device or emulator is available.
+Current instrumentation coverage includes server setup validation, login recovery UI and server-change routing, populated live-browser rendering, the Currently Reading reset menu, browser loading states, cached offline browser actions, in-memory Room reconciliation and reading-state reset transactions, and a WebView-level EPUB regression that checks runtime padding geometry plus visible text after page translation. `assembleDebugAndroidTest` compiles this coverage with the AndroidX test runner; run the connected test task when a device or emulator is available.
 
 ## Latest device feedback — July 12, 2026
 
@@ -31,6 +31,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - The progress reconciliation follow-up parses BookOrbit's numeric `readingProgress` and nested `readStatus`, keeps all reader and API values on a single 0-100 scale, permits newer reread/backward corrections, and explicitly writes `reading`/`read` status as part of the queued progress operation. Target-server bidirectional validation is required.
 - The catalog follow-up replaces Browse lazy loading with a complete server-scoped Room metadata cache. Cached content renders before cold-start network checks finish; refresh reconciles all pages and writes only changed/new/reordered rows or deletions. Exact default-sort rail taps use BookOrbit jump-bucket indexes. JVM tests and instrumentation-test compilation pass; target-device/server validation is required.
 - The large-library follow-up cancels off-screen cover calls, warms versioned selected-library thumbnails in unmetered WorkManager batches, and caches rich details per catalog version. The full pass completes 127 JVM tests across 21 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation; target-device validation with the 5k-book library is required.
+- The July 15 Currently Reading/On Deck pass completes 134 JVM tests across 21 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Target-device validation must confirm the BookOrbit reset endpoint, overflow/long-press interaction, restart behavior, and revised On Deck sequence.
 
 ## Manual Test Matrix
 
@@ -126,3 +127,6 @@ Current instrumentation coverage includes server setup validation, login recover
 10. Repeat with a title below 1% progress and confirm neither side turns that value into 50% or 100%.
 11. Turn several pages rapidly while a sync is likely active, immediately close the reader, and confirm the last page—not an earlier in-flight page—reaches BookOrbit and the title remains in Currently Reading.
 12. Finish a title at 99.5% or above and confirm BookOrbit changes its status to `Read` and removes it from Currently Reading.
+13. On a Currently Reading card, open the visible overflow menu and confirm `Remove from Currently reading` is available; repeat by long-pressing the card.
+14. Remove the title and confirm it disappears from both Lagrange and BookOrbit, its progress resets, and reopening starts from the beginning. Relaunch Lagrange once more to confirm stale queued or exact EPUB resume state does not restore the old position.
+15. For a series with volumes 1 and 2 complete, confirm On Deck shows volume 3. Begin volume 3 and confirm On Deck shows no later volume while volume 3 remains in Currently Reading.

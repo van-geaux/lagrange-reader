@@ -580,6 +580,47 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `removing currently reading resets repository and browser progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            lastReadAtMillis = 200L,
+            readerPageIndex = 2,
+            readerPageCount = 8
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.removeFromCurrentlyReading(current)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current), repository.resetReadingStateBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val reset = browser.browserState.books.single()
+        assertNull(reset.progressLabel)
+        assertNull(reset.progressPercent)
+        assertNull(reset.progressPositionMs)
+        assertNull(reset.progressPageIndex)
+        assertNull(reset.lastReadAtMillis)
+        assertNull(reset.readerPageIndex)
+        assertNull(reset.readerPageCount)
+        assertFalse(reset.isRead)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("reset its progress"))
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -653,6 +694,7 @@ private class FakeBookOrbitDataSource(
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
     val queuedProgress = mutableListOf<BookSummary>()
+    val resetReadingStateBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
@@ -737,6 +779,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun clearActiveReader() {
         clearActiveReaderCalls += 1
+    }
+
+    override suspend fun resetBookReadingState(book: BookSummary) {
+        resetReadingStateBooks += book
     }
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? {

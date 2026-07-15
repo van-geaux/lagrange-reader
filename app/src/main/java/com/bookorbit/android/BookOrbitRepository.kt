@@ -128,6 +128,7 @@ interface BookOrbitDataSource {
     suspend fun clearActiveReader()
     suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
+    suspend fun resetBookReadingState(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary): File
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
@@ -721,6 +722,30 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 updatedAtMillis = System.currentTimeMillis()
             )
         )
+    }
+
+    override suspend fun resetBookReadingState(book: BookSummary) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+
+        // A worker may already be replaying an older progress event. Serialize the reset
+        // behind that replay, then remove every queued/acknowledged marker before another
+        // worker can put the title back into Reading.
+        progressSyncMutex.withLock {
+            request(
+                "/api/v1/books/${book.id}/reset-reading-state",
+                "POST",
+                null
+            )
+            queueStore.removeForBook(serverUrl, book.id)
+            lastSyncedProgressStore.removeForBook(serverUrl, book.id)
+        }
+
+        epubReaderPositionStore.removeForBook(serverUrl, book.id)
+        activeReaderStore.clearIfMatches(serverUrl, book.id)
+        bookDetailCacheStore.remove(serverUrl, book.id, book.fileId)
+        libraryCatalogStore.resetBookReadingState(serverUrl, book.id)
+        browserSnapshotStore.resetBookReadingState(serverUrl, book.id)
     }
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = withContext(Dispatchers.IO) {
@@ -1338,6 +1363,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             path.contains("/audio-progress") -> "sync listening progress"
             path.contains("/progress") -> "sync reading progress"
             path.endsWith("/status") && method == "PATCH" -> "sync reading status"
+            path.endsWith("/reset-reading-state") && method == "POST" -> "reset reading state"
             path.contains("/books") && method == "POST" -> "load books"
             else -> "complete this request"
         }

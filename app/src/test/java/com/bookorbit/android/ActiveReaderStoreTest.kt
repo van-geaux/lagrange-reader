@@ -37,6 +37,18 @@ class ActiveReaderStoreTest {
         assertEquals(book, restored)
     }
 
+    @Test
+    fun `clearIfMatches removes only the requested active book`() = runBlocking {
+        val store = ActiveReaderStore(Files.createTempDirectory("active-reader-store-clear-match").toFile())
+        store.save("https://example.test", sampleBook())
+
+        store.clearIfMatches("https://example.test", "other-book")
+        assertEquals(sampleBook(), store.read("https://example.test"))
+
+        store.clearIfMatches("https://example.test", "book-1")
+        assertNull(store.read("https://example.test"))
+    }
+
     private fun sampleBook(): BookSummary {
         return BookSummary(
             libraryId = "lib-1",

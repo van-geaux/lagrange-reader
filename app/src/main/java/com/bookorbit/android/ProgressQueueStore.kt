@@ -57,6 +57,14 @@ class ProgressQueueStore private constructor(
         writeUnlocked(remaining)
     }
 
+    suspend fun removeForBook(serverUrl: String, bookId: String) = mutex.withLock {
+        writeUnlocked(
+            readUnlocked().filterNot { update ->
+                update.serverUrl == serverUrl && update.bookId == bookId
+            }
+        )
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) file.delete()
     }

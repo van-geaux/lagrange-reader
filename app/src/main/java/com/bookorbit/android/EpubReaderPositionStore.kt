@@ -43,6 +43,13 @@ class EpubReaderPositionStore private constructor(
         writeUnlocked(current)
     }
 
+    suspend fun removeForBook(serverUrl: String, bookId: String) = mutex.withLock {
+        val remaining = readUnlocked().filterValues { position ->
+            position.serverUrl != serverUrl || position.bookId != bookId
+        }
+        writeUnlocked(remaining)
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) file.delete()
     }
