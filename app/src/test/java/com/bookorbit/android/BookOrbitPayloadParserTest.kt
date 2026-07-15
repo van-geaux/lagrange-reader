@@ -538,18 +538,28 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
-    fun `parseSeriesCatalogPage supplies a cover endpoint when metadata omits the cover`() {
+    fun `parseSeriesCatalogPage uses the representative book thumbnail from current server payloads`() {
         val series = BookOrbitPayloadParser.parseSeriesCatalogPage(
             payload = """
-                {"items":[{"id":"series-fallback","name":"Fallback Series"}]}
+                {"items":[{"id":"series-fallback","name":"Fallback Series","coverBookIds":[42,57]}]}
             """.trimIndent(),
             serverBase = "https://example.test"
         )
 
         assertEquals(
-            "https://example.test/api/v1/series/series-fallback/cover",
+            "https://example.test/api/v1/books/42/thumbnail",
             series.items.single().coverUrl
         )
+    }
+
+    @Test
+    fun `parseSeriesCatalogPage does not invent a nonexistent series cover route`() {
+        val series = BookOrbitPayloadParser.parseSeriesCatalogPage(
+            payload = """{"items":[{"id":"series-without-cover","name":"No Cover Series"}]}""",
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(null, series.items.single().coverUrl)
     }
 
     @Test(expected = UserFacingException::class)

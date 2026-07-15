@@ -1752,6 +1752,9 @@ internal object BookOrbitPayloadParser {
                 val item = array.optJSONObject(index) ?: continue
                 val info = item.optJSONObject("seriesInfo") ?: item
                 val id = info.stringValue("id", "_id", "seriesId") ?: "series-$index"
+                val coverBookId = info.stringList("coverBookIds").firstOrNull()
+                    ?: item.stringList("coverBookIds").firstOrNull()
+                val representativeThumbnailPath = coverBookId?.let { "/api/v1/books/$it/thumbnail" }
                 add(
                     SeriesSummary(
                         id = id,
@@ -1763,9 +1766,9 @@ internal object BookOrbitPayloadParser {
                         readCount = info.numberValue("readCount", "booksRead")?.toInt() ?: 0,
                         coverUrl = info.resolveCatalogImageUrl(
                             serverBase = serverBase,
-                            fallbackPath = "/api/v1/series/$id/cover",
+                            fallbackPath = representativeThumbnailPath,
                             keys = arrayOf("coverUrl", "cover", "coverImage")
-                        ) ?: "$serverBase/api/v1/series/$id/cover"
+                        ) ?: representativeThumbnailPath?.let { "$serverBase$it" }
                     )
                 )
             }
@@ -2088,7 +2091,7 @@ internal object BookOrbitPayloadParser {
 
     private fun JSONObject.resolveCatalogImageUrl(
         serverBase: String,
-        fallbackPath: String,
+        fallbackPath: String?,
         keys: Array<String>
     ): String? {
         val explicit = keys.asSequence()
@@ -2108,7 +2111,7 @@ internal object BookOrbitPayloadParser {
             }
         }
         val hasImageMetadata = keys.any { key -> has(key) && !isNull(key) }
-        return if (hasImageMetadata) "$serverBase$fallbackPath" else null
+        return if (hasImageMetadata && !fallbackPath.isNullOrBlank()) "$serverBase$fallbackPath" else null
     }
 
     private fun JSONArray?.selectPrimaryFile(): JSONObject? {

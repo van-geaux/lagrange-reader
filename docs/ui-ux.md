@@ -108,7 +108,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Latest device feedback workplan - 2026-07-13 (session, catalog, and density follow-up)
 
 - [x] Prioritize session persistence with refresh-cookie renewal and one authenticated-request retry before returning to Login; validate the actual endpoint on the target server.
-- [x] Retry Series and Authors catalog thumbnails, use a deterministic Series cover fallback, and cache successful catalog image bytes for fast scroll-back rendering.
+- [x] Retry Series and Authors catalog thumbnails, resolve Series `coverBookIds` through representative book thumbnails, and cache successful catalog image bytes for fast scroll-back rendering.
 - [x] Merge reader progress into Home immediately so Continue reading appears without waiting for a full browser reload or a later page.
 - [x] Remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books.
 - [x] Reduce shared app typography by approximately 10% and organize book card metadata as title, optional series, and series index rows.
@@ -140,7 +140,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Provide both a visible overflow menu and long-press menu for removing a title from Currently reading; the action uses normal-user APIs to clear primary/current BookOrbit progress, mark the title unread, clear local reading progress, and remains unavailable in an offline snapshot.
 - [x] Make On Deck represent series progression: show the next unread volume only when a prior volume is completely read, and hide it once that volume is Currently reading.
 - [x] Add swipe-to-refresh to Home using the established Libraries pull indicator and refresh behavior.
-- [ ] Ensure Series cards display their thumbnails.
+- [x] Ensure Series cards display representative book thumbnails from BookOrbit's `coverBookIds` response field.
 - [ ] Give Series the same complete-catalog/jump-rail navigation model as the large-library browser instead of Load more.
 - [ ] Include the series book count on collapsed series cards in Libraries.
 - [ ] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.

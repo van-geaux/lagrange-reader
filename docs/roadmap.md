@@ -145,7 +145,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 ### Latest device feedback workplan - 2026-07-13 (session, catalog, and density follow-up)
 
 1. Implemented: make session persistence the highest-priority fix by retrying 401/403 API, cover, download, and reader-cache requests after a refresh-cookie renewal attempt. The endpoint contract and long-lived behavior still require physical-device validation against the target server.
-2. Implemented: make Series catalog covers use a deterministic server cover fallback, retry failed catalog image loads, and cache successful catalog image bytes for scroll-back reuse.
+2. Implemented and corrected after target feedback: parse Series `coverBookIds` and load the first representative book's thumbnail, retry failed catalog image loads, and cache successful catalog image bytes for scroll-back reuse. The earlier assumed `/series/{id}/cover` route does not exist in BookOrbit.
 3. Implemented: merge freshly observed reader progress into the browser immediately and include a recently read book even when it was outside the first server page, so Continue reading does not wait for a full reload.
 4. Implemented: remove redundant in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books while preserving destination identity in the app bar/detail screens.
 5. Implemented: reduce shared Compose typography tokens by approximately 10% and reorganize book card metadata into book title, optional series, and series-index rows.
@@ -210,7 +210,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Add visible overflow and long-press actions to Currently reading cards. Removal uses BookOrbit's normal-user file/audio progress and status APIs to clear primary/current progress, mark the title unread, and clear matching local queued, synced, resume, and cached progress so stale work cannot restore it. Reading-session history and additional-file progress remain an admin-reset limitation.
 - [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
 - [x] Add pull-down refresh to Home using the same refresh indicator and cache-preserving catalog reconciliation as Libraries.
-- [ ] Fix missing thumbnails on Series cards.
+- [x] Fix missing thumbnails on Series cards by mapping BookOrbit's `coverBookIds` to representative book thumbnail URLs.
 - [ ] Add a jump rail to Series and replace its Load more pagination with complete/local navigation.
 - [ ] Show the number of books in collapsed Libraries series cards, matching the Series screen.
 - [ ] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
