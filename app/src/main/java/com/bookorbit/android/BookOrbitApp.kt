@@ -747,6 +747,49 @@ internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
 
 internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean = this != EpubReaderTheme.Dark
 
+internal const val EPUB_BOOK_LOCATION_TOTAL = 1000
+
+internal data class EpubReaderProgressStatus(
+    val completionPercent: Float,
+    val chapterNumber: Int,
+    val chapterCount: Int,
+    val chapterPageNumber: Int,
+    val chapterPageCount: Int,
+    val bookLocation: Int
+)
+
+internal fun epubReaderProgressStatus(
+    chapterIndex: Int,
+    chapterCount: Int,
+    pageIndex: Int,
+    pageCount: Int
+): EpubReaderProgressStatus {
+    val safeChapterCount = chapterCount.coerceAtLeast(1)
+    val safeChapterIndex = chapterIndex.coerceIn(0, safeChapterCount - 1)
+    val safePageCount = pageCount.coerceAtLeast(1)
+    val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
+    val chapterProgress = (safePageIndex + 1f) / safePageCount
+    val bookProgress = ((safeChapterIndex + chapterProgress) / safeChapterCount).coerceIn(0f, 1f)
+    return EpubReaderProgressStatus(
+        completionPercent = bookProgress * 100f,
+        chapterNumber = safeChapterIndex + 1,
+        chapterCount = safeChapterCount,
+        chapterPageNumber = safePageIndex + 1,
+        chapterPageCount = safePageCount,
+        bookLocation = (bookProgress * EPUB_BOOK_LOCATION_TOTAL)
+            .roundToInt()
+            .coerceIn(1, EPUB_BOOK_LOCATION_TOTAL)
+    )
+}
+
+internal fun EpubReaderProgressStatus.displayText(): String =
+    "${completionPercent.roundToInt()}% · Chapter $chapterNumber/$chapterCount · " +
+        "Page $chapterPageNumber/$chapterPageCount · Book $bookLocation/$EPUB_BOOK_LOCATION_TOTAL"
+
+internal fun EpubReaderProgressStatus.accessibilityText(): String =
+    "Book completion ${completionPercent.roundToInt()} percent; chapter $chapterNumber of $chapterCount; " +
+        "chapter page $chapterPageNumber of $chapterPageCount; book location $bookLocation of $EPUB_BOOK_LOCATION_TOTAL"
+
 @Suppress("DEPRECATION")
 @Composable
 internal fun EpubReaderSystemBars(theme: EpubReaderTheme) {
@@ -1176,10 +1219,15 @@ private fun EpubReaderView(
         }
     }
 
-    LaunchedEffect(currentChapter, currentPage, currentPageCount, chapterCount) {
-        val chapterProgress = (currentPage + 1f) / currentPageCount.coerceAtLeast(1)
-        val percent = ((currentChapter + chapterProgress) / chapterCount.toFloat()) * 100f
-        onProgress(currentChapter, currentPage, currentPageCount, percent)
+    val progressStatus = epubReaderProgressStatus(
+        chapterIndex = currentChapter,
+        chapterCount = chapterCount,
+        pageIndex = currentPage,
+        pageCount = currentPageCount
+    )
+
+    LaunchedEffect(currentChapter, currentPage, currentPageCount, progressStatus.completionPercent) {
+        onProgress(currentChapter, currentPage, currentPageCount, progressStatus.completionPercent)
     }
 
     LaunchedEffect(paddingDraft) {
@@ -1194,7 +1242,10 @@ private fun EpubReaderView(
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = topReaderInset, bottom = bottomReaderInset)
+                .padding(
+                    top = topReaderInset,
+                    bottom = bottomReaderInset + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                )
                 .semantics {
                     contentDescription = if (isPreview) {
                         "Preview paginated EPUB reader; progress is not saved"
@@ -1290,7 +1341,12 @@ private fun EpubReaderView(
                 shadowElevation = 8.dp
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(
+                        start = 12.dp,
+                        top = 10.dp,
+                        end = 12.dp,
+                        bottom = 10.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                    ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (showChapterPicker) {
@@ -1380,6 +1436,40 @@ private fun EpubReaderView(
                     }
                 }
             }
+        }
+        EpubReaderProgressFooter(
+            status = progressStatus,
+            theme = selectedTheme,
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+internal fun EpubReaderProgressFooter(
+    status: EpubReaderProgressStatus,
+    theme: EpubReaderTheme,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
+        color = Color(theme.backgroundColor),
+        shadowElevation = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = status.displayText(),
+                modifier = Modifier.semantics {
+                    contentDescription = status.accessibilityText()
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = Color(android.graphics.Color.parseColor(theme.foregroundCss)).copy(alpha = 0.78f),
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
@@ -2023,6 +2113,7 @@ private data class EpubWebViewRenderState(
 )
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
+private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = 30.dp
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")

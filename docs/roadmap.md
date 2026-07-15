@@ -220,7 +220,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Prevent the reading screen from closing unexpectedly after an idle period.
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
 - [x] Show battery and signal indicators in the reader's top-right area using Android's native status bar while keeping the bottom navigation bar immersive.
-- [ ] Show book completion percentage, chapter page progress, and book page progress at the bottom of the reader.
+- [x] Show book completion percentage, chapter page progress, and a normalized 1-1000 whole-book location in an always-visible EPUB footer.
 
 ## Source of truth
 

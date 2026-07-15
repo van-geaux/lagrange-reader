@@ -150,7 +150,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
 - [x] Use one clear Close action for the reader options overlay, and dismiss the overlay when visible book content is tapped.
 - [x] Show battery and signal indicators in the reader's top-right area through Android's native status bar.
-- [ ] Show book completion percentage, chapter page progress, and book page progress in the reader's bottom status area.
+- [x] Keep an always-visible EPUB bottom status area showing completion percentage, chapter page progress, and a normalized 1-1000 whole-book location.
 
 ### Checkpoint 5: Other media readers - deferred
 
