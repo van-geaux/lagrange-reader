@@ -135,6 +135,16 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep lazy Compose item rendering for bounded memory while removing network-backed lazy catalog paging.
 - [ ] Validate thumbnail warm-up, far-letter offline covers, rapid-scroll visible-card priority, and repeat detail-open latency with the 5k-book library.
 
+### New user feedback workplan - 2026-07-15
+
+- [ ] Provide an accessible action menu or long-press action for removing a title from Currently reading, with matching BookOrbit state synchronization.
+- [ ] Make On Deck represent series progression: show the next unread volume only when a prior volume is completely read, and hide it once that volume is Currently reading.
+- [ ] Add swipe-to-refresh to Home.
+- [ ] Ensure Series cards display their thumbnails.
+- [ ] Give Series the same complete-catalog/jump-rail navigation model as the large-library browser instead of Load more.
+- [ ] Include the series book count on collapsed series cards in Libraries.
+- [ ] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

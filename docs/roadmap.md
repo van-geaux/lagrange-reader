@@ -205,6 +205,16 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 5. Deliberate boundary: keep the complete catalog and thumbnails locally, but do not prefetch one rich-detail endpoint per title; a 5k-book library would otherwise generate roughly 5k extra API calls. The summary detail screen renders immediately and the rich supplement is fetched once per changed/opened title.
 6. Verification passes: 127 JVM tests across 21 suites, Android lint, debug APK assembly, and Android instrumentation-test compilation. Physical-device validation against the 5k-book library remains required.
 
+### New user feedback workplan - 2026-07-15
+
+- [ ] Add a Currently reading action menu or long-press action that removes a title from the shelf and synchronizes the removal with BookOrbit's Currently reading state.
+- [ ] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
+- [ ] Add pull-down refresh to Home.
+- [ ] Fix missing thumbnails on Series cards.
+- [ ] Add a jump rail to Series and replace its Load more pagination with complete/local navigation.
+- [ ] Show the number of books in collapsed Libraries series cards, matching the Series screen.
+- [ ] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
