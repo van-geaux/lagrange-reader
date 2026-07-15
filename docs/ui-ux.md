@@ -137,7 +137,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 ### New user feedback workplan - 2026-07-15
 
-- [x] Provide both a visible overflow menu and long-press menu for removing a title from Currently reading; the action resets BookOrbit and local reading progress and is unavailable in an offline snapshot.
+- [x] Provide both a visible overflow menu and long-press menu for removing a title from Currently reading; the action uses normal-user APIs to clear primary/current BookOrbit progress, mark the title unread, clear local reading progress, and remains unavailable in an offline snapshot.
 - [x] Make On Deck represent series progression: show the next unread volume only when a prior volume is completely read, and hide it once that volume is Currently reading.
 - [ ] Add swipe-to-refresh to Home.
 - [ ] Ensure Series cards display their thumbnails.

@@ -107,6 +107,41 @@ class ProgressPercentNormalizationTest {
     }
 
     @Test
+    fun `ebook reset deletes the primary file progress`() {
+        val request = buildProgressResetRequest(book(mediaKind = MediaKind.EPUB, fileId = "88"))
+
+        assertEquals("/api/v1/books/files/88/progress", request?.path)
+        assertEquals("DELETE", request?.method)
+        assertEquals(null, request?.payload)
+    }
+
+    @Test
+    fun `audio reset saves explicit zero progress`() {
+        val request = buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = "91"))
+
+        assertEquals("/api/v1/books/41/audio-progress", request?.path)
+        assertEquals("PATCH", request?.method)
+        assertEquals(0.0, request?.payload?.getDouble("percentage"))
+        assertEquals(91, request?.payload?.getInt("currentFileId"))
+        assertEquals(0.0, request?.payload?.getDouble("positionSeconds"))
+    }
+
+    @Test
+    fun `reset requires a valid file id`() {
+        assertEquals(null, buildProgressResetRequest(book(mediaKind = MediaKind.EPUB, fileId = null)))
+        assertEquals(null, buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = "not-a-number")))
+    }
+
+    @Test
+    fun `reset marks the book unread and clears lifecycle dates`() {
+        val payload = buildUnreadStatusPayload()
+
+        assertEquals("unread", payload.getString("status"))
+        assertEquals(true, payload.isNull("startedAt"))
+        assertEquals(true, payload.isNull("finishedAt"))
+    }
+
+    @Test
     fun `low epub percentage restores near the beginning instead of the middle`() {
         assertEquals(0, percentToChapterIndex(0.5f, 100))
         assertEquals(1, percentToChapterIndex(1f, 100))
@@ -128,5 +163,13 @@ class ProgressPercentNormalizationTest {
         pageIndex = 0,
         progressPercent = progressPercent,
         updatedAtMillis = 1L
+    )
+
+    private fun book(mediaKind: MediaKind, fileId: String?) = BookSummary(
+        libraryId = "7",
+        id = "41",
+        fileId = fileId,
+        title = "Test book",
+        mediaKind = mediaKind
     )
 }

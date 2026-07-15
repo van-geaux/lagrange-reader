@@ -727,15 +727,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     override suspend fun resetBookReadingState(book: BookSummary) = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val progressResetRequest = buildProgressResetRequest(book)
+            ?: throw UserFacingException("Unable to reset progress because this book has no valid file ID.")
 
-        // A worker may already be replaying an older progress event. Serialize the reset
+        // A worker may already be replaying an older progress event. Serialize the clear
         // behind that replay, then remove every queued/acknowledged marker before another
-        // worker can put the title back into Reading.
+        // worker can put the title back into Reading. These endpoints are available to
+        // ordinary users; BookOrbit's full reset-reading-state endpoint is metadata-admin only.
         progressSyncMutex.withLock {
             request(
-                "/api/v1/books/${book.id}/reset-reading-state",
-                "POST",
-                null
+                progressResetRequest.path,
+                progressResetRequest.method,
+                progressResetRequest.payload?.toString()?.toRequestBody(JSON)
+            )
+            request(
+                "/api/v1/books/${book.id}/status",
+                "PATCH",
+                buildUnreadStatusPayload().toString().toRequestBody(JSON)
             )
             queueStore.removeForBook(serverUrl, book.id)
             lastSyncedProgressStore.removeForBook(serverUrl, book.id)
@@ -1361,9 +1369,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         return when {
             path == "/api/v1/libraries" -> "load libraries"
             path.contains("/audio-progress") -> "sync listening progress"
+            path.contains("/progress") && method == "DELETE" -> "clear reading progress"
             path.contains("/progress") -> "sync reading progress"
             path.endsWith("/status") && method == "PATCH" -> "sync reading status"
-            path.endsWith("/reset-reading-state") && method == "POST" -> "reset reading state"
             path.contains("/books") && method == "POST" -> "load books"
             else -> "complete this request"
         }
@@ -2312,6 +2320,39 @@ internal fun buildReadStatusPayload(item: ProgressUpdate): JSONObject? {
     return JSONObject().apply {
         put("status", if (percentage >= COMPLETED_PROGRESS_PERCENT) "read" else "reading")
     }
+}
+
+internal data class ProgressResetRequest(
+    val path: String,
+    val method: String,
+    val payload: JSONObject? = null
+)
+
+internal fun buildProgressResetRequest(book: BookSummary): ProgressResetRequest? {
+    val fileId = book.fileId ?: return null
+    if (book.mediaKind != MediaKind.AUDIO) {
+        return ProgressResetRequest(
+            path = "/api/v1/books/files/$fileId/progress",
+            method = "DELETE"
+        )
+    }
+
+    val numericFileId = fileId.toIntOrNull() ?: return null
+    return ProgressResetRequest(
+        path = "/api/v1/books/${book.id}/audio-progress",
+        method = "PATCH",
+        payload = JSONObject().apply {
+            put("percentage", 0.0)
+            put("currentFileId", numericFileId)
+            put("positionSeconds", 0.0)
+        }
+    )
+}
+
+internal fun buildUnreadStatusPayload(): JSONObject = JSONObject().apply {
+    put("status", "unread")
+    put("startedAt", JSONObject.NULL)
+    put("finishedAt", JSONObject.NULL)
 }
 
 internal fun ProgressUpdate.targetsServer(currentServerUrl: String): Boolean {

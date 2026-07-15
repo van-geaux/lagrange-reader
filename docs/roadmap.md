@@ -207,7 +207,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### New user feedback workplan - 2026-07-15
 
-- [x] Add visible overflow and long-press actions to Currently reading cards. Removal calls BookOrbit's full reading-state reset endpoint and clears matching local queued, synced, resume, and cached progress so the title cannot be restored by stale work.
+- [x] Add visible overflow and long-press actions to Currently reading cards. Removal uses BookOrbit's normal-user file/audio progress and status APIs to clear primary/current progress, mark the title unread, and clear matching local queued, synced, resume, and cached progress so stale work cannot restore it. Reading-session history and additional-file progress remain an admin-reset limitation.
 - [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
 - [ ] Add pull-down refresh to Home.
 - [ ] Fix missing thumbnails on Series cards.
