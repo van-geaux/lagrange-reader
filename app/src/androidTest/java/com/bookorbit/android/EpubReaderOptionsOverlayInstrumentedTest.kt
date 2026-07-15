@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -19,27 +20,50 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun optionsExposeOneCloseActionAndDismissFromVisibleBookArea() {
+    fun bottomSheetSeparatesContinueReadingFromClosingTheBook() {
         val dismissCount = mutableIntStateOf(0)
+        val continueCount = mutableIntStateOf(0)
+        val closeBookCount = mutableIntStateOf(0)
 
         composeRule.setContent {
             Box(modifier = Modifier.fillMaxSize()) {
                 EpubReaderDismissScrim(onDismiss = { dismissCount.intValue++ })
-                EpubReaderOptionsHeader(
+                EpubReaderOptionsBottomSheet(
                     title = "Test Book",
                     status = "Chapter 1/2 · Page 3/4",
-                    onClose = { dismissCount.intValue++ }
+                    theme = EpubReaderTheme.Sepia,
+                    chapterTitles = listOf("Chapter One", "Chapter Two"),
+                    currentChapter = 0,
+                    showChapterPicker = false,
+                    padding = EpubPaddingPercentages(),
+                    fontScale = 1f,
+                    onContinueReading = { continueCount.intValue++ },
+                    onCloseBook = { closeBookCount.intValue++ },
+                    onToggleChapterPicker = {},
+                    onChapterSelected = {},
+                    onThemeSelected = {},
+                    onPaddingChange = {},
+                    onPaddingChangeFinished = {},
+                    onDecreaseFont = {},
+                    onIncreaseFont = {}
                 )
             }
         }
 
         composeRule.onAllNodesWithText("Back").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Close").assertCountEquals(1)
-        composeRule.onNodeWithText("Close").performClick()
-        composeRule.onNodeWithContentDescription("Close reader options").performClick()
+        composeRule.onAllNodesWithText("Continue reading").assertCountEquals(1)
+        composeRule.onAllNodesWithText("Close book").assertCountEquals(1)
+        composeRule.onNodeWithText("Reader options").assertIsDisplayed()
+        composeRule.onNodeWithText("Continue reading").performClick()
+        composeRule.onNodeWithText("Close book").performClick()
+        composeRule
+            .onNodeWithContentDescription("Dismiss reader options and continue reading")
+            .performClick()
 
         composeRule.runOnIdle {
-            assertEquals(2, dismissCount.intValue)
+            assertEquals(1, continueCount.intValue)
+            assertEquals(1, closeBookCount.intValue)
+            assertEquals(1, dismissCount.intValue)
         }
     }
 }

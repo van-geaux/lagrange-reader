@@ -18,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -46,6 +47,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -54,6 +56,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1165,6 +1169,11 @@ private fun EpubReaderView(
     }
 
     val chapterCount = epubBook.chapters.size
+    val chapterTitles = remember(epubBook) {
+        epubBook.chapters.mapIndexed { index, chapter ->
+            chapter.title.ifBlank { "Chapter ${index + 1}" }
+        }
+    }
     val estimatedChapter = remember(chapterCount, initialPercent, isPreview) {
         if (isPreview) 0 else percentToChapterIndex(initialPercent, chapterCount)
     }
@@ -1330,114 +1339,36 @@ private fun EpubReaderView(
 
         if (showControls) {
             EpubReaderDismissScrim(onDismiss = dismissControls)
-            EpubReaderOptionsHeader(
+            EpubReaderOptionsBottomSheet(
                 title = if (isPreview) "Preview · ${epubBook.title ?: title}" else (epubBook.title ?: title),
                 status = "Chapter ${currentChapter + 1}/$chapterCount · Page ${currentPage + 1}/$currentPageCount",
-                onClose = dismissControls,
-                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+                theme = selectedTheme,
+                chapterTitles = chapterTitles,
+                currentChapter = currentChapter,
+                showChapterPicker = showChapterPicker,
+                padding = paddingDraft,
+                fontScale = fontScale,
+                onContinueReading = dismissControls,
+                onCloseBook = {
+                    dismissControls()
+                    onBack()
+                },
+                onToggleChapterPicker = { showChapterPicker = !showChapterPicker },
+                onChapterSelected = { index ->
+                    openChapterAtEnd = false
+                    currentChapter = index
+                    showChapterPicker = false
+                },
+                onThemeSelected = { theme ->
+                    selectedTheme = theme
+                    themeStore.save(theme)
+                },
+                onPaddingChange = applyPadding,
+                onPaddingChangeFinished = { paddingStore.save(readerKey, paddingDraft) },
+                onDecreaseFont = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) },
+                onIncreaseFont = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) },
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             )
-
-            Surface(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(
-                        start = 12.dp,
-                        top = 10.dp,
-                        end = 12.dp,
-                        bottom = 10.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (showChapterPicker) {
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            epubBook.chapters.forEachIndexed { index, chapter ->
-                                FilterChip(
-                                    selected = index == currentChapter,
-                                    onClick = {
-                                        openChapterAtEnd = false
-                                        currentChapter = index
-                                        showChapterPicker = false
-                                    },
-                                    label = { Text(chapter.title.ifBlank { "Chapter ${index + 1}" }) }
-                                )
-                            }
-                        }
-                    }
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 440.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(onClick = { showChapterPicker = !showChapterPicker }) {
-                                Text("Chapters")
-                            }
-                            EPUB_THEME_OPTIONS.forEach { theme ->
-                                FilterChip(
-                                    selected = theme == selectedTheme,
-                                    onClick = {
-                                        selectedTheme = theme
-                                        themeStore.save(theme)
-                                    },
-                                    label = { Text(theme.label) }
-                                )
-                            }
-                        }
-                        Text(
-                            "Padding · 100% equals 25% of the screen edge",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        EpubPaddingSlider(
-                            label = "Top",
-                            value = paddingDraft.top,
-                            onValueChange = { value -> applyPadding(paddingDraft.copy(top = value)) },
-                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
-                        )
-                        EpubPaddingSlider(
-                            label = "Bottom",
-                            value = paddingDraft.bottom,
-                            onValueChange = { value -> applyPadding(paddingDraft.copy(bottom = value)) },
-                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
-                        )
-                        EpubPaddingSlider(
-                            label = "Left",
-                            value = paddingDraft.left,
-                            onValueChange = { value -> applyPadding(paddingDraft.copy(left = value)) },
-                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
-                        )
-                        EpubPaddingSlider(
-                            label = "Right",
-                            value = paddingDraft.right,
-                            onValueChange = { value -> applyPadding(paddingDraft.copy(right = value)) },
-                            onValueChangeFinished = { paddingStore.save(readerKey, paddingDraft) }
-                        )
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(onClick = { fontScale = (fontScale - 0.1f).coerceAtLeast(0.9f) }) {
-                                Text("A-")
-                            }
-                            Text(formatEpubFontScale(fontScale), style = MaterialTheme.typography.bodySmall)
-                            OutlinedButton(onClick = { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) }) {
-                                Text("A+")
-                            }
-                        }
-                    }
-                }
-            }
         }
         EpubReaderProgressFooter(
             status = progressStatus,
@@ -1485,45 +1416,261 @@ internal fun EpubReaderDismissScrim(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.32f))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onDismiss
             )
-            .semantics { contentDescription = "Close reader options" }
+            .semantics { contentDescription = "Dismiss reader options and continue reading" }
+    )
+}
+
+internal data class EpubReaderOptionsPalette(
+    val container: Int,
+    val content: Int,
+    val mutedContent: Int,
+    val accent: Int,
+    val onAccent: Int,
+    val surfaceVariant: Int,
+    val outline: Int
+)
+
+internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = when (this) {
+    EpubReaderTheme.Light -> EpubReaderOptionsPalette(
+        container = 0xFFF7F4EE.toInt(),
+        content = 0xFF1F1C17.toInt(),
+        mutedContent = 0xFF5E574D.toInt(),
+        accent = 0xFF2457A6.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFE7E0D4.toInt(),
+        outline = 0xFF6F685E.toInt()
+    )
+    EpubReaderTheme.Sepia -> EpubReaderOptionsPalette(
+        container = 0xFFF1E6D2.toInt(),
+        content = 0xFF3B2E1E.toInt(),
+        mutedContent = 0xFF6A5944.toInt(),
+        accent = 0xFF7A4B00.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFE4D4B9.toInt(),
+        outline = 0xFF796A57.toInt()
+    )
+    EpubReaderTheme.Dark -> EpubReaderOptionsPalette(
+        container = 0xFF181512.toInt(),
+        content = 0xFFECE4D8.toInt(),
+        mutedContent = 0xFFBDB4A7.toInt(),
+        accent = 0xFF8DB5FF.toInt(),
+        onAccent = 0xFF10284D.toInt(),
+        surfaceVariant = 0xFF2B2723.toInt(),
+        outline = 0xFF8B8175.toInt()
     )
 }
 
 @Composable
-internal fun EpubReaderOptionsHeader(
+internal fun EpubReaderOptionsBottomSheet(
     title: String,
     status: String,
-    onClose: () -> Unit,
+    theme: EpubReaderTheme,
+    chapterTitles: List<String>,
+    currentChapter: Int,
+    showChapterPicker: Boolean,
+    padding: EpubPaddingPercentages,
+    fontScale: Float,
+    onContinueReading: () -> Unit,
+    onCloseBook: () -> Unit,
+    onToggleChapterPicker: () -> Unit,
+    onChapterSelected: (Int) -> Unit,
+    onThemeSelected: (EpubReaderTheme) -> Unit,
+    onPaddingChange: (EpubPaddingPercentages) -> Unit,
+    onPaddingChangeFinished: () -> Unit,
+    onDecreaseFont: () -> Unit,
+    onIncreaseFont: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-        shadowElevation = 6.dp
+    val parentTypography = MaterialTheme.typography
+    val parentShapes = MaterialTheme.shapes
+    val colors = remember(theme) {
+        val palette = theme.readerOptionsPalette()
+        if (theme == EpubReaderTheme.Dark) {
+            darkColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
+                primaryContainer = Color(palette.surfaceVariant),
+                onPrimaryContainer = Color(palette.content),
+                background = Color(palette.container),
+                onBackground = Color(palette.content),
+                surface = Color(palette.container),
+                onSurface = Color(palette.content),
+                surfaceVariant = Color(palette.surfaceVariant),
+                onSurfaceVariant = Color(palette.mutedContent),
+                outline = Color(palette.outline)
+            )
+        } else {
+            lightColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
+                primaryContainer = Color(palette.surfaceVariant),
+                onPrimaryContainer = Color(palette.content),
+                background = Color(palette.container),
+                onBackground = Color(palette.content),
+                surface = Color(palette.container),
+                onSurface = Color(palette.content),
+                surfaceVariant = Color(palette.surfaceVariant),
+                onSurfaceVariant = Color(palette.mutedContent),
+                outline = Color(palette.outline)
+            )
+        }
+    }
+    MaterialTheme(
+        colorScheme = colors,
+        typography = parentTypography,
+        shapes = parentShapes
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 12.dp
         ) {
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(
-                    title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 620.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = 20.dp,
+                        top = 10.dp,
+                        end = 20.dp,
+                        bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                    ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 42.dp, height = 4.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Reader options",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        title,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onContinueReading,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Continue reading")
+                    }
+                    OutlinedButton(
+                        onClick = onCloseBook,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Close book")
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Reading position", style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = onToggleChapterPicker) {
+                        Text(if (showChapterPicker) "Hide chapters" else "Choose chapter")
+                    }
+                    if (showChapterPicker) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            chapterTitles.forEachIndexed { index, chapterTitle ->
+                                FilterChip(
+                                    selected = index == currentChapter,
+                                    onClick = { onChapterSelected(index) },
+                                    label = { Text(chapterTitle) }
+                                )
+                            }
+                        }
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        EPUB_THEME_OPTIONS.forEach { option ->
+                            FilterChip(
+                                selected = option == theme,
+                                onClick = { onThemeSelected(option) },
+                                label = { Text(option.label) }
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(onClick = onDecreaseFont) { Text("A-") }
+                        Text(
+                            "Text size ${formatEpubFontScale(fontScale)}",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        OutlinedButton(onClick = onIncreaseFont) { Text("A+") }
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Page margins", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Each 100% setting equals 25% of that screen edge.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    EpubPaddingSlider(
+                        label = "Top",
+                        value = padding.top,
+                        onValueChange = { value -> onPaddingChange(padding.copy(top = value)) },
+                        onValueChangeFinished = onPaddingChangeFinished
+                    )
+                    EpubPaddingSlider(
+                        label = "Bottom",
+                        value = padding.bottom,
+                        onValueChange = { value -> onPaddingChange(padding.copy(bottom = value)) },
+                        onValueChangeFinished = onPaddingChangeFinished
+                    )
+                    EpubPaddingSlider(
+                        label = "Left",
+                        value = padding.left,
+                        onValueChange = { value -> onPaddingChange(padding.copy(left = value)) },
+                        onValueChangeFinished = onPaddingChangeFinished
+                    )
+                    EpubPaddingSlider(
+                        label = "Right",
+                        value = padding.right,
+                        onValueChange = { value -> onPaddingChange(padding.copy(right = value)) },
+                        onValueChangeFinished = onPaddingChangeFinished
+                    )
+                }
             }
-            TextButton(onClick = onClose) { Text("Close") }
         }
     }
 }

@@ -46,7 +46,7 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens location, chapters, theme, text size, independent Top/Bottom/Left/Right percentage sliders, and one Close action. Close, exposed-book taps, or Android Back dismiss the overlay; Android Back exits the reader only when the overlay is closed. Android's native top status bar remains visible for battery and network indicators with reader-theme-aware contrast, while the bottom navigation bar stays immersive. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Target-device testing confirms restored content rendering and visible independent edge changes. Typography, page breaks, images, chapter boundaries, and tap-zone comfort still require validation before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens one rounded bottom sheet containing the current location, chapters, theme, text size, and independent Top/Bottom/Left/Right percentage sliders. Continue reading dismisses the sheet without leaving the book, while Close book exits the reader. Exposed-book taps or Android Back dismiss the sheet; Android Back exits the reader only when the sheet is closed. The sheet matches Light, Sepia, and Dark reader palettes with verified normal-text contrast. Android's native top status bar remains visible for battery and network indicators with reader-theme-aware contrast, while the bottom navigation bar stays immersive. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Target-device testing confirms restored content rendering and visible independent edge changes. Page breaks, images, chapter boundaries, and tap-zone comfort still require validation before Checkpoint 4 is complete.
 
 ### Device feedback workplan
 
@@ -148,7 +148,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Additional reader feedback workplan - 2026-07-15
 
 - [x] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
-- [x] Use one clear Close action for the reader options overlay, and dismiss the overlay when visible book content is tapped.
+- [x] Use a bottom sheet with distinct Continue reading and Close book actions, while visible book content still dismisses options without leaving the reader.
 - [x] Show battery and signal indicators in the reader's top-right area through Android's native status bar.
 - [x] Keep an always-visible EPUB bottom status area showing completion percentage, chapter page progress, and a normalized 1-1000 whole-book location.
 
@@ -156,8 +156,8 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 - [x] Resolve stale Currently Reading state after server-confirmed removal by suppressing non-positive unread progress metadata during Home refresh.
 - [x] Reduce perceived Home sync latency for large libraries with 100-book pages and bounded four-request catalog batches while preserving immediate interaction with cached content.
-- [ ] Give reader options distinct Continue reading and Close book actions.
-- [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
+- [x] Give reader options distinct Continue reading and Close book actions.
+- [x] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
 - [x] Allow explicit HTTP server entry when required by the configured BookOrbit deployment while retaining HTTPS as the bare remote-host default.
 - [x] Add Mark as read and Mark as unread to shared three-dot/long-press actions on Home shelves and individual Library, Series, Author, and Local Books posters; keep collapsed series cards as series navigation rather than single-book actions.
 - [x] Keep global search results as list rows and add the same Mark as read/unread menu through both a visible three-dot action and long-press.
@@ -165,7 +165,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [ ] Make the book-detail series title a navigation affordance to series details.
 - [ ] Redesign the book-detail genres/tags and lower metadata hierarchy.
 - [ ] Add a full-screen, tap-to-dismiss/back-dismiss cover viewer from book details.
-- [ ] Redesign the reader options window's hierarchy, spacing, and control presentation.
+- [x] Redesign the reader options window as a rounded bottom sheet with clearer hierarchy, spacing, and grouped controls.
 
 ### Checkpoint 5: Other media readers - deferred
 

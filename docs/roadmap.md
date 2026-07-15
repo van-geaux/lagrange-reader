@@ -233,15 +233,15 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Keep global search results as list rows rather than converting them to poster cards.
 - [x] Fix stale Currently Reading state after refresh: explicit `unread` records with no positive progress now discard stale page/position and status timestamps, so a server-confirmed removal cannot be reconstructed as reading activity.
 - [x] Reduce Home sync/loading time for large libraries by requesting BookOrbit's 100-book page limit and loading large known page ranges in ordered batches with at most four concurrent requests. Existing cached content remains usable, and unstable totals/duplicates still trigger the full consistency retry.
-- [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
-- [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
+- [x] Redesign reader options as a bottom sheet with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
+- [x] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
 - [x] Allow explicitly entered HTTP BookOrbit server URLs and Android cleartext traffic; bare remote hostnames still default to HTTPS, while bare local development hosts retain HTTP shorthand.
 - [x] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus. Read status is written directly while preserving position; unread uses the normal-user reset flow so completed progress cannot immediately restore Read.
 - [ ] Redesign book-detail actions as a swipeable/compact action area, using symbols where they improve discoverability without hiding labels.
 - [ ] Make the tapped series title in book details navigate to that series detail page.
 - [ ] Redesign book-detail genres/tags and the lower metadata section for a more compact, elegant hierarchy.
 - [ ] Open the book-detail cover in a full-screen image viewer, dismissible by tapping the image again or pressing Android Back.
-- [ ] Redesign the reader options window for clearer hierarchy, spacing, and controls.
+- [x] Redesign the reader options window as a rounded bottom sheet with clearer hierarchy, spacing, and grouped controls.
 
 ## Source of truth
 

@@ -180,9 +180,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay
 - [x] Show battery and signal indicators in the reader's top-right area
 - [x] Show book completion percentage, chapter page progress, and normalized whole-book location at the bottom of the reader
-- [ ] Give reader options distinct Continue reading and Close book actions
-- [ ] Improve reader-options text/background contrast across all reader themes
-- [ ] Redesign the reader options window for clearer hierarchy and controls
+- [x] Give reader options distinct Continue reading and Close book actions
+- [x] Improve reader-options text/background contrast across all reader themes
+- [x] Redesign the reader options window as a bottom sheet with clearer hierarchy and controls
 - [x] Add Mark as read and Mark as unread to book overflow and long-press actions; read preserves position, while unread resets progress
 - [ ] Reduce Home initial sync/loading latency for large libraries
 - [x] Add better PDF zoom/pan behavior
