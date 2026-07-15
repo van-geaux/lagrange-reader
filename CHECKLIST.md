@@ -143,6 +143,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Explicitly sync BookOrbit `reading`/`read` status with each accepted progress event
 - [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
 - [x] Prevent removed Currently Reading titles from returning from stale unread-status timestamps after Home refresh
+- [x] Reduce large-library refresh latency with 100-book pages and bounded concurrent page requests
 - [ ] Add session event support if `sessions` endpoint is useful
 
 ## 10. Offline Sync Queue
@@ -291,7 +292,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use BookOrbit jump-bucket absolute indexes for default Browse navigation, with a complete-cache local fallback
 - [x] Disable the jump rail until the first full catalog is ready and for sort modes that do not support meaningful letter buckets
 - [ ] Validate cache-first reopen, catalog additions/deletions/progress changes, and exact #/A–Z jumps on the target device/server
-- [ ] Validate full thumbnail warming, rapid-scroll cancellation, and instant repeat detail opens with the 5k-book library
+- [ ] Validate bounded catalog-refresh latency, full thumbnail warming, rapid-scroll cancellation, and instant repeat detail opens with the 5k-book library
 - [x] Route background authenticated request failures through the login recovery flow
 - [x] Retry authenticated requests through the refresh-cookie session flow before showing session-expired login
 - [x] Retry and cache Series/Authors catalog thumbnails, resolving Series `coverBookIds` through representative book thumbnails

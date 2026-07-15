@@ -225,7 +225,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 ### Device validation follow-up and new work order — 2026-07-15
 
 - [x] Fix stale Currently Reading state after refresh: explicit `unread` records with no positive progress now discard stale page/position and status timestamps, so a server-confirmed removal cannot be reconstructed as reading activity.
-- [ ] Reduce the time the Home sync/loading indicator remains visible on a roughly 5,000-book library while keeping the Home surface usable.
+- [x] Reduce Home sync/loading time for large libraries by requesting BookOrbit's 100-book page limit and loading large known page ranges in ordered batches with at most four concurrent requests. Existing cached content remains usable, and unstable totals/duplicates still trigger the full consistency retry.
 - [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
 - [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
 - [ ] Allow HTTP server URLs when entering a BookOrbit server address.

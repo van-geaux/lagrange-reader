@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,6 +40,33 @@ class LibraryCatalogPaginationTest {
 
         assertEquals(listOf(0, 1), requestedPages)
         assertEquals(listOf("1", "2"), mergeLibraryBooks(pages).map { it.id })
+    }
+
+    @Test
+    fun `large catalog loads bounded page batches concurrently and preserves server order`() = runTest {
+        val requestedPages = mutableListOf<Int>()
+        var activeRequests = 0
+        var maximumActiveRequests = 0
+
+        val pages = loadCompleteLibraryPages { requestedPage ->
+            requestedPages += requestedPage
+            activeRequests += 1
+            maximumActiveRequests = maxOf(maximumActiveRequests, activeRequests)
+            delay(10)
+            activeRequests -= 1
+            val firstId = requestedPage * 100
+            LibraryBooksPage(
+                items = (firstId until firstId + 100).map { id -> book(id.toString(), "Book $id") },
+                total = 1_000,
+                page = requestedPage,
+                size = 100
+            )
+        }
+
+        assertEquals((0 until 10).toList(), requestedPages.sorted())
+        assertEquals(4, maximumActiveRequests)
+        assertEquals(1_000, mergeLibraryBooks(pages).size)
+        assertEquals((0 until 1_000).map(Int::toString), mergeLibraryBooks(pages).map { it.id })
     }
 
     @Test

@@ -14,6 +14,9 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -53,7 +56,9 @@ import kotlin.coroutines.resumeWithException
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "bookorbit_prefs")
-private const val LIBRARY_PAGE_SIZE = 50
+private const val LIBRARY_PAGE_SIZE = 100
+private const val LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS = 4
+private const val LIBRARY_PARALLEL_PAGE_THRESHOLD = 4
 private const val COMPLETED_PROGRESS_PERCENT = 99.5f
 private val progressSyncMutex = Mutex()
 
@@ -2250,13 +2255,47 @@ internal suspend fun loadCompleteLibraryPages(
     firstPage: LibraryBooksPage? = null,
     loadPage: suspend (Int) -> LibraryBooksPage
 ): List<LibraryBooksPage> {
-    val pages = mutableListOf<LibraryBooksPage>()
+    val initialPage = firstPage ?: loadPage(0)
+    val initialPageSize = initialPage.size?.takeIf { it > 0 } ?: LIBRARY_PAGE_SIZE
+    val initialTotal = initialPage.total?.takeIf { it >= 0 }
+    val expectedPageCount = initialTotal?.let { total ->
+        if (total == 0) 1 else ((total - 1) / initialPageSize) + 1
+    }
+    if (
+        expectedPageCount != null &&
+        expectedPageCount >= LIBRARY_PARALLEL_PAGE_THRESHOLD &&
+        initialPage.items.isNotEmpty()
+    ) {
+        val remainingPages = (1 until expectedPageCount)
+            .chunked(LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS)
+            .flatMap { pageBatch ->
+                coroutineScope {
+                    pageBatch
+                        .map { pageNumber -> async { pageNumber to loadPage(pageNumber) } }
+                        .awaitAll()
+                        .sortedBy { (pageNumber, _) -> pageNumber }
+                        .map { (_, page) -> page }
+                }
+            }
+        return listOf(initialPage) + remainingPages
+    }
+
+    val pages = mutableListOf(initialPage)
     val accumulatedIds = linkedSetOf<String>()
-    var targetTotal: Int? = null
-    var pageNumber = 0
+    initialPage.items.forEach { book -> accumulatedIds += book.id }
+    var targetTotal: Int? = initialTotal
+    var pageNumber = 1
+
+    if (
+        initialPage.items.isEmpty() ||
+        targetTotal?.let { accumulatedIds.size >= it } == true ||
+        initialPage.items.size < initialPageSize
+    ) {
+        return pages
+    }
 
     while (true) {
-        val page = if (pageNumber == 0 && firstPage != null) firstPage else loadPage(pageNumber)
+        val page = loadPage(pageNumber)
         pages += page
         targetTotal = listOfNotNull(targetTotal, page.total?.takeIf { it >= 0 }).maxOrNull()
 

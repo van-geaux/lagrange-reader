@@ -75,11 +75,11 @@ Current client request body for the first page:
 ```json
 {
   "sort": [],
-  "pagination": { "page": 0, "size": 50 }
+  "pagination": { "page": 0, "size": 100 }
 }
 ```
 
-Subsequent pages use the same body with an incremented `pagination.page` value.
+Subsequent pages use the same body with an incremented `pagination.page` value. For a reported catalog of at least four pages, the client requests remaining pages in ordered batches with at most four concurrent calls, then validates the merged count and retries once if the catalog changed during traversal.
 
 When Library Browse filters are applied, the client adds BookOrbit's standard filter group and sort fields while keeping the same pagination contract. For example:
 
@@ -95,7 +95,7 @@ When Library Browse filters are applied, the client adds BookOrbit's standard fi
     ]
   },
   "sort": [{ "field": "lastReadAt", "dir": "desc" }],
-  "pagination": { "page": 0, "size": 50 }
+  "pagination": { "page": 0, "size": 100 }
 }
 ```
 
@@ -123,7 +123,7 @@ Current response shape:
   "total": 5012,
   "seriesCount": 321,
   "page": 0,
-  "size": 50
+  "size": 100
 }
 ```
 

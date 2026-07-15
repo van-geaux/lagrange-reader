@@ -155,7 +155,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 ### Device validation follow-up and new UI work order - 2026-07-15
 
 - [x] Resolve stale Currently Reading state after server-confirmed removal by suppressing non-positive unread progress metadata during Home refresh.
-- [ ] Reduce perceived Home sync latency for large libraries while preserving immediate interaction with cached content.
+- [x] Reduce perceived Home sync latency for large libraries with 100-book pages and bounded four-request catalog batches while preserving immediate interaction with cached content.
 - [ ] Give reader options distinct Continue reading and Close book actions.
 - [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
 - [ ] Allow HTTP server entry when required by the configured BookOrbit deployment.
