@@ -127,10 +127,32 @@ internal fun buildLibraryJumpTargets(
             }
         )
     }
-    val railLabels = if (
+    val railDirection = if (
         direction == SortDirection.DESCENDING &&
         sort in setOf(BookSortOption.TITLE, BookSortOption.AUTHOR) &&
         displayedBooks.none { it.second != null }
+    ) {
+        SortDirection.DESCENDING
+    } else {
+        SortDirection.ASCENDING
+    }
+    return buildAlphabetJumpTargets(labels, railDirection)
+}
+
+internal fun buildSeriesJumpTargets(
+    series: List<SeriesSummary>,
+    direction: SortDirection = SortDirection.ASCENDING
+): List<Pair<Char, Int>> = buildAlphabetJumpTargets(
+    labels = series.map { libraryJumpLabel(it.name) },
+    direction = direction
+)
+
+private fun buildAlphabetJumpTargets(
+    labels: List<Char>,
+    direction: SortDirection
+): List<Pair<Char, Int>> {
+    val railLabels = if (
+        direction == SortDirection.DESCENDING
     ) {
         ('Z' downTo 'A').toList() + '#'
     } else {
@@ -833,29 +855,39 @@ private fun SeriesCatalogScreen(
 ) {
     var items by remember(query) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
     var total by remember(query) { mutableStateOf(0) }
-    var nextPage by remember(query) { mutableStateOf(1) }
     var isLoading by remember(query) { mutableStateOf(false) }
     var filter by remember(query) { mutableStateOf(SeriesCatalogFilter(query = query.takeIf { it.isNotBlank() })) }
     var showFilter by rememberSaveable(query) { mutableStateOf(false) }
+    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(query, filter) {
         isLoading = true
+        gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
-        val page = loader(filter.copy(query = query.takeIf { it.isNotBlank() }), 0)
-        items = page.items
-        total = page.total ?: page.items.size
-        nextPage = 1
+        val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
+        val catalog = loadCompleteSeriesCatalog { page -> loader(activeFilter, page) }
+        items = catalog.items
+        total = catalog.total ?: catalog.items.size
         isLoading = false
     }
+    val jumpTargets = remember(items, filter.sort, filter.direction, isLoading) {
+        if (!isLoading && filter.sort == SeriesSortOption.NAME) {
+            buildSeriesJumpTargets(items, filter.direction)
+        } else {
+            emptyList()
+        }
+    }
 
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -906,25 +938,17 @@ private fun SeriesCatalogScreen(
                 }
             }
         }
-        if (!isLoading && items.size < total) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            isLoading = true
-                            val page = loader(
-                                filter.copy(query = query.takeIf { it.isNotBlank() }),
-                                nextPage
-                            )
-                            items = (items + page.items).distinctBy { it.id }
-                            total = page.total ?: total
-                            nextPage += 1
-                            isLoading = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Load more") }
-            }
+        }
+        if (jumpTargets.isNotEmpty()) {
+            LibraryJumpRail(
+                targets = jumpTargets,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp, bottom = 12.dp),
+                onJump = { index ->
+                    scope.launch { gridState.animateScrollToItem(index + 1) }
+                }
+            )
         }
     }
     if (showFilter) {

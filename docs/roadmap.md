@@ -211,7 +211,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
 - [x] Add pull-down refresh to Home using the same refresh indicator and cache-preserving catalog reconciliation as Libraries.
 - [x] Fix missing thumbnails on Series cards by mapping BookOrbit's `coverBookIds` to representative book thumbnail URLs.
-- [ ] Add a jump rail to Series and replace its Load more pagination with complete/local navigation.
+- [x] Fetch every filtered Series page into a deduplicated in-memory catalog, remove Load more, and add #/A–Z or Z–A direct navigation for Name sorting.
 - [ ] Show the number of books in collapsed Libraries series cards, matching the Series screen.
 - [ ] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
 

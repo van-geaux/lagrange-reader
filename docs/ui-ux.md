@@ -141,7 +141,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Make On Deck represent series progression: show the next unread volume only when a prior volume is completely read, and hide it once that volume is Currently reading.
 - [x] Add swipe-to-refresh to Home using the established Libraries pull indicator and refresh behavior.
 - [x] Ensure Series cards display representative book thumbnails from BookOrbit's `coverBookIds` response field.
-- [ ] Give Series the same complete-catalog/jump-rail navigation model as the large-library browser instead of Load more.
+- [x] Give Series complete, deduplicated in-memory results and #/A–Z or Z–A navigation for Name sorting instead of Load more.
 - [ ] Include the series book count on collapsed series cards in Libraries.
 - [ ] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.
 

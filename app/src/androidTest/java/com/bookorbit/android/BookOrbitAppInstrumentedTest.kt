@@ -251,6 +251,43 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun seriesCatalogUsesJumpRailWithoutLoadMore() {
+        val dataSource = InstrumentedFakeDataSource().apply {
+            seriesCatalogPages[0] = SeriesCatalogPage(
+                items = listOf(
+                    SeriesSummary(id = "series-a", name = "Alpha Series"),
+                    SeriesSummary(id = "series-z", name = "Zulu Series")
+                ),
+                total = 2,
+                page = 0,
+                size = 100
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Series").performClick()
+
+        composeRule.onNodeWithContentDescription("Jump to A").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Load more").assertCountEquals(0)
+    }
+
+    @Test
     fun librarySeriesCanCollapseAndExpand() {
         val first = BookSummary(
             libraryId = "lib-1",
@@ -388,6 +425,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
+    val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
 
     override suspend fun getServerUrl(): String? = null
     override suspend fun setServerUrl(serverUrl: String) = Unit
@@ -408,6 +446,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         if (page == 0) return LibraryBooksPage(items = loadBooksResult, total = loadBooksResult.size, page = 0, size = loadBooksResult.size)
         return libraryPageResults[page] ?: LibraryBooksPage(page = page)
     }
+    override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
+        seriesCatalogPages[page] ?: SeriesCatalogPage(page = page)
     override suspend fun loadLocalBooks(): List<BookSummary> = localBooksResult
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)

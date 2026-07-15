@@ -289,7 +289,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Make On Deck show only the next unread book in a series after a completely read book, excluding books already present in Currently reading
 - [x] Add pull-down refresh to the Home screen
 - [x] Restore visible thumbnails for series cards in the Series screen using BookOrbit's representative `coverBookIds`
-- [ ] Add a jump rail to the Series screen and replace its Load more flow with complete/local navigation
+- [x] Add a #/A–Z jump rail to Name-sorted Series results and replace Load more with complete, deduplicated in-memory navigation
 - [ ] Show the number of books in each collapsed Libraries series card, matching the Series screen
 - [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
 - [x] Reduce app typography tokens by approximately 10% for phone density

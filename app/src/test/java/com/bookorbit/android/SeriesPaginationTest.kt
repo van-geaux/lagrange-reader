@@ -6,6 +6,71 @@ import org.junit.Test
 
 class SeriesPaginationTest {
     @Test
+    fun `series catalog pagination loads every page to the response total`() = runTest {
+        val requests = mutableListOf<Int>()
+
+        val catalog = loadCompleteSeriesCatalog { requestedPage ->
+            requests += requestedPage
+            when (requestedPage) {
+                0 -> catalogPage(
+                    page = 0,
+                    total = 3,
+                    size = 2,
+                    items = listOf(series("alpha", "Alpha"), series("middle", "Middle"))
+                )
+                1 -> catalogPage(
+                    page = 1,
+                    total = 3,
+                    size = 2,
+                    items = listOf(series("zulu", "Zulu"))
+                )
+                else -> error("pagination should stop at the response total")
+            }
+        }
+
+        assertEquals(listOf(0, 1), requests)
+        assertEquals(listOf("alpha", "middle", "zulu"), catalog.items.map { it.id })
+        assertEquals(3, catalog.total)
+    }
+
+    @Test
+    fun `series catalog pagination stops when a page adds no distinct series`() = runTest {
+        val requests = mutableListOf<Int>()
+
+        val catalog = loadCompleteSeriesCatalog { requestedPage ->
+            requests += requestedPage
+            if (requestedPage == 0) {
+                catalogPage(0, total = 4, size = 2, items = listOf(series("alpha", "Alpha"), series("middle", "Middle")))
+            } else {
+                catalogPage(1, total = 4, size = 2, items = listOf(series("middle", "Duplicate Middle")))
+            }
+        }
+
+        assertEquals(listOf(0, 1), requests)
+        assertEquals(listOf("alpha", "middle"), catalog.items.map { it.id })
+    }
+
+    @Test
+    fun `series jump targets follow ascending and descending name order`() {
+        val ascending = buildSeriesJumpTargets(
+            listOf(series("numeric", "123 Series"), series("alpha", "Alpha"), series("middle", "Middle"), series("zulu", "Zulu"))
+        ).toMap()
+        val descending = buildSeriesJumpTargets(
+            listOf(series("zulu", "Zulu"), series("middle", "Middle"), series("alpha", "Alpha"), series("numeric", "123 Series")),
+            SortDirection.DESCENDING
+        )
+
+        assertEquals(0, ascending['#'])
+        assertEquals(1, ascending['A'])
+        assertEquals(2, ascending['B'])
+        assertEquals(3, ascending['Z'])
+        assertEquals('Z', descending.first().first)
+        assertEquals(0, descending.first().second)
+        assertEquals(1, descending.first { it.first == 'M' }.second)
+        assertEquals(3, descending.last().second)
+    }
+
+    @Test
     fun `pagination reaches response total when series metadata count is smaller`() = runTest {
         val requests = mutableListOf<Int>()
         val pages = listOf(
@@ -128,6 +193,20 @@ class SeriesPaginationTest {
             seriesInfo = seriesInfo
         )
     }
+
+    private fun catalogPage(
+        page: Int,
+        total: Int?,
+        size: Int,
+        items: List<SeriesSummary>
+    ) = SeriesCatalogPage(
+        items = items,
+        total = total,
+        page = page,
+        size = size
+    )
+
+    private fun series(id: String, name: String) = SeriesSummary(id = id, name = name)
 
     private fun book(id: String, title: String, seriesIndex: Double?): BookSummary {
         return BookSummary(
