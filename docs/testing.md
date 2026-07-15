@@ -47,6 +47,21 @@ Current instrumentation coverage includes server setup validation, login recover
 
 ## Latest device feedback — July 15, 2026
 
+### Validation completed
+
+- Explicit HTTP BookOrbit connections work correctly.
+- Mark as read and Mark as unread work correctly.
+- Android/BookOrbit progress synchronization works correctly.
+- Large-library browsing and the #/A–Z jump rail are fast and accurate.
+- Airplane-mode browsing works. Undownloaded books correctly cannot open full details without a connection.
+- Session-expiry recovery works as expected.
+- Series navigation and Series thumbnails work correctly.
+
+### Remaining UI work
+
+- Global book-search results do not currently expose the book context menu through either long-press or the three-dot action.
+- Search results intentionally remain list rows rather than poster cards; preserve this presentation while adding the missing actions.
+
 - Launch, navigation, Home refresh, On Deck, battery indicators, and EPUB footer progress passed on the target device.
 - Home remains interactive while its initial sync/loading indicator is visible, but the tested build kept the indicator for a noticeable time on roughly 5,000 books. The follow-up now doubles catalog pages to 100 items and loads large page ranges in bounded four-request batches; target-device timing confirmation remains required.
 - Currently Reading removal succeeds in the app and BookOrbit's server view, but the tested build repopulated removed titles after Home pull-to-refresh because BookOrbit's explicit unread record carried a fresh status timestamp. The follow-up parser fix now suppresses non-positive unread activity metadata and requires target-device confirmation.

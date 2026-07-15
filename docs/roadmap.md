@@ -224,6 +224,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### Device validation follow-up and new work order — 2026-07-15
 
+- [x] Validate explicit HTTP server setup and authenticated browsing/reading.
+- [x] Validate Mark as read/unread from supported book-card menus.
+- [x] Validate Android/BookOrbit progress synchronization in both directions.
+- [x] Validate large-library browsing, fast #/A–Z jumps, and airplane-mode behavior; undownloaded books correctly require a connection for full details.
+- [x] Validate session-expiry recovery, Series navigation, and Series thumbnails.
+- [ ] Add the book context menu to global search results for both long-press and three-dot actions.
+- [x] Keep global search results as list rows rather than converting them to poster cards.
 - [x] Fix stale Currently Reading state after refresh: explicit `unread` records with no positive progress now discard stale page/position and status timestamps, so a server-confirmed removal cannot be reconstructed as reading activity.
 - [x] Reduce Home sync/loading time for large libraries by requesting BookOrbit's 100-book page limit and loading large known page ranges in ordered batches with at most four concurrent requests. Existing cached content remains usable, and unstable totals/duplicates still trigger the full consistency retry.
 - [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
