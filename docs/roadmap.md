@@ -215,6 +215,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [ ] Show the number of books in collapsed Libraries series cards, matching the Series screen.
 - [ ] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
 
+### Additional reader feedback workplan - 2026-07-15
+
+- [ ] Prevent the reading screen from closing unexpectedly after an idle period.
+- [ ] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
+- [ ] Show battery and signal indicators in the reader's top-right area.
+- [ ] Show book completion percentage, chapter page progress, and book page progress at the bottom of the reader.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

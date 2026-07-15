@@ -145,6 +145,13 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [ ] Include the series book count on collapsed series cards in Libraries.
 - [ ] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.
 
+### Additional reader feedback workplan - 2026-07-15
+
+- [ ] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
+- [ ] Use one clear Close action for the reader options overlay, and dismiss the overlay when visible book content is tapped.
+- [ ] Show battery and signal indicators in the reader's top-right area.
+- [ ] Show book completion percentage, chapter page progress, and book page progress in the reader's bottom status area.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

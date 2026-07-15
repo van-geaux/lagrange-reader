@@ -173,6 +173,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Persist independent EPUB padding values across reader close/reopen
 - [x] Flush the final reader progress before browser refresh and sync pending progress before first Home load
 - [x] Keep reader options open until the explicit Close action is tapped
+- [ ] Prevent the reading screen from closing unexpectedly after an idle period
+- [ ] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay
+- [ ] Show battery and signal indicators in the reader's top-right area
+- [ ] Show book completion percentage, chapter page progress, and book page progress at the bottom of the reader
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death
 - [x] Improve accessibility for controls and reader screens
