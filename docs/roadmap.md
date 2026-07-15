@@ -209,7 +209,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 - [x] Add visible overflow and long-press actions to Currently reading cards. Removal uses BookOrbit's normal-user file/audio progress and status APIs to clear primary/current progress, mark the title unread, and clear matching local queued, synced, resume, and cached progress so stale work cannot restore it. Reading-session history and additional-file progress remain an admin-reset limitation.
 - [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
-- [ ] Add pull-down refresh to Home.
+- [x] Add pull-down refresh to Home using the same refresh indicator and cache-preserving catalog reconciliation as Libraries.
 - [ ] Fix missing thumbnails on Series cards.
 - [ ] Add a jump rail to Series and replace its Load more pagination with complete/local navigation.
 - [ ] Show the number of books in collapsed Libraries series cards, matching the Series screen.

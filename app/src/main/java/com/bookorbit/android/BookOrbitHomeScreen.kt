@@ -86,6 +86,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
@@ -544,9 +545,11 @@ internal fun NativeLibraryBrowserScreen(
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = onDeleteLocalCopy
                 )
-                destination == BrowserDestination.HOME -> HomeFeed(
+                destination == BrowserDestination.HOME -> RefreshableHomeFeed(
                     state = state,
                     modifier = Modifier.padding(padding),
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = onRefresh,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.HOME
@@ -1381,6 +1384,36 @@ private fun CatalogImage(
         } else {
             Text(label.substringAfterLast(" ").take(1).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun RefreshableHomeFeed(
+    state: BrowserState,
+    modifier: Modifier,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit,
+    onRemoveFromCurrentlyReading: (BookSummary) -> Unit
+) {
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("home_pull_to_refresh")
+    ) {
+        HomeFeed(
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            coverLoader = coverLoader,
+            onBookSelected = onBookSelected,
+            onSeriesSelected = onSeriesSelected,
+            onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading
+        )
     }
 }
 

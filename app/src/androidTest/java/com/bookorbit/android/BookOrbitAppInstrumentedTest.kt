@@ -7,10 +7,13 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
@@ -191,6 +194,31 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun homePullDownTriggersBrowserRefresh() {
+        val dataSource = InstrumentedFakeDataSource()
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("home_pull_to_refresh").performTouchInput { swipeDown() }
+
+        composeRule.waitUntil { dataSource.loadLibrariesCalls == 1 }
+    }
+
+    @Test
     fun homeSearchAndMoreActionsOpenNativeLayers() {
         composeRule.setContent {
             BookOrbitTheme {
@@ -356,6 +384,7 @@ class BookOrbitAppInstrumentedTest {
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var clearServerCalls = 0
+    var loadLibrariesCalls = 0
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
@@ -370,7 +399,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun setSelectedLibraryId(libraryId: String) = Unit
     override suspend fun getSessionState(): SessionState = SessionState.Unauthenticated
     override suspend fun login(username: String, password: String) = Unit
-    override suspend fun loadLibraries(): List<LibrarySummary> = emptyList()
+    override suspend fun loadLibraries(): List<LibrarySummary> {
+        loadLibrariesCalls += 1
+        return emptyList()
+    }
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
         if (page == 0) return LibraryBooksPage(items = loadBooksResult, total = loadBooksResult.size, page = 0, size = loadBooksResult.size)

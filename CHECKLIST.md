@@ -287,7 +287,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Surface newly recorded progress immediately in Home Continue reading, including books outside the first loaded page
 - [x] Add visible overflow and long-press Currently reading actions that use normal-user APIs to clear primary/current progress, mark the title unread, and clear matching local progress
 - [x] Make On Deck show only the next unread book in a series after a completely read book, excluding books already present in Currently reading
-- [ ] Add pull-down refresh to the Home screen
+- [x] Add pull-down refresh to the Home screen
 - [ ] Restore visible thumbnails for series cards in the Series screen
 - [ ] Add a jump rail to the Series screen and replace its Load more flow with complete/local navigation
 - [ ] Show the number of books in each collapsed Libraries series card, matching the Series screen
