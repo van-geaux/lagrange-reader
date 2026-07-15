@@ -41,6 +41,24 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun serverSetupAcceptsExplicitRemoteHttpUrl() {
+        val dataSource = InstrumentedFakeDataSource()
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.ServerSetup(),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Server URL").performTextInput("http://books.example.test:8080")
+        composeRule.onNodeWithText("Continue").performClick()
+
+        composeRule.waitUntil { dataSource.savedServerUrls == listOf("http://books.example.test:8080") }
+    }
+
+    @Test
     fun startupLoadingStateUsesBrandedMarkInsteadOfSpinner() {
         composeRule.setContent {
             BookOrbitTheme {
@@ -469,13 +487,16 @@ class BookOrbitAppInstrumentedTest {
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
+    val savedServerUrls = mutableListOf<String>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
 
     override suspend fun getServerUrl(): String? = null
-    override suspend fun setServerUrl(serverUrl: String) = Unit
+    override suspend fun setServerUrl(serverUrl: String) {
+        savedServerUrls += serverUrl
+    }
     override suspend fun clearServer() {
         clearServerCalls += 1
     }

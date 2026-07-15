@@ -22,6 +22,7 @@
 ## Current behavior
 
 - local data is scoped to the current Android app sandbox and is not shared with other apps
+- explicit HTTP BookOrbit URLs are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
 - changing or clearing the configured server resets session state, but server-scoped cached browser and progress data may remain on disk
 - sign-out clears cookies and active-reader state, but it does not currently wipe downloads, cached browser snapshots, or queued progress
 - downloaded files remain on disk until the user removes them from the browser UI

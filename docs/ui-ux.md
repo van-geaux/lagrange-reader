@@ -158,7 +158,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Reduce perceived Home sync latency for large libraries with 100-book pages and bounded four-request catalog batches while preserving immediate interaction with cached content.
 - [ ] Give reader options distinct Continue reading and Close book actions.
 - [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
-- [ ] Allow HTTP server entry when required by the configured BookOrbit deployment.
+- [x] Allow explicit HTTP server entry when required by the configured BookOrbit deployment while retaining HTTPS as the bare remote-host default.
 - [ ] Add Mark as read and Mark as unread to the shared three-dot/long-press book actions.
 - [ ] Replace oversized book-detail actions with a swipeable compact action area and selective symbol buttons.
 - [ ] Make the book-detail series title a navigation affordance to series details.

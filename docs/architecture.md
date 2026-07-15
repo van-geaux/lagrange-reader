@@ -48,7 +48,7 @@ The current app flow is:
 
 - `BookOrbitRepository` is the main integration layer with the BookOrbit server.
 - It stores the selected server URL and selected library.
-- Server URL validation now requires HTTPS for non-local hosts; cleartext HTTP is reserved for local development targets only.
+- Server URL validation accepts explicit HTTP or HTTPS URLs. Bare remote hostnames default to HTTPS, while bare localhost and common emulator loopback hosts default to HTTP; malformed and unsupported schemes remain rejected.
 - It loads libraries and books from the live API.
 - It walks every page of the selected library's default listing, deduplicates by book id while preserving server order, and only publishes the result after the full request succeeds. If totals change or the deduplicated count disagrees with the latest total, it retries once from page zero and otherwise preserves the prior cache.
 - It reads BookOrbit's `/api/v1/libraries/{id}/books/jump-buckets` response and retains absolute indexes only when its total matches the reconciled listing. Older servers or mismatched snapshots fall back to complete local index derivation.
@@ -68,7 +68,7 @@ The current app flow is:
 ### Local persistence
 
 - `DataStore` stores the configured server URL and selected library ID.
-- Android network security config blocks cleartext traffic by default and allows it only for localhost and common emulator loopback hosts.
+- Android network security config permits cleartext traffic so explicitly configured HTTP BookOrbit deployments work. This is a user-selected compatibility mode: HTTP exposes credentials, bearer tokens, cookies, metadata, progress, and content to network interception, so HTTPS remains the recommended transport.
 - Session reset now waits for cookie removal to complete before the app settles on the login screen, and explicit sign-out suppresses cached offline-browser fallback until a fresh login succeeds.
 - Successful native login persists the returned `accessToken`; authenticated API, cover, download, and reader-cache requests send it as a Bearer credential alongside the shared cookie jar. A 401/403 response triggers one refresh-cookie renewal attempt and rebuilds the original request with refreshed credentials before session recovery is shown. Explicit session clearing removes the token and cookies.
 - Refresh requests include the current bearer/cookie credentials and are serialized; a request that waited behind another successful refresh reuses the newly persisted token instead of starting a second renewal.

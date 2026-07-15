@@ -42,6 +42,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - The July 15 EPUB progress-footer pass completes 148 JVM tests across 25 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Unit coverage verifies completion and normalized 1-1000 location calculations, while a compiled Compose test verifies the visible and accessible footer text. Target-device validation must confirm the footer stays readable, theme-matched, and unobstructed on representative screen sizes while page and chapter changes update every field.
 - The July 15 unread-refresh follow-up completes 149 JVM tests across 25 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Its regression fixture includes zero progress plus stale page, position, book, progress, and unread-status timestamps and verifies that none can reconstruct Currently Reading activity. Target-device confirmation remains required against the live server response.
 - The July 15 large-catalog refresh pass completes 150 JVM tests across 25 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Its coroutine regression verifies 100-book page ordering, a four-request concurrency ceiling, and complete 1,000-book merging. Target-device timing and server-load confirmation remain required with the roughly 5,000-book library.
+- The July 15 HTTP-server pass retains 150 JVM tests across 25 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. URL coverage verifies explicit remote HTTP, HTTPS and bare-host defaults, unsupported-scheme rejection, and a compiled Compose setup flow that submits an explicit HTTP URL. Target-device confirmation remains required against the intended HTTP BookOrbit deployment.
 
 ## Latest device feedback — July 15, 2026
 
@@ -56,7 +57,7 @@ Current instrumentation coverage includes server setup validation, login recover
 
 1. Launch the app on an emulator or device.
 2. Enter the BookOrbit server URL.
-3. Current behavior: verify a non-local `http://` URL is rejected and that a local development URL such as `http://10.0.2.2:3000` is still accepted when appropriate. The new work order requests allowing HTTP server URLs more generally, so this test will be revised after implementation.
+3. Verify explicit `https://` and `http://` BookOrbit URLs are accepted, while unsupported schemes such as `ftp://` are rejected. Confirm a bare remote hostname defaults to HTTPS and a bare local development target such as `10.0.2.2:3000` defaults to HTTP. Use HTTP only on a trusted network because credentials, tokens, metadata, progress, and content are not encrypted.
 4. Verify the native username/password form appears with password visibility control and Change server.
 5. Submit valid credentials and confirm the app reaches the library browser.
 

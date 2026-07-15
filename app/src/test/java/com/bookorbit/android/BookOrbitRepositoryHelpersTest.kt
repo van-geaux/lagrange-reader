@@ -43,10 +43,11 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
-    fun `normalizeServerUrl requires https for non-local hosts`() {
+    fun `normalizeServerUrl accepts explicit remote http and defaults bare remote hosts to https`() {
         assertEquals("https://example.test", normalizeServerUrl("https://example.test/"))
-        assertNull(normalizeServerUrl("http://example.test"))
-        assertNull(normalizeServerUrl("books.example.test"))
+        assertEquals("http://example.test", normalizeServerUrl("http://example.test"))
+        assertEquals("https://books.example.test", normalizeServerUrl("books.example.test"))
+        assertEquals("https://books.example.test:8080", normalizeServerUrl("books.example.test:8080"))
     }
 
     @Test
@@ -58,7 +59,8 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
-    fun `invalidServerUrlMessage explains https requirement`() {
+    fun `invalidServerUrlMessage names both supported protocols`() {
+        assertTrue(invalidServerUrlMessage().contains("HTTP"))
         assertTrue(invalidServerUrlMessage().contains("HTTPS"))
     }
 

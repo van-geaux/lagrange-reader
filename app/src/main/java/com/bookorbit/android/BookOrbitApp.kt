@@ -1800,10 +1800,15 @@ internal fun normalizeServerUrl(value: String): String? {
     if (explicitScheme != null && !explicitScheme.equals("http", ignoreCase = true) && !explicitScheme.equals("https", ignoreCase = true)) {
         return null
     }
+    if (explicitScheme == null && Regex("^[A-Za-z][A-Za-z0-9+.-]*:(?![0-9])").containsMatchIn(raw)) {
+        return null
+    }
     val prefixed = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
         raw
     } else {
-        "http://$raw"
+        val bareHost = runCatching { URI("http://$raw").host }.getOrNull() ?: return null
+        val defaultScheme = if (isAllowedCleartextHost(bareHost)) "http" else "https"
+        "$defaultScheme://$raw"
     }
     val uri = runCatching { URI(prefixed) }.getOrNull() ?: return null
     val scheme = uri.scheme ?: return null
@@ -1811,16 +1816,13 @@ internal fun normalizeServerUrl(value: String): String? {
         return null
     }
     val host = uri.host ?: return null
-    if (scheme.equals("http", ignoreCase = true) && !isAllowedCleartextHost(host)) {
-        return null
-    }
     val port = if (uri.port > 0) ":${uri.port}" else ""
     val path = uri.path?.takeIf { it.isNotBlank() && it != "/" }?.trimEnd('/') ?: ""
     return "${scheme.lowercase(Locale.US)}://$host$port$path"
 }
 
 internal fun invalidServerUrlMessage(): String {
-    return "Enter a valid server URL. Use HTTPS unless this is a local development server."
+    return "Enter a valid HTTP or HTTPS server URL."
 }
 
 internal fun isAllowedCleartextHost(host: String): Boolean {

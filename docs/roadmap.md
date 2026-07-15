@@ -228,7 +228,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Reduce Home sync/loading time for large libraries by requesting BookOrbit's 100-book page limit and loading large known page ranges in ordered batches with at most four concurrent requests. Existing cached content remains usable, and unstable totals/duplicates still trigger the full consistency retry.
 - [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
 - [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
-- [ ] Allow HTTP server URLs when entering a BookOrbit server address.
+- [x] Allow explicitly entered HTTP BookOrbit server URLs and Android cleartext traffic; bare remote hostnames still default to HTTPS, while bare local development hosts retain HTTP shorthand.
 - [ ] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus.
 - [ ] Redesign book-detail actions as a swipeable/compact action area, using symbols where they improve discoverability without hiding labels.
 - [ ] Make the tapped series title in book details navigate to that series detail page.
