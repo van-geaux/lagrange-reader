@@ -143,7 +143,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Ensure Series cards display representative book thumbnails from BookOrbit's `coverBookIds` response field.
 - [x] Give Series complete, deduplicated in-memory results and #/A–Z or Z–A navigation for Name sorting instead of Load more.
 - [x] Include the series book count on collapsed series cards in Libraries.
-- [ ] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.
+- [x] Persist the selected light/dark/sepia reader background theme per reader session and across app restarts.
 
 ### Additional reader feedback workplan - 2026-07-15
 

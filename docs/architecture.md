@@ -104,7 +104,7 @@ The current app flow is:
 - Pending progress that targets a different server now remains persisted instead of being silently dropped during sync attempts.
 - Changing the configured server now preserves server-scoped downloads, queued progress, and last-synced markers on disk instead of wiping them globally.
 - Reader resume now restores queued local progress only from the exact server/media/book/file target instead of loosely matching overlapping ids.
-- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. Top/Bottom resize the Android `WebView` outside its HTML content, while Left/Right update the page strip in place; target-device testing confirms visible changes on all four edges.
+- EPUB reader padding is stored independently for Top, Bottom, Left, and Right per book/file target, so closing and reopening a book keeps its values instead of returning to the 15% defaults. The selected light/dark/sepia background is stored separately as an app-wide EPUB preference and restored whenever any EPUB reader is recreated, with Sepia as the fresh/invalid-value fallback. Top/Bottom resize the Android `WebView` outside its HTML content, while Left/Right update the page strip in place; target-device testing confirms visible changes on all four edges.
 - Debug queue counts shown in the browser are scoped to the active server, even when pending updates for other saved servers still exist on disk.
 
 ### Reader implementations

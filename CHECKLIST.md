@@ -295,7 +295,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Reduce app typography tokens by approximately 10% for phone density
 - [x] Render book cards with title, optional series, and series-index metadata rows
 - [x] Validate reader edge padding while sliders move on the target device; Top/Bottom resize the WebView externally while Left/Right remain in the known-good page strip
-- [ ] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
+- [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

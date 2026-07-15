@@ -1048,6 +1048,7 @@ private fun EpubReaderView(
     }
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
     val paddingStore = remember(context) { EpubReaderPaddingStore(context) }
+    val themeStore = remember(context) { EpubReaderThemeStore(context) }
     if (file == null || !file.exists()) {
         ReaderMessage("Unable to prepare this EPUB.")
         return
@@ -1070,7 +1071,7 @@ private fun EpubReaderView(
             }
         )
     }
-    var selectedTheme by remember(file) { mutableStateOf(EpubReaderTheme.Sepia) }
+    var selectedTheme by remember(file) { mutableStateOf(themeStore.read()) }
     var fontScale by remember(file) { mutableStateOf(1f) }
     var paddingDraft by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
     var appliedPadding by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
@@ -1284,7 +1285,10 @@ private fun EpubReaderView(
                             EPUB_THEME_OPTIONS.forEach { theme ->
                                 FilterChip(
                                     selected = theme == selectedTheme,
-                                    onClick = { selectedTheme = theme },
+                                    onClick = {
+                                        selectedTheme = theme
+                                        themeStore.save(theme)
+                                    },
                                     label = { Text(theme.label) }
                                 )
                             }

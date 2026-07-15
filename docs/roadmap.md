@@ -213,7 +213,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Fix missing thumbnails on Series cards by mapping BookOrbit's `coverBookIds` to representative book thumbnail URLs.
 - [x] Fetch every filtered Series page into a deduplicated in-memory catalog, remove Load more, and add #/A–Z or Z–A direct navigation for Name sorting.
 - [x] Show the number of books in collapsed Libraries series cards, matching the Series screen.
-- [ ] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
+- [x] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
 
 ### Additional reader feedback workplan - 2026-07-15
 
