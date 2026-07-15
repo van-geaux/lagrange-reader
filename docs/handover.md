@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Current outcome
 
@@ -9,7 +9,7 @@ The latest implementation pass addresses the two current user-reported problems:
 1. Reading progress shown inside Lagrange was not reliably reaching BookOrbit, leaving BookOrbit's Currently Reading widget blank.
 2. A roughly 5,000-book library loaded covers slowly, especially after rapid scrolling and when opening book details.
 
-The complete catalog/jump-rail work, explicit progress/status reconciliation, in-flight queue fix, and large-library thumbnail/detail caching are implemented and committed locally. Full automated verification passes. The remaining work is physical-device and live-server validation with the user's real library.
+The complete catalog/jump-rail work, explicit progress/status reconciliation, in-flight queue fix, large-library thumbnail/detail caching, HTTP server support, and Mark as read/unread actions are implemented and committed. Full automated verification passes. The remaining work is physical-device/live-server validation and the reader-options design decision.
 
 ## Repository and publishing state
 
@@ -18,7 +18,15 @@ The complete catalog/jump-rail work, explicit progress/status reconciliation, in
 - Branch: `main`
 - Remote: `origin` via SSH
 - The user-owned untracked root `AGENTS.md` is intentionally untouched and must not be included in project commits.
+- The untracked `.agents/` workspace directory is also intentionally untouched.
 - Recent implementation commits:
+  - `f1c33bc feat: add book read status actions`
+  - `f6067ce feat: support HTTP BookOrbit servers`
+  - `17ecb60 perf: accelerate large catalog refresh`
+  - `fba3f03 fix: keep reset books off Home refresh`
+  - `6df80cf docs: record device feedback work order`
+
+Earlier implementation commits:
   - `fc6e80e fix: sync BookOrbit reading status with progress`
   - `39e409e fix: reconcile reading progress with server`
   - `6e636fd feat: cache complete library catalogs locally`
@@ -72,6 +80,8 @@ The complete catalog/jump-rail work, explicit progress/status reconciliation, in
 - EPUB exact local chapter/page resume and independent Top, Bottom, Left, and Right padding persistence are implemented.
 - The earlier blank EPUB/clipped-wrapper candidate was superseded. The current visible-overflow page strip renders the real EPUB, and target-device testing confirmed all four padding controls visibly change the reading surface.
 - Preview remains isolated from normal active-reader and progress state.
+- Explicit `http://` server URLs are accepted, while bare remote hosts default to HTTPS and bare local development hosts retain HTTP shorthand. Android cleartext traffic is enabled for explicit HTTP deployments; HTTP exposes credentials, tokens, and content to the network.
+- Home shelves and individual Library, Series, Author, and Local Books posters expose Mark as read/unread through overflow and long-press menus. Mark as read preserves position; Mark as unread uses the normal-user progress reset flow. Currently Reading retains its removal action.
 - Audiobook, PDF, and CBZ paths remain implemented, but broader format-specific device validation is deferred until representative samples are available.
 
 ## Verification completed
@@ -84,7 +94,7 @@ The final combined command passed:
 
 Results:
 
-- 127 JVM tests across 21 suites
+- 153 JVM tests across 25 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
@@ -95,11 +105,27 @@ Debug APK:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-No Android device was attached during the final progress/cache pass, so the latest behavior is not yet live-validated.
+No Android device was attached during the final HTTP/book-status pass, so those latest behaviors are not yet live-validated.
 
 ## Highest-priority next validation
 
-### 1. Android to BookOrbit progress
+### 1. HTTP and book-status actions
+
+1. Install `app/build/outputs/apk/debug/app-debug.apk` on the target device.
+2. Connect using an explicit `http://` BookOrbit URL and confirm login, browsing, cover loading, and reading work. Treat this as a trusted-network-only validation because cleartext traffic is not confidential.
+3. On Home and Library Browse, open a book's overflow menu and repeat with a long-press. Confirm Mark as read and Mark as unread are available.
+4. Mark an in-progress book read and confirm it leaves Currently Reading on both Lagrange and BookOrbit while its position remains available.
+5. Mark it unread and confirm progress resets, the server reports unread, and Home pull-to-refresh does not restore the prior state.
+
+### 2. Reader options design decision
+
+Before implementing the remaining reader-options redesign, choose one presentation:
+
+- Bottom sheet: recommended; clear overlay-close action, separate Close book action, strong contrast, and visible book context.
+- Full-screen options page: most spacious and readable, but hides the book completely.
+- Centered modal: compact and keeps more book visible, but has less room for controls.
+
+### 3. Android to BookOrbit progress
 
 1. Install the latest debug APK.
 2. Open several unfinished EPUBs and move each to a visibly different percentage.
@@ -109,14 +135,14 @@ No Android device was attached during the final progress/cache pass, so the late
 6. Repeat after reading offline and reconnecting.
 7. Finish one title at 99.5% or above and confirm BookOrbit changes it to `Read` and removes it from Currently Reading.
 
-### 2. BookOrbit to Android progress
+### 4. BookOrbit to Android progress
 
 1. Advance one of those titles in BookOrbit's web reader.
 2. Refresh Lagrange.
 3. Confirm the newer server percentage replaces the temporary local overlay and reader resume follows it when there is no newer queued Android event.
 4. Test a backward correction/reread and a value below 1% to verify neither direction scales or suppresses it incorrectly.
 
-### 3. Five-thousand-book library
+### 5. Five-thousand-book library
 
 1. On the first complete sync, confirm cached cards remain usable while reconciliation runs and the letter rail appears only after completion.
 2. Tap `#` and several distant letters; each tap should land directly on the requested or next available initial without loading intermediate server pages.
@@ -138,6 +164,8 @@ No Android device was attached during the final progress/cache pass, so the late
 - Keep full thumbnail warming unmetered and single-chain unless the user explicitly chooses another bandwidth policy.
 - Do not eagerly fetch every rich-detail endpoint without an explicit user decision; the current on-open versioned cache is intentional.
 - Preserve offline reader behavior, Preview isolation, session recovery, local resume, and server-scoped persistence when changing browser or sync behavior.
+- Keep explicit HTTP support opt-in at entry; bare remote-host defaults must remain HTTPS.
+- Keep Mark as read serialized against progress replay, and keep Mark as unread tied to the normal-user progress/status reset flow.
 
 ## Important files for the next session
 
@@ -155,7 +183,10 @@ No Android device was attached during the final progress/cache pass, so the late
 - `app/src/main/java/com/bookorbit/android/CoverCacheWarmWorker.kt`
 - `app/src/main/java/com/bookorbit/android/BookDetailCacheStore.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
+- `app/src/main/java/com/bookorbit/android/BrowserSnapshotStore.kt`
+- `app/src/main/java/com/bookorbit/android/LibraryCatalogStore.kt`
 - `app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt`
+- `app/src/test/java/com/bookorbit/android/AppCoordinatorTest.kt`
 - `app/src/test/java/com/bookorbit/android/ProgressPercentNormalizationTest.kt`
 - `app/src/test/java/com/bookorbit/android/BookDetailCacheStoreTest.kt`
 - `app/src/test/java/com/bookorbit/android/CoverCacheStoreTest.kt`
@@ -164,6 +195,8 @@ No Android device was attached during the final progress/cache pass, so the late
 ## Known remaining limitations
 
 - Live bidirectional progress and explicit BookOrbit status reconciliation still require target-server validation.
+- Explicit HTTP server support and Mark as read/unread actions require device/server validation.
+- Reader options still need the user's presentation choice before the distinct Continue reading and Close book redesign can be implemented.
 - Full thumbnail warming and visible-card prioritization require target-device validation with the real 5,000-book library.
 - BookOrbit metadata refresh must still request all catalog pages because the server does not expose a reliable revision/delta contract.
 - Thumbnail versions that become obsolete remain on disk; an eviction/cleanup policy can be added later if real storage measurements justify it.
