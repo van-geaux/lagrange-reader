@@ -46,7 +46,7 @@ Detail refinement candidate: book details now mirror the reader-relevant content
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens location, chapters, theme, text size, independent Top/Bottom/Left/Right percentage sliders, and one Close action. Close, exposed-book taps, or Android Back dismiss the overlay; Android Back exits the reader only when the overlay is closed. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Target-device testing confirms restored content rendering and visible independent edge changes. Typography, page breaks, images, chapter boundaries, and tap-zone comfort still require validation before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens location, chapters, theme, text size, independent Top/Bottom/Left/Right percentage sliders, and one Close action. Close, exposed-book taps, or Android Back dismiss the overlay; Android Back exits the reader only when the overlay is closed. Android's native top status bar remains visible for battery and network indicators with reader-theme-aware contrast, while the bottom navigation bar stays immersive. Every edge defaults to 15%; 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android WebView outside the EPUB HTML, while Left/Right update the known-good page strip in place. Target-device testing confirms restored content rendering and visible independent edge changes. Typography, page breaks, images, chapter boundaries, and tap-zone comfort still require validation before Checkpoint 4 is complete.
 
 ### Device feedback workplan
 
@@ -149,7 +149,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 - [x] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
 - [x] Use one clear Close action for the reader options overlay, and dismiss the overlay when visible book content is tapped.
-- [ ] Show battery and signal indicators in the reader's top-right area.
+- [x] Show battery and signal indicators in the reader's top-right area through Android's native status bar.
 - [ ] Show book completion percentage, chapter page progress, and book page progress in the reader's bottom status area.
 
 ### Checkpoint 5: Other media readers - deferred

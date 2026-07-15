@@ -735,6 +735,54 @@ internal fun KeepReaderScreenAwake() {
     }
 }
 
+internal data class EpubReaderSystemBarsPolicy(
+    val showStatusBar: Boolean,
+    val showNavigationBar: Boolean
+)
+
+internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
+    showStatusBar = true,
+    showNavigationBar = false
+)
+
+internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean = this != EpubReaderTheme.Dark
+
+@Suppress("DEPRECATION")
+@Composable
+internal fun EpubReaderSystemBars(theme: EpubReaderTheme) {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        if (EPUB_READER_SYSTEM_BARS_POLICY.showStatusBar) {
+            controller?.show(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller?.hide(WindowInsetsCompat.Type.statusBars())
+        }
+        if (EPUB_READER_SYSTEM_BARS_POLICY.showNavigationBar) {
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
+        } else {
+            controller?.hide(WindowInsetsCompat.Type.navigationBars())
+        }
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+    DisposableEffect(view, theme) {
+        val window = (view.context as? Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previousStatusBarColor = window?.statusBarColor
+        val previousLightStatusBars = controller?.isAppearanceLightStatusBars
+        window?.statusBarColor = theme.backgroundColor
+        controller?.isAppearanceLightStatusBars = theme.usesDarkStatusBarIcons()
+        onDispose {
+            previousStatusBarColor?.let { window.statusBarColor = it }
+            previousLightStatusBars?.let { controller.isAppearanceLightStatusBars = it }
+        }
+    }
+}
+
 @Composable
 private fun AudioReader(
     file: File?,
@@ -1059,16 +1107,6 @@ private fun EpubReaderView(
     onProgress: (Int, Int, Int, Float?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = (view.context as? Activity)?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
     val epubBook = remember(file) { file?.takeIf(File::exists)?.let { loadEpubBook(context, it) } }
     val paddingStore = remember(context) { EpubReaderPaddingStore(context) }
     val themeStore = remember(context) { EpubReaderThemeStore(context) }
@@ -1095,6 +1133,7 @@ private fun EpubReaderView(
         )
     }
     var selectedTheme by remember(file) { mutableStateOf(themeStore.read()) }
+    EpubReaderSystemBars(selectedTheme)
     var fontScale by remember(file) { mutableStateOf(1f) }
     var paddingDraft by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
     var appliedPadding by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }

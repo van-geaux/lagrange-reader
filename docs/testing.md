@@ -38,6 +38,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - The July 15 EPUB theme-persistence pass completes 144 JVM tests across 22 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. It adds round-trip/fallback coverage plus a compiled Android SharedPreferences recreation test. Target-device validation must confirm the selected app-wide theme survives reader close, another EPUB, and a full app relaunch.
 - The July 15 reader keep-awake pass completes 145 JVM tests across 23 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. It adds visual-format selection coverage and a compiled Compose lifecycle test that clears the keep-awake flag on exit. Target-device validation must confirm an idle visual reader outlives the configured display timeout while explicit system locking still works.
 - The July 15 reader-options pass retains 145 JVM tests across 23 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Its compiled Compose interaction test verifies there is no visible Back action, exactly one Close action, and both Close and exposed-content dismissal paths. Target-device validation must confirm Android Back dismisses options before exiting the reader and exposed-content taps do not turn a page.
+- The July 15 native reader-status pass completes 146 JVM tests across 24 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Policy coverage verifies a visible top status bar, immersive bottom navigation, and theme-appropriate icon contrast. Target-device validation must confirm Android's battery and network indicators remain legible across Light, Sepia, and Dark.
 
 ## Manual Test Matrix
 
@@ -97,7 +98,7 @@ Current instrumentation coverage includes server setup validation, login recover
 
 ### 3. Reading And Listening
 
-1. Open an EPUB and confirm the chapter content renders instead of a blank/black reading surface, with no one-line-per-page layout or permanent app toolbar; system bars should remain immersive with transient swipe reveal. This is the regression check for the latest debug build.
+1. Open an EPUB and confirm the chapter content renders instead of a blank/black reading surface, with no one-line-per-page layout or permanent app toolbar. Confirm Android's native top status bar remains visible with battery and current network indicators while the bottom navigation bar stays immersive. Switch among Light, Sepia, and Dark and confirm the status background matches the reader and its icons remain legible. This is the regression check for the latest debug build.
 2. Tap the left and right outer quarters and swipe left and right; confirm each action moves exactly one paginated screen and navigation crosses chapter boundaries.
 3. Confirm a swipe does not also trigger a second tap-zone navigation.
 4. Tap the center and confirm title, chapter/page status, chapter picker, theme, text-size controls, and exactly one visible Close action appear as overlays; no separate Back action should appear. Tap the exposed book area and confirm the options close without turning the page. Reopen the options, press Android Back, and confirm it closes the options; press Android Back again and confirm it exits the reader.

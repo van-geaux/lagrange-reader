@@ -219,7 +219,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 - [x] Prevent the reading screen from closing unexpectedly after an idle period.
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
-- [ ] Show battery and signal indicators in the reader's top-right area.
+- [x] Show battery and signal indicators in the reader's top-right area using Android's native status bar while keeping the bottom navigation bar immersive.
 - [ ] Show book completion percentage, chapter page progress, and book page progress at the bottom of the reader.
 
 ## Source of truth
