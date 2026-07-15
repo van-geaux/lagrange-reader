@@ -222,6 +222,17 @@ internal fun collapsedLibraryBooks(
     )
 }
 
+internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, Int> = books
+    .mapNotNull { book ->
+        (book.seriesId ?: book.seriesName)
+            ?.takeIf { it.isNotBlank() }
+    }
+    .groupingBy { it }
+    .eachCount()
+
+internal fun seriesBookCountLabel(count: Int): String =
+    "$count ${if (count == 1) "book" else "books"}"
+
 private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
 }
@@ -1261,9 +1272,10 @@ private fun BookPosterCard(
     onClick: () -> Unit,
     showSeriesIndex: Boolean = false,
     enabled: Boolean = true,
-    displayTitle: String = book.title
+    displayTitle: String = book.title,
+    supportingText: String? = null
 ) {
-    val isBookCard = displayTitle == book.title
+    val isBookCard = supportingText == null && displayTitle == book.title
     val status = when {
         !enabled -> "Unavailable offline"
         book.isRead && book.isDownloaded -> "Read · Offline"
@@ -1279,6 +1291,7 @@ private fun BookPosterCard(
             .semantics {
                 contentDescription = buildString {
                     append(displayTitle)
+                    supportingText?.let { append(", $it") }
                     status?.let { append(", $it") }
                 }
                 if (!enabled) disabled()
@@ -1317,14 +1330,25 @@ private fun BookPosterCard(
                         )
                     }
                 }
-            } else if (!book.author.isNullOrBlank()) {
-                Text(
-                    book.author,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall
-                )
+            } else {
+                supportingText?.let { text ->
+                    Text(
+                        text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (!book.author.isNullOrBlank()) {
+                    Text(
+                        book.author,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
             status?.let {
                 Text(
@@ -1984,6 +2008,7 @@ private fun LibraryBooks(
     } else {
         state.books.map { Pair(it, null) }
     }
+    val seriesBookCounts = remember(state.books) { collapsedSeriesBookCounts(state.books) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var pendingAnchor by remember(title) { mutableStateOf<LibraryGridAnchor?>(null) }
@@ -2112,6 +2137,9 @@ private fun LibraryBooks(
                 coverLoader = coverLoader,
                 enabled = !unavailableOffline,
                 displayTitle = if (seriesKey != null) book.seriesName ?: "Series" else book.title,
+                supportingText = seriesKey?.let { key ->
+                    seriesBookCountLabel(seriesBookCounts[key] ?: 1)
+                },
                 onClick = {
                     if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
                 }

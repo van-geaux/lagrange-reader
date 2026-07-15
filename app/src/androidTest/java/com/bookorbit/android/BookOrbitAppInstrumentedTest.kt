@@ -288,6 +288,53 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun collapsedLibrarySeriesCardShowsItsBookCount() {
+        val books = listOf(
+            BookSummary(
+                libraryId = "lib-1",
+                id = "book-1",
+                fileId = "file-1",
+                title = "Volume One",
+                seriesId = "series-1",
+                seriesName = "Test Series",
+                seriesIndex = 1.0
+            ),
+            BookSummary(
+                libraryId = "lib-1",
+                id = "book-2",
+                fileId = "file-2",
+                title = "Volume Two",
+                seriesId = "series-1",
+                seriesName = "Test Series",
+                seriesIndex = 2.0
+            )
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = books,
+                            isCatalogComplete = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Browse").performClick()
+        composeRule.onNodeWithContentDescription("Collapse series").performClick()
+
+        composeRule.onNodeWithText("2 books").assertIsDisplayed()
+    }
+
+    @Test
     fun librarySeriesCanCollapseAndExpand() {
         val first = BookSummary(
             libraryId = "lib-1",

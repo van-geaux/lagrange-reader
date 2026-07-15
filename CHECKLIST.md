@@ -290,7 +290,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add pull-down refresh to the Home screen
 - [x] Restore visible thumbnails for series cards in the Series screen using BookOrbit's representative `coverBookIds`
 - [x] Add a #/A–Z jump rail to Name-sorted Series results and replace Load more with complete, deduplicated in-memory navigation
-- [ ] Show the number of books in each collapsed Libraries series card, matching the Series screen
+- [x] Show the number of books in each collapsed Libraries series card, matching the Series screen
 - [x] Remove duplicate in-content Home/library headings from Home, Library Browse, Series, Authors, and Local books content
 - [x] Reduce app typography tokens by approximately 10% for phone density
 - [x] Render book cards with title, optional series, and series-index metadata rows

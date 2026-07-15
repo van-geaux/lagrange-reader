@@ -56,6 +56,22 @@ class LibraryNavigationTest {
     }
 
     @Test
+    fun `collapsed series counts every matching book and uses singular grammar`() {
+        val books = listOf(
+            BookSummary("library", "one", null, "One", seriesId = "series-a", seriesName = "Series A"),
+            BookSummary("library", "two", null, "Two", seriesId = "series-a", seriesName = "Series A"),
+            BookSummary("library", "single", null, "Single", seriesId = "series-b", seriesName = "Series B"),
+            BookSummary("library", "standalone", null, "Standalone")
+        )
+
+        val counts = collapsedSeriesBookCounts(books)
+
+        assertEquals(mapOf("series-a" to 2, "series-b" to 1), counts)
+        assertEquals("2 books", seriesBookCountLabel(counts.getValue("series-a")))
+        assertEquals("1 book", seriesBookCountLabel(counts.getValue("series-b")))
+    }
+
+    @Test
     fun `server jump buckets keep exact absolute indexes and fall forward for missing letters`() {
         val rail = buildServerLibraryJumpTargets(
             buckets = listOf(
