@@ -14,8 +14,11 @@ import android.webkit.WebSettings
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
@@ -1106,10 +1109,15 @@ private fun EpubReaderView(
         paddingDraft = next
         appliedPadding = next
     }
+    val dismissControls = {
+        showControls = false
+        showChapterPicker = false
+    }
+    BackHandler {
+        if (showControls) dismissControls() else onBack()
+    }
     val centerTap = rememberUpdatedState {
-        if (!showControls) {
-            showControls = true
-        }
+        if (showControls) dismissControls() else showControls = true
     }
     val pageChanged = rememberUpdatedState { page: Int, count: Int ->
         currentPage = page.coerceAtLeast(0)
@@ -1229,37 +1237,13 @@ private fun EpubReaderView(
         )
 
         if (showControls) {
-            Surface(
+            EpubReaderDismissScrim(onDismiss = dismissControls)
+            EpubReaderOptionsHeader(
+                title = if (isPreview) "Preview · ${epubBook.title ?: title}" else (epubBook.title ?: title),
+                status = "Chapter ${currentChapter + 1}/$chapterCount · Page ${currentPage + 1}/$currentPageCount",
+                onClose = dismissControls,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-                shadowElevation = 6.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onBack) { Text("Back") }
-                    Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                        Text(
-                            if (isPreview) "Preview · ${epubBook.title ?: title}" else (epubBook.title ?: title),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "Chapter ${currentChapter + 1}/$chapterCount · Page ${currentPage + 1}/$currentPageCount",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(
-                        onClick = {
-                            showControls = false
-                            showChapterPicker = false
-                        }
-                    ) { Text("Close") }
-                }
-            }
+            )
 
             Surface(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
@@ -1357,6 +1341,58 @@ private fun EpubReaderView(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun EpubReaderDismissScrim(
+    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDismiss
+            )
+            .semantics { contentDescription = "Close reader options" }
+    )
+}
+
+@Composable
+internal fun EpubReaderOptionsHeader(
+    title: String,
+    status: String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        shadowElevation = 6.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                Text(
+                    title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onClose) { Text("Close") }
         }
     }
 }

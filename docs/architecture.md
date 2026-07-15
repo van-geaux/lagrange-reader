@@ -118,8 +118,8 @@ The current app flow is:
   - the OPF manifest and spine are parsed
   - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
   - reflowable chapter content uses the last device-known-good single absolute page strip with `overflow: visible`; page turns translate that strip without adding a clipped HTML wrapper around it
-  - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls, and the top-right Close action is the only way to dismiss them
-  - EPUB hides both system bars and permanent app chrome while reading; Back, chapter selection, themes, and text sizing live in transient overlays
+  - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls with one visible Close action, and tapping exposed book content also dismisses them
+  - EPUB hides both system bars and permanent app chrome while reading; chapter selection, themes, and text sizing live in transient overlays. Android Back dismisses an open overlay first, then exits the reader when the overlay is closed.
   - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
   - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right update and repaginate the page strip in place. Target-device testing confirms that EPUB content renders and all four controls visibly update the reading surface.

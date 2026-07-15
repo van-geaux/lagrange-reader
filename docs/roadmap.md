@@ -135,7 +135,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 ## Latest device feedback workplan — 2026-07-13 (reader, Home, and session follow-up)
 
 1. Implemented: apply Top, Bottom, Left, and Right reader padding changes continuously with a short debounce and an explicit page-strip height so slider changes visibly repaginate the chapter.
-2. Implemented: change the reader overlay's top-right action to Close; center taps and taps elsewhere no longer dismiss the open reader options.
+2. Implemented, then superseded by later feedback: change the reader overlay's top-right action to Close and initially keep outside taps from dismissing it.
 3. Implemented: restore the Home Continue reading shelf for active progress even when the server marks the item read, and tolerate alternate progress container/field names.
 4. Implemented: remove the duplicate Home/library heading from Library Recommended.
 5. Implemented: suppress a derived Browse series count until all books are loaded when the server does not provide a complete series total.
@@ -218,7 +218,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 ### Additional reader feedback workplan - 2026-07-15
 
 - [x] Prevent the reading screen from closing unexpectedly after an idle period.
-- [ ] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
+- [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
 - [ ] Show battery and signal indicators in the reader's top-right area.
 - [ ] Show book completion percentage, chapter page progress, and book page progress at the bottom of the reader.
 
