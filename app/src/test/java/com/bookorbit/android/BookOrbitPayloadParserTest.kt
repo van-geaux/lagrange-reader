@@ -250,6 +250,44 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks does not treat an unread status update as reading activity`() {
+        val book = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-reset",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-reset",
+                    "title": "Removed From Currently Reading",
+                    "files": [{"id": "file-reset", "format": "epub", "role": "primary"}],
+                    "readingProgress": {
+                      "percentage": 0,
+                      "pageNumber": 12,
+                      "positionSeconds": 600,
+                      "updatedAt": "2026-07-15T10:00:00Z"
+                    },
+                    "lastReadAt": "2026-07-15T09:00:00Z",
+                    "readStatus": {
+                      "status": "unread",
+                      "startedAt": null,
+                      "finishedAt": null,
+                      "updatedAt": "2026-07-15T10:01:00Z"
+                    }
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        ).single()
+
+        assertEquals(0f, book.progressPercent)
+        assertNull(book.progressLabel)
+        assertNull(book.progressPositionMs)
+        assertNull(book.progressPageIndex)
+        assertNull(book.lastReadAtMillis)
+        assertTrue(currentlyReadingBooks(listOf(book)).isEmpty())
+    }
+
+    @Test
     fun `parseBooks accepts alternate progress containers and percentage names`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-progress",

@@ -224,7 +224,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ### Device validation follow-up and new work order — 2026-07-15
 
-- [ ] Fix stale local Currently Reading/catalog state: after a title is removed and BookOrbit confirms it is absent, Home refresh must not repopulate the removed title.
+- [x] Fix stale Currently Reading state after refresh: explicit `unread` records with no positive progress now discard stale page/position and status timestamps, so a server-confirmed removal cannot be reconstructed as reading activity.
 - [ ] Reduce the time the Home sync/loading indicator remains visible on a roughly 5,000-book library while keeping the Home surface usable.
 - [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
 - [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.

@@ -1551,12 +1551,31 @@ internal object BookOrbitPayloadParser {
                             "progressPercent"
                         )?.toFloat()
                 )
-                val progressLabel = progressPercent
-                    ?.let { "${formatProgressValue(it)}%" }
-                    ?: readingProgress.progressLabel()
                 val readStatusValue = readStatus?.stringValue("status", "state")
                     ?.trim()
                     ?.lowercase(Locale.US)
+                val suppressUnreadReadingActivity = readStatusValue == "unread" &&
+                    (progressPercent == null || progressPercent <= 0f)
+                val progressLabel = if (suppressUnreadReadingActivity) {
+                    null
+                } else {
+                    progressPercent
+                        ?.takeIf { it > 0f }
+                        ?.let { "${formatProgressValue(it)}%" }
+                        ?: readingProgress.progressLabel()
+                }
+                val progressPositionMs = readingProgress.progressPositionMs()
+                    .takeUnless { suppressUnreadReadingActivity }
+                val progressPageIndex = readingProgress.progressPageIndex()
+                    .takeUnless { suppressUnreadReadingActivity }
+                val lastReadAtMillis = if (suppressUnreadReadingActivity) {
+                    null
+                } else {
+                    readingProgress.timestampValue(
+                        "updatedAt", "lastReadAt", "finishedAt", "completedAt"
+                    ) ?: readStatus.timestampValue("finishedAt", "startedAt", "updatedAt")
+                        ?: obj.timestampValue("lastReadAt", "lastReadDate")
+                }
                 add(
                     BookSummary(
                         libraryId = obj.stringValue("libraryId", "library_id") ?: libraryId,
@@ -1572,8 +1591,8 @@ internal object BookOrbitPayloadParser {
                         localPath = fileId?.let { downloads[it]?.localPath },
                         progressLabel = progressLabel,
                         progressPercent = progressPercent,
-                        progressPositionMs = readingProgress.progressPositionMs(),
-                        progressPageIndex = readingProgress.progressPageIndex(),
+                        progressPositionMs = progressPositionMs,
+                        progressPageIndex = progressPageIndex,
                         seriesId = series?.stringValue("id", "_id", "seriesId")
                             ?: obj.stringValue("seriesId", "series_id"),
                         seriesName = series?.stringValue("name", "title")
@@ -1588,10 +1607,7 @@ internal object BookOrbitPayloadParser {
                             obj.booleanValue("isRead", "read"),
                         addedAtMillis = obj.timestampValue("createdAt", "addedAt", "dateAdded"),
                         updatedAtMillis = obj.timestampValue("updatedAt", "modifiedAt", "dateModified"),
-                        lastReadAtMillis = readingProgress.timestampValue(
-                            "updatedAt", "lastReadAt", "finishedAt", "completedAt"
-                        ) ?: readStatus.timestampValue("finishedAt", "startedAt", "updatedAt")
-                            ?: obj.timestampValue("lastReadAt", "lastReadDate")
+                        lastReadAtMillis = lastReadAtMillis
                     )
                 )
             }

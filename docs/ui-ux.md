@@ -154,7 +154,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 ### Device validation follow-up and new UI work order - 2026-07-15
 
-- [ ] Resolve stale local Currently Reading state after server-confirmed removal, including the Home refresh/loading path.
+- [x] Resolve stale Currently Reading state after server-confirmed removal by suppressing non-positive unread progress metadata during Home refresh.
 - [ ] Reduce perceived Home sync latency for large libraries while preserving immediate interaction with cached content.
 - [ ] Give reader options distinct Continue reading and Close book actions.
 - [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.

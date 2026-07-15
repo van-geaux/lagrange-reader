@@ -142,7 +142,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Reject unknown progress payloads instead of resetting BookOrbit to zero percent
 - [x] Explicitly sync BookOrbit `reading`/`read` status with each accepted progress event
 - [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
-- [ ] Prevent removed Currently Reading titles from returning from stale local state after Home refresh
+- [x] Prevent removed Currently Reading titles from returning from stale unread-status timestamps after Home refresh
 - [ ] Add session event support if `sessions` endpoint is useful
 
 ## 10. Offline Sync Queue
