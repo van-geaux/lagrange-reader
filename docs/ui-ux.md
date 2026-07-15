@@ -152,6 +152,20 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Show battery and signal indicators in the reader's top-right area through Android's native status bar.
 - [x] Keep an always-visible EPUB bottom status area showing completion percentage, chapter page progress, and a normalized 1-1000 whole-book location.
 
+### Device validation follow-up and new UI work order - 2026-07-15
+
+- [ ] Resolve stale local Currently Reading state after server-confirmed removal, including the Home refresh/loading path.
+- [ ] Reduce perceived Home sync latency for large libraries while preserving immediate interaction with cached content.
+- [ ] Give reader options distinct Continue reading and Close book actions.
+- [ ] Establish theme-safe reader-options typography contrast across Light, Sepia, and Dark.
+- [ ] Allow HTTP server entry when required by the configured BookOrbit deployment.
+- [ ] Add Mark as read and Mark as unread to the shared three-dot/long-press book actions.
+- [ ] Replace oversized book-detail actions with a swipeable compact action area and selective symbol buttons.
+- [ ] Make the book-detail series title a navigation affordance to series details.
+- [ ] Redesign the book-detail genres/tags and lower metadata hierarchy.
+- [ ] Add a full-screen, tap-to-dismiss/back-dismiss cover viewer from book details.
+- [ ] Redesign the reader options window's hierarchy, spacing, and control presentation.
+
 ### Checkpoint 5: Other media readers - deferred
 
 - Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.

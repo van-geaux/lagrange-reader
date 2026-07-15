@@ -222,6 +222,20 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Show battery and signal indicators in the reader's top-right area using Android's native status bar while keeping the bottom navigation bar immersive.
 - [x] Show book completion percentage, chapter page progress, and a normalized 1-1000 whole-book location in an always-visible EPUB footer.
 
+### Device validation follow-up and new work order — 2026-07-15
+
+- [ ] Fix stale local Currently Reading/catalog state: after a title is removed and BookOrbit confirms it is absent, Home refresh must not repopulate the removed title.
+- [ ] Reduce the time the Home sync/loading indicator remains visible on a roughly 5,000-book library while keeping the Home surface usable.
+- [ ] Redesign reader options with separate actions for Continue reading (close options and remain in the book) and Close book (exit the reader).
+- [ ] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
+- [ ] Allow HTTP server URLs when entering a BookOrbit server address.
+- [ ] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus.
+- [ ] Redesign book-detail actions as a swipeable/compact action area, using symbols where they improve discoverability without hiding labels.
+- [ ] Make the tapped series title in book details navigate to that series detail page.
+- [ ] Redesign book-detail genres/tags and the lower metadata section for a more compact, elegant hierarchy.
+- [ ] Open the book-detail cover in a full-screen image viewer, dismissible by tapping the image again or pressing Android Back.
+- [ ] Redesign the reader options window for clearer hierarchy, spacing, and controls.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

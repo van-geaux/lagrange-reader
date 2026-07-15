@@ -42,6 +42,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Handle malformed URL, unreachable host, TLS failure, and redirect edge cases
 - [x] Add clear server-connection error UI states
 - [x] Add retry and recovery behavior for server failures
+- [ ] Allow HTTP server URLs when explicitly configured by the user
 
 ## 3. Authentication Flow
 
@@ -141,6 +142,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Reject unknown progress payloads instead of resetting BookOrbit to zero percent
 - [x] Explicitly sync BookOrbit `reading`/`read` status with each accepted progress event
 - [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
+- [ ] Prevent removed Currently Reading titles from returning from stale local state after Home refresh
 - [ ] Add session event support if `sessions` endpoint is useful
 
 ## 10. Offline Sync Queue
@@ -177,6 +179,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay
 - [x] Show battery and signal indicators in the reader's top-right area
 - [x] Show book completion percentage, chapter page progress, and normalized whole-book location at the bottom of the reader
+- [ ] Give reader options distinct Continue reading and Close book actions
+- [ ] Improve reader-options text/background contrast across all reader themes
+- [ ] Redesign the reader options window for clearer hierarchy and controls
+- [ ] Add Mark as read and Mark as unread to book overflow and long-press actions
+- [ ] Reduce Home initial sync/loading latency for large libraries
 - [x] Add better PDF zoom/pan behavior
 - [x] Preserve reader/player state across rotation/process death
 - [x] Improve accessibility for controls and reader screens
@@ -268,6 +275,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Improve thumbnail loading performance and retry failed covers
 - [x] Cancel off-screen cover requests so visible cards and details are not blocked by stale scroll work
 - [x] Warm every missing/changed selected-library thumbnail into the local cache in durable unmetered batches
+- [ ] Redesign book-detail actions as a swipeable compact area with selective symbol buttons
+- [ ] Navigate from a tapped book-detail series title to Series details
+- [ ] Redesign book-detail genres/tags and lower metadata hierarchy
+- [ ] Add a full-screen book-detail cover viewer with tap and Back dismissal
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title
