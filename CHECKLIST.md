@@ -298,7 +298,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Retry and cache Series/Authors catalog thumbnails, resolving Series `coverBookIds` through representative book thumbnails
 - [x] Surface newly recorded progress immediately in Home Continue reading, including books outside the first loaded page
 - [x] Add visible overflow and long-press Currently reading actions that use normal-user APIs to clear primary/current progress, mark the title unread, and clear matching local progress
-- [ ] Add the book context menu to global search results for both long-press and three-dot actions
+- [x] Add the book context menu to global search results for both long-press and three-dot actions
 - [x] Keep global search results as list rows rather than poster cards
 - [x] Make On Deck show only the next unread book in a series after a completely read book, excluding books already present in Currently reading
 - [x] Add pull-down refresh to the Home screen

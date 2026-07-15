@@ -284,6 +284,49 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun searchResultListRowExposesBookActionsFromOverflowAndLongPress() {
+        val searchBook = BookSummary(
+            libraryId = "lib-1",
+            id = "book-search",
+            fileId = "file-search",
+            title = "Search Result Book",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            searchBooksResult = listOf(searchBook)
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Search").performClick()
+        composeRule.onNodeWithText("Search your library").performTextInput("Search Result")
+        composeRule.waitUntil { dataSource.searchQueries == listOf("Search Result") }
+
+        composeRule.onNodeWithText("Search Result Book").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("More options for Search Result Book").performClick()
+        composeRule.onNodeWithText("Mark as read").performClick()
+        composeRule.waitUntil { dataSource.markedReadBooks == listOf(searchBook) }
+
+        composeRule.onNodeWithTag("search_result_book_${searchBook.id}").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Mark as unread").performClick()
+        composeRule.waitUntil { dataSource.resetReadingStateBooks == listOf(searchBook) }
+    }
+
+    @Test
     fun seriesCatalogUsesJumpRailWithoutLoadMore() {
         val dataSource = InstrumentedFakeDataSource().apply {
             seriesCatalogPages[0] = SeriesCatalogPage(
@@ -507,6 +550,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
+    var searchBooksResult: List<BookSummary> = emptyList()
+    val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
 
@@ -527,6 +572,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         return emptyList()
     }
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
+    override suspend fun searchBooks(query: String): List<BookSummary> {
+        searchQueries += query
+        return searchBooksResult
+    }
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
         if (page == 0) return LibraryBooksPage(items = loadBooksResult, total = loadBooksResult.size, page = 0, size = loadBooksResult.size)
         return libraryPageResults[page] ?: LibraryBooksPage(page = page)

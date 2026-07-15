@@ -501,7 +501,9 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy
+                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 selectedBook != null -> BookDetails(
                     book = selectedBook!!,
@@ -584,7 +586,9 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy
+                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
                 )
                 destination == BrowserDestination.HOME -> RefreshableHomeFeed(
                     state = state,
@@ -785,7 +789,9 @@ private fun SearchLayerContent(
     onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -813,7 +819,9 @@ private fun SearchLayerContent(
                 onBookSelected = onBookSelected,
                 onDownload = onDownload,
                 onCancelDownload = onCancelDownload,
-                onDeleteLocalCopy = onDeleteLocalCopy
+                onDeleteLocalCopy = onDeleteLocalCopy,
+                onMarkAsRead = onMarkAsRead,
+                onMarkAsUnread = onMarkAsUnread
             )
         }
     }
@@ -1946,7 +1954,9 @@ private fun SearchResults(
     onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     LibraryBookList(
         title = "Search results",
@@ -1958,7 +1968,9 @@ private fun SearchResults(
         onBookSelected = onBookSelected,
         onDownload = onDownload,
         onCancelDownload = onCancelDownload,
-        onDeleteLocalCopy = onDeleteLocalCopy
+        onDeleteLocalCopy = onDeleteLocalCopy,
+        onMarkAsRead = onMarkAsRead,
+        onMarkAsUnread = onMarkAsUnread
     )
 }
 
@@ -2388,7 +2400,9 @@ private fun LibraryBookList(
     onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -2416,12 +2430,15 @@ private fun LibraryBookList(
                 onBookSelected = onBookSelected,
                 onDownload = onDownload,
                 onCancelDownload = onCancelDownload,
-                onDeleteLocalCopy = onDeleteLocalCopy
+                onDeleteLocalCopy = onDeleteLocalCopy,
+                onMarkAsRead = onMarkAsRead,
+                onMarkAsUnread = onMarkAsUnread
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryBookCard(
     book: BookSummary,
@@ -2430,13 +2447,26 @@ private fun LibraryBookCard(
     onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
 ) {
     val fileId = book.fileId
     val isDownloading = fileId != null && fileId in state.downloadingFileIds
     val failed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
+    val hasActions = !state.isOfflineSnapshot
+    val canOpenDetails = !isDownloading && !unavailableOffline
+    var showActions by remember(book.id) { mutableStateOf(false) }
     Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("search_result_book_${book.id}")
+            .combinedClickable(
+                enabled = canOpenDetails || hasActions,
+                onClick = { if (canOpenDetails) onBookSelected(book) },
+                onLongClick = if (hasActions) ({ showActions = true }) else null
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -2471,6 +2501,35 @@ private fun LibraryBookCard(
                         fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
                             Text(if (failed) "Retry" else "Download")
                         }
+                    }
+                }
+            }
+            if (hasActions) {
+                Box {
+                    IconButton(onClick = { showActions = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options for ${book.title}"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showActions,
+                        onDismissRequest = { showActions = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Mark as read") },
+                            onClick = {
+                                showActions = false
+                                onMarkAsRead(book)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Mark as unread") },
+                            onClick = {
+                                showActions = false
+                                onMarkAsUnread(book)
+                            }
+                        )
                     }
                 }
             }

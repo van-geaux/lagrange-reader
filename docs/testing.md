@@ -57,10 +57,11 @@ Current instrumentation coverage includes server setup validation, login recover
 - Session-expiry recovery works as expected.
 - Series navigation and Series thumbnails work correctly.
 
-### Remaining UI work
+### Latest implemented UI follow-up
 
-- Global book-search results do not currently expose the book context menu through either long-press or the three-dot action.
-- Search results intentionally remain list rows rather than poster cards; preserve this presentation while adding the missing actions.
+- Global book-search result list rows now expose Mark as read and Mark as unread through both long-press and a visible three-dot action.
+- Search results intentionally remain list rows rather than poster cards.
+- The Compose interaction regression covers both menu entry paths and callback actions. JVM tests, instrumentation-test APK compilation, lint, and debug APK assembly pass; no device was attached to execute the instrumentation test.
 
 - Launch, navigation, Home refresh, On Deck, battery indicators, and EPUB footer progress passed on the target device.
 - Home remains interactive while its initial sync/loading indicator is visible, but the tested build kept the indicator for a noticeable time on roughly 5,000 books. The follow-up now doubles catalog pages to 100 items and loads large page ranges in bounded four-request batches; target-device timing confirmation remains required.
@@ -109,7 +110,7 @@ Current instrumentation coverage includes server setup validation, login recover
 7. Tap Filter in Browse and verify title/author/series matching, unread/in-progress/finished, format, and sort/direction controls update immediately from local metadata without a loading-more row. Confirm the letter rail remains exact for server-default, Title, and Author sorts (including descending order) and is hidden for non-letter sorts such as Date added or Read progress.
 8. Return Home and confirm shelves only appear when they contain matching books. From the top of Home, pull down and confirm the refresh indicator appears, existing cached shelves remain usable, and server-side changes are reflected when refresh completes.
 9. Confirm Continue reading/Currently reading is the first book shelf, active progress is shown there even if the server read flag is also set, completed books are excluded from it, and Recently read books remains a separate history shelf.
-10. Search for a title outside the selected library cache and confirm global BookOrbit results appear.
+10. Search for a title outside the selected library cache and confirm global BookOrbit results appear as list rows. Open a result's three-dot menu and repeat with a long-press; confirm both paths show Mark as read and Mark as unread and that each action reaches BookOrbit.
 11. Confirm real book covers load on Home, search results, library lists, and detail screens. Leave the app on unmetered Wi-Fi after a full catalog refresh so the thumbnail worker can advance, then enable airplane mode and jump to several distant letters; already warmed thumbnails should render without a server response.
 12. While covers are filling in, rapidly scroll vertically and across several shelves, then stop on a distant row. Confirm off-screen requests stop competing with the visible row, its covers fill promptly, gestures remain smooth, failed thumbnails retry, and memory use does not progressively degrade. Open More and confirm About remains above the Android navigation controls.
 13. Open Series and confirm there is no Load more action after loading completes. With Name/Ascending, tap # and several A–Z rail entries and confirm each lands directly on the requested or next available initial across the complete result; repeat with Name/Descending and confirm the rail runs Z–A then #. Select Book count, Last added, or Read progress and confirm the letter rail is hidden because the list is not alphabetic. Tap Filter and verify author/library/completion/sort/direction choices rebuild the complete server result. Confirm Series cards backed by `coverBookIds` show a representative book thumbnail instead of a first-letter placeholder; a series with no covered books should retain the placeholder without requesting a nonexistent Series route. Open Authors and wait for the first screen of cards; confirm covers appear, then scroll away and back and confirm cached catalog images return quickly.
