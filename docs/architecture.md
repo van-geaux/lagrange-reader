@@ -109,6 +109,7 @@ The current app flow is:
 
 ### Reader implementations
 
+- EPUB, PDF, and comic reader composition marks the host view to keep the display awake and restores its prior value when the reader leaves composition. Audio and unsupported screens retain the normal device timeout.
 - Audio uses ExoPlayer against a local file or authenticated stream URL.
 - PDF uses `PdfRenderer` with simple page-by-page navigation against local downloads or authenticated cache copies.
 - EPUB uses a local extraction flow:

@@ -633,6 +633,9 @@ private fun ReaderScreen(
     onBack: () -> Unit,
     onProgress: (BookSummary, Long, Int, Float?) -> Unit
 ) {
+    if (readerKeepsScreenAwake(state.book.mediaKind)) {
+        KeepReaderScreenAwake()
+    }
     val isPreview = state.launchMode == ReaderLaunchMode.PREVIEW
     val readerProgress: (BookSummary, Long, Int, Float?) -> Unit = if (isPreview) {
         { _, _, _, _ -> }
@@ -708,6 +711,23 @@ private fun ReaderScreen(
                     message = "This file format is not supported yet."
                 )
             }
+        }
+    }
+}
+
+internal fun readerKeepsScreenAwake(mediaKind: MediaKind): Boolean = when (mediaKind) {
+    MediaKind.EPUB, MediaKind.PDF, MediaKind.COMIC -> true
+    MediaKind.AUDIO, MediaKind.UNKNOWN -> false
+}
+
+@Composable
+internal fun KeepReaderScreenAwake() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val wasKeepingScreenOn = view.keepScreenOn
+        view.keepScreenOn = true
+        onDispose {
+            view.keepScreenOn = wasKeepingScreenOn
         }
     }
 }

@@ -36,6 +36,7 @@ Current instrumentation coverage includes server setup validation, login recover
 - The July 15 complete Series navigation pass completes 142 JVM tests across 21 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. Target-device/server validation must confirm multi-page loading, the absence of Load more, and exact ascending/descending rail navigation on the full Series catalog.
 - The July 15 collapsed Libraries series-count pass completes 143 JVM tests across 21 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. It adds JVM grammar/grouping coverage and a compiled Compose assertion for the visible count. Target-device validation must confirm the count remains readable on narrow cards and matches the books represented by the active Browse filter.
 - The July 15 EPUB theme-persistence pass completes 144 JVM tests across 22 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. It adds round-trip/fallback coverage plus a compiled Android SharedPreferences recreation test. Target-device validation must confirm the selected app-wide theme survives reader close, another EPUB, and a full app relaunch.
+- The July 15 reader keep-awake pass completes 145 JVM tests across 23 suites with zero failures, Android lint, debug APK assembly, and instrumentation-test compilation. It adds visual-format selection coverage and a compiled Compose lifecycle test that clears the keep-awake flag on exit. Target-device validation must confirm an idle visual reader outlives the configured display timeout while explicit system locking still works.
 
 ## Manual Test Matrix
 
@@ -101,8 +102,9 @@ Current instrumentation coverage includes server setup validation, login recover
 4. Tap the center and confirm Back, title, chapter/page status, chapter picker, theme, and text-size controls appear as overlays; confirm additional center or outside taps leave them open until Close is tapped.
 5. After content renders, confirm the reader menu exposes Light, Sepia, and Dark themes plus independent Top, Bottom, Left, and Right percentage sliders. Verify every edge starts at 15%, 100% maps to roughly one quarter of the relevant screen dimension, changing one slider does not change the others, and moving each slider visibly changes the text inset and repaginates while the menu remains open. Test top and bottom with large changes in both directions, advance to later pages, and confirm translated pages still contain visible text rather than becoming blank. Verify only the top-right Close action dismisses the options; center or other outside taps must not dismiss it. Images must remain constrained to the page.
 6. Select Dark, close and reopen the EPUB, and confirm Dark remains selected while the reader returns to the exact saved page within the saved chapter. Open another EPUB and confirm it also uses Dark. Repeat after fully closing and relaunching the app, then restore the preferred theme.
-7. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
-8. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
+7. Set the device display timeout to its shortest practical value, leave an EPUB untouched for longer than that timeout, and confirm the display and reader remain open. Leave the reader and confirm normal display timeout behavior returns. A manual power-button lock or other system interruption must still work.
+8. Recheck offline images, progress sync, and last-session restore against the available EPUB sample.
+9. Audiobook, PDF, and CBZ validation is deferred until representative sample files are available.
 
 ### 4. Downloads And Offline Reopen
 

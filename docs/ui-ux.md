@@ -147,7 +147,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 ### Additional reader feedback workplan - 2026-07-15
 
-- [ ] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
+- [x] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
 - [ ] Use one clear Close action for the reader options overlay, and dismiss the overlay when visible book content is tapped.
 - [ ] Show battery and signal indicators in the reader's top-right area.
 - [ ] Show book completion percentage, chapter page progress, and book page progress in the reader's bottom status area.
