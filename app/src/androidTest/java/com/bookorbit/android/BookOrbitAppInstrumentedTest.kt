@@ -181,6 +181,71 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun bookDetailsExposeCompactActionsCoverViewerMetadataAndSeriesNavigation() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-series",
+            fileId = "file-series",
+            title = "Orbit Rising",
+            author = "Test Author",
+            seriesId = "series-orbit",
+            seriesName = "Orbit Saga",
+            seriesIndex = 2.0,
+            format = "epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+            bookDetailResult = BookDetailInfo(
+                book = book,
+                libraryName = "Main",
+                publisher = "Test Press",
+                publishedDate = "2026",
+                language = "English",
+                pageCount = 320,
+                isbn13 = "9781234567890",
+                genres = listOf("Science fiction"),
+                tags = listOf("Space opera")
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Orbit Rising").performClick()
+        composeRule.onNodeWithTag("book-detail-actions").assertIsDisplayed()
+        composeRule.onNodeWithText("Read").assertIsEnabled()
+        composeRule.onNodeWithText("Preview").assertIsEnabled()
+        composeRule.onNodeWithText("Download").assertIsEnabled()
+        composeRule.onNodeWithText("Genres").assertIsDisplayed()
+        composeRule.onNodeWithText("Science fiction").assertIsDisplayed()
+        composeRule.onNodeWithText("Tags").assertIsDisplayed()
+        composeRule.onNodeWithText("Space opera").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("Open full-screen cover for Orbit Rising").performClick()
+        composeRule.onNodeWithContentDescription("Full-screen cover for Orbit Rising. Tap to close").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Full-screen cover for Orbit Rising. Tap to close").performClick()
+        composeRule.onAllNodesWithContentDescription("Full-screen cover for Orbit Rising. Tap to close").assertCountEquals(0)
+
+        composeRule.onNodeWithContentDescription("Open series Orbit Saga").performClick()
+        composeRule.onNodeWithText("Orbit Saga").assertIsDisplayed()
+        composeRule.onNodeWithText("Orbit Rising").assertIsDisplayed()
+    }
+
+    @Test
     fun currentlyReadingCardExposesRemoveAction() {
         val dataSource = InstrumentedFakeDataSource()
         val current = BookSummary(
@@ -551,6 +616,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     var searchBooksResult: List<BookSummary> = emptyList()
+    var bookDetailResult: BookDetailInfo? = null
     val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
@@ -576,6 +642,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         searchQueries += query
         return searchBooksResult
     }
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
         if (page == 0) return LibraryBooksPage(items = loadBooksResult, total = loadBooksResult.size, page = 0, size = loadBooksResult.size)
         return libraryPageResults[page] ?: LibraryBooksPage(page = page)

@@ -237,11 +237,13 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Improve reader-options typography with reliable text/background contrast in Light, Sepia, and Dark modes.
 - [x] Allow explicitly entered HTTP BookOrbit server URLs and Android cleartext traffic; bare remote hostnames still default to HTTPS, while bare local development hosts retain HTTP shorthand.
 - [x] Add Mark as read and Mark as unread to the book-card three-dot and long-press menus. Read status is written directly while preserving position; unread uses the normal-user reset flow so completed progress cannot immediately restore Read.
-- [ ] Redesign book-detail actions as a swipeable/compact action area, using symbols where they improve discoverability without hiding labels.
-- [ ] Make the tapped series title in book details navigate to that series detail page.
-- [ ] Redesign book-detail genres/tags and the lower metadata section for a more compact, elegant hierarchy.
-- [ ] Open the book-detail cover in a full-screen image viewer, dismissible by tapping the image again or pressing Android Back.
+- [x] Redesign book-detail actions as a horizontally swipeable compact tile area, using selective icons without hiding labels.
+- [x] Make the tapped series title in book details navigate to that Series detail page.
+- [x] Wrap Genre and Tag chips separately and group lower metadata into compact Publication, Identifiers, and Library/file cards.
+- [x] Open the book-detail cover in a full-screen image viewer, dismissible by tapping the cover again or pressing Android Back.
 - [x] Redesign the reader options window as a rounded bottom sheet with clearer hierarchy, spacing, and grouped controls.
+
+The book-detail follow-up includes a Compose instrumentation regression for the action area, Genre/Tag content, cover-viewer tap dismissal, and Series navigation. `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass; physical-device layout, horizontal swiping, and Android Back dismissal remain to be validated.
 
 ## Source of truth
 

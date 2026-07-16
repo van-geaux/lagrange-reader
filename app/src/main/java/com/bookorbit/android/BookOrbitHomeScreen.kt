@@ -8,9 +8,11 @@ import android.util.LruCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,9 +42,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -83,6 +89,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
@@ -92,8 +100,11 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -515,7 +526,11 @@ internal fun NativeLibraryBrowserScreen(
                     onPreview = onPreview,
                     onDownload = onDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy
+                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onSeriesSelected = { seriesKey ->
+                        selectedSeriesKey = seriesKey
+                        selectedBook = null
+                    }
                 )
                 selectedSeriesKey != null -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
@@ -2537,6 +2552,7 @@ private fun LibraryBookCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BookDetails(
     book: BookSummary,
@@ -2548,28 +2564,87 @@ private fun BookDetails(
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
-    onDeleteLocalCopy: (BookSummary) -> Unit
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onSeriesSelected: (String) -> Unit
 ) {
     val detail by produceState(initialValue = BookDetailInfo(book), book.id) {
         value = detailLoader(book) ?: value
     }
+    var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
     val displayBook = detail.book
     val fileId = displayBook.fileId
     val isDownloading = fileId != null && fileId in state.downloadingFileIds
     val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
+    val seriesKey = displayBook.seriesId ?: displayBook.seriesName
+    val publicationMetadata = buildList {
+        detail.publisher?.let { add("Publisher" to it) }
+        detail.publishedDate?.let { add("Published" to it) }
+        detail.language?.let { add("Language" to it) }
+        detail.pageCount?.let { add("Pages" to it.toString()) }
+        detail.rating?.let {
+            add("Rating" to String.format(java.util.Locale.US, "%.1f / 5", it))
+        }
+    }
+    val identifierMetadata = buildList {
+        detail.isbn13?.let { add("ISBN-13" to it) }
+        detail.isbn10?.let { add("ISBN-10" to it) }
+    }
+    val fileMetadata = buildList {
+        detail.libraryName?.let { add("Library" to it) }
+        displayBook.format?.let { add("Format" to it.uppercase()) }
+        detail.durationSeconds?.takeIf { it > 0 }?.let {
+            add("Duration" to formatDetailDuration(it))
+        }
+        detail.totalSizeBytes?.takeIf { it > 0 }?.let {
+            add("File size" to formatFileSize(it))
+        }
+        if (detail.fileCount > 1) add("Files" to detail.fileCount.toString())
+        if (displayBook.isDownloaded) add("Offline" to "Available")
+    }
+
+    if (showCoverViewer) {
+        FullScreenCoverViewer(
+            book = displayBook,
+            coverLoader = coverLoader,
+            onDismiss = { showCoverViewer = false }
+        )
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Box(modifier = Modifier.width(116.dp)) { BookCover(displayBook, coverLoader) }
+                Box(
+                    modifier = Modifier
+                        .width(116.dp)
+                        .clickable { showCoverViewer = true }
+                        .semantics {
+                            contentDescription = "Open full-screen cover for ${displayBook.title}"
+                        }
+                ) {
+                    BookCover(displayBook, coverLoader)
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    displayBook.seriesName?.let { OrbitEyebrow(it) }
+                    displayBook.seriesName?.let { seriesName ->
+                        OrbitEyebrow(
+                            text = "$seriesName${displayBook.seriesIndex?.let(::formatSeriesIndex)?.let { " #$it" }.orEmpty()}  ›",
+                            modifier = if (seriesKey != null) {
+                                Modifier
+                                    .clickable { onSeriesSelected(seriesKey) }
+                                    .semantics {
+                                        contentDescription = "Open series $seriesName"
+                                    }
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
                     Text(displayBook.title, style = MaterialTheme.typography.headlineSmall)
                     detail.subtitle?.let {
                         Text(it, style = MaterialTheme.typography.titleMedium)
@@ -2585,30 +2660,53 @@ private fun BookDetails(
             }
         }
         item {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            LazyRow(
+                modifier = Modifier.testTag("book-detail-actions"),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
-                    onClick = { onRead(displayBook) },
-                    enabled = !isDownloading && !unavailableOffline
-                ) {
-                    Text(if (displayBook.progressPercent?.let { it > 0f } == true) "Continue reading" else "Read")
+                item(key = "read") {
+                    DetailActionTile(
+                        label = if (displayBook.progressPercent?.let { it > 0f } == true) {
+                            "Continue reading"
+                        } else {
+                            "Read"
+                        },
+                        icon = Icons.Default.PlayArrow,
+                        emphasized = true,
+                        enabled = !isDownloading && !unavailableOffline,
+                        onClick = { onRead(displayBook) }
+                    )
                 }
-                OutlinedButton(
-                    onClick = { onPreview(displayBook) },
-                    enabled = !isDownloading && !unavailableOffline
-                ) {
-                    Text("Preview")
+                item(key = "preview") {
+                    DetailActionTile(
+                        label = "Preview",
+                        icon = Icons.Default.Search,
+                        enabled = !isDownloading && !unavailableOffline,
+                        onClick = { onPreview(displayBook) }
+                    )
                 }
                 when {
-                    displayBook.isDownloaded -> OutlinedButton(
-                        onClick = { onDeleteLocalCopy(displayBook) },
-                        enabled = !isDownloading
-                    ) { Text("Delete local") }
-                    isDownloading -> OutlinedButton(onClick = { onCancelDownload(displayBook) }) { Text("Cancel download") }
-                    fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(displayBook) }) {
-                        Text("Download")
+                    displayBook.isDownloaded -> item(key = "delete-local") {
+                        DetailActionTile(
+                            label = "Delete local",
+                            icon = Icons.Default.Delete,
+                            enabled = !isDownloading,
+                            onClick = { onDeleteLocalCopy(displayBook) }
+                        )
+                    }
+                    isDownloading -> item(key = "cancel-download") {
+                        DetailActionTile(
+                            label = "Cancel download",
+                            icon = Icons.Default.Close,
+                            onClick = { onCancelDownload(displayBook) }
+                        )
+                    }
+                    fileId != null && !state.isOfflineSnapshot -> item(key = "download") {
+                        DetailActionTile(
+                            label = "Download",
+                            icon = Icons.Default.ArrowDropDown,
+                            onClick = { onDownload(displayBook) }
+                        )
                     }
                 }
             }
@@ -2616,43 +2714,231 @@ private fun BookDetails(
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
             item { ExpandableDescription("Synopsis", plainText(synopsis)) }
         }
-        if (detail.genres.isNotEmpty() || detail.tags.isNotEmpty()) {
+        if (detail.genres.isNotEmpty()) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Genres and tags", style = MaterialTheme.typography.titleLarge)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        (detail.genres + detail.tags).distinct().forEach { label ->
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                                Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                            }
-                        }
+                DetailLabelGroup(
+                    title = "Genres",
+                    labels = detail.genres
+                )
+            }
+        }
+        if (detail.tags.isNotEmpty()) {
+            item {
+                DetailLabelGroup(
+                    title = "Tags",
+                    labels = detail.tags
+                )
+            }
+        }
+        if (publicationMetadata.isNotEmpty() || identifierMetadata.isNotEmpty() || fileMetadata.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HorizontalDivider()
+                    Text(
+                        "Book details",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    if (publicationMetadata.isNotEmpty()) {
+                        DetailMetadataGroup("Publication", publicationMetadata)
+                    }
+                    if (identifierMetadata.isNotEmpty()) {
+                        DetailMetadataGroup("Identifiers", identifierMetadata)
+                    }
+                    if (fileMetadata.isNotEmpty()) {
+                        DetailMetadataGroup("Library and file", fileMetadata)
                     }
                 }
             }
         }
-        item {
-            HorizontalDivider()
-            Column(modifier = Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Book details", style = MaterialTheme.typography.titleLarge)
-                displayBook.seriesName?.let {
-                    MetadataLine("Series", "$it${displayBook.seriesIndex?.let(::formatSeriesIndex)?.let { index -> " #$index" }.orEmpty()}")
+    }
+}
+
+@Composable
+private fun DetailActionTile(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    emphasized: Boolean = false
+) {
+    Card(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .width(104.dp)
+            .heightIn(min = 76.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (emphasized) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+            contentColor = if (emphasized) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 11.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailLabelGroup(title: String, labels: List<String>) {
+    val distinctLabels = labels.filter { it.isNotBlank() }.distinct()
+    if (distinctLabels.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            distinctLabels.forEach { label ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    shape = MaterialTheme.shapes.extraSmall
+                ) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
-                detail.publisher?.let { MetadataLine("Publisher", it) }
-                detail.publishedDate?.let { MetadataLine("Published", it) }
-                detail.language?.let { MetadataLine("Language", it) }
-                detail.pageCount?.let { MetadataLine("Pages", it.toString()) }
-                detail.isbn13?.let { MetadataLine("ISBN-13", it) }
-                detail.isbn10?.let { MetadataLine("ISBN-10", it) }
-                detail.rating?.let { MetadataLine("Rating", String.format(java.util.Locale.US, "%.1f / 5", it)) }
-                detail.libraryName?.let { MetadataLine("Library", it) }
-                displayBook.format?.let { MetadataLine("Format", it.uppercase()) }
-                detail.durationSeconds?.takeIf { it > 0 }?.let { MetadataLine("Duration", formatDetailDuration(it)) }
-                detail.totalSizeBytes?.takeIf { it > 0 }?.let { MetadataLine("File size", formatFileSize(it)) }
-                if (detail.fileCount > 1) MetadataLine("Files", detail.fileCount.toString())
-                if (displayBook.isDownloaded) MetadataLine("Offline", "Available")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailMetadataGroup(title: String, entries: List<Pair<String, String>>) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            OrbitEyebrow(title)
+            entries.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.width(78.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = value,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullScreenCoverViewer(
+    book: BookSummary,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onDismiss: () -> Unit
+) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl, book.updatedAtMillis) {
+        val bytes = try {
+            coverLoader(book)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            null
+        }
+        value = if (bytes != null && bytes.isNotEmpty()) {
+            try {
+                withContext(Dispatchers.Default) {
+                    decodeCoverBitmap(bytes, targetWidth = 1080, targetHeight = 1620)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.94f))
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.68f)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        )
+                    )
+                    .clickable(onClick = onDismiss)
+                    .semantics {
+                        contentDescription = "Full-screen cover for ${book.title}. Tap to close"
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(
+                        text = book.title.take(1).uppercase(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.displaySmall
+                    )
+                }
             }
         }
     }
@@ -2813,14 +3099,6 @@ internal fun ExpandableDescription(
                 Text(if (expanded) "Collapse" else "Expand")
             }
         }
-    }
-}
-
-@Composable
-private fun MetadataLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, modifier = Modifier.width(92.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, modifier = Modifier.weight(1f))
     }
 }
 

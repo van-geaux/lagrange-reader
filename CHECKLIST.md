@@ -213,6 +213,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add integration tests for library/book loading
 - [ ] Add integration tests for offline queue replay
 - [x] Add an Android WebView instrumentation regression for EPUB padding geometry and translated-page visibility
+- [x] Add Compose instrumentation regression coverage for book-detail actions, wrapped metadata, the full-screen cover viewer, and Series navigation
 - [x] Add at least one end-to-end manual test matrix
 
 ## 14. Release Readiness
@@ -276,10 +277,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Improve thumbnail loading performance and retry failed covers
 - [x] Cancel off-screen cover requests so visible cards and details are not blocked by stale scroll work
 - [x] Warm every missing/changed selected-library thumbnail into the local cache in durable unmetered batches
-- [ ] Redesign book-detail actions as a swipeable compact area with selective symbol buttons
-- [ ] Navigate from a tapped book-detail series title to Series details
-- [ ] Redesign book-detail genres/tags and lower metadata hierarchy
-- [ ] Add a full-screen book-detail cover viewer with tap and Back dismissal
+- [x] Redesign book-detail actions as a swipeable compact area with selective symbol buttons
+- [x] Navigate from a tapped book-detail series title to Series details
+- [x] Redesign book-detail genres/tags and lower metadata hierarchy
+- [x] Add a full-screen book-detail cover viewer with tap and Back dismissal
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title

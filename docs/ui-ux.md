@@ -38,7 +38,7 @@ The first Home shelf now renders as Currently reading. It recognizes active perc
 
 Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while Options lives in the profile menu above Log out. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from complete Room-cached Browse content.
 
-Detail refinement candidate: book details now mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Series details load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. This is ready for UI discussion and device adjustment now; validate hierarchy, density, long metadata, and primary-action placement before marking Checkpoint 3 complete.
+Detail refinement candidate: book details mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Primary actions now use compact horizontally swipeable tiles with persistent labels and selective icons. The series eyebrow is a visible navigation affordance into the existing Series detail page; Genre and Tag chips wrap independently; and the lower hierarchy groups Publication, Identifiers, and Library/file values into compact cards. Tapping the cover opens a dark full-screen viewer, and tapping the displayed cover or pressing Android Back dismisses it. Compose regression coverage exercises the action area, metadata content, cover-viewer tap dismissal, and Series navigation. Series details continue to load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books. Checkpoint 3 remains open for physical-device review of horizontal swiping, narrow/large-text wrapping, full-screen cover scaling, Android Back dismissal, and primary-action density.
 
 ### Checkpoint 4: EPUB reader - ready with current sample content
 
@@ -161,10 +161,10 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Allow explicit HTTP server entry when required by the configured BookOrbit deployment while retaining HTTPS as the bare remote-host default.
 - [x] Add Mark as read and Mark as unread to shared three-dot/long-press actions on Home shelves and individual Library, Series, Author, and Local Books posters; keep collapsed series cards as series navigation rather than single-book actions.
 - [x] Keep global search results as list rows and add the same Mark as read/unread menu through both a visible three-dot action and long-press.
-- [ ] Replace oversized book-detail actions with a swipeable compact action area and selective symbol buttons.
-- [ ] Make the book-detail series title a navigation affordance to series details.
-- [ ] Redesign the book-detail genres/tags and lower metadata hierarchy.
-- [ ] Add a full-screen, tap-to-dismiss/back-dismiss cover viewer from book details.
+- [x] Replace oversized book-detail actions with a swipeable compact action area and selective symbol buttons.
+- [x] Make the book-detail series title a navigation affordance to series details.
+- [x] Redesign the book-detail genres/tags and lower metadata hierarchy.
+- [x] Add a full-screen, tap-to-dismiss/back-dismiss cover viewer from book details.
 - [x] Redesign the reader options window as a rounded bottom sheet with clearer hierarchy, spacing, and grouped controls.
 
 ### Checkpoint 5: Other media readers - deferred
