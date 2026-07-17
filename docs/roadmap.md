@@ -254,8 +254,7 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [x] Make genre selections navigate to filtered Books or Series results through the catalog filter model; keep tags informational.
 - [x] Keep a book's series name and series index visible as distinct metadata rows.
 - [ ] Validate genre-filter query support and result scope against the target BookOrbit server.
-- [x] Surface server-hosted OIDC/SSO through the embedded `Use server sign-in` flow while retaining native credentials.
-- [ ] Validate OIDC redirects and login completion on a real OIDC-enabled server.
+- [ ] Add and validate direct OIDC/SSO authentication after the provider and redirect contract are confirmed; native username/password remains current.
 - [x] Complete the revised detail density, title expansion, multi-selection, genre navigation, and series-index implementation in code/tests.
 - [ ] Run device validation for the revised detail density, multi-selection, genre-filter result scope, and interrupted-download recovery.
 - [ ] Keep audiobook and CBZ validation deferred until representative samples are available.
@@ -264,7 +263,7 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 
 ### Latest detail-action feedback — 2026-07-17
 
-The full-screen cover viewer, long-title expansion, series-index presentation, revised action labels/icons, and download status presentation are implemented. Multi-select header overlap and stale-selection pruning are fixed. Genre chips now navigate to fully paginated server-filtered Books or Series results; tags remain informational. The remaining work is physical-device/server validation, especially genre query compatibility, OIDC/SSO redirects, and interrupted downloads.
+The full-screen cover viewer, long-title expansion, series-index presentation, revised action labels/icons, and download status presentation are implemented. Multi-select header overlap and stale-selection pruning are fixed. Genre chips now navigate to fully paginated server-filtered Books or Series results; tags remain informational. The remaining work is physical-device/server validation, especially genre query compatibility and interrupted downloads; direct OIDC/SSO remains deferred.
 
 ### Target-device follow-up work order — 2026-07-17
 
@@ -272,12 +271,24 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 - [ ] Add labels beside Download and Delete local, retaining their clear icons and compact layout.
 - [ ] Reconcile the selected book detail immediately after a download completes so Download becomes Delete local without leaving and reopening the screen.
 - [ ] Investigate the tappable Tag path that currently opens an empty result. Use a verified BookOrbit tag filter when available; otherwise remove the tap affordance and keep tags informational.
-- [ ] Resolve the authentication direction. The current embedded flow intentionally opens BookOrbit's own login page so the server can discover and initiate its configured SSO provider; recommended follow-up is to relabel it as BookOrbit web sign-in unless a direct provider endpoint can be verified. Native-only login would remove SSO support.
+- [x] Keep native username/password as the current authentication flow; defer direct OIDC/SSO until the provider and redirect contract are confirmed.
 - [ ] Make red Home message cards dismissible by horizontal swipe and an explicit close button, with dismissal reflected immediately rather than waiting for refresh.
 - [ ] Replace the normalized `Book x/1000` EPUB footer with a layout-derived current/total whole-book page count that responds to text size, margins, viewport, and chapter pagination.
 - [ ] Restrict Recently read to books that have actually finished, excluding every title that remains in progress.
 
 ## Source of truth
+
+### Options backlog
+
+Interface
+
+- [ ] Add a lock-orientation toggle.
+- [ ] Add a haptic-feedback option.
+- [ ] Add app theme selection: Light, Dark, or Follow system.
+
+Data
+
+- [ ] Add a downloads-over-cellular policy: Always, Never, or Ask for confirmation.
 
 Detailed checkpoint status is tracked in:
 

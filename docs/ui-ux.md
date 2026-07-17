@@ -2,13 +2,18 @@
 
 The functional prototype is stable enough for UI/UX work to begin. EPUB is the currently available representative content type; audiobook, PDF, and CBZ-specific validation remains deferred until sample files are available.
 
-Latest detail feedback: keep compact action spacing while showing Read/Preview labels beside clear icons and Download as an icon-only action; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. The embedded server sign-in path now surfaces OIDC/SSO; provider redirect validation remains open.
+Latest detail feedback: keep compact action spacing while showing Read/Preview labels beside clear icons and Download as an icon-only action; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
-Follow-up action feedback is implemented: Read and Preview show visible labels beside clear Play/Visibility icons, Download uses an unmistakable download symbol, and active per-file download progress/status is discoverable from book details. Multi-select headers avoid overlap and prune stale selections. Genre chips navigate to fully paginated server-filtered Books or Series results; tags remain informational. Native credentials remain available alongside the embedded `Use server sign-in` OIDC/SSO path.
+Follow-up action feedback is implemented: Read and Preview show visible labels beside clear Play/Visibility icons, Download uses an unmistakable download symbol, and active per-file download progress/status is discoverable from book details. Multi-select headers avoid overlap and prune stale selections. Genre chips navigate to fully paginated server-filtered Books or Series results; tags remain informational. Native username/password remains the only authentication flow for now; direct OIDC/SSO is deferred.
 
-Audited implementation status: code and automated verification are complete; physical-device/server validation remains required for genre query compatibility and scope, OIDC redirects/auth completion, download interruption recovery, and final responsive density.
+Audited implementation status: code and automated verification are complete; physical-device/server validation remains required for genre query compatibility and scope, download interruption recovery, and final responsive density. Direct OIDC/SSO remains an open backlog item.
 
-Latest target-device feedback: Download and Delete local also need visible labels, and a completed download must update the still-open detail immediately. A tappable Tag currently opens an empty result and must either use a verified server tag filter or become informational. Red Home message cards need swipe and close-button dismissal. The reader footer should show layout-derived whole-book pages instead of a normalized `/1000`, and Recently read must contain only completed titles. Embedded server sign-in currently opens BookOrbit's own login page before its configured SSO redirect; retaining it under a clearer BookOrbit web-sign-in label is recommended unless a direct provider endpoint is verified.
+Latest target-device feedback: Download and Delete local also need visible labels, and a completed download must update the still-open detail immediately. A tappable Tag currently opens an empty result and must either use a verified server tag filter or become informational. Red Home message cards need swipe and close-button dismissal. The reader footer should show layout-derived whole-book pages instead of a normalized `/1000`, and Recently read must contain only completed titles. Direct OIDC/SSO is deferred; native username/password remains current.
+
+Options backlog
+
+- Interface: lock orientation toggle; haptic feedback option; app theme selection (Light, Dark, Follow system).
+- Data: downloads-over-cellular policy (Always, Never, Ask for confirmation).
 
 ## Checkpoints
 

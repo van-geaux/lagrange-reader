@@ -287,8 +287,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add multi-book selection and bulk Mark as read/unread actions to library grids
 - [x] Navigate genre selections to filtered Books or Series results through the server filter model; keep tags informational
 - [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
-- [x] Surface the OIDC/SSO provider path through embedded server sign-in while retaining native credentials
-- [ ] Validate OIDC redirects and login completion on a real OIDC-enabled server
+- [ ] Add direct OIDC/SSO authentication after the provider/redirect contract is confirmed; native username/password remains current
 - [x] Validate the revised detail-action density, title expansion, multi-selection, and series-index implementation in code/tests
 - [ ] Validate the revised detail density and genre-filter result scope on a device
 - [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
@@ -297,7 +296,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add visible labels to Download and Delete local book-detail actions
 - [ ] Refresh the open book-detail state immediately when a download completes
 - [ ] Fix the tappable Tag result path so it returns matching books, or remove the tap affordance if BookOrbit has no supported tag filter
-- [ ] Decide whether to retain and relabel embedded BookOrbit server sign-in or return to native-credentials-only authentication
+- [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
 - [ ] Make dismissible red Home messages support horizontal swipe and an explicit close button
 - [ ] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total
 - [ ] Restrict Recently read to completed books and exclude titles still in progress
@@ -339,6 +338,18 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
 - [ ] Checkpoint 5: refine audiobook, PDF, and CBZ readers when samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
+
+## Options backlog
+
+### Interface
+
+- [ ] Add lock orientation toggle
+- [ ] Add haptic feedback option
+- [ ] Add app theme selection: Light, Dark, or Follow system
+
+### Data
+
+- [ ] Add downloads-over-cellular policy: Always, Never, or Ask for confirmation
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 

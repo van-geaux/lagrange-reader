@@ -126,7 +126,6 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Sign in").assertIsDisplayed()
-        composeRule.onNodeWithText("Use server sign-in").assertIsDisplayed()
         composeRule.onNodeWithText("Sign in again to continue browsing.").assertIsDisplayed()
         composeRule.onNodeWithText("Change server").performClick()
         composeRule.waitUntil { dataSource.clearServerCalls == 1 }

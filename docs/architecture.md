@@ -9,8 +9,8 @@
 The current app flow is:
 
 1. User enters a BookOrbit server URL.
-2. The app presents native username/password credentials and submits them to the BookOrbit login API; it also offers `Use server sign-in`, an embedded WebView for server-hosted OIDC/SSO.
-3. The embedded sign-in shares the app cookie jar and polls `GET /api/v1/auth/me` through the existing coordinator before resuming the pending browser, library, reader, or download destination.
+2. The app presents native username/password credentials and submits them to the BookOrbit login API.
+3. The app verifies `GET /api/v1/auth/me` before resuming the pending browser, library, reader, or download destination. Direct OIDC/SSO authentication is deferred.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
@@ -41,7 +41,7 @@ The current app flow is:
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
 - Offline-first active-reader restore uses the same local-only reader stream suppression, so startup reopen does not quietly fall back to a live audio stream.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
-- Native username/password remains available alongside the embedded server sign-in WebView; the WebView shares cookies and login completion is detected by polling `auth/me` through the coordinator.
+- Native username/password is the current authentication flow. Embedded server/OIDC sign-in is intentionally deferred until its provider and redirect contract are defined.
 - Preview reader launches start at the beginning and do not write active-reader or progress state.
 
 ### Data and API layer

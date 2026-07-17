@@ -43,7 +43,7 @@ GET /api/v1/auth/me
 Used to confirm authenticated session state after login.
 The app also uses this endpoint during bootstrap and login polling instead of inferring auth state from library loading.
 
-The Android login screen retains native credentials and also offers an embedded server sign-in WebView for deployments that host OIDC/SSO. The WebView shares the authenticated cookie jar with the API client; the coordinator polls this endpoint to detect completion. OIDC provider discovery and redirect behavior still require validation against the target deployment.
+The Android login screen currently uses native username/password credentials only. Direct OIDC/SSO provider discovery, redirects, and callback handling are deferred pending a confirmed target-server contract.
 
 ## Libraries
 
