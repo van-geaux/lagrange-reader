@@ -303,6 +303,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate interrupted download recovery and retry behavior on a device
 - [x] Add visible labels to Download and Delete local book-detail actions
 - [ ] Add a dynamic Mark as read/Mark as unread action to book details; placement awaits design approval, with a three-dot overflow at the end of the swipeable action row recommended
+- [ ] Make Close book feel immediate by restoring the cached browser before background progress sync, active-reader cleanup, and refresh complete
+- [ ] Recover missing foreground book-detail covers, including `your name.`, through the standard BookOrbit thumbnail endpoint when payload cover metadata is absent or stale
+- [ ] Add a reading-position bar to reader options; whole-book versus current-chapter mapping awaits design approval
 - [x] Refresh the open book-detail state immediately when a download completes
 - [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
