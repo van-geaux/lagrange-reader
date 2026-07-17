@@ -343,11 +343,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Interface
 
-- [ ] Add lock orientation toggle
-- [ ] Add haptic feedback option
-- [ ] Add app theme selection: Light, Dark, or Follow system
-- [ ] Add default opening screen selection: Home, Library, or Local books
-- [ ] Add Reduce motion/animations accessibility option
+- [x] Add lock current orientation toggle
+- [x] Add haptic feedback toggle for supported interactions
+- [x] Add app theme selection: Follow system, Light, or Dark
+- [x] Add default opening screen selection: Home, Library, or Local books
+- [x] Add Reduce motion/animations accessibility option for immediate catalog jumps
 
 ### Data
 

@@ -105,7 +105,9 @@ import kotlin.math.roundToInt
 @Composable
 fun BookOrbitApp(
     screen: AppScreen,
-    coordinator: AppCoordinator
+    coordinator: AppCoordinator,
+    appPreferences: AppPreferences = AppPreferences(),
+    onAppPreferencesChange: (AppPreferences) -> Unit = {}
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
@@ -145,7 +147,9 @@ fun BookOrbitApp(
             onDismissMessage = coordinator::dismissBrowserMessage,
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
             onMarkAsRead = coordinator::markBookAsRead,
-            onMarkAsUnread = coordinator::markBookAsUnread
+            onMarkAsUnread = coordinator::markBookAsUnread,
+            appPreferences = appPreferences,
+            onAppPreferencesChange = onAppPreferencesChange
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,

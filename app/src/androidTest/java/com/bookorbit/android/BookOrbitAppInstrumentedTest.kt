@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
@@ -22,6 +23,8 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -418,6 +421,39 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("About").performClick()
         composeRule.onNodeWithContentDescription("User profile").performClick()
         composeRule.onNodeWithText("Options").assertIsDisplayed()
+    }
+
+    @Test
+    fun optionsExposePersistableInterfaceControls() {
+        val preferences = mutableStateOf(AppPreferences())
+        composeRule.setContent {
+            BookOrbitTheme(themeMode = preferences.value.themeMode) {
+                OptionsScreen(
+                    preferences = preferences.value,
+                    onPreferencesChange = { preferences.value = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Interface").assertIsDisplayed()
+        composeRule.onNodeWithTag("options-lock-orientation").performClick()
+        composeRule.runOnIdle { assertTrue(preferences.value.lockOrientation) }
+
+        composeRule.onNodeWithTag("options-haptic-feedback").performClick()
+        composeRule.runOnIdle { assertEquals(false, preferences.value.hapticFeedback) }
+
+        composeRule.onNodeWithTag("options-theme").performClick()
+        composeRule.onNodeWithText("Dark").performClick()
+        composeRule.runOnIdle { assertEquals(AppThemeMode.DARK, preferences.value.themeMode) }
+
+        composeRule.onNodeWithTag("options-opening-screen").performClick()
+        composeRule.onNodeWithText("Local books").performClick()
+        composeRule.runOnIdle {
+            assertEquals(DefaultOpeningScreen.LOCAL_BOOKS, preferences.value.defaultOpeningScreen)
+        }
+
+        composeRule.onNodeWithTag("options-reduce-motion").performScrollTo().performClick()
+        composeRule.runOnIdle { assertTrue(preferences.value.reduceMotion) }
     }
 
     @Test

@@ -137,8 +137,16 @@ private val OrbitShapes = Shapes(
 )
 
 @Composable
-fun BookOrbitTheme(content: @Composable () -> Unit) {
-    val colors = if (androidx.compose.foundation.isSystemInDarkTheme()) DarkColors else LightColors
+fun BookOrbitTheme(
+    themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
+    content: @Composable () -> Unit
+) {
+    val useDarkColors = when (themeMode) {
+        AppThemeMode.FOLLOW_SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.DARK -> true
+    }
+    val colors = if (useDarkColors) DarkColors else LightColors
     MaterialTheme(
         colorScheme = colors,
         typography = OrbitTypography,

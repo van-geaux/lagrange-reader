@@ -25,6 +25,7 @@ The current app flow is:
 - `AppCoordinator` now depends on a small repository-facing interface so bootstrap, login recovery, and browser fallback behavior can be covered by focused JVM tests without changing runtime wiring.
 - `AppScreen` defines the app-level screens.
 - `BookOrbitApp` renders the UI for setup, login, library browsing, and reader/player screens.
+- The native grouped Options screen persists Interface settings for locking the current orientation, suppressing supported haptics, selecting Follow system/Light/Dark app theme, choosing the fresh-start destination (Home/Library/Local books), and reducing motion via immediate catalog jumps. Theme changes apply immediately; physical-device validation remains pending. Data options remain backlog items.
 - Library browsing renders explicit loading, empty, and error states for library and book lists, with a refresh action.
 - The browser top bar exposes sign-out for live sessions and a direct sign-in path from cached offline snapshots.
 - Book cards show active download progress, failed-download retry, and cancel controls while a download is running.

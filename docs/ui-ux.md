@@ -12,7 +12,7 @@ Latest target-device feedback: Download and Delete local now have visible labels
 
 Options backlog
 
-- Interface: lock orientation toggle; haptic feedback option; app theme selection (Light, Dark, Follow system); default opening screen (Home, Library, Local books); Reduce motion/animations accessibility option.
+- Interface implementation complete: lock current orientation toggle; haptic feedback toggle; app theme selection (Follow system, Light, Dark) applied immediately; default opening screen (Home, Library, Local books) on fresh start; Reduce motion/animations using immediate catalog jumps. Physical-device validation remains pending.
 - Data: downloads-over-cellular policy (Always, Never, Ask for confirmation); storage management with downloaded/cache sizes and a Clear cache action that never deletes downloaded books; background metadata/cover refresh network policy (Any network, Wi-Fi only, Disabled); confirmation before deleting a local copy.
 
 ## Checkpoints

@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,7 +74,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -89,6 +92,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,8 +100,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -119,7 +125,16 @@ import kotlinx.coroutines.withContext
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
+private enum class OptionsDialog { THEME, OPENING_SCREEN }
 private val BOOK_CARD_MIN_SIZE = 88.dp
+
+internal val LocalReduceMotion = staticCompositionLocalOf { false }
+
+private fun DefaultOpeningScreen.toBrowserDestination(): BrowserDestination = when (this) {
+    DefaultOpeningScreen.HOME -> BrowserDestination.HOME
+    DefaultOpeningScreen.LIBRARY -> BrowserDestination.LIBRARY
+    DefaultOpeningScreen.LOCAL_BOOKS -> BrowserDestination.LOCAL_BOOKS
+}
 
 private val LIBRARY_JUMP_LABELS = listOf('#') + ('A'..'Z').toList()
 
@@ -298,9 +313,13 @@ internal fun NativeLibraryBrowserScreen(
     onDismissMessage: () -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    appPreferences: AppPreferences = AppPreferences(),
+    onAppPreferencesChange: (AppPreferences) -> Unit = {}
 ) {
-    var destination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
+    var destination by rememberSaveable {
+        mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
+    }
     var query by rememberSaveable { mutableStateOf("") }
     var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
     var showMoreMenu by rememberSaveable { mutableStateOf(false) }
@@ -673,6 +692,8 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsUnread = onMarkAsUnread
                 )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
+                    preferences = appPreferences,
+                    onPreferencesChange = onAppPreferencesChange,
                     modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
@@ -1005,6 +1026,7 @@ private fun SeriesCatalogScreen(
     var showFilter by rememberSaveable(query, initialFilter) { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
+    val reduceMotion = LocalReduceMotion.current
 
     LaunchedEffect(query, filter) {
         isLoading = true
@@ -1091,7 +1113,13 @@ private fun SeriesCatalogScreen(
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
                 onJump = { index ->
-                    scope.launch { gridState.animateScrollToItem(index + 1) }
+                    scope.launch {
+                        if (reduceMotion) {
+                            gridState.scrollToItem(index + 1)
+                        } else {
+                            gridState.animateScrollToItem(index + 1)
+                        }
+                    }
                 }
             )
         }
@@ -1563,18 +1591,217 @@ private fun BookPosterCard(
 }
 
 @Composable
-private fun OptionsScreen(modifier: Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+internal fun OptionsScreen(
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp)
     ) {
-        OrbitEyebrow("Options")
-        Text("Options", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Reader and app options will appear here later.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        item(key = "options-intro") {
+            Column(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OrbitEyebrow("Options")
+                Text("Interface", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "Choose how Lagrange looks and responds.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        item(key = "lock-orientation") {
+            AppPreferenceSwitchRow(
+                title = "Lock orientation",
+                summary = "Keep the orientation currently in use",
+                checked = preferences.lockOrientation,
+                testTag = "options-lock-orientation",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(lockOrientation = it))
+                }
+            )
+        }
+        item(key = "haptic-feedback") {
+            AppPreferenceSwitchRow(
+                title = "Haptic feedback",
+                summary = "Use touch feedback for supported interactions",
+                checked = preferences.hapticFeedback,
+                testTag = "options-haptic-feedback",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(hapticFeedback = it))
+                }
+            )
+        }
+        item(key = "theme") {
+            AppPreferenceSelectionRow(
+                title = "Theme",
+                value = preferences.themeMode.displayName,
+                testTag = "options-theme",
+                onClick = { openDialog = OptionsDialog.THEME }
+            )
+        }
+        item(key = "opening-screen") {
+            AppPreferenceSelectionRow(
+                title = "Default opening screen",
+                value = preferences.defaultOpeningScreen.displayName,
+                summary = "Used the next time the app starts",
+                testTag = "options-opening-screen",
+                onClick = { openDialog = OptionsDialog.OPENING_SCREEN }
+            )
+        }
+        item(key = "reduce-motion") {
+            AppPreferenceSwitchRow(
+                title = "Reduce motion",
+                summary = "Use immediate catalog jumps instead of animated scrolling",
+                checked = preferences.reduceMotion,
+                testTag = "options-reduce-motion",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(reduceMotion = it))
+                }
+            )
+        }
+        item(key = "data-preview") {
+            Column(
+                modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OrbitEyebrow("Data")
+                Text("Data controls are next", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Download networks, storage, background refresh, and deletion confirmation will appear here.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
     }
+
+    when (openDialog) {
+        OptionsDialog.THEME -> AppPreferenceChoiceDialog(
+            title = "Theme",
+            choices = AppThemeMode.values().toList(),
+            selected = preferences.themeMode,
+            label = AppThemeMode::displayName,
+            onSelect = {
+                onPreferencesChange(preferences.copy(themeMode = it))
+                openDialog = null
+            },
+            onDismiss = { openDialog = null }
+        )
+        OptionsDialog.OPENING_SCREEN -> AppPreferenceChoiceDialog(
+            title = "Default opening screen",
+            choices = DefaultOpeningScreen.values().toList(),
+            selected = preferences.defaultOpeningScreen,
+            label = DefaultOpeningScreen::displayName,
+            onSelect = {
+                onPreferencesChange(preferences.copy(defaultOpeningScreen = it))
+                openDialog = null
+            },
+            onDismiss = { openDialog = null }
+        )
+        null -> Unit
+    }
+}
+
+@Composable
+private fun AppPreferenceSwitchRow(
+    title: String,
+    summary: String,
+    checked: Boolean,
+    testTag: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(summary) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = null
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag)
+            .clickable {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onCheckedChange(!checked)
+            }
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+@Composable
+private fun AppPreferenceSelectionRow(
+    title: String,
+    value: String,
+    testTag: String,
+    summary: String? = null,
+    onClick: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = {
+            Column {
+                Text(value, color = MaterialTheme.colorScheme.primary)
+                summary?.let { Text(it) }
+            }
+        },
+        trailingContent = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag)
+            .clickable {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+@Composable
+private fun <T> AppPreferenceChoiceDialog(
+    title: String,
+    choices: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                choices.forEach { choice ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(choice) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RadioButton(
+                            selected = choice == selected,
+                            onClick = { onSelect(choice) }
+                        )
+                        Text(label(choice), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
@@ -2335,6 +2562,7 @@ private fun LibraryBooks(
     val seriesBookCounts = remember(state.books) { collapsedSeriesBookCounts(state.books) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
+    val reduceMotion = LocalReduceMotion.current
     var pendingAnchor by remember(title) { mutableStateOf<LibraryGridAnchor?>(null) }
     val jumpSort = filter?.sort ?: BookSortOption.SERVER_DEFAULT
     val jumpTargets = remember(
@@ -2370,7 +2598,11 @@ private fun LibraryBooks(
                         book.seriesName == anchor.seriesKey))
         }
         if (targetIndex >= 0) {
-            gridState.animateScrollToItem(targetIndex + 1)
+            if (reduceMotion) {
+                gridState.scrollToItem(targetIndex + 1)
+            } else {
+                gridState.animateScrollToItem(targetIndex + 1)
+            }
         }
         pendingAnchor = null
     }
@@ -2504,7 +2736,11 @@ private fun LibraryBooks(
                     .padding(end = 4.dp, bottom = 12.dp),
                 onJump = { index ->
                     scope.launch {
-                        gridState.animateScrollToItem(index + 1)
+                        if (reduceMotion) {
+                            gridState.scrollToItem(index + 1)
+                        } else {
+                            gridState.animateScrollToItem(index + 1)
+                        }
                     }
                 }
             )

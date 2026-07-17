@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,6 +11,23 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+
+internal fun requestedOrientationForLock(enabled: Boolean): Int = if (enabled) {
+    ActivityInfo.SCREEN_ORIENTATION_LOCKED
+} else {
+    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+}
+
+private object DisabledHapticFeedback : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,6 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val graph = AppGraph(this)
+        val preferencesStore = AppPreferencesStore(this)
         splashScreen.setKeepOnScreenCondition {
             graph.coordinator.screen.value is AppScreen.Loading
         }
@@ -29,14 +48,33 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val screen by graph.coordinator.screen.collectAsState()
+            var appPreferences by remember { mutableStateOf(preferencesStore.read()) }
             LaunchedEffect(Unit) {
                 graph.coordinator.bootstrap()
             }
-            BookOrbitTheme {
-                BookOrbitApp(
-                    screen = screen,
-                    coordinator = graph.coordinator
-                )
+            LaunchedEffect(appPreferences.lockOrientation) {
+                requestedOrientation = requestedOrientationForLock(appPreferences.lockOrientation)
+            }
+            val platformHaptics = LocalHapticFeedback.current
+            CompositionLocalProvider(
+                LocalHapticFeedback provides if (appPreferences.hapticFeedback) {
+                    platformHaptics
+                } else {
+                    DisabledHapticFeedback
+                },
+                LocalReduceMotion provides appPreferences.reduceMotion
+            ) {
+                BookOrbitTheme(themeMode = appPreferences.themeMode) {
+                    BookOrbitApp(
+                        screen = screen,
+                        coordinator = graph.coordinator,
+                        appPreferences = appPreferences,
+                        onAppPreferencesChange = { updated ->
+                            preferencesStore.save(updated)
+                            appPreferences = updated
+                        }
+                    )
+                }
             }
         }
     }

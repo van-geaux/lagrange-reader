@@ -282,11 +282,11 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 
 Interface
 
-- [ ] Add a lock-orientation toggle.
-- [ ] Add a haptic-feedback option.
-- [ ] Add app theme selection: Light, Dark, or Follow system.
-- [ ] Add default opening screen selection: Home, Library, or Local books.
-- [ ] Add a Reduce motion/animations accessibility option.
+- [x] Add a lock-current-orientation toggle.
+- [x] Add a haptic-feedback toggle that suppresses supported haptics.
+- [x] Add app theme selection: Follow system, Light, or Dark, applied immediately.
+- [x] Add default opening screen selection: Home, Library, or Local books, applied on fresh app start.
+- [x] Add a Reduce motion/animations accessibility option using immediate catalog jumps.
 
 Data
 
