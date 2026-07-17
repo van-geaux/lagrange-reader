@@ -11,10 +11,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+
+private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
@@ -460,22 +465,36 @@ class AppCoordinator(
                     )
                 )
                 val failedLibraries = mutableListOf<String>()
-                libraries.filterNot { it.id == selectedLibrary }.forEach { library ->
-                    try {
-                        val refreshed = repository.refreshLibraryCatalog(library.id)
-                        homeBooks = homeBooks.replaceLibrary(library.id, refreshed.items)
-                        val current = lastBrowserState ?: return@forEach
-                        showBrowser(
-                            current.copy(
-                                homeBooks = mergeKnownProgress(homeBooks, null)
-                            )
-                        )
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: AuthenticationRequiredException) {
-                        throw error
-                    } catch (_: Throwable) {
-                        failedLibraries += library.name
+                val remainingLibraries = libraries.filterNot { it.id == selectedLibrary }
+                remainingLibraries.chunked(HOME_LIBRARY_REFRESH_CONCURRENCY).forEach { batch ->
+                    val outcomes = coroutineScope {
+                        batch.map { library ->
+                            async {
+                                try {
+                                    library to repository.refreshLibraryCatalog(library.id)
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: AuthenticationRequiredException) {
+                                    throw error
+                                } catch (_: Throwable) {
+                                    library to null
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                    outcomes.forEach { (library, refreshed) ->
+                        if (refreshed == null) {
+                            failedLibraries += library.name
+                        } else {
+                            homeBooks = homeBooks.replaceLibrary(library.id, refreshed.items)
+                            lastBrowserState?.let { current ->
+                                showBrowser(
+                                    current.copy(
+                                        homeBooks = mergeKnownProgress(homeBooks, null)
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
                 val current = lastBrowserState

@@ -164,6 +164,64 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `home refreshes nonselected libraries in bounded concurrent batches`() = runTest {
+        val additionalLibraries = (2..7).map { index ->
+            LibrarySummary(id = "lib-$index", name = "Library $index")
+        }
+        val allLibraries = listOf(library) + additionalLibraries
+        val gates = additionalLibraries.associate { it.id to CompletableDeferred<Unit>() }
+        val refreshedBooks = allLibraries.associate { currentLibrary ->
+            currentLibrary.id to LibraryBooksPage(
+                items = listOf(
+                    book.copy(
+                        libraryId = currentLibrary.id,
+                        id = "book-${currentLibrary.id}",
+                        fileId = "file-${currentLibrary.id}",
+                        title = "Book from ${currentLibrary.name}"
+                    )
+                ),
+                total = 1,
+                isComplete = true
+            )
+        }
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = allLibraries,
+            loadBooksResult = refreshedBooks.getValue(library.id).items,
+            refreshLibraryCatalogResults = refreshedBooks,
+            refreshLibraryCatalogGates = gates
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+
+        assertEquals(
+            listOf(library.id) + additionalLibraries.take(3).map { it.id },
+            repository.refreshedLibraryIds
+        )
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+        assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+
+        additionalLibraries.take(3).forEach { gates.getValue(it.id).complete(Unit) }
+        runCurrent()
+
+        assertEquals(
+            listOf(library.id) + additionalLibraries.take(6).map { it.id },
+            repository.refreshedLibraryIds
+        )
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+
+        additionalLibraries.drop(3).forEach { gates.getValue(it.id).complete(Unit) }
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(allLibraries.map { "book-${it.id}" }.toSet(), state.homeBooks.map { it.id }.toSet())
+        assertFalse(state.isRefreshing)
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+    }
+
+    @Test
     fun `load browser shows cached catalog before reconciling to the complete server result`() = runTest {
         val cachedBook = book.copy(title = "Cached title")
         val refreshedBook = book.copy(title = "Server title")
@@ -922,6 +980,7 @@ private class FakeBookOrbitDataSource(
     var refreshLibraryCatalogErrors: Map<String, Throwable> = emptyMap(),
     var refreshLibraryCatalogError: Throwable? = null,
     var refreshLibraryCatalogGate: CompletableDeferred<Unit>? = null,
+    var refreshLibraryCatalogGates: Map<String, CompletableDeferred<Unit>> = emptyMap(),
     var loadLibrariesError: Throwable? = null,
     var loadBooksError: Throwable? = null,
     var searchBooksError: Throwable? = null,
@@ -946,6 +1005,8 @@ private class FakeBookOrbitDataSource(
     val loginCalls = mutableListOf<Pair<String, String>>()
     val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
     val refreshedLibraryIds = mutableListOf<String>()
+    var activeLibraryRefreshes = 0
+    var maxConcurrentLibraryRefreshes = 0
 
     override suspend fun getServerUrl(): String? = serverUrl
 
@@ -999,14 +1060,21 @@ private class FakeBookOrbitDataSource(
     ): LibraryBooksPage {
         refreshedLibraryIds += libraryId
         refreshFirstPages += firstPage
-        refreshLibraryCatalogGate?.await()
-        refreshLibraryCatalogErrors[libraryId]?.let { throw it }
-        refreshLibraryCatalogError?.let { throw it }
-        return refreshLibraryCatalogResults[libraryId]
-            ?: refreshLibraryCatalogResult
-            ?: firstPage?.copy(isComplete = true)
-            ?: cachedLibraryCatalog?.copy(isComplete = true)
-            ?: LibraryBooksPage(isComplete = true)
+        activeLibraryRefreshes += 1
+        maxConcurrentLibraryRefreshes = maxOf(maxConcurrentLibraryRefreshes, activeLibraryRefreshes)
+        return try {
+            refreshLibraryCatalogGate?.await()
+            refreshLibraryCatalogGates[libraryId]?.await()
+            refreshLibraryCatalogErrors[libraryId]?.let { throw it }
+            refreshLibraryCatalogError?.let { throw it }
+            refreshLibraryCatalogResults[libraryId]
+                ?: refreshLibraryCatalogResult
+                ?: firstPage?.copy(isComplete = true)
+                ?: cachedLibraryCatalog?.copy(isComplete = true)
+                ?: LibraryBooksPage(isComplete = true)
+        } finally {
+            activeLibraryRefreshes -= 1
+        }
     }
 
     override suspend fun searchBooks(query: String): List<BookSummary> {
