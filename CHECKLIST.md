@@ -358,7 +358,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Add lock current orientation toggle
 - [x] Add haptic feedback toggle for supported interactions
-- [ ] Validate/fix haptic perceptibility and define consistent coverage beyond Options rows and supported long-press interactions
+- [x] Implement perceptible Android haptics for existing Compose requests with API-appropriate constants and immediate confirmation when enabled
+- [ ] Validate haptic perceptibility and system-setting behavior on a physical API 26-29 and API 30+ device
+- [ ] Define consistent haptic coverage beyond Options rows and supported Foundation long-press interactions
 - [x] Add app theme selection: Follow system, Light, or Dark
 - [x] Add default opening screen selection: Home, Library, or Local books
 - [x] Add Reduce motion/animations accessibility option for immediate catalog jumps

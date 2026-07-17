@@ -1,7 +1,10 @@
 package com.bookorbit.android
 
 import android.content.pm.ActivityInfo
+import android.os.Build
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -18,6 +21,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 
 internal fun requestedOrientationForLock(enabled: Boolean): Int = if (enabled) {
     ActivityInfo.SCREEN_ORIENTATION_LOCKED
@@ -27,6 +31,20 @@ internal fun requestedOrientationForLock(enabled: Boolean): Int = if (enabled) {
 
 private object DisabledHapticFeedback : HapticFeedback {
     override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
+
+internal fun hapticFeedbackConstantForSdk(sdkInt: Int): Int = if (sdkInt >= Build.VERSION_CODES.R) {
+    HapticFeedbackConstants.CONFIRM
+} else {
+    HapticFeedbackConstants.VIRTUAL_KEY
+}
+
+internal fun shouldConfirmHapticEnable(current: Boolean, updated: Boolean): Boolean = updated && !current
+
+private class PerceptibleHapticFeedback(private val view: View) : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+        view.performHapticFeedback(hapticFeedbackConstantForSdk(Build.VERSION.SDK_INT))
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -55,10 +73,11 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(appPreferences.lockOrientation) {
                 requestedOrientation = requestedOrientationForLock(appPreferences.lockOrientation)
             }
-            val platformHaptics = LocalHapticFeedback.current
+            val view = LocalView.current
+            val perceptibleHaptics = remember(view) { PerceptibleHapticFeedback(view) }
             CompositionLocalProvider(
                 LocalHapticFeedback provides if (appPreferences.hapticFeedback) {
-                    platformHaptics
+                    perceptibleHaptics
                 } else {
                     DisabledHapticFeedback
                 },
@@ -70,6 +89,9 @@ class MainActivity : ComponentActivity() {
                         coordinator = graph.coordinator,
                         appPreferences = appPreferences,
                         onAppPreferencesChange = { updated ->
+                            if (shouldConfirmHapticEnable(appPreferences.hapticFeedback, updated.hapticFeedback)) {
+                                perceptibleHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
                             val refreshPolicyChanged =
                                 updated.backgroundRefreshNetworkPolicy !=
                                     appPreferences.backgroundRefreshNetworkPolicy

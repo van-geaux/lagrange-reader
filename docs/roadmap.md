@@ -290,7 +290,7 @@ Validated on the target device:
 - [x] Storage accounting/cache clearing and delete-local confirmation.
 - [x] Layout-derived whole-book progress correctness.
 
-Haptic feedback was not perceptible. The current code explicitly requests haptics only for Options switch/selection rows and otherwise depends on Android/Foundation behavior for supported long-press interactions; ordinary navigation, book taps, and page turns do not request feedback. Keep haptics open for perceptibility fixes and a consistent coverage decision rather than treating the option as device-validated.
+The haptic perceptibility fix is implemented but not yet device-validated. While enabled, `MainActivity` supplies a custom provider that maps Compose requests to Android `HapticFeedbackConstants.CONFIRM` on API 30+ and `VIRTUAL_KEY` on API 26-29 through `View.performHapticFeedback`, so system haptic settings remain authoritative. Switching from off to on confirms immediately through the newly enabled provider; switching off receives the pre-change feedback and suppresses later requests. Existing coverage remains limited to Options switch/selection rows and supported Foundation long presses. Whether navigation, ordinary book taps, and page turns should also request haptics remains an open design decision.
 
 Implement next, in order:
 
@@ -303,6 +303,8 @@ Implement next, in order:
 7. [x] Replace the comic reader's visible buttons with a fullscreen fitted-image interaction model: left/right tap zones and horizontal swipes turn pages, center tap opens a dark rounded options sheet with title/page, Continue reading, Close book, and page slider, exposed-content tap or Android Back closes options first, and Android Back exits only when options are closed. Target-device validation passed.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
+
+The completed haptic-perceptibility step passes 181 JVM tests across 29 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. `HapticFeedbackTest` covers API mapping and the enable transition.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 
@@ -325,7 +327,8 @@ Data
 - [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current scheduled cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately. A separate scheduled metadata worker is not yet present.
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points.
 - [x] Validate lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, and delete-local confirmation on a physical device.
-- [ ] Validate haptic perceptibility/coverage, app theme, and background network policy on a physical device.
+- [ ] Validate the haptic perceptibility fix, app theme, and background network policy on a physical device.
+- [ ] Decide whether to extend haptic requests beyond Options rows and supported Foundation long presses.
 
 Detailed checkpoint status is tracked in:
 
