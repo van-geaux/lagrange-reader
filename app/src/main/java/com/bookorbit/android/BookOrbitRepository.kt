@@ -544,26 +544,38 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
-        val url = book.coverUrl?.let(::coverThumbnailUrl) ?: return@withContext null
-        val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
-        synchronized(coverCache) { coverCache[cacheIdentity] }?.let { return@withContext it }
         val serverUrl = getServerUrl().orEmpty()
-        coverCacheStore.read(serverUrl, book.id, cacheIdentity)?.let { bytes ->
-            if (bytes.isNotEmpty()) {
-                synchronized(coverCache) { coverCache[cacheIdentity] = bytes }
-                return@withContext bytes
+        val candidates = bookCoverCandidateUrls(book, serverUrl)
+        var lastFailure: Throwable? = null
+        candidates.forEach { url ->
+            val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
+            synchronized(coverCache) { coverCache[cacheIdentity] }?.let { return@withContext it }
+            coverCacheStore.read(serverUrl, book.id, cacheIdentity)?.let { bytes ->
+                if (bytes.isNotEmpty()) {
+                    synchronized(coverCache) { coverCache[cacheIdentity] = bytes }
+                    return@withContext bytes
+                }
             }
-        }
-        val bytes = requestBytes(url)
-        if (bytes.isEmpty()) return@withContext null
-        coverCacheStore.save(serverUrl, book.id, cacheIdentity, bytes)
-        synchronized(coverCache) {
-            coverCache[cacheIdentity] = bytes
-            while (coverCache.size > 32) {
-                coverCache.remove(coverCache.entries.first().key)
+            val bytes = try {
+                requestBytes(url)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                lastFailure = error
+                return@forEach
             }
+            if (bytes.isEmpty()) return@forEach
+            coverCacheStore.save(serverUrl, book.id, cacheIdentity, bytes)
+            synchronized(coverCache) {
+                coverCache[cacheIdentity] = bytes
+                while (coverCache.size > 32) {
+                    coverCache.remove(coverCache.entries.first().key)
+                }
+            }
+            return@withContext bytes
         }
-        bytes
+        lastFailure?.let { throw it }
+        null
     }
 
     internal suspend fun warmCoverCacheBatch(
@@ -2484,6 +2496,20 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
     } else {
         coverUrl
     }
+}
+
+internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List<String> {
+    return buildList {
+        book.coverUrl
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::coverThumbnailUrl)
+            ?.let(::add)
+        serverBase
+            .trim()
+            .trimEnd('/')
+            .takeIf { it.isNotBlank() }
+            ?.let { add("$it/api/v1/books/${book.id}/thumbnail") }
+    }.distinct()
 }
 
 internal fun coverCacheIdentity(url: String, updatedAtMillis: Long?): String {

@@ -139,6 +139,56 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `book cover candidates recover missing metadata through the standard endpoint`() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Your Name."
+        )
+
+        assertEquals(
+            listOf("https://example.test/api/v1/books/book-1/thumbnail"),
+            bookCoverCandidateUrls(book, "https://example.test/")
+        )
+    }
+
+    @Test
+    fun `book cover candidates try explicit metadata before the standard endpoint`() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Book",
+            coverUrl = "https://cdn.example.test/stale-cover.jpg"
+        )
+
+        assertEquals(
+            listOf(
+                "https://cdn.example.test/stale-cover.jpg",
+                "https://example.test/api/v1/books/book-1/thumbnail"
+            ),
+            bookCoverCandidateUrls(book, "https://example.test")
+        )
+    }
+
+    @Test
+    fun `book cover candidates do not duplicate canonical metadata`() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Book",
+            coverUrl = "https://example.test/api/v1/books/book-1/cover"
+        )
+
+        assertEquals(
+            listOf("https://example.test/api/v1/books/book-1/thumbnail"),
+            bookCoverCandidateUrls(book, "https://example.test")
+        )
+    }
+
+    @Test
     fun `cover cache identity changes with the catalog version`() {
         val url = "https://example.test/api/v1/books/book-1/thumbnail"
 
