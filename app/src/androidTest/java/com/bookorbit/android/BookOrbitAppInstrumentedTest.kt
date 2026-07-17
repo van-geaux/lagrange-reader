@@ -457,6 +457,89 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun optionsExposeDataPoliciesAndSafeCacheClearing() {
+        val preferences = mutableStateOf(AppPreferences())
+        var clearCount = 0
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(
+                    preferences = preferences.value,
+                    onPreferencesChange = { preferences.value = it },
+                    storageUsageLoader = {
+                        StorageUsage(downloadedBytes = 10L * 1024L, cacheBytes = 2L * 1024L)
+                    },
+                    onClearCache = { clearCount += 1 }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("options-cellular-downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Never").performClick()
+        composeRule.runOnIdle {
+            assertEquals(CellularDownloadPolicy.NEVER, preferences.value.cellularDownloadPolicy)
+        }
+
+        composeRule.onNodeWithTag("options-storage").performScrollTo()
+        composeRule.onNodeWithText("Downloads 10 KB · Cache 2.0 KB").assertIsDisplayed()
+        composeRule.onNodeWithTag("options-clear-cache").performClick()
+        composeRule.onNodeWithText("Downloaded books are kept.", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("confirm-clear-cache").performClick()
+        composeRule.waitUntil { clearCount == 1 }
+
+        composeRule.onNodeWithTag("options-background-refresh").performScrollTo().performClick()
+        composeRule.onNodeWithText("Disabled").performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                BackgroundRefreshNetworkPolicy.DISABLED,
+                preferences.value.backgroundRefreshNetworkPolicy
+            )
+        }
+
+        composeRule.onNodeWithTag("options-confirm-local-delete").performScrollTo().performClick()
+        composeRule.runOnIdle { assertEquals(false, preferences.value.confirmDeleteLocalCopy) }
+    }
+
+    @Test
+    fun browserConfirmsBeforeDeletingDownloadedLocalCopy() {
+        val downloadedBook = BookSummary(
+            libraryId = "lib-1",
+            id = "book-delete-confirm",
+            fileId = "file-delete-confirm",
+            title = "Keep My Download",
+            mediaKind = MediaKind.EPUB,
+            localPath = "/downloads/keep-my-download.epub"
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            bookDetailResult = BookDetailInfo(downloadedBook)
+        }
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(downloadedBook)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main),
+                    appPreferences = AppPreferences(confirmDeleteLocalCopy = true)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Browse").performClick()
+        composeRule.onNodeWithText("Keep My Download").performClick()
+        composeRule.onNodeWithContentDescription("Delete local").performClick()
+        composeRule.onNodeWithText("Delete local copy?").assertIsDisplayed()
+        composeRule.runOnIdle { assertTrue(dataSource.deletedLocalBooks.isEmpty()) }
+        composeRule.onNodeWithTag("confirm-delete-local-copy").performClick()
+        composeRule.waitUntil { dataSource.deletedLocalBooks == listOf(downloadedBook) }
+    }
+
+    @Test
     fun searchResultListRowExposesBookActionsFromOverflowAndLongPress() {
         val searchBook = BookSummary(
             libraryId = "lib-1",
@@ -721,6 +804,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val savedServerUrls = mutableListOf<String>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
+    val deletedLocalBooks = mutableListOf<BookSummary>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     var searchBooksResult: List<BookSummary> = emptyList()
@@ -770,7 +854,9 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     }
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
     override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = File("unused")
-    override suspend fun deleteLocalCopy(book: BookSummary) = Unit
+    override suspend fun deleteLocalCopy(book: BookSummary) {
+        deletedLocalBooks += book
+    }
     override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = Unit
     override suspend fun pendingProgressCount(): Int = 0
     override suspend fun syncPendingProgress(): SyncAttemptResult = SyncAttemptResult.Success

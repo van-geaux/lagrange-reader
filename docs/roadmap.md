@@ -290,10 +290,11 @@ Interface
 
 Data
 
-- [ ] Add a downloads-over-cellular policy: Always, Never, or Ask for confirmation.
-- [ ] Add storage management showing downloaded/cache sizes and a Clear cache action; Clear cache must not delete downloaded books.
-- [ ] Add a background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled.
-- [ ] Add confirmation before deleting a local copy.
+- [x] Add downloads-over-cellular policy: Always, Never, or Ask for confirmation, with browser-wide start/prompt/block behavior and metered non-Wi-Fi treated as cellular.
+- [x] Add storage management showing downloaded/disposable-cache sizes and a confirmed Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data.
+- [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current scheduled cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately. A separate scheduled metadata worker is not yet present.
+- [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points.
+- [ ] Validate network policy, storage accounting/cache clearing, and delete confirmation on a physical device.
 
 Detailed checkpoint status is tracked in:
 

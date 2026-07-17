@@ -17,6 +17,12 @@ class CoverCacheWarmWorker(
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (
+            AppPreferencesStore(applicationContext).read().backgroundRefreshNetworkPolicy ==
+            BackgroundRefreshNetworkPolicy.DISABLED
+        ) {
+            return Result.success()
+        }
         val serverUrl = inputData.getString(KEY_SERVER_URL).orEmpty()
         val libraryId = inputData.getString(KEY_LIBRARY_ID).orEmpty()
         val startIndex = inputData.getInt(KEY_START_INDEX, 0)
@@ -56,10 +62,15 @@ class CoverCacheWarmWorker(
         private const val DOWNLOADS_PER_BATCH = 50
 
         fun enqueue(context: Context, serverUrl: String, libraryId: String) {
+            val request = request(context, serverUrl, libraryId, startIndex = 0, initial = true)
+            if (request == null) {
+                cancelAll(context)
+                return
+            }
             WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME,
                 ExistingWorkPolicy.REPLACE,
-                request(serverUrl, libraryId, startIndex = 0, initial = true)
+                request
             )
         }
 
@@ -73,36 +84,51 @@ class CoverCacheWarmWorker(
             libraryId: String,
             startIndex: Int
         ) {
+            val request = request(context, serverUrl, libraryId, startIndex, initial = false)
+                ?: return
             WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME,
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
-                request(serverUrl, libraryId, startIndex, initial = false)
+                request
             )
         }
 
         private fun request(
+            context: Context,
             serverUrl: String,
             libraryId: String,
             startIndex: Int,
             initial: Boolean
-        ) = OneTimeWorkRequestBuilder<CoverCacheWarmWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.UNMETERED)
-                    .build()
-            )
-            .setInputData(
-                workDataOf(
-                    KEY_SERVER_URL to serverUrl,
-                    KEY_LIBRARY_ID to libraryId,
-                    KEY_START_INDEX to startIndex
+        ) = backgroundRefreshNetworkType(
+            AppPreferencesStore(context).read().backgroundRefreshNetworkPolicy
+        )?.let { networkType ->
+            OneTimeWorkRequestBuilder<CoverCacheWarmWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(networkType)
+                        .build()
                 )
-            )
-            .addTag(TAG)
-            .apply {
-                if (initial) setInitialDelay(5, TimeUnit.SECONDS)
-            }
-            .build()
+                .setInputData(
+                    workDataOf(
+                        KEY_SERVER_URL to serverUrl,
+                        KEY_LIBRARY_ID to libraryId,
+                        KEY_START_INDEX to startIndex
+                    )
+                )
+                .addTag(TAG)
+                .apply {
+                    if (initial) setInitialDelay(5, TimeUnit.SECONDS)
+                }
+                .build()
+        }
 
     }
+}
+
+internal fun backgroundRefreshNetworkType(
+    policy: BackgroundRefreshNetworkPolicy
+): NetworkType? = when (policy) {
+    BackgroundRefreshNetworkPolicy.ANY_NETWORK -> NetworkType.CONNECTED
+    BackgroundRefreshNetworkPolicy.WIFI_ONLY -> NetworkType.UNMETERED
+    BackgroundRefreshNetworkPolicy.DISABLED -> null
 }

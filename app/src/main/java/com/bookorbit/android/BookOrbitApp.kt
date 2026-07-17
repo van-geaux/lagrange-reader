@@ -149,7 +149,9 @@ fun BookOrbitApp(
             onMarkAsRead = coordinator::markBookAsRead,
             onMarkAsUnread = coordinator::markBookAsUnread,
             appPreferences = appPreferences,
-            onAppPreferencesChange = onAppPreferencesChange
+            onAppPreferencesChange = onAppPreferencesChange,
+            storageUsageLoader = coordinator::loadStorageUsage,
+            onClearCache = coordinator::clearAppCache
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,

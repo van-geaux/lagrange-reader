@@ -351,10 +351,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Data
 
-- [ ] Add downloads-over-cellular policy: Always, Never, or Ask for confirmation
-- [ ] Add storage management showing downloaded/cache sizes and a Clear cache action; Clear cache must not delete downloaded books
-- [ ] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled
-- [ ] Add confirmation before deleting a local copy
+- [x] Add downloads-over-cellular policy: Always, Never, or Ask for confirmation, with browser-wide start/prompt/block behavior
+- [x] Add storage management showing downloaded/cache sizes and a Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data
+- [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately
+- [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points
+- [ ] Validate cellular/network policy, storage accounting/cache clearing, and delete confirmation on a physical device
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 

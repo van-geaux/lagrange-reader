@@ -103,6 +103,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -125,7 +126,13 @@ import kotlinx.coroutines.withContext
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
-private enum class OptionsDialog { THEME, OPENING_SCREEN }
+private enum class OptionsDialog {
+    THEME,
+    OPENING_SCREEN,
+    CELLULAR_DOWNLOADS,
+    BACKGROUND_REFRESH,
+    CLEAR_CACHE
+}
 private val BOOK_CARD_MIN_SIZE = 88.dp
 
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
@@ -315,8 +322,11 @@ internal fun NativeLibraryBrowserScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     appPreferences: AppPreferences = AppPreferences(),
-    onAppPreferencesChange: (AppPreferences) -> Unit = {}
+    onAppPreferencesChange: (AppPreferences) -> Unit = {},
+    storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
+    onClearCache: suspend () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
     }
@@ -334,6 +344,28 @@ internal fun NativeLibraryBrowserScreen(
     var genreSourceBook by remember { mutableStateOf<BookSummary?>(null) }
     var genreSourceSeriesKey by remember { mutableStateOf<String?>(null) }
     var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
+    var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
+    var showCellularDownloadBlocked by remember { mutableStateOf(false) }
+    var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
+    val requestDownload: (BookSummary) -> Unit = { book ->
+        when (
+            cellularDownloadDecision(
+                policy = appPreferences.cellularDownloadPolicy,
+                isCellularOrMetered = context.isActiveCellularOrMeteredNetwork()
+            )
+        ) {
+            CellularDownloadDecision.START -> onDownload(book)
+            CellularDownloadDecision.ASK -> pendingCellularDownload = book
+            CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
+        }
+    }
+    val requestLocalDelete: (BookSummary) -> Unit = { book ->
+        if (appPreferences.confirmDeleteLocalCopy) {
+            pendingLocalDelete = book
+        } else {
+            onDeleteLocalCopy(book)
+        }
+    }
     val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
         value = null
         if (query.isNotBlank()) {
@@ -412,6 +444,52 @@ internal fun NativeLibraryBrowserScreen(
                 }
             )
         }
+    }
+
+    pendingCellularDownload?.let { book ->
+        AlertDialog(
+            onDismissRequest = { pendingCellularDownload = null },
+            title = { Text("Download using cellular data?") },
+            text = { Text("Downloading ${book.title} may use a significant amount of mobile data.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingCellularDownload = null
+                    onDownload(book)
+                }) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCellularDownload = null }) { Text("Cancel") }
+            }
+        )
+    }
+    if (showCellularDownloadBlocked) {
+        AlertDialog(
+            onDismissRequest = { showCellularDownloadBlocked = false },
+            title = { Text("Cellular downloads are disabled") },
+            text = { Text("Change Downloads over cellular in Options to download on this network.") },
+            confirmButton = {
+                TextButton(onClick = { showCellularDownloadBlocked = false }) { Text("OK") }
+            }
+        )
+    }
+    pendingLocalDelete?.let { book ->
+        AlertDialog(
+            onDismissRequest = { pendingLocalDelete = null },
+            title = { Text("Delete local copy?") },
+            text = { Text("${book.title} will be removed from this device. Your BookOrbit book is not deleted.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingLocalDelete = null
+                        onDeleteLocalCopy(book)
+                    },
+                    modifier = Modifier.testTag("confirm-delete-local-copy")
+                ) { Text("Delete local") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLocalDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 
     Scaffold(
@@ -585,9 +663,9 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = destination
                         selectedBook = book
                     },
-                    onDownload = onDownload,
+                    onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -623,9 +701,9 @@ internal fun NativeLibraryBrowserScreen(
                     detailLoader = bookDetailLoader,
                     onRead = onBookOpen,
                     onPreview = onPreview,
-                    onDownload = onDownload,
+                    onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
@@ -694,6 +772,8 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
                     onPreferencesChange = onAppPreferencesChange,
+                    storageUsageLoader = storageUsageLoader,
+                    onClearCache = onClearCache,
                     modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
@@ -711,9 +791,9 @@ internal fun NativeLibraryBrowserScreen(
                         query = ""
                         selectedBook = book
                     },
-                    onDownload = onDownload,
+                    onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
-                    onDeleteLocalCopy = onDeleteLocalCopy,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -1594,9 +1674,18 @@ private fun BookPosterCard(
 internal fun OptionsScreen(
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
+    storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
+    onClearCache: suspend () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
+    var storageRefreshKey by rememberSaveable { mutableStateOf(0) }
+    var isClearingCache by remember { mutableStateOf(false) }
+    var storageMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
+        value = runCatching { storageUsageLoader() }.getOrNull()
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1666,19 +1755,84 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "data-preview") {
+        item(key = "data-heading") {
             Column(
                 modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OrbitEyebrow("Data")
-                Text("Data controls are next", style = MaterialTheme.typography.titleMedium)
+                Text("Network and storage", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Download networks, storage, background refresh, and deletion confirmation will appear here.",
+                    "Control automatic network use and local files.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
+        }
+        item(key = "cellular-downloads") {
+            AppPreferenceSelectionRow(
+                title = "Downloads over cellular",
+                value = preferences.cellularDownloadPolicy.displayName,
+                summary = "Metered non-Wi-Fi networks are treated as cellular",
+                testTag = "options-cellular-downloads",
+                onClick = { openDialog = OptionsDialog.CELLULAR_DOWNLOADS }
+            )
+        }
+        item(key = "storage") {
+            ListItem(
+                headlineContent = { Text("Storage") },
+                supportingContent = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            storageUsage?.let {
+                                "Downloads ${formatByteSize(it.downloadedBytes)} · Cache ${formatByteSize(it.cacheBytes)}"
+                            } ?: "Calculating storage use…"
+                        )
+                        storageMessage?.let {
+                            Text(
+                                it,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(
+                            "Clear cache never deletes downloaded books",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                },
+                trailingContent = {
+                    TextButton(
+                        onClick = { openDialog = OptionsDialog.CLEAR_CACHE },
+                        enabled = !isClearingCache,
+                        modifier = Modifier.testTag("options-clear-cache")
+                    ) {
+                        Text(if (isClearingCache) "Clearing…" else "Clear cache")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().testTag("options-storage")
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        item(key = "background-refresh") {
+            AppPreferenceSelectionRow(
+                title = "Background metadata and covers",
+                value = preferences.backgroundRefreshNetworkPolicy.displayName,
+                summary = "Manual refresh remains available on any network",
+                testTag = "options-background-refresh",
+                onClick = { openDialog = OptionsDialog.BACKGROUND_REFRESH }
+            )
+        }
+        item(key = "confirm-local-delete") {
+            AppPreferenceSwitchRow(
+                title = "Confirm before deleting local copy",
+                summary = "Ask before removing a downloaded file from this device",
+                checked = preferences.confirmDeleteLocalCopy,
+                testTag = "options-confirm-local-delete",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(confirmDeleteLocalCopy = it))
+                }
+            )
         }
     }
 
@@ -1704,6 +1858,55 @@ internal fun OptionsScreen(
                 openDialog = null
             },
             onDismiss = { openDialog = null }
+        )
+        OptionsDialog.CELLULAR_DOWNLOADS -> AppPreferenceChoiceDialog(
+            title = "Downloads over cellular",
+            choices = CellularDownloadPolicy.values().toList(),
+            selected = preferences.cellularDownloadPolicy,
+            label = CellularDownloadPolicy::displayName,
+            onSelect = {
+                onPreferencesChange(preferences.copy(cellularDownloadPolicy = it))
+                openDialog = null
+            },
+            onDismiss = { openDialog = null }
+        )
+        OptionsDialog.BACKGROUND_REFRESH -> AppPreferenceChoiceDialog(
+            title = "Background metadata and covers",
+            choices = BackgroundRefreshNetworkPolicy.values().toList(),
+            selected = preferences.backgroundRefreshNetworkPolicy,
+            label = BackgroundRefreshNetworkPolicy::displayName,
+            onSelect = {
+                onPreferencesChange(preferences.copy(backgroundRefreshNetworkPolicy = it))
+                openDialog = null
+            },
+            onDismiss = { openDialog = null }
+        )
+        OptionsDialog.CLEAR_CACHE -> AlertDialog(
+            onDismissRequest = { openDialog = null },
+            title = { Text("Clear cache?") },
+            text = { Text("Cached covers and temporary reader files will be removed. Downloaded books are kept.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        openDialog = null
+                        isClearingCache = true
+                        storageMessage = null
+                        scope.launch {
+                            runCatching { onClearCache() }
+                                .onSuccess {
+                                    storageMessage = "Cache cleared"
+                                    storageRefreshKey += 1
+                                }
+                                .onFailure { storageMessage = "Unable to clear cache" }
+                            isClearingCache = false
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm-clear-cache")
+                ) { Text("Clear cache") }
+            },
+            dismissButton = {
+                TextButton(onClick = { openDialog = null }) { Text("Cancel") }
+            }
         )
         null -> Unit
     }

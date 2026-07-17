@@ -70,8 +70,14 @@ class MainActivity : ComponentActivity() {
                         coordinator = graph.coordinator,
                         appPreferences = appPreferences,
                         onAppPreferencesChange = { updated ->
+                            val refreshPolicyChanged =
+                                updated.backgroundRefreshNetworkPolicy !=
+                                    appPreferences.backgroundRefreshNetworkPolicy
                             preferencesStore.save(updated)
                             appPreferences = updated
+                            if (refreshPolicyChanged) {
+                                graph.coordinator.reconfigureBackgroundRefresh()
+                            }
                         }
                     )
                 }

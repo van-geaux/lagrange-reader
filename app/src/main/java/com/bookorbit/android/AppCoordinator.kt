@@ -77,6 +77,16 @@ class AppCoordinator(
         repository.loadCatalogImage(url)
     }
 
+    suspend fun loadStorageUsage(): StorageUsage = repository.loadStorageUsage()
+
+    suspend fun clearAppCache() {
+        repository.clearAppCache()
+    }
+
+    fun reconfigureBackgroundRefresh() {
+        scope.launch { repository.reconfigureBackgroundRefresh() }
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()

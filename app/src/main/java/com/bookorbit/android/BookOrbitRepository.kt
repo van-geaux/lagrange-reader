@@ -140,6 +140,9 @@ interface BookOrbitDataSource {
     suspend fun resetBookReadingState(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
     suspend fun deleteLocalCopy(book: BookSummary)
+    suspend fun loadStorageUsage(): StorageUsage = StorageUsage()
+    suspend fun clearAppCache() = Unit
+    suspend fun reconfigureBackgroundRefresh() = Unit
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
     suspend fun pendingProgressCount(): Int
     suspend fun syncPendingProgress(): SyncAttemptResult
@@ -158,6 +161,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val activeReaderStore = ActiveReaderStore(context)
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
+    private val appStorageManager = AppStorageManager(context)
     private val coverCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
@@ -923,6 +927,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             throw UserFacingException("Unable to remove the local copy for this title.")
         }
         bookDetailCacheStore.remove(serverUrl, book.id, fileId)
+    }
+
+    override suspend fun loadStorageUsage(): StorageUsage = appStorageManager.usage()
+
+    override suspend fun clearAppCache() = withContext(Dispatchers.IO) {
+        synchronized(coverCache) { coverCache.clear() }
+        coverCacheStore.clear()
+        appStorageManager.clearDisposableCache()
+    }
+
+    override suspend fun reconfigureBackgroundRefresh() {
+        CoverCacheWarmWorker.cancelAll(context)
+        val serverUrl = getServerUrl().orEmpty()
+        val libraryId = getSelectedLibraryId().orEmpty()
+        if (serverUrl.isNotBlank() && libraryId.isNotBlank()) {
+            CoverCacheWarmWorker.enqueue(context, serverUrl, libraryId)
+        }
     }
 
     override suspend fun queueProgress(

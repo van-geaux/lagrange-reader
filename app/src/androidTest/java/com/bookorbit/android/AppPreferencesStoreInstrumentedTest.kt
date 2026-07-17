@@ -18,7 +18,10 @@ class AppPreferencesStoreInstrumentedTest {
             hapticFeedback = false,
             themeMode = AppThemeMode.DARK,
             defaultOpeningScreen = DefaultOpeningScreen.LOCAL_BOOKS,
-            reduceMotion = true
+            reduceMotion = true,
+            cellularDownloadPolicy = CellularDownloadPolicy.ALWAYS,
+            backgroundRefreshNetworkPolicy = BackgroundRefreshNetworkPolicy.DISABLED,
+            confirmDeleteLocalCopy = false
         )
 
         try {
