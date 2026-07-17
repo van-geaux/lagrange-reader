@@ -96,6 +96,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add comic/CBZ reader support if BookOrbit exposes comic files
 - [x] Fix the manga unsupported-format regression by recognizing bare CBZ/CBR/CB7 format tokens and routing them to the comic reader
 - [x] Support authenticated server-page reading for CBZ/CBR/CB7 and offline extraction for local ZIP comics, including mislabeled ZIP archives
+- [ ] Give the comic reader the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes change pages, center tap opens reader options, exposed-content tap or Back dismisses options first, and Back exits only when options are closed
 - [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
 - [ ] Validate online CBZ/CBR/CB7 reading, offline ZIP/CBZ reading, page navigation, and progress on a physical device/server
 - [x] Add proper in-reader loading/error states
@@ -348,7 +349,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
-- [ ] Checkpoint 5: device-validate online CBZ/CBR/CB7 and offline ZIP/CBZ reading; consider optional offline RAR/7z extraction, and refine audiobook/PDF readers when representative samples are available
+- [ ] Checkpoint 5: implement and device-validate novel-style fullscreen comic interactions for online CBZ/CBR/CB7 and offline ZIP/CBZ reading; consider optional offline RAR/7z extraction, and refine audiobook/PDF readers when representative samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
 
 ## Options backlog
