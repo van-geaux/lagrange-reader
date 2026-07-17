@@ -35,12 +35,15 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                     chapterTitles = listOf("Chapter One", "Chapter Two"),
                     currentChapter = 0,
                     showChapterPicker = false,
+                    currentPage = 2,
+                    currentPageCount = 4,
                     padding = EpubPaddingPercentages(),
                     fontScale = 1f,
                     onContinueReading = { continueCount.intValue++ },
                     onCloseBook = { closeBookCount.intValue++ },
                     onToggleChapterPicker = {},
                     onChapterSelected = {},
+                    onPageSelected = {},
                     onThemeSelected = {},
                     onPaddingChange = {},
                     onPaddingChangeFinished = {},
@@ -54,6 +57,9 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onAllNodesWithText("Continue reading").assertCountEquals(1)
         composeRule.onAllNodesWithText("Close book").assertCountEquals(1)
         composeRule.onNodeWithText("Reader options").assertIsDisplayed()
+        composeRule.onNodeWithText("Choose chapter").assertIsDisplayed()
+        composeRule.onNodeWithText("Page 3 of 4").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Chapter page 3 of 4").assertIsDisplayed()
         composeRule.onNodeWithText("Continue reading").performClick()
         composeRule.onNodeWithText("Close book").performClick()
         composeRule

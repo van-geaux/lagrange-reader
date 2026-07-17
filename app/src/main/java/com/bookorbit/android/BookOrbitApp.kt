@@ -1283,6 +1283,7 @@ private fun EpubReaderView(
             else -> Unit
         }
     }
+    val readerWebView = remember(file) { arrayOfNulls<WebView>(1) }
 
     LaunchedEffect(paddingDraft) {
         delay(180)
@@ -1389,7 +1390,7 @@ private fun EpubReaderView(
                         ),
                         EPUB_READER_BRIDGE
                     )
-                }
+                }.also { readerWebView[0] = it }
             },
             update = { webView ->
                 val chapter = currentChapterState
@@ -1427,6 +1428,12 @@ private fun EpubReaderView(
                         null
                     )
                 }
+            },
+            onRelease = { webView ->
+                if (readerWebView[0] === webView) readerWebView[0] = null
+                webView.removeJavascriptInterface(EPUB_READER_BRIDGE)
+                webView.stopLoading()
+                webView.destroy()
             }
         )
 
@@ -1439,6 +1446,8 @@ private fun EpubReaderView(
                 chapterTitles = chapterTitles,
                 currentChapter = currentChapter,
                 showChapterPicker = showChapterPicker,
+                currentPage = currentPage,
+                currentPageCount = currentPageCount,
                 padding = paddingDraft,
                 fontScale = fontScale,
                 onContinueReading = dismissControls,
@@ -1451,6 +1460,11 @@ private fun EpubReaderView(
                     openChapterAtEnd = false
                     currentChapter = index
                     showChapterPicker = false
+                },
+                onPageSelected = { pageIndex ->
+                    val target = pageIndex.coerceIn(0, (currentPageCount - 1).coerceAtLeast(0))
+                    currentPage = target
+                    readerWebView[0]?.evaluateJavascript(epubPageJumpJavascript(target), null)
                 },
                 onThemeSelected = { theme ->
                     selectedTheme = theme
@@ -1646,12 +1660,15 @@ internal fun EpubReaderOptionsBottomSheet(
     chapterTitles: List<String>,
     currentChapter: Int,
     showChapterPicker: Boolean,
+    currentPage: Int,
+    currentPageCount: Int,
     padding: EpubPaddingPercentages,
     fontScale: Float,
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     onToggleChapterPicker: () -> Unit,
     onChapterSelected: (Int) -> Unit,
+    onPageSelected: (Int) -> Unit,
     onThemeSelected: (EpubReaderTheme) -> Unit,
     onPaddingChange: (EpubPaddingPercentages) -> Unit,
     onPaddingChangeFinished: () -> Unit,
@@ -1782,6 +1799,11 @@ internal fun EpubReaderOptionsBottomSheet(
                             }
                         }
                     }
+                    EpubChapterPageSlider(
+                        pageIndex = currentPage,
+                        pageCount = currentPageCount,
+                        onPageSelected = onPageSelected
+                    )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Appearance", style = MaterialTheme.typography.titleMedium)
@@ -1844,6 +1866,36 @@ internal fun EpubReaderOptionsBottomSheet(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun EpubChapterPageSlider(
+    pageIndex: Int,
+    pageCount: Int,
+    onPageSelected: (Int) -> Unit
+) {
+    val safePageCount = pageCount.coerceAtLeast(1)
+    val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            "Page ${safePageIndex + 1} of $safePageCount",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Slider(
+            value = safePageIndex.toFloat(),
+            onValueChange = { value ->
+                val target = value.roundToInt().coerceIn(0, safePageCount - 1)
+                if (target != safePageIndex) onPageSelected(target)
+            },
+            valueRange = 0f..(safePageCount - 1).coerceAtLeast(1).toFloat(),
+            enabled = safePageCount > 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = "Chapter page ${safePageIndex + 1} of $safePageCount"
+                }
+        )
     }
 }
 
@@ -2661,7 +2713,19 @@ internal fun styleEpubHtml(
             applyPageGeometry();
             if (strip && initialized) repaginateFromOffset(contentOffset);
           };
-          window.BookOrbitReaderLayout = Object.freeze({ setInsets, refresh: repaginate });
+          const jumpToPage = (next) => {
+            const target = Number(next);
+            if (!Number.isFinite(target)) return;
+            pinToEnd = false;
+            page = Math.min(Math.max(0, Math.round(target)), pageCount() - 1);
+            renderPage();
+            publish();
+          };
+          window.BookOrbitReaderLayout = Object.freeze({
+            setInsets,
+            refresh: repaginate,
+            goToPage: jumpToPage
+          });
           window.addEventListener('load', () => {
             strip = document.createElement('main');
             strip.id = 'bookorbit-page-strip';
@@ -2736,6 +2800,11 @@ internal fun epubPaddingUpdateJavascript(padding: EpubPaddingPercentages): Strin
         "${formatEpubCssPercent(topInset)}, ${formatEpubCssPercent(bottomInset)}, " +
         "${formatEpubCssPercent(leftInset)}, ${formatEpubCssPercent(rightInset)}); " +
         "window.BookOrbitReaderLayout.refresh(); }"
+}
+
+internal fun epubPageJumpJavascript(pageIndex: Int): String {
+    return "if (window.BookOrbitReaderLayout) { " +
+        "window.BookOrbitReaderLayout.goToPage(${pageIndex.coerceAtLeast(0)}); }"
 }
 
 private fun formatEpubFontScale(fontScale: Float): String {

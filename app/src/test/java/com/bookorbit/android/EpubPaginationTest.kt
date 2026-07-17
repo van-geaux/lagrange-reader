@@ -56,6 +56,21 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
         assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
         assertTrue(rendered.contains("window.BookOrbitReaderLayout = Object.freeze"))
+        assertTrue(rendered.contains("goToPage: jumpToPage"))
+    }
+
+    @Test
+    fun `epub page jump command stays within the current chapter`() {
+        val rendered = styleEpubHtml(
+            html = "<p>Readable chapter text</p>",
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1f,
+            startAtEnd = false
+        )
+
+        assertTrue(rendered.contains("page = Math.min(Math.max(0, Math.round(target)), pageCount() - 1)"))
+        assertTrue(epubPageJumpJavascript(7).contains("goToPage(7)"))
+        assertTrue(epubPageJumpJavascript(-4).contains("goToPage(0)"))
     }
 
     @Test

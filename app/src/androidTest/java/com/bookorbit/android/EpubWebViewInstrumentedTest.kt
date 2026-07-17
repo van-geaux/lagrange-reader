@@ -154,6 +154,63 @@ class EpubWebViewInstrumentedTest {
         assertTrue(measuredChapter.get() == 7)
     }
 
+    @Test
+    fun pageJumpApiMovesWithinTheCurrentChapter() {
+        val loaded = CountDownLatch(1)
+        val jumped = CountDownLatch(1)
+        lateinit var webView: WebView
+        val chapter = (1..160).joinToString(separator = "") { index ->
+            "<p>Jump target paragraph $index with enough text to span several pages.</p>"
+        }
+
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        addJavascriptInterface(
+                            TestReaderBridge { page, count ->
+                                if (page == 4 && count > 4) jumped.countDown()
+                            },
+                            "BookOrbitReader"
+                        )
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                super.onPageFinished(view, url)
+                                loaded.countDown()
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            "https://reader.test/",
+                            styleEpubHtml(
+                                html = "<html><head></head><body>$chapter</body></html>",
+                                theme = EpubReaderTheme.Sepia,
+                                fontScale = 1f,
+                                startAtEnd = false,
+                                topPaddingPercent = 0f,
+                                bottomPaddingPercent = 0f
+                            ),
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }.also { webView = it }
+                }
+            )
+        }
+
+        assertTrue("EPUB WebView did not finish loading", loaded.await(10, TimeUnit.SECONDS))
+        awaitGeometry(webView) { geometry -> geometry.optInt("pageCount") > 4 }
+        evaluateJavascript(webView, epubPageJumpJavascript(4))
+
+        assertTrue("EPUB page jump was not published", jumped.await(5, TimeUnit.SECONDS))
+        val jumpedGeometry = awaitGeometry(webView) { geometry ->
+            geometry.optBoolean("ready") && geometry.optString("transform") != "none"
+        }
+        assertTrue(jumpedGeometry.getBoolean("visibleText"))
+    }
+
     private fun awaitGeometry(
         webView: WebView,
         condition: (JSONObject) -> Boolean
@@ -184,12 +241,14 @@ class EpubWebViewInstrumentedTest {
     }
 
     @Suppress("UNUSED_PARAMETER")
-    private class TestReaderBridge {
+    private class TestReaderBridge(
+        private val onPageChanged: (Int, Int) -> Unit = { _, _ -> }
+    ) {
         @JavascriptInterface
         fun centerTap() = Unit
 
         @JavascriptInterface
-        fun pageChanged(page: Int, count: Int) = Unit
+        fun pageChanged(page: Int, count: Int) = onPageChanged(page, count)
 
         @JavascriptInterface
         fun chapterBoundary(direction: Int) = Unit
