@@ -248,21 +248,23 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 ### Latest device feedback work order — 2026-07-17
 
 - [x] Dismiss the full-screen cover viewer when any part of the screen is tapped; retain Android Back dismissal.
-- [x] Replace oversized book-detail action cards with symbol-only transparent controls and tighter padding.
+- [x] Replace oversized book-detail action cards with compact controls: Read/Preview labels beside clear icons and an icon-only Download action.
 - [x] Clamp long book-detail titles to five rows with an expand/collapse affordance.
 - [x] Support selecting multiple books in library grids and applying bulk Mark as read/unread actions.
-- [x] Make genre/tag selections navigate to filtered Books or Series results through the catalog filter model.
+- [x] Make genre selections navigate to filtered Books or Series results through the catalog filter model; keep tags informational.
 - [x] Keep a book's series name and series index visible as distinct metadata rows.
 - [ ] Validate genre-filter query support and result scope against the target BookOrbit server.
-- [ ] Surface and validate OIDC login when the server has OIDC enabled; the provider option is not currently visible in the app.
-- [ ] Run device validation for the revised detail density, title expansion, multi-selection, genre filters, and series-index layout.
+- [x] Surface server-hosted OIDC/SSO through the embedded `Use server sign-in` flow while retaining native credentials.
+- [ ] Validate OIDC redirects and login completion on a real OIDC-enabled server.
+- [x] Complete the revised detail density, title expansion, multi-selection, genre navigation, and series-index implementation in code/tests.
+- [ ] Run device validation for the revised detail density, multi-selection, genre-filter result scope, and interrupted-download recovery.
 - [ ] Keep audiobook and CBZ validation deferred until representative samples are available.
-- [ ] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
-- [ ] Expose active download progress and a clear place to check download status from book details.
+- [x] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
+- [x] Expose active per-file download progress, percentage/linear or indeterminate state, cancel guidance, and retry failure status from book details.
 
 ### Latest detail-action feedback — 2026-07-17
 
-The full-screen cover viewer, long-title expansion, and series-index presentation are confirmed good. The next implementation pass should restore visible Read and Preview labels beside their icons, replace the ambiguous Download symbol, and make active download progress/status discoverable in the detail screen.
+The full-screen cover viewer, long-title expansion, series-index presentation, revised action labels/icons, and download status presentation are implemented. Multi-select header overlap and stale-selection pruning are fixed. Genre chips now navigate to fully paginated server-filtered Books or Series results; tags remain informational. The remaining work is physical-device/server validation, especially genre query compatibility, OIDC/SSO redirects, and interrupted downloads.
 
 ## Source of truth
 

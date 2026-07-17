@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -45,11 +46,13 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
@@ -279,6 +282,7 @@ internal fun NativeLibraryBrowserScreen(
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
+    libraryBooksPageLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
@@ -305,6 +309,10 @@ internal fun NativeLibraryBrowserScreen(
     var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
     var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
     var selectedAuthor by remember { mutableStateOf<AuthorSummary?>(null) }
+    var activeBookGenre by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeSeriesGenre by rememberSaveable { mutableStateOf<String?>(null) }
+    var genreSourceBook by remember { mutableStateOf<BookSummary?>(null) }
+    var genreSourceSeriesKey by remember { mutableStateOf<String?>(null) }
     var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
     val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
         value = null
@@ -322,12 +330,24 @@ internal fun NativeLibraryBrowserScreen(
         query = ""
         selectedAuthor = null
         selectedSeriesKey = null
+        activeBookGenre = null
+        activeSeriesGenre = null
+        genreSourceBook = null
+        genreSourceSeriesKey = null
     }
 
-    BackHandler(enabled = isSearchOpen || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
+    BackHandler(enabled = isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
         if (isSearchOpen) {
             isSearchOpen = false
             query = ""
+        } else if (activeBookGenre != null) {
+            activeBookGenre = null
+            selectedBook = genreSourceBook
+            genreSourceBook = null
+        } else if (activeSeriesGenre != null) {
+            activeSeriesGenre = null
+            selectedSeriesKey = genreSourceSeriesKey
+            genreSourceSeriesKey = null
         } else if (selectedBook != null) {
             selectedBook = null
         } else if (selectedAuthor != null) {
@@ -394,6 +414,40 @@ internal fun NativeLibraryBrowserScreen(
                         showProfileMenu = false
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
+                )
+                activeBookGenre != null -> BrowserTopBar(
+                    title = "Books · ${activeBookGenre!!}",
+                    navigationIcon = {
+                        TextButton(onClick = {
+                            activeBookGenre = null
+                            selectedBook = genreSourceBook
+                            genreSourceBook = null
+                        }) { Text("Back") }
+                    },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions
+                )
+                activeSeriesGenre != null -> BrowserTopBar(
+                    title = "Series · ${activeSeriesGenre!!}",
+                    navigationIcon = {
+                        TextButton(onClick = {
+                            activeSeriesGenre = null
+                            selectedSeriesKey = genreSourceSeriesKey
+                            genreSourceSeriesKey = null
+                        }) { Text("Back") }
+                    },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions
                 )
@@ -473,7 +527,7 @@ internal fun NativeLibraryBrowserScreen(
             }
         },
         bottomBar = {
-            if (!isSearchOpen && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
+            if (!isSearchOpen && activeBookGenre == null && activeSeriesGenre == null && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
                 BrowserBottomNavigation(
                     destination = destination,
                     onHome = {
@@ -517,6 +571,30 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
+                activeBookGenre != null -> GenreBooksScreen(
+                    genre = activeBookGenre!!,
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    loader = libraryBooksPageLoader,
+                    coverLoader = coverLoader,
+                    onBookSelected = { selectedBook = it; activeBookGenre = null; genreSourceBook = null },
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread
+                )
+                activeSeriesGenre != null -> SeriesCatalogScreen(
+                    query = "",
+                    initialFilter = SeriesCatalogFilter(genre = activeSeriesGenre),
+                    libraryOptions = state.libraries,
+                    modifier = Modifier.padding(padding),
+                    loader = seriesCatalogLoader,
+                    imageLoader = catalogImageLoader,
+                    onSeriesSelected = { series ->
+                        selectedSeriesKey = series.id
+                        activeSeriesGenre = null
+                        genreSourceSeriesKey = null
+                        detailReturnDestination = BrowserDestination.SERIES
+                    }
+                )
                 selectedBook != null -> BookDetails(
                     book = selectedBook!!,
                     state = state,
@@ -531,6 +609,11 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
+                    },
+                    onGenreSelected = { genre ->
+                        genreSourceBook = selectedBook
+                        selectedBook = null
+                        activeBookGenre = genre
                     }
                 )
                 selectedSeriesKey != null -> SeriesDetails(
@@ -541,7 +624,12 @@ internal fun NativeLibraryBrowserScreen(
                     detailLoader = seriesDetailLoader,
                     onBookSelected = { selectedBook = it },
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    onGenreSelected = { genre ->
+                        genreSourceSeriesKey = selectedSeriesKey
+                        selectedSeriesKey = null
+                        activeSeriesGenre = genre
+                    }
                 )
                 selectedAuthor != null -> AuthorDetails(
                     author = selectedAuthor!!,
@@ -554,6 +642,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
                     query = "",
+                    initialFilter = SeriesCatalogFilter(),
                     libraryOptions = state.libraries,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
@@ -896,17 +985,20 @@ private fun LibraryPickerScreen(
 @Composable
 private fun SeriesCatalogScreen(
     query: String,
+    initialFilter: SeriesCatalogFilter,
     libraryOptions: List<LibrarySummary>,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
-    var items by remember(query) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
-    var total by remember(query) { mutableStateOf(0) }
-    var isLoading by remember(query) { mutableStateOf(false) }
-    var filter by remember(query) { mutableStateOf(SeriesCatalogFilter(query = query.takeIf { it.isNotBlank() })) }
-    var showFilter by rememberSaveable(query) { mutableStateOf(false) }
+    var items by remember(query, initialFilter) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var total by remember(query, initialFilter) { mutableStateOf(0) }
+    var isLoading by remember(query, initialFilter) { mutableStateOf(false) }
+    var filter by remember(query, initialFilter) {
+        mutableStateOf(initialFilter.copy(query = query.takeIf { it.isNotBlank() }))
+    }
+    var showFilter by rememberSaveable(query, initialFilter) { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
@@ -1112,6 +1204,13 @@ private fun SeriesFilterSheet(
                 value = draft.author.orEmpty(),
                 onValueChange = { draft = draft.copy(author = it) },
                 label = { Text("Author") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = draft.genre.orEmpty(),
+                onValueChange = { draft = draft.copy(genre = it) },
+                label = { Text("Genre") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -2129,6 +2228,61 @@ private fun LibraryBrowseScreen(
 }
 
 @Composable
+private fun GenreBooksScreen(
+    genre: String,
+    state: BrowserState,
+    modifier: Modifier,
+    loader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit
+) {
+    val libraryId = state.selectedLibraryId
+    var loadError by remember(libraryId, genre) { mutableStateOf<String?>(null) }
+    val books by produceState<List<BookSummary>?>(initialValue = null, libraryId, genre) {
+        loadError = null
+        if (libraryId == null) {
+            value = emptyList()
+            loadError = "Select a library before filtering books by genre."
+            return@produceState
+        }
+        try {
+            val pages = loadCompleteLibraryPages { page ->
+                loader(libraryId, page, BookBrowseFilter(genre = genre))
+            }
+            value = mergeLibraryBooks(pages)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            value = emptyList()
+            loadError = error.message ?: "Unable to load books in this genre."
+        }
+    }
+    val filteredBooks = books.orEmpty()
+    LibraryBooks(
+        state = state.copy(
+            books = filteredBooks,
+            booksTotal = filteredBooks.size,
+            booksSeriesTotal = null,
+            isLoadingBooks = books == null,
+            message = loadError
+        ),
+        modifier = modifier,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
+        titleOverride = genre,
+        emptyMessage = "No books found in $genre.",
+        allowSeriesCollapse = false,
+        totalBooks = filteredBooks.size,
+        filter = BookBrowseFilter(genre = genre),
+        jumpRailEnabled = false,
+        onMarkAsRead = onMarkAsRead,
+        onMarkAsUnread = onMarkAsUnread
+    )
+}
+
+@Composable
 private fun LibraryBooks(
     state: BrowserState,
     modifier: Modifier,
@@ -2153,6 +2307,9 @@ private fun LibraryBooks(
     var seriesCollapsed by rememberSaveable(title) { mutableStateOf(false) }
     var selectedBookIds by remember(title) { mutableStateOf<Set<String>>(emptySet()) }
     val selectedBooks = state.books.filter { it.id in selectedBookIds }
+    LaunchedEffect(state.books) {
+        selectedBookIds = selectedBookIds.intersect(state.books.mapTo(mutableSetOf()) { it.id })
+    }
     val seriesKeys = state.books
         .mapNotNull { it.seriesId ?: it.seriesName }
         .filter { it.isNotBlank() }
@@ -2227,15 +2384,23 @@ private fun LibraryBooks(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (selectedBookIds.isNotEmpty()) {
-                    Text("${selectedBookIds.size} selected", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { selectedBooks.forEach { onMarkAsRead?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark read") }
-                    TextButton(onClick = { selectedBooks.forEach { onMarkAsUnread?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark unread") }
-                    TextButton(onClick = { selectedBookIds = emptySet() }) { Text("Clear") }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("${selectedBookIds.size} selected", style = MaterialTheme.typography.titleMedium)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            TextButton(onClick = { selectedBooks.forEach { onMarkAsRead?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark read") }
+                            TextButton(onClick = { selectedBooks.forEach { onMarkAsUnread?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark unread") }
+                            TextButton(onClick = { selectedBookIds = emptySet() }) { Text("Clear selection") }
+                        }
+                    }
                 }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                if (selectedBookIds.isEmpty()) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                     Text(
                         buildString {
                             val bookCount = totalBooks ?: state.books.size
@@ -2270,6 +2435,7 @@ private fun LibraryBooks(
                     ) {
                         Text(if (seriesCollapsed) "Expand series" else "Collapse series")
                     }
+                }
                 }
             }
         }
@@ -2584,7 +2750,8 @@ private fun BookDetails(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
-    onSeriesSelected: (String) -> Unit
+    onSeriesSelected: (String) -> Unit,
+    onGenreSelected: (String) -> Unit
 ) {
     val detail by produceState(initialValue = BookDetailInfo(book), book.id) {
         value = detailLoader(book) ?: value
@@ -2593,6 +2760,8 @@ private fun BookDetails(
     val displayBook = detail.book
     val fileId = displayBook.fileId
     val isDownloading = fileId != null && fileId in state.downloadingFileIds
+    val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
+    val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
     val seriesKey = displayBook.seriesId ?: displayBook.seriesName
     val publicationMetadata = buildList {
@@ -2692,12 +2861,9 @@ private fun BookDetails(
             ) {
                 item(key = "read") {
                     DetailActionTile(
-                        label = if (displayBook.progressPercent?.let { it > 0f } == true) {
-                            "Continue reading"
-                        } else {
-                            "Read"
-                        },
+                        label = "Read",
                         icon = Icons.Default.PlayArrow,
+                        showLabel = true,
                         emphasized = true,
                         enabled = !isDownloading && !unavailableOffline,
                         onClick = { onRead(displayBook) }
@@ -2706,7 +2872,8 @@ private fun BookDetails(
                 item(key = "preview") {
                     DetailActionTile(
                         label = "Preview",
-                        icon = Icons.Default.Search,
+                        icon = Icons.Default.Visibility,
+                        showLabel = true,
                         enabled = !isDownloading && !unavailableOffline,
                         onClick = { onPreview(displayBook) }
                     )
@@ -2730,11 +2897,45 @@ private fun BookDetails(
                     fileId != null && !state.isOfflineSnapshot -> item(key = "download") {
                         DetailActionTile(
                             label = "Download",
-                            icon = Icons.Default.ArrowDropDown,
+                            icon = Icons.Default.Download,
                             onClick = { onDownload(displayBook) }
                         )
                     }
                 }
+            }
+        }
+        if (isDownloading) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("book-download-status"),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        downloadProgress?.let { "Downloading · ${(it * 100).toInt()}%" } ?: "Downloading…",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (downloadProgress != null) {
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Text("Use the × action above to cancel.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        } else if (downloadFailed) {
+            item {
+                Text(
+                    "Download failed. Tap the download action to retry.",
+                    modifier = Modifier.testTag("book-download-status"),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
@@ -2744,7 +2945,8 @@ private fun BookDetails(
             item {
                 DetailLabelGroup(
                     title = "Genres",
-                    labels = detail.genres
+                    labels = detail.genres,
+                    onLabelClick = onGenreSelected
                 )
             }
         }
@@ -2786,37 +2988,45 @@ private fun DetailActionTile(
     icon: ImageVector,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    emphasized: Boolean = false
+    emphasized: Boolean = false,
+    showLabel: Boolean = false
 ) {
     Card(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .size(46.dp),
+            .then(if (showLabel) Modifier.widthIn(min = 88.dp).height(46.dp) else Modifier.size(46.dp)),
         colors = CardDefaults.cardColors(
             containerColor = Color.Transparent,
             contentColor = if (emphasized) {
-                MaterialTheme.colorScheme.onPrimaryContainer
+                MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = if (showLabel) 10.dp else 4.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+            if (showLabel) {
+                Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DetailLabelGroup(title: String, labels: List<String>) {
+private fun DetailLabelGroup(
+    title: String,
+    labels: List<String>,
+    onLabelClick: ((String) -> Unit)? = null
+) {
     val distinctLabels = labels.filter { it.isNotBlank() }.distinct()
     if (distinctLabels.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -2827,6 +3037,13 @@ private fun DetailLabelGroup(title: String, labels: List<String>) {
         ) {
             distinctLabels.forEach { label ->
                 Card(
+                    modifier = if (onLabelClick != null) {
+                        Modifier
+                            .clickable { onLabelClick(label) }
+                            .semantics { contentDescription = "Filter $title by $label" }
+                    } else {
+                        Modifier
+                    },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     ),
@@ -2989,7 +3206,8 @@ private fun SeriesDetails(
     detailLoader: suspend (String) -> SeriesDetailInfo?,
     onBookSelected: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onGenreSelected: (String) -> Unit
 ) {
     val localBooks = books
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
@@ -3047,22 +3265,14 @@ private fun SeriesDetails(
                     ExpandableDescription("About this series", plainText(synopsis))
                 }
             }
-            val labels = (first.genres + first.tags).distinct()
-            if (labels.isNotEmpty()) {
+            if (first.genres.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Genres and tags", style = MaterialTheme.typography.titleLarge)
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            labels.forEach { label ->
-                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                                    Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                                }
-                            }
-                        }
-                    }
+                    DetailLabelGroup("Genres", first.genres, onGenreSelected)
+                }
+            }
+            if (first.tags.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    DetailLabelGroup("Tags", first.tags)
                 }
             }
         }

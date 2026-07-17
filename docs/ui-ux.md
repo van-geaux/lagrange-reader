@@ -2,9 +2,11 @@
 
 The functional prototype is stable enough for UI/UX work to begin. EPUB is the currently available representative content type; audiobook, PDF, and CBZ-specific validation remains deferred until sample files are available.
 
-Latest detail feedback: use symbol-only transparent action controls with reduced padding; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre and Tag chips should navigate to filtered Books or Series results when supported by the server query contract. OIDC provider surfacing remains an open authentication item.
+Latest detail feedback: keep compact action spacing while showing Read/Preview labels beside clear icons and Download as an icon-only action; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. The embedded server sign-in path now surfaces OIDC/SSO; provider redirect validation remains open.
 
-Follow-up action feedback: Read and Preview need visible labels beside clear icons, Download needs an unmistakable download symbol, and active download progress/status should be discoverable from the book detail screen.
+Follow-up action feedback is implemented: Read and Preview show visible labels beside clear Play/Visibility icons, Download uses an unmistakable download symbol, and active per-file download progress/status is discoverable from book details. Multi-select headers avoid overlap and prune stale selections. Genre chips navigate to fully paginated server-filtered Books or Series results; tags remain informational. Native credentials remain available alongside the embedded `Use server sign-in` OIDC/SSO path.
+
+Audited implementation status: code and automated verification are complete; physical-device/server validation remains required for genre query compatibility and scope, OIDC redirects/auth completion, download interruption recovery, and final responsive density.
 
 ## Checkpoints
 

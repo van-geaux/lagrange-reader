@@ -126,6 +126,7 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Sign in").assertIsDisplayed()
+        composeRule.onNodeWithText("Use server sign-in").assertIsDisplayed()
         composeRule.onNodeWithText("Sign in again to continue browsing.").assertIsDisplayed()
         composeRule.onNodeWithText("Change server").performClick()
         composeRule.waitUntil { dataSource.clearServerCalls == 1 }
@@ -230,6 +231,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Read").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Preview").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Download").assertIsEnabled()
+        composeRule.onNodeWithText("Read").assertIsDisplayed()
+        composeRule.onNodeWithText("Preview").assertIsDisplayed()
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
         composeRule.onNodeWithText("Science fiction").assertIsDisplayed()
         composeRule.onNodeWithText("Tags").assertIsDisplayed()
@@ -239,6 +242,10 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Full-screen cover for Orbit Rising. Tap anywhere to close").assertIsDisplayed()
             .performClick()
         composeRule.onAllNodesWithContentDescription("Full-screen cover for Orbit Rising. Tap anywhere to close").assertCountEquals(0)
+
+        composeRule.onNodeWithContentDescription("Filter Genres by Science fiction").performClick()
+        composeRule.onNodeWithText("Books · Science fiction").assertIsDisplayed()
+        composeRule.onNodeWithText("Back").performClick()
 
         composeRule.onNodeWithContentDescription("Open series Orbit Saga").performClick()
         composeRule.onNodeWithText("Orbit Saga").assertIsDisplayed()
@@ -661,7 +668,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         resetReadingStateBooks += book
     }
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
-    override suspend fun downloadBook(book: BookSummary): File = File("unused")
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = File("unused")
     override suspend fun deleteLocalCopy(book: BookSummary) = Unit
     override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = Unit
     override suspend fun pendingProgressCount(): Int = 0

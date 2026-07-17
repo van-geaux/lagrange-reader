@@ -36,6 +36,18 @@ class CatalogFiltersTest {
     }
 
     @Test
+    fun `genre book filter targets the server genres field`() {
+        val rules = BookBrowseFilter(genre = "Science fiction")
+            .toServerFilter()
+            ?.getJSONArray("rules")
+            ?: error("expected genre rule")
+
+        assertEquals(1, rules.length())
+        assertEquals("genres", rules.getJSONObject(0).getString("field"))
+        assertEquals("Science fiction", rules.getJSONObject(0).getString("value"))
+    }
+
+    @Test
     fun `local books apply title status format and sort filters`() {
         val books = listOf(
             BookSummary("library", "1", "file-1", "Zeta", author = "Author", mediaKind = MediaKind.EPUB, progressPercent = 40f),

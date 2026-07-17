@@ -43,6 +43,8 @@ GET /api/v1/auth/me
 Used to confirm authenticated session state after login.
 The app also uses this endpoint during bootstrap and login polling instead of inferring auth state from library loading.
 
+The Android login screen retains native credentials and also offers an embedded server sign-in WebView for deployments that host OIDC/SSO. The WebView shares the authenticated cookie jar with the API client; the coordinator polls this endpoint to detect completion. OIDC provider discovery and redirect behavior still require validation against the target deployment.
+
 ## Libraries
 
 ### List libraries
@@ -99,7 +101,7 @@ When Library Browse filters are applied, the client adds BookOrbit's standard fi
 }
 ```
 
-The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Local books use the same controls against cached `BookSummary` metadata instead of sending a request.
+The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Tapping a book-detail genre bypasses the local summary-only filter and opens a fully paginated server-filtered Books list scoped to the selected library. Local books use the standard controls against cached `BookSummary` metadata instead of sending a request; tags remain informational because they are not used as a filter.
 
 Current response shape:
 
@@ -155,7 +157,7 @@ Endpoint:
 GET /api/v1/series?q=&page=0&size=100&sort=name&order=asc
 ```
 
-The Series filter sheet uses BookOrbit's `completionStatus`, `author`, `libraryId`, `sort`, and `order` query parameters. Completion values are `not_started`, `in_progress`, and `complete`; catalog sort values are `name`, `bookCount`, `lastAddedAt`, and `readProgress`.
+The Series filter sheet uses BookOrbit's `completionStatus`, `author`, `libraryId`, `genre`, `sort`, and `order` query parameters. A Series-detail genre chip opens a fully paginated catalog with `genre=<value>`. Completion values are `not_started`, `in_progress`, and `complete`; catalog sort values are `name`, `bookCount`, `lastAddedAt`, and `readProgress`. Genre query compatibility and exact result scope still require validation against the target server.
 
 ### Book cover
 
@@ -214,6 +216,7 @@ Notes:
 
 - Requires download permission.
 - Used by the app for offline local storage.
+- The client streams the response and reports per-file byte progress to `BrowserState`; completed downloads and authentication-interrupted downloads clear the active state, while failures expose retry guidance.
 
 ## Progress
 

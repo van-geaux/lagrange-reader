@@ -378,6 +378,31 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `active download exposes determinate progress in browser state`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = gate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.downloadBook(book)
+        runCurrent()
+
+        val downloading = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertTrue(book.fileId in downloading.downloadingFileIds)
+        assertEquals(0.5f, downloading.downloadProgressByFileId[book.fileId])
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
     fun `load browser redirects to login when browsing session expires`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -741,6 +766,7 @@ private class FakeBookOrbitDataSource(
     ),
     var buildReaderError: Throwable? = null,
     var downloadError: Throwable? = null,
+    var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
     var cachedLibraryCatalog: LibraryBooksPage? = null,
@@ -861,8 +887,10 @@ private class FakeBookOrbitDataSource(
         return if (localOnly) restoreActiveReaderLocalOnlyResult else restoreActiveReaderResult
     }
 
-    override suspend fun downloadBook(book: BookSummary): File {
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
         downloadedBooks += book
+        onProgress(0.5f)
+        downloadGate?.await()
         downloadError?.let { throw it }
         return File("downloaded.bin")
     }

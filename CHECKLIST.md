@@ -281,16 +281,19 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Navigate from a tapped book-detail series title to Series details
 - [x] Redesign book-detail genres/tags and lower metadata hierarchy
 - [x] Add a full-screen book-detail cover viewer with any-screen-tap and Back dismissal
-- [x] Reduce book-detail action cards to symbol-only transparent controls with compact padding
+- [x] Reduce book-detail action cards to compact controls with Read/Preview labels, clear icons, and icon-only Download
 - [x] Limit long book-detail titles to five rows with an expand/collapse action
 - [x] Keep series name and series index visible as separate book-detail metadata rows
 - [x] Add multi-book selection and bulk Mark as read/unread actions to library grids
-- [x] Navigate genre/tag selections to filtered Books or Series results through the server filter model
-- [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract
-- [ ] Surface and validate the OIDC provider login option when OIDC is enabled on the server
-- [ ] Validate the revised detail-action density, title expansion, multi-selection, genre filters, and series-index layout on a device
-- [ ] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
-- [ ] Use an unmistakable download icon and show active download progress/status from book details
+- [x] Navigate genre selections to filtered Books or Series results through the server filter model; keep tags informational
+- [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
+- [x] Surface the OIDC/SSO provider path through embedded server sign-in while retaining native credentials
+- [ ] Validate OIDC redirects and login completion on a real OIDC-enabled server
+- [x] Validate the revised detail-action density, title expansion, multi-selection, and series-index implementation in code/tests
+- [ ] Validate the revised detail density and genre-filter result scope on a device
+- [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
+- [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
+- [ ] Validate interrupted download recovery and retry behavior on a device
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title

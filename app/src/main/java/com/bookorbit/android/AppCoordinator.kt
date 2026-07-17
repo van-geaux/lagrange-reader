@@ -661,11 +661,19 @@ class AppCoordinator(
                 message = null
             )
             val result = runCatching {
-                repository.downloadBook(book)
+                repository.downloadBook(book) { progress ->
+                    scope.launch { updateDownloadProgress(fileId, progress) }
+                }
             }
             activeDownloads.remove(fileId)
             result
                 .onSuccess {
+                    updateDownloadState(
+                        fileId = fileId,
+                        isDownloading = false,
+                        failed = false,
+                        message = null
+                    )
                     loadBrowser()
                 }
                 .onFailure { error ->
@@ -677,6 +685,12 @@ class AppCoordinator(
                             message = "Download canceled."
                         )
                     } else if (error is AuthenticationRequiredException) {
+                        updateDownloadState(
+                            fileId = fileId,
+                            isDownloading = false,
+                            failed = false,
+                            message = null
+                        )
                         showLogin(
                             message = "Your session expired. Sign in again to continue downloading ${book.title}.",
                             destination = PostLoginDestination.DownloadBook(book)
@@ -799,11 +813,13 @@ class AppCoordinator(
     ) {
         val current = lastBrowserState ?: return
         val downloading = current.downloadingFileIds.toMutableSet()
+        val progressByFile = current.downloadProgressByFileId.toMutableMap()
         val failedDownloads = current.failedDownloadFileIds.toMutableSet()
         if (isDownloading) {
             downloading += fileId
         } else {
             downloading -= fileId
+            progressByFile -= fileId
         }
         if (failed) {
             failedDownloads += fileId
@@ -813,10 +829,23 @@ class AppCoordinator(
         showBrowser(
             current.copy(
                 downloadingFileIds = downloading,
+                downloadProgressByFileId = progressByFile,
                 failedDownloadFileIds = failedDownloads,
                 message = message
             )
         )
+    }
+
+    private fun updateDownloadProgress(fileId: String, progress: Float?) {
+        val current = lastBrowserState ?: return
+        if (fileId !in current.downloadingFileIds) return
+        val progressByFile = current.downloadProgressByFileId.toMutableMap()
+        if (progress == null) {
+            progressByFile -= fileId
+        } else {
+            progressByFile[fileId] = progress.coerceIn(0f, 1f)
+        }
+        showBrowser(current.copy(downloadProgressByFileId = progressByFile))
     }
 
     private fun showBrowserMessage(message: String) {
@@ -958,6 +987,7 @@ class AppCoordinator(
             isLoadingLibraries = false,
             isLoadingBooks = false,
             downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
+            downloadProgressByFileId = transient?.downloadProgressByFileId.orEmpty(),
             failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
             debugPendingProgressCount = pendingProgressCount,
             isOfflineSnapshot = false

@@ -14,9 +14,12 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -135,7 +138,7 @@ interface BookOrbitDataSource {
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
     suspend fun markBookAsRead(book: BookSummary) = Unit
     suspend fun resetBookReadingState(book: BookSummary) = Unit
-    suspend fun downloadBook(book: BookSummary): File
+    suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
     suspend fun pendingProgressCount(): Int
@@ -829,7 +832,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         )
     }
 
-    override suspend fun downloadBook(book: BookSummary): File = withContext(Dispatchers.IO) {
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
         val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         if (!target.exists() || target.length() <= 0L) {
@@ -841,6 +844,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             if (parent != null && !parent.exists()) {
                 throw UserFacingException("Unable to prepare local storage for this download.")
             }
+            val downloadContext = currentCoroutineContext()
             executeAuthenticated(
                 requestFactory = {
                     Request.Builder()
@@ -851,12 +855,34 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 },
                 action = "download this title"
             ) { response ->
-                val input = response.body?.byteStream()
+                val body = response.body
                     ?: throw UserFacingException("The server returned an empty download.")
+                val input = body.byteStream()
+                val totalBytes = body.contentLength().takeIf { it > 0L }
+                onProgress(0f.takeIf { totalBytes != null })
                 try {
                     FileOutputStream(target).use { output ->
-                        input.copyTo(output)
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var copiedBytes = 0L
+                        var lastReportedPercent = -1
+                        while (true) {
+                            downloadContext.ensureActive()
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            copiedBytes += count
+                            val percent = totalBytes?.let { total ->
+                                ((copiedBytes * 100L) / total).coerceIn(0L, 100L).toInt()
+                            }
+                            if (percent != null && percent != lastReportedPercent) {
+                                lastReportedPercent = percent
+                                onProgress(percent / 100f)
+                            }
+                        }
                     }
+                } catch (error: CancellationException) {
+                    target.delete()
+                    throw error
                 } catch (error: IOException) {
                     target.delete()
                     if (error.isLikelyLocalStorageFailure()) {
@@ -868,6 +894,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     target = target,
                     message = "The server returned an empty download."
                 )
+                onProgress(1f)
             }
         }
         downloadStore.save(

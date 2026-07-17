@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -119,7 +120,8 @@ fun BookOrbitApp(
             message = screen.message,
             isSubmitting = screen.isSubmitting,
             onChangeServer = coordinator::clearServer,
-            onSubmit = coordinator::submitLogin
+            onSubmit = coordinator::submitLogin,
+            onAuthenticated = coordinator::refreshLoginState
         )
         is AppScreen.Browser -> NativeLibraryBrowserScreen(
             state = screen.browserState,
@@ -129,6 +131,7 @@ fun BookOrbitApp(
             onLibrarySelected = coordinator::selectLibrary,
             searchBooks = coordinator::searchBooks,
             localBooksLoader = coordinator::loadLocalBooks,
+            libraryBooksPageLoader = coordinator::loadLibraryBooksPage,
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
             seriesDetailLoader = coordinator::loadSeriesDetail,
@@ -307,12 +310,14 @@ private fun LoginScreen(
     message: String?,
     isSubmitting: Boolean,
     onChangeServer: () -> Unit,
-    onSubmit: (String, String) -> Unit
+    onSubmit: (String, String) -> Unit,
+    onAuthenticated: () -> Unit
 ) {
     var username by remember(serverUrl) { mutableStateOf("") }
     var password by remember(serverUrl) { mutableStateOf("") }
     var passwordVisible by remember(serverUrl) { mutableStateOf(false) }
     var validationMessage by remember(serverUrl) { mutableStateOf<String?>(null) }
+    var showServerLogin by remember(serverUrl) { mutableStateOf(false) }
     val submit = {
         when {
             username.isBlank() -> validationMessage = "Enter your username."
@@ -323,21 +328,63 @@ private fun LoginScreen(
             }
         }
     }
+    BackHandler(enabled = showServerLogin) { showServerLogin = false }
+    LaunchedEffect(serverUrl, showServerLogin) {
+        if (showServerLogin) {
+            while (isActive) {
+                delay(1500)
+                onAuthenticated()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             BookOrbitTopBar(
-                title = "Sign in",
+                title = if (showServerLogin) "Server sign-in" else "Sign in",
+                navigationIcon = {
+                    if (showServerLogin) {
+                        TextButton(onClick = { showServerLogin = false }) { Text("Back") }
+                    }
+                },
                 actions = { TextButton(onClick = onChangeServer) { Text("Change server") } }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
+        if (showServerLogin) {
+            AndroidView(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .semantics { contentDescription = "BookOrbit server sign-in page" },
+                factory = { context ->
+                    WebView(context).apply webView@ {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        webChromeClient = WebChromeClient()
+                        CookieManager.getInstance().apply {
+                            setAcceptCookie(true)
+                            setAcceptThirdPartyCookies(this@webView, true)
+                        }
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                onAuthenticated()
+                            }
+                        }
+                        loadUrl(serverUrl)
+                    }
+                }
+            )
+        } else Column(
             modifier = Modifier
                 .padding(padding)
                 .padding(horizontal = 12.dp, vertical = 12.dp)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
             if (!message.isNullOrBlank()) {
                 OrbitMessage(
@@ -426,6 +473,18 @@ private fun LoginScreen(
                             Text("Sign in")
                         }
                     }
+                    OutlinedButton(
+                        onClick = { showServerLogin = true },
+                        enabled = !isSubmitting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Use server sign-in")
+                    }
+                    Text(
+                        "Use server sign-in for OIDC, SSO, or another provider configured by this BookOrbit server.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
