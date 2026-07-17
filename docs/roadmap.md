@@ -302,7 +302,7 @@ Implement next, in order:
 6. [x] Fix the comic unsupported-format regression by recognizing bare CBZ/CBR/CB7 formats. Use authenticated server page extraction for all three online and local ZIP extraction for offline CBZ/mislabeled ZIP; keep client-side offline RAR/7z extraction optional. Physical-device validation remains pending.
 7. [x] Replace the comic reader's visible buttons with a fullscreen fitted-image interaction model: left/right tap zones and horizontal swipes turn pages, center tap opens a dark rounded options sheet with title/page, Continue reading, Close book, and page slider, exposed-content tap or Android Back closes options first, and Android Back exits only when options are closed. Target-device validation passed.
 8. [x] Add a final compact three-dot overflow at the end of the book-detail action row. It exposes exactly one live context-sensitive action: Mark as read for unfinished books or Mark as unread for read/completed books, resolving status from selected-library or server-wide Home state and remaining disabled for offline snapshots. Physical-device validation remains pending.
-9. [ ] Make Close book transition immediately to the cached browser, then flush/sync progress, clear active-reader state, and refresh in the background instead of holding the reader open on network/storage work.
+9. [x] Make Close book synchronously restore cached Browser state before coroutine/network/storage work, immediately merge captured progress into selected-library `books` and server-wide `homeBooks`, and show refreshing/loading state. Background work flushes the captured progress, attempts pending sync, clears non-preview active-reader state, and refreshes the browser; Preview still neither persists nor clears. If no cached browser exists, leave the reader for Loading while the browser loads. Physical-device validation remains pending.
 10. [ ] Fix foreground book-detail cover gaps such as `your name.` by trying BookOrbit's standard `/api/v1/books/{bookId}/thumbnail` endpoint when explicit cover metadata is absent or its request fails, without turning the library-wide warmer into a request-per-missing-cover scan.
 11. [ ] Add a reading-position bar to reader options. Mapping awaits design approval: whole-book position is recommended over a current-chapter-only bar because it provides a true book-level jump while retaining the existing chapter chooser.
 
@@ -311,6 +311,8 @@ The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites
 The completed haptic-perceptibility step passes 181 JVM tests across 29 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. `HapticFeedbackTest` covers API mapping and the enable transition.
 
 The completed book-detail reading-status overflow step passes 183 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Helper unit coverage and a compiled instrumentation flow cover the context-sensitive action.
+
+The completed immediate reader-close step passes 184 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Focused coordinator coverage verifies cached-browser restoration before background work and final-progress preservation.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

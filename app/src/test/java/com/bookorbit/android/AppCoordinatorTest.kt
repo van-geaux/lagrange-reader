@@ -690,6 +690,39 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `close reader restores cached browser before background work runs`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+
+        coordinator.closeReader()
+
+        val restored = coordinator.screen.value as AppScreen.Browser
+        assertTrue(restored.browserState.isRefreshing)
+        assertEquals(50f, restored.browserState.books.single().progressPercent)
+        assertEquals(50f, restored.browserState.homeBooks.single().progressPercent)
+        assertTrue(repository.queuedProgress.isEmpty())
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(0, repository.clearActiveReaderCalls)
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(book), repository.queuedProgress)
+        assertTrue(repository.syncPendingProgressCalls >= 1)
+        assertEquals(1, repository.clearActiveReaderCalls)
+    }
+
+    @Test
     fun `successful sync lets refreshed server progress replace the local overlay`() = runTest {
         val serverBook = book.copy(progressPercent = 72f, progressLabel = "72%")
         val repository = FakeBookOrbitDataSource(

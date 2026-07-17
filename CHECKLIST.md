@@ -303,7 +303,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate interrupted download recovery and retry behavior on a device
 - [x] Add visible labels to Download and Delete local book-detail actions
 - [x] Add a final compact three-dot overflow to book details with exactly one live context-sensitive Mark as read or Mark as unread action; disable it for offline snapshots and keep device validation pending
-- [ ] Make Close book feel immediate by restoring the cached browser before background progress sync, active-reader cleanup, and refresh complete
+- [x] Make Close book immediately restore cached browser state (or Loading when unavailable), merge captured progress into selected/server-wide books, and complete persistence, sync, cleanup, and refresh in the background; physical-device validation remains pending
 - [ ] Recover missing foreground book-detail covers, including `your name.`, through the standard BookOrbit thumbnail endpoint when payload cover metadata is absent or stale
 - [ ] Add a reading-position bar to reader options; whole-book versus current-chapter mapping awaits design approval
 - [x] Refresh the open book-detail state immediately when a download completes

@@ -1016,10 +1016,25 @@ class AppCoordinator(
     }
 
     fun closeReader() {
+        val reader = _screen.value as? AppScreen.Reader
+        lastBrowserState?.let { browser ->
+            showBrowser(
+                browser.copy(
+                    books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
+                    homeBooks = mergeKnownProgress(browser.homeBooks, null),
+                    isRefreshing = true,
+                    isLoadingLibraries = true,
+                    isLoadingBooks = true,
+                    isOfflineSnapshot = false,
+                    message = null
+                )
+            )
+        } ?: run {
+            _screen.value = AppScreen.Loading
+        }
         scope.launch {
-            val reader = _screen.value as? AppScreen.Reader
             if (reader?.readerState?.launchMode != ReaderLaunchMode.PREVIEW) {
-                flushCurrentReaderProgress()
+                flushReaderProgress(reader)
                 // Try to publish before clearing the active reader. WorkManager remains
                 // the fallback for offline/transient failures.
                 runCatching { repository.syncPendingProgress() }
@@ -1173,8 +1188,8 @@ class AppCoordinator(
         }
     }
 
-    private suspend fun flushCurrentReaderProgress() {
-        val reader = _screen.value as? AppScreen.Reader ?: return
+    private suspend fun flushReaderProgress(reader: AppScreen.Reader?) {
+        reader ?: return
         val key = reader.readerState.book.progressKey()
         val progress = latestProgressByTarget[key] ?: return
         if (ProgressQueuePolicy.isMeaningfullyDifferent(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
