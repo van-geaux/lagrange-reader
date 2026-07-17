@@ -297,9 +297,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Refresh the open book-detail state immediately when a download completes
 - [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
-- [ ] Make dismissible red Home messages support horizontal swipe and an explicit close button
+- [x] Make red Home/Library Recommended messages dismissible with horizontal swipe and an explicit close button
 - [ ] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total
-- [ ] Restrict Recently read to completed books and exclude titles still in progress
+- [x] Restrict Recently read to completed books and exclude titles still in progress
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title

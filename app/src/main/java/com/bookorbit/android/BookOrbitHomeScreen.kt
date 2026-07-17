@@ -295,6 +295,7 @@ internal fun NativeLibraryBrowserScreen(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDismissMessage: () -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
@@ -711,7 +712,8 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    onDismissMessage = onDismissMessage
                 )
                 destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
                     state = state,
@@ -739,7 +741,8 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    onDismissMessage = onDismissMessage
                 )
                 else -> HomeFeed(
                     state = state,
@@ -749,7 +752,8 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    onDismissMessage = onDismissMessage
                 )
             }
     }
@@ -1644,7 +1648,8 @@ private fun RefreshableHomeFeed(
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onDismissMessage: () -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -1661,7 +1666,8 @@ private fun RefreshableHomeFeed(
             onSeriesSelected = onSeriesSelected,
             onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
             onMarkAsRead = onMarkAsRead,
-            onMarkAsUnread = onMarkAsUnread
+            onMarkAsUnread = onMarkAsUnread,
+            onDismissMessage = onDismissMessage
         )
     }
 }
@@ -1676,6 +1682,7 @@ private fun HomeFeed(
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
+    onDismissMessage: (() -> Unit)? = null,
     showHeader: Boolean = false
 ) {
     val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
@@ -1686,10 +1693,7 @@ private fun HomeFeed(
     ).take(12)
     val recentSeries = remember(state.books) { recentSeries(state.books, useUpdatedAt = false) }
     val updatedSeries = remember(state.books) { recentSeries(state.books, useUpdatedAt = true) }
-    val recentlyRead = state.books
-        .filter { it.isRead || it.lastReadAtMillis != null }
-        .sortedByDescending { it.lastReadAtMillis ?: 0L }
-        .take(12)
+    val recentlyRead = remember(state.books) { recentlyReadBooks(state.books) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val availableMarkAsRead = onMarkAsRead.takeUnless { state.isOfflineSnapshot }
@@ -1718,7 +1722,8 @@ private fun HomeFeed(
                 OrbitMessage(
                     text = message,
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
+                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR,
+                    onDismiss = onDismissMessage
                 )
             }
         }
@@ -2108,7 +2113,8 @@ private fun LibraryContentScreen(
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onDismissMessage: () -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -2138,6 +2144,7 @@ private fun LibraryContentScreen(
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
+                    onDismissMessage = onDismissMessage,
                     showHeader = false
                 )
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
@@ -3429,6 +3436,18 @@ internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> 
         .sortedWith(
             compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
                 .thenByDescending { it.progressPercent ?: 0f }
+                .thenBy { it.title.lowercase() }
+        )
+        .take(12)
+}
+
+internal fun recentlyReadBooks(books: List<BookSummary>): List<BookSummary> {
+    val currentlyReadingIds = currentlyReadingBooks(books).mapTo(mutableSetOf()) { it.id }
+    return books
+        .filter { it.isRead && it.id !in currentlyReadingIds }
+        .sortedWith(
+            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+                .thenByDescending { it.updatedAtMillis ?: 0L }
                 .thenBy { it.title.lowercase() }
         )
         .take(12)

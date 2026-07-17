@@ -66,6 +66,22 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `recently read includes completed books and excludes unfinished activity`() {
+        val finished = seriesBook("book-finished", index = 1.0, isRead = true).copy(lastReadAtMillis = 300L)
+        val olderFinished = seriesBook("book-older", index = 2.0, isRead = true).copy(lastReadAtMillis = 100L)
+        val stillReading = seriesBook("book-current", index = 3.0, isRead = true).copy(
+            progressPercent = 42f,
+            lastReadAtMillis = 400L
+        )
+        val recentlyOpened = seriesBook("book-opened", index = 4.0).copy(lastReadAtMillis = 500L)
+
+        assertEquals(
+            listOf(finished, olderFinished),
+            recentlyReadBooks(listOf(recentlyOpened, olderFinished, stillReading, finished))
+        )
+    }
+
+    @Test
     fun `recent series keeps one representative ordered by activity`() {
         val older = seriesBook("book-1", index = 1.0, addedAt = 100L)
         val newer = seriesBook("book-2", index = 2.0, addedAt = 200L)

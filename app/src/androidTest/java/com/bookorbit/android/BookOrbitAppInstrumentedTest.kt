@@ -1,5 +1,7 @@
 package com.bookorbit.android
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeLeft
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
@@ -359,6 +362,30 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("home_pull_to_refresh").performTouchInput { swipeDown() }
 
         composeRule.waitUntil { dataSource.loadLibrariesCalls == 1 }
+    }
+
+    @Test
+    fun dismissibleMessageSupportsCloseButtonAndHorizontalSwipe() {
+        val showCloseMessage = mutableStateOf(true)
+        val showSwipeMessage = mutableStateOf(true)
+        composeRule.setContent {
+            BookOrbitTheme {
+                Column {
+                    if (showCloseMessage.value) {
+                        OrbitMessage("Close this message", onDismiss = { showCloseMessage.value = false })
+                    }
+                    if (showSwipeMessage.value) {
+                        OrbitMessage("Swipe this message", onDismiss = { showSwipeMessage.value = false })
+                    }
+                }
+            }
+        }
+
+        composeRule.onAllNodesWithContentDescription("Dismiss message")[0].performClick()
+        composeRule.onAllNodesWithText("Close this message").assertCountEquals(0)
+        composeRule.onNodeWithText("Swipe this message").performTouchInput { swipeLeft() }
+        composeRule.waitUntil { !showSwipeMessage.value }
+        composeRule.onAllNodesWithText("Swipe this message").assertCountEquals(0)
     }
 
     @Test

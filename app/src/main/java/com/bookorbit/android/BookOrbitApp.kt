@@ -142,6 +142,7 @@ fun BookOrbitApp(
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,
             onDeleteLocalCopy = coordinator::deleteLocalCopy,
+            onDismissMessage = coordinator::dismissBrowserMessage,
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
             onMarkAsRead = coordinator::markBookAsRead,
             onMarkAsUnread = coordinator::markBookAsUnread

@@ -720,6 +720,12 @@ class AppCoordinator(
         )
     }
 
+    fun dismissBrowserMessage() {
+        val current = lastBrowserState ?: return
+        if (current.message == null) return
+        showBrowser(current.copy(message = null))
+    }
+
     fun deleteLocalCopy(book: BookSummary) {
         scope.launch {
             runCatching {

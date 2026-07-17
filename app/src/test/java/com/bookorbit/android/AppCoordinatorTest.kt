@@ -403,6 +403,26 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `dismissing a browser message clears it immediately`() = runTest {
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                message = "Refresh failed."
+            )
+        )
+
+        coordinator.dismissBrowserMessage()
+
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertEquals(null, browser.browserState.message)
+    }
+
+    @Test
     fun `load browser redirects to login when browsing session expires`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,

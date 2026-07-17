@@ -272,9 +272,9 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 - [x] Reconcile the selected book detail immediately after a download completes so Download becomes Delete local without leaving and reopening the screen.
 - [x] Remove the misleading Tag tap affordance because BookOrbit has no verified tag filter; keep tags informational.
 - [x] Keep native username/password as the current authentication flow; defer direct OIDC/SSO until the provider and redirect contract are confirmed.
-- [ ] Make red Home message cards dismissible by horizontal swipe and an explicit close button, with dismissal reflected immediately rather than waiting for refresh.
+- [x] Make red Home/Library Recommended message cards dismissible by horizontal swipe and an explicit close button, clearing the BrowserState message immediately.
 - [ ] Replace the normalized `Book x/1000` EPUB footer with a layout-derived current/total whole-book page count that responds to text size, margins, viewport, and chapter pagination.
-- [ ] Restrict Recently read to books that have actually finished, excluding every title that remains in progress.
+- [x] Restrict Recently read to books that have actually finished, excluding every title that remains in progress; order by last-read/updated/title and cap at 12.
 
 ## Source of truth
 

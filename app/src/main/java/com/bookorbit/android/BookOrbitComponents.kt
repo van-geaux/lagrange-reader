@@ -12,12 +12,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
@@ -95,10 +100,12 @@ internal enum class OrbitMessageTone {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun OrbitMessage(
     text: String,
     modifier: Modifier = Modifier,
-    tone: OrbitMessageTone = OrbitMessageTone.INFO
+    tone: OrbitMessageTone = OrbitMessageTone.INFO,
+    onDismiss: (() -> Unit)? = null
 ) {
     val containerColor = when (tone) {
         OrbitMessageTone.INFO -> MaterialTheme.colorScheme.primaryContainer
@@ -116,24 +123,52 @@ internal fun OrbitMessage(
         OrbitMessageTone.OFFLINE -> MaterialTheme.colorScheme.secondary
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = containerColor,
-        contentColor = contentColor,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+    val content: @Composable () -> Unit = {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = containerColor,
+            contentColor = contentColor,
+            shape = MaterialTheme.shapes.medium
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 5.dp)
-                    .size(8.dp)
-                    .background(markerColor, CircleShape)
-            )
-            Text(text = text, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(markerColor, CircleShape)
+                )
+                Text(
+                    text = text,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (onDismiss != null) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Dismiss message")
+                    }
+                }
+            }
+        }
+    }
+
+    if (onDismiss == null) {
+        Box(modifier = modifier.fillMaxWidth()) { content() }
+    } else {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value != SwipeToDismissBoxValue.Settled) onDismiss()
+                true
+            }
+        )
+        SwipeToDismissBox(
+            state = dismissState,
+            modifier = modifier.fillMaxWidth(),
+            backgroundContent = {}
+        ) {
+            content()
         }
     }
 }
