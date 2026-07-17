@@ -245,6 +245,19 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 The book-detail follow-up includes a Compose instrumentation regression for the action area, Genre/Tag content, cover-viewer tap dismissal, and Series navigation. `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass; physical-device layout, horizontal swiping, and Android Back dismissal remain to be validated.
 
+### Latest device feedback work order — 2026-07-17
+
+- [x] Dismiss the full-screen cover viewer when any part of the screen is tapped; retain Android Back dismissal.
+- [x] Replace oversized book-detail action cards with symbol-only transparent controls and tighter padding.
+- [x] Clamp long book-detail titles to five rows with an expand/collapse affordance.
+- [x] Support selecting multiple books in library grids and applying bulk Mark as read/unread actions.
+- [x] Make genre/tag selections navigate to filtered Books or Series results through the catalog filter model.
+- [x] Keep a book's series name and series index visible as distinct metadata rows.
+- [ ] Validate genre-filter query support and result scope against the target BookOrbit server.
+- [ ] Surface and validate OIDC login when the server has OIDC enabled; the provider option is not currently visible in the app.
+- [ ] Run device validation for the revised detail density, title expansion, multi-selection, genre filters, and series-index layout.
+- [ ] Keep audiobook and CBZ validation deferred until representative samples are available.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:

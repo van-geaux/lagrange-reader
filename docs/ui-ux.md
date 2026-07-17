@@ -2,6 +2,8 @@
 
 The functional prototype is stable enough for UI/UX work to begin. EPUB is the currently available representative content type; audiobook, PDF, and CBZ-specific validation remains deferred until sample files are available.
 
+Latest detail feedback: use symbol-only transparent action controls with reduced padding; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre and Tag chips should navigate to filtered Books or Series results when supported by the server query contract. OIDC provider surfacing remains an open authentication item.
+
 ## Checkpoints
 
 ### Checkpoint 0: Functional baseline - complete

@@ -428,6 +428,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             order = filter.direction.serverValue,
             extra = buildList {
                 filter.author?.trim()?.takeIf { it.isNotBlank() }?.let { add("author" to it) }
+                filter.genre?.trim()?.takeIf { it.isNotBlank() }?.let { add("genre" to it) }
                 filter.libraryId?.trim()?.takeIf { it.isNotBlank() }?.let { add("libraryId" to it) }
                 filter.completion.serverValue?.let { add("completionStatus" to it) }
             }

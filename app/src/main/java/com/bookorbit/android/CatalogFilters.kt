@@ -43,13 +43,14 @@ data class BookBrowseFilter(
     val title: String? = null,
     val author: String? = null,
     val series: String? = null,
+    val genre: String? = null,
     val readStatus: BookReadFilter = BookReadFilter.ALL,
     val format: BookFormatFilter = BookFormatFilter.ALL,
     val sort: BookSortOption = BookSortOption.SERVER_DEFAULT,
     val direction: SortDirection = SortDirection.ASCENDING
 ) {
     val isActive: Boolean
-        get() = !title.isNullOrBlank() || !author.isNullOrBlank() || !series.isNullOrBlank() ||
+        get() = !title.isNullOrBlank() || !author.isNullOrBlank() || !series.isNullOrBlank() || !genre.isNullOrBlank() ||
             readStatus != BookReadFilter.ALL ||
             format != BookFormatFilter.ALL ||
             sort != BookSortOption.SERVER_DEFAULT
@@ -72,20 +73,21 @@ enum class SeriesSortOption(val label: String, internal val serverField: String)
 data class SeriesCatalogFilter(
     val query: String? = null,
     val author: String? = null,
+    val genre: String? = null,
     val libraryId: String? = null,
     val completion: SeriesCompletionFilter = SeriesCompletionFilter.ALL,
     val sort: SeriesSortOption = SeriesSortOption.NAME,
     val direction: SortDirection = SortDirection.ASCENDING
 ) {
     val isActive: Boolean
-        get() = !author.isNullOrBlank() || !libraryId.isNullOrBlank() ||
+        get() = !author.isNullOrBlank() || !genre.isNullOrBlank() || !libraryId.isNullOrBlank() ||
             completion != SeriesCompletionFilter.ALL ||
             sort != SeriesSortOption.NAME || direction != SortDirection.ASCENDING
 }
 
 internal fun BookBrowseFilter.toServerFilter(): JSONObject? {
     val rules = JSONArray()
-    listOf("title" to title, "author" to author, "series" to series).forEach { (field, value) ->
+    listOf("title" to title, "author" to author, "series" to series, "genres" to genre).forEach { (field, value) ->
         value?.trim()?.takeIf { it.isNotBlank() }?.let { text ->
             rules.put(
                 JSONObject()

@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -1321,7 +1322,10 @@ private fun BookPosterCard(
     displayTitle: String = book.title,
     supportingText: String? = null,
     onMarkAsRead: (() -> Unit)? = null,
-    onMarkAsUnread: (() -> Unit)? = null
+    onMarkAsUnread: (() -> Unit)? = null,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null
 ) {
     val isBookCard = supportingText == null && displayTitle == book.title
     val hasActions = enabled && (onMarkAsRead != null || onMarkAsUnread != null)
@@ -1339,8 +1343,8 @@ private fun BookPosterCard(
             .fillMaxWidth()
             .combinedClickable(
                 enabled = enabled,
-                onClick = onClick,
-                onLongClick = if (hasActions) ({ showActions = true }) else null
+                onClick = if (selectionMode && onToggleSelection != null) onToggleSelection else onClick,
+                onLongClick = if (onToggleSelection != null) onToggleSelection else if (hasActions) ({ showActions = true }) else null
             )
             .semantics {
                 contentDescription = buildString {
@@ -1349,8 +1353,10 @@ private fun BookPosterCard(
                     status?.let { append(", $it") }
                 }
                 if (!enabled) disabled()
+                if (isSelected) stateDescription = "Selected"
             },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -2145,6 +2151,8 @@ private fun LibraryBooks(
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
         ?: "Library"
     var seriesCollapsed by rememberSaveable(title) { mutableStateOf(false) }
+    var selectedBookIds by remember(title) { mutableStateOf<Set<String>>(emptySet()) }
+    val selectedBooks = state.books.filter { it.id in selectedBookIds }
     val seriesKeys = state.books
         .mapNotNull { it.seriesId ?: it.seriesName }
         .filter { it.isNotBlank() }
@@ -2218,6 +2226,12 @@ private fun LibraryBooks(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (selectedBookIds.isNotEmpty()) {
+                    Text("${selectedBookIds.size} selected", modifier = Modifier.weight(1f))
+                    TextButton(onClick = { selectedBooks.forEach { onMarkAsRead?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark read") }
+                    TextButton(onClick = { selectedBooks.forEach { onMarkAsUnread?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark unread") }
+                    TextButton(onClick = { selectedBookIds = emptySet() }) { Text("Clear") }
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -2297,6 +2311,11 @@ private fun LibraryBooks(
                 } else null,
                 onMarkAsUnread = if (seriesKey == null && !state.isOfflineSnapshot) {
                     onMarkAsUnread?.let { mark -> { mark(book) } }
+                } else null,
+                isSelected = book.id in selectedBookIds,
+                selectionMode = selectedBookIds.isNotEmpty(),
+                onToggleSelection = if (seriesKey == null && !state.isOfflineSnapshot) {
+                    { selectedBookIds = if (book.id in selectedBookIds) selectedBookIds - book.id else selectedBookIds + book.id }
                 } else null,
                 onClick = {
                     if (seriesKey != null) onSeriesSelected(seriesKey) else onBookSelected(book)
@@ -2645,7 +2664,14 @@ private fun BookDetails(
                             }
                         )
                     }
-                    Text(displayBook.title, style = MaterialTheme.typography.headlineSmall)
+                    displayBook.seriesIndex?.let { index ->
+                        Text(
+                            "Book ${formatSeriesIndex(index)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    ExpandableBookTitle(displayBook.title)
                     detail.subtitle?.let {
                         Text(it, style = MaterialTheme.typography.titleMedium)
                     }
@@ -2766,14 +2792,9 @@ private fun DetailActionTile(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .width(104.dp)
-            .heightIn(min = 76.dp),
+            .size(46.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (emphasized) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
+            containerColor = Color.Transparent,
             contentColor = if (emphasized) {
                 MaterialTheme.colorScheme.onPrimaryContainer
             } else {
@@ -2783,19 +2804,12 @@ private fun DetailActionTile(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 11.dp),
+                .fillMaxSize()
+                .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -2824,6 +2838,26 @@ private fun DetailLabelGroup(title: String, labels: List<String>) {
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandableBookTitle(title: String) {
+    var expanded by remember(title) { mutableStateOf(false) }
+    var overflow by remember(title) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            maxLines = if (expanded) Int.MAX_VALUE else 5,
+            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+            onTextLayout = { overflow = it.hasVisualOverflow }
+        )
+        if (overflow || expanded) {
+            TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+                Text(if (expanded) "Collapse" else "Expand title")
             }
         }
     }
@@ -2903,7 +2937,9 @@ private fun FullScreenCoverViewer(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.94f))
-                .padding(24.dp),
+                .padding(24.dp)
+                .clickable(onClick = onDismiss)
+                .semantics { contentDescription = "Full-screen cover for ${book.title}. Tap anywhere to close" },
             contentAlignment = Alignment.Center
         ) {
             Box(
