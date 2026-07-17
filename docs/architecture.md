@@ -67,6 +67,14 @@ The current app flow is:
 - Progress queue writes are dispatched on `Dispatchers.IO`; the coordinator captures the newest reader/player event synchronously so an immediate close cannot lose the final update.
 - `closeReader` copies the active `ReaderState`, then synchronously leaves the reader before starting coroutine/network/storage work. When a cached `BrowserState` exists, it is restored immediately with refreshing/loading state and the captured progress merged into both selected-library `books` and server-wide `homeBooks`; without a cache, the screen changes to Loading while browser load proceeds. Background work persists the captured event, attempts pending foreground sync, clears active-reader state for non-preview sessions only, and refreshes the browser. Preview continues to skip both progress persistence and active-reader cleanup. Browser bootstrap still flushes pending progress before catalog reconciliation, and WorkManager remains the offline/transient fallback.
 
+### Repository HTTP integration testing
+
+- `BookOrbitRepositoryIntegrationTest` runs in androidTest with MockWebServer 4.12.0, the real Android application context, `BookOrbitRepository`, and its persistence stores rather than a repository fake.
+- Login coverage asserts the native credential JSON, persisted access token, and authenticated Bearer request to `/api/v1/auth/me`.
+- Catalog coverage asserts the real GET libraries call and POST paginated library-books request with page size 100, then parses EPUB media kind and server progress.
+- Queue coverage confirms a locally queued event makes zero HTTP requests until explicit replay, then asserts file-progress and book-`reading` status payloads before exact queue acknowledgement.
+- Cases isolate and clear progress stores, cancel unique background work, and clear server/session state. The androidTest APK compiles; connected execution remains pending because adb enumeration did not produce a usable target.
+
 ### Local persistence
 
 - `DataStore` stores the configured server URL and selected library ID.

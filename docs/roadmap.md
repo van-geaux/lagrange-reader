@@ -47,9 +47,9 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 3. Automated coverage and recovery hardening
 
-- Add integration coverage for login bootstrap and library/book loading
-- Add integration coverage around offline queue replay
-- Execute Compose instrumentation tests on a connected emulator or device
+- Completed in androidTest: real-repository/MockWebServer integration coverage for login bootstrap and library/book loading
+- Completed in androidTest: offline queue retention plus explicit progress/status replay and acknowledgement
+- Execute the new repository integration tests and remaining Compose instrumentation tests on a usable connected emulator or device; current adb enumeration did not yield a runnable target
 - Validate server-forced session expiry and return-to-intended-action recovery on a real deployment
 
 ### 4. Media-specific validation
@@ -317,6 +317,8 @@ The completed immediate reader-close step passes 184 JVM tests across 30 suites 
 The completed missing-cover fallback step passes 187 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Three helper regressions cover missing metadata, candidate order, and canonical deduplication.
 
 The completed EPUB current-chapter slider step passes 188 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Unit coverage verifies the clamped JavaScript command; instrumentation compiles retained selector/slider semantics and a WebView jump/rendered-text regression.
+
+The repository HTTP integration-test step retains 188 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Three `BookOrbitRepositoryIntegrationTest` cases compile into the androidTest APK; connected execution remains pending because adb device enumeration hung/no usable target was available.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

@@ -216,9 +216,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add unit tests for progress queue store
 - [x] Add unit tests for sync conflict resolution
 - [x] Add unit tests for coordinator bootstrap and login recovery
-- [ ] Add integration tests for login bootstrap
-- [ ] Add integration tests for library/book loading
-- [ ] Add integration tests for offline queue replay
+- [x] Add repository HTTP integration tests for login bootstrap
+- [x] Add repository HTTP integration tests for library/book loading
+- [x] Add repository HTTP integration tests for offline queue replay
+- [ ] Execute the repository HTTP integration tests on a usable connected device/emulator; current androidTest APK compiles but adb enumeration did not provide a runnable target
 - [x] Add an Android WebView instrumentation regression for EPUB padding geometry and translated-page visibility
 - [x] Add Compose instrumentation regression coverage for book-detail actions, wrapped metadata, the full-screen cover viewer, and Series navigation
 - [x] Add at least one end-to-end manual test matrix
