@@ -93,6 +93,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Confirm byte-range support and resume behavior for audio
 - [x] Replace generic ebook fallback with real EPUB reader
 - [x] Add comic/CBZ reader support if BookOrbit exposes comic files
+- [ ] Investigate the target manga sample reaching unsupported-format handling despite the existing CBZ implementation, then restore CBZ detection/routing/reading
+- [ ] Define and implement CBR handling based on available RAR archive tooling and representative sample constraints
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path
@@ -109,6 +111,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add storage-space failure handling
 - [x] Add download integrity checks
 - [x] Add delete-local-copy action
+- [ ] Reconcile an open book-detail screen immediately after Delete local succeeds so offline availability and actions update without leaving the screen
 - [x] Prune stale download records when local files are missing
 - [ ] Add redownload/update behavior if server file changes
 
@@ -272,6 +275,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a downward-triangle affordance to the selected Library name
 - [x] Replace the Library refresh arrow with swipe-down-to-refresh
 - [x] Cache cover thumbnails locally for Local books
+- [ ] Fix Local books cached-thumbnail rendering, including while offline
 - [x] Rename the collapsed-series action to Expand series
 - [x] Keep collapsed series ordered by series name and restore the scroll anchor when toggling collapse
 - [x] Improve thumbnail loading performance and retry failed covers
@@ -300,6 +304,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Make red Home/Library Recommended messages dismissible with horizontal swipe and an explicit close button
 - [x] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total, weighted completion, and calculating fallback
 - [x] Restrict Recently read to completed books and exclude titles still in progress
+- [ ] Restore Currently reading for genuinely in-progress books when the server/library state contains active progress
+- [ ] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Browse
+- [ ] Fix main Options navigation from book details so retained detail state cannot mask the Options destination
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title
@@ -336,7 +343,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
-- [ ] Checkpoint 5: refine audiobook, PDF, and CBZ readers when samples are available
+- [ ] Checkpoint 5: investigate the CBZ regression and CBR support with the available manga samples; refine audiobook/PDF readers when representative samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
 
 ## Options backlog
@@ -345,6 +352,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Add lock current orientation toggle
 - [x] Add haptic feedback toggle for supported interactions
+- [ ] Validate/fix haptic perceptibility and define consistent coverage beyond Options rows and supported long-press interactions
 - [x] Add app theme selection: Follow system, Light, or Dark
 - [x] Add default opening screen selection: Home, Library, or Local books
 - [x] Add Reduce motion/animations accessibility option for immediate catalog jumps
@@ -355,7 +363,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add storage management showing downloaded/cache sizes and a Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data
 - [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points
-- [ ] Validate cellular/network policy, storage accounting/cache clearing, and delete confirmation on a physical device
+- [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, and delete-local confirmation on a physical device
+- [ ] Validate app theme and background network policy on a physical device
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
@@ -365,7 +374,7 @@ UI/UX discussion and design-system work can start now:
 
 - The functional and JVM baseline is ready.
 - EPUB is the validated representative reader path.
-- Audiobook, PDF, and CBZ-specific work is deferred until sample files are available.
+- Comic work is reopened with available manga samples; audiobook-specific testing remains deferred until a representative sample is available.
 - The immediate implementation pass is the user-feedback workplan below: Home reading priority first, then the Plex-inspired shell, Home search/status-bar spacing, reader padding, and launch visual.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 

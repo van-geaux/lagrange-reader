@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to begin. EPUB is the currently available representative content type; audiobook, PDF, and CBZ-specific validation remains deferred until sample files are available.
+The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. Manga samples are now available, so comic validation is reopened: CBZ was previously implemented but target CBR/CBZ content currently reaches unsupported-format handling. CBZ needs a format-detection/routing regression investigation; CBR may require separate RAR archive support. Audiobook validation remains deferred without a representative sample.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -10,10 +10,14 @@ Audited implementation status: code and automated verification are complete; phy
 
 Latest target-device feedback: Download and Delete local now have visible labels, and a completed download updates the still-open detail immediately. BookOrbit has no verified tag filter, so Tag chips are informational and non-clickable. Red Home/Library Recommended messages now support explicit X dismissal and horizontal swipe dismissal, clearing the message immediately. Recently read now contains only completed books, excludes every ID still in Currently reading, and is capped at 12. The reader footer now shows layout-derived whole-book pages with a calculating fallback; measurement timing/stability still requires device validation. Direct OIDC/SSO is deferred; native username/password remains current.
 
+Latest target-device validation: lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, delete-local confirmation, and whole-book progress correctness work as intended. Haptics were not perceptible. The current code explicitly requests haptics only for Options switch/selection rows and otherwise relies on Android/Foundation haptics for supported long-press interactions; ordinary navigation, book taps, and page turns have no explicit haptic feedback. Perceptibility and consistent interaction coverage remain open.
+
+Latest work order, in priority order: reconcile the open detail immediately after Delete local; restore cached/offline Local books thumbnails; make main Options navigation work from book details; restore genuinely in-progress Currently reading entries; aggregate Home shelves across all libraries on the connected server while keeping Libraries/Browse selected-library-scoped; then restore CBZ routing/reading and define CBR behavior against the available samples and archive tooling. Direct OIDC/SSO remains deferred.
+
 Options backlog
 
-- Interface implementation complete: lock current orientation toggle; haptic feedback toggle; app theme selection (Follow system, Light, Dark) applied immediately; default opening screen (Home, Library, Local books) on fresh start; Reduce motion/animations using immediate catalog jumps. Physical-device validation remains pending.
-- Data implementation complete: downloads-over-cellular policy (Always, Never, Ask for confirmation) with browser-wide start/prompt/block behavior; storage management with downloaded/disposable-cache sizes and a confirmed Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data; background metadata/cover refresh policy (Any network, Wi-Fi only, Disabled) governing current scheduled cover work and future metadata work; confirmation before deleting a local copy, enabled by default. Physical-device network/storage/confirmation validation remains pending.
+- Interface implementation complete: lock current orientation toggle; haptic feedback toggle; app theme selection (Follow system, Light, Dark) applied immediately; default opening screen (Home, Library, Local books) on fresh start; Reduce motion/animations using immediate catalog jumps. Orientation locking, default opening screen, and Reduce motion are device-validated. Haptic perceptibility/coverage and app-theme validation remain open.
+- Data implementation complete: downloads-over-cellular policy (Always, Never, Ask for confirmation) with browser-wide start/prompt/block behavior; storage management with downloaded/disposable-cache sizes and a confirmed Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data; background metadata/cover refresh policy (Any network, Wi-Fi only, Disabled) governing current scheduled cover work and future metadata work; confirmation before deleting a local copy, enabled by default. Cellular behavior, cache clearing, and delete confirmation are device-validated; background-network-policy validation remains open.
 
 ## Checkpoints
 
@@ -45,9 +49,9 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 - Add intentional empty, loading, offline, and failure presentations.
 - Keep actions usable with long titles, large font scales, and narrow phone widths.
 
-The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home must put Currently reading first, while completed/recently read books remain available separately. Home shelves remain scoped to the selected library's complete local metadata catalog.
+The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home must put Currently reading first, while completed/recently read books remain available separately. The next Home revision must aggregate shelves across every library on the connected server; selected-library scoping belongs to Libraries Recommended/Browse, not Home.
 
-The first Home shelf now renders as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress and excludes completed books; Recently read books remains a separate history shelf.
+The first Home shelf is intended to render as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress and excludes completed books; Recently read books remains a separate history shelf. Target feedback reports that genuinely in-progress books are currently absent, so restoration is an open regression item.
 
 Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while Options lives in the profile menu above Log out. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from complete Room-cached Browse content.
 
@@ -180,9 +184,20 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Add a full-screen, tap-to-dismiss/back-dismiss cover viewer from book details.
 - [x] Redesign the reader options window as a rounded bottom sheet with clearer hierarchy, spacing, and grouped controls.
 
+### Latest target-device work order - 2026-07-17
+
+- [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, delete-local confirmation, and whole-book progress correctness.
+- [ ] Make enabled haptics perceptible on supported devices and define consistent coverage; current explicit coverage is limited to Options switch/selection rows, plus Android/Foundation-supported long presses.
+- [ ] After Delete local succeeds, update the still-open detail actions and offline availability immediately.
+- [ ] Show cached Local books thumbnails online and offline.
+- [ ] Ensure the main Options destination opens from book details instead of retained detail state masking it.
+- [ ] Restore genuinely in-progress titles to Currently reading.
+- [ ] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse.
+- [ ] Reproduce and fix the CBZ unsupported-format regression with the available manga samples; define CBR behavior separately around RAR support and sample constraints.
+
 ### Checkpoint 5: Other media readers - deferred
 
-- Adjust audiobook, PDF, and CBZ-specific UX only after representative files are available.
+- Use the available manga samples to restore CBZ routing/reading and define CBR behavior; defer audiobook-specific UX until a representative sample is available.
 - Shared reader tokens and navigation patterns may be implemented earlier, but format-specific behavior must remain marked unvalidated.
 
 ### Checkpoint 6: Polish and release validation - after primary screens

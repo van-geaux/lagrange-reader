@@ -52,10 +52,12 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Execute Compose instrumentation tests on a connected emulator or device
 - Validate server-forced session expiry and return-to-intended-action recovery on a real deployment
 
-### 4. Deferred media-specific validation
+### 4. Media-specific validation
 
-- Obtain representative audiobook, PDF, and CBZ files
-- Validate offline reopen, restart resume, streaming/range behavior, and progress sync for each format
+- Use the newly available manga samples to investigate why target CBR/CBZ content reaches unsupported-format handling despite the existing CBZ implementation
+- Restore CBZ format detection/routing/reading, then define CBR support separately according to available RAR tooling and sample constraints
+- Obtain representative audiobook and PDF files; audiobook testing remains deferred without a sample
+- Validate offline reopen, restart resume, streaming/range behavior, and progress sync for each supported format
 - Adjust format-specific controls only after their behavior can be exercised on device
 
 ### 5. Release readiness
@@ -257,7 +259,7 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [ ] Add and validate direct OIDC/SSO authentication after the provider and redirect contract are confirmed; native username/password remains current.
 - [x] Complete the revised detail density, title expansion, multi-selection, genre navigation, and series-index implementation in code/tests.
 - [ ] Run device validation for the revised detail density, multi-selection, genre-filter result scope, and interrupted-download recovery.
-- [ ] Keep audiobook and CBZ validation deferred until representative samples are available.
+- [ ] Keep audiobook validation deferred until a representative sample is available; reopen comic validation with the available manga samples.
 - [x] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
 - [x] Expose active per-file download progress, percentage/linear or indeterminate state, cancel guidance, and retry failure status from book details.
 
@@ -275,6 +277,30 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 - [x] Make red Home/Library Recommended message cards dismissible by horizontal swipe and an explicit close button, clearing the BrowserState message immediately.
 - [x] Replace the normalized `Book x/1000` EPUB footer with sequential hidden-WebView measurement, layout-derived current/total pages, weighted completion, and a `Book pages calculating` fallback while counts settle.
 - [x] Restrict Recently read to books that have actually finished, excluding every title that remains in progress; order by last-read/updated/title and cap at 12.
+
+### Latest target-device validation and work order - 2026-07-17
+
+Validated on the target device:
+
+- [x] Lock current orientation.
+- [x] Default opening screen.
+- [x] Downloads-over-cellular behavior.
+- [x] Reduce motion.
+- [x] Storage accounting/cache clearing and delete-local confirmation.
+- [x] Layout-derived whole-book progress correctness.
+
+Haptic feedback was not perceptible. The current code explicitly requests haptics only for Options switch/selection rows and otherwise depends on Android/Foundation behavior for supported long-press interactions; ordinary navigation, book taps, and page turns do not request feedback. Keep haptics open for perceptibility fixes and a consistent coverage decision rather than treating the option as device-validated.
+
+Implement next, in order:
+
+1. Reconcile the still-open book-detail state immediately after Delete local succeeds so Delete local, offline availability, and related status update without backing out and reopening.
+2. Restore cached thumbnails in Local books, including while offline.
+3. Fix navigation to the main Options screen from book details; the current selection is masked by retained detail state.
+4. Restore Currently reading for genuinely in-progress books.
+5. Aggregate Home shelves across every library on the connected server. Keep the selected-library scope in Libraries/Browse rather than applying it to Home.
+6. Reopen comic work using the available manga samples. Diagnose the CBZ unsupported-format regression and restore CBZ routing/reading; treat CBR separately because it may require RAR archive support not used by CBZ.
+
+Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 
 ## Source of truth
 
@@ -294,7 +320,8 @@ Data
 - [x] Add storage management showing downloaded/disposable-cache sizes and a confirmed Clear cache action that preserves downloaded books, downloaded-book metadata, settings, progress, and catalog data.
 - [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current scheduled cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately. A separate scheduled metadata worker is not yet present.
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points.
-- [ ] Validate network policy, storage accounting/cache clearing, and delete confirmation on a physical device.
+- [x] Validate lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, and delete-local confirmation on a physical device.
+- [ ] Validate haptic perceptibility/coverage, app theme, and background network policy on a physical device.
 
 Detailed checkpoint status is tracked in:
 
