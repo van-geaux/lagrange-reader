@@ -133,7 +133,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Restore and validate visible EPUB chapter content before validating reader padding changes on the device.
 - [x] Persist independent reader padding per book/file and flush the final progress update before returning to the browser.
 - [x] Add server-aligned filter controls to Library Browse and Series, with the same title/author/series, read-status, format, and sort controls applied to Local books.
-- [ ] Validate session expiry, catalog thumbnails, typography/card density, and metadata wrapping on the physical device.
+- [ ] Validate catalog thumbnails, typography/card density, and metadata wrapping on the physical device; session-expiry recovery is already validated.
 
 ### Cache-first Browse and exact navigation — 2026-07-13
 

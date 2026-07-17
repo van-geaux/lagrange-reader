@@ -160,7 +160,7 @@ Validated against the live server and BookOrbit source:
 ## Known architectural gaps
 
 - EPUB exact in-chapter page restore is implemented; exact restore, visible-overflow pagination, external vertical padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
-- Native login has not yet been verified against every server auth flow or real rate-limit response.
+- Native username/password login completion is verified through `/api/v1/auth/me` before coordinator resume. Other server auth variants and real rate-limit responses remain outside that completed check.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling rules are extracted into a small policy object with focused JVM coverage.

@@ -49,10 +49,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Open server login page inside app
 - [x] Share session cookies between WebView and API client
 - [x] Verify server-side login contract against the live BookOrbit server
-- [ ] Verify login completion detection is robust
+- [x] Verify native login completion through authenticated `/api/v1/auth/me` before coordinator resume
 - [x] Confirm session persistence after app restart
 - [x] Keep explicit Sign in on the login screen instead of bouncing to cached Home
-- [ ] Confirm logout/session expiry recovery behavior on a physical device
+- [x] Confirm explicit sign-out and session-expiry recovery behavior on a physical device
 - [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
 - [x] Add explicit authenticated-user bootstrap check after login
 - [x] Add clean logout/reset session behavior
@@ -124,7 +124,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Reopen local audio/PDF files
 - [x] Prefer local file when available
 - [x] Keep queued progress locally while offline
-- [ ] Test full airplane-mode behavior with downloaded books
+- [x] Test full airplane-mode behavior with downloaded books
 - [x] Confirm app startup behavior when offline
 - [x] Confirm library list fallback when offline
 - [x] Define and implement offline UX for books not downloaded
@@ -148,7 +148,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Preserve reader updates enqueued while foreground or WorkManager sync is in flight
 - [x] Reject unknown progress payloads instead of resetting BookOrbit to zero percent
 - [x] Explicitly sync BookOrbit `reading`/`read` status with each accepted progress event
-- [ ] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
+- [x] Validate Android-to-BookOrbit and BookOrbit-to-Android progress reconciliation on the target server
 - [x] Prevent removed Currently Reading titles from returning from stale unread-status timestamps after Home refresh
 - [x] Reduce large-library refresh latency with 100-book pages and bounded concurrent page requests
 - [ ] Add session event support if `sessions` endpoint is useful
