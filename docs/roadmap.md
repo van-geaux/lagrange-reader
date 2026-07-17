@@ -285,10 +285,15 @@ Interface
 - [ ] Add a lock-orientation toggle.
 - [ ] Add a haptic-feedback option.
 - [ ] Add app theme selection: Light, Dark, or Follow system.
+- [ ] Add default opening screen selection: Home, Library, or Local books.
+- [ ] Add a Reduce motion/animations accessibility option.
 
 Data
 
 - [ ] Add a downloads-over-cellular policy: Always, Never, or Ask for confirmation.
+- [ ] Add storage management showing downloaded/cache sizes and a Clear cache action; Clear cache must not delete downloaded books.
+- [ ] Add a background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled.
+- [ ] Add confirmation before deleting a local copy.
 
 Detailed checkpoint status is tracked in:
 

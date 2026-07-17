@@ -346,10 +346,15 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Add lock orientation toggle
 - [ ] Add haptic feedback option
 - [ ] Add app theme selection: Light, Dark, or Follow system
+- [ ] Add default opening screen selection: Home, Library, or Local books
+- [ ] Add Reduce motion/animations accessibility option
 
 ### Data
 
 - [ ] Add downloads-over-cellular policy: Always, Never, or Ask for confirmation
+- [ ] Add storage management showing downloaded/cache sizes and a Clear cache action; Clear cache must not delete downloaded books
+- [ ] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled
+- [ ] Add confirmation before deleting a local copy
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
