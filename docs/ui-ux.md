@@ -196,7 +196,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; physical-device validation remains pending.
 - [x] Fix the bare-format unsupported regression and route online CBZ/CBR/CB7 plus offline ZIP/CBZ through the comic reader; physical-device validation remains pending.
 - [x] Match the novel reader's fullscreen interaction model in comics: outer tap zones and horizontal swipes change pages, center tap opens options, exposed content or Back dismisses options first, and Back exits only when options are closed; target-device validation passed.
-- [ ] Add dynamic Mark as read/Mark as unread access to book details. Placement awaits approval; the recommended candidate is a three-dot overflow at the end of the swipeable primary-action row rather than another always-visible tile.
+- [x] Add a compact three-dot overflow at the end of the swipeable book-detail action row. Show exactly one live action—Mark as read for unfinished books or Mark as unread for read/completed books—from selected-library/server-wide Home status; disable it for offline snapshots. Physical-device validation remains pending.
 - [ ] Make Close book dismiss the reader immediately while progress publication, cleanup, and browser refresh continue in the background.
 - [ ] Restore missing foreground book-detail covers such as `your name.` through a standard BookOrbit thumbnail fallback when explicit cover metadata is absent or stale.
 - [ ] Add a reading-position bar to reader options; whole-book mapping is recommended, while current-chapter-only mapping remains an alternative awaiting approval.

@@ -705,6 +705,8 @@ internal fun NativeLibraryBrowserScreen(
                     onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
@@ -3199,10 +3201,14 @@ private fun BookDetails(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
-    val stateBook = state.books.firstOrNull { it.id == book.id } ?: book
+    val stateBook = state.books.firstOrNull { it.id == book.id }
+        ?: state.homeBooks.firstOrNull { it.id == book.id }
+        ?: book
     val currentBook = stateBook.fileId?.let { fileId ->
         if (state.localFilePathOverrides.containsKey(fileId)) {
             stateBook.copy(localPath = state.localFilePathOverrides[fileId])
@@ -3233,7 +3239,16 @@ private fun BookDetails(
         value = detailLoader(currentBook) ?: value
     }
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
-    val displayBook = detail.book
+    var showBookActions by rememberSaveable(book.id) { mutableStateOf(false) }
+    val displayBook = detail.book.copy(
+        localPath = currentBook.localPath,
+        progressLabel = currentBook.progressLabel ?: detail.book.progressLabel,
+        progressPercent = currentBook.progressPercent ?: detail.book.progressPercent,
+        progressPositionMs = currentBook.progressPositionMs ?: detail.book.progressPositionMs,
+        progressPageIndex = currentBook.progressPageIndex ?: detail.book.progressPageIndex,
+        lastReadAtMillis = currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
+        isRead = currentBook.isRead
+    )
     val fileId = displayBook.fileId
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
     val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
@@ -3379,6 +3394,33 @@ private fun BookDetails(
                         )
                     }
                 }
+                item(key = "more-book-actions") {
+                    Box {
+                        DetailActionTile(
+                            label = "More book actions",
+                            icon = Icons.Default.MoreVert,
+                            enabled = !state.isOfflineSnapshot,
+                            onClick = { showBookActions = true }
+                        )
+                        DropdownMenu(
+                            expanded = showBookActions,
+                            onDismissRequest = { showBookActions = false }
+                        ) {
+                            val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
+                            DropdownMenuItem(
+                                text = { Text(statusActionLabel) },
+                                onClick = {
+                                    showBookActions = false
+                                    if (statusActionLabel == "Mark as unread") {
+                                        onMarkAsUnread(displayBook)
+                                    } else {
+                                        onMarkAsRead(displayBook)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
         if (isDownloading) {
@@ -3457,6 +3499,11 @@ private fun BookDetails(
             }
         }
     }
+}
+
+internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String {
+    val completed = book.isRead || book.progressPercent?.let { it >= 99.5f } == true
+    return if (completed) "Mark as unread" else "Mark as read"
 }
 
 @Composable

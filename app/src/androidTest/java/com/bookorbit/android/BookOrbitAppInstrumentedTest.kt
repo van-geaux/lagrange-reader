@@ -244,6 +244,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Read").assertIsDisplayed()
         composeRule.onNodeWithText("Preview").assertIsDisplayed()
         composeRule.onNodeWithText("Download").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("More book actions").performClick()
+        composeRule.onNodeWithText("Mark as read").assertIsDisplayed().performClick()
+        composeRule.waitUntil { dataSource.markedReadBooks.any { it.id == book.id } }
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
         composeRule.onNodeWithText("Science fiction").assertIsDisplayed()
         composeRule.onNodeWithText("Tags").assertIsDisplayed()
