@@ -755,48 +755,71 @@ internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
 
 internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean = this != EpubReaderTheme.Dark
 
-internal const val EPUB_BOOK_LOCATION_TOTAL = 1000
-
 internal data class EpubReaderProgressStatus(
     val completionPercent: Float,
     val chapterNumber: Int,
     val chapterCount: Int,
     val chapterPageNumber: Int,
     val chapterPageCount: Int,
-    val bookLocation: Int
+    val bookPageNumber: Int?,
+    val bookPageCount: Int?
 )
 
 internal fun epubReaderProgressStatus(
     chapterIndex: Int,
     chapterCount: Int,
     pageIndex: Int,
-    pageCount: Int
+    pageCount: Int,
+    chapterPageCounts: List<Int>? = null
 ): EpubReaderProgressStatus {
     val safeChapterCount = chapterCount.coerceAtLeast(1)
     val safeChapterIndex = chapterIndex.coerceIn(0, safeChapterCount - 1)
     val safePageCount = pageCount.coerceAtLeast(1)
     val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
+    val measuredPageCounts = chapterPageCounts
+        ?.takeIf { it.size == safeChapterCount }
+        ?.map { it.coerceAtLeast(1) }
+        ?.toMutableList()
+        ?.also { it[safeChapterIndex] = safePageCount }
+    val bookPageCount = measuredPageCounts?.sum()
+    val bookPageNumber = measuredPageCounts?.let { counts ->
+        (counts.take(safeChapterIndex).sum() + safePageIndex + 1)
+            .coerceIn(1, bookPageCount ?: 1)
+    }
     val chapterProgress = (safePageIndex + 1f) / safePageCount
-    val bookProgress = ((safeChapterIndex + chapterProgress) / safeChapterCount).coerceIn(0f, 1f)
+    val bookProgress = if (bookPageNumber != null && bookPageCount != null) {
+        bookPageNumber.toFloat() / bookPageCount
+    } else {
+        (safeChapterIndex + chapterProgress) / safeChapterCount
+    }.coerceIn(0f, 1f)
     return EpubReaderProgressStatus(
         completionPercent = bookProgress * 100f,
         chapterNumber = safeChapterIndex + 1,
         chapterCount = safeChapterCount,
         chapterPageNumber = safePageIndex + 1,
         chapterPageCount = safePageCount,
-        bookLocation = (bookProgress * EPUB_BOOK_LOCATION_TOTAL)
-            .roundToInt()
-            .coerceIn(1, EPUB_BOOK_LOCATION_TOTAL)
+        bookPageNumber = bookPageNumber,
+        bookPageCount = bookPageCount
     )
 }
 
 internal fun EpubReaderProgressStatus.displayText(): String =
     "${completionPercent.roundToInt()}% · Chapter $chapterNumber/$chapterCount · " +
-        "Page $chapterPageNumber/$chapterPageCount · Book $bookLocation/$EPUB_BOOK_LOCATION_TOTAL"
+        "Page $chapterPageNumber/$chapterPageCount · " +
+        if (bookPageNumber != null && bookPageCount != null) {
+            "Book $bookPageNumber/$bookPageCount"
+        } else {
+            "Book pages calculating…"
+        }
 
 internal fun EpubReaderProgressStatus.accessibilityText(): String =
     "Book completion ${completionPercent.roundToInt()} percent; chapter $chapterNumber of $chapterCount; " +
-        "chapter page $chapterPageNumber of $chapterPageCount; book location $bookLocation of $EPUB_BOOK_LOCATION_TOTAL"
+        "chapter page $chapterPageNumber of $chapterPageCount; " +
+        if (bookPageNumber != null && bookPageCount != null) {
+            "book page $bookPageNumber of $bookPageCount"
+        } else {
+            "whole-book pages are calculating"
+        }
 
 @Suppress("DEPRECATION")
 @Composable
@@ -1197,6 +1220,12 @@ private fun EpubReaderView(
     var showChapterPicker by remember(file) { mutableStateOf(false) }
     var currentPage by remember(file, initialPage) { mutableStateOf(initialPage.coerceAtLeast(0)) }
     var currentPageCount by remember(file) { mutableStateOf(1) }
+    var measuredChapterPageCounts by remember(file, fontScale, appliedPadding, selectedTheme) {
+        mutableStateOf(List<Int?>(chapterCount) { null })
+    }
+    var measuredViewportKey by remember(file, fontScale, appliedPadding, selectedTheme) {
+        mutableStateOf<String?>(null)
+    }
     var openChapterAtEnd by remember(file) { mutableStateOf(false) }
     val currentChapterState by rememberUpdatedState(epubBook.chapters[currentChapter])
     val currentAppliedPadding by rememberUpdatedState(appliedPadding)
@@ -1232,17 +1261,6 @@ private fun EpubReaderView(
         }
     }
 
-    val progressStatus = epubReaderProgressStatus(
-        chapterIndex = currentChapter,
-        chapterCount = chapterCount,
-        pageIndex = currentPage,
-        pageCount = currentPageCount
-    )
-
-    LaunchedEffect(currentChapter, currentPage, currentPageCount, progressStatus.completionPercent) {
-        onProgress(currentChapter, currentPage, currentPageCount, progressStatus.completionPercent)
-    }
-
     LaunchedEffect(paddingDraft) {
         delay(180)
         appliedPadding = paddingDraft
@@ -1252,6 +1270,56 @@ private fun EpubReaderView(
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color(selectedTheme.backgroundColor))) {
         val topReaderInset = maxHeight * (epubPaddingViewportPercent(appliedPadding.top) / 100f)
         val bottomReaderInset = maxHeight * (epubPaddingViewportPercent(appliedPadding.bottom) / 100f)
+        val viewportKey = "${maxWidth.value}x${maxHeight.value}"
+        LaunchedEffect(viewportKey) {
+            if (measuredViewportKey != viewportKey) {
+                measuredViewportKey = viewportKey
+                measuredChapterPageCounts = List(chapterCount) { null }
+            }
+        }
+        val completePageCounts = measuredChapterPageCounts
+            .takeIf { measuredViewportKey == viewportKey && it.all { count -> count != null } }
+            ?.map { count -> count ?: 1 }
+        val currentLayoutPageCount = completePageCounts?.getOrNull(currentChapter) ?: currentPageCount
+        val progressStatus = epubReaderProgressStatus(
+            chapterIndex = currentChapter,
+            chapterCount = chapterCount,
+            pageIndex = currentPage,
+            pageCount = currentLayoutPageCount,
+            chapterPageCounts = completePageCounts
+        )
+        LaunchedEffect(currentChapter, currentPage, currentLayoutPageCount, progressStatus.completionPercent) {
+            onProgress(currentChapter, currentPage, currentLayoutPageCount, progressStatus.completionPercent)
+        }
+
+        val measurementChapterIndex = if (measuredViewportKey == viewportKey) {
+            measuredChapterPageCounts.indexOfFirst { it == null }
+        } else {
+            -1
+        }
+        if (measurementChapterIndex >= 0) {
+            EpubChapterPageCountMeasurer(
+                chapter = epubBook.chapters[measurementChapterIndex],
+                chapterIndex = measurementChapterIndex,
+                theme = selectedTheme,
+                fontScale = fontScale,
+                padding = appliedPadding,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        top = topReaderInset,
+                        bottom = bottomReaderInset + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                    )
+                    .graphicsLayer { alpha = 0f },
+                onMeasured = { index, count ->
+                    if (index in measuredChapterPageCounts.indices && measuredChapterPageCounts[index] == null) {
+                        measuredChapterPageCounts = measuredChapterPageCounts.toMutableList().also {
+                            it[index] = count.coerceAtLeast(1)
+                        }
+                    }
+                }
+            )
+        }
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
@@ -1378,6 +1446,85 @@ private fun EpubReaderView(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
         )
     }
+}
+
+@Composable
+private fun EpubChapterPageCountMeasurer(
+    chapter: EpubChapter,
+    chapterIndex: Int,
+    theme: EpubReaderTheme,
+    fontScale: Float,
+    padding: EpubPaddingPercentages,
+    modifier: Modifier,
+    onMeasured: (Int, Int) -> Unit
+) {
+    val measuredCallback by rememberUpdatedState(onMeasured)
+    AndroidView(
+        modifier = modifier,
+        factory = { webContext ->
+            WebView(webContext).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+                settings.setSupportZoom(false)
+                @Suppress("DEPRECATION")
+                settings.allowFileAccessFromFileURLs = true
+                @Suppress("DEPRECATION")
+                settings.allowUniversalAccessFromFileURLs = true
+                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                isHorizontalScrollBarEnabled = false
+                isVerticalScrollBarEnabled = false
+                isClickable = false
+                isFocusable = false
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                overScrollMode = WebView.OVER_SCROLL_NEVER
+                addJavascriptInterface(
+                    EpubPageMeasurementBridge { index, count ->
+                        measuredCallback(index, count)
+                    },
+                    EPUB_READER_BRIDGE
+                )
+            }
+        },
+        update = { webView ->
+            val documentKey = listOf(
+                chapter.file.absolutePath,
+                chapter.file.lastModified(),
+                theme.name,
+                fontScale,
+                padding.left,
+                padding.right,
+                chapterIndex
+            ).joinToString("|")
+            if (webView.tag != documentKey) {
+                webView.tag = documentKey
+                webView.setBackgroundColor(theme.backgroundColor)
+                webView.loadDataWithBaseURL(
+                    chapter.file.parentFile?.toURI()?.toString(),
+                    styleEpubHtml(
+                        html = chapter.file.readText(),
+                        theme = theme,
+                        fontScale = fontScale,
+                        startAtEnd = false,
+                        topPaddingPercent = 0f,
+                        bottomPaddingPercent = 0f,
+                        leftPaddingPercent = padding.left,
+                        rightPaddingPercent = padding.right,
+                        measurementChapterIndex = chapterIndex
+                    ),
+                    "text/html",
+                    Charsets.UTF_8.name(),
+                    null
+                )
+            }
+        },
+        onRelease = { webView ->
+            webView.removeJavascriptInterface(EPUB_READER_BRIDGE)
+            webView.stopLoading()
+            webView.destroy()
+        }
+    )
 }
 
 @Composable
@@ -1723,6 +1870,27 @@ private class EpubReaderBridge(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
+private class EpubPageMeasurementBridge(
+    private val onMeasured: (Int, Int) -> Unit
+) {
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun centerTap() = Unit
+
+    @JavascriptInterface
+    fun pageChanged(page: Int, count: Int) = Unit
+
+    @JavascriptInterface
+    fun chapterBoundary(direction: Int) = Unit
+
+    @JavascriptInterface
+    fun chapterPageCount(chapterIndex: Int, count: Int) {
+        mainHandler.post { onMeasured(chapterIndex, count.coerceAtLeast(1)) }
+    }
+}
+
 @Composable
 private fun ComicReaderView(
     title: String,
@@ -2025,7 +2193,8 @@ internal fun styleEpubHtml(
     bottomPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     leftPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     rightPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
-    initialPage: Int = 0
+    initialPage: Int = 0,
+    measurementChapterIndex: Int? = null
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
     val topInset = epubPaddingViewportPercent(topPaddingPercent)
@@ -2089,6 +2258,8 @@ internal fun styleEpubHtml(
           };
           let pinToEnd = ${startAtEnd.toString()};
           const initialPage = ${initialPage.coerceAtLeast(0)};
+          const measurementChapterIndex = ${measurementChapterIndex?.coerceAtLeast(0) ?: "null"};
+          let measurementToken = 0;
           const bridge = window.$EPUB_READER_BRIDGE;
           const normalizeInset = (value) => Math.min(25, Math.max(0, Number(value) || 0));
           const pageHeight = () => Math.max(
@@ -2111,7 +2282,33 @@ internal fun styleEpubHtml(
           const pageCount = () => strip
             ? Math.max(1, Math.ceil(strip.scrollHeight / pageHeight()))
             : 1;
-          const publish = () => bridge.pageChanged(page, pageCount());
+          const scheduleMeasuredPageCount = () => {
+            if (measurementChapterIndex === null) return;
+            const token = ++measurementToken;
+            const fontReady = document.fonts && document.fonts.ready
+              ? Promise.resolve(document.fonts.ready).catch(() => undefined)
+              : Promise.resolve();
+            const imageReady = Array.from(strip ? strip.querySelectorAll('img') : []).map((image) => {
+              image.loading = 'eager';
+              if (image.complete) return Promise.resolve();
+              return new Promise((resolve) => {
+                image.addEventListener('load', resolve, { once: true });
+                image.addEventListener('error', resolve, { once: true });
+              });
+            });
+            const assetsReady = Promise.all([fontReady, ...imageReady]);
+            const readinessTimeout = new Promise((resolve) => window.setTimeout(resolve, 750));
+            Promise.race([assetsReady, readinessTimeout]).then(() => {
+              requestAnimationFrame(() => requestAnimationFrame(() => {
+                if (token !== measurementToken || !strip) return;
+                bridge.chapterPageCount(measurementChapterIndex, pageCount());
+              }));
+            });
+          };
+          const publish = () => {
+            bridge.pageChanged(page, pageCount());
+            scheduleMeasuredPageCount();
+          };
           const renderPage = () => {
             if (!strip) return;
             strip.style.transform = `translate3d(0, ${'$'}{-page * pageHeight()}px, 0)`;

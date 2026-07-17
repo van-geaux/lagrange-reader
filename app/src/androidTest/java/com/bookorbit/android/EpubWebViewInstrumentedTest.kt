@@ -13,6 +13,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertNotEquals
@@ -105,6 +106,54 @@ class EpubWebViewInstrumentedTest {
         assertTrue(nextPage.getBoolean("visibleText"))
     }
 
+    @Test
+    fun measurementBridgeReportsLayoutDerivedChapterPageCount() {
+        val measured = CountDownLatch(1)
+        val measuredChapter = AtomicInteger(-1)
+        val measuredPages = AtomicInteger(0)
+        val chapter = (1..120).joinToString(separator = "") { index ->
+            "<p>Measured reader paragraph $index with enough text to span several pages.</p>"
+        }
+
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        addJavascriptInterface(
+                            MeasuredReaderBridge { chapterIndex, pageCount ->
+                                measuredChapter.set(chapterIndex)
+                                measuredPages.set(pageCount)
+                                measured.countDown()
+                            },
+                            "BookOrbitReader"
+                        )
+                        loadDataWithBaseURL(
+                            "https://reader.test/",
+                            styleEpubHtml(
+                                html = "<html><head></head><body>$chapter</body></html>",
+                                theme = EpubReaderTheme.Sepia,
+                                fontScale = 1f,
+                                startAtEnd = false,
+                                topPaddingPercent = 0f,
+                                bottomPaddingPercent = 0f,
+                                measurementChapterIndex = 7
+                            ),
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }
+                }
+            )
+        }
+
+        assertTrue("EPUB page measurement did not finish", measured.await(10, TimeUnit.SECONDS))
+        assertTrue(measuredPages.get() > 1)
+        assertTrue(measuredChapter.get() == 7)
+    }
+
     private fun awaitGeometry(
         webView: WebView,
         condition: (JSONObject) -> Boolean
@@ -144,6 +193,25 @@ class EpubWebViewInstrumentedTest {
 
         @JavascriptInterface
         fun chapterBoundary(direction: Int) = Unit
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    private class MeasuredReaderBridge(
+        private val onMeasured: (Int, Int) -> Unit
+    ) {
+        @JavascriptInterface
+        fun centerTap() = Unit
+
+        @JavascriptInterface
+        fun pageChanged(page: Int, count: Int) = Unit
+
+        @JavascriptInterface
+        fun chapterBoundary(direction: Int) = Unit
+
+        @JavascriptInterface
+        fun chapterPageCount(chapterIndex: Int, count: Int) {
+            onMeasured(chapterIndex, count)
+        }
     }
 
     private companion object {

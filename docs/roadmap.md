@@ -220,7 +220,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Prevent the reading screen from closing unexpectedly after an idle period.
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay.
 - [x] Show battery and signal indicators in the reader's top-right area using Android's native status bar while keeping the bottom navigation bar immersive.
-- [x] Show book completion percentage, chapter page progress, and a normalized 1-1000 whole-book location in an always-visible EPUB footer.
+- [x] Show book completion percentage, chapter page progress, and a measured whole-book page location in an always-visible EPUB footer.
 
 ### Device validation follow-up and new work order — 2026-07-15
 
@@ -273,7 +273,7 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 - [x] Remove the misleading Tag tap affordance because BookOrbit has no verified tag filter; keep tags informational.
 - [x] Keep native username/password as the current authentication flow; defer direct OIDC/SSO until the provider and redirect contract are confirmed.
 - [x] Make red Home/Library Recommended message cards dismissible by horizontal swipe and an explicit close button, clearing the BrowserState message immediately.
-- [ ] Replace the normalized `Book x/1000` EPUB footer with a layout-derived current/total whole-book page count that responds to text size, margins, viewport, and chapter pagination.
+- [x] Replace the normalized `Book x/1000` EPUB footer with sequential hidden-WebView measurement, layout-derived current/total pages, weighted completion, and a `Book pages calculating` fallback while counts settle.
 - [x] Restrict Recently read to books that have actually finished, excluding every title that remains in progress; order by last-read/updated/title and cap at 12.
 
 ## Source of truth

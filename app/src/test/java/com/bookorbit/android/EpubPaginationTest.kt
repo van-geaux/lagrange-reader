@@ -110,4 +110,20 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("const initialPage = 7"))
         assertTrue(rendered.contains("Math.min(initialPage, pageCount() - 1)"))
     }
+
+    @Test
+    fun `epub measurement html reports a layout settled chapter page count`() {
+        val rendered = styleEpubHtml(
+            html = "<p>Measured chapter text</p>",
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1.2f,
+            startAtEnd = false,
+            measurementChapterIndex = 4
+        )
+
+        assertTrue(rendered.contains("const measurementChapterIndex = 4"))
+        assertTrue(rendered.contains("document.fonts.ready"))
+        assertTrue(rendered.contains("image.addEventListener('load'"))
+        assertTrue(rendered.contains("bridge.chapterPageCount(measurementChapterIndex, pageCount())"))
+    }
 }

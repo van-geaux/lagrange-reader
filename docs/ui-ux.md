@@ -8,7 +8,7 @@ Follow-up action feedback is implemented: Read and Preview show visible labels b
 
 Audited implementation status: code and automated verification are complete; physical-device/server validation remains required for genre query compatibility and scope, download interruption recovery, and final responsive density. Direct OIDC/SSO remains an open backlog item.
 
-Latest target-device feedback: Download and Delete local now have visible labels, and a completed download updates the still-open detail immediately. BookOrbit has no verified tag filter, so Tag chips are informational and non-clickable. Red Home/Library Recommended messages now support explicit X dismissal and horizontal swipe dismissal, clearing the message immediately. Recently read now contains only completed books, excludes every ID still in Currently reading, and is capped at 12. The reader footer should show layout-derived whole-book pages instead of a normalized `/1000`. Direct OIDC/SSO is deferred; native username/password remains current.
+Latest target-device feedback: Download and Delete local now have visible labels, and a completed download updates the still-open detail immediately. BookOrbit has no verified tag filter, so Tag chips are informational and non-clickable. Red Home/Library Recommended messages now support explicit X dismissal and horizontal swipe dismissal, clearing the message immediately. Recently read now contains only completed books, excludes every ID still in Currently reading, and is capped at 12. The reader footer now shows layout-derived whole-book pages with a calculating fallback; measurement timing/stability still requires device validation. Direct OIDC/SSO is deferred; native username/password remains current.
 
 Options backlog
 
@@ -163,7 +163,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep the reading screen open indefinitely while the user is idle unless the user explicitly leaves it or the system interrupts it.
 - [x] Use a bottom sheet with distinct Continue reading and Close book actions, while visible book content still dismisses options without leaving the reader.
 - [x] Show battery and signal indicators in the reader's top-right area through Android's native status bar.
-- [x] Keep an always-visible EPUB bottom status area showing completion percentage, chapter page progress, and a normalized 1-1000 whole-book location.
+- [x] Keep an always-visible EPUB bottom status area showing weighted completion, chapter page progress, and measured whole-book current/total pages with a calculating fallback.
 
 ### Device validation follow-up and new UI work order - 2026-07-15
 

@@ -179,7 +179,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Prevent the reading screen from closing unexpectedly after an idle period
 - [x] Simplify the reader options overlay to one Close action; tapping the visible book content should also close the options overlay
 - [x] Show battery and signal indicators in the reader's top-right area
-- [x] Show book completion percentage, chapter page progress, and normalized whole-book location at the bottom of the reader
+- [x] Show book completion percentage, chapter page progress, and measured whole-book page location at the bottom of the reader
 - [x] Give reader options distinct Continue reading and Close book actions
 - [x] Improve reader-options text/background contrast across all reader themes
 - [x] Redesign the reader options window as a bottom sheet with clearer hierarchy and controls
@@ -298,7 +298,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
 - [x] Make red Home/Library Recommended messages dismissible with horizontal swipe and an explicit close button
-- [ ] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total
+- [x] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total, weighted completion, and calculating fallback
 - [x] Restrict Recently read to completed books and exclude titles still in progress
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
