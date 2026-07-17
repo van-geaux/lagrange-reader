@@ -19,7 +19,7 @@ enum class BookFormatFilter(
     EPUB("EPUB", listOf("epub"), setOf(MediaKind.EPUB)),
     PDF("PDF", listOf("pdf"), setOf(MediaKind.PDF)),
     AUDIO("Audio", listOf("mp3", "m4b", "audio"), setOf(MediaKind.AUDIO)),
-    COMIC("Comic", listOf("cbz", "cbr", "comic"), setOf(MediaKind.COMIC))
+    COMIC("Comic", listOf("cbz", "cbr", "cb7", "comic"), setOf(MediaKind.COMIC))
 }
 
 enum class BookSortOption(val label: String, internal val serverField: String?) {

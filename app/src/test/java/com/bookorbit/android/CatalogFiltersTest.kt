@@ -27,6 +27,7 @@ class CatalogFiltersTest {
         assertEquals("includesAny", rules.getJSONObject(2).getString("operator"))
         assertEquals("lastReadAt", BookSortOption.LAST_READ.serverField)
         assertEquals("desc", SortDirection.DESCENDING.serverValue)
+        assertTrue("cb7" in BookFormatFilter.COMIC.serverValues)
     }
 
     @Test

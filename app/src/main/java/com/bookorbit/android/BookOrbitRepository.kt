@@ -719,10 +719,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             serverBase = serverBase(),
             localOnly = localOnly
         )
+        val comicPagesUrl = buildComicPagesUrl(
+            fileId = book.fileId,
+            serverBase = serverBase(),
+            localOnly = localOnly,
+            mediaKind = book.mediaKind
+        )
         ensureReaderCanOpen(
             book = book,
             localFile = localFile,
-            streamUrl = streamUrl
+            streamUrl = streamUrl,
+            comicPagesUrl = comicPagesUrl
         )
         val restoredProgress = resolveRestoredReaderProgress(
             book = book,
@@ -737,6 +744,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = streamUrl,
+            comicPagesUrl = comicPagesUrl,
             lastKnownPosition = restoredProgress.positionMs,
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: 0,
@@ -839,11 +847,21 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             serverBase = serverBase(),
             localOnly = localOnly
         )
+        val comicPagesUrl = buildComicPagesUrl(
+            fileId = savedBook.fileId,
+            serverBase = serverBase(),
+            localOnly = localOnly,
+            mediaKind = savedBook.mediaKind
+        )
+        if (localOnly && savedBook.mediaKind == MediaKind.COMIC && localFile?.let(ReaderFileValidator::canRenderComicLocally) != true) {
+            return@withContext null
+        }
         runCatching {
             ensureReaderCanOpen(
                 book = savedBook,
                 localFile = localFile,
-                streamUrl = streamUrl
+                streamUrl = streamUrl,
+                comicPagesUrl = comicPagesUrl
             )
         }.getOrElse {
             return@withContext null
@@ -861,6 +879,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
             localFile = localFile,
             streamUrl = streamUrl,
+            comicPagesUrl = comicPagesUrl,
             lastKnownPosition = restoredProgress.positionMs,
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
@@ -1173,7 +1192,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         return when (book.mediaKind) {
             MediaKind.EPUB,
             MediaKind.PDF,
-            MediaKind.COMIC -> if (allowRemoteCache) cacheReadableCopy(book) else null
+            MediaKind.COMIC -> if (allowRemoteCache && book.hasZipComicHint()) cacheReadableCopy(book) else null
             else -> null
         }
     }
@@ -1181,7 +1200,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private fun ensureReaderCanOpen(
         book: BookSummary,
         localFile: File?,
-        streamUrl: String?
+        streamUrl: String?,
+        comicPagesUrl: String? = null
     ) {
         when (book.mediaKind) {
             MediaKind.AUDIO -> {
@@ -1200,7 +1220,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 }
             }
             MediaKind.COMIC -> {
-                if (localFile == null) {
+                val localComicReady = localFile?.let(ReaderFileValidator::canRenderComicLocally) == true
+                if (!localComicReady && comicPagesUrl.isNullOrBlank()) {
                     throw UserFacingException("This comic could not be prepared for reading. Download it first or reconnect to the server.")
                 }
             }
@@ -1219,7 +1240,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             MediaKind.EPUB -> "epub"
             MediaKind.PDF -> "pdf"
             MediaKind.AUDIO -> "bin"
-            MediaKind.COMIC -> "cbz"
+            MediaKind.COMIC -> book.comicArchiveExtension() ?: "cbz"
             MediaKind.UNKNOWN -> "bin"
         }
         val targetDir = File(context.cacheDir, "reader-cache").apply { mkdirs() }
@@ -1981,10 +2002,11 @@ internal object BookOrbitPayloadParser {
 
     fun inferMediaKind(format: String?, title: String?): MediaKind {
         val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
+        val parts = token.split(Regex("[^a-z0-9]+"))
         return when {
             token.endsWith(".mp3") || token.endsWith(".m4b") || token.contains("audio") -> MediaKind.AUDIO
             token.endsWith(".pdf") || token.contains("pdf") -> MediaKind.PDF
-            token.endsWith(".cbz") || token.endsWith(".cbr") || token.contains("comic") -> MediaKind.COMIC
+            parts.any { it == "cbz" || it == "cbr" || it == "cb7" } || token.contains("comic") -> MediaKind.COMIC
             token.endsWith(".epub") || token.contains("epub") || token.contains("mobi") || token.contains("azw3") -> MediaKind.EPUB
             else -> MediaKind.UNKNOWN
         }
@@ -2572,6 +2594,30 @@ internal fun buildReaderStreamUrl(
         return null
     }
     return "${serverBase.trimEnd('/')}/api/v1/books/files/$fileId/serve"
+}
+
+internal fun buildComicPagesUrl(
+    fileId: String?,
+    serverBase: String,
+    localOnly: Boolean,
+    mediaKind: MediaKind
+): String? {
+    if (localOnly || mediaKind != MediaKind.COMIC || fileId.isNullOrBlank()) {
+        return null
+    }
+    return "${serverBase.trimEnd('/')}/api/v1/cbz/files/$fileId/pages"
+}
+
+private fun BookSummary.hasZipComicHint(): Boolean = comicArchiveExtension() == "cbz"
+
+private fun BookSummary.comicArchiveExtension(): String? {
+    val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
+    return when {
+        token.contains("cb7") || token.contains("7z") -> "cb7"
+        token.contains("cbr") || token.contains("rar") -> "cbr"
+        token.contains("cbz") || token.contains("zip") -> "cbz"
+        else -> null
+    }
 }
 
 internal fun resolveRestoredReaderProgress(

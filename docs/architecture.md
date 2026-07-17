@@ -76,9 +76,9 @@ The current app flow is:
 - Refresh requests include the current bearer/cookie credentials and are serialized; a request that waited behind another successful refresh reuses the newly persisted token instead of starting a second renewal.
 - Coordinator-side session and server resets also clear in-memory browser, download, and post-login destination state so stale UI targets are not reused after sign-out or server changes.
 - `DownloadStore` stores downloaded file records scoped by server URL so server changes do not reuse unrelated local files by `fileId`.
-- Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available.
+- Download targets use sanitized book titles plus file ids, with extensions derived from BookOrbit format/MIME hints where available; bare CBZ/CBR/CB7 tokens retain the matching comic extension.
 - Missing local download files are pruned from persisted download records before records are returned, so offline snapshots do not continue to show removed files as downloaded.
-- Corrupted local EPUB/PDF/CBZ files are rejected before reader startup, and invalid persisted download records are dropped before falling back to authenticated cache copies when possible.
+- Corrupted local EPUB/PDF/comic files are rejected before reader startup, and invalid persisted download records are dropped before falling back to authenticated cache copies when possible. ZIP, RAR4, RAR5, and 7z magic signatures are accepted for downloaded comics, including mislabeled archives, so valid CBR/CB7 records are not deleted merely because the client cannot extract them locally.
 - Zero-byte local download and reader-cache files are discarded and refetched instead of being treated as valid local content.
 - Authenticated reader-cache copies are also scoped by server-derived cache keys so server changes do not reuse unrelated cached files with the same `fileId`.
 - `BrowserSnapshotStore` persists the last successful library list and can read legacy first-page book snapshots as a migration/failure fallback; it is no longer the active Browse book store. Download and Delete local operations still update its matching book `localPath` immediately so fallback/offline state cannot retain stale availability.
@@ -126,6 +126,7 @@ The current app flow is:
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
   - an always-visible theme-matched footer displays weighted completion, current chapter/count, exact current chapter page/count, and measured whole-book current/total pages. A hidden same-size WebView measures every spine chapter sequentially with the current viewport, margins, font scale, theme, assets, and external top/bottom geometry; bounded font/image readiness waits prevent hangs. Until all counts settle, the footer says `Book pages calculating`. Counts reset when measurement inputs change, while the visible known-good renderer and exact chapter/page resume remain unchanged
   - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right update and repaginate the page strip in place. Target-device testing confirms that EPUB content renders and all four controls visibly update the reading surface.
+- Comic inference recognizes bare `cbz`, `cbr`, and `cb7` BookOrbit format tokens in addition to dotted extensions and generic comic hints. Remote comics use authenticated `GET /api/v1/cbz/files/{fileId}/pages` for the page count and `GET /api/v1/cbz/files/{fileId}/pages/{pageIndex}` for each rendered image; page changes use the normal comic progress queue. Local ZIP comics are extracted and rendered on-device, including archives whose extension is mislabeled. BookOrbit's server also detects ZIP/RAR content by magic bytes and serves CBZ/CBR/CB7 through the same endpoints. This build deliberately adds no client RAR/7z dependency: downloaded/local CBR and CB7 remain valid but require connectivity for server-side page extraction.
 - Unsupported formats show an explicit unsupported-format message.
 
 ## Live BookOrbit contract currently assumed
@@ -140,6 +141,8 @@ Validated against the live server and BookOrbit source:
 - `GET /api/v1/series/{seriesId}/books`
 - `GET /api/v1/books/files/{fileId}/serve`
 - `GET /api/v1/books/files/{fileId}/download`
+- `GET /api/v1/cbz/files/{fileId}/pages`
+- `GET /api/v1/cbz/files/{fileId}/pages/{pageIndex}`
 - `POST /api/v1/books/files/{fileId}/progress`
 - `PATCH /api/v1/books/{id}/audio-progress`
 
@@ -150,10 +153,11 @@ Validated against the live server and BookOrbit source:
 - Sync retry/backoff behavior still needs hardening and live replay verification.
 - Reader state restoration uses queued local progress first, then server-reported page/time/percentage progress.
 - Progress throttling rules are extracted into a small policy object with focused JVM coverage.
+- Offline client-side extraction is limited to ZIP-based comics; RAR-backed CBR and 7z-backed CB7 require the configured BookOrbit server unless a future archive dependency is approved.
 
 ## UI/UX phase boundary
 
-The functional architecture is stable enough for UI/UX changes to begin. Theme tokens and shared shell components should be established before screen-specific restyling, followed by setup/login, library browsing, and the EPUB reader. Format-specific audiobook, PDF, and CBZ adjustments remain deferred until representative files are available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
+The functional architecture is stable enough for UI/UX changes to begin. Theme tokens and shared shell components should be established before screen-specific restyling, followed by setup/login, library browsing, and the EPUB reader. Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ, with physical-device validation pending; offline RAR/7z extraction remains optional. Audiobook-specific refinement remains deferred until a representative file is available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
 
 The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.
 

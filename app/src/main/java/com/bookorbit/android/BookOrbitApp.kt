@@ -95,7 +95,10 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.net.URI
 import java.util.Locale
@@ -161,7 +164,8 @@ fun BookOrbitApp(
         is AppScreen.Reader -> ReaderScreen(
             state = screen.readerState,
             onBack = coordinator::closeReader,
-            onProgress = coordinator::onProgress
+            onProgress = coordinator::onProgress,
+            comicPageLoader = coordinator::loadCatalogImage
         )
     }
 }
@@ -648,7 +652,8 @@ private fun LoadingRow(text: String) {
 private fun ReaderScreen(
     state: ReaderState,
     onBack: () -> Unit,
-    onProgress: (BookSummary, Long, Int, Float?) -> Unit
+    onProgress: (BookSummary, Long, Int, Float?) -> Unit,
+    comicPageLoader: suspend (String) -> ByteArray?
 ) {
     if (readerKeepsScreenAwake(state.book.mediaKind)) {
         KeepReaderScreenAwake()
@@ -718,6 +723,8 @@ private fun ReaderScreen(
                 MediaKind.COMIC -> ComicReaderView(
                     title = state.book.title,
                     file = state.localFile,
+                    pagesUrl = state.comicPagesUrl,
+                    pageLoader = comicPageLoader,
                     initialPage = state.pageIndex,
                     onProgress = { pageIndex, percent ->
                         readerProgress(state.book, 0L, pageIndex, percent)
@@ -1901,28 +1908,74 @@ private class EpubPageMeasurementBridge(
 private fun ComicReaderView(
     title: String,
     file: File?,
+    pagesUrl: String?,
+    pageLoader: suspend (String) -> ByteArray?,
     initialPage: Int,
     onProgress: (Int, Float?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val comicPages = remember(file) { file?.takeIf(File::exists)?.let { loadComicPages(context, it) } }
-    if (file == null || !file.exists()) {
-        ReaderMessage("Unable to prepare this comic.")
-        return
-    }
-    if (comicPages.isNullOrEmpty()) {
-        ReaderMessage("Unable to open this comic.")
-        return
+    val source by produceState<ComicPageSource>(
+        initialValue = ComicPageSource.Loading,
+        file,
+        pagesUrl
+    ) {
+        val localPages = withContext(Dispatchers.IO) {
+            file?.takeIf(File::exists)?.let { loadComicPages(context, it) }.orEmpty()
+        }
+        value = when {
+            localPages.isNotEmpty() -> ComicPageSource.Local(localPages)
+            !pagesUrl.isNullOrBlank() -> {
+                val pageCount = runCatching { pageLoader(pagesUrl) }
+                    .getOrNull()
+                    ?.let(::parseComicPageCount)
+                if (pageCount != null) {
+                    ComicPageSource.Remote(pagesUrl, pageCount)
+                } else if (file != null && ReaderFileValidator.isReadable(MediaKind.COMIC, file)) {
+                    ComicPageSource.Error("This downloaded CBR/CB7 comic needs a connection to BookOrbit for page extraction.")
+                } else {
+                    ComicPageSource.Error("Unable to load this comic from BookOrbit.")
+                }
+            }
+            file != null && ReaderFileValidator.isReadable(MediaKind.COMIC, file) -> {
+                ComicPageSource.Error("This downloaded CBR/CB7 comic needs a connection to BookOrbit for page extraction.")
+            }
+            else -> ComicPageSource.Error("Unable to open this comic.")
+        }
     }
 
-    val pageCount = comicPages.size
-    var currentPage by remember(file, initialPage) {
+    when (val currentSource = source) {
+        ComicPageSource.Loading -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            return
+        }
+        is ComicPageSource.Error -> {
+            ReaderMessage(currentSource.message)
+            return
+        }
+        else -> Unit
+    }
+
+    val pageCount = source.pageCount
+    var currentPage by remember(source, initialPage) {
         mutableStateOf(initialPage.coerceIn(0, pageCount - 1))
     }
-    val bitmap by produceState<Bitmap?>(initialValue = null, file, currentPage) {
-        value = runCatching {
-            BitmapFactory.decodeFile(comicPages[currentPage].absolutePath)
-        }.getOrNull()
+    val pageImage by produceState<ComicPageImage>(initialValue = ComicPageImage.Loading, source, currentPage) {
+        val bitmap = when (val currentSource = source) {
+            is ComicPageSource.Local -> withContext(Dispatchers.IO) {
+                runCatching { BitmapFactory.decodeFile(currentSource.pages[currentPage].absolutePath) }.getOrNull()
+            }
+            is ComicPageSource.Remote -> runCatching {
+                pageLoader("${currentSource.pagesUrl}/$currentPage")
+            }.getOrNull()?.let { bytes ->
+                withContext(Dispatchers.Default) {
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+            }
+            else -> null
+        }
+        value = bitmap?.let(ComicPageImage::Ready) ?: ComicPageImage.Error
     }
 
     LaunchedEffect(currentPage, pageCount) {
@@ -1952,13 +2005,15 @@ private fun ComicReaderView(
                 .weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            bitmap?.let {
-                Image(
-                    bitmap = it.asImageBitmap(),
+            when (val currentImage = pageImage) {
+                ComicPageImage.Loading -> CircularProgressIndicator()
+                is ComicPageImage.Ready -> Image(
+                    bitmap = currentImage.bitmap.asImageBitmap(),
                     contentDescription = "Comic page ${currentPage + 1}",
                     modifier = Modifier.fillMaxWidth()
                 )
-            } ?: Text("Unable to render this comic page.")
+                ComicPageImage.Error -> Text("Unable to render this comic page.")
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
@@ -1975,6 +2030,37 @@ private fun ComicReaderView(
             }
         }
     }
+}
+
+private sealed interface ComicPageSource {
+    val pageCount: Int
+
+    data object Loading : ComicPageSource {
+        override val pageCount: Int = 0
+    }
+
+    data class Local(val pages: List<File>) : ComicPageSource {
+        override val pageCount: Int = pages.size
+    }
+
+    data class Remote(val pagesUrl: String, override val pageCount: Int) : ComicPageSource
+
+    data class Error(val message: String) : ComicPageSource {
+        override val pageCount: Int = 0
+    }
+}
+
+private sealed interface ComicPageImage {
+    data object Loading : ComicPageImage
+    data class Ready(val bitmap: Bitmap) : ComicPageImage
+    data object Error : ComicPageImage
+}
+
+internal fun parseComicPageCount(payload: ByteArray): Int? {
+    return runCatching {
+        JSONObject(payload.toString(Charsets.UTF_8)).optInt("pageCount")
+            .takeIf { it > 0 }
+    }.getOrNull()
 }
 
 @Composable
@@ -2069,12 +2155,13 @@ private fun renderPdfPage(file: File, pageIndex: Int): Bitmap? {
 }
 
 private fun loadComicPages(context: android.content.Context, file: File): List<File> {
-    val extension = file.extension.lowercase(Locale.US)
-    if (extension != "cbz") {
-        return emptyList()
-    }
-
-    val targetDir = File(context.cacheDir, "comic-pages/${file.nameWithoutExtension}").apply {
+    val sourceKey = listOf(
+        file.nameWithoutExtension,
+        file.absolutePath.hashCode().toUInt().toString(16),
+        file.length(),
+        file.lastModified()
+    ).joinToString("-")
+    val targetDir = File(context.cacheDir, "comic-pages/$sourceKey").apply {
         mkdirs()
     }
     val existingPages = targetDir.listFiles()

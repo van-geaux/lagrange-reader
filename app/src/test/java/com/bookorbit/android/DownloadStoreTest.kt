@@ -67,6 +67,25 @@ class DownloadStoreTest {
     }
 
     @Test
+    fun `downloadTarget preserves all BookOrbit comic archive extensions`() {
+        val filesDir = Files.createTempDirectory("download-store-comic-target").toFile()
+        val store = DownloadStore(filesDir)
+
+        assertEquals(
+            "Issue-1.cbz",
+            store.downloadTarget("1", "Issue", MediaKind.COMIC, "cbz").name
+        )
+        assertEquals(
+            "Issue-2.cbr",
+            store.downloadTarget("2", "Issue", MediaKind.COMIC, "cbr").name
+        )
+        assertEquals(
+            "Issue-3.cb7",
+            store.downloadTarget("3", "Issue", MediaKind.COMIC, "cb7").name
+        )
+    }
+
+    @Test
     fun `readAll and find are scoped by server url`() = runBlocking {
         val filesDir = Files.createTempDirectory("download-store-server-scope").toFile()
         val store = DownloadStore(filesDir)

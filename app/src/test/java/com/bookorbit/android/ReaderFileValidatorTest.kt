@@ -48,6 +48,25 @@ class ReaderFileValidatorTest {
         assertFalse(ReaderFileValidator.isReadable(MediaKind.COMIC, invalid))
     }
 
+    @Test
+    fun `comic validator preserves rar and seven zip archives for server page extraction`() {
+        val dir = Files.createTempDirectory("reader-file-validator-comic-archives").toFile()
+        val rar4 = File(dir, "valid-rar4.cbr").apply {
+            writeBytes(byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00, 0x01))
+        }
+        val rar5 = File(dir, "valid-rar5.cbr").apply {
+            writeBytes(byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00, 0x01))
+        }
+        val sevenZip = File(dir, "valid.cb7").apply {
+            writeBytes(byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C, 0x01))
+        }
+
+        listOf(rar4, rar5, sevenZip).forEach { archive ->
+            assertTrue(ReaderFileValidator.isReadable(MediaKind.COMIC, archive))
+            assertFalse(ReaderFileValidator.canRenderComicLocally(archive))
+        }
+    }
+
     private fun zip(target: File, vararg entries: Pair<String, String>) {
         target.parentFile?.mkdirs()
         ZipOutputStream(target.outputStream()).use { output ->

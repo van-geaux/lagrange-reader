@@ -102,6 +102,27 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks routes bare BookOrbit comic file formats`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-manga",
+            payload = """
+                {
+                  "items": [
+                    {"id":"book-cbz","title":"ZIP Comic","files":[{"id":"101","format":"cbz","role":"primary"}]},
+                    {"id":"book-cbr","title":"RAR Comic","files":[{"id":"102","format":"cbr","role":"primary"}]},
+                    {"id":"book-cb7","title":"7z Comic","files":[{"id":"103","format":"cb7","role":"primary"}]}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(listOf(MediaKind.COMIC, MediaKind.COMIC, MediaKind.COMIC), books.map { it.mediaKind })
+        assertEquals(listOf("cbz", "cbr", "cb7"), books.map { it.format })
+    }
+
+    @Test
     fun `parseBooks falls back through nested ids and nullable fields`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-2",

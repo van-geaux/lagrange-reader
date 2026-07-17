@@ -1,5 +1,7 @@
 package com.bookorbit.android
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
@@ -21,6 +23,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
+import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
@@ -802,6 +805,48 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Expand Synopsis").assertIsDisplayed()
     }
 
+    @Test
+    fun remoteComicUsesBookOrbitPageEndpoints() {
+        val pagesUrl = "https://books.example.test/api/v1/cbz/files/42/pages"
+        val pageBytes = ByteArrayOutputStream().use { output ->
+            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply {
+                setPixel(0, 0, Color.BLACK)
+                compress(Bitmap.CompressFormat.PNG, 100, output)
+                recycle()
+            }
+            output.toByteArray()
+        }
+        val dataSource = InstrumentedFakeDataSource().apply {
+            catalogImageResults[pagesUrl] = "{\"pageCount\":2}".toByteArray()
+            catalogImageResults["$pagesUrl/0"] = pageBytes
+            catalogImageResults["$pagesUrl/1"] = pageBytes
+        }
+        val comic = BookSummary(
+            libraryId = "lib-manga",
+            id = "book-comic",
+            fileId = "42",
+            title = "Remote Comic",
+            format = "cbr",
+            mediaKind = MediaKind.COMIC
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Reader(
+                        ReaderState(book = comic, comicPagesUrl = pagesUrl)
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Page 1 of 2").assertIsDisplayed()
+        composeRule.onNodeWithText("Next").performClick()
+        composeRule.onNodeWithText("Page 2 of 2").assertIsDisplayed()
+        composeRule.waitUntil { "$pagesUrl/1" in dataSource.loadedCatalogImageUrls }
+    }
+
 }
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
@@ -818,6 +863,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
+    val catalogImageResults = mutableMapOf<String, ByteArray>()
+    val loadedCatalogImageUrls = mutableListOf<String>()
 
     override suspend fun getServerUrl(): String? = null
     override suspend fun setServerUrl(serverUrl: String) {
@@ -841,6 +888,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         return searchBooksResult
     }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+    override suspend fun loadCatalogImage(url: String): ByteArray? {
+        loadedCatalogImageUrls += url
+        return catalogImageResults[url]
+    }
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
         if (page == 0) return LibraryBooksPage(items = loadBooksResult, total = loadBooksResult.size, page = 0, size = loadBooksResult.size)
         return libraryPageResults[page] ?: LibraryBooksPage(page = page)

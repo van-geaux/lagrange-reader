@@ -146,6 +146,7 @@ class DownloadStore private constructor(
             token.contains("flac") -> "flac"
             token.contains("cbz") -> "cbz"
             token.contains("cbr") -> "cbr"
+            token.contains("cb7") -> "cb7"
             else -> Regex("""\.([a-z0-9]{2,5})(?:$|[?#\s])""")
                 .find(token)
                 ?.groupValues

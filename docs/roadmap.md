@@ -54,11 +54,11 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ### 4. Media-specific validation
 
-- Use the newly available manga samples to investigate why target CBR/CBZ content reaches unsupported-format handling despite the existing CBZ implementation
-- Restore CBZ format detection/routing/reading, then define CBR support separately according to available RAR tooling and sample constraints
+- Completed in code: recognize bare CBZ/CBR/CB7 BookOrbit format tokens, include CB7 in filters/download naming, and route all three through the comic reader instead of unsupported-format handling
+- Completed in code: read remote comics through authenticated `/api/v1/cbz/files/{fileId}/pages` and `/pages/{pageIndex}`, with page progress; retain local ZIP extraction for offline CBZ and mislabeled ZIP archives
+- Treat RAR4/RAR5/7z signatures as valid downloaded comics so they are not deleted as corrupt; downloaded/local CBR/CB7 still requires server page extraction in this build
+- Device-validate online CBZ/CBR/CB7 and offline ZIP/CBZ behavior; client-side offline RAR/7z extraction remains an optional future enhancement
 - Obtain representative audiobook and PDF files; audiobook testing remains deferred without a sample
-- Validate offline reopen, restart resume, streaming/range behavior, and progress sync for each supported format
-- Adjust format-specific controls only after their behavior can be exercised on device
 
 ### 5. Release readiness
 
@@ -259,7 +259,7 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [ ] Add and validate direct OIDC/SSO authentication after the provider and redirect contract are confirmed; native username/password remains current.
 - [x] Complete the revised detail density, title expansion, multi-selection, genre navigation, and series-index implementation in code/tests.
 - [ ] Run device validation for the revised detail density, multi-selection, genre-filter result scope, and interrupted-download recovery.
-- [ ] Keep audiobook validation deferred until a representative sample is available; reopen comic validation with the available manga samples.
+- [ ] Keep audiobook validation deferred until a representative sample is available; device-validate the implemented online CBZ/CBR/CB7 and offline ZIP/CBZ paths.
 - [x] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
 - [x] Expose active per-file download progress, percentage/linear or indeterminate state, cancel guidance, and retry failure status from book details.
 
@@ -298,9 +298,9 @@ Implement next, in order:
 3. [x] Fix navigation to the main Options screen from book details by dismissing retained detail state before selecting Options. Physical-device validation remains pending.
 4. [x] Restore Currently reading for genuinely in-progress books by deriving top-level Home from the server-wide collection rather than only the selected library. Physical-device validation remains pending.
 5. [x] Aggregate Home shelves across every library on the connected server. Restore cached slices from every Room catalog, refresh the selected library first and every other library incrementally, retain cached slices with a partial-cache message when a nonselected refresh fails, and keep Libraries Recommended/Browse selected-library scoped. Physical-device validation remains pending.
-6. [ ] Reopen comic work using the available manga samples. Diagnose the CBZ unsupported-format regression and restore CBZ routing/reading; treat CBR separately because it may require RAR archive support not used by CBZ.
+6. [x] Fix the comic unsupported-format regression by recognizing bare CBZ/CBR/CB7 formats. Use authenticated server page extraction for all three online and local ZIP extraction for offline CBZ/mislabeled ZIP; keep client-side offline RAR/7z extraction optional. Physical-device validation remains pending.
 
-The completed Home aggregation/Currently Reading step passes 173 JVM tests across 28 suites with zero failures/errors/skips, `lintDebug`, and `assembleDebugAndroidTest`. Comic investigation remains next.
+The completed comic-routing step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass, and Compose instrumentation compiles a remote CBR page-navigation regression.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

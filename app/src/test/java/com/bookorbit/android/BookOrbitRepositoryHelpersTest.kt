@@ -28,6 +28,9 @@ class BookOrbitRepositoryHelpersTest {
         assertEquals(MediaKind.PDF, BookOrbitPayloadParser.inferMediaKind("application/pdf", null))
         assertEquals(MediaKind.AUDIO, BookOrbitPayloadParser.inferMediaKind("audio/x-m4b", null))
         assertEquals(MediaKind.COMIC, BookOrbitPayloadParser.inferMediaKind(null, "Issue_01.cbz"))
+        assertEquals(MediaKind.COMIC, BookOrbitPayloadParser.inferMediaKind("cbz", "Issue 01"))
+        assertEquals(MediaKind.COMIC, BookOrbitPayloadParser.inferMediaKind("cbr", "Issue 02"))
+        assertEquals(MediaKind.COMIC, BookOrbitPayloadParser.inferMediaKind("cb7", "Issue 03"))
     }
 
     @Test
@@ -85,6 +88,42 @@ class BookOrbitRepositoryHelpersTest {
             "https://example.test/api/v1/books/files/file-1/serve",
             buildReaderStreamUrl(fileId = "file-1", serverBase = "https://example.test/", localOnly = false)
         )
+    }
+
+    @Test
+    fun `buildComicPagesUrl targets BookOrbit comic page endpoints only when online`() {
+        assertNull(
+            buildComicPagesUrl(
+                fileId = "42",
+                serverBase = "https://example.test",
+                localOnly = true,
+                mediaKind = MediaKind.COMIC
+            )
+        )
+        assertNull(
+            buildComicPagesUrl(
+                fileId = "42",
+                serverBase = "https://example.test",
+                localOnly = false,
+                mediaKind = MediaKind.EPUB
+            )
+        )
+        assertEquals(
+            "https://example.test/api/v1/cbz/files/42/pages",
+            buildComicPagesUrl(
+                fileId = "42",
+                serverBase = "https://example.test/",
+                localOnly = false,
+                mediaKind = MediaKind.COMIC
+            )
+        )
+    }
+
+    @Test
+    fun `comic page count parser rejects malformed and empty responses`() {
+        assertEquals(24, parseComicPageCount("{\"pageCount\":24}".toByteArray()))
+        assertNull(parseComicPageCount("{\"pageCount\":0}".toByteArray()))
+        assertNull(parseComicPageCount("not-json".toByteArray()))
     }
 
     @Test

@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. Manga samples are now available, so comic validation is reopened: CBZ was previously implemented but target CBR/CBZ content currently reaches unsupported-format handling. CBZ needs a format-detection/routing regression investigation; CBR may require separate RAR archive support. Audiobook validation remains deferred without a representative sample.
+The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. The manga unsupported-format regression is fixed in code: bare CBZ/CBR/CB7 formats now open the comic reader, with authenticated server pages for online reading and on-device ZIP extraction for offline CBZ/mislabeled ZIP archives. Downloaded CBR/CB7 remains valid but requires a connection for server-side RAR/7z extraction in this build. Comic device validation and optional future offline RAR/7z support remain open. Audiobook validation remains deferred without a representative sample.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -12,7 +12,7 @@ Latest target-device feedback: Download and Delete local now have visible labels
 
 Latest target-device validation: lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, delete-local confirmation, and whole-book progress correctness work as intended. Haptics were not perceptible. The current code explicitly requests haptics only for Options switch/selection rows and otherwise relies on Android/Foundation haptics for supported long-press interactions; ordinary navigation, book taps, and page turns have no explicit haptic feedback. Perceptibility and consistent interaction coverage remain open.
 
-Latest implementation: Delete local immediately returns the still-open detail action to Download and refreshes Local books; incomplete Local books summaries recover thumbnails and related metadata from the latest cached rich detail; and Options now dismisses retained book-detail state before opening. Home now aggregates every server library while Libraries Recommended/Browse remain selected-library scoped, and genuinely in-progress books from any library can populate Currently reading. Cached library slices remain visible during incremental refresh and when a nonselected library fails. These browser fixes require physical-device validation. Comic work is next: restore CBZ routing/reading and define CBR behavior against the available samples and archive tooling. Direct OIDC/SSO remains deferred.
+Latest implementation: Delete local immediately returns the still-open detail action to Download and refreshes Local books; incomplete Local books summaries recover thumbnails and related metadata from the latest cached rich detail; and Options now dismisses retained book-detail state before opening. Home now aggregates every server library while Libraries Recommended/Browse remain selected-library scoped, and genuinely in-progress books from any library can populate Currently reading. Cached library slices remain visible during incremental refresh and when a nonselected library fails. Comic routing now supports online CBZ/CBR/CB7 plus offline ZIP/CBZ and records page progress; browser and comic physical-device validation remains pending. Direct OIDC/SSO remains deferred.
 
 Options backlog
 
@@ -193,12 +193,14 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Ensure the main Options destination opens from book details instead of retained detail state masking it; physical-device validation remains pending.
 - [x] Restore genuinely in-progress titles from any server library to Currently reading; physical-device validation remains pending.
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; physical-device validation remains pending.
-- [ ] Reproduce and fix the CBZ unsupported-format regression with the available manga samples; define CBR behavior separately around RAR support and sample constraints.
+- [x] Fix the bare-format unsupported regression and route online CBZ/CBR/CB7 plus offline ZIP/CBZ through the comic reader; physical-device validation remains pending.
+- [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
-### Checkpoint 5: Other media readers - deferred
+### Checkpoint 5: Other media readers - partially implemented
 
-- Use the available manga samples to restore CBZ routing/reading and define CBR behavior; defer audiobook-specific UX until a representative sample is available.
-- Shared reader tokens and navigation patterns may be implemented earlier, but format-specific behavior must remain marked unvalidated.
+- Device-validate authenticated CBZ/CBR/CB7 page loading/navigation/progress and offline ZIP/CBZ extraction with the available manga samples.
+- Keep downloaded CBR/CB7 available but show the connection requirement for server-side extraction; client-side RAR/7z support is optional future work.
+- Defer audiobook-specific UX until a representative sample is available.
 
 ### Checkpoint 6: Polish and release validation - after primary screens
 
