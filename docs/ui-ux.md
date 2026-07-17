@@ -12,7 +12,7 @@ Latest target-device feedback: Download and Delete local now have visible labels
 
 Latest target-device validation: lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, delete-local confirmation, and whole-book progress correctness work as intended. Haptics were not perceptible. The current code explicitly requests haptics only for Options switch/selection rows and otherwise relies on Android/Foundation haptics for supported long-press interactions; ordinary navigation, book taps, and page turns have no explicit haptic feedback. Perceptibility and consistent interaction coverage remain open.
 
-Latest work order, in priority order: reconcile the open detail immediately after Delete local; restore cached/offline Local books thumbnails; make main Options navigation work from book details; restore genuinely in-progress Currently reading entries; aggregate Home shelves across all libraries on the connected server while keeping Libraries/Browse selected-library-scoped; then restore CBZ routing/reading and define CBR behavior against the available samples and archive tooling. Direct OIDC/SSO remains deferred.
+Latest implementation: Delete local immediately returns the still-open detail action to Download and refreshes Local books; incomplete Local books summaries recover thumbnails and related metadata from the latest cached rich detail; and Options now dismisses retained book-detail state before opening. These three fixes require physical-device validation. Remaining work, in priority order: restore genuinely in-progress Currently reading entries; aggregate Home shelves across all libraries on the connected server while keeping Libraries/Browse selected-library-scoped; then restore CBZ routing/reading and define CBR behavior against the available samples and archive tooling. Direct OIDC/SSO remains deferred.
 
 Options backlog
 
@@ -188,9 +188,9 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 
 - [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, delete-local confirmation, and whole-book progress correctness.
 - [ ] Make enabled haptics perceptible on supported devices and define consistent coverage; current explicit coverage is limited to Options switch/selection rows, plus Android/Foundation-supported long presses.
-- [ ] After Delete local succeeds, update the still-open detail actions and offline availability immediately.
-- [ ] Show cached Local books thumbnails online and offline.
-- [ ] Ensure the main Options destination opens from book details instead of retained detail state masking it.
+- [x] After Delete local succeeds, update the still-open detail actions and offline availability immediately; physical-device validation remains pending.
+- [x] Show cached Local books thumbnails online and offline by recovering incomplete summaries from the latest rich-detail cache; physical-device validation remains pending.
+- [x] Ensure the main Options destination opens from book details instead of retained detail state masking it; physical-device validation remains pending.
 - [ ] Restore genuinely in-progress titles to Currently reading.
 - [ ] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse.
 - [ ] Reproduce and fix the CBZ unsupported-format regression with the available manga samples; define CBR behavior separately around RAR support and sample constraints.

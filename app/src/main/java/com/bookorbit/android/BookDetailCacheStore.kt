@@ -44,6 +44,19 @@ class BookDetailCacheStore private constructor(
         }
     }
 
+    suspend fun readLatest(
+        serverUrl: String,
+        bookId: String,
+        fileId: String?
+    ): BookDetailInfo? = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (!file.isFile) return@withLock null
+            val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock null
+            val entry = root.optJSONObject(cacheKey(serverUrl, bookId, fileId)) ?: return@withLock null
+            if (!entry.has("detail")) entry.toBookDetail() else entry.optJSONObject("detail")?.toBookDetail()
+        }
+    }
+
     suspend fun save(
         serverUrl: String,
         bookId: String,

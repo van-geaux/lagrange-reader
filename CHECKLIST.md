@@ -111,7 +111,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add storage-space failure handling
 - [x] Add download integrity checks
 - [x] Add delete-local-copy action
-- [ ] Reconcile an open book-detail screen immediately after Delete local succeeds so offline availability and actions update without leaving the screen
+- [x] Reconcile an open book-detail screen immediately after Delete local succeeds so offline availability and actions update without leaving the screen
 - [x] Prune stale download records when local files are missing
 - [ ] Add redownload/update behavior if server file changes
 
@@ -275,7 +275,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a downward-triangle affordance to the selected Library name
 - [x] Replace the Library refresh arrow with swipe-down-to-refresh
 - [x] Cache cover thumbnails locally for Local books
-- [ ] Fix Local books cached-thumbnail rendering, including while offline
+- [x] Recover Local books cached thumbnails and metadata from the latest rich-detail cache, including while offline
 - [x] Rename the collapsed-series action to Expand series
 - [x] Keep collapsed series ordered by series name and restore the scroll anchor when toggling collapse
 - [x] Improve thumbnail loading performance and retry failed covers
@@ -306,7 +306,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Restrict Recently read to completed books and exclude titles still in progress
 - [ ] Restore Currently reading for genuinely in-progress books when the server/library state contains active progress
 - [ ] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Browse
-- [ ] Fix main Options navigation from book details so retained detail state cannot mask the Options destination
+- [x] Fix main Options navigation from book details so retained detail state cannot mask the Options destination
+- [ ] Validate immediate Delete local reconciliation, Local books offline thumbnails, and Options-from-detail navigation on a physical device
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title

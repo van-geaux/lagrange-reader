@@ -677,13 +677,14 @@ class AppCoordinator(
             }
             activeDownloads.remove(fileId)
             result
-                .onSuccess {
+                .onSuccess { localFile ->
                     updateDownloadState(
                         fileId = fileId,
                         isDownloading = false,
                         failed = false,
                         message = null
                     )
+                    updateLocalFileState(fileId, localFile.absolutePath)
                     loadBrowser()
                 }
                 .onFailure { error ->
@@ -741,7 +742,7 @@ class AppCoordinator(
             runCatching {
                 repository.deleteLocalCopy(book)
             }.onSuccess {
-                loadBrowser()
+                book.fileId?.let { fileId -> updateLocalFileState(fileId, null) }
             }.onFailure { error ->
                 showBrowserMessage(userMessage(error, "Unable to remove the local copy."))
             }
@@ -1005,6 +1006,8 @@ class AppCoordinator(
             downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
             downloadProgressByFileId = transient?.downloadProgressByFileId.orEmpty(),
             failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
+            localFilePathOverrides = transient?.localFilePathOverrides.orEmpty(),
+            localBooksRevision = transient?.localBooksRevision ?: 0,
             debugPendingProgressCount = pendingProgressCount,
             isOfflineSnapshot = false
         )
@@ -1013,6 +1016,20 @@ class AppCoordinator(
     private fun showBrowser(state: BrowserState) {
         lastBrowserState = state
         _screen.value = AppScreen.Browser(browserState = state)
+    }
+
+    private fun updateLocalFileState(fileId: String, localPath: String?) {
+        val current = lastBrowserState ?: return
+        val nextOverrides = current.localFilePathOverrides + (fileId to localPath)
+        showBrowser(
+            current.copy(
+                books = current.books.map { book ->
+                    if (book.fileId == fileId) book.copy(localPath = localPath) else book
+                },
+                localFilePathOverrides = nextOverrides,
+                localBooksRevision = current.localBooksRevision + 1
+            )
+        )
     }
 
     private fun mergeKnownProgress(books: List<BookSummary>, libraryId: String?): List<BookSummary> {

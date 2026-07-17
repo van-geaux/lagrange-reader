@@ -403,6 +403,30 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `deleting a local copy updates open detail state without a catalog reload`() = runTest {
+        val downloadedBook = book.copy(localPath = "/downloads/sample.epub")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = emptyList()
+            )
+        )
+
+        coordinator.deleteLocalCopy(downloadedBook)
+        advanceUntilIdle()
+
+        val browser = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(downloadedBook), repository.deletedLocalBooks)
+        assertTrue(browser.localFilePathOverrides.containsKey(requireNotNull(book.fileId)))
+        assertEquals(null, browser.localFilePathOverrides[book.fileId])
+        assertEquals(1, browser.localBooksRevision)
+    }
+
+    @Test
     fun `dismissing a browser message clears it immediately`() = runTest {
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -808,6 +832,7 @@ private class FakeBookOrbitDataSource(
     val queuedProgress = mutableListOf<BookSummary>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
+    val deletedLocalBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
@@ -915,7 +940,9 @@ private class FakeBookOrbitDataSource(
         return File("downloaded.bin")
     }
 
-    override suspend fun deleteLocalCopy(book: BookSummary) = Unit
+    override suspend fun deleteLocalCopy(book: BookSummary) {
+        deletedLocalBooks += book
+    }
 
     override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
         queuedProgress += book

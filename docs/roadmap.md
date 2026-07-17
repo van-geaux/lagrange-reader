@@ -293,12 +293,14 @@ Haptic feedback was not perceptible. The current code explicitly requests haptic
 
 Implement next, in order:
 
-1. Reconcile the still-open book-detail state immediately after Delete local succeeds so Delete local, offline availability, and related status update without backing out and reopening.
-2. Restore cached thumbnails in Local books, including while offline.
-3. Fix navigation to the main Options screen from book details; the current selection is masked by retained detail state.
-4. Restore Currently reading for genuinely in-progress books.
-5. Aggregate Home shelves across every library on the connected server. Keep the selected-library scope in Libraries/Browse rather than applying it to Home.
-6. Reopen comic work using the available manga samples. Diagnose the CBZ unsupported-format regression and restore CBZ routing/reading; treat CBR separately because it may require RAR archive support not used by CBZ.
+1. [x] Reconcile the still-open book-detail state immediately after Delete local succeeds so the action returns to Download, Local books refreshes, and catalog/snapshot offline state updates without backing out and reopening. Physical-device validation remains pending.
+2. [x] Restore cached thumbnails and related metadata in Local books, including while offline, by filling incomplete catalog/snapshot summaries from the latest cached rich detail. Physical-device validation remains pending.
+3. [x] Fix navigation to the main Options screen from book details by dismissing retained detail state before selecting Options. Physical-device validation remains pending.
+4. [ ] Restore Currently reading for genuinely in-progress books.
+5. [ ] Aggregate Home shelves across every library on the connected server. Keep the selected-library scope in Libraries/Browse rather than applying it to Home.
+6. [ ] Reopen comic work using the available manga samples. Diagnose the CBZ unsupported-format regression and restore CBZ routing/reading; treat CBR separately because it may require RAR archive support not used by CBZ.
+
+The completed browser/local-state step passes 171 JVM tests across 28 suites with zero failures/errors/skips, `lintDebug`, and `assembleDebugAndroidTest`.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

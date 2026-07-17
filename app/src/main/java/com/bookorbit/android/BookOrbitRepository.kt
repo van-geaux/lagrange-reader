@@ -403,8 +403,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 val snapshotBook = snapshotBooks.firstOrNull { book ->
                     book.id == record.bookId || book.fileId == record.fileId
                 }
-                snapshotBook?.copy(
-                    fileId = snapshotBook.fileId ?: record.fileId,
+                val cachedDetailBook = bookDetailCacheStore.readLatest(
+                    serverUrl = serverUrl,
+                    bookId = record.bookId,
+                    fileId = record.fileId
+                )?.book
+                val metadataBook = snapshotBook?.copy(
+                    coverUrl = snapshotBook.coverUrl ?: cachedDetailBook?.coverUrl,
+                    updatedAtMillis = snapshotBook.updatedAtMillis ?: cachedDetailBook?.updatedAtMillis,
+                    author = snapshotBook.author ?: cachedDetailBook?.author,
+                    format = snapshotBook.format ?: cachedDetailBook?.format,
+                    seriesId = snapshotBook.seriesId ?: cachedDetailBook?.seriesId,
+                    seriesName = snapshotBook.seriesName ?: cachedDetailBook?.seriesName,
+                    seriesIndex = snapshotBook.seriesIndex ?: cachedDetailBook?.seriesIndex
+                ) ?: cachedDetailBook
+                metadataBook?.copy(
+                    fileId = metadataBook.fileId ?: record.fileId,
                     localPath = record.localPath
                 ) ?: BookSummary(
                     libraryId = "",
@@ -912,10 +926,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 mimeType = book.format
             )
         )
+        val serverUrl = getServerUrl().orEmpty()
+        libraryCatalogStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
+        browserSnapshotStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
         val downloadedBook = book.copy(localPath = target.absolutePath)
         val detail = runCatching { loadBookDetail(downloadedBook) }
             .getOrElse { BookDetailInfo(downloadedBook) }
-        bookDetailCacheStore.save(getServerUrl().orEmpty(), book.id, fileId, detail)
+        bookDetailCacheStore.save(serverUrl, book.id, fileId, detail)
         target
     }
 
@@ -926,6 +943,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         if (!deleted) {
             throw UserFacingException("Unable to remove the local copy for this title.")
         }
+        libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
+        browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
         bookDetailCacheStore.remove(serverUrl, book.id, fileId)
     }
 

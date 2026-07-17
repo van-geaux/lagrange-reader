@@ -386,6 +386,7 @@ internal fun NativeLibraryBrowserScreen(
         activeSeriesGenre = null
         genreSourceBook = null
         genreSourceSeriesKey = null
+        selectedBook = null
     }
 
     BackHandler(enabled = isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
@@ -2996,7 +2997,7 @@ private fun LocalBooksScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
-    val books by produceState<List<BookSummary>?>(initialValue = null) {
+    val books by produceState<List<BookSummary>?>(initialValue = null, state.localBooksRevision) {
         value = loader()
     }
     var filter by remember { mutableStateOf(BookBrowseFilter()) }
@@ -3199,7 +3200,14 @@ private fun BookDetails(
     onSeriesSelected: (String) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
-    val currentBook = state.books.firstOrNull { it.id == book.id } ?: book
+    val stateBook = state.books.firstOrNull { it.id == book.id } ?: book
+    val currentBook = stateBook.fileId?.let { fileId ->
+        if (state.localFilePathOverrides.containsKey(fileId)) {
+            stateBook.copy(localPath = state.localFilePathOverrides[fileId])
+        } else {
+            stateBook
+        }
+    } ?: stateBook
     val currentFileId = currentBook.fileId
     val isDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
     val detail by produceState(

@@ -537,6 +537,12 @@ class BookOrbitAppInstrumentedTest {
         composeRule.runOnIdle { assertTrue(dataSource.deletedLocalBooks.isEmpty()) }
         composeRule.onNodeWithTag("confirm-delete-local-copy").performClick()
         composeRule.waitUntil { dataSource.deletedLocalBooks == listOf(downloadedBook) }
+        composeRule.onNodeWithText("Download").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Delete local").assertCountEquals(0)
+
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        composeRule.onNodeWithText("Options").performClick()
+        composeRule.onNodeWithText("Interface").assertIsDisplayed()
     }
 
     @Test

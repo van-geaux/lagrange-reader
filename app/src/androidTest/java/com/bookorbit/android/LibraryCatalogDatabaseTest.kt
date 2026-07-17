@@ -110,6 +110,17 @@ class LibraryCatalogDatabaseTest {
         assertEquals(4, marked.progressPageIndex)
     }
 
+    @Test
+    fun local_path_updates_without_waiting_for_catalog_reconciliation() = runBlocking {
+        dao.insertBooks(listOf(book("a", 0, "Alpha")))
+
+        dao.updateLocalPath(SERVER, "a", "/downloads/alpha.epub")
+        assertEquals("/downloads/alpha.epub", dao.readBooks(SERVER, LIBRARY).single().localPath)
+
+        dao.updateLocalPath(SERVER, "a", null)
+        assertNull(dao.readBooks(SERVER, LIBRARY).single().localPath)
+    }
+
     private fun metadata(total: Int, refreshedAtMillis: Long) = LibraryCatalogMetadataEntity(
         serverUrl = SERVER,
         libraryId = LIBRARY,

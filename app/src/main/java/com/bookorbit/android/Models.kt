@@ -171,6 +171,8 @@ data class BrowserState(
     val downloadingFileIds: Set<String> = emptySet(),
     val downloadProgressByFileId: Map<String, Float> = emptyMap(),
     val failedDownloadFileIds: Set<String> = emptySet(),
+    val localFilePathOverrides: Map<String, String?> = emptyMap(),
+    val localBooksRevision: Int = 0,
     val debugPendingProgressCount: Int = 0,
     val isOfflineSnapshot: Boolean = false,
     val message: String? = null

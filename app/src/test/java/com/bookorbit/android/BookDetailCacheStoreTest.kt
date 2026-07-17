@@ -67,6 +67,10 @@ class BookDetailCacheStoreTest {
                 store.read("https://example.test", "book-1", "file-1", 100L)?.synopsis
             )
             assertNull(store.read("https://example.test", "book-1", "file-1", 101L))
+            assertEquals(
+                "Cached synopsis",
+                store.readLatest("https://example.test", "book-1", "file-1")?.synopsis
+            )
             filesDir.deleteRecursively()
         }
     }
