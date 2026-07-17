@@ -57,7 +57,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 - Completed in code: recognize bare CBZ/CBR/CB7 BookOrbit format tokens, include CB7 in filters/download naming, and route all three through the comic reader instead of unsupported-format handling
 - Completed in code: read remote comics through authenticated `/api/v1/cbz/files/{fileId}/pages` and `/pages/{pageIndex}`, with page progress; retain local ZIP extraction for offline CBZ and mislabeled ZIP archives
 - Treat RAR4/RAR5/7z signatures as valid downloaded comics so they are not deleted as corrupt; downloaded/local CBR/CB7 still requires server page extraction in this build
-- Give comics the established novel-reader interaction model: fullscreen content, outer tap zones and horizontal swipes for page changes, center-tap reader options, exposed-content/Back dismissal, and Back-to-exit only after options close
+- Completed in code: give comics the established novel-reader interaction model with a black fullscreen fitted-image surface, always-visible page footer, outer tap zones and horizontal swipes for page changes, center-tap options, exposed-content/Back dismissal, and Back-to-exit only after options close
 - Device-validate online CBZ/CBR/CB7 and offline ZIP/CBZ behavior; client-side offline RAR/7z extraction remains an optional future enhancement
 - Obtain representative audiobook and PDF files; audiobook testing remains deferred without a sample
 
@@ -300,9 +300,9 @@ Implement next, in order:
 4. [x] Restore Currently reading for genuinely in-progress books by deriving top-level Home from the server-wide collection rather than only the selected library. Physical-device validation remains pending.
 5. [x] Aggregate Home shelves across every library on the connected server. Restore cached slices from every Room catalog, refresh the selected library first and every other library incrementally, retain cached slices with a partial-cache message when a nonselected refresh fails, and keep Libraries Recommended/Browse selected-library scoped. Physical-device validation remains pending.
 6. [x] Fix the comic unsupported-format regression by recognizing bare CBZ/CBR/CB7 formats. Use authenticated server page extraction for all three online and local ZIP extraction for offline CBZ/mislabeled ZIP; keep client-side offline RAR/7z extraction optional. Physical-device validation remains pending.
-7. [ ] Replace the comic reader's visible buttons with the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes turn pages, center tap opens a comic options sheet, exposed-content tap or Android Back closes options first, and Android Back exits only when options are closed.
+7. [x] Replace the comic reader's visible buttons with a fullscreen fitted-image interaction model: left/right tap zones and horizontal swipes turn pages, center tap opens a dark rounded options sheet with title/page, Continue reading, Close book, and page slider, exposed-content tap or Android Back closes options first, and Android Back exits only when options are closed. Physical-device validation remains pending.
 
-The completed comic-routing step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass, and Compose instrumentation compiles a remote CBR page-navigation regression.
+The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

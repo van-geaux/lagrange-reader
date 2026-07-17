@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -73,6 +75,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -688,6 +693,20 @@ private fun ReaderScreen(
         )
         return
     }
+    if (state.book.mediaKind == MediaKind.COMIC) {
+        ComicReaderView(
+            title = if (isPreview) "Preview · ${state.book.title}" else state.book.title,
+            file = state.localFile,
+            pagesUrl = state.comicPagesUrl,
+            pageLoader = comicPageLoader,
+            initialPage = if (isPreview) 0 else state.pageIndex,
+            onBack = onBack,
+            onProgress = { pageIndex, percent ->
+                readerProgress(state.book, 0L, pageIndex, percent)
+            }
+        )
+        return
+    }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -720,16 +739,7 @@ private fun ReaderScreen(
                     }
                 )
                 MediaKind.EPUB -> Unit
-                MediaKind.COMIC -> ComicReaderView(
-                    title = state.book.title,
-                    file = state.localFile,
-                    pagesUrl = state.comicPagesUrl,
-                    pageLoader = comicPageLoader,
-                    initialPage = state.pageIndex,
-                    onProgress = { pageIndex, percent ->
-                        readerProgress(state.book, 0L, pageIndex, percent)
-                    }
-                )
+                MediaKind.COMIC -> Unit
                 MediaKind.UNKNOWN -> UnsupportedReaderView(
                     title = state.book.title,
                     message = "This file format is not supported yet."
@@ -1911,9 +1921,16 @@ private fun ComicReaderView(
     pagesUrl: String?,
     pageLoader: suspend (String) -> ByteArray?,
     initialPage: Int,
+    onBack: () -> Unit,
     onProgress: (Int, Float?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var showControls by remember(file, pagesUrl) { mutableStateOf(false) }
+    val dismissControls = { showControls = false }
+    EpubReaderSystemBars(EpubReaderTheme.Dark)
+    BackHandler {
+        if (showControls) dismissControls() else onBack()
+    }
     val source by produceState<ComicPageSource>(
         initialValue = ComicPageSource.Loading,
         file,
@@ -1983,26 +2000,37 @@ private fun ComicReaderView(
         onProgress(currentPage, percent)
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(Color.Black)
+            .testTag("comic_reader_surface")
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Page ${currentPage + 1} of $pageCount",
-            modifier = Modifier.semantics {
-                heading()
-                contentDescription = "Comic page ${currentPage + 1} of $pageCount"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline
-        )
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+                .fillMaxSize()
+                .padding(bottom = EPUB_READER_PROGRESS_FOOTER_HEIGHT)
+                .pointerInput(showControls, currentPage, pageCount) {
+                    if (!showControls) {
+                        var horizontalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { horizontalDrag = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                horizontalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                val threshold = size.width * COMIC_SWIPE_THRESHOLD_FRACTION
+                                when {
+                                    horizontalDrag <= -threshold && currentPage < pageCount - 1 -> currentPage++
+                                    horizontalDrag >= threshold && currentPage > 0 -> currentPage--
+                                }
+                                horizontalDrag = 0f
+                            },
+                            onDragCancel = { horizontalDrag = 0f }
+                        )
+                    }
+                },
             contentAlignment = Alignment.Center
         ) {
             when (val currentImage = pageImage) {
@@ -2010,23 +2038,206 @@ private fun ComicReaderView(
                 is ComicPageImage.Ready -> Image(
                     bitmap = currentImage.bitmap.asImageBitmap(),
                     contentDescription = "Comic page ${currentPage + 1}",
-                    modifier = Modifier.fillMaxWidth()
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
                 )
-                ComicPageImage.Error -> Text("Unable to render this comic page.")
+                ComicPageImage.Error -> Text(
+                    "Unable to render this comic page.",
+                    color = Color.White
+                )
+            }
+            Row(modifier = Modifier.fillMaxSize()) {
+                ComicReaderTapZone(
+                    contentDescription = "Previous comic page",
+                    weight = 1f,
+                    onClick = {
+                        if (currentPage > 0) currentPage--
+                    }
+                )
+                ComicReaderTapZone(
+                    contentDescription = "Open comic reader options",
+                    weight = 2f,
+                    onClick = { showControls = true }
+                )
+                ComicReaderTapZone(
+                    contentDescription = "Next comic page",
+                    weight = 1f,
+                    onClick = {
+                        if (currentPage < pageCount - 1) currentPage++
+                    }
+                )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { currentPage = (currentPage - 1).coerceAtLeast(0) },
-                enabled = currentPage > 0
+        if (showControls) {
+            EpubReaderDismissScrim(onDismiss = dismissControls)
+            ComicReaderOptionsBottomSheet(
+                title = title,
+                currentPage = currentPage,
+                pageCount = pageCount,
+                onPageSelected = { currentPage = it.coerceIn(0, pageCount - 1) },
+                onContinueReading = dismissControls,
+                onCloseBook = {
+                    dismissControls()
+                    onBack()
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            )
+        }
+        ComicReaderProgressFooter(
+            currentPage = currentPage,
+            pageCount = pageCount,
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun RowScope.ComicReaderTapZone(
+    contentDescription: String,
+    weight: Float,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .fillMaxSize()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .semantics { this.contentDescription = contentDescription }
+    )
+}
+
+@Composable
+internal fun ComicReaderProgressFooter(
+    currentPage: Int,
+    pageCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
+        color = Color.Black,
+        shadowElevation = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Page ${currentPage + 1} of $pageCount",
+                modifier = Modifier.semantics {
+                    contentDescription = "Comic page ${currentPage + 1} of $pageCount"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = Color.White.copy(alpha = 0.78f),
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+@Composable
+internal fun ComicReaderOptionsBottomSheet(
+    title: String,
+    currentPage: Int,
+    pageCount: Int,
+    onPageSelected: (Int) -> Unit,
+    onContinueReading: () -> Unit,
+    onCloseBook: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val parentTypography = MaterialTheme.typography
+    val parentShapes = MaterialTheme.shapes
+    val palette = remember { EpubReaderTheme.Dark.readerOptionsPalette() }
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Color(palette.accent),
+            onPrimary = Color(palette.onAccent),
+            primaryContainer = Color(palette.surfaceVariant),
+            onPrimaryContainer = Color(palette.content),
+            background = Color(palette.container),
+            onBackground = Color(palette.content),
+            surface = Color(palette.container),
+            onSurface = Color(palette.content),
+            surfaceVariant = Color(palette.surfaceVariant),
+            onSurfaceVariant = Color(palette.mutedContent),
+            outline = Color(palette.outline)
+        ),
+        typography = parentTypography,
+        shapes = parentShapes
+    ) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 12.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(
+                    start = 20.dp,
+                    top = 10.dp,
+                    end = 20.dp,
+                    bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Previous")
-            }
-            Button(
-                onClick = { currentPage = (currentPage + 1).coerceAtMost(pageCount - 1) },
-                enabled = currentPage < pageCount - 1
-            ) {
-                Text("Next")
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 42.dp, height = 4.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Reader options",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        title,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        "Page ${currentPage + 1} of $pageCount",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(onClick = onContinueReading, modifier = Modifier.weight(1f)) {
+                        Text("Continue reading")
+                    }
+                    OutlinedButton(onClick = onCloseBook, modifier = Modifier.weight(1f)) {
+                        Text("Close book")
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Reading position", style = MaterialTheme.typography.titleMedium)
+                    Slider(
+                        value = currentPage.toFloat(),
+                        onValueChange = { onPageSelected(it.roundToInt()) },
+                        valueRange = 0f..(pageCount - 1).coerceAtLeast(1).toFloat(),
+                        enabled = pageCount > 1,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Comic reading position"
+                        }
+                    )
+                }
             }
         }
     }
@@ -2560,6 +2771,7 @@ private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = 30.dp
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
+private const val COMIC_SWIPE_THRESHOLD_FRACTION = 0.15f
 private const val EPUB_READER_BRIDGE = "BookOrbitReader"
 private val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,

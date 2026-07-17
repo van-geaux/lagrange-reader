@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -841,10 +842,20 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Page 1 of 2").assertIsDisplayed()
-        composeRule.onNodeWithText("Next").performClick()
-        composeRule.onNodeWithText("Page 2 of 2").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Comic page 1 of 2").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Next comic page").performClick()
+        composeRule.onNodeWithContentDescription("Comic page 2 of 2").assertIsDisplayed()
         composeRule.waitUntil { "$pagesUrl/1" in dataSource.loadedCatalogImageUrls }
+
+        composeRule.onNodeWithTag("comic_reader_surface").performTouchInput { swipeRight() }
+        composeRule.onNodeWithContentDescription("Comic page 1 of 2").assertIsDisplayed()
+        composeRule.onNodeWithTag("comic_reader_surface").performTouchInput { swipeLeft() }
+        composeRule.onNodeWithContentDescription("Comic page 2 of 2").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("Open comic reader options").performClick()
+        composeRule.onNodeWithText("Reader options").assertIsDisplayed()
+        composeRule.onNodeWithText("Continue reading").performClick()
+        composeRule.onAllNodesWithText("Reader options").assertCountEquals(0)
     }
 
 }
