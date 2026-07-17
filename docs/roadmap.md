@@ -268,9 +268,9 @@ The full-screen cover viewer, long-title expansion, series-index presentation, r
 ### Target-device follow-up work order — 2026-07-17
 
 - [x] Confirm Read/Preview labels, live download progress, long-title expansion, series-index layout, and multi-selection behavior.
-- [ ] Add labels beside Download and Delete local, retaining their clear icons and compact layout.
-- [ ] Reconcile the selected book detail immediately after a download completes so Download becomes Delete local without leaving and reopening the screen.
-- [ ] Investigate the tappable Tag path that currently opens an empty result. Use a verified BookOrbit tag filter when available; otherwise remove the tap affordance and keep tags informational.
+- [x] Add labels beside Download and Delete local, retaining their clear icons and compact layout.
+- [x] Reconcile the selected book detail immediately after a download completes so Download becomes Delete local without leaving and reopening the screen.
+- [x] Remove the misleading Tag tap affordance because BookOrbit has no verified tag filter; keep tags informational.
 - [x] Keep native username/password as the current authentication flow; defer direct OIDC/SSO until the provider and redirect contract are confirmed.
 - [ ] Make red Home message cards dismissible by horizontal swipe and an explicit close button, with dismissal reflected immediately rather than waiting for refresh.
 - [ ] Replace the normalized `Book x/1000` EPUB footer with a layout-derived current/total whole-book page count that responds to text size, margins, viewport, and chapter pagination.

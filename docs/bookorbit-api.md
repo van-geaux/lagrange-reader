@@ -101,7 +101,7 @@ When Library Browse filters are applied, the client adds BookOrbit's standard fi
 }
 ```
 
-The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Tapping a book-detail genre bypasses the local summary-only filter and opens a fully paginated server-filtered Books list scoped to the selected library. Local books use the standard controls against cached `BookSummary` metadata instead of sending a request; tags remain informational because they are not used as a filter.
+The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Tapping a book-detail genre bypasses the local summary-only filter and opens a fully paginated server-filtered Books list scoped to the selected library. Local books use the standard controls against cached `BookSummary` metadata instead of sending a request; tags remain informational because the documented contract has no verified tag filter and tag chips are non-clickable.
 
 Current response shape:
 

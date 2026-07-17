@@ -293,9 +293,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
 - [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
 - [ ] Validate interrupted download recovery and retry behavior on a device
-- [ ] Add visible labels to Download and Delete local book-detail actions
-- [ ] Refresh the open book-detail state immediately when a download completes
-- [ ] Fix the tappable Tag result path so it returns matching books, or remove the tap affordance if BookOrbit has no supported tag filter
+- [x] Add visible labels to Download and Delete local book-detail actions
+- [x] Refresh the open book-detail state immediately when a download completes
+- [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
 - [ ] Make dismissible red Home messages support horizontal swipe and an explicit close button
 - [ ] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total

@@ -2753,13 +2753,32 @@ private fun BookDetails(
     onSeriesSelected: (String) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
-    val detail by produceState(initialValue = BookDetailInfo(book), book.id) {
-        value = detailLoader(book) ?: value
+    val currentBook = state.books.firstOrNull { it.id == book.id } ?: book
+    val currentFileId = currentBook.fileId
+    val isDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
+    val detail by produceState(
+        initialValue = BookDetailInfo(currentBook),
+        currentBook.id,
+        currentBook.updatedAtMillis,
+        currentBook.localPath,
+        isDownloading
+    ) {
+        value = value.copy(
+            book = value.book.copy(
+                localPath = currentBook.localPath,
+                progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
+                progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
+                progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
+                progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
+                lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
+                isRead = currentBook.isRead
+            )
+        )
+        value = detailLoader(currentBook) ?: value
     }
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
     val displayBook = detail.book
     val fileId = displayBook.fileId
-    val isDownloading = fileId != null && fileId in state.downloadingFileIds
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
     val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
@@ -2883,6 +2902,7 @@ private fun BookDetails(
                         DetailActionTile(
                             label = "Delete local",
                             icon = Icons.Default.Delete,
+                            showLabel = true,
                             enabled = !isDownloading,
                             onClick = { onDeleteLocalCopy(displayBook) }
                         )
@@ -2898,6 +2918,7 @@ private fun BookDetails(
                         DetailActionTile(
                             label = "Download",
                             icon = Icons.Default.Download,
+                            showLabel = true,
                             onClick = { onDownload(displayBook) }
                         )
                     }

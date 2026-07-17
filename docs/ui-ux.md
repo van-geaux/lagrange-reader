@@ -8,7 +8,7 @@ Follow-up action feedback is implemented: Read and Preview show visible labels b
 
 Audited implementation status: code and automated verification are complete; physical-device/server validation remains required for genre query compatibility and scope, download interruption recovery, and final responsive density. Direct OIDC/SSO remains an open backlog item.
 
-Latest target-device feedback: Download and Delete local also need visible labels, and a completed download must update the still-open detail immediately. A tappable Tag currently opens an empty result and must either use a verified server tag filter or become informational. Red Home message cards need swipe and close-button dismissal. The reader footer should show layout-derived whole-book pages instead of a normalized `/1000`, and Recently read must contain only completed titles. Direct OIDC/SSO is deferred; native username/password remains current.
+Latest target-device feedback: Download and Delete local now have visible labels, and a completed download updates the still-open detail immediately. BookOrbit has no verified tag filter, so Tag chips are informational and non-clickable. Red Home message cards still need swipe and close-button dismissal. The reader footer should show layout-derived whole-book pages instead of a normalized `/1000`, and Recently read must contain only completed titles. Direct OIDC/SSO is deferred; native username/password remains current.
 
 Options backlog
 

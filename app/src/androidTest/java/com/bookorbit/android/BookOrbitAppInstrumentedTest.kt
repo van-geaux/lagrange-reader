@@ -3,6 +3,7 @@ package com.bookorbit.android
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -232,10 +233,11 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Download").assertIsEnabled()
         composeRule.onNodeWithText("Read").assertIsDisplayed()
         composeRule.onNodeWithText("Preview").assertIsDisplayed()
+        composeRule.onNodeWithText("Download").assertIsDisplayed()
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
         composeRule.onNodeWithText("Science fiction").assertIsDisplayed()
         composeRule.onNodeWithText("Tags").assertIsDisplayed()
-        composeRule.onNodeWithText("Space opera").assertIsDisplayed()
+        composeRule.onNodeWithText("Space opera").assertIsDisplayed().assertHasNoClickAction()
 
         composeRule.onNodeWithContentDescription("Open full-screen cover for Orbit Rising").performClick()
         composeRule.onNodeWithContentDescription("Full-screen cover for Orbit Rising. Tap anywhere to close").assertIsDisplayed()
@@ -249,6 +251,43 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Open series Orbit Saga").performClick()
         composeRule.onNodeWithText("Orbit Saga").assertIsDisplayed()
         composeRule.onNodeWithText("Orbit Rising").assertIsDisplayed()
+    }
+
+    @Test
+    fun downloadedBookDetailsShowLabeledDeleteLocalAction() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-downloaded",
+            fileId = "file-downloaded",
+            title = "Downloaded Book",
+            format = "epub",
+            mediaKind = MediaKind.EPUB,
+            localPath = "/downloads/downloaded.epub"
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+            bookDetailResult = BookDetailInfo(book)
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Downloaded Book").performClick()
+        composeRule.onNodeWithContentDescription("Delete local").assertIsEnabled()
+        composeRule.onNodeWithText("Delete local").assertIsDisplayed()
     }
 
     @Test
