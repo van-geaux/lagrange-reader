@@ -304,8 +304,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Make red Home/Library Recommended messages dismissible with horizontal swipe and an explicit close button
 - [x] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total, weighted completion, and calculating fallback
 - [x] Restrict Recently read to completed books and exclude titles still in progress
-- [ ] Restore Currently reading for genuinely in-progress books when the server/library state contains active progress
-- [ ] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Browse
+- [x] Restore Currently reading for genuinely in-progress books when any server library contains active progress
+- [x] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Recommended/Browse
+- [ ] Validate server-wide Home aggregation, incremental multi-library refresh, partial-cache messaging, and cross-library Currently reading on a physical device/server
 - [x] Fix main Options navigation from book details so retained detail state cannot mask the Options destination
 - [ ] Validate immediate Delete local reconciliation, Local books offline thumbnails, and Options-from-detail navigation on a physical device
 - [x] Add safe bottom spacing to the More menu

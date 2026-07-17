@@ -157,6 +157,7 @@ data class BrowserState(
     val libraries: List<LibrarySummary>,
     val selectedLibraryId: String?,
     val books: List<BookSummary>,
+    val homeBooks: List<BookSummary> = books,
     val booksTotal: Int? = null,
     val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,

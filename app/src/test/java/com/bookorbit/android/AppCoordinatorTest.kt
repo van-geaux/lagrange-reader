@@ -94,6 +94,76 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `home aggregates every server library while selected books stay scoped`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val mangaBook = book.copy(
+            libraryId = mangaLibrary.id,
+            id = "book-manga",
+            fileId = "file-manga",
+            title = "Reading Manga",
+            progressPercent = 35f,
+            lastReadAtMillis = 500L
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary),
+            loadBooksResult = listOf(book),
+            refreshLibraryCatalogResults = mapOf(
+                library.id to LibraryBooksPage(items = listOf(book), total = 1, isComplete = true),
+                mangaLibrary.id to LibraryBooksPage(items = listOf(mangaBook), total = 1, isComplete = true)
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(book), state.books)
+        assertEquals(setOf(book.id, mangaBook.id), state.homeBooks.mapTo(mutableSetOf()) { it.id })
+        assertEquals(listOf(mangaBook), currentlyReadingBooks(state.homeBooks))
+        assertEquals(listOf(library.id, mangaLibrary.id), repository.refreshedLibraryIds)
+    }
+
+    @Test
+    fun `home keeps another library cached when only its refresh fails`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val cachedManga = book.copy(
+            libraryId = mangaLibrary.id,
+            id = "book-manga",
+            fileId = "file-manga",
+            title = "Cached Manga"
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary),
+            loadBooksResult = listOf(book),
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library, mangaLibrary),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book, cachedManga)
+            ),
+            refreshLibraryCatalogResults = mapOf(
+                library.id to LibraryBooksPage(items = listOf(book), total = 1, isComplete = true)
+            ),
+            refreshLibraryCatalogErrors = mapOf(
+                mangaLibrary.id to java.io.IOException("offline")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(setOf(book.id, cachedManga.id), state.homeBooks.mapTo(mutableSetOf()) { it.id })
+        assertTrue(state.message.orEmpty().contains(mangaLibrary.name))
+        assertFalse(state.isRefreshing)
+    }
+
+    @Test
     fun `load browser shows cached catalog before reconciling to the complete server result`() = runTest {
         val cachedBook = book.copy(title = "Cached title")
         val refreshedBook = book.copy(title = "Server title")
@@ -815,6 +885,8 @@ private class FakeBookOrbitDataSource(
     var loadBooksResult: List<BookSummary> = emptyList(),
     var cachedLibraryCatalog: LibraryBooksPage? = null,
     var refreshLibraryCatalogResult: LibraryBooksPage? = null,
+    var refreshLibraryCatalogResults: Map<String, LibraryBooksPage> = emptyMap(),
+    var refreshLibraryCatalogErrors: Map<String, Throwable> = emptyMap(),
     var refreshLibraryCatalogError: Throwable? = null,
     var refreshLibraryCatalogGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesError: Throwable? = null,
@@ -840,6 +912,7 @@ private class FakeBookOrbitDataSource(
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
     val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
+    val refreshedLibraryIds = mutableListOf<String>()
 
     override suspend fun getServerUrl(): String? = serverUrl
 
@@ -885,14 +958,19 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = cachedLibraryCatalog
 
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> = cachedBrowserState?.homeBooks.orEmpty()
+
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
         firstPage: LibraryBooksPage?
     ): LibraryBooksPage {
+        refreshedLibraryIds += libraryId
         refreshFirstPages += firstPage
         refreshLibraryCatalogGate?.await()
+        refreshLibraryCatalogErrors[libraryId]?.let { throw it }
         refreshLibraryCatalogError?.let { throw it }
-        return refreshLibraryCatalogResult
+        return refreshLibraryCatalogResults[libraryId]
+            ?: refreshLibraryCatalogResult
             ?: firstPage?.copy(isComplete = true)
             ?: cachedLibraryCatalog?.copy(isComplete = true)
             ?: LibraryBooksPage(isComplete = true)

@@ -296,11 +296,11 @@ Implement next, in order:
 1. [x] Reconcile the still-open book-detail state immediately after Delete local succeeds so the action returns to Download, Local books refreshes, and catalog/snapshot offline state updates without backing out and reopening. Physical-device validation remains pending.
 2. [x] Restore cached thumbnails and related metadata in Local books, including while offline, by filling incomplete catalog/snapshot summaries from the latest cached rich detail. Physical-device validation remains pending.
 3. [x] Fix navigation to the main Options screen from book details by dismissing retained detail state before selecting Options. Physical-device validation remains pending.
-4. [ ] Restore Currently reading for genuinely in-progress books.
-5. [ ] Aggregate Home shelves across every library on the connected server. Keep the selected-library scope in Libraries/Browse rather than applying it to Home.
+4. [x] Restore Currently reading for genuinely in-progress books by deriving top-level Home from the server-wide collection rather than only the selected library. Physical-device validation remains pending.
+5. [x] Aggregate Home shelves across every library on the connected server. Restore cached slices from every Room catalog, refresh the selected library first and every other library incrementally, retain cached slices with a partial-cache message when a nonselected refresh fails, and keep Libraries Recommended/Browse selected-library scoped. Physical-device validation remains pending.
 6. [ ] Reopen comic work using the available manga samples. Diagnose the CBZ unsupported-format regression and restore CBZ routing/reading; treat CBR separately because it may require RAR archive support not used by CBZ.
 
-The completed browser/local-state step passes 171 JVM tests across 28 suites with zero failures/errors/skips, `lintDebug`, and `assembleDebugAndroidTest`.
+The completed Home aggregation/Currently Reading step passes 173 JVM tests across 28 suites with zero failures/errors/skips, `lintDebug`, and `assembleDebugAndroidTest`. Comic investigation remains next.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

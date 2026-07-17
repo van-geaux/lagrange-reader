@@ -2091,6 +2091,7 @@ private fun RefreshableHomeFeed(
     ) {
         HomeFeed(
             state = state,
+            books = state.homeBooks,
             modifier = Modifier.fillMaxSize(),
             coverLoader = coverLoader,
             onBookSelected = onBookSelected,
@@ -2106,6 +2107,7 @@ private fun RefreshableHomeFeed(
 @Composable
 private fun HomeFeed(
     state: BrowserState,
+    books: List<BookSummary> = state.books,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
@@ -2116,15 +2118,15 @@ private fun HomeFeed(
     onDismissMessage: (() -> Unit)? = null,
     showHeader: Boolean = false
 ) {
-    val currentlyReading = remember(state.books) { currentlyReadingBooks(state.books) }
-    val onDeck = remember(state.books) { onDeckBooks(state.books) }
-    val recentlyAddedBooks = state.books.sortedWith(
+    val currentlyReading = remember(books) { currentlyReadingBooks(books) }
+    val onDeck = remember(books) { onDeckBooks(books) }
+    val recentlyAddedBooks = books.sortedWith(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
     ).take(12)
-    val recentSeries = remember(state.books) { recentSeries(state.books, useUpdatedAt = false) }
-    val updatedSeries = remember(state.books) { recentSeries(state.books, useUpdatedAt = true) }
-    val recentlyRead = remember(state.books) { recentlyReadBooks(state.books) }
+    val recentSeries = remember(books) { recentSeries(books, useUpdatedAt = false) }
+    val updatedSeries = remember(books) { recentSeries(books, useUpdatedAt = true) }
+    val recentlyRead = remember(books) { recentlyReadBooks(books) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val availableMarkAsRead = onMarkAsRead.takeUnless { state.isOfflineSnapshot }

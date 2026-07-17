@@ -418,14 +418,18 @@ class AppCoordinator(
                 }
 
                 repository.setSelectedLibraryId(selectedLibrary)
+                var homeBooks = repository.loadCachedHomeBooks()
+                    .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
                 val firstPage = cachedCatalog ?: repository.loadBooksPage(selectedLibrary, 0)
+                homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
                 showBrowser(
                     catalogBrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         libraryId = selectedLibrary,
                         page = firstPage,
+                        homeBooks = homeBooks,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = true,
                         isCatalogSyncing = true
@@ -442,17 +446,49 @@ class AppCoordinator(
                     latestProgressByTarget.clear()
                     queuedProgressByTarget.clear()
                 }
+                homeBooks = homeBooks.replaceLibrary(selectedLibrary, refreshedCatalog.items)
                 showBrowser(
                     catalogBrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         libraryId = selectedLibrary,
                         page = refreshedCatalog,
+                        homeBooks = homeBooks,
                         pendingProgressCount = pendingProgressCount,
-                        isRefreshing = false,
+                        isRefreshing = libraries.size > 1,
                         isCatalogSyncing = false
                     )
                 )
+                val failedLibraries = mutableListOf<String>()
+                libraries.filterNot { it.id == selectedLibrary }.forEach { library ->
+                    try {
+                        val refreshed = repository.refreshLibraryCatalog(library.id)
+                        homeBooks = homeBooks.replaceLibrary(library.id, refreshed.items)
+                        val current = lastBrowserState ?: return@forEach
+                        showBrowser(
+                            current.copy(
+                                homeBooks = mergeKnownProgress(homeBooks, null)
+                            )
+                        )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: AuthenticationRequiredException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        failedLibraries += library.name
+                    }
+                }
+                val current = lastBrowserState
+                if (current != null) {
+                    showBrowser(
+                        current.copy(
+                            isRefreshing = false,
+                            message = failedLibraries.takeIf { it.isNotEmpty() }?.let { failed ->
+                                "Home is showing cached results for ${failed.joinToString()}."
+                            }
+                        )
+                    )
+                }
             }.onFailure { error ->
                 if (error is AuthenticationRequiredException) {
                     showLogin(
@@ -532,12 +568,16 @@ class AppCoordinator(
                 val pendingProgressCount = repository.pendingProgressCount()
                 val cachedCatalog = repository.loadCachedLibraryCatalog(libraryId)
                 val firstPage = cachedCatalog ?: repository.loadBooksPage(libraryId, 0)
+                val initialHomeBooks = currentBrowser?.browserState?.homeBooks
+                    .orEmpty()
+                    .replaceLibrary(libraryId, firstPage.items)
                 showBrowser(
                     catalogBrowserState(
                         serverUrl = serverUrl,
                         libraries = libraries,
                         libraryId = libraryId,
                         page = firstPage,
+                        homeBooks = initialHomeBooks,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = true,
                         isCatalogSyncing = true
@@ -553,6 +593,7 @@ class AppCoordinator(
                         libraries = libraries,
                         libraryId = libraryId,
                         page = refreshedCatalog,
+                        homeBooks = initialHomeBooks.replaceLibrary(libraryId, refreshedCatalog.items),
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = false,
                         isCatalogSyncing = false
@@ -774,6 +815,13 @@ class AppCoordinator(
                                 currentBook
                             }
                         },
+                        homeBooks = current.homeBooks.map { currentBook ->
+                            if (currentBook.id == book.id) {
+                                currentBook.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                            } else {
+                                currentBook
+                            }
+                        },
                         debugPendingProgressCount = repository.pendingProgressCount(),
                         message = "Marked ${book.title} as read."
                     )
@@ -808,6 +856,9 @@ class AppCoordinator(
                 showBrowser(
                     current.copy(
                         books = current.books.map { currentBook ->
+                            if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
+                        },
+                        homeBooks = current.homeBooks.map { currentBook ->
                             if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
                         },
                         debugPendingProgressCount = repository.pendingProgressCount(),
@@ -945,7 +996,8 @@ class AppCoordinator(
             )
             lastBrowserState?.let { browser ->
                 lastBrowserState = browser.copy(
-                    books = mergeKnownProgress(browser.books, browser.selectedLibraryId)
+                    books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
+                    homeBooks = mergeKnownProgress(browser.homeBooks, null)
                 )
             }
             if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
@@ -982,6 +1034,7 @@ class AppCoordinator(
         libraries: List<LibrarySummary>,
         libraryId: String,
         page: LibraryBooksPage,
+        homeBooks: List<BookSummary>? = null,
         pendingProgressCount: Int,
         isRefreshing: Boolean,
         isCatalogSyncing: Boolean
@@ -992,6 +1045,7 @@ class AppCoordinator(
             libraries = libraries,
             selectedLibraryId = libraryId,
             books = mergeKnownProgress(page.items, libraryId),
+            homeBooks = mergeKnownProgress(homeBooks ?: transient?.homeBooks.orEmpty(), null),
             booksTotal = page.total,
             booksSeriesTotal = page.seriesTotal,
             booksPage = page.page ?: 0,
@@ -1024,6 +1078,9 @@ class AppCoordinator(
         showBrowser(
             current.copy(
                 books = current.books.map { book ->
+                    if (book.fileId == fileId) book.copy(localPath = localPath) else book
+                },
+                homeBooks = current.homeBooks.map { book ->
                     if (book.fileId == fileId) book.copy(localPath = localPath) else book
                 },
                 localFilePathOverrides = nextOverrides,
@@ -1066,6 +1123,19 @@ class AppCoordinator(
             }
             .toList()
         return merged + recentBooks
+    }
+
+    private fun List<BookSummary>.onlyFrom(libraries: List<LibrarySummary>): List<BookSummary> {
+        val libraryIds = libraries.mapTo(mutableSetOf()) { it.id }
+        return filter { it.libraryId in libraryIds }
+    }
+
+    private fun List<BookSummary>.replaceLibrary(
+        libraryId: String,
+        replacement: List<BookSummary>
+    ): List<BookSummary> {
+        return (filterNot { it.libraryId == libraryId } + replacement)
+            .distinctBy { it.id }
     }
 
     private fun resetTransientState(clearBrowserState: Boolean) {

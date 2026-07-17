@@ -119,6 +119,7 @@ interface BookOrbitDataSource {
         libraryId: String,
         firstPage: LibraryBooksPage? = null
     ): LibraryBooksPage = (firstPage ?: loadBooksPage(libraryId, 0)).copy(isComplete = true)
+    suspend fun loadCachedHomeBooks(): List<BookSummary> = emptyList()
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -274,6 +275,20 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 jumpBuckets = cached.jumpBuckets
             )
         }
+
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        val catalogBooks = libraryCatalogStore.readAllBooks(serverUrl)
+        val books = catalogBooks.ifEmpty {
+            browserSnapshotStore.read(serverUrl)
+                ?.booksByLibraryId
+                ?.values
+                ?.flatten()
+                .orEmpty()
+        }
+        books.withCurrentDownloads(downloads)
+    }
 
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
@@ -678,11 +693,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val books = cachedCatalog?.books
             ?: selectedLibraryId?.let { snapshot.booksByLibraryId[it] }
             .orEmpty()
+        val homeBooks = libraryCatalogStore.readAllBooks(serverUrl)
+            .ifEmpty { snapshot.booksByLibraryId.values.flatten() }
         BrowserState(
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
             selectedLibraryId = selectedLibraryId,
             books = books.withCurrentDownloads(downloads),
+            homeBooks = homeBooks.withCurrentDownloads(downloads),
             booksTotal = cachedCatalog?.total ?: books.size,
             booksSeriesTotal = cachedCatalog?.seriesTotal,
             booksPageSize = cachedCatalog?.pageSize,
