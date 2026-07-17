@@ -289,6 +289,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract
 - [ ] Surface and validate the OIDC provider login option when OIDC is enabled on the server
 - [ ] Validate the revised detail-action density, title expansion, multi-selection, genre filters, and series-index layout on a device
+- [ ] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
+- [ ] Use an unmistakable download icon and show active download progress/status from book details
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title

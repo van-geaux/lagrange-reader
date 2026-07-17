@@ -4,6 +4,8 @@ The functional prototype is stable enough for UI/UX work to begin. EPUB is the c
 
 Latest detail feedback: use symbol-only transparent action controls with reduced padding; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre and Tag chips should navigate to filtered Books or Series results when supported by the server query contract. OIDC provider surfacing remains an open authentication item.
 
+Follow-up action feedback: Read and Preview need visible labels beside clear icons, Download needs an unmistakable download symbol, and active download progress/status should be discoverable from the book detail screen.
+
 ## Checkpoints
 
 ### Checkpoint 0: Functional baseline - complete

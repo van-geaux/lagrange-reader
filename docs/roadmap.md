@@ -257,6 +257,12 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [ ] Surface and validate OIDC login when the server has OIDC enabled; the provider option is not currently visible in the app.
 - [ ] Run device validation for the revised detail density, title expansion, multi-selection, genre filters, and series-index layout.
 - [ ] Keep audiobook and CBZ validation deferred until representative samples are available.
+- [ ] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
+- [ ] Expose active download progress and a clear place to check download status from book details.
+
+### Latest detail-action feedback — 2026-07-17
+
+The full-screen cover viewer, long-title expansion, and series-index presentation are confirmed good. The next implementation pass should restore visible Read and Preview labels beside their icons, replace the ambiguous Download symbol, and make active download progress/status discoverable in the detail screen.
 
 ## Source of truth
 
