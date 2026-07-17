@@ -266,6 +266,17 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 
 The full-screen cover viewer, long-title expansion, series-index presentation, revised action labels/icons, and download status presentation are implemented. Multi-select header overlap and stale-selection pruning are fixed. Genre chips now navigate to fully paginated server-filtered Books or Series results; tags remain informational. The remaining work is physical-device/server validation, especially genre query compatibility, OIDC/SSO redirects, and interrupted downloads.
 
+### Target-device follow-up work order — 2026-07-17
+
+- [x] Confirm Read/Preview labels, live download progress, long-title expansion, series-index layout, and multi-selection behavior.
+- [ ] Add labels beside Download and Delete local, retaining their clear icons and compact layout.
+- [ ] Reconcile the selected book detail immediately after a download completes so Download becomes Delete local without leaving and reopening the screen.
+- [ ] Investigate the tappable Tag path that currently opens an empty result. Use a verified BookOrbit tag filter when available; otherwise remove the tap affordance and keep tags informational.
+- [ ] Resolve the authentication direction. The current embedded flow intentionally opens BookOrbit's own login page so the server can discover and initiate its configured SSO provider; recommended follow-up is to relabel it as BookOrbit web sign-in unless a direct provider endpoint can be verified. Native-only login would remove SSO support.
+- [ ] Make red Home message cards dismissible by horizontal swipe and an explicit close button, with dismissal reflected immediately rather than waiting for refresh.
+- [ ] Replace the normalized `Book x/1000` EPUB footer with a layout-derived current/total whole-book page count that responds to text size, margins, viewport, and chapter pagination.
+- [ ] Restrict Recently read to books that have actually finished, excluding every title that remains in progress.
+
 ## Source of truth
 
 Detailed checkpoint status is tracked in:
