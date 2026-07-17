@@ -196,6 +196,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; physical-device validation remains pending.
 - [x] Fix the bare-format unsupported regression and route online CBZ/CBR/CB7 plus offline ZIP/CBZ through the comic reader; physical-device validation remains pending.
 - [x] Match the novel reader's fullscreen interaction model in comics: outer tap zones and horizontal swipes change pages, center tap opens options, exposed content or Back dismisses options first, and Back exits only when options are closed; target-device validation passed.
+- [ ] Add dynamic Mark as read/Mark as unread access to book details. Placement awaits approval; the recommended candidate is a three-dot overflow at the end of the swipeable primary-action row rather than another always-visible tile.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented

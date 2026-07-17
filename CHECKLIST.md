@@ -302,6 +302,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
 - [ ] Validate interrupted download recovery and retry behavior on a device
 - [x] Add visible labels to Download and Delete local book-detail actions
+- [ ] Add a dynamic Mark as read/Mark as unread action to book details; placement awaits design approval, with a three-dot overflow at the end of the swipeable action row recommended
 - [x] Refresh the open book-detail state immediately when a download completes
 - [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
