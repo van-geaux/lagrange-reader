@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. The manga unsupported-format regression is fixed in code: bare CBZ/CBR/CB7 formats now open the comic reader, with authenticated server pages for online reading and on-device ZIP extraction for offline CBZ/mislabeled ZIP archives. Comics use a black fullscreen fitted-image surface with an always-visible page footer, gesture/tap page turns, and a dark center-tap options sheet. Downloaded CBR/CB7 remains valid but requires a connection for server-side RAR/7z extraction in this build. Comic device validation and optional future offline RAR/7z support remain open. Audiobook validation remains deferred without a representative sample.
+The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. The manga unsupported-format regression is fixed in code: bare CBZ/CBR/CB7 formats now open the comic reader, with authenticated server pages for online reading and on-device ZIP extraction for offline CBZ/mislabeled ZIP archives. Comics use a target-device-validated black fullscreen fitted-image surface with an always-visible page footer, gesture/tap page turns, and a dark center-tap options sheet. Downloaded CBR/CB7 remains valid but requires a connection for server-side RAR/7z extraction in this build. The broader comic source-format matrix and optional future offline RAR/7z support remain open. Audiobook validation remains deferred without a representative sample.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -194,12 +194,12 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Restore genuinely in-progress titles from any server library to Currently reading; physical-device validation remains pending.
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; physical-device validation remains pending.
 - [x] Fix the bare-format unsupported regression and route online CBZ/CBR/CB7 plus offline ZIP/CBZ through the comic reader; physical-device validation remains pending.
-- [x] Match the novel reader's fullscreen interaction model in comics: outer tap zones and horizontal swipes change pages, center tap opens options, exposed content or Back dismisses options first, and Back exits only when options are closed; physical-device validation remains pending.
+- [x] Match the novel reader's fullscreen interaction model in comics: outer tap zones and horizontal swipes change pages, center tap opens options, exposed content or Back dismisses options first, and Back exits only when options are closed; target-device validation passed.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented
 
-- Device-validate authenticated CBZ/CBR/CB7 page loading/progress, offline ZIP/CBZ extraction, fullscreen image fitting/footer, tap and swipe navigation, options actions/slider, and Back dismissal/exit ordering with the available manga samples.
+- Fullscreen image fitting/footer, tap and swipe navigation, options actions/slider, and Back dismissal/exit ordering are target-device validated. Finish the authenticated CBZ/CBR/CB7 page-loading/progress and offline ZIP/CBZ source matrix with the available manga samples.
 - Keep downloaded CBR/CB7 available but show the connection requirement for server-side extraction; client-side RAR/7z support is optional future work.
 - Defer audiobook-specific UX until a representative sample is available.
 
