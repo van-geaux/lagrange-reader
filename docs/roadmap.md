@@ -65,7 +65,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 - Complete accessibility, large-text, narrow-screen, rotation, and theme checks
 - Run unit, lint, debug, instrumentation-compile, and release build gates
-- Confirm no secrets or internal URLs are committed
+- Completed: audit the tracked tree and history for sensitive filenames, high-confidence key signatures, hardcoded credential assignments, and unexplained production/internal URLs
 - Create the first tagged release
 
 ## User feedback workplan — 2026-07-12

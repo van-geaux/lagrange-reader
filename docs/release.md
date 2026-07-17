@@ -51,4 +51,5 @@ If a rename is required later:
 
 - debug and release compilation both pass locally
 - no release keystore is committed in this repository
+- the tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses
 - there is not yet a production signing config wired into Gradle

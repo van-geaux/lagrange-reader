@@ -227,7 +227,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [ ] Remove remaining scaffold shortcuts and placeholders
 - [x] Audit cleartext/TLS policy
-- [ ] Confirm no secrets or internal URLs are committed
+- [x] Confirm no secrets or internal URLs are committed
 - [x] Add privacy notes if user data is stored locally
 - [x] Verify release build compiles
 - [x] Verify app install on physical device
