@@ -376,7 +376,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Restore embedded image rendering inside opened EPUB content
 - [ ] Diagnose the separate remote EPUB Preview preparation/authentication/transport regression that persists after relogin and reports `This EPUB could not be prepared for reading. Download it first or reconnect to the server.`; CBZ/CBR Preview remains the working comparison, and the failure may share a cause with missing EPUB images
 - [x] Restore the full #/A–Z Library and Series jump rail: retain sort/catalog hiding rules and the existing grid gutter, but render unrepresented letters with 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action
-- [ ] Add a Local books shelf at the bottom of top-level Home containing every local/downloaded book across the server, plus a selected-library-only Local books shelf at the bottom of each Library Home; confirm empty-state, item limit, and navigation behavior before implementation
+- [x] Add a Local books shelf at the bottom of top-level Home from server-wide `homeBooks` and at the bottom of Library Recommended from selected-library books; use deterministic deduplicated alphabetical previews up to 12, reuse normal shelf cards/actions/covers, and route See all to global or selected-library-scoped Local books
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

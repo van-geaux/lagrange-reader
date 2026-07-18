@@ -216,7 +216,8 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [ ] Restore EPUB embedded images and diagnose the remote non-local EPUB Preview preparation failure that persists after relogin; verify whether both regressions share resource URL/authentication handling.
 - [x] Retain the full stable #/A–Z jump rail when eligible (Z–A/# descending), rendering unavailable entries with 38%-alpha `onSurfaceVariant`, disabled semantics, content descriptions such as `B unavailable`, and no click action. Existing sort/catalog hiding and grid gutter behavior remain unchanged.
 - The full gate passes 209 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; `catalogJumpRailLabels` and compiled Library/Series assertions cover unavailable labels.
-- [ ] Add a bottom Local books shelf to Home using all server-local titles and to Library Home using only titles local to the selected library; confirm empty-state, item limit, and navigation behavior before implementation.
+- [x] Add a bottom Local books shelf to top-level Home using server-wide local titles and to Library Recommended using only titles local to the selected library. Both use deterministic deduplicated alphabetical previews capped at 12 and reuse normal shelf cards/actions/covers; See all opens global or library-scoped Local books with the appropriate title, while More > Local books remains global.
+- The full gate passes 210 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; compiled coverage exercises the global shelf, global See all, and library-scope exclusion.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented

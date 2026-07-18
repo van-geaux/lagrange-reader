@@ -330,7 +330,7 @@ Pending follow-up:
 3. [ ] Restore embedded image rendering inside EPUB reading content.
 4. [ ] Diagnose and fix remote non-local EPUB Preview preparation after relogin; it currently always reports that the EPUB could not be prepared, while CBZ/CBR Preview works. Treat this as a separate preparation/authentication/transport regression while checking for a shared cause with missing EPUB images.
 5. [x] Restore the full #/A–Z Library and Series jump rail while retaining sort/catalog hiding rules and the existing grid gutter. Missing labels use 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action; descending order is Z–A/#.
-6. [ ] Add a Local books shelf at the bottom of top-level Home containing all local books on the server, and at the bottom of each Library Home containing only that library's local books. Confirm empty-state, item limit, and navigation behavior before implementation.
+6. [x] Add a Local books shelf at the bottom of top-level Home from server-wide `homeBooks` and at the bottom of Library Recommended from selected-library books. `HomeFeed` derives a deterministic deduplicated alphabetical preview capped at 12, reuses `ShelfBookCard` actions/covers, and routes See all to global Local books or a selected-library-scoped Local books destination/title. More > Local books remains global.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
@@ -365,6 +365,8 @@ The completed Achievements step passes 208 JVM tests across 34 suites with zero 
 The compact Achievement/action-row follow-up passes the full gate: 208 JVM tests across 34 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Focused coverage includes `AchievementIconTest`, `BookDetailReadingStatusActionTest`, and Android-test Kotlin compilation.
 
 The full disabled-letter jump-rail follow-up passes 209 JVM tests across 34 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Unit coverage exercises `catalogJumpRailLabels`; compiled Compose assertions verify unavailable `B` entries in both Library and Series.
+
+The Local books shelf follow-up passes 210 JVM tests across 34 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Unit coverage verifies server-wide aggregation, library scoping, deduplication, alphabetical order, and the 12-item limit; compiled Compose coverage exercises the global shelf/global See all route and selected-library exclusion.
 
 The completed combined feedback batch passes 206 JVM tests across 33 suites with zero failures/errors/skips after removing the obsolete haptic suite; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Coverage includes same-server no-op handling, represented jump-rail labels, fresh EPUB margin defaults with saved-value preservation, retained series loading with transparent 46 dp neighbor controls, and complete app-haptic removal. APK: `app/build/outputs/apk/debug/app-debug.apk`.
 

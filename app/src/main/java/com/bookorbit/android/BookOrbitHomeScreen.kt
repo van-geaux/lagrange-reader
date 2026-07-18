@@ -45,6 +45,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
@@ -57,7 +58,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
@@ -278,6 +278,18 @@ internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, In
 internal fun seriesBookCountLabel(count: Int): String =
     "$count ${if (count == 1) "book" else "books"}"
 
+internal fun localBooksShelf(
+    books: List<BookSummary>,
+    libraryId: String? = null,
+    limit: Int = 12
+): List<BookSummary> = books
+    .asSequence()
+    .filter { it.isDownloaded && (libraryId == null || it.libraryId == libraryId) }
+    .distinctBy { it.id }
+    .sortedWith(compareBy<BookSummary> { it.title.lowercase() }.thenBy { it.id })
+    .take(limit)
+    .toList()
+
 internal data class SeriesBookNeighbors(
     val previous: BookSummary?,
     val next: BookSummary?,
@@ -400,6 +412,7 @@ internal fun NativeLibraryBrowserScreen(
     var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
+    var localBooksLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
     var showChangeServerEditor by rememberSaveable { mutableStateOf(false) }
     var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
     var changeServerError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -507,6 +520,7 @@ internal fun NativeLibraryBrowserScreen(
                 },
                 onLocalBooks = {
                     showMoreMenu = false
+                    localBooksLibraryId = null
                     destination = BrowserDestination.LOCAL_BOOKS
                     query = ""
                     selectedAuthor = null
@@ -934,6 +948,7 @@ internal fun NativeLibraryBrowserScreen(
                     state = state,
                     modifier = Modifier.padding(padding),
                     loader = localBooksLoader,
+                    libraryId = localBooksLibraryId,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LOCAL_BOOKS
@@ -991,7 +1006,11 @@ internal fun NativeLibraryBrowserScreen(
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage
+                    onDismissMessage = onDismissMessage,
+                    onLocalBooksSelected = {
+                        localBooksLibraryId = null
+                        destination = BrowserDestination.LOCAL_BOOKS
+                    }
                 )
                 destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
                     state = state,
@@ -1020,7 +1039,11 @@ internal fun NativeLibraryBrowserScreen(
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage
+                    onDismissMessage = onDismissMessage,
+                    onLocalBooksSelected = {
+                        localBooksLibraryId = state.selectedLibraryId
+                        destination = BrowserDestination.LOCAL_BOOKS
+                    }
                 )
                 else -> HomeFeed(
                     state = state,
@@ -2267,7 +2290,8 @@ private fun RefreshableHomeFeed(
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onDismissMessage: () -> Unit
+    onDismissMessage: () -> Unit,
+    onLocalBooksSelected: () -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -2286,7 +2310,8 @@ private fun RefreshableHomeFeed(
             onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
             onMarkAsRead = onMarkAsRead,
             onMarkAsUnread = onMarkAsUnread,
-            onDismissMessage = onDismissMessage
+            onDismissMessage = onDismissMessage,
+            onLocalBooksSelected = onLocalBooksSelected
         )
     }
 }
@@ -2303,6 +2328,8 @@ private fun HomeFeed(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onDismissMessage: (() -> Unit)? = null,
+    onLocalBooksSelected: (() -> Unit)? = null,
+    localBooksLibraryId: String? = null,
     showHeader: Boolean = false
 ) {
     val currentlyReading = remember(books) { currentlyReadingBooks(books) }
@@ -2314,6 +2341,12 @@ private fun HomeFeed(
     val recentSeries = remember(books) { recentSeries(books, useUpdatedAt = false) }
     val updatedSeries = remember(books) { recentSeries(books, useUpdatedAt = true) }
     val recentlyRead = remember(books) { recentlyReadBooks(books) }
+    val localBooks = remember(books, localBooksLibraryId) {
+        localBooksShelf(
+            books = books,
+            libraryId = localBooksLibraryId
+        )
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val availableMarkAsRead = onMarkAsRead.takeUnless { state.isOfflineSnapshot }
@@ -2373,6 +2406,17 @@ private fun HomeFeed(
         if (recentlyRead.isNotEmpty()) item {
             BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
+        if (localBooks.isNotEmpty()) item {
+            BookShelf(
+                title = "Local books",
+                books = localBooks,
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
+                onMarkAsRead = availableMarkAsRead,
+                onMarkAsUnread = availableMarkAsUnread,
+                onSeeAll = onLocalBooksSelected
+            )
+        }
         if (state.isLoadingBooks) item { LoadingFeedRow("Loading books...") }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item {
@@ -2404,10 +2448,11 @@ private fun BookShelf(
     onBookSelected: (BookSummary) -> Unit,
     onRemoveFromCurrentlyReading: ((BookSummary) -> Unit)? = null,
     onMarkAsRead: ((BookSummary) -> Unit)? = null,
-    onMarkAsUnread: ((BookSummary) -> Unit)? = null
+    onMarkAsUnread: ((BookSummary) -> Unit)? = null,
+    onSeeAll: (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ShelfTitle(title)
+        ShelfTitle(title, onSeeAll)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -2454,12 +2499,17 @@ private fun SeriesShelf(
 }
 
 @Composable
-private fun ShelfTitle(title: String) {
-    Text(
-        title,
-        modifier = Modifier.padding(horizontal = 16.dp),
-        style = MaterialTheme.typography.titleLarge
-    )
+private fun ShelfTitle(title: String, onSeeAll: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        if (onSeeAll != null) {
+            TextButton(onClick = onSeeAll) { Text("See all") }
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -2734,7 +2784,8 @@ private fun LibraryContentScreen(
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onDismissMessage: () -> Unit
+    onDismissMessage: () -> Unit,
+    onLocalBooksSelected: () -> Unit
 ) {
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
@@ -2765,6 +2816,8 @@ private fun LibraryContentScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage,
+                    onLocalBooksSelected = onLocalBooksSelected,
+                    localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
                 )
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
@@ -3202,6 +3255,7 @@ private fun LocalBooksScreen(
     state: BrowserState,
     modifier: Modifier,
     loader: suspend () -> List<BookSummary>,
+    libraryId: String?,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
@@ -3212,8 +3266,11 @@ private fun LocalBooksScreen(
     }
     var filter by remember { mutableStateOf(BookBrowseFilter()) }
     var showFilter by rememberSaveable { mutableStateOf(false) }
-    val filteredBooks = remember(books, filter) {
-        filterAndSortLocalBooks(books.orEmpty(), filter)
+    val scopedBooks = remember(books, libraryId) {
+        books.orEmpty().filter { libraryId == null || it.libraryId == libraryId }
+    }
+    val filteredBooks = remember(scopedBooks, filter) {
+        filterAndSortLocalBooks(scopedBooks, filter)
     }
     LibraryBooks(
         state = state.copy(
@@ -3225,7 +3282,9 @@ private fun LocalBooksScreen(
         modifier = modifier,
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
-        titleOverride = "Local books",
+        titleOverride = state.libraries.firstOrNull { it.id == libraryId }
+            ?.let { "Local books · ${it.name}" }
+            ?: "Local books",
         emptyMessage = "No local books found.",
         allowSeriesCollapse = false,
         totalBooks = filteredBooks.size,
@@ -3639,7 +3698,7 @@ private fun BookDetails(
                 val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
                 DetailActionTile(
                     label = statusActionLabel,
-                    icon = if (statusActionLabel == "Mark as unread") Icons.Default.Undo else Icons.Default.CheckCircle,
+                    icon = if (statusActionLabel == "Mark as unread") Icons.AutoMirrored.Filled.Undo else Icons.Default.CheckCircle,
                     showLabel = true,
                     enabled = !state.isOfflineSnapshot,
                     onClick = {

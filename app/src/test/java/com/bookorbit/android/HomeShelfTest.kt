@@ -89,6 +89,25 @@ class HomeShelfTest {
         assertEquals(listOf("Orbit Saga" to newer), recentSeries(listOf(older, newer), useUpdatedAt = false))
     }
 
+    @Test
+    fun `local shelf aggregates or scopes downloads and applies its limit`() {
+        val alpha = seriesBook("alpha", index = 1.0).copy(title = "Alpha", localPath = "/local/alpha.epub")
+        val duplicateAlpha = alpha.copy(fileId = "duplicate-file")
+        val beta = seriesBook("beta", index = 2.0).copy(
+            libraryId = "lib-2",
+            title = "Beta",
+            localPath = "/local/beta.epub"
+        )
+        val remote = seriesBook("remote", index = 3.0).copy(title = "Remote")
+
+        assertEquals(
+            listOf("alpha", "beta"),
+            localBooksShelf(listOf(beta, remote, duplicateAlpha, alpha)).map { it.id }
+        )
+        assertEquals(listOf("alpha"), localBooksShelf(listOf(beta, alpha), libraryId = "lib-1").map { it.id })
+        assertEquals(listOf("alpha"), localBooksShelf(listOf(beta, alpha), limit = 1).map { it.id })
+    }
+
     private fun seriesBook(
         id: String,
         index: Double,

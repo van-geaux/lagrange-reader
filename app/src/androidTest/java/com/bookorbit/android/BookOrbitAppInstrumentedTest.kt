@@ -592,6 +592,60 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun homeLocalShelfAggregatesServerAndLibraryShelfScopesDownloads() {
+        val mainLocal = BookSummary(
+            libraryId = "lib-1",
+            id = "local-main",
+            fileId = "file-main",
+            title = "Main Local",
+            localPath = "/local/main.epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val mangaLocal = BookSummary(
+            libraryId = "lib-2",
+            id = "local-manga",
+            fileId = "file-manga",
+            title = "Manga Local",
+            localPath = "/local/manga.cbz",
+            mediaKind = MediaKind.COMIC
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            localBooksResult = listOf(mainLocal, mangaLocal)
+        }
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(
+                                LibrarySummary(id = "lib-1", name = "Main"),
+                                LibrarySummary(id = "lib-2", name = "Manga")
+                            ),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(mainLocal),
+                            homeBooks = listOf(mainLocal, mangaLocal)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Local books").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cover for Main Local").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cover for Manga Local").assertIsDisplayed()
+        composeRule.onNodeWithText("See all").performClick()
+        composeRule.onNodeWithContentDescription("Main Local").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Manga Local").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Local books").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cover for Main Local").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Cover for Manga Local").assertCountEquals(0)
+    }
+
+    @Test
     fun dismissibleMessageSupportsCloseButtonAndHorizontalSwipe() {
         val showCloseMessage = mutableStateOf(true)
         val showSwipeMessage = mutableStateOf(true)
