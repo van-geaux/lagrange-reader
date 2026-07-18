@@ -1,17 +1,17 @@
 # Handover
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 ## Current outcome
 
-The latest implementation work addresses the current user-reported problems and completes the selected reader-options redesign:
+The active user work order is implemented through the EPUB preparation/resource follow-up. The latest app includes the revised book-detail actions, server-wide Home aggregation, Local books shelves, complete comic interactions, five app themes, server switching, Achievements, stable jump rails, series-neighbor navigation, stale progress recovery, and the latest EPUB fixes.
 
-1. Reading progress shown inside Lagrange was not reliably reaching BookOrbit, leaving BookOrbit's Currently Reading widget blank.
-2. A roughly 5,000-book library loaded covers slowly, especially after rapid scrolling and when opening book details.
-3. Global search results lacked the book context menu.
-4. Reader options needed separate Continue reading and Close book actions with clearer hierarchy and theme-safe contrast.
+The newest EPUB step fixes two separate regressions:
 
-The complete catalog/jump-rail work, explicit progress/status reconciliation, in-flight queue fix, large-library thumbnail/detail caching, HTTP server support, search-result actions, and bottom-sheet reader-options redesign are implemented and committed. The user has validated the HTTP flow, status actions, bidirectional sync, large-library browsing/jump rail, airplane-mode behavior, session expiry, Series navigation, and Series thumbnails. Full automated verification passes. Remaining work is physical-device validation of the new reader-options presentation and the next book-detail polish work.
+1. Nonlocal EPUB/PDF reading and Preview now download an authenticated temporary reader copy. The previous resolver accidentally applied a CBZ-only archive check to EPUB/PDF, so a nonlocal EPUB could never be prepared even after relogin.
+2. Extracted EPUB chapter resources now load through `WebViewAssetLoader` at `appassets.androidplatform.net`. Nested and parent-relative paths receive safe encoded base URLs, the visible reader and hidden page measurer share the same extracted root, and broad WebView file/content access is disabled. Read-only inspection of the live `your name.` sample confirmed matching `OEBPS` chapter references and image entries.
+
+Automated verification passes. The next useful work is physical validation of nonlocal EPUB Preview after relogin and embedded images, followed by the remaining format and responsive edge checks.
 
 ## Repository and publishing state
 
@@ -19,81 +19,97 @@ The complete catalog/jump-rail work, explicit progress/status reconciliation, in
 - Local path: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-- The user-owned untracked root `AGENTS.md` is intentionally untouched and must not be included in project commits.
+- Before this handover commit/push, local `main` is 45 commits ahead of `origin/main`.
+- The user requested this handover update and publication. Push is pending until the handover commit is created.
+- The user-owned untracked root `AGENTS.md` is intentionally untouched and must not be committed.
 - The untracked `.agents/` workspace directory is also intentionally untouched.
-- Recent implementation commits:
-  - `7350dd0 feat: redesign reader options as bottom sheet`
-  - `a4128ce feat: add search result book actions`
-  - `3eb5cd5 docs: record device validation and search menu work`
-  - `f1c33bc feat: add book read status actions`
-  - `f6067ce feat: support HTTP BookOrbit servers`
-  - `17ecb60 perf: accelerate large catalog refresh`
-  - `fba3f03 fix: keep reset books off Home refresh`
-  - `6df80cf docs: record device feedback work order`
 
-Earlier implementation commits:
-  - `fc6e80e fix: sync BookOrbit reading status with progress`
-  - `39e409e fix: reconcile reading progress with server`
-  - `6e636fd feat: cache complete library catalogs locally`
-  - `6d19283 fix: preserve in-flight reading progress`
-  - `974eccb perf: warm large library caches`
+Latest implementation commits:
+
+- `596da23 fix: prepare and render epub resources`
+- `5f5c850 feat: add local books home shelves`
+- `87e240a feat: retain disabled jump rail letters`
+- `f5045cf feat: compact detail and achievement actions`
+- `7c929ae feat: redesign achievement tiles`
+- `d88a1ff fix: recover stale progress file ids`
+- `fc94aa5 fix: refine device feedback follow-ups`
+- `d7b866a feat: add achievements catalogue`
+- `894e511 feat: add selectable dark palettes`
+- `3b19388 feat: navigate adjacent series books`
+- `053227b feat: add confirmed server switching`
+- `e4683c5 fix: keep catalog cards clear of jump rails`
+- `7c999c2 fix: align genre filters with server contract`
+- `e424d54 feat: add safe local download updates`
+- `5a298ca perf: parallelize home library refresh`
+- `3b1c32a test: add repository http integration coverage`
+- `dd3255a feat: add chapter page slider`
+- `dc2df21 fix: make reader close immediate`
+- `631a94d feat: add fullscreen comic reader controls`
+- `abd806e feat: aggregate home across libraries`
+- `4f1c6a6 feat: add data preferences`
+- `d457855 feat: add interface preferences`
+
+Consult `git log` plus `CHECKLIST.md` and `docs/roadmap.md` for the complete intervening commit history and work-order record.
 
 ## Latest implementation state
 
-### Bidirectional reading progress
+### Book details and catalog actions
 
-- BookOrbit card payloads now parse the current scalar `readingProgress` value, nested `readStatus`, and tolerated legacy page/time progress containers.
-- EPUB, PDF, comic, audiobook, queue, marker, resume, and API paths use one canonical 0-100 percentage scale.
-- A newer lower percentage is allowed through as reread/correction progress instead of being rejected as stale.
-- Browser bootstrap replays pending progress before catalog refresh. Closing a reader records the newest event, flushes it, and attempts foreground sync before clearing active-reader state.
-- Foreground and WorkManager repository instances share queue and last-synced file locks.
-- Sync acknowledges only the exact event IDs it processed. A newer update written while an older network request is in flight is preserved instead of being erased by an old queue snapshot.
-- Rapid reader callbacks replace a short-delayed unique worker so the latest compacted event retains a trailing replay.
-- Unknown percentages inherit the known book percentage when possible and are otherwise rejected; they are no longer submitted as a valid `0%` update.
-- BookOrbit's Currently Reading widget is status-backed, so Lagrange now explicitly follows every accepted file/audio progress write with `PATCH /api/v1/books/{bookId}/status`: progress below 99.5% sets `reading`, and progress at or above 99.5% sets `read`.
-- Progress and status are treated as one queued operation. The event is acknowledged only after both requests succeed, so a status failure remains retryable instead of leaving BookOrbit's Currently Reading widget empty after accepting progress.
-- A separate reading-session submission is not required for the Currently Reading widget. Existing books with no pending event require one new reader progress event to repair their server status.
-- Temporary local browser overlays are removed after successful replay and fresh catalog reconciliation so later BookOrbit-side progress can become authoritative in Lagrange.
+- Book-detail actions use a wrapping `FlowRow`, so narrow screens no longer hide trailing controls behind an unexplained horizontal swipe.
+- Read, Preview, Download/Update/Cancel/Delete local, and the direct live Mark as read/unread action remain labeled.
+- The selected detail reconciles immediately after download, update, and Delete local without requiring the user to leave and reopen it.
+- Long titles expand from a five-line limit, series name/index remain visible, and series books expose transparent Previous/Next controls backed by one retained complete-series load.
+- Genre chips open the official paginated BookOrbit relation filter using singular `genre`, `includesAny`, and an array value. Tags remain informational.
+- Multi-book selection supports bulk Mark as read/unread.
+- The cover viewer dismisses from any full-screen tap or Android Back. Missing foreground covers fall through to the canonical thumbnail endpoint.
 
-### Complete catalog and exact jump rail
+### Home, local state, and large libraries
 
-- The active selected-library catalog is stored in server/library-scoped Room tables instead of the former first-page JSON snapshot.
-- Cached metadata renders before cold-start session and network checks complete.
-- BookOrbit has no reliable catalog revision/delta contract, so refresh still walks every metadata page to detect additions, deletions, reordering, metadata edits, and remote progress changes.
-- Reconciliation retries once if page totals shift, then atomically writes only changed/new/reordered rows and deletions. An interrupted refresh keeps the previous complete generation usable.
-- Browse no longer performs network-backed near-end lazy paging. Local filters and supported sorts operate over the complete cached catalog.
-- Default-sort rail taps use BookOrbit's absolute jump-bucket indexes when valid. Complete local indexes cover filtered, title, author, descending, collapsed-series, and older-server cases.
-- The rail is hidden until the first complete catalog exists and for sorts without meaningful letter buckets.
-- Compose item rendering remains lazy intentionally; composing roughly 5,000 cards simultaneously would waste memory. The removed behavior is network-backed lazy catalog loading, not bounded UI virtualization.
+- Top-level Home aggregates all libraries on the server. Selected-library screens remain scoped to their library.
+- Currently Reading and completed-only Recently read derive from the correct server-wide collections.
+- Top-level Home has a global Local books shelf; Library Recommended has a selected-library Local books shelf. Each uses a deterministic deduplicated alphabetical preview of up to 12 and a correctly scoped See all route.
+- Download/delete/update changes reconcile Room, snapshots, details, Local books, and Home immediately. Local books retain cached thumbnails offline.
+- Initial multi-library refresh makes the selected library current first, then refreshes nonselected libraries in deterministic batches of at most three concurrent libraries.
+- Library/Series grids reserve a rail gutter. Eligible rails retain the stable `#/A-Z` vocabulary (`Z-A/#` descending); unavailable entries are greyed, disabled, announced as unavailable, and cannot forward to another letter.
+- The stale pending-progress queue fix remaps one deleted/stale file-id 404 to the book's current primary file, or acknowledges a terminal invalid target so the debug queue can drain.
 
-### Large-library covers and book details
+### Readers and downloads
 
-- Card cover loads are owned by Compose. When a card scrolls out of composition, cancellation reaches the underlying OkHttp call instead of leaving a process-global stale request running.
-- Short striped locks deduplicate simultaneous requests without serializing unrelated covers.
-- Cover decoding remains off the Compose main thread, uses downsampling and `RGB_565`, and stores decoded bitmaps in a bounded 32 MB memory cache.
-- Persisted thumbnail keys include the book catalog update version, so unchanged thumbnails are reused and changed books fetch a new image.
-- `CoverCacheStore` uses per-file locks shared across repository instances, allowing visible foreground reads and unrelated background writes to proceed concurrently.
-- After a successful complete catalog refresh, `CoverCacheWarmWorker` starts one selected-library chain on unmetered connectivity. It waits five seconds, scans past existing files, and downloads at most 50 missing/changed thumbnails per durable batch.
-- Switching the selected library replaces the previous warm chain so multiple libraries do not compete with visible cards.
-- Rich `BookDetailInfo` is cached for every opened title, not only downloads, and reused until the catalog `updatedAt` version changes.
-- Rich details are deliberately not prefetched for every title: doing so for the target library would add roughly 5,000 detail API requests. The summary screen renders immediately, and the rich supplement is fetched once per changed/opened title.
+- EPUB uses a fullscreen paginated reader with tap/swipe navigation, center-tap options, exact chapter/page resume, chapter selection, a current-chapter page slider, measured whole-book progress, independent margins, themes, and prompt close behavior.
+- EPUB resources use a scoped appassets origin instead of broad file URL access. Visible rendering and hidden page measurement resolve the same fonts/images/assets.
+- Nonlocal EPUB/PDF opens through an authenticated temporary reader cache; explicit offline downloads remain separate durable files.
+- Comic CBZ/CBR works online through authenticated server page extraction. Local ZIP/CBZ works offline. The comic reader matches the novel interaction model: fullscreen fitted pages, tap/swipe page turns, center options, page slider, and options-first Back behavior.
+- Download/Update local shows determinate or indeterminate progress, cancel/retry state, cellular policy handling, staged validation, and atomic replacement. Interrupted and large downloads are target-device validated.
+- Closing a reader restores cached Browser state immediately and completes persistence/sync/cleanup/refresh in the background. Preview remains isolated from normal progress and active-reader state.
 
-### Reader and UI status
+### Options, profile, and appearance
 
-- The Plex-inspired Home/Libraries/More shell, Home search/profile actions, library selector, Recommended/Browse tabs, compact poster grids, Series, Authors, Local books, Options, About, and details are implemented.
-- The complete selected-library cache drives Home and Browse; global search and Series/Authors catalogs remain server-backed.
-- EPUB exact local chapter/page resume and independent Top, Bottom, Left, and Right padding persistence are implemented.
-- The earlier blank EPUB/clipped-wrapper candidate was superseded. The current visible-overflow page strip renders the real EPUB, and target-device testing confirmed all four padding controls visibly change the reading surface.
-- Preview remains isolated from normal active-reader and progress state.
-- Explicit `http://` server URLs are accepted, while bare remote hosts default to HTTPS and bare local development hosts retain HTTP shorthand. Android cleartext traffic is enabled for explicit HTTP deployments; HTTP exposes credentials, tokens, and content to the network.
-- Home shelves and individual Library, Series, Author, and Local Books posters expose Mark as read/unread through overflow and long-press menus. Mark as read preserves position; Mark as unread uses the normal-user progress reset flow. Currently Reading retains its removal action.
-- Global search results intentionally remain list rows and now expose Mark as read/unread through both a visible three-dot action and long-press.
-- EPUB reader options now use one rounded bottom sheet with separate Continue reading and Close book actions, grouped Reading position/Appearance/Page margins controls, and Light/Sepia/Dark theme-specific contrast palettes. Continue reading dismisses the sheet; Close book exits the reader; exposed-content taps and Back dismiss the sheet first.
-- Audiobook, PDF, and CBZ paths remain implemented, but broader format-specific device validation is deferred until representative samples are available.
+- Interface options include lock orientation, default opening screen, Reduce motion, and a five-item theme list: Follow system, Light, Charcoal, Warm black, and OLED black.
+- The former haptic-feedback setting and explicit app-haptic paths were removed by user direction.
+- Data options include cellular download behavior (Always/Never/Ask), storage usage, cache clearing, delete-local confirmation, and background network policy.
+- Change server appears above Log out. An unchanged normalized URL is a silent no-op; an actual replacement warns, logs out, cancels transient work, validates the new URL, and prefills the next login/setup flow.
+- Achievements uses the authenticated server endpoint and compact adaptive information cards with a small server-provided icon, title-row state, metadata, and conditional progress/date.
+- Native username/password remains the only authentication flow. Direct OIDC/SSO is deferred until the provider/redirect contract is confirmed.
+
+## Target-device validation already completed
+
+The user has validated the following on the target device/server:
+
+- Read/Preview/Download/Delete local labels, action wrapping, direct read-status action, long titles, and series-index presentation
+- Download progress, update/delete reconciliation, interrupted/large downloads, and cellular/background policies
+- Multi-selection and genre filtering
+- Local thumbnails and offline availability changes
+- Server-wide Home/Currently Reading aggregation
+- Prompt reader close, EPUB chapter-page slider, correct whole-book progress, and reader margin controls
+- Online/local CBZ and CBR plus fullscreen comic interactions
+- Series Previous/Next behavior, Change server, all five themes, system bars, jump-rail spacing, and stale queue recovery
+- Functional Achievements flow; the newest compact density still needs physical validation
+
+The newest EPUB resource/Preview fix still needs physical confirmation.
 
 ## Verification completed
 
-The final combined command passed:
+The final combined command passed before the handover update:
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
@@ -101,77 +117,67 @@ The final combined command passed:
 
 Results:
 
-- 154 JVM tests across 26 suites
+- 213 JVM tests across 35 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
 - Android instrumentation-test APK compilation passed
-- `git diff --check` passed; only the repository's expected LF-to-CRLF warnings were reported
+- Focused EPUB cache/asset tests passed
+- `git diff --check` passed; only expected LF-to-CRLF warnings were reported
+
+Compiled instrumentation coverage now includes:
+
+- A real `BookOrbitRepository`/MockWebServer case proving nonlocal EPUB preparation requests `/api/v1/books/files/{fileId}/download` and returns a validated local reader file.
+- A real WebView case proving a chapter in `Text/` resolves `../Images/cover.png` through the appassets loader with nonzero `naturalWidth`.
+
+No Android device or emulator was attached, so these newest instrumentation cases compiled but were not executed.
 
 Debug APK:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-No Android device was attached during the reader-options redesign pass, so the new bottom-sheet presentation and interaction still need physical-device validation.
-
 ## Highest-priority next validation
 
-### 1. Reader options bottom sheet
+### 1. EPUB Preview and embedded resources
 
-1. Install `app/build/outputs/apk/debug/app-debug.apk` on the target device.
-2. Open an EPUB, tap the center, and confirm one rounded bottom sheet shows the book title/status, Continue reading, Close book, Reading position, Appearance, and Page margins sections.
-3. Confirm Continue reading dismisses the sheet and remains in the book. Reopen it and confirm Close book exits the reader.
-4. Confirm tapping exposed book content dismisses the sheet without turning the page. Press Android Back once to dismiss the sheet and again to exit the reader.
-5. Check Light, Sepia, and Dark for readable title text, secondary text, buttons, chips, sliders, and the footer. Confirm chapter selection, text-size controls, and all four padding sliders remain usable.
+1. Install the latest debug APK and sign in normally.
+2. Preview a nonlocal EPUB, including after a forced relogin, and confirm it opens instead of showing the prepare/download/reconnect error.
+3. Open `your name.` and representative EPUBs with nested/parent-relative resources. Confirm inline illustrations and covers render, remain page-constrained, and do not destabilize page counts.
+4. Confirm the same books reopen offline after an explicit durable download.
+5. If a device/emulator becomes attached to this workspace, execute the compiled repository and WebView instrumentation tests.
 
-### 2. Android to BookOrbit progress
+### 2. Remaining format coverage
 
-1. Install the latest debug APK.
-2. Open several unfinished EPUBs and move each to a visibly different percentage.
-3. Turn several pages rapidly in at least one title, then immediately close the reader.
-4. Confirm the debug pending-progress count drains.
-5. Refresh BookOrbit's web app and confirm each title has `Reading` status and appears in Currently Reading at approximately the final Android percentage.
-6. Repeat after reading offline and reconnecting.
-7. Finish one title at 99.5% or above and confirm BookOrbit changes it to `Read` and removes it from Currently Reading.
+- Obtain a representative audiobook before audiobook-specific validation/refinement.
+- Validate CB7 online and downloaded behavior. Offline client-side RAR/7z extraction remains an optional enhancement, not current scope.
+- Continue representative PDF validation when a suitable sample is available.
 
-### 3. BookOrbit to Android progress
+### 3. Remaining responsive and failure edges
 
-1. Advance one of those titles in BookOrbit's web reader.
-2. Refresh Lagrange.
-3. Confirm the newer server percentage replaces the temporary local overlay and reader resume follows it when there is no newer queued Android event.
-4. Test a backward correction/reread and a value below 1% to verify neither direction scales or suppresses it incorrectly.
+- Check compact Achievement cards for secret/censored entries, unsupported-server response, retry, conditional metadata, and narrow/wide layouts.
+- Check series Previous/Next across long titles, responsive widths, loading transitions, and offline snapshots.
+- Check disabled jump rails/gutters across additional widths and orientations.
+- Exercise partial failure of a nonselected library during server-wide Home refresh and confirm cached slices remain usable with clear messaging.
 
-### 4. Five-thousand-book library
+### 4. Deferred authentication
 
-1. On the first complete sync, confirm cached cards remain usable while reconciliation runs and the letter rail appears only after completion.
-2. Tap `#` and several distant letters; each tap should land directly on the requested or next available initial without loading intermediate server pages.
-3. Rapidly scroll through distant rows, stop, and confirm visible covers fill promptly instead of waiting behind off-screen requests.
-4. Leave the app on unmetered Wi-Fi after refresh so thumbnail warming can advance. Then enable airplane mode and jump to distant letters; warmed thumbnails should still render.
-5. Open a book detail, return, and reopen it; the rich detail should be immediate on the second open.
-6. Change that book's metadata in BookOrbit, refresh Lagrange, and confirm the next detail open replaces the old cached version.
-
-### 5. Next book-detail work
-
-- Redesign book-detail actions as a compact/swipeable action area while retaining visible labels.
-- Make the tapped series title navigate to Series details.
-- Compact the genres/tags and lower metadata hierarchy.
-- Add a full-screen cover viewer with tap and Android Back dismissal.
+- Direct OIDC/SSO remains deferred. Do not restore the embedded server login button without first confirming BookOrbit's provider discovery, redirect URI, token handoff, and mobile callback contract.
 
 ## Architecture guardrails
 
 - Do not restore network-backed Browse lazy paging; exact jumps rely on the complete local catalog.
-- Do not replace `LazyVerticalGrid` with eager rendering of every book; UI virtualization is still required for memory safety.
-- Do not acknowledge progress by rewriting an old queue snapshot. Use exact event-ID acknowledgement so concurrent reader writes survive.
-- Do not acknowledge a progress event until its matching BookOrbit `reading`/`read` status request succeeds.
-- Keep all progress percentages on the canonical 0-100 scale.
-- Keep the explicit status boundary at 99.5% unless the user approves a policy change.
-- Do not submit an unknown percentage as zero.
-- Keep thumbnails server-, book-, URL-, and catalog-version-scoped.
-- Keep full thumbnail warming unmetered and single-chain unless the user explicitly chooses another bandwidth policy.
-- Do not eagerly fetch every rich-detail endpoint without an explicit user decision; the current on-open versioned cache is intentional.
-- Preserve offline reader behavior, Preview isolation, session recovery, local resume, and server-scoped persistence when changing browser or sync behavior.
-- Keep explicit HTTP support opt-in at entry; bare remote-host defaults must remain HTTPS.
-- Keep Mark as read serialized against progress replay, and keep Mark as unread tied to the normal-user progress/status reset flow.
+- Keep `LazyVerticalGrid`/lazy lists for UI virtualization; do not compose thousands of cards eagerly.
+- Keep Home server-wide while Library Recommended/Browse and library Local books remain selected-library scoped.
+- Preserve exact event-ID progress acknowledgement, stale-file remapping, 0-100 percentage scale, and the paired progress plus `reading`/`read` status operation.
+- Preserve Preview isolation from normal progress and active-reader state.
+- Keep nonlocal EPUB/PDF temporary reader copies separate from durable offline downloads.
+- Keep EPUB assets confined to the extracted root/appassets handler. Do not re-enable broad WebView file/content access.
+- Keep visible and hidden EPUB WebViews on the same extracted root so image/font timing and whole-book measurement agree.
+- Keep comic server-page routing for online CBZ/CBR/CB7 and local extraction only for supported ZIP content unless an approved RAR/7z implementation is added.
+- Keep thumbnail keys server/book/URL/catalog-version scoped and background warming bounded by the selected network policy.
+- Do not eagerly fetch every rich-detail endpoint for a large catalog.
+- Keep explicit HTTP opt-in; bare remote hosts default to HTTPS.
+- Do not infer or implement direct OIDC/SSO without an approved mobile redirect/token design.
 
 ## Important files for the next session
 
@@ -183,35 +189,27 @@ No Android device was attached during the reader-options redesign pass, so the n
 - `docs/ui-ux.md`
 - `app/src/main/java/com/bookorbit/android/AppCoordinator.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt`
-- `app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt`
-- `app/src/main/java/com/bookorbit/android/LastSyncedProgressStore.kt`
-- `app/src/main/java/com/bookorbit/android/CoverCacheStore.kt`
-- `app/src/main/java/com/bookorbit/android/CoverCacheWarmWorker.kt`
-- `app/src/main/java/com/bookorbit/android/BookDetailCacheStore.kt`
-- `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
+- `app/src/main/java/com/bookorbit/android/EpubSupport.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitApp.kt`
-- `app/src/main/java/com/bookorbit/android/BrowserSnapshotStore.kt`
+- `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
+- `app/src/main/java/com/bookorbit/android/AchievementScreen.kt`
+- `app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt`
+- `app/src/main/java/com/bookorbit/android/DownloadStore.kt`
 - `app/src/main/java/com/bookorbit/android/LibraryCatalogStore.kt`
-- `app/src/test/java/com/bookorbit/android/ProgressQueueStoreTest.kt`
-- `app/src/test/java/com/bookorbit/android/AppCoordinatorTest.kt`
-- `app/src/test/java/com/bookorbit/android/ProgressPercentNormalizationTest.kt`
-- `app/src/test/java/com/bookorbit/android/BookDetailCacheStoreTest.kt`
-- `app/src/test/java/com/bookorbit/android/CoverCacheStoreTest.kt`
+- `app/src/test/java/com/bookorbit/android/EpubAssetUrlTest.kt`
 - `app/src/test/java/com/bookorbit/android/BookOrbitRepositoryHelpersTest.kt`
-- `app/src/test/java/com/bookorbit/android/EpubReaderOptionsPaletteTest.kt`
-- `app/src/androidTest/java/com/bookorbit/android/EpubReaderOptionsOverlayInstrumentedTest.kt`
+- `app/src/androidTest/java/com/bookorbit/android/BookOrbitRepositoryIntegrationTest.kt`
+- `app/src/androidTest/java/com/bookorbit/android/EpubWebViewInstrumentedTest.kt`
 
 ## Known remaining limitations
 
-- Live bidirectional progress and explicit BookOrbit status reconciliation have been validated against the target server; broader format-specific coverage remains incomplete.
-- Explicit HTTP server support, Mark as read/unread actions, session expiry, Series navigation, and Series thumbnails have been validated on the target device/server.
-- The reader-options bottom sheet is implemented and automated coverage passes; its presentation, contrast, scrolling, and action behavior still require physical-device validation.
-- Full thumbnail warming and visible-card prioritization require target-device validation with the real 5,000-book library.
-- BookOrbit metadata refresh must still request all catalog pages because the server does not expose a reliable revision/delta contract.
-- Thumbnail versions that become obsolete remain on disk; an eviction/cleanup policy can be added later if real storage measurements justify it.
-- Series and Authors catalogs remain server-backed and do not yet use the selected-library Room catalog.
-- Exact in-chapter resume is implemented for EPUB; equivalent format-specific validation remains incomplete for audiobook, PDF, and CBZ.
-- CBR remains unsupported.
+- The newest nonlocal EPUB Preview and embedded-image fixes need target-device validation.
+- No connected device/emulator was available for the latest instrumentation execution.
+- Audiobook validation is deferred without a representative sample.
+- CB7 validation remains open; offline RAR/7z extraction is optional future work.
+- Direct OIDC/SSO is deferred pending a confirmed mobile authentication contract.
+- BookOrbit still lacks a reliable complete-catalog revision/delta contract, so metadata refresh must request all pages.
+- Some responsive, partial-failure, and unusual Achievement/series edge states remain validation work rather than known implementation failures.
 
 ## Environment notes
 
@@ -219,7 +217,7 @@ No Android device was attached during the reader-options redesign pass, so the n
 - `local.properties` points to the Android SDK.
 - Gradle requires access to the user cache under `C:\Users\vangeaux\.gradle`.
 - The Gradle daemon used for this session was stopped before this handover was updated.
-- GitHub CLI is installed, but its stored API token was stale during this session. Direct Git SSH authentication is configured separately through the `origin` remote.
+- Git SSH authentication is configured through `origin`.
 
 ## Handover maintenance rule
 
