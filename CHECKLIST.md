@@ -99,7 +99,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Give the comic reader the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes change pages, center tap opens reader options, exposed-content tap or Back dismisses options first, and Back exits only when options are closed; target-device validation passed
 - [x] Validate the general comic reading flow on the target device; comic books work correctly in current testing
 - [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
-- [ ] Validate online CBZ/CBR/CB7 reading and offline downloaded comic formats, including page navigation and progress, on a physical device/server
+- [x] Validate online and local/downloaded CBZ/CBR reading, page navigation, and progress on the target device/server; RAR-backed local CBR continues to use server-side extraction when required
+- [ ] Validate online and downloaded CB7 reading on a physical device/server
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path
@@ -109,7 +110,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Download file from API to app-local storage
 - [x] Persist download record locally
 - [x] Expose downloaded status in UI
-- [ ] Verify large-download behavior on real content
+- [x] Verify large-download behavior on real content
 - [x] Add progress indicator for active downloads
 - [x] Add retry/cancel behavior for failed downloads
 - [x] Validate file naming and extension handling for all supported formats
@@ -168,6 +169,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures
 - [x] Recover stale non-audio queued file IDs after progress 404 by resolving the book's current primary file, retrying once, and acknowledging terminal INVALID targets so they cannot retry forever
+- [x] Validate on the target device that stale-file recovery clears the stuck pending-sync queue
 - [x] Add queue inspection/logging for debug builds
 - [x] Confirm behavior when server changes while queue still exists
 
@@ -303,12 +305,12 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate the remaining revised detail density on a device; genre-filter result scope is validated
 - [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
 - [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
-- [ ] Validate interrupted download recovery and retry behavior on a device
+- [x] Validate interrupted download recovery, retry behavior, and large downloads on the target device
 - [x] Add visible labels to Download and Delete local book-detail actions
 - [x] Add a final compact three-dot overflow to book details with exactly one live context-sensitive Mark as read or Mark as unread action; disable it for offline snapshots and keep device validation pending
-- [x] Make Close book immediately restore cached browser state (or Loading when unavailable), merge captured progress into selected/server-wide books, and complete persistence, sync, cleanup, and refresh in the background; physical-device validation remains pending
+- [x] Make Close book immediately restore cached browser state (or Loading when unavailable), merge captured progress into selected/server-wide books, and complete persistence, sync, cleanup, and refresh in the background; prompt dismissal is target-device validated
 - [x] Recover missing foreground book-detail covers, including `your name.`, through ordered explicit/canonical thumbnail candidates while preserving cancellation and cache identity; physical-device/server validation remains pending
-- [x] Add the approved current-chapter page slider beneath the retained Choose chapter/chip controls, with immediate clamped jumps and single-page disablement; physical-device validation remains pending
+- [x] Add the approved current-chapter page slider beneath the retained Choose chapter/chip controls, with immediate clamped jumps and single-page disablement; target-device validation passed
 - [x] Refresh the open book-detail state immediately when a download completes
 - [x] Remove the Tag tap affordance because BookOrbit has no verified supported tag filter; keep tags informational
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
@@ -317,9 +319,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Restrict Recently read to completed books and exclude titles still in progress
 - [x] Restore Currently reading for genuinely in-progress books when any server library contains active progress
 - [x] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Recommended/Browse
-- [ ] Validate server-wide Home aggregation, incremental multi-library refresh, partial-cache messaging, and cross-library Currently reading on a physical device/server
+- [x] Validate server-wide Home aggregation and cross-library Currently reading on the target device/server
+- [ ] Validate incremental multi-library refresh latency and partial-cache messaging under a failing nonselected library
 - [x] Fix main Options navigation from book details so retained detail state cannot mask the Options destination
-- [ ] Validate immediate Delete local reconciliation, Local books offline thumbnails, and Options-from-detail navigation on a physical device
+- [x] Validate immediate Download/Delete local reconciliation, Local books thumbnails, and Options-from-detail navigation on the target device
 - [x] Add safe bottom spacing to the More menu
 - [x] Show full Library book/series totals from the complete cached catalog
 - [x] Return from Library selection by tapping the top-left Libraries title
@@ -353,24 +356,34 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add a stable Previous/Next series-book row directly below book identity/series metadata, using complete online series data or cached offline neighbors ordered by numeric series index
 - [x] Validate basic series Previous/Next navigation on the target device
 - [x] Restyle series Previous/Next as transparent borderless 46 dp controls matching detail actions and retain the first complete series load across adjacent navigation
-- [ ] Validate the new series Previous/Next visuals across responsive widths, long titles, loading transitions, and offline snapshots
+- [x] Validate the transparent series Previous/Next controls on the target device
+- [ ] Validate remaining series Previous/Next edge cases across responsive widths, long titles, loading transitions, and offline snapshots
 - [x] Replace the single app Dark choice with one flat five-option Theme list: Follow system, Light, Charcoal, Warm black, and OLED black; migrate legacy Dark to Charcoal
 - [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
-- [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device; submitting the current normalized URL now closes silently without state changes
+- [x] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on the target device; submitting the current normalized URL closes silently without state changes
 - [x] Add a profile Achievements destination backed by authenticated `GET /api/v1/achievements`, with earned/available summary, adaptive Unlocked/Locked cards, optional locked progress, award dates, secret-field preservation, older-server unsupported state, and retry errors
 - [x] Validate the basic Achievements flow on the target device/server
 - [x] Redesign Achievements as Library-like adaptive poster tiles with a 128 dp minimum width, prominent semantic Android Material symbols mapped from the server's official BookOrbit `iconName` vocabulary, a small lock-state indicator, and name/description/category/rarity/progress/date metadata below each poster
-- [ ] Validate secret/censored entries, unsupported-server behavior, retry, poster symbols, two-line descriptions, conditional progress/date metadata, and responsive layout on physical devices/server variants
+- [ ] Validate secret/censored entries, unsupported-server behavior, retry, conditional progress/date metadata, and responsive layout after the compact information-card redesign
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
 - [x] Validate the jump-rail grid spacing on the target device
 - [ ] Validate the conditional jump-rail gutter across additional widths, orientations, and responsive grid sizes
+
+### Latest target-device follow-up — 2026-07-18
+
+- [ ] Replace the oversized Achievement poster tiles with the approved compact information cards: keep each achievement in a card, place the small server-driven semantic icon immediately before the title, put lock/unlock state at the row end, and keep description plus progress or earned date below
+- [ ] Resolve undiscoverable horizontal overflow in the book-detail `book-detail-actions` row (Read, Preview, Download/Delete local, More) by making additional actions visibly discoverable or eliminating hidden horizontal navigation; confirm the exact GUI treatment before implementation
+- [ ] Restore embedded image rendering inside opened EPUB content
+- [ ] Diagnose the separate remote EPUB Preview preparation/authentication/transport regression that persists after relogin and reports `This EPUB could not be prepared for reading. Download it first or reconnect to the server.`; CBZ/CBR Preview remains the working comparison, and the failure may share a cause with missing EPUB images
+- [ ] Restore the full #/A–Z Library and Series jump rail, rendering unrepresented letters with existing disabled/grey tokens and accessibility semantics and making them non-selectable
+- [ ] Add a Local books shelf at the bottom of top-level Home containing every local/downloaded book across the server, plus a selected-library-only Local books shelf at the bottom of each Library Home; confirm empty-state, item limit, and navigation behavior before implementation
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
 - [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
-- [ ] Checkpoint 5: fullscreen comic interactions are device-validated; validate online CBZ/CBR/CB7 and offline downloaded comic formats, consider optional offline CBR/CB7 extraction, and refine audiobook/PDF readers when representative samples are available
+- [ ] Checkpoint 5: fullscreen comic interactions plus online/local CBZ and CBR are device-validated; validate CB7, consider optional offline CBR/CB7 extraction, and refine audiobook/PDF readers when representative samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
 
 ## Options backlog
@@ -392,7 +405,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points
 - [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, and delete-local confirmation on a physical device
 - [x] Validate all five app themes on the target device
-- [ ] Validate detailed theme contrast/system-bar edge cases and background network policy on physical devices
+- [x] Validate detailed theme contrast/system-bar behavior and background network policy on the target device
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
