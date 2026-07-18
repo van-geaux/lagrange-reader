@@ -92,6 +92,8 @@ When Library Browse filters are applied, the client adds BookOrbit's standard fi
     "join": "AND",
     "rules": [
       { "type": "rule", "field": "title", "operator": "contains", "value": "Dune" },
+      { "type": "rule", "field": "author", "operator": "includesAny", "value": ["Frank Herbert"] },
+      { "type": "rule", "field": "genre", "operator": "includesAny", "value": ["Science Fiction"] },
       { "type": "rule", "field": "readProgress", "operator": "isInProgress" },
       { "type": "rule", "field": "format", "operator": "includesAny", "value": ["epub"] }
     ]
@@ -101,7 +103,7 @@ When Library Browse filters are applied, the client adds BookOrbit's standard fi
 }
 ```
 
-The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. Tapping a book-detail genre bypasses the local summary-only filter and opens a fully paginated server-filtered Books list scoped to the selected library. Local books use the standard controls against cached `BookSummary` metadata instead of sending a request; tags remain informational because the documented contract has no verified tag filter and tag chips are non-clickable.
+The Android filter sheet exposes title/author/series matching, unread/in-progress/finished progress, common formats, and the server sort fields most useful on a phone. BookOrbit's current source defines book relation rules as the singular `genre` or `author` field with operator `includesAny` and an array value. The client now follows that exact shape; the previous genre-chip request incorrectly used `genres`, `contains`, and a scalar value. Tapping a book-detail genre bypasses the local summary-only filter and opens a fully paginated server-filtered Books list scoped to the selected library. Local books use the standard controls against cached `BookSummary` metadata instead of sending a request; tags remain informational because the documented contract has no verified tag filter and tag chips are non-clickable. A real-repository MockWebServer regression asserts the exact genre payload and result parsing; target-server compatibility and result scope remain pending device validation.
 
 Current response shape:
 

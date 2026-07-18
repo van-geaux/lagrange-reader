@@ -37,15 +37,30 @@ class CatalogFiltersTest {
     }
 
     @Test
-    fun `genre book filter targets the server genres field`() {
+    fun `genre book filter uses the official relation rule contract`() {
         val rules = BookBrowseFilter(genre = "Science fiction")
             .toServerFilter()
             ?.getJSONArray("rules")
             ?: error("expected genre rule")
 
         assertEquals(1, rules.length())
-        assertEquals("genres", rules.getJSONObject(0).getString("field"))
-        assertEquals("Science fiction", rules.getJSONObject(0).getString("value"))
+        val rule = rules.getJSONObject(0)
+        assertEquals("genre", rule.getString("field"))
+        assertEquals("includesAny", rule.getString("operator"))
+        assertEquals("Science fiction", rule.getJSONArray("value").getString(0))
+    }
+
+    @Test
+    fun `author book filter uses the official relation rule contract`() {
+        val rule = BookBrowseFilter(author = "Terry Pratchett")
+            .toServerFilter()
+            ?.getJSONArray("rules")
+            ?.getJSONObject(0)
+            ?: error("expected author rule")
+
+        assertEquals("author", rule.getString("field"))
+        assertEquals("includesAny", rule.getString("operator"))
+        assertEquals("Terry Pratchett", rule.getJSONArray("value").getString(0))
     }
 
     @Test

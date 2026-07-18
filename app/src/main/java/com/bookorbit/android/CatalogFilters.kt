@@ -87,7 +87,7 @@ data class SeriesCatalogFilter(
 
 internal fun BookBrowseFilter.toServerFilter(): JSONObject? {
     val rules = JSONArray()
-    listOf("title" to title, "author" to author, "series" to series, "genres" to genre).forEach { (field, value) ->
+    listOf("title" to title, "series" to series).forEach { (field, value) ->
         value?.trim()?.takeIf { it.isNotBlank() }?.let { text ->
             rules.put(
                 JSONObject()
@@ -95,6 +95,17 @@ internal fun BookBrowseFilter.toServerFilter(): JSONObject? {
                     .put("field", field)
                     .put("operator", "contains")
                     .put("value", text)
+            )
+        }
+    }
+    listOf("author" to author, "genre" to genre).forEach { (field, value) ->
+        value?.trim()?.takeIf { it.isNotBlank() }?.let { text ->
+            rules.put(
+                JSONObject()
+                    .put("type", "rule")
+                    .put("field", field)
+                    .put("operator", "includesAny")
+                    .put("value", JSONArray().put(text))
             )
         }
     }

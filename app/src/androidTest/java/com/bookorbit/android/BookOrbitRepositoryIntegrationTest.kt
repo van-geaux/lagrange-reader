@@ -130,6 +130,44 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun genreFilteredBooksUseTheOfficialRelationRuleContract() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "items":[{
+                    "id":"book-comedy",
+                    "libraryId":"library-1",
+                    "title":"Comedy Book",
+                    "files":[{"id":"file-comedy","format":"epub"}]
+                  }],
+                  "total":1,
+                  "page":0,
+                  "size":100
+                }
+                """.trimIndent()
+            )
+        )
+
+        val page = repository.loadBooksPage(
+            libraryId = "library-1",
+            page = 0,
+            filter = BookBrowseFilter(genre = "Comedy")
+        )
+
+        assertEquals(listOf("book-comedy"), page.items.map { it.id })
+        val request = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("/api/v1/libraries/library-1/books", request.path)
+        val rule = JSONObject(request.body.readUtf8())
+            .getJSONObject("filter")
+            .getJSONArray("rules")
+            .getJSONObject(0)
+        assertEquals("genre", rule.getString("field"))
+        assertEquals("includesAny", rule.getString("operator"))
+        assertEquals("Comedy", rule.getJSONArray("value").getString(0))
+    }
+
+    @Test
     fun queuedProgressStaysLocalUntilExplicitReplayThenAcknowledgesBothWrites() = runBlocking {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {

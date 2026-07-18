@@ -97,8 +97,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Fix the manga unsupported-format regression by recognizing bare CBZ/CBR/CB7 format tokens and routing them to the comic reader
 - [x] Support authenticated server-page reading for CBZ/CBR/CB7 and offline extraction for local ZIP comics, including mislabeled ZIP archives
 - [x] Give the comic reader the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes change pages, center tap opens reader options, exposed-content tap or Back dismisses options first, and Back exits only when options are closed; target-device validation passed
+- [x] Validate the general comic reading flow on the target device; comic books work correctly in current testing
 - [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
-- [ ] Validate online CBZ/CBR/CB7 reading, offline ZIP/CBZ reading, page navigation, and progress on a physical device/server
+- [ ] Complete the per-format online CBZ/CBR/CB7 and offline ZIP/CBZ source matrix, including page navigation and progress, on a physical device/server
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path
@@ -117,7 +118,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add delete-local-copy action
 - [x] Reconcile an open book-detail screen immediately after Delete local succeeds so offline availability and actions update without leaving the screen
 - [x] Prune stale download records when local files are missing
-- [x] Add version-aware Update local with staged validation and atomic replacement when server metadata changes; physical-device/server validation remains pending
+- [x] Add version-aware Update local with staged validation and atomic replacement when server metadata changes; target-device Update local flow validated
 
 ## 8. Offline Reading / Listening
 
@@ -294,7 +295,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Limit long book-detail titles to five rows with an expand/collapse action
 - [x] Keep series name and series index visible as separate book-detail metadata rows
 - [x] Add multi-book selection and bulk Mark as read/unread actions to library grids
-- [x] Navigate genre selections to filtered Books or Series results through the server filter model; keep tags informational
+- [x] Navigate genre selections to filtered Books or Series results, using BookOrbit's current singular `genre`/`includesAny`/array book-filter contract and the analogous `author` relation contract; keep tags informational
 - [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
 - [ ] Add direct OIDC/SSO authentication after the provider/redirect contract is confirmed; native username/password remains current
 - [x] Validate the revised detail-action density, title expansion, multi-selection, and series-index implementation in code/tests
@@ -348,6 +349,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Render book cards with title, optional series, and series-index metadata rows
 - [x] Validate reader edge padding while sliders move on the target device; Top/Bottom resize the WebView externally while Left/Right remain in the known-good page strip
 - [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
+- [ ] Add Previous/Next navigation between books in the same series from book details, ordered by series index; placement and interaction design remain pending
+- [ ] Revise the app Dark theme to use a darker, less blue, more neutral palette; palette review remains pending
+- [ ] Add Change server immediately above Log out in the profile menu, with the current URL prefilled, a Change server action, and a Cancel/Continue warning that continuing logs out and interrupts current work before returning to login with the new server configured
+- [ ] Add a profile Achievements destination with card-style Unlocked and Locked sections and locked-achievement progress when the server API provides it; API and screen-design validation remain pending
+- [ ] Prevent visible Library and Series jump rails from covering trailing grid cards; preferred candidate is a trailing grid gutter only while the rail is visible, with alternatives and design confirmation pending
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
