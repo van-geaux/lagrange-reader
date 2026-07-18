@@ -671,7 +671,49 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Series").performClick()
 
         composeRule.onNodeWithContentDescription("Jump to A").assertIsDisplayed()
+        val seriesCardBounds = composeRule.onNodeWithTag("series_card_series-a")
+            .fetchSemanticsNode().boundsInRoot
+        val jumpRailBounds = composeRule.onNodeWithTag("catalog_jump_rail")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(seriesCardBounds.right <= jumpRailBounds.left)
         composeRule.onAllNodesWithText("Load more").assertCountEquals(0)
+    }
+
+    @Test
+    fun libraryGridCardsEndBeforeTheVisibleJumpRail() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-alpha",
+            fileId = "file-alpha",
+            title = "Alpha Book",
+            mediaKind = MediaKind.EPUB
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book),
+                            isCatalogComplete = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Browse").performClick()
+
+        val bookCardBounds = composeRule.onNodeWithContentDescription("Alpha Book")
+            .fetchSemanticsNode().boundsInRoot
+        val jumpRailBounds = composeRule.onNodeWithTag("catalog_jump_rail")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(bookCardBounds.right <= jumpRailBounds.left)
     }
 
     @Test

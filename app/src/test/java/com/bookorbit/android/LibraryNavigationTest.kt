@@ -1,9 +1,16 @@
 package com.bookorbit.android
 
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LibraryNavigationTest {
+    @Test
+    fun `catalog grid reserves trailing space only while jump rail is visible`() {
+        assertEquals(16.dp, catalogGridEndPadding(hasJumpRail = false))
+        assertEquals(32.dp, catalogGridEndPadding(hasJumpRail = true))
+    }
+
     @Test
     fun `jump rail always exposes hash and every alphabet letter`() {
         val targets = listOf(

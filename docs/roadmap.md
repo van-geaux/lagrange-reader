@@ -310,7 +310,7 @@ Implement next, in order:
 14. [ ] Revise the app Dark theme to a darker, less blue, more neutral palette. Palette review and device validation remain pending.
 15. [ ] Add Change server immediately above Log out in the profile menu. It opens a current-URL-prefilled server field with a Change server action; confirmation explains that continuing logs out and interrupts current work, offers Cancel/Continue, and on Continue clears the current session and returns to login with the new server URL configured. Interaction and session-transition validation remain pending.
 16. [ ] Add a profile Achievements destination with a card-style screen split into Unlocked and Locked sections. Show progress for locked achievements when the server API exposes it. API contract and screen-design validation remain pending.
-17. [ ] Prevent visible Library and Series jump rails from overlaying trailing grid cards. The preferred candidate is to reserve a trailing grid gutter only while the rail is visible; alternatives and design confirmation remain pending.
+17. [x] Prevent visible Library Browse and Series catalog jump rails from overlaying trailing grid cards. Both grids now reserve 32 dp trailing content padding only while the shared 20 dp rail is visible, accounting for the 20 dp rail, 4 dp outer edge, and 8 dp card-to-rail separation; without a rail they retain 16 dp full-width padding. Physical-device and responsive-layout validation remains pending.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
@@ -331,6 +331,8 @@ The completed Home initial-sync optimization passes 189 JVM tests across 30 suit
 The completed downloaded-book update step passes 196 JVM tests across 31 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Store/model unit coverage exercises version decisions, ebook compatibility, and atomic replacement; compiled Compose and real-repository MockWebServer regressions cover the Update local action plus malformed-replacement preservation/retry. The target-device Update local flow works correctly.
 
 The corrected BookOrbit genre-contract step passes 197 JVM tests across 31 suites with zero failures and `assembleDebugAndroidTest` passes. The implementation now matches the official current BookOrbit source: book relation filters use singular `genre` (and adjacent `author`) with `includesAny` and an array value instead of the previous `genres`/`contains`/scalar shape. A compiled real-repository MockWebServer test asserts the exact genre request payload and parses the filtered result. Physical-device/server result-scope validation remains pending.
+
+The completed jump-rail layout step passes 198 JVM tests across 31 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Unit coverage verifies conditional 16/32 dp trailing padding, and compiled Compose regressions assert that Library and Series card right bounds stay left of the visible rail. Physical-device and responsive-layout validation remains pending.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

@@ -207,7 +207,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [ ] Revise the app Dark theme to a darker, less blue, more neutral palette; palette review remains pending.
 - [ ] Put Change server immediately above Log out in the profile menu. Open a current-URL-prefilled server field and Change server action, then use a Cancel/Continue confirmation warning that Continue logs out and interrupts current work; Continue clears the session and returns to login with the new URL configured. Interaction validation remains pending.
 - [ ] Add a profile Achievements destination using separate card-style Unlocked and Locked sections, including progress for locked achievements when supplied by the server. API contract and screen-design validation remain pending.
-- [ ] Prevent visible Library and Series jump rails from covering trailing grid cards. Preferred candidate: reserve a trailing grid gutter only while the rail is visible; alternatives and design confirmation remain pending.
+- [x] Prevent visible Library and Series jump rails from covering trailing grid cards. Reserve 32 dp trailing grid padding only while the shared 20 dp rail is visible (20 dp rail + 4 dp edge + 8 dp separation); otherwise retain 16 dp full-width padding. Physical-device and responsive-layout validation remains pending.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented

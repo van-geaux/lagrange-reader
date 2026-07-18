@@ -353,7 +353,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Revise the app Dark theme to use a darker, less blue, more neutral palette; palette review remains pending
 - [ ] Add Change server immediately above Log out in the profile menu, with the current URL prefilled, a Change server action, and a Cancel/Continue warning that continuing logs out and interrupts current work before returning to login with the new server configured
 - [ ] Add a profile Achievements destination with card-style Unlocked and Locked sections and locked-achievement progress when the server API provides it; API and screen-design validation remain pending
-- [ ] Prevent visible Library and Series jump rails from covering trailing grid cards; preferred candidate is a trailing grid gutter only while the rail is visible, with alternatives and design confirmation pending
+- [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
+- [ ] Validate the conditional jump-rail gutter across physical-device widths, orientations, and responsive grid sizes
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

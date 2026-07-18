@@ -134,6 +134,11 @@ private enum class OptionsDialog {
     CLEAR_CACHE
 }
 private val BOOK_CARD_MIN_SIZE = 88.dp
+private val CATALOG_GRID_PADDING = 16.dp
+private val CATALOG_JUMP_RAIL_END_PADDING = 32.dp
+
+internal fun catalogGridEndPadding(hasJumpRail: Boolean) =
+    if (hasJumpRail) CATALOG_JUMP_RAIL_END_PADDING else CATALOG_GRID_PADDING
 
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
 
@@ -1135,11 +1140,17 @@ private fun SeriesCatalogScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
+        val hasJumpRail = jumpTargets.isNotEmpty()
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = CATALOG_GRID_PADDING,
+                top = CATALOG_GRID_PADDING,
+                end = catalogGridEndPadding(hasJumpRail),
+                bottom = CATALOG_GRID_PADDING
+            ),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1168,6 +1179,7 @@ private fun SeriesCatalogScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag("series_card_${series.id}")
                     .clickable { onSeriesSelected(series) },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -1194,7 +1206,7 @@ private fun SeriesCatalogScreen(
             }
         }
         }
-        if (jumpTargets.isNotEmpty()) {
+        if (hasJumpRail) {
             LibraryJumpRail(
                 targets = jumpTargets,
                 modifier = Modifier
@@ -2821,11 +2833,17 @@ private fun LibraryBooks(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
+        val hasJumpRail = jumpTargets.isNotEmpty()
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = CATALOG_GRID_PADDING,
+                top = CATALOG_GRID_PADDING,
+                end = catalogGridEndPadding(hasJumpRail),
+                bottom = CATALOG_GRID_PADDING
+            ),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -2941,7 +2959,7 @@ private fun LibraryBooks(
             )
         }
         }
-        if (jumpTargets.isNotEmpty()) {
+        if (hasJumpRail) {
             LibraryJumpRail(
                 targets = jumpTargets,
                 modifier = Modifier
@@ -2969,6 +2987,7 @@ private fun LibraryJumpRail(
 ) {
     Column(
         modifier = modifier
+            .testTag("catalog_jump_rail")
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
             .heightIn(max = 560.dp)
