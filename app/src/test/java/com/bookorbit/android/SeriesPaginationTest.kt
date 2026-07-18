@@ -62,7 +62,7 @@ class SeriesPaginationTest {
 
         assertEquals(0, ascending['#'])
         assertEquals(1, ascending['A'])
-        assertEquals(2, ascending['B'])
+        assertEquals(setOf('#', 'A', 'M', 'Z'), ascending.keys)
         assertEquals(3, ascending['Z'])
         assertEquals('Z', descending.first().first)
         assertEquals(0, descending.first().second)

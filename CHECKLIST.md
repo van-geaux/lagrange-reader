@@ -99,7 +99,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Give the comic reader the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes change pages, center tap opens reader options, exposed-content tap or Back dismisses options first, and Back exits only when options are closed; target-device validation passed
 - [x] Validate the general comic reading flow on the target device; comic books work correctly in current testing
 - [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
-- [ ] Complete the per-format online CBZ/CBR/CB7 and offline ZIP/CBZ source matrix, including page navigation and progress, on a physical device/server
+- [ ] Validate online CBZ/CBR/CB7 reading and offline downloaded comic formats, including page navigation and progress, on a physical device/server
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure opening a non-downloaded book always chooses streaming path
@@ -263,7 +263,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Avoid showing a partial derived series count while Browse is still paginating (superseded by complete local catalogs)
 - [x] Add reader padding controls with a more generous default text inset
 - [x] Add independent Top and Bottom reader padding controls with repagination
-- [x] Replace reader padding presets with independent Top/Bottom/Left/Right percentage controls; default each edge to 15%
+- [x] Replace reader padding presets with independent Top/Bottom/Left/Right percentage controls; fresh books default Top to 30% and Bottom/Left/Right to 15%, while saved per-book values remain unchanged
 - [x] Replace the launch/startup spinner with the branded adaptive-icon loading state
 - [ ] Validate the branded launch state on a physical device
 - [x] Restore the exact in-chapter EPUB page on reopen and restart
@@ -296,10 +296,10 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Keep series name and series index visible as separate book-detail metadata rows
 - [x] Add multi-book selection and bulk Mark as read/unread actions to library grids
 - [x] Navigate genre selections to filtered Books or Series results, using BookOrbit's current singular `genre`/`includesAny`/array book-filter contract and the analogous `author` relation contract; keep tags informational
-- [ ] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
+- [x] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
 - [ ] Add direct OIDC/SSO authentication after the provider/redirect contract is confirmed; native username/password remains current
 - [x] Validate the revised detail-action density, title expansion, multi-selection, and series-index implementation in code/tests
-- [ ] Validate the revised detail density and genre-filter result scope on a device
+- [ ] Validate the remaining revised detail density on a device; genre-filter result scope is validated
 - [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
 - [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
 - [ ] Validate interrupted download recovery and retry behavior on a device
@@ -324,7 +324,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Return from Library selection by tapping the top-left Libraries title
 - [x] Cache full downloaded-book metadata for server-free local detail screens
 - [x] Cache versioned rich details for every opened book and invalidate them when catalog metadata changes
-- [x] Show # and every A–Z label on the Library jump rail, grouping non-alphabetic titles under #
+- [x] Show only represented #/letter buckets on Library and Series jump rails; retain valid server absolute indexes and do not expose missing-letter forward-fallback labels
 - [x] Persist complete per-server/per-library book metadata in Room and render it before cold-start network checks finish
 - [x] Reconcile every server page atomically, writing only changed/new/reordered rows and deleting titles no longer returned by BookOrbit
 - [x] Remove Browse's near-end lazy loading and apply Browse filters/sorts to the complete local catalog
@@ -350,21 +350,26 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate reader edge padding while sliders move on the target device; Top/Bottom resize the WebView externally while Left/Right remain in the known-good page strip
 - [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
 - [x] Add a stable Previous/Next series-book row directly below book identity/series metadata, using complete online series data or cached offline neighbors ordered by numeric series index
-- [ ] Validate the series Previous/Next row on physical devices for responsive widths, long titles, loading transitions, and offline snapshots
+- [x] Validate basic series Previous/Next navigation on the target device
+- [x] Restyle series Previous/Next as transparent borderless 46 dp controls matching detail actions and retain the first complete series load across adjacent navigation
+- [ ] Validate the new series Previous/Next visuals across responsive widths, long titles, loading transitions, and offline snapshots
 - [x] Replace the single app Dark choice with one flat five-option Theme list: Follow system, Light, Charcoal, Warm black, and OLED black; migrate legacy Dark to Charcoal
 - [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
-- [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device
+- [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device; submitting the current normalized URL now closes silently without state changes
 - [x] Add a profile Achievements destination backed by authenticated `GET /api/v1/achievements`, with earned/available summary, adaptive Unlocked/Locked cards, optional locked progress, award dates, secret-field preservation, older-server unsupported state, and retry errors
-- [ ] Validate Achievements payloads, secret/censored entries, progress, unsupported-server behavior, retry, and responsive cards on a physical device/server
+- [x] Validate the basic Achievements flow on the target device/server
+- [ ] Redesign Achievements with Library-like cards and official achievement symbols; exact layout clarification remains pending
+- [ ] Validate secret/censored entries, progress, unsupported-server behavior, retry, and responsive cards on a physical device/server
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
-- [ ] Validate the conditional jump-rail gutter across physical-device widths, orientations, and responsive grid sizes
+- [x] Validate the jump-rail grid spacing on the target device
+- [ ] Validate the conditional jump-rail gutter across additional widths, orientations, and responsive grid sizes
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
 - [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
-- [ ] Checkpoint 5: fullscreen comic interactions are device-validated; finish the online CBZ/CBR/CB7 and offline ZIP/CBZ source matrix, consider optional offline RAR/7z extraction, and refine audiobook/PDF readers when representative samples are available
+- [ ] Checkpoint 5: fullscreen comic interactions are device-validated; validate online CBZ/CBR/CB7 and offline downloaded comic formats, consider optional offline CBR/CB7 extraction, and refine audiobook/PDF readers when representative samples are available
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
 
 ## Options backlog
@@ -372,10 +377,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 ### Interface
 
 - [x] Add lock current orientation toggle
-- [x] Add haptic feedback toggle for supported interactions
-- [x] Implement perceptible Android haptics for existing Compose requests with API-appropriate constants and immediate confirmation when enabled
-- [ ] Validate haptic perceptibility and system-setting behavior on a physical API 26-29 and API 30+ device
-- [ ] Define consistent haptic coverage beyond Options rows and supported Foundation long-press interactions
+- [x] Add haptic feedback toggle and explicit app haptics (superseded and removed by user direction)
+- [x] Remove the haptic setting, stored preference, custom provider, manual requests, and obsolete tests
 - [x] Add the combined app theme selection: Follow system, Light, Charcoal, Warm black, or OLED black, applied immediately with legacy Dark migration to Charcoal
 - [x] Add default opening screen selection: Home, Library, or Local books
 - [x] Add Reduce motion/animations accessibility option for immediate catalog jumps
@@ -387,7 +390,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points
 - [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, and delete-local confirmation on a physical device
-- [ ] Validate all app themes on physical devices for contrast/readability, OLED true black, system switching, dialogs/cards, and status/navigation bars; also validate background network policy
+- [x] Validate all five app themes on the target device
+- [ ] Validate detailed theme contrast/system-bar edge cases and background network policy on physical devices
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
@@ -397,7 +401,7 @@ UI/UX discussion and design-system work can start now:
 
 - The functional and JVM baseline is ready.
 - EPUB is the validated representative reader path.
-- Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ. Fullscreen tap/swipe/options behavior is target-device validated; the broader source-format matrix remains pending. Offline CBR/CB7 extraction is an optional future item. Audiobook-specific testing remains deferred until a representative sample is available.
+- Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ. Fullscreen tap/swipe/options behavior is target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation. Offline CBR/CB7 extraction is optional future work. Audiobook-specific testing remains deferred until a representative sample is available.
 - The immediate implementation pass is the user-feedback workplan below: Home reading priority first, then the Plex-inspired shell, Home search/status-bar spacing, reader padding, and launch visual.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 

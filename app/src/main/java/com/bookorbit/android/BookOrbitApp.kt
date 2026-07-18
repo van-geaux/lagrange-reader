@@ -2547,7 +2547,7 @@ internal fun styleEpubHtml(
     theme: EpubReaderTheme,
     fontScale: Float,
     startAtEnd: Boolean,
-    topPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
+    topPaddingPercent: Float = EPUB_DEFAULT_TOP_PADDING_PERCENT,
     bottomPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     leftPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     rightPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
@@ -2822,7 +2822,7 @@ internal fun epubPaddingViewportPercent(value: Float): Float {
 }
 
 internal data class EpubPaddingPercentages(
-    val top: Float = EPUB_DEFAULT_PADDING_PERCENT,
+    val top: Float = EPUB_DEFAULT_TOP_PADDING_PERCENT,
     val bottom: Float = EPUB_DEFAULT_PADDING_PERCENT,
     val left: Float = EPUB_DEFAULT_PADDING_PERCENT,
     val right: Float = EPUB_DEFAULT_PADDING_PERCENT
@@ -2838,6 +2838,7 @@ private data class EpubWebViewRenderState(
 )
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
+internal const val EPUB_DEFAULT_TOP_PADDING_PERCENT = 30f
 private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = 30.dp
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)

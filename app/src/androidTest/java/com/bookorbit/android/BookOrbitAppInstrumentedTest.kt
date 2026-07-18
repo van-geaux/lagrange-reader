@@ -174,6 +174,15 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Change server").performClick()
         composeRule.onNodeWithText(currentServer).assertIsDisplayed()
 
+        composeRule.onNodeWithTag("submit-server-change").performClick()
+        composeRule.onAllNodesWithText("Change server?").assertCountEquals(0)
+        composeRule.runOnIdle {
+            assertEquals(0, dataSource.clearServerCalls)
+            assertTrue(dataSource.savedServerUrls.isEmpty())
+        }
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        composeRule.onNodeWithText("Change server").performClick()
+
         composeRule.onNodeWithText("Server URL").performTextReplacement(replacement)
         composeRule.onNodeWithTag("submit-server-change").performClick()
         composeRule.onNodeWithText(
@@ -428,6 +437,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("No next book in Test Series").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Previous book in Test Series: #2 \u00B7 Current Book")
             .assertIsEnabled()
+        composeRule.runOnIdle { assertEquals(1, dataSource.seriesDetailLoadCalls) }
     }
 
     @Test
@@ -649,11 +659,9 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Interface").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Haptic feedback").assertCountEquals(0)
         composeRule.onNodeWithTag("options-lock-orientation").performClick()
         composeRule.runOnIdle { assertTrue(preferences.value.lockOrientation) }
-
-        composeRule.onNodeWithTag("options-haptic-feedback").performClick()
-        composeRule.runOnIdle { assertEquals(false, preferences.value.hapticFeedback) }
 
         composeRule.onNodeWithTag("options-theme").performClick()
         composeRule.onNodeWithText("Follow system").assertIsDisplayed()
@@ -1129,6 +1137,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var searchBooksResult: List<BookSummary> = emptyList()
     var bookDetailResult: BookDetailInfo? = null
     var seriesDetailResult: SeriesDetailInfo? = null
+    var seriesDetailLoadCalls = 0
     var achievementsResult: AchievementCatalogue = AchievementCatalogue(
         status = AchievementCatalogueStatus.UNSUPPORTED
     )
@@ -1162,7 +1171,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         return searchBooksResult
     }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
-    override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = seriesDetailResult
+    override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? {
+        seriesDetailLoadCalls += 1
+        return seriesDetailResult
+    }
     override suspend fun loadAchievements(): AchievementCatalogue = achievementsResult
     override suspend fun loadCatalogImage(url: String): ByteArray? {
         loadedCatalogImageUrls += url

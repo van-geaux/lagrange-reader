@@ -30,7 +30,6 @@ enum class BackgroundRefreshNetworkPolicy(val displayName: String) {
 
 data class AppPreferences(
     val lockOrientation: Boolean = false,
-    val hapticFeedback: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val defaultOpeningScreen: DefaultOpeningScreen = DefaultOpeningScreen.HOME,
     val reduceMotion: Boolean = false,
@@ -48,7 +47,6 @@ internal class AppPreferencesStore(context: Context) {
 
     fun read(): AppPreferences = AppPreferences(
         lockOrientation = preferences.getBoolean(LOCK_ORIENTATION_KEY, false),
-        hapticFeedback = preferences.getBoolean(HAPTIC_FEEDBACK_KEY, true),
         themeMode = appThemeModeFromStorage(preferences.getString(THEME_MODE_KEY, null)),
         defaultOpeningScreen = defaultOpeningScreenFromStorage(
             preferences.getString(DEFAULT_OPENING_SCREEN_KEY, null)
@@ -66,7 +64,6 @@ internal class AppPreferencesStore(context: Context) {
     fun save(value: AppPreferences) {
         preferences.edit()
             .putBoolean(LOCK_ORIENTATION_KEY, value.lockOrientation)
-            .putBoolean(HAPTIC_FEEDBACK_KEY, value.hapticFeedback)
             .putString(THEME_MODE_KEY, appThemeModeStorageValue(value.themeMode))
             .putString(
                 DEFAULT_OPENING_SCREEN_KEY,
@@ -88,7 +85,6 @@ internal class AppPreferencesStore(context: Context) {
     private companion object {
         const val APP_PREFERENCES_FILE = "app_preferences"
         const val LOCK_ORIENTATION_KEY = "lock_orientation"
-        const val HAPTIC_FEEDBACK_KEY = "haptic_feedback"
         const val THEME_MODE_KEY = "theme_mode"
         const val DEFAULT_OPENING_SCREEN_KEY = "default_opening_screen"
         const val REDUCE_MOTION_KEY = "reduce_motion"

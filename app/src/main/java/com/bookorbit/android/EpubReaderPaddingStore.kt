@@ -11,7 +11,7 @@ internal class EpubReaderPaddingStore(context: Context) {
 
     fun read(key: String): EpubPaddingPercentages {
         return EpubPaddingPercentages(
-            top = preferences.getFloat(componentKey(key, "top"), EPUB_DEFAULT_PADDING_PERCENT),
+            top = preferences.getFloat(componentKey(key, "top"), EPUB_DEFAULT_TOP_PADDING_PERCENT),
             bottom = preferences.getFloat(componentKey(key, "bottom"), EPUB_DEFAULT_PADDING_PERCENT),
             left = preferences.getFloat(componentKey(key, "left"), EPUB_DEFAULT_PADDING_PERCENT),
             right = preferences.getFloat(componentKey(key, "right"), EPUB_DEFAULT_PADDING_PERCENT)

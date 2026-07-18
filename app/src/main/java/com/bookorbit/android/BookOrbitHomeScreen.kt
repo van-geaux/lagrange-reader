@@ -104,11 +104,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -127,6 +125,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
@@ -204,15 +203,10 @@ private fun buildAlphabetJumpTargets(
     } else {
         LIBRARY_JUMP_LABELS
     }
-    return railLabels.mapIndexed { railIndex, target ->
-        val exact = labels.indexOfFirst { it == target }
-        val fallback = if (exact >= 0) {
-            exact
-        } else {
-            labels.indexOfFirst { label -> railLabels.indexOf(label) > railIndex }
-        }
-        val index = fallback.takeIf { it >= 0 } ?: (labels.lastIndex.takeIf { it >= 0 } ?: 0)
-        target to index
+    return railLabels.mapNotNull { target ->
+        labels.indexOfFirst { it == target }
+            .takeIf { it >= 0 }
+            ?.let { target to it }
     }
 }
 
@@ -227,13 +221,9 @@ internal fun buildServerLibraryJumpTargets(
             ?: '#'
         bucket.copy(index = bucket.index.coerceIn(0, itemCount - 1)) to label
     }
-    return LIBRARY_JUMP_LABELS.mapIndexed { railIndex, target ->
-        val exact = indexedBuckets.firstOrNull { it.second == target }
-        val fallback = exact ?: indexedBuckets.firstOrNull { (_, label) ->
-            LIBRARY_JUMP_LABELS.indexOf(label) > railIndex
-        }
-        val bucket = fallback ?: indexedBuckets.last()
-        target to bucket.first.index
+    return LIBRARY_JUMP_LABELS.mapNotNull { target ->
+        indexedBuckets.firstOrNull { it.second == target }
+            ?.let { target to it.first.index }
     }
 }
 
@@ -602,6 +592,9 @@ internal fun NativeLibraryBrowserScreen(
                         val normalized = normalizeServerUrl(changeServerUrl)
                         if (normalized == null) {
                             changeServerError = invalidServerUrlMessage()
+                        } else if (serverUrlsMatch(state.serverUrl, normalized)) {
+                            changeServerUrl = normalized
+                            showChangeServerEditor = false
                         } else {
                             changeServerUrl = normalized
                             showChangeServerEditor = false
@@ -1033,6 +1026,12 @@ internal fun NativeLibraryBrowserScreen(
                 )
             }
     }
+}
+
+internal fun serverUrlsMatch(current: String, candidate: String): Boolean {
+    val currentNormalized = normalizeServerUrl(current)?.toHttpUrlOrNull() ?: return false
+    val candidateNormalized = normalizeServerUrl(candidate)?.toHttpUrlOrNull() ?: return false
+    return currentNormalized == candidateNormalized
 }
 
 @Composable
@@ -1914,17 +1913,6 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "haptic-feedback") {
-            AppPreferenceSwitchRow(
-                title = "Haptic feedback",
-                summary = "Use touch feedback for supported interactions",
-                checked = preferences.hapticFeedback,
-                testTag = "options-haptic-feedback",
-                onCheckedChange = {
-                    onPreferencesChange(preferences.copy(hapticFeedback = it))
-                }
-            )
-        }
         item(key = "theme") {
             AppPreferenceSelectionRow(
                 title = "Theme",
@@ -2118,7 +2106,6 @@ private fun AppPreferenceSwitchRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    val haptics = LocalHapticFeedback.current
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(summary) },
@@ -2131,10 +2118,7 @@ private fun AppPreferenceSwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(testTag)
-            .clickable {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onCheckedChange(!checked)
-            }
+            .clickable { onCheckedChange(!checked) }
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
@@ -2147,7 +2131,6 @@ private fun AppPreferenceSelectionRow(
     summary: String? = null,
     onClick: () -> Unit
 ) {
-    val haptics = LocalHapticFeedback.current
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = {
@@ -2160,10 +2143,7 @@ private fun AppPreferenceSelectionRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(testTag)
-            .clickable {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }
+            .clickable(onClick = onClick)
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
@@ -3467,17 +3447,14 @@ private fun BookDetails(
             .distinctBy { it.id }
             .filter { candidate -> booksShareSeries(displayBook, candidate) }
     }
-    val seriesBooks by produceState(
-        initialValue = localSeriesBooks,
-        seriesKey,
-        displayBook.id,
-        state.isOfflineSnapshot,
-        localSeriesBooks
-    ) {
-        value = localSeriesBooks
-        if (seriesKey != null && !state.isOfflineSnapshot) {
-            seriesDetailLoader(seriesKey)?.books?.takeIf { it.isNotEmpty() }?.let { value = it }
+    var loadedSeriesBooks by remember(seriesKey) { mutableStateOf<List<BookSummary>?>(null) }
+    LaunchedEffect(seriesKey, state.isOfflineSnapshot) {
+        if (seriesKey != null && !state.isOfflineSnapshot && loadedSeriesBooks == null) {
+            loadedSeriesBooks = seriesDetailLoader(seriesKey)?.books?.takeIf { it.isNotEmpty() }
         }
+    }
+    val seriesBooks = remember(localSeriesBooks, loadedSeriesBooks) {
+        (localSeriesBooks + loadedSeriesBooks.orEmpty()).distinctBy { it.id }
     }
     val seriesNeighbors = remember(displayBook, seriesBooks) {
         seriesBookNeighbors(displayBook, seriesBooks)
@@ -3810,11 +3787,11 @@ private fun SeriesNeighborButton(
             neighbor.title
         ).joinToString(" \u00B7 ")
     }
-    OutlinedButton(
+    Card(
         onClick = { book?.let(onClick) },
         enabled = book != null,
         modifier = modifier
-            .heightIn(min = 64.dp)
+            .height(46.dp)
             .semantics {
                 contentDescription = if (bookLabel != null) {
                     "$direction book in $seriesName: $bookLabel"
@@ -3822,25 +3799,36 @@ private fun SeriesNeighborButton(
                     "No ${direction.lowercase()} book in $seriesName"
                 }
             },
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        )
     ) {
-        if (direction == "Previous") {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = if (direction == "Previous") Alignment.Start else Alignment.End
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(direction, style = MaterialTheme.typography.labelLarge)
-            Text(
-                text = bookLabel ?: emptyLabel,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (direction == "Next") {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            if (direction == "Previous") {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = if (direction == "Previous") Alignment.Start else Alignment.End
+            ) {
+                Text(direction, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = bookLabel ?: emptyLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (direction == "Next") {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            }
         }
     }
 }

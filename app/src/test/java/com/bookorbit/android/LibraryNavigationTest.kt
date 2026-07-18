@@ -12,7 +12,7 @@ class LibraryNavigationTest {
     }
 
     @Test
-    fun `jump rail always exposes hash and every alphabet letter`() {
+    fun `jump rail exposes only labels represented by books`() {
         val targets = listOf(
             BookSummary("library", "numeric", null, "123 Stories"),
             BookSummary("library", "alpha", null, "Alpha Book"),
@@ -22,10 +22,8 @@ class LibraryNavigationTest {
 
         val rail = buildLibraryJumpTargets(targets)
 
-        assertEquals(27, rail.size)
-        assertEquals('#', rail.first().first)
-        assertEquals(('A'..'Z').toList(), rail.drop(1).map { it.first })
-        assertEquals(0, rail.first().second)
+        assertEquals(listOf('#', 'A', 'M', 'Z'), rail.map { it.first })
+        assertEquals(listOf(0, 1, 2, 3), rail.map { it.second })
     }
 
     @Test
@@ -79,7 +77,7 @@ class LibraryNavigationTest {
     }
 
     @Test
-    fun `server jump buckets keep exact absolute indexes and fall forward for missing letters`() {
+    fun `server jump buckets keep only exact represented labels and absolute indexes`() {
         val rail = buildServerLibraryJumpTargets(
             buckets = listOf(
                 LibraryJumpBucket(key = "#", label = "#", index = 0),
@@ -90,9 +88,9 @@ class LibraryNavigationTest {
             itemCount = 100
         ).toMap()
 
+        assertEquals(setOf('#', 'A', 'M', 'Z'), rail.keys)
         assertEquals(3, rail['A'])
-        assertEquals(40, rail['B'])
-        assertEquals(99, rail['Y'])
+        assertEquals(40, rail['M'])
         assertEquals(99, rail['Z'])
     }
 
@@ -111,8 +109,9 @@ class LibraryNavigationTest {
         )
 
         assertEquals('Z', rail.first().first)
+        assertEquals(listOf('Z', 'M', 'A'), rail.map { it.first })
         assertEquals(0, rail.first().second)
         assertEquals(1, rail.first { it.first == 'M' }.second)
-        assertEquals('#', rail.last().first)
+        assertEquals('A', rail.last().first)
     }
 }

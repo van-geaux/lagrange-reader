@@ -7,6 +7,14 @@ import org.junit.Test
 
 class EpubPaginationTest {
     @Test
+    fun `fresh reader padding defaults top to thirty and other edges to fifteen`() {
+        assertEquals(
+            EpubPaddingPercentages(top = 30f, bottom = 15f, left = 15f, right = 15f),
+            EpubPaddingPercentages()
+        )
+    }
+
+    @Test
     fun `epub pagination uses full viewport strip and swipe navigation`() {
         val rendered = styleEpubHtml(
             html = "<p>Readable chapter text</p>",
@@ -26,10 +34,10 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("#bookorbit-page-strip"))
         assertTrue(rendered.contains("strip = document.createElement('main')"))
         assertTrue(rendered.contains("left: 3.75vw"))
-        assertTrue(rendered.contains("top: 3.75vh"))
+        assertTrue(rendered.contains("top: 7.50vh"))
         assertTrue(rendered.contains("width: calc(100vw - 7.50vw)"))
-        assertTrue(rendered.contains("height: calc(100vh - 7.50vh)"))
-        assertTrue(rendered.contains("min-height: calc(100vh - 7.50vh)"))
+        assertTrue(rendered.contains("height: calc(100vh - 11.25vh)"))
+        assertTrue(rendered.contains("min-height: calc(100vh - 11.25vh)"))
         assertTrue(rendered.contains("overflow: visible"))
         assertFalse(rendered.contains("#bookorbit-page-viewport"))
         assertFalse(rendered.contains("position: fixed !important"))

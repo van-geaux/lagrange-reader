@@ -1,11 +1,19 @@
 package com.bookorbit.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
+    @Test
+    fun `server url comparison ignores normalization-only differences`() {
+        assertTrue(serverUrlsMatch("https://books.example.test/", "BOOKS.EXAMPLE.TEST"))
+        assertFalse(serverUrlsMatch("https://books.example.test", "https://other.example.test"))
+        assertFalse(serverUrlsMatch("https://books.example.test/BookOrbit", "https://books.example.test/bookorbit"))
+    }
+
     @Test
     fun `extractAccessToken accepts the login contract and nested responses`() {
         assertEquals("access-123", extractAccessToken("{\"accessToken\":\"access-123\"}"))
