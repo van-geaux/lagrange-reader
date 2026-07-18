@@ -5,7 +5,9 @@ import android.content.Context
 enum class AppThemeMode(val displayName: String) {
     FOLLOW_SYSTEM("Follow system"),
     LIGHT("Light"),
-    DARK("Dark")
+    CHARCOAL("Charcoal"),
+    WARM_BLACK("Warm black"),
+    OLED_BLACK("OLED black")
 }
 
 enum class DefaultOpeningScreen(val displayName: String) {
@@ -100,7 +102,9 @@ internal fun appThemeModeStorageValue(value: AppThemeMode): String = value.name.
 
 internal fun appThemeModeFromStorage(value: String?): AppThemeMode = when (value?.trim()?.lowercase()) {
     "light" -> AppThemeMode.LIGHT
-    "dark" -> AppThemeMode.DARK
+    "dark", "charcoal" -> AppThemeMode.CHARCOAL
+    "warm_black" -> AppThemeMode.WARM_BLACK
+    "oled_black" -> AppThemeMode.OLED_BLACK
     else -> AppThemeMode.FOLLOW_SYSTEM
 }
 

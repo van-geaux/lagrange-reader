@@ -16,7 +16,7 @@ class AppPreferencesStoreInstrumentedTest {
         val expected = AppPreferences(
             lockOrientation = true,
             hapticFeedback = false,
-            themeMode = AppThemeMode.DARK,
+            themeMode = AppThemeMode.WARM_BLACK,
             defaultOpeningScreen = DefaultOpeningScreen.LOCAL_BOOKS,
             reduceMotion = true,
             cellularDownloadPolicy = CellularDownloadPolicy.ALWAYS,

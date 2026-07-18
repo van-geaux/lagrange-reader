@@ -351,7 +351,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
 - [x] Add a stable Previous/Next series-book row directly below book identity/series metadata, using complete online series data or cached offline neighbors ordered by numeric series index
 - [ ] Validate the series Previous/Next row on physical devices for responsive widths, long titles, loading transitions, and offline snapshots
-- [ ] Revise the app Dark theme to use a darker, less blue, more neutral palette; palette review remains pending
+- [x] Replace the single app Dark choice with one flat five-option Theme list: Follow system, Light, Charcoal, Warm black, and OLED black; migrate legacy Dark to Charcoal
 - [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
 - [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device
 - [ ] Add a profile Achievements destination with card-style Unlocked and Locked sections and locked-achievement progress when the server API provides it; API and screen-design validation remain pending
@@ -375,7 +375,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Implement perceptible Android haptics for existing Compose requests with API-appropriate constants and immediate confirmation when enabled
 - [ ] Validate haptic perceptibility and system-setting behavior on a physical API 26-29 and API 30+ device
 - [ ] Define consistent haptic coverage beyond Options rows and supported Foundation long-press interactions
-- [x] Add app theme selection: Follow system, Light, or Dark
+- [x] Add the combined app theme selection: Follow system, Light, Charcoal, Warm black, or OLED black, applied immediately with legacy Dark migration to Charcoal
 - [x] Add default opening screen selection: Home, Library, or Local books
 - [x] Add Reduce motion/animations accessibility option for immediate catalog jumps
 
@@ -386,7 +386,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add background metadata/cover refresh network policy: Any network, Wi-Fi only, or Disabled; current cover work uses CONNECTED/UNMETERED constraints and reconfigures immediately
 - [x] Add confirmation before deleting a local copy, enabled by default across native-browser delete entry points
 - [x] Validate lock-current-orientation, default opening screen, Reduce motion, cellular download behavior, storage/cache clearing, and delete-local confirmation on a physical device
-- [ ] Validate app theme and background network policy on a physical device
+- [ ] Validate all app themes on physical devices for contrast/readability, OLED true black, system switching, dialogs/cards, and status/navigation bars; also validate background network policy
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 

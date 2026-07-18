@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -20,9 +21,6 @@ private val OrbitPaper = Color(0xFFFAF6ED)
 private val OrbitSurface = Color(0xFFFFFCF6)
 private val OrbitSlate = Color(0xFF486581)
 private val OrbitMist = Color(0xFFD9E2EC)
-private val OrbitNightSurface = Color(0xFF102B38)
-private val OrbitNightSurfaceHigh = Color(0xFF193846)
-private val OrbitNightText = Color(0xFFE9F1F5)
 
 private val LightColors = lightColorScheme(
     primary = OrbitNavy,
@@ -47,28 +45,91 @@ private val LightColors = lightColorScheme(
     onError = Color.White
 )
 
-private val DarkColors = darkColorScheme(
+private val CharcoalColors = darkColorScheme(
+    primary = Color(0xFFA8CDE0),
+    onPrimary = Color(0xFF0B3445),
+    primaryContainer = Color(0xFF263E49),
+    onPrimaryContainer = Color(0xFFD0EAF5),
+    secondary = OrbitAmber,
+    onSecondary = Color(0xFF422D00),
+    secondaryContainer = Color(0xFF55400D),
+    onSecondaryContainer = Color(0xFFFFDEA1),
+    tertiary = Color(0xFFC7C7CC),
+    onTertiary = Color(0xFF2A292D),
+    background = Color(0xFF0D0D0F),
+    onBackground = Color(0xFFF1F1F3),
+    surface = Color(0xFF151517),
+    onSurface = Color(0xFFF1F1F3),
+    surfaceVariant = Color(0xFF222226),
+    onSurfaceVariant = Color(0xFFC8C7CC),
+    outline = Color(0xFF929198),
+    outlineVariant = Color(0xFF424147),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6)
+)
+
+private val WarmBlackColors = darkColorScheme(
+    primary = Color(0xFFB7D4E2),
+    onPrimary = Color(0xFF123542),
+    primaryContainer = Color(0xFF294751),
+    onPrimaryContainer = Color(0xFFD2ECF7),
+    secondary = OrbitAmber,
+    onSecondary = Color(0xFF422D00),
+    secondaryContainer = Color(0xFF57420E),
+    onSecondaryContainer = Color(0xFFFFDEA1),
+    tertiary = Color(0xFFD5C4AE),
+    onTertiary = Color(0xFF392F23),
+    background = Color(0xFF100E0B),
+    onBackground = Color(0xFFF4EEE6),
+    surface = Color(0xFF191612),
+    onSurface = Color(0xFFF4EEE6),
+    surfaceVariant = Color(0xFF28231D),
+    onSurfaceVariant = Color(0xFFD1C6B9),
+    outline = Color(0xFF9D9184),
+    outlineVariant = Color(0xFF4B433A),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6)
+)
+
+private val OledBlackColors = darkColorScheme(
     primary = Color(0xFFA8CDE0),
     onPrimary = Color(0xFF073447),
-    primaryContainer = Color(0xFF214C60),
+    primaryContainer = Color(0xFF1C3D4A),
     onPrimaryContainer = Color(0xFFC8E8F7),
     secondary = OrbitAmber,
     onSecondary = Color(0xFF422D00),
-    secondaryContainer = Color(0xFF604500),
+    secondaryContainer = Color(0xFF4C3908),
     onSecondaryContainer = Color(0xFFFFDEA1),
-    tertiary = Color(0xFFB7CAD4),
-    onTertiary = Color(0xFF22343D),
-    background = OrbitNavyDeep,
-    onBackground = OrbitNightText,
-    surface = OrbitNightSurface,
-    onSurface = OrbitNightText,
-    surfaceVariant = OrbitNightSurfaceHigh,
-    onSurfaceVariant = Color(0xFFC4D2D9),
-    outline = Color(0xFF8E9EA6),
-    outlineVariant = Color(0xFF3D4C53),
+    tertiary = Color(0xFFCCCCD0),
+    onTertiary = Color(0xFF29292C),
+    background = Color.Black,
+    onBackground = Color(0xFFF5F5F6),
+    surface = Color(0xFF101010),
+    onSurface = Color(0xFFF5F5F6),
+    surfaceVariant = Color(0xFF1C1C1E),
+    onSurfaceVariant = Color(0xFFCECDD2),
+    outline = Color(0xFF96959B),
+    outlineVariant = Color(0xFF3E3E42),
     error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005)
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6)
 )
+
+internal fun appColorSchemeForTheme(
+    themeMode: AppThemeMode,
+    systemDark: Boolean
+): ColorScheme = when (themeMode) {
+    AppThemeMode.FOLLOW_SYSTEM -> if (systemDark) CharcoalColors else LightColors
+    AppThemeMode.LIGHT -> LightColors
+    AppThemeMode.CHARCOAL -> CharcoalColors
+    AppThemeMode.WARM_BLACK -> WarmBlackColors
+    AppThemeMode.OLED_BLACK -> OledBlackColors
+}
 
 private val OrbitTypography = Typography(
     displaySmall = TextStyle(
@@ -141,12 +202,10 @@ fun BookOrbitTheme(
     themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     content: @Composable () -> Unit
 ) {
-    val useDarkColors = when (themeMode) {
-        AppThemeMode.FOLLOW_SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.DARK -> true
-    }
-    val colors = if (useDarkColors) DarkColors else LightColors
+    val colors = appColorSchemeForTheme(
+        themeMode = themeMode,
+        systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    )
     MaterialTheme(
         colorScheme = colors,
         typography = OrbitTypography,

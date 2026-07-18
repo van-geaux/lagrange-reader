@@ -595,8 +595,12 @@ class BookOrbitAppInstrumentedTest {
         composeRule.runOnIdle { assertEquals(false, preferences.value.hapticFeedback) }
 
         composeRule.onNodeWithTag("options-theme").performClick()
-        composeRule.onNodeWithText("Dark").performClick()
-        composeRule.runOnIdle { assertEquals(AppThemeMode.DARK, preferences.value.themeMode) }
+        composeRule.onNodeWithText("Follow system").assertIsDisplayed()
+        composeRule.onNodeWithText("Light").assertIsDisplayed()
+        composeRule.onNodeWithText("Charcoal").assertIsDisplayed()
+        composeRule.onNodeWithText("Warm black").assertIsDisplayed()
+        composeRule.onNodeWithText("OLED black").performClick()
+        composeRule.runOnIdle { assertEquals(AppThemeMode.OLED_BLACK, preferences.value.themeMode) }
 
         composeRule.onNodeWithTag("options-opening-screen").performClick()
         composeRule.onNodeWithText("Local books").performClick()

@@ -11,7 +11,7 @@ class AppPreferencesStoreTest {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))
         }
-        assertEquals(AppThemeMode.DARK, appThemeModeFromStorage(" DARK "))
+        assertEquals(AppThemeMode.CHARCOAL, appThemeModeFromStorage(" DARK "))
         assertEquals(AppThemeMode.FOLLOW_SYSTEM, appThemeModeFromStorage("unknown"))
         assertEquals(AppThemeMode.FOLLOW_SYSTEM, appThemeModeFromStorage(null))
     }
