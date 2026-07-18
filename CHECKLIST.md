@@ -167,6 +167,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Collapse multiple pending updates for the same book/file
 - [x] Add backoff and retry policy for server errors
 - [x] Distinguish auth failures from transient network failures
+- [x] Recover stale non-audio queued file IDs after progress 404 by resolving the book's current primary file, retrying once, and acknowledging terminal INVALID targets so they cannot retry forever
 - [x] Add queue inspection/logging for debug builds
 - [x] Confirm behavior when server changes while queue still exists
 

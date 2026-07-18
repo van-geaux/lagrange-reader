@@ -1190,7 +1190,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val payload = buildProgressPayload(item) ?: return@withContext ProgressPostResult.INVALID
         val readStatusPayload = buildReadStatusPayload(item) ?: return@withContext ProgressPostResult.INVALID
 
-        request(path, if (item.mediaKind == MediaKind.AUDIO) "PATCH" else "POST", payload.toString().toRequestBody(JSON))
+        if (item.mediaKind == MediaKind.AUDIO) {
+            request(path, "PATCH", payload.toString().toRequestBody(JSON))
+        } else {
+            val progressResult = postFileProgressWithRemap(item, payload)
+            if (progressResult != ProgressPostResult.ACCEPTED) {
+                return@withContext progressResult
+            }
+        }
         // BookOrbit's dashboard widget is status-backed, and some server versions can
         // accept file progress even when their automatic status update fails. Treat the
         // progress and status writes as one queued operation so a failed status write is
@@ -1201,6 +1208,43 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             readStatusPayload.toString().toRequestBody(JSON)
         )
         ProgressPostResult.ACCEPTED
+    }
+
+    private fun postFileProgressWithRemap(
+        item: ProgressUpdate,
+        payload: JSONObject
+    ): ProgressPostResult {
+        val originalFileId = item.fileId ?: return ProgressPostResult.INVALID
+        val body = payload.toString().toRequestBody(JSON)
+        try {
+            request("/api/v1/books/files/$originalFileId/progress", "POST", body)
+            return ProgressPostResult.ACCEPTED
+        } catch (error: HttpRequestException) {
+            if (error.code != 404) throw error
+        }
+
+        val currentFileId = try {
+            BookOrbitPayloadParser.parsePrimaryFileId(
+                request("/api/v1/books/${item.bookId}", "GET", null)
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) return ProgressPostResult.INVALID
+            throw error
+        }
+        if (currentFileId.isNullOrBlank() || currentFileId == originalFileId) {
+            return ProgressPostResult.INVALID
+        }
+
+        return try {
+            request(
+                "/api/v1/books/files/$currentFileId/progress",
+                "POST",
+                payload.toString().toRequestBody(JSON)
+            )
+            ProgressPostResult.ACCEPTED
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) ProgressPostResult.INVALID else throw error
+        }
     }
 
     private fun enqueueSyncWorker() {
@@ -1682,6 +1726,13 @@ private class WebViewCookieJar : CookieJar {
 }
 
 internal object BookOrbitPayloadParser {
+    fun parsePrimaryFileId(payload: String): String? {
+        return extractObject(payload, "resolve the current book file")
+            .optJSONArray("files")
+            .selectPrimaryFile()
+            ?.stringValue("id", "_id", "fileId")
+    }
+
     fun parseAchievements(payload: String): AchievementCatalogue {
         val root = extractObject(payload, "load achievements")
         val categories = root.optJSONArray("categories") ?: JSONArray()

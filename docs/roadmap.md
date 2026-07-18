@@ -317,6 +317,7 @@ Implement next, in order:
 21. [ ] Restyle Achievements with Library-like cards and official achievement symbols; exact layout clarification remains pending.
 22. [x] Restyle series Previous/Next as transparent borderless 46 dp controls matching detail actions and retain the first complete series load so adjacent navigation does not reload it.
 23. [x] Remove the haptic-feedback setting and every explicit app-haptic path by user direction.
+24. [x] Fix indefinitely stuck non-audio progress events caused by stale/deleted file IDs. On progress POST 404, load the current book, parse its primary file, and retry once with a changed replacement file ID before patching status. If the book/current file/remapped file is still 404 or the ID is unchanged, classify the event INVALID and acknowledge it so the queue drains instead of retrying forever.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
@@ -349,6 +350,8 @@ The completed five-option app-theme step passes 205 JVM tests across 33 suites w
 The completed Achievements step passes 207 JVM tests across 34 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. The functional target-server flow is validated; visual redesign and edge-state validation remain pending. The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
 The completed combined feedback batch passes 206 JVM tests across 33 suites with zero failures/errors/skips after removing the obsolete haptic suite; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Coverage includes same-server no-op handling, represented jump-rail labels, fresh EPUB margin defaults with saved-value preservation, retained series loading with transparent 46 dp neighbor controls, and complete app-haptic removal. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+
+The stuck progress-queue fix passes 207 JVM tests across 33 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. A parser unit regression covers current-primary-file extraction, while a compiled real-repository MockWebServer case proves stale-to-current remapping, both progress and status writes, and a final queue count of zero. APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
 Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 

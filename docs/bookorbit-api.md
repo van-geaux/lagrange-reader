@@ -261,6 +261,8 @@ Optional fields currently relevant to the client:
 - `pageNumber`
 - `positionSeconds`
 
+If this non-audio progress endpoint returns 404 for a queued event, the client treats the recorded file ID as potentially stale. It fetches `GET /api/v1/books/{bookId}`, resolves the current primary file, and retries progress once only when the replacement ID differs. After a successful remapped write it patches the normal `reading`/`read` status. A missing book/current file, unchanged ID, or second 404 is terminal `INVALID`; the event is acknowledged rather than retried forever. Authentication and other transient failures keep their existing retry behavior.
+
 ### Audiobook progress
 
 Endpoint:

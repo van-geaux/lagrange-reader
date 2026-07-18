@@ -210,6 +210,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Make same-URL Change server submission normalize, close silently, and leave state unchanged.
 - [x] Show only actual represented #/letter labels on Library and Series rails, without forward-fallback labels.
 - [x] Raise the fresh EPUB Top margin default to 30% while retaining 15% Bottom/Left/Right and all saved per-book values.
+- [x] Prevent the debug pending-progress count from remaining stuck on stale/deleted non-audio file IDs: remap one 404 to the current primary file, or acknowledge terminal INVALID targets.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented

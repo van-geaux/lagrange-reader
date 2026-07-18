@@ -213,6 +213,51 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun staleQueuedFileIdRemapsToTheBooksCurrentPrimaryFile() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/v1/books/files/file-stale/progress" -> {
+                    MockResponse().setResponseCode(404)
+                }
+                request.path == "/api/v1/books/book-remapped" && request.method == "GET" -> {
+                    jsonResponse(
+                        """
+                            {
+                              "id":"book-remapped",
+                              "title":"Remapped EPUB",
+                              "files":[{"id":"file-current","format":"epub","role":"primary"}]
+                            }
+                        """.trimIndent()
+                    )
+                }
+                request.path == "/api/v1/books/files/file-current/progress" -> jsonResponse("{}")
+                request.path == "/api/v1/books/book-remapped/status" -> jsonResponse("{}")
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        val book = BookSummary(
+            libraryId = "light-novels",
+            id = "book-remapped",
+            fileId = "file-stale",
+            title = "Remapped EPUB",
+            mediaKind = MediaKind.EPUB
+        )
+
+        repository.queueProgress(book, position = 8_000L, pageIndex = 2, progressPercent = 20f)
+        WorkManager.getInstance(context)
+            .cancelUniqueWork(PROGRESS_SYNC_WORK_NAME)
+            .result
+            .get(5, TimeUnit.SECONDS)
+
+        assertEquals(SyncAttemptResult.Success, repository.syncPendingProgress())
+        assertEquals(0, repository.pendingProgressCount())
+        assertEquals("/api/v1/books/files/file-stale/progress", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
+        assertEquals("/api/v1/books/book-remapped", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
+        assertEquals("/api/v1/books/files/file-current/progress", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
+        assertEquals("/api/v1/books/book-remapped/status", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
+    }
+
+    @Test
     fun failedLocalUpdateKeepsOldFileAndValidRetryReplacesIt() = runBlocking {
         var downloadRequestCount = 0
         server.dispatcher = object : Dispatcher() {

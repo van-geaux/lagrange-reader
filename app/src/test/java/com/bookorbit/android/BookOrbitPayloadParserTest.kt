@@ -7,6 +7,24 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `parsePrimaryFileId prefers the current primary readable file`() {
+        assertEquals(
+            "file-new",
+            BookOrbitPayloadParser.parsePrimaryFileId(
+                """
+                    {
+                      "id":"book-1",
+                      "files":[
+                        {"id":"file-secondary","format":"pdf"},
+                        {"id":"file-new","format":"epub","role":"primary"}
+                      ]
+                    }
+                """.trimIndent()
+            )
+        )
+    }
+
+    @Test
     fun `parseLibraryBooksPage retains response pagination metadata`() {
         val page = BookOrbitPayloadParser.parseLibraryBooksPage(
             libraryId = "lib-1",
