@@ -181,61 +181,30 @@ class AppCoordinator(
 
     fun saveServer(serverUrl: String) {
         scope.launch {
-            when (repository.checkServer(serverUrl)) {
-                ServerCheckResult.Reachable -> Unit
-                ServerCheckResult.MalformedUrl -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = invalidServerUrlMessage()
-                    )
-                    return@launch
-                }
-                ServerCheckResult.UnreachableHost -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "The server host could not be resolved."
-                    )
-                    return@launch
-                }
-                ServerCheckResult.Timeout -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "The server took too long to respond. Retry or check the network."
-                    )
-                    return@launch
-                }
-                ServerCheckResult.TlsFailure -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "The server TLS certificate could not be validated."
-                    )
-                    return@launch
-                }
-                ServerCheckResult.Redirected -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "The server redirected this URL. Enter the final base URL directly."
-                    )
-                    return@launch
-                }
-                ServerCheckResult.HttpFailure -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "The server responded, but the base URL did not open correctly."
-                    )
-                    return@launch
-                }
-                ServerCheckResult.NetworkFailure -> {
-                    _screen.value = AppScreen.ServerSetup(
-                        serverUrl = serverUrl,
-                        message = "Unable to reach that server. Check the URL and try again."
-                    )
-                    return@launch
-                }
+            serverSetupFailure(serverUrl, repository.checkServer(serverUrl))?.let { failure ->
+                _screen.value = failure
+                return@launch
             }
             repository.setServerUrl(serverUrl)
             showLogin(
                 message = "Connect to the server and complete sign in.",
+                destination = PostLoginDestination.Browser
+            )
+        }
+    }
+
+    fun changeServer(serverUrl: String) {
+        scope.launch {
+            resetTransientState(clearBrowserState = true)
+            allowCachedLoginFallback = false
+            repository.clearServer()
+            serverSetupFailure(serverUrl, repository.checkServer(serverUrl))?.let { failure ->
+                _screen.value = failure
+                return@launch
+            }
+            repository.setServerUrl(serverUrl)
+            showLogin(
+                message = "Server changed. Sign in to access your libraries.",
                 destination = PostLoginDestination.Browser
             )
         }
@@ -1216,6 +1185,23 @@ class AppCoordinator(
             serverUrl = repository.getServerUrl().orEmpty(),
             message = message
         )
+    }
+
+    private fun serverSetupFailure(
+        serverUrl: String,
+        result: ServerCheckResult
+    ): AppScreen.ServerSetup? {
+        val message = when (result) {
+            ServerCheckResult.Reachable -> return null
+            ServerCheckResult.MalformedUrl -> invalidServerUrlMessage()
+            ServerCheckResult.UnreachableHost -> "The server host could not be resolved."
+            ServerCheckResult.Timeout -> "The server took too long to respond. Retry or check the network."
+            ServerCheckResult.TlsFailure -> "The server TLS certificate could not be validated."
+            ServerCheckResult.Redirected -> "The server redirected this URL. Enter the final base URL directly."
+            ServerCheckResult.HttpFailure -> "The server responded, but the base URL did not open correctly."
+            ServerCheckResult.NetworkFailure -> "Unable to reach that server. Check the URL and try again."
+        }
+        return AppScreen.ServerSetup(serverUrl = serverUrl, message = message)
     }
 
     private fun resumeAfterLogin() {

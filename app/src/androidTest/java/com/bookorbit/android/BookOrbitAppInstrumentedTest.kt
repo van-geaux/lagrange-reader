@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
@@ -140,6 +141,53 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Sign in again to continue browsing.").assertIsDisplayed()
         composeRule.onNodeWithText("Change server").performClick()
         composeRule.waitUntil { dataSource.clearServerCalls == 1 }
+    }
+
+    @Test
+    fun profileChangeServerPrefillsWarnsAndContinuesAboveLogout() {
+        val currentServer = "https://books.example.test"
+        val replacement = "https://replacement.example.test"
+        val dataSource = InstrumentedFakeDataSource().apply { serverUrl = currentServer }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = currentServer,
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        val changeServerBounds = composeRule.onNodeWithText("Change server")
+            .fetchSemanticsNode().boundsInRoot
+        val logoutBounds = composeRule.onNodeWithText("Log out")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(changeServerBounds.top < logoutBounds.top)
+        composeRule.onNodeWithText("Change server").performClick()
+        composeRule.onNodeWithText(currentServer).assertIsDisplayed()
+
+        composeRule.onNodeWithText("Server URL").performTextReplacement(replacement)
+        composeRule.onNodeWithTag("submit-server-change").performClick()
+        composeRule.onNodeWithText(
+            "Changing to $replacement will log you out of the current server and cancel active downloads."
+        ).assertIsDisplayed()
+
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText(replacement).assertIsDisplayed()
+        composeRule.onNodeWithTag("submit-server-change").performClick()
+        composeRule.onNodeWithTag("confirm-server-change").performClick()
+
+        composeRule.waitUntil {
+            dataSource.clearServerCalls == 1 && dataSource.savedServerUrls == listOf(replacement)
+        }
     }
 
     @Test
@@ -948,6 +996,7 @@ class BookOrbitAppInstrumentedTest {
 }
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {
+    var serverUrl: String? = null
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
     val savedServerUrls = mutableListOf<String>()
@@ -965,11 +1014,13 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val catalogImageResults = mutableMapOf<String, ByteArray>()
     val loadedCatalogImageUrls = mutableListOf<String>()
 
-    override suspend fun getServerUrl(): String? = null
+    override suspend fun getServerUrl(): String? = serverUrl
     override suspend fun setServerUrl(serverUrl: String) {
+        this.serverUrl = serverUrl
         savedServerUrls += serverUrl
     }
     override suspend fun clearServer() {
+        serverUrl = null
         clearServerCalls += 1
     }
     override suspend fun clearSession() = Unit

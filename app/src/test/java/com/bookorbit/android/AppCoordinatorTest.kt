@@ -455,6 +455,45 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `change server clears current state and opens login for the reachable replacement`() = runTest {
+        val replacement = "https://replacement.example.test"
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearServerCalls)
+        assertEquals(replacement, repository.serverUrl)
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals(replacement, login.serverUrl)
+        assertTrue(login.message.orEmpty().contains("Server changed"))
+    }
+
+    @Test
+    fun `change server leaves the replacement prefilled when its validation fails`() = runTest {
+        val replacement = "https://unreachable.example.test"
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            checkServerResult = ServerCheckResult.UnreachableHost
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearServerCalls)
+        assertNull(repository.serverUrl)
+        assertEquals(
+            AppScreen.ServerSetup(
+                serverUrl = replacement,
+                message = "The server host could not be resolved."
+            ),
+            coordinator.screen.value
+        )
+    }
+
+    @Test
     fun `select library resumes after authentication recovers`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -998,6 +1037,7 @@ private class FakeBookOrbitDataSource(
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
+    var clearServerCalls = 0
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
@@ -1015,6 +1055,7 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun clearServer() {
+        clearServerCalls += 1
         serverUrl = null
         selectedLibraryId = null
     }

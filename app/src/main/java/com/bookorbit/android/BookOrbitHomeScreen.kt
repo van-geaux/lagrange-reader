@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
@@ -306,6 +307,7 @@ internal fun NativeLibraryBrowserScreen(
     onRefresh: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    onChangeServer: (String) -> Unit,
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
@@ -352,6 +354,10 @@ internal fun NativeLibraryBrowserScreen(
     var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
+    var showChangeServerEditor by rememberSaveable { mutableStateOf(false) }
+    var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
+    var changeServerError by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingServerChange by rememberSaveable { mutableStateOf<String?>(null) }
     val requestDownload: (BookSummary) -> Unit = { book ->
         when (
             cellularDownloadDecision(
@@ -392,6 +398,12 @@ internal fun NativeLibraryBrowserScreen(
         genreSourceBook = null
         genreSourceSeriesKey = null
         selectedBook = null
+    }
+    val openChangeServerEditor = {
+        showProfileMenu = false
+        changeServerUrl = state.serverUrl
+        changeServerError = null
+        showChangeServerEditor = true
     }
 
     BackHandler(enabled = isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
@@ -502,6 +514,75 @@ internal fun NativeLibraryBrowserScreen(
             }
         )
     }
+    if (showChangeServerEditor) {
+        AlertDialog(
+            onDismissRequest = { showChangeServerEditor = false },
+            title = { Text("Change server") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter the BookOrbit server you want to use.")
+                    OutlinedTextField(
+                        value = changeServerUrl,
+                        onValueChange = {
+                            changeServerUrl = it
+                            changeServerError = null
+                        },
+                        label = { Text("Server URL") },
+                        singleLine = true,
+                        isError = changeServerError != null,
+                        supportingText = changeServerError?.let { message ->
+                            { Text(message) }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val normalized = normalizeServerUrl(changeServerUrl)
+                        if (normalized == null) {
+                            changeServerError = invalidServerUrlMessage()
+                        } else {
+                            changeServerUrl = normalized
+                            showChangeServerEditor = false
+                            pendingServerChange = normalized
+                        }
+                    },
+                    modifier = Modifier.testTag("submit-server-change")
+                ) { Text("Change server") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChangeServerEditor = false }) { Text("Cancel") }
+            }
+        )
+    }
+    pendingServerChange?.let { serverUrl ->
+        val returnToEditor = {
+            pendingServerChange = null
+            showChangeServerEditor = true
+        }
+        AlertDialog(
+            onDismissRequest = returnToEditor,
+            title = { Text("Change server?") },
+            text = {
+                Text(
+                    "Changing to $serverUrl will log you out of the current server and cancel active downloads."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingServerChange = null
+                        onChangeServer(serverUrl)
+                    },
+                    modifier = Modifier.testTag("confirm-server-change")
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = returnToEditor) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -524,7 +605,8 @@ internal fun NativeLibraryBrowserScreen(
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 activeBookGenre != null -> BrowserTopBar(
                     title = "Books · ${activeBookGenre!!}",
@@ -541,7 +623,8 @@ internal fun NativeLibraryBrowserScreen(
                     onDismissProfile = { showProfileMenu = false },
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 activeSeriesGenre != null -> BrowserTopBar(
                     title = "Series · ${activeSeriesGenre!!}",
@@ -558,7 +641,8 @@ internal fun NativeLibraryBrowserScreen(
                     onDismissProfile = { showProfileMenu = false },
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 selectedBook != null -> BrowserTopBar(
                     title = "Book details",
@@ -572,7 +656,8 @@ internal fun NativeLibraryBrowserScreen(
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 selectedSeriesKey != null -> BrowserTopBar(
                     title = "Series",
@@ -586,7 +671,8 @@ internal fun NativeLibraryBrowserScreen(
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 selectedAuthor != null -> BrowserTopBar(
                     title = "Author",
@@ -600,7 +686,8 @@ internal fun NativeLibraryBrowserScreen(
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
                 else -> BrowserTopBar(
                     title = when {
@@ -631,7 +718,8 @@ internal fun NativeLibraryBrowserScreen(
                         if (state.isOfflineSnapshot) onSignIn() else onSignOut()
                     },
                     sessionActionLabel = sessionActionLabel,
-                    onOptions = openOptions
+                    onOptions = openOptions,
+                    onChangeServer = openChangeServerEditor
                 )
             }
         },
@@ -884,6 +972,7 @@ private fun BrowserTopBar(
     onSessionAction: () -> Unit,
     sessionActionLabel: String,
     onOptions: () -> Unit = {},
+    onChangeServer: () -> Unit = {},
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
     onTitleClick: (() -> Unit)? = null
@@ -914,6 +1003,11 @@ private fun BrowserTopBar(
                             onDismissProfile()
                             onOptions()
                         }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Change server") },
+                        leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
+                        onClick = onChangeServer
                     )
                     DropdownMenuItem(
                         text = { Text(sessionActionLabel) },

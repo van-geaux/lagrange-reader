@@ -351,7 +351,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
 - [ ] Add Previous/Next navigation between books in the same series from book details, ordered by series index; placement and interaction design remain pending
 - [ ] Revise the app Dark theme to use a darker, less blue, more neutral palette; palette review remains pending
-- [ ] Add Change server immediately above Log out in the profile menu, with the current URL prefilled, a Change server action, and a Cancel/Continue warning that continuing logs out and interrupts current work before returning to login with the new server configured
+- [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
+- [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device
 - [ ] Add a profile Achievements destination with card-style Unlocked and Locked sections and locked-achievement progress when the server API provides it; API and screen-design validation remain pending
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
 - [ ] Validate the conditional jump-rail gutter across physical-device widths, orientations, and responsive grid sizes

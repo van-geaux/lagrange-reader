@@ -136,6 +136,7 @@ fun BookOrbitApp(
             onRefresh = coordinator::loadBrowser,
             onSignIn = coordinator::beginSignIn,
             onSignOut = coordinator::signOut,
+            onChangeServer = coordinator::changeServer,
             onLibrarySelected = coordinator::selectLibrary,
             searchBooks = coordinator::searchBooks,
             localBooksLoader = coordinator::loadLocalBooks,
