@@ -99,6 +99,21 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `remote reader cache prepares EPUB and PDF without applying comic archive rules`() {
+        val epub = BookSummary("library", "epub", "epub-file", "EPUB", mediaKind = MediaKind.EPUB)
+        val pdf = BookSummary("library", "pdf", "pdf-file", "PDF", mediaKind = MediaKind.PDF)
+        val cbz = BookSummary("library", "cbz", "cbz-file", "Comic.cbz", mediaKind = MediaKind.COMIC)
+        val cbr = BookSummary("library", "cbr", "cbr-file", "Comic.cbr", mediaKind = MediaKind.COMIC)
+
+        assertTrue(shouldCacheReadableCopy(epub, allowRemoteCache = true))
+        assertTrue(shouldCacheReadableCopy(pdf, allowRemoteCache = true))
+        assertTrue(shouldCacheReadableCopy(cbz, allowRemoteCache = true))
+        assertFalse(shouldCacheReadableCopy(cbr, allowRemoteCache = true))
+        assertFalse(shouldCacheReadableCopy(epub, allowRemoteCache = false))
+        assertFalse(shouldCacheReadableCopy(epub.copy(fileId = null), allowRemoteCache = true))
+    }
+
+    @Test
     fun `buildComicPagesUrl targets BookOrbit comic page endpoints only when online`() {
         assertNull(
             buildComicPagesUrl(

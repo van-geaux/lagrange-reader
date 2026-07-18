@@ -103,7 +103,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate online and downloaded CB7 reading on a physical device/server
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
-- [x] Ensure opening a non-downloaded book always chooses streaming path
+- [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
 
 ## 7. Download For Offline Use
 
@@ -373,8 +373,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 - [x] Replace the oversized Achievement poster tiles with compact adaptive information cards: 260 dp grid minimum, 22 dp server-driven icon immediately before the title, lock/unlock state at row end, and description/category/rarity plus conditional progress/date inside one card
 - [x] Replace the horizontally scrolling `book-detail-actions` row with a wrapping `FlowRow` so Read, Preview, Download/Update/Cancel/Delete local, and the directly labeled live Mark as read/unread tile remain visible on narrow screens
-- [ ] Restore embedded image rendering inside opened EPUB content
-- [ ] Diagnose the separate remote EPUB Preview preparation/authentication/transport regression that persists after relogin and reports `This EPUB could not be prepared for reading. Download it first or reconnect to the server.`; CBZ/CBR Preview remains the working comparison, and the failure may share a cause with missing EPUB images
+- [x] Restore embedded EPUB resources through `WebViewAssetLoader` at `appassets.androidplatform.net`, using safe nested/encoded chapter base URLs and the same extracted root for visible rendering and hidden measurement while disabling broad file/content access
+- [x] Fix remote nonlocal EPUB/PDF Preview preparation by downloading an authenticated temporary reader copy instead of incorrectly gating preparation on CBZ detection
 - [x] Restore the full #/A–Z Library and Series jump rail: retain sort/catalog hiding rules and the existing grid gutter, but render unrepresented letters with 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action
 - [x] Add a Local books shelf at the bottom of top-level Home from server-wide `homeBooks` and at the bottom of Library Recommended from selected-library books; use deterministic deduplicated alphabetical previews up to 12, reuse normal shelf cards/actions/covers, and route See all to global or selected-library-scoped Local books
 - [ ] Checkpoint 1: agree on product direction and design-system tokens

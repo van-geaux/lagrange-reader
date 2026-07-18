@@ -2,9 +2,11 @@ package com.bookorbit.android
 
 import android.content.Context
 import android.util.Xml
+import androidx.webkit.WebViewAssetLoader
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 import java.io.FileInputStream
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipEntry
@@ -20,6 +22,36 @@ data class EpubChapter(
     val title: String,
     val file: File
 )
+
+private const val EPUB_ASSET_DOMAIN = "appassets.androidplatform.net"
+private const val EPUB_ASSET_PATH = "/epub/"
+
+internal fun epubAssetLoader(context: Context, rootDir: File): WebViewAssetLoader {
+    return WebViewAssetLoader.Builder()
+        .setDomain(EPUB_ASSET_DOMAIN)
+        .addPathHandler(
+            EPUB_ASSET_PATH,
+            WebViewAssetLoader.InternalStoragePathHandler(context, rootDir.canonicalFile)
+        )
+        .build()
+}
+
+internal fun epubChapterBaseUrl(rootDir: File, chapterFile: File): String {
+    val rootPath = rootDir.canonicalFile.toPath()
+    val chapterParentPath = requireNotNull(chapterFile.canonicalFile.parentFile).toPath()
+    require(chapterParentPath.startsWith(rootPath)) { "EPUB chapter must be inside its extracted root." }
+    val relativeSegments = rootPath.relativize(chapterParentPath)
+        .map { segment -> URLEncoder.encode(segment.toString(), Charsets.UTF_8.name()).replace("+", "%20") }
+    return buildString {
+        append("https://")
+        append(EPUB_ASSET_DOMAIN)
+        append(EPUB_ASSET_PATH)
+        if (relativeSegments.isNotEmpty()) {
+            append(relativeSegments.joinToString("/"))
+            append('/')
+        }
+    }
+}
 
 fun loadEpubBook(context: Context, sourceFile: File): EpubBook? {
     return runCatching {

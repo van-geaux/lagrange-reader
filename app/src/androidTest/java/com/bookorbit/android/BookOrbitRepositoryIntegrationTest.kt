@@ -4,9 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.WorkManager
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
+import okio.Buffer
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -35,6 +39,7 @@ class BookOrbitRepositoryIntegrationTest {
         ProgressQueueStore(context).clear()
         LastSyncedProgressStore(context).clear()
         clearDownloads()
+        File(context.cacheDir, "reader-cache").deleteRecursively()
         repository = BookOrbitRepository(context)
         repository.clearServer()
         server = MockWebServer().apply { start() }
@@ -50,6 +55,7 @@ class BookOrbitRepositoryIntegrationTest {
         ProgressQueueStore(context).clear()
         LastSyncedProgressStore(context).clear()
         clearDownloads()
+        File(context.cacheDir, "reader-cache").deleteRecursively()
         repository.clearServer()
         server.shutdown()
     }
@@ -304,6 +310,32 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals(3, downloadRequestCount)
     }
 
+    @Test
+    fun nonLocalEpubPreviewDownloadsAValidatedTemporaryReaderCopy() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/epub+zip")
+                .setBody(Buffer().write(testEpubBytes()))
+        )
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "preview-epub",
+            fileId = "preview-epub-file",
+            title = "Remote Preview",
+            format = "epub",
+            mediaKind = MediaKind.EPUB
+        )
+
+        val state = repository.buildReaderState(book, localOnly = false)
+
+        assertTrue(state.localFile?.exists() == true)
+        assertTrue(ReaderFileValidator.isReadable(MediaKind.EPUB, state.localFile!!))
+        val request = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", request.method)
+        assertEquals("/api/v1/books/files/preview-epub-file/download", request.path)
+    }
+
     private fun jsonResponse(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")
@@ -313,6 +345,28 @@ class BookOrbitRepositoryIntegrationTest {
         val store = DownloadStore(context)
         store.readAll().forEach { record -> File(record.localPath).delete() }
         store.clear()
+    }
+
+    private fun testEpubBytes(): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            fun entry(path: String, body: String) {
+                zip.putNextEntry(ZipEntry(path))
+                zip.write(body.toByteArray())
+                zip.closeEntry()
+            }
+            entry("mimetype", "application/epub+zip")
+            entry(
+                "META-INF/container.xml",
+                """<?xml version="1.0"?><container><rootfiles><rootfile full-path="OEBPS/package.opf"/></rootfiles></container>"""
+            )
+            entry(
+                "OEBPS/package.opf",
+                """<package><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>"""
+            )
+            entry("OEBPS/chapter.xhtml", "<html><body><p>Preview chapter</p></body></html>")
+        }
+        return output.toByteArray()
     }
 
     private companion object {

@@ -13,8 +13,8 @@ The current app flow is:
 3. The app verifies `GET /api/v1/auth/me` before resuming the pending browser, library, reader, or download destination. Direct OIDC/SSO authentication is deferred.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
-6. EPUB and PDF titles are opened from a local readable copy when the native reader requires file access.
-7. EPUB titles are extracted into app cache and rendered chapter by chapter from the EPUB spine.
+6. EPUB and PDF titles are opened from a local readable copy; nonlocal sources are downloaded through the authenticated client into a temporary reader cache without applying comic archive rules.
+7. EPUB titles are extracted into app cache and rendered chapter by chapter from the EPUB spine through a scoped `WebViewAssetLoader` origin.
 
 ## Main components
 
@@ -63,7 +63,7 @@ The current app flow is:
 - Stored selected-library ids are validated against the latest available library list before the browser chooses a library to load.
 - It resolves stream and download URLs for files.
 - Download responses are streamed with byte-level progress; `BrowserState` exposes per-file progress on a 0..1 scale, including determinate percentage/linear progress and indeterminate fallback, retry failure state, cancel guidance, and active-state clearing after completion or auth interruption.
-- It prepares readable local copies for offline-first reader flows, including EPUB/PDF cache copies for authenticated reads before download.
+- It prepares readable local copies for offline-first reader flows, including authenticated temporary EPUB/PDF cache copies for nonlocal reads and Preview; comic-specific archive detection is limited to comic preparation.
 - It translates local progress events into the server DTO shapes.
 - It maps BookOrbit's current scalar `readingProgress` card value, nested `readStatus`, and legacy nested page/time progress fields back into browser and reader state. An explicit `unread` status with no positive progress suppresses stale position, page, label, and timestamp fields; BookOrbit updates the status record's own timestamp when resetting a title, and that administrative timestamp must not become Home reading activity.
 - Reader callbacks, persisted snapshots, queue entries, last-synced markers, and API payloads all use one canonical 0-100 percentage scale; low values are not reinterpreted as fractions.
@@ -132,13 +132,13 @@ The current app flow is:
   - the `.epub` is resolved from downloads or fetched into app cache
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
-  - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter
+  - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter through `https://appassets.androidplatform.net/epub/`
   - reflowable chapter content uses the last device-known-good single absolute page strip with `overflow: visible`; page turns translate that strip without adding a clipped HTML wrapper around it
   - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls with one visible Close action, and tapping exposed book content also dismisses them
   - EPUB keeps the native top status bar visible for Android-managed battery, network, time, and notification indicators while hiding the bottom navigation bar. The status-bar background and light/dark icon appearance follow the selected reader theme. Permanent app chrome remains hidden; chapter selection, themes, and text sizing live in transient overlays. Android Back dismisses an open overlay first, then exits the reader when the overlay is closed.
-  - the reader `WebView` allows local file-backed EPUB resources so extracted images and cover content can resolve offline
+  - safe nested/encoded chapter base URLs resolve relative resources within the extracted EPUB root through `WebViewAssetLoader`; paths outside that root are rejected, and broad WebView file/content access remains disabled
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
-  - an always-visible theme-matched footer displays weighted completion, current chapter/count, exact current chapter page/count, and measured whole-book current/total pages. A hidden same-size WebView measures every spine chapter sequentially with the current viewport, margins, font scale, theme, assets, and external top/bottom geometry; bounded font/image readiness waits prevent hangs. Until all counts settle, the footer says `Book pages calculating`. Counts reset when measurement inputs change, while the visible known-good renderer and exact chapter/page resume remain unchanged
+  - an always-visible theme-matched footer displays weighted completion, current chapter/count, exact current chapter page/count, and measured whole-book current/total pages. A hidden same-size WebView measures every spine chapter sequentially from the same extracted root and appassets loader as the visible reader, with the current viewport, margins, font scale, theme, assets, and external top/bottom geometry; bounded font/image readiness waits prevent hangs. Until all counts settle, the footer says `Book pages calculating`. Counts reset when measurement inputs change, while the visible known-good renderer and exact chapter/page resume remain unchanged
   - Reading position retains the existing Choose chapter button and chapter-chip selector. A slider beneath them shows `Page X of Y` from the primary WebView's current chapter page count, disables when that count is one, and sends immediate page jumps while dragging. It is deliberately chapter-local rather than tied to the hidden whole-book measurement
   - `BookOrbitReaderLayout.goToPage` clamps JavaScript requests to `0..current chapter pageCount-1`, applies the existing page transform/rendering path, and emits the normal `pageChanged` callback so persistence/progress behavior is unchanged and chapter-boundary navigation cannot be triggered by the slider
   - Top, Bottom, Left, and Right use independent 0-100% controls and persist per book/file. Top/Bottom are converted to Compose padding around the `WebView`, so Android performs the vertical clipping and viewport resize without changing the known-good HTML renderer; Left/Right update and repaginate the page strip in place. Target-device testing confirms that EPUB content renders and all four controls visibly update the reading surface.

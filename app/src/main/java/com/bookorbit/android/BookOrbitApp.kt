@@ -10,6 +10,8 @@ import android.os.ParcelFileDescriptor
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -1325,6 +1327,7 @@ private fun EpubReaderView(
         }
         if (measurementChapterIndex >= 0) {
             EpubChapterPageCountMeasurer(
+                rootDir = epubBook.rootDir,
                 chapter = epubBook.chapters[measurementChapterIndex],
                 chapterIndex = measurementChapterIndex,
                 theme = selectedTheme,
@@ -1361,21 +1364,26 @@ private fun EpubReaderView(
                     }
                 },
             factory = { webContext ->
+                val assetLoader = epubAssetLoader(webContext, epubBook.rootDir)
                 WebView(webContext).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    settings.allowFileAccess = true
-                    settings.allowContentAccess = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
                     settings.setSupportZoom(false)
-                    @Suppress("DEPRECATION")
-                    settings.allowFileAccessFromFileURLs = true
-                    @Suppress("DEPRECATION")
-                    settings.allowUniversalAccessFromFileURLs = true
                     settings.cacheMode = WebSettings.LOAD_DEFAULT
                     isHorizontalScrollBarEnabled = false
                     isVerticalScrollBarEnabled = false
                     overScrollMode = WebView.OVER_SCROLL_NEVER
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest
+                        ): WebResourceResponse? {
+                            return assetLoader.shouldInterceptRequest(request.url)
+                                ?: super.shouldInterceptRequest(view, request)
+                        }
+
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
                             view.evaluateJavascript(
@@ -1407,7 +1415,7 @@ private fun EpubReaderView(
                     val html = chapter.file.readText()
                     webView.setBackgroundColor(selectedTheme.backgroundColor)
                     webView.loadDataWithBaseURL(
-                        chapter.file.parentFile?.toURI()?.toString(),
+                        epubChapterBaseUrl(epubBook.rootDir, chapter.file),
                         styleEpubHtml(
                             html = html,
                             theme = selectedTheme,
@@ -1489,6 +1497,7 @@ private fun EpubReaderView(
 
 @Composable
 private fun EpubChapterPageCountMeasurer(
+    rootDir: File,
     chapter: EpubChapter,
     chapterIndex: Int,
     theme: EpubReaderTheme,
@@ -1501,16 +1510,13 @@ private fun EpubChapterPageCountMeasurer(
     AndroidView(
         modifier = modifier,
         factory = { webContext ->
+            val assetLoader = epubAssetLoader(webContext, rootDir)
             WebView(webContext).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                settings.allowFileAccess = true
-                settings.allowContentAccess = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
                 settings.setSupportZoom(false)
-                @Suppress("DEPRECATION")
-                settings.allowFileAccessFromFileURLs = true
-                @Suppress("DEPRECATION")
-                settings.allowUniversalAccessFromFileURLs = true
                 settings.cacheMode = WebSettings.LOAD_DEFAULT
                 isHorizontalScrollBarEnabled = false
                 isVerticalScrollBarEnabled = false
@@ -1518,6 +1524,15 @@ private fun EpubChapterPageCountMeasurer(
                 isFocusable = false
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 overScrollMode = WebView.OVER_SCROLL_NEVER
+                webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest
+                    ): WebResourceResponse? {
+                        return assetLoader.shouldInterceptRequest(request.url)
+                            ?: super.shouldInterceptRequest(view, request)
+                    }
+                }
                 addJavascriptInterface(
                     EpubPageMeasurementBridge { index, count ->
                         measuredCallback(index, count)
@@ -1540,7 +1555,7 @@ private fun EpubChapterPageCountMeasurer(
                 webView.tag = documentKey
                 webView.setBackgroundColor(theme.backgroundColor)
                 webView.loadDataWithBaseURL(
-                    chapter.file.parentFile?.toURI()?.toString(),
+                    epubChapterBaseUrl(rootDir, chapter.file),
                     styleEpubHtml(
                         html = chapter.file.readText(),
                         theme = theme,

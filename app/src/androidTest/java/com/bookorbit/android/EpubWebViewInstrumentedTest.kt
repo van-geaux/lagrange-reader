@@ -1,6 +1,10 @@
 package com.bookorbit.android
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,7 +14,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -211,6 +217,74 @@ class EpubWebViewInstrumentedTest {
         assertTrue(jumpedGeometry.getBoolean("visibleText"))
     }
 
+    @Test
+    fun extractedEpubImageLoadsThroughTheAppAssetOrigin() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val root = File(context.cacheDir, "epub-webview-image-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val textDir = File(root, "Text").apply { mkdirs() }
+        val imageDir = File(root, "Images").apply { mkdirs() }
+        val chapterFile = File(textDir, "chapter.xhtml").apply {
+            writeText("<html><head></head><body><img id=\"cover\" src=\"../Images/cover.png\"></body></html>")
+        }
+        File(imageDir, "cover.png").outputStream().use { output ->
+            Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(Color.MAGENTA)
+                compress(Bitmap.CompressFormat.PNG, 100, output)
+                recycle()
+            }
+        }
+        val loaded = CountDownLatch(1)
+        lateinit var webView: WebView
+
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { webContext ->
+                    val assetLoader = epubAssetLoader(webContext, root)
+                    WebView(webContext).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldInterceptRequest(
+                                view: WebView,
+                                request: WebResourceRequest
+                            ): WebResourceResponse? {
+                                return assetLoader.shouldInterceptRequest(request.url)
+                                    ?: super.shouldInterceptRequest(view, request)
+                            }
+
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                super.onPageFinished(view, url)
+                                loaded.countDown()
+                            }
+                        }
+                        addJavascriptInterface(TestReaderBridge(), "BookOrbitReader")
+                        loadDataWithBaseURL(
+                            epubChapterBaseUrl(root, chapterFile),
+                            styleEpubHtml(
+                                html = chapterFile.readText(),
+                                theme = EpubReaderTheme.Sepia,
+                                fontScale = 1f,
+                                startAtEnd = false
+                            ),
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }.also { webView = it }
+                }
+            )
+        }
+
+        assertTrue("EPUB WebView did not finish loading", loaded.await(10, TimeUnit.SECONDS))
+        val imageState = awaitJson(webView) { state ->
+            state.optBoolean("complete") && state.optInt("naturalWidth") > 0
+        }
+        assertTrue(imageState.getInt("naturalWidth") > 0)
+    }
+
     private fun awaitGeometry(
         webView: WebView,
         condition: (JSONObject) -> Boolean
@@ -221,6 +295,17 @@ class EpubWebViewInstrumentedTest {
             Thread.sleep(100)
         }
         throw AssertionError("Timed out waiting for EPUB layout geometry")
+    }
+
+    private fun awaitJson(webView: WebView, condition: (JSONObject) -> Boolean): JSONObject {
+        repeat(50) {
+            val script = "JSON.stringify((() => { const image = document.getElementById('cover'); " +
+                "return image ? { complete: image.complete, naturalWidth: image.naturalWidth } : {}; })())"
+            val value = JSONObject(decodeJavascriptString(evaluateJavascript(webView, script)))
+            if (condition(value)) return value
+            Thread.sleep(100)
+        }
+        throw AssertionError("Timed out waiting for the EPUB image asset")
     }
 
     private fun evaluateJavascript(webView: WebView, script: String): String {

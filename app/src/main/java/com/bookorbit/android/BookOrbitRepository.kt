@@ -1286,11 +1286,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         if (downloaded != null) {
             return downloaded
         }
-        return when (book.mediaKind) {
-            MediaKind.EPUB,
-            MediaKind.PDF,
-            MediaKind.COMIC -> if (allowRemoteCache && book.hasZipComicHint()) cacheReadableCopy(book) else null
-            else -> null
+        return if (shouldCacheReadableCopy(book, allowRemoteCache)) {
+            cacheReadableCopy(book)
+        } else {
+            null
         }
     }
 
@@ -2817,6 +2816,19 @@ internal fun buildComicPagesUrl(
 }
 
 private fun BookSummary.hasZipComicHint(): Boolean = comicArchiveExtension() == "cbz"
+
+internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolean): Boolean {
+    if (!allowRemoteCache || book.fileId.isNullOrBlank()) {
+        return false
+    }
+    return when (book.mediaKind) {
+        MediaKind.EPUB,
+        MediaKind.PDF -> true
+        MediaKind.COMIC -> book.hasZipComicHint()
+        MediaKind.AUDIO,
+        MediaKind.UNKNOWN -> false
+    }
+}
 
 private fun BookSummary.comicArchiveExtension(): String? {
     val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
