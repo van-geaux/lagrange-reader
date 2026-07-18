@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.WorkManager
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
@@ -33,6 +34,7 @@ class BookOrbitRepositoryIntegrationTest {
             .get(5, TimeUnit.SECONDS)
         ProgressQueueStore(context).clear()
         LastSyncedProgressStore(context).clear()
+        clearDownloads()
         repository = BookOrbitRepository(context)
         repository.clearServer()
         server = MockWebServer().apply { start() }
@@ -47,6 +49,7 @@ class BookOrbitRepositoryIntegrationTest {
             .get(5, TimeUnit.SECONDS)
         ProgressQueueStore(context).clear()
         LastSyncedProgressStore(context).clear()
+        clearDownloads()
         repository.clearServer()
         server.shutdown()
     }
@@ -171,10 +174,63 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals("reading", JSONObject(statusRequest.body.readUtf8()).getString("status"))
     }
 
+    @Test
+    fun failedLocalUpdateKeepsOldFileAndValidRetryReplacesIt() = runBlocking {
+        var downloadRequestCount = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/v1/books/files/file-update/download" -> {
+                    downloadRequestCount += 1
+                    MockResponse()
+                        .setResponseCode(200)
+                        .setHeader("Content-Type", "application/pdf")
+                        .setBody(
+                            when (downloadRequestCount) {
+                                1 -> "%PDF-old"
+                                2 -> "not-a-pdf"
+                                else -> "%PDF-new"
+                            }
+                        )
+                }
+                request.path == "/api/v1/books/book-update" -> MockResponse().setResponseCode(404)
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        val original = BookSummary(
+            libraryId = "library-1",
+            id = "book-update",
+            fileId = "file-update",
+            title = "Versioned Book",
+            format = "pdf",
+            mediaKind = MediaKind.PDF,
+            updatedAtMillis = 100L
+        )
+
+        val localFile = repository.downloadBook(original)
+        assertEquals("%PDF-old", localFile.readText())
+
+        val updated = original.copy(updatedAtMillis = 200L, localPath = localFile.absolutePath)
+        val failedUpdate = runCatching { repository.downloadBook(updated) }
+        assertTrue(failedUpdate.exceptionOrNull() is UserFacingException)
+        assertEquals("%PDF-old", localFile.readText())
+
+        repository.downloadBook(updated)
+        assertEquals("%PDF-new", localFile.readText())
+        val record = DownloadStore(context).find(repository.getServerUrl().orEmpty(), "file-update")!!
+        assertEquals(200L, record.sourceUpdatedAtMillis)
+        assertEquals(3, downloadRequestCount)
+    }
+
     private fun jsonResponse(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")
         .setBody(body)
+
+    private suspend fun clearDownloads() {
+        val store = DownloadStore(context)
+        store.readAll().forEach { record -> File(record.localPath).delete() }
+        store.clear()
+    }
 
     private companion object {
         const val PROGRESS_SYNC_WORK_NAME = "bookorbit-progress-sync"

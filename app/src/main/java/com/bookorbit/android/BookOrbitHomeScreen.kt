@@ -448,15 +448,20 @@ internal fun NativeLibraryBrowserScreen(
     }
 
     pendingCellularDownload?.let { book ->
+        val isUpdate = book.hasDownloadUpdate
         AlertDialog(
             onDismissRequest = { pendingCellularDownload = null },
-            title = { Text("Download using cellular data?") },
-            text = { Text("Downloading ${book.title} may use a significant amount of mobile data.") },
+            title = { Text(if (isUpdate) "Update local copy using cellular data?" else "Download using cellular data?") },
+            text = {
+                Text(
+                    "${if (isUpdate) "Updating" else "Downloading"} ${book.title} may use a significant amount of mobile data."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     pendingCellularDownload = null
                     onDownload(book)
-                }) { Text("Download") }
+                }) { Text(if (isUpdate) "Update local" else "Download") }
             },
             dismissButton = {
                 TextButton(onClick = { pendingCellularDownload = null }) { Text("Cancel") }
@@ -3233,7 +3238,9 @@ private fun BookDetails(
                 progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
                 progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
                 lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
-                isRead = currentBook.isRead
+                isRead = currentBook.isRead,
+                updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
+                downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
             )
         )
         value = detailLoader(currentBook) ?: value
@@ -3247,7 +3254,9 @@ private fun BookDetails(
         progressPositionMs = currentBook.progressPositionMs ?: detail.book.progressPositionMs,
         progressPageIndex = currentBook.progressPageIndex ?: detail.book.progressPageIndex,
         lastReadAtMillis = currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
-        isRead = currentBook.isRead
+        isRead = currentBook.isRead,
+        updatedAtMillis = currentBook.updatedAtMillis ?: detail.book.updatedAtMillis,
+        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
     )
     val fileId = displayBook.fileId
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
@@ -3369,21 +3378,32 @@ private fun BookDetails(
                     )
                 }
                 when {
-                    displayBook.isDownloaded -> item(key = "delete-local") {
-                        DetailActionTile(
-                            label = "Delete local",
-                            icon = Icons.Default.Delete,
-                            showLabel = true,
-                            enabled = !isDownloading,
-                            onClick = { onDeleteLocalCopy(displayBook) }
-                        )
-                    }
                     isDownloading -> item(key = "cancel-download") {
                         DetailActionTile(
                             label = "Cancel download",
                             icon = Icons.Default.Close,
                             onClick = { onCancelDownload(displayBook) }
                         )
+                    }
+                    displayBook.isDownloaded -> {
+                        if (displayBook.hasDownloadUpdate && !state.isOfflineSnapshot) {
+                            item(key = "update-local") {
+                                DetailActionTile(
+                                    label = "Update local",
+                                    icon = Icons.Default.Download,
+                                    showLabel = true,
+                                    onClick = { onDownload(displayBook) }
+                                )
+                            }
+                        }
+                        item(key = "delete-local") {
+                            DetailActionTile(
+                                label = "Delete local",
+                                icon = Icons.Default.Delete,
+                                showLabel = true,
+                                onClick = { onDeleteLocalCopy(displayBook) }
+                            )
+                        }
                     }
                     fileId != null && !state.isOfflineSnapshot -> item(key = "download") {
                         DetailActionTile(
@@ -3432,7 +3452,9 @@ private fun BookDetails(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        downloadProgress?.let { "Downloading · ${(it * 100).toInt()}%" } ?: "Downloading…",
+                        downloadProgress?.let {
+                            "${if (displayBook.isDownloaded) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
+                        } ?: if (displayBook.isDownloaded) "Updating local…" else "Downloading…",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3450,7 +3472,11 @@ private fun BookDetails(
         } else if (downloadFailed) {
             item {
                 Text(
-                    "Download failed. Tap the download action to retry.",
+                    if (displayBook.isDownloaded) {
+                        "Update failed. Your previous local copy is still available; tap Update local to retry."
+                    } else {
+                        "Download failed. Tap the download action to retry."
+                    },
                     modifier = Modifier.testTag("book-download-status"),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium

@@ -117,7 +117,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add delete-local-copy action
 - [x] Reconcile an open book-detail screen immediately after Delete local succeeds so offline availability and actions update without leaving the screen
 - [x] Prune stale download records when local files are missing
-- [ ] Add redownload/update behavior if server file changes
+- [x] Add version-aware Update local with staged validation and atomic replacement when server metadata changes; physical-device/server validation remains pending
 
 ## 8. Offline Reading / Listening
 

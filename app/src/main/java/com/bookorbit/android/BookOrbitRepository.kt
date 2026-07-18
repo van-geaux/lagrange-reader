@@ -43,6 +43,9 @@ import org.json.JSONTokener
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -434,7 +437,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 ) ?: cachedDetailBook
                 metadataBook?.copy(
                     fileId = metadataBook.fileId ?: record.fileId,
-                    localPath = record.localPath
+                    localPath = record.localPath,
+                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis
                 ) ?: BookSummary(
                     libraryId = "",
                     id = record.bookId,
@@ -442,7 +446,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     title = record.title,
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
-                    localPath = record.localPath
+                    localPath = record.localPath,
+                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis
                 )
             }
     }
@@ -901,67 +906,83 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
-        val target = downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
-        if (!target.exists() || target.length() <= 0L) {
-            if (target.exists() && target.length() <= 0L) {
-                target.delete()
-            }
+        val serverUrl = getServerUrl().orEmpty()
+        val existingRecord = downloadStore.find(serverUrl, fileId)
+        val target = existingRecord
+            ?.localPath
+            ?.let(::File)
+            ?: downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
+        val hadUsableExisting = existingRecord != null &&
+            downloadedFilePassesIntegrity(book, target)
+        val canReuseExisting = existingRecord != null &&
+            !downloadUpdateAvailable(book, existingRecord) &&
+            hadUsableExisting
+        if (!canReuseExisting) {
             val parent = target.parentFile
             parent?.mkdirs()
             if (parent != null && !parent.exists()) {
                 throw UserFacingException("Unable to prepare local storage for this download.")
             }
+            val staged = File(parent, ".${target.name}.$fileId.part")
+            if (staged.exists() && !staged.delete()) {
+                throw UserFacingException("Unable to clear an interrupted download before retrying.")
+            }
             val downloadContext = currentCoroutineContext()
-            executeAuthenticated(
-                requestFactory = {
-                    Request.Builder()
-                        .url(buildDownloadUrl(fileId))
-                        .get()
-                        .addSessionAccessToken()
-                        .build()
-                },
-                action = "download this title"
-            ) { response ->
-                val body = response.body
-                    ?: throw UserFacingException("The server returned an empty download.")
-                val input = body.byteStream()
-                val totalBytes = body.contentLength().takeIf { it > 0L }
-                onProgress(0f.takeIf { totalBytes != null })
-                try {
-                    FileOutputStream(target).use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var copiedBytes = 0L
-                        var lastReportedPercent = -1
-                        while (true) {
-                            downloadContext.ensureActive()
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            output.write(buffer, 0, count)
-                            copiedBytes += count
-                            val percent = totalBytes?.let { total ->
-                                ((copiedBytes * 100L) / total).coerceIn(0L, 100L).toInt()
-                            }
-                            if (percent != null && percent != lastReportedPercent) {
-                                lastReportedPercent = percent
-                                onProgress(percent / 100f)
+            try {
+                executeAuthenticated(
+                    requestFactory = {
+                        Request.Builder()
+                            .url(buildDownloadUrl(fileId))
+                            .get()
+                            .addSessionAccessToken()
+                            .build()
+                    },
+                    action = "download this title"
+                ) { response ->
+                    val body = response.body
+                        ?: throw UserFacingException("The server returned an empty download.")
+                    val input = body.byteStream()
+                    val totalBytes = body.contentLength().takeIf { it > 0L }
+                    onProgress(0f.takeIf { totalBytes != null })
+                    try {
+                        FileOutputStream(staged).use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            var copiedBytes = 0L
+                            var lastReportedPercent = -1
+                            while (true) {
+                                downloadContext.ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                output.write(buffer, 0, count)
+                                copiedBytes += count
+                                val percent = totalBytes?.let { total ->
+                                    ((copiedBytes * 100L) / total).coerceIn(0L, 100L).toInt()
+                                }
+                                if (percent != null && percent != lastReportedPercent) {
+                                    lastReportedPercent = percent
+                                    onProgress(percent / 100f)
+                                }
                             }
                         }
+                    } catch (error: IOException) {
+                        if (error.isLikelyLocalStorageFailure()) {
+                            throw UserFacingException("Local storage could not save this download. Check free space and file access, then try again.")
+                        }
+                        throw error
                     }
-                } catch (error: CancellationException) {
-                    target.delete()
-                    throw error
-                } catch (error: IOException) {
-                    target.delete()
-                    if (error.isLikelyLocalStorageFailure()) {
-                        throw UserFacingException("Local storage could not save this download. Check free space and file access, then try again.")
+                    ensureNonEmptyFile(
+                        target = staged,
+                        message = "The server returned an empty download."
+                    )
+                    if (!downloadedFilePassesIntegrity(book, staged)) {
+                        val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
+                        throw UserFacingException("The downloaded file did not pass integrity checks.$suffix")
                     }
-                    throw error
+                    onProgress(1f)
                 }
-                ensureNonEmptyFile(
-                    target = target,
-                    message = "The server returned an empty download."
-                )
-                onProgress(1f)
+                atomicReplaceDownloadedFile(staged, target)
+            } finally {
+                if (staged.exists()) staged.delete()
             }
         }
         downloadStore.save(
@@ -972,10 +993,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 title = book.title,
                 localPath = target.absolutePath,
                 mediaKind = book.mediaKind,
-                mimeType = book.format
+                mimeType = book.format,
+                sourceUpdatedAtMillis = listOfNotNull(
+                    existingRecord?.sourceUpdatedAtMillis,
+                    book.updatedAtMillis
+                ).maxOrNull()
             )
         )
-        val serverUrl = getServerUrl().orEmpty()
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
         val downloadedBook = book.copy(localPath = target.absolutePath)
@@ -1738,6 +1762,9 @@ internal object BookOrbitPayloadParser {
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
                         localPath = fileId?.let { downloads[it]?.localPath },
+                        downloadedSourceUpdatedAtMillis = fileId?.let {
+                            downloads[it]?.sourceUpdatedAtMillis
+                        },
                         progressLabel = progressLabel,
                         progressPercent = progressPercent,
                         progressPositionMs = progressPositionMs,
@@ -2479,8 +2506,53 @@ internal fun libraryCatalogPagesAreStable(
 private fun List<BookSummary>.withCurrentDownloads(
     downloads: Map<String, DownloadRecord>
 ): List<BookSummary> = map { book ->
-    val localPath = book.fileId?.let { downloads[it]?.localPath }
-    if (localPath == book.localPath) book else book.copy(localPath = localPath)
+    val download = book.fileId?.let(downloads::get)
+    val localPath = download?.localPath
+    if (
+        localPath == book.localPath &&
+        download?.sourceUpdatedAtMillis == book.downloadedSourceUpdatedAtMillis
+    ) {
+        book
+    } else {
+        book.copy(
+            localPath = localPath,
+            downloadedSourceUpdatedAtMillis = download?.sourceUpdatedAtMillis
+        )
+    }
+}
+
+internal fun downloadUpdateAvailable(book: BookSummary, record: DownloadRecord): Boolean {
+    val currentSourceVersion = book.updatedAtMillis ?: return false
+    val downloadedSourceVersion = record.sourceUpdatedAtMillis
+    return downloadedSourceVersion == null || currentSourceVersion > downloadedSourceVersion
+}
+
+internal fun downloadedFilePassesIntegrity(book: BookSummary, file: File): Boolean {
+    if (!file.exists() || file.length() <= 0L) return false
+    if (book.mediaKind != MediaKind.EPUB) {
+        return ReaderFileValidator.isReadable(book.mediaKind, file)
+    }
+    val formatToken = listOfNotNull(book.format, book.title).joinToString(" ").lowercase()
+    return if (formatToken.contains("mobi") || formatToken.contains("azw3")) {
+        true
+    } else {
+        ReaderFileValidator.isReadable(book.mediaKind, file)
+    }
+}
+
+internal fun atomicReplaceDownloadedFile(staged: File, target: File) {
+    require(staged.exists()) { "Staged download does not exist." }
+    target.parentFile?.mkdirs()
+    try {
+        Files.move(
+            staged.toPath(),
+            target.toPath(),
+            StandardCopyOption.ATOMIC_MOVE,
+            StandardCopyOption.REPLACE_EXISTING
+        )
+    } catch (_: AtomicMoveNotSupportedException) {
+        Files.move(staged.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
 }
 
 internal fun mergeSeriesBooks(pages: List<SeriesBooksPage>): List<BookSummary> {

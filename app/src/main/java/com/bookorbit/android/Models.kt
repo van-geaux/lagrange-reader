@@ -28,6 +28,7 @@ data class BookSummary(
     val downloadUrl: String? = null,
     val coverUrl: String? = null,
     val localPath: String? = null,
+    val downloadedSourceUpdatedAtMillis: Long? = null,
     val progressLabel: String? = null,
     val progressPercent: Float? = null,
     val progressPositionMs: Long? = null,
@@ -43,6 +44,9 @@ data class BookSummary(
     val readerPageCount: Int? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
+    val hasDownloadUpdate: Boolean
+        get() = isDownloaded && updatedAtMillis != null &&
+            (downloadedSourceUpdatedAtMillis == null || updatedAtMillis > downloadedSourceUpdatedAtMillis)
 }
 
 internal fun BookSummary.withReadingStateReset(): BookSummary = copy(
@@ -216,5 +220,6 @@ data class DownloadRecord(
     val localPath: String,
     val mediaKind: MediaKind,
     val mimeType: String? = null,
+    val sourceUpdatedAtMillis: Long? = null,
     val downloadedAtMillis: Long = System.currentTimeMillis()
 )

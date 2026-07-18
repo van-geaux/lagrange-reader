@@ -201,6 +201,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Make Close book dismiss the reader immediately to cached Browser state (or Loading without a cache), merge the latest visible progress into Home/Library, and continue persistence, sync, cleanup, and refresh in the background; physical-device validation remains pending.
 - [x] Restore missing foreground book-detail covers such as `your name.` by trying normalized explicit metadata before the canonical BookOrbit thumbnail endpoint; physical-device/server validation remains pending.
 - [x] Add the approved current-chapter page slider beneath the unchanged Choose chapter/chip controls. Show `Page X of Y`, jump while dragging, disable for single-page chapters, and never cross a chapter boundary; physical-device validation remains pending.
+- [x] Show an online-only Update local action when the server catalog version is newer (or once for legacy versionless downloads), reusing cellular confirmation and update-specific progress/cancel/retry wording; physical-device validation remains pending.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
 ### Checkpoint 5: Other media readers - partially implemented

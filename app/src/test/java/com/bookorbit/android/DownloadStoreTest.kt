@@ -124,4 +124,28 @@ class DownloadStoreTest {
         assertEquals(firstFile.absolutePath, store.find("https://one.example", "shared-file")?.localPath)
         assertEquals(secondFile.absolutePath, store.find("https://two.example", "shared-file")?.localPath)
     }
+
+    @Test
+    fun `source catalog version survives download store round trip`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-source-version").toFile()
+        val store = DownloadStore(filesDir)
+        val localFile = File(filesDir, "downloads/versioned.epub").apply {
+            parentFile?.mkdirs()
+            writeText("versioned")
+        }
+
+        store.save(
+            DownloadRecord(
+                serverUrl = "https://example.test",
+                fileId = "file-versioned",
+                bookId = "book-versioned",
+                title = "Versioned",
+                localPath = localFile.absolutePath,
+                mediaKind = MediaKind.EPUB,
+                sourceUpdatedAtMillis = 1234L
+            )
+        )
+
+        assertEquals(1234L, store.find("https://example.test", "file-versioned")?.sourceUpdatedAtMillis)
+    }
 }

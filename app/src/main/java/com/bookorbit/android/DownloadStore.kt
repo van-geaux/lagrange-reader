@@ -80,6 +80,13 @@ class DownloadStore private constructor(
                         localPath = obj.optString("localPath"),
                         mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
                         mimeType = obj.optString("mimeType"),
+                        sourceUpdatedAtMillis = if (
+                            obj.has("sourceUpdatedAtMillis") && !obj.isNull("sourceUpdatedAtMillis")
+                        ) {
+                            obj.optLong("sourceUpdatedAtMillis")
+                        } else {
+                            null
+                        },
                         downloadedAtMillis = obj.optLong("downloadedAtMillis")
                     )
                 )
@@ -108,6 +115,7 @@ class DownloadStore private constructor(
                     put("localPath", record.localPath)
                     put("mediaKind", record.mediaKind.name)
                     put("mimeType", record.mimeType)
+                    put("sourceUpdatedAtMillis", record.sourceUpdatedAtMillis)
                     put("downloadedAtMillis", record.downloadedAtMillis)
                 }
             )

@@ -744,7 +744,11 @@ class AppCoordinator(
                         failed = false,
                         message = null
                     )
-                    updateLocalFileState(fileId, localFile.absolutePath)
+                    updateLocalFileState(
+                        fileId = fileId,
+                        localPath = localFile.absolutePath,
+                        downloadedSourceUpdatedAtMillis = book.updatedAtMillis
+                    )
                     loadBrowser()
                 }
                 .onFailure { error ->
@@ -1106,16 +1110,34 @@ class AppCoordinator(
         _screen.value = AppScreen.Browser(browserState = state)
     }
 
-    private fun updateLocalFileState(fileId: String, localPath: String?) {
+    private fun updateLocalFileState(
+        fileId: String,
+        localPath: String?,
+        downloadedSourceUpdatedAtMillis: Long? = null
+    ) {
         val current = lastBrowserState ?: return
         val nextOverrides = current.localFilePathOverrides + (fileId to localPath)
         showBrowser(
             current.copy(
                 books = current.books.map { book ->
-                    if (book.fileId == fileId) book.copy(localPath = localPath) else book
+                    if (book.fileId == fileId) {
+                        book.copy(
+                            localPath = localPath,
+                            downloadedSourceUpdatedAtMillis = downloadedSourceUpdatedAtMillis
+                        )
+                    } else {
+                        book
+                    }
                 },
                 homeBooks = current.homeBooks.map { book ->
-                    if (book.fileId == fileId) book.copy(localPath = localPath) else book
+                    if (book.fileId == fileId) {
+                        book.copy(
+                            localPath = localPath,
+                            downloadedSourceUpdatedAtMillis = downloadedSourceUpdatedAtMillis
+                        )
+                    } else {
+                        book
+                    }
                 },
                 localFilePathOverrides = nextOverrides,
                 localBooksRevision = current.localBooksRevision + 1

@@ -304,6 +304,48 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun outdatedDownloadedBookDetailsShowUpdateLocalAction() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-outdated-download",
+            fileId = "file-outdated-download",
+            title = "Updated Book",
+            format = "epub",
+            mediaKind = MediaKind.EPUB,
+            localPath = "/downloads/updated-book.epub",
+            downloadedSourceUpdatedAtMillis = 100L,
+            updatedAtMillis = 200L
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+            bookDetailResult = BookDetailInfo(book)
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Updated Book").performClick()
+        composeRule.onNodeWithContentDescription("Update local").assertIsEnabled()
+        composeRule.onNodeWithText("Update local").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Delete local").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Update local").performClick()
+        composeRule.waitUntil { dataSource.downloadedBooks == listOf(book) }
+    }
+
+    @Test
     fun currentlyReadingCardExposesRemoveAction() {
         val dataSource = InstrumentedFakeDataSource()
         val current = BookSummary(
@@ -870,6 +912,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
+    val downloadedBooks = mutableListOf<BookSummary>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     var searchBooksResult: List<BookSummary> = emptyList()
@@ -924,7 +967,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         resetReadingStateBooks += book
     }
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = File("unused")
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+        downloadedBooks += book
+        return File("unused")
+    }
     override suspend fun deleteLocalCopy(book: BookSummary) {
         deletedLocalBooks += book
     }
