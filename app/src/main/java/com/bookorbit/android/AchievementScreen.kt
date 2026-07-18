@@ -1,12 +1,10 @@
 package com.bookorbit.android
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -136,7 +134,7 @@ private fun AchievementCatalogueGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 128.dp),
+        columns = GridCells.Adaptive(minSize = 260.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -227,74 +225,77 @@ private fun AchievementCard(achievement: AchievementItem) {
     } else {
         rarityColor(achievement.rarity)
     }
-    val posterColor = if (locked) {
+    val cardColor = if (locked) {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     } else {
         rarityColor(achievement.rarity).copy(alpha = 0.16f)
     }
-    Column(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth().aspectRatio(0.72f),
-            colors = CardDefaults.cardColors(containerColor = posterColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(14.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = achievementIcon(achievement.iconName),
                     contentDescription = "${achievement.name} achievement symbol",
                     tint = symbolColor,
-                    modifier = Modifier.size(62.dp).align(Alignment.Center)
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    achievement.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Icon(
                     imageVector = if (locked) Icons.Default.Lock else Icons.Default.CheckCircle,
                     contentDescription = if (locked) "Locked" else "Unlocked",
                     tint = symbolColor,
-                    modifier = Modifier.size(22.dp).align(Alignment.TopEnd)
+                    modifier = Modifier.size(20.dp)
                 )
             }
-        }
-        Text(
-            achievement.name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            achievement.description,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            "${achievement.categoryLabel} · ${achievement.rarity.replaceFirstChar { it.titlecase(Locale.US) }}",
-            style = MaterialTheme.typography.labelSmall,
-            color = symbolColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (progress != null) {
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                achievement.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                "${achievement.currentProgress} / ${achievement.threshold}",
+                "${achievement.categoryLabel} · ${achievement.rarity.replaceFirstChar { it.titlecase(Locale.US) }}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = symbolColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        } else if (achievement.earned && !achievement.awardedAt.isNullOrBlank()) {
-            Text(
-                "Unlocked ${achievement.awardedAt.take(10)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "${achievement.currentProgress} / ${achievement.threshold}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (achievement.earned && !achievement.awardedAt.isNullOrBlank()) {
+                Text(
+                    "Unlocked ${achievement.awardedAt.take(10)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

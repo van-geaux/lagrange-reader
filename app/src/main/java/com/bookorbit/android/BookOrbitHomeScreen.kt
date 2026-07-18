@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -56,6 +57,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
@@ -3425,7 +3427,6 @@ private fun BookDetails(
         value = detailLoader(currentBook) ?: value
     }
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
-    var showBookActions by rememberSaveable(book.id) { mutableStateOf(false) }
     val displayBook = detail.book.copy(
         localPath = currentBook.localPath,
         progressLabel = currentBook.progressLabel ?: detail.book.progressLabel,
@@ -3559,11 +3560,11 @@ private fun BookDetails(
             }
         }
         item {
-            LazyRow(
-                modifier = Modifier.testTag("book-detail-actions"),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().testTag("book-detail-actions"),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item(key = "read") {
                     DetailActionTile(
                         label = "Read",
                         icon = Icons.Default.PlayArrow,
@@ -3572,8 +3573,6 @@ private fun BookDetails(
                         enabled = !isDownloading && !unavailableOffline,
                         onClick = { onRead(displayBook) }
                     )
-                }
-                item(key = "preview") {
                     DetailActionTile(
                         label = "Preview",
                         icon = Icons.Default.Visibility,
@@ -3581,36 +3580,32 @@ private fun BookDetails(
                         enabled = !isDownloading && !unavailableOffline,
                         onClick = { onPreview(displayBook) }
                     )
-                }
                 when {
-                    isDownloading -> item(key = "cancel-download") {
+                    isDownloading -> {
                         DetailActionTile(
                             label = "Cancel download",
                             icon = Icons.Default.Close,
+                            showLabel = true,
                             onClick = { onCancelDownload(displayBook) }
                         )
                     }
                     displayBook.isDownloaded -> {
                         if (displayBook.hasDownloadUpdate && !state.isOfflineSnapshot) {
-                            item(key = "update-local") {
-                                DetailActionTile(
-                                    label = "Update local",
-                                    icon = Icons.Default.Download,
-                                    showLabel = true,
-                                    onClick = { onDownload(displayBook) }
-                                )
-                            }
-                        }
-                        item(key = "delete-local") {
                             DetailActionTile(
-                                label = "Delete local",
-                                icon = Icons.Default.Delete,
+                                label = "Update local",
+                                icon = Icons.Default.Download,
                                 showLabel = true,
-                                onClick = { onDeleteLocalCopy(displayBook) }
+                                onClick = { onDownload(displayBook) }
                             )
                         }
+                        DetailActionTile(
+                            label = "Delete local",
+                            icon = Icons.Default.Delete,
+                            showLabel = true,
+                            onClick = { onDeleteLocalCopy(displayBook) }
+                        )
                     }
-                    fileId != null && !state.isOfflineSnapshot -> item(key = "download") {
+                    fileId != null && !state.isOfflineSnapshot -> {
                         DetailActionTile(
                             label = "Download",
                             icon = Icons.Default.Download,
@@ -3619,33 +3614,20 @@ private fun BookDetails(
                         )
                     }
                 }
-                item(key = "more-book-actions") {
-                    Box {
-                        DetailActionTile(
-                            label = "More book actions",
-                            icon = Icons.Default.MoreVert,
-                            enabled = !state.isOfflineSnapshot,
-                            onClick = { showBookActions = true }
-                        )
-                        DropdownMenu(
-                            expanded = showBookActions,
-                            onDismissRequest = { showBookActions = false }
-                        ) {
-                            val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
-                            DropdownMenuItem(
-                                text = { Text(statusActionLabel) },
-                                onClick = {
-                                    showBookActions = false
-                                    if (statusActionLabel == "Mark as unread") {
-                                        onMarkAsUnread(displayBook)
-                                    } else {
-                                        onMarkAsRead(displayBook)
-                                    }
-                                }
-                            )
+                val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
+                DetailActionTile(
+                    label = statusActionLabel,
+                    icon = if (statusActionLabel == "Mark as unread") Icons.Default.Undo else Icons.Default.CheckCircle,
+                    showLabel = true,
+                    enabled = !state.isOfflineSnapshot,
+                    onClick = {
+                        if (statusActionLabel == "Mark as unread") {
+                            onMarkAsUnread(displayBook)
+                        } else {
+                            onMarkAsRead(displayBook)
                         }
                     }
-                }
+                )
             }
         }
         if (isDownloading) {

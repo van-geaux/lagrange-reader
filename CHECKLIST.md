@@ -290,7 +290,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Improve thumbnail loading performance and retry failed covers
 - [x] Cancel off-screen cover requests so visible cards and details are not blocked by stale scroll work
 - [x] Warm every missing/changed selected-library thumbnail into the local cache in durable unmetered batches
-- [x] Redesign book-detail actions as a swipeable compact area with selective symbol buttons
+- [x] Redesign book-detail actions as a wrapping compact area with selective symbols and persistent labels so every action remains visible on narrow screens
 - [x] Navigate from a tapped book-detail series title to Series details
 - [x] Redesign book-detail genres/tags and lower metadata hierarchy
 - [x] Add a full-screen book-detail cover viewer with any-screen-tap and Back dismissal
@@ -307,7 +307,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Use an unmistakable download icon and expose active per-file download progress/status from book details
 - [x] Validate interrupted download recovery, retry behavior, and large downloads on the target device
 - [x] Add visible labels to Download and Delete local book-detail actions
-- [x] Add a final compact three-dot overflow to book details with exactly one live context-sensitive Mark as read or Mark as unread action; disable it for offline snapshots and keep device validation pending
+- [x] Replace the former three-dot book-detail action with a directly labeled live Mark as read or Mark as unread tile in the wrapping action row; retain existing status logic and disable it for offline snapshots
 - [x] Make Close book immediately restore cached browser state (or Loading when unavailable), merge captured progress into selected/server-wide books, and complete persistence, sync, cleanup, and refresh in the background; prompt dismissal is target-device validated
 - [x] Recover missing foreground book-detail covers, including `your name.`, through ordered explicit/canonical thumbnail candidates while preserving cancellation and cache identity; physical-device/server validation remains pending
 - [x] Add the approved current-chapter page slider beneath the retained Choose chapter/chip controls, with immediate clamped jumps and single-page disablement; target-device validation passed
@@ -363,7 +363,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on the target device; submitting the current normalized URL closes silently without state changes
 - [x] Add a profile Achievements destination backed by authenticated `GET /api/v1/achievements`, with earned/available summary, adaptive Unlocked/Locked cards, optional locked progress, award dates, secret-field preservation, older-server unsupported state, and retry errors
 - [x] Validate the basic Achievements flow on the target device/server
-- [x] Redesign Achievements as Library-like adaptive poster tiles with a 128 dp minimum width, prominent semantic Android Material symbols mapped from the server's official BookOrbit `iconName` vocabulary, a small lock-state indicator, and name/description/category/rarity/progress/date metadata below each poster
+- [x] Replace the superseded Achievement poster layout with compact adaptive information cards using a 260 dp grid minimum, a 22 dp server-driven semantic icon immediately before the title, lock/unlock state at row end, and description/category/rarity plus conditional progress/date inside the card
 - [ ] Validate secret/censored entries, unsupported-server behavior, retry, conditional progress/date metadata, and responsive layout after the compact information-card redesign
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
 - [x] Validate the jump-rail grid spacing on the target device
@@ -371,8 +371,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Latest target-device follow-up — 2026-07-18
 
-- [ ] Replace the oversized Achievement poster tiles with the approved compact information cards: keep each achievement in a card, place the small server-driven semantic icon immediately before the title, put lock/unlock state at the row end, and keep description plus progress or earned date below
-- [ ] Resolve undiscoverable horizontal overflow in the book-detail `book-detail-actions` row (Read, Preview, Download/Delete local, More) by making additional actions visibly discoverable or eliminating hidden horizontal navigation; confirm the exact GUI treatment before implementation
+- [x] Replace the oversized Achievement poster tiles with compact adaptive information cards: 260 dp grid minimum, 22 dp server-driven icon immediately before the title, lock/unlock state at row end, and description/category/rarity plus conditional progress/date inside one card
+- [x] Replace the horizontally scrolling `book-detail-actions` row with a wrapping `FlowRow` so Read, Preview, Download/Update/Cancel/Delete local, and the directly labeled live Mark as read/unread tile remain visible on narrow screens
 - [ ] Restore embedded image rendering inside opened EPUB content
 - [ ] Diagnose the separate remote EPUB Preview preparation/authentication/transport regression that persists after relogin and reports `This EPUB could not be prepared for reading. Download it first or reconnect to the server.`; CBZ/CBR Preview remains the working comparison, and the failure may share a cause with missing EPUB images
 - [ ] Restore the full #/A–Z Library and Series jump rail, rendering unrepresented letters with existing disabled/grey tokens and accessibility semantics and making them non-selectable
