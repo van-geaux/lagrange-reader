@@ -354,7 +354,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replace the single app Dark choice with one flat five-option Theme list: Follow system, Light, Charcoal, Warm black, and OLED black; migrate legacy Dark to Charcoal
 - [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
 - [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device
-- [ ] Add a profile Achievements destination with card-style Unlocked and Locked sections and locked-achievement progress when the server API provides it; API and screen-design validation remain pending
+- [x] Add a profile Achievements destination backed by authenticated `GET /api/v1/achievements`, with earned/available summary, adaptive Unlocked/Locked cards, optional locked progress, award dates, secret-field preservation, older-server unsupported state, and retry errors
+- [ ] Validate Achievements payloads, secret/censored entries, progress, unsupported-server behavior, retry, and responsive cards on a physical device/server
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
 - [ ] Validate the conditional jump-rail gutter across physical-device widths, orientations, and responsive grid sizes
 - [ ] Checkpoint 1: agree on product direction and design-system tokens

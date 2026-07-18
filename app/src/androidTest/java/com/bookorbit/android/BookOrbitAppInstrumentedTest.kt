@@ -191,6 +191,67 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun profileAchievementsShowsUnlockedAndLockedCardsWithServerProgress() {
+        val dataSource = InstrumentedFakeDataSource().apply {
+            achievementsResult = AchievementCatalogue(
+                items = listOf(
+                    AchievementItem(
+                        key = "first-finish",
+                        category = "reading",
+                        categoryLabel = "Reading",
+                        name = "First Finish",
+                        description = "Finish a book",
+                        iconName = "book-check",
+                        rarity = "common",
+                        threshold = 1,
+                        earned = true,
+                        awardedAt = "2026-07-17T12:30:00.000Z",
+                        currentProgress = 1
+                    ),
+                    AchievementItem(
+                        key = "page-turner",
+                        category = "reading",
+                        categoryLabel = "Reading",
+                        name = "Page Turner",
+                        description = "Finish ten books",
+                        iconName = "books",
+                        rarity = "rare",
+                        threshold = 10,
+                        currentProgress = 4
+                    )
+                ),
+                totalEarned = 1,
+                totalAvailable = 2
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = emptyList(),
+                            selectedLibraryId = null,
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        composeRule.onNodeWithText("Achievements").performClick()
+        composeRule.waitUntil { composeRule.onAllNodesWithText("First Finish").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("1 of 2 unlocked").assertIsDisplayed()
+        composeRule.onNodeWithText("Unlocked").assertIsDisplayed()
+        composeRule.onNodeWithText("First Finish").assertIsDisplayed()
+        composeRule.onNodeWithText("Page Turner").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("4 / 10").assertIsDisplayed()
+    }
+
+    @Test
     fun liveBrowserShowsLibrariesBooksAndAvailableActions() {
         val book = BookSummary(
             libraryId = "lib-1",
@@ -1068,6 +1129,9 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var searchBooksResult: List<BookSummary> = emptyList()
     var bookDetailResult: BookDetailInfo? = null
     var seriesDetailResult: SeriesDetailInfo? = null
+    var achievementsResult: AchievementCatalogue = AchievementCatalogue(
+        status = AchievementCatalogueStatus.UNSUPPORTED
+    )
     val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
@@ -1099,6 +1163,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = seriesDetailResult
+    override suspend fun loadAchievements(): AchievementCatalogue = achievementsResult
     override suspend fun loadCatalogImage(url: String): ByteArray? {
         loadedCatalogImageUrls += url
         return catalogImageResults[url]

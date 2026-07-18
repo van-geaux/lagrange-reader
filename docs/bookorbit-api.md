@@ -191,6 +191,16 @@ GET /api/v1/series/{seriesId}/books?page=0&size=100&sort=seriesIndex&order=asc
 
 The response contains `items` plus `seriesInfo`. BookOrbit limits `size` to 100, so the client requests and merges additional pages until `seriesInfo.bookCount` is reached. It maps the complete ordered book list, series name, book/read counts, authors, and possible index gaps, then loads the first book detail for synopsis and genre/tag context.
 
+### Achievements
+
+Authenticated endpoint:
+
+```text
+GET /api/v1/achievements
+```
+
+The contract is verified against the official current BookOrbit source. The client preserves server-censored secret fields, shows award dates for earned achievements, and shows locked current/threshold progress only when both values are provided. HTTP 404 is treated as an older server without Achievements support; other failures remain retryable.
+
 ## Files
 
 ### Stream a file

@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
@@ -127,7 +128,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, OPTIONS, ABOUT }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private enum class OptionsDialog {
     THEME,
@@ -363,6 +364,7 @@ internal fun NativeLibraryBrowserScreen(
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
+    achievementsLoader: suspend () -> AchievementCatalogue,
     catalogImageLoader: suspend (String) -> ByteArray?,
     onBookOpen: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
@@ -435,6 +437,19 @@ internal fun NativeLibraryBrowserScreen(
         showProfileMenu = false
         showMoreMenu = false
         destination = BrowserDestination.OPTIONS
+        query = ""
+        selectedAuthor = null
+        selectedSeriesKey = null
+        activeBookGenre = null
+        activeSeriesGenre = null
+        genreSourceBook = null
+        genreSourceSeriesKey = null
+        selectedBook = null
+    }
+    val openAchievements = {
+        showProfileMenu = false
+        showMoreMenu = false
+        destination = BrowserDestination.ACHIEVEMENTS
         query = ""
         selectedAuthor = null
         selectedSeriesKey = null
@@ -651,6 +666,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 activeBookGenre != null -> BrowserTopBar(
@@ -669,6 +685,7 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 activeSeriesGenre != null -> BrowserTopBar(
@@ -687,6 +704,7 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedBook != null -> BrowserTopBar(
@@ -702,6 +720,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedSeriesKey != null -> BrowserTopBar(
@@ -717,6 +736,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedAuthor != null -> BrowserTopBar(
@@ -732,6 +752,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
                 else -> BrowserTopBar(
@@ -742,6 +763,7 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.SERIES -> "Series"
                         destination == BrowserDestination.AUTHORS -> "Authors"
                         destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
+                        destination == BrowserDestination.ACHIEVEMENTS -> "Achievements"
                         destination == BrowserDestination.OPTIONS -> "Options"
                         destination == BrowserDestination.ABOUT -> "About"
                         else -> "Home"
@@ -764,6 +786,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onAchievements = openAchievements,
                     onChangeServer = openChangeServerEditor
                 )
             }
@@ -917,6 +940,10 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
+                destination == BrowserDestination.ACHIEVEMENTS -> AchievementsScreen(
+                    loader = achievementsLoader,
+                    modifier = Modifier.padding(padding)
+                )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
                     onPreferencesChange = onAppPreferencesChange,
@@ -1019,6 +1046,7 @@ private fun BrowserTopBar(
     onSessionAction: () -> Unit,
     sessionActionLabel: String,
     onOptions: () -> Unit = {},
+    onAchievements: () -> Unit = {},
     onChangeServer: () -> Unit = {},
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
@@ -1049,6 +1077,14 @@ private fun BrowserTopBar(
                         onClick = {
                             onDismissProfile()
                             onOptions()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Achievements") },
+                        leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
+                        onClick = {
+                            onDismissProfile()
+                            onAchievements()
                         }
                     )
                     DropdownMenuItem(
@@ -1091,6 +1127,7 @@ private fun BrowserBottomNavigation(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
                 destination == BrowserDestination.LOCAL_BOOKS ||
+                destination == BrowserDestination.ACHIEVEMENTS ||
                 destination == BrowserDestination.OPTIONS ||
                 destination == BrowserDestination.ABOUT,
             onClick = onMore,

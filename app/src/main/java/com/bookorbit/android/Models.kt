@@ -139,6 +139,35 @@ data class AuthorBooksPage(
     val size: Int? = null
 )
 
+enum class AchievementCatalogueStatus {
+    AVAILABLE,
+    UNSUPPORTED,
+    ERROR
+}
+
+data class AchievementItem(
+    val key: String,
+    val category: String,
+    val categoryLabel: String,
+    val name: String,
+    val description: String,
+    val iconName: String,
+    val rarity: String,
+    val threshold: Int? = null,
+    val hidden: Boolean = false,
+    val earned: Boolean = false,
+    val awardedAt: String? = null,
+    val currentProgress: Int? = null,
+    val sortOrder: Int = 0
+)
+
+data class AchievementCatalogue(
+    val items: List<AchievementItem> = emptyList(),
+    val totalEarned: Int = 0,
+    val totalAvailable: Int = 0,
+    val status: AchievementCatalogueStatus = AchievementCatalogueStatus.AVAILABLE
+)
+
 data class LibraryJumpBucket(
     val key: String,
     val label: String,

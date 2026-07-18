@@ -147,6 +147,7 @@ fun BookOrbitApp(
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,
             authorBooksLoader = coordinator::loadAuthorBooks,
+            achievementsLoader = coordinator::loadAchievements,
             catalogImageLoader = coordinator::loadCatalogImage,
             onBookOpen = coordinator::openBook,
             onPreview = coordinator::previewBook,

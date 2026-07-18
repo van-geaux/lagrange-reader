@@ -78,6 +78,12 @@ class AppCoordinator(
             repository.loadAuthorBooks(authorId, page)
         }
 
+    suspend fun loadAchievements(): AchievementCatalogue = loadWithSessionRecovery(
+        AchievementCatalogue(status = AchievementCatalogueStatus.ERROR)
+    ) {
+        repository.loadAchievements()
+    }
+
     suspend fun loadCatalogImage(url: String): ByteArray? = loadWithSessionRecovery(null) {
         repository.loadCatalogImage(url)
     }

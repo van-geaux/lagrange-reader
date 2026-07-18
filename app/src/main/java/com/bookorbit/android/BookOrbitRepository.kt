@@ -129,6 +129,9 @@ interface BookOrbitDataSource {
         loadSeriesCatalog(filter.query, page)
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
     suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
+    suspend fun loadAchievements(): AchievementCatalogue = AchievementCatalogue(
+        status = AchievementCatalogueStatus.UNSUPPORTED
+    )
     suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
@@ -232,6 +235,20 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .toString()
             .toRequestBody(JSON)
         requestLogin(body)
+    }
+
+    override suspend fun loadAchievements(): AchievementCatalogue = withContext(Dispatchers.IO) {
+        try {
+            BookOrbitPayloadParser.parseAchievements(
+                request("/api/v1/achievements", "GET", null)
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) {
+                AchievementCatalogue(status = AchievementCatalogueStatus.UNSUPPORTED)
+            } else {
+                throw error
+            }
+        }
     }
 
     override suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
@@ -1665,6 +1682,48 @@ private class WebViewCookieJar : CookieJar {
 }
 
 internal object BookOrbitPayloadParser {
+    fun parseAchievements(payload: String): AchievementCatalogue {
+        val root = extractObject(payload, "load achievements")
+        val categories = root.optJSONArray("categories") ?: JSONArray()
+        val items = buildList {
+            for (categoryIndex in 0 until categories.length()) {
+                val category = categories.optJSONObject(categoryIndex) ?: continue
+                val categoryKey = category.stringValue("key") ?: "other"
+                val categoryLabel = category.stringValue("label") ?: categoryKey
+                val achievements = category.optJSONArray("achievements") ?: continue
+                for (achievementIndex in 0 until achievements.length()) {
+                    val achievement = achievements.optJSONObject(achievementIndex) ?: continue
+                    val key = achievement.stringValue("key") ?: continue
+                    add(
+                        AchievementItem(
+                            key = key,
+                            category = achievement.stringValue("category") ?: categoryKey,
+                            categoryLabel = categoryLabel,
+                            name = achievement.stringValue("name") ?: "Achievement",
+                            description = achievement.stringValue("description").orEmpty(),
+                            iconName = achievement.stringValue("iconName") ?: "award",
+                            rarity = achievement.stringValue("rarity") ?: "common",
+                            threshold = achievement.numberValue("threshold")?.toInt(),
+                            hidden = achievement.booleanValue("hidden"),
+                            earned = achievement.booleanValue("earned"),
+                            awardedAt = achievement.stringValue("awardedAt"),
+                            currentProgress = achievement.numberValue("currentProgress")?.toInt(),
+                            sortOrder = achievement.numberValue("sortOrder")?.toInt() ?: 0
+                        )
+                    )
+                }
+            }
+        }
+
+        return AchievementCatalogue(
+            items = items,
+            totalEarned = root.numberValue("totalEarned")?.toInt()?.coerceAtLeast(0)
+                ?: items.count { it.earned },
+            totalAvailable = root.numberValue("totalAvailable")?.toInt()?.coerceAtLeast(0)
+                ?: items.size
+        )
+    }
+
     fun parseLibraries(payload: String): List<LibrarySummary> {
         val array = extractArray(payload, "load libraries")
         return buildList {
