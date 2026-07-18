@@ -41,6 +41,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -275,6 +277,49 @@ internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, In
 
 internal fun seriesBookCountLabel(count: Int): String =
     "$count ${if (count == 1) "book" else "books"}"
+
+internal data class SeriesBookNeighbors(
+    val previous: BookSummary?,
+    val next: BookSummary?,
+    val total: Int
+)
+
+private fun booksShareSeries(current: BookSummary, candidate: BookSummary): Boolean {
+    if (candidate.id == current.id) return true
+    val seriesId = current.seriesId?.takeIf { it.isNotBlank() }
+    val seriesName = current.seriesName?.takeIf { it.isNotBlank() }
+    return when {
+        seriesId != null -> candidate.seriesId == seriesId ||
+            (candidate.seriesId.isNullOrBlank() && candidate.seriesName == seriesName)
+        seriesName != null -> candidate.seriesName == seriesName
+        else -> false
+    }
+}
+
+internal fun seriesBookNeighbors(
+    current: BookSummary,
+    candidates: List<BookSummary>
+): SeriesBookNeighbors {
+    val seriesId = current.seriesId?.takeIf { it.isNotBlank() }
+    val seriesName = current.seriesName?.takeIf { it.isNotBlank() }
+    if (seriesId == null && seriesName == null) {
+        return SeriesBookNeighbors(previous = null, next = null, total = 0)
+    }
+    val sameSeries = (candidates + current)
+        .filter { candidate -> booksShareSeries(current, candidate) }
+        .distinctBy { it.id }
+        .sortedWith(
+            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy { it.title.lowercase() }
+                .thenBy { it.id }
+        )
+    val currentIndex = sameSeries.indexOfFirst { it.id == current.id }
+    return SeriesBookNeighbors(
+        previous = sameSeries.getOrNull(currentIndex - 1),
+        next = sameSeries.getOrNull(currentIndex + 1),
+        total = sameSeries.size
+    )
+}
 
 private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -798,6 +843,7 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
+                    seriesDetailLoader = seriesDetailLoader,
                     onRead = onBookOpen,
                     onPreview = onPreview,
                     onDownload = requestDownload,
@@ -809,6 +855,7 @@ internal fun NativeLibraryBrowserScreen(
                         selectedSeriesKey = seriesKey
                         selectedBook = null
                     },
+                    onBookSelected = { selectedBook = it },
                     onGenreSelected = { genre ->
                         genreSourceBook = selectedBook
                         selectedBook = null
@@ -3314,6 +3361,7 @@ private fun BookDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onRead: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
@@ -3322,6 +3370,7 @@ private fun BookDetails(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
     val stateBook = state.books.firstOrNull { it.id == book.id }
@@ -3376,6 +3425,26 @@ private fun BookDetails(
     val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
     val seriesKey = displayBook.seriesId ?: displayBook.seriesName
+    val localSeriesBooks = remember(state.books, state.homeBooks, displayBook, seriesKey) {
+        (state.books + state.homeBooks + displayBook)
+            .distinctBy { it.id }
+            .filter { candidate -> booksShareSeries(displayBook, candidate) }
+    }
+    val seriesBooks by produceState(
+        initialValue = localSeriesBooks,
+        seriesKey,
+        displayBook.id,
+        state.isOfflineSnapshot,
+        localSeriesBooks
+    ) {
+        value = localSeriesBooks
+        if (seriesKey != null && !state.isOfflineSnapshot) {
+            seriesDetailLoader(seriesKey)?.books?.takeIf { it.isNotEmpty() }?.let { value = it }
+        }
+    }
+    val seriesNeighbors = remember(displayBook, seriesBooks) {
+        seriesBookNeighbors(displayBook, seriesBooks)
+    }
     val publicationMetadata = buildList {
         detail.publisher?.let { add("Publisher" to it) }
         detail.publishedDate?.let { add("Published" to it) }
@@ -3464,6 +3533,15 @@ private fun BookDetails(
                     }
                     Text(nativeBookStatus(displayBook, state.isOfflineSnapshot), style = MaterialTheme.typography.bodyMedium)
                 }
+            }
+        }
+        if (seriesNeighbors.total > 1) {
+            item {
+                SeriesNeighborNavigation(
+                    seriesName = displayBook.seriesName ?: "Series",
+                    neighbors = seriesNeighbors,
+                    onBookSelected = onBookSelected
+                )
             }
         }
         item {
@@ -3636,6 +3714,96 @@ private fun BookDetails(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SeriesNeighborNavigation(
+    seriesName: String,
+    neighbors: SeriesBookNeighbors,
+    onBookSelected: (BookSummary) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("series-neighbor-navigation"),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        OrbitEyebrow("Series navigation")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SeriesNeighborButton(
+                direction = "Previous",
+                book = neighbors.previous,
+                seriesName = seriesName,
+                emptyLabel = "Start of series",
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                modifier = Modifier.weight(1f).testTag("series-previous-book"),
+                onClick = onBookSelected
+            )
+            SeriesNeighborButton(
+                direction = "Next",
+                book = neighbors.next,
+                seriesName = seriesName,
+                emptyLabel = "End of series",
+                icon = Icons.AutoMirrored.Filled.ArrowForward,
+                modifier = Modifier.weight(1f).testTag("series-next-book"),
+                onClick = onBookSelected
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeriesNeighborButton(
+    direction: String,
+    book: BookSummary?,
+    seriesName: String,
+    emptyLabel: String,
+    icon: ImageVector,
+    modifier: Modifier,
+    onClick: (BookSummary) -> Unit
+) {
+    val bookLabel = book?.let { neighbor ->
+        listOfNotNull(
+            neighbor.seriesIndex?.let(::formatSeriesIndex)?.let { "#$it" },
+            neighbor.title
+        ).joinToString(" \u00B7 ")
+    }
+    OutlinedButton(
+        onClick = { book?.let(onClick) },
+        enabled = book != null,
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .semantics {
+                contentDescription = if (bookLabel != null) {
+                    "$direction book in $seriesName: $bookLabel"
+                } else {
+                    "No ${direction.lowercase()} book in $seriesName"
+                }
+            },
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        if (direction == "Previous") {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = if (direction == "Previous") Alignment.Start else Alignment.End
+        ) {
+            Text(direction, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = bookLabel ?: emptyLabel,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (direction == "Next") {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
 }

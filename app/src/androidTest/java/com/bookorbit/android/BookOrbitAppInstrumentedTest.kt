@@ -315,6 +315,61 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun bookDetailsNavigateToSeriesNeighborsInIndexOrder() {
+        fun seriesBook(id: String, title: String, index: Double) = BookSummary(
+            libraryId = "lib-1",
+            id = id,
+            fileId = "file-$id",
+            title = title,
+            seriesId = "series-1",
+            seriesName = "Test Series",
+            seriesIndex = index,
+            mediaKind = MediaKind.EPUB
+        )
+        val first = seriesBook("first", "First Book", 1.0)
+        val current = seriesBook("current", "Current Book", 2.0)
+        val next = seriesBook("next", "Next Book", 3.0)
+        val dataSource = InstrumentedFakeDataSource().apply {
+            seriesDetailResult = SeriesDetailInfo(
+                id = "series-1",
+                name = "Test Series",
+                bookCount = 3,
+                readCount = 0,
+                books = listOf(next, first, current)
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(current)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Current Book").performClick()
+        composeRule.onNodeWithTag("series-neighbor-navigation").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Previous book in Test Series: #1 \u00B7 First Book")
+            .assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Next book in Test Series: #3 \u00B7 Next Book")
+            .assertIsEnabled()
+            .performClick()
+
+        composeRule.onNodeWithContentDescription("Open full-screen cover for Next Book").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("No next book in Test Series").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("Previous book in Test Series: #2 \u00B7 Current Book")
+            .assertIsEnabled()
+    }
+
+    @Test
     fun downloadedBookDetailsShowLabeledDeleteLocalAction() {
         val book = BookSummary(
             libraryId = "lib-1",
@@ -1008,6 +1063,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var localBooksResult: List<BookSummary> = emptyList()
     var searchBooksResult: List<BookSummary> = emptyList()
     var bookDetailResult: BookDetailInfo? = null
+    var seriesDetailResult: SeriesDetailInfo? = null
     val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
@@ -1038,6 +1094,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         return searchBooksResult
     }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+    override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = seriesDetailResult
     override suspend fun loadCatalogImage(url: String): ByteArray? {
         loadedCatalogImageUrls += url
         return catalogImageResults[url]

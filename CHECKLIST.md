@@ -349,7 +349,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Render book cards with title, optional series, and series-index metadata rows
 - [x] Validate reader edge padding while sliders move on the target device; Top/Bottom resize the WebView externally while Left/Right remain in the known-good page strip
 - [x] Persist the selected reader background theme (light, dark, or sepia) across reader close/reopen and app sessions
-- [ ] Add Previous/Next navigation between books in the same series from book details, ordered by series index; placement and interaction design remain pending
+- [x] Add a stable Previous/Next series-book row directly below book identity/series metadata, using complete online series data or cached offline neighbors ordered by numeric series index
+- [ ] Validate the series Previous/Next row on physical devices for responsive widths, long titles, loading transitions, and offline snapshots
 - [ ] Revise the app Dark theme to use a darker, less blue, more neutral palette; palette review remains pending
 - [x] Add Change server immediately above Log out/Sign in in the profile menu, with current-URL prefill, inline URL validation, Cancel/Continue warning, active-download cancellation, old-session/cache clearing, and login/setup recovery for the replacement server
 - [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device
