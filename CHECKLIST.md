@@ -359,8 +359,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Validate Change server editor, confirmation, active-work cancellation, and reachable/unreachable session transitions on a physical device; submitting the current normalized URL now closes silently without state changes
 - [x] Add a profile Achievements destination backed by authenticated `GET /api/v1/achievements`, with earned/available summary, adaptive Unlocked/Locked cards, optional locked progress, award dates, secret-field preservation, older-server unsupported state, and retry errors
 - [x] Validate the basic Achievements flow on the target device/server
-- [ ] Redesign Achievements with Library-like cards and official achievement symbols; exact layout clarification remains pending
-- [ ] Validate secret/censored entries, progress, unsupported-server behavior, retry, and responsive cards on a physical device/server
+- [x] Redesign Achievements as Library-like adaptive poster tiles with a 128 dp minimum width, prominent semantic Android Material symbols mapped from the server's official BookOrbit `iconName` vocabulary, a small lock-state indicator, and name/description/category/rarity/progress/date metadata below each poster
+- [ ] Validate secret/censored entries, unsupported-server behavior, retry, poster symbols, two-line descriptions, conditional progress/date metadata, and responsive layout on physical devices/server variants
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards by reserving 32 dp trailing grid padding only while the shared 20 dp rail is visible; otherwise retain 16 dp full-width padding
 - [x] Validate the jump-rail grid spacing on the target device
 - [ ] Validate the conditional jump-rail gutter across additional widths, orientations, and responsive grid sizes

@@ -199,7 +199,7 @@ Authenticated endpoint:
 GET /api/v1/achievements
 ```
 
-The contract is verified against the official current BookOrbit source. The client preserves server-censored secret fields, shows award dates for earned achievements, and shows locked current/threshold progress only when both values are provided. HTTP 404 is treated as an older server without Achievements support; other failures remain retryable.
+The contract is verified against the official current BookOrbit source. The response's `iconName` uses BookOrbit's official achievement icon vocabulary; the Android UI maps those values to semantic Material equivalents instead of displaying raw icon names. The client preserves server-censored secret fields, shows award dates for earned achievements, and shows locked current/threshold progress only when both values are provided. HTTP 404 is treated as an older server without Achievements support; other failures remain retryable.
 
 ## Files
 

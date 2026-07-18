@@ -210,7 +210,7 @@ class BookOrbitAppInstrumentedTest {
                         categoryLabel = "Reading",
                         name = "First Finish",
                         description = "Finish a book",
-                        iconName = "book-check",
+                        iconName = "book-open",
                         rarity = "common",
                         threshold = 1,
                         earned = true,
@@ -223,7 +223,7 @@ class BookOrbitAppInstrumentedTest {
                         categoryLabel = "Reading",
                         name = "Page Turner",
                         description = "Finish ten books",
-                        iconName = "books",
+                        iconName = "library",
                         rarity = "rare",
                         threshold = 10,
                         currentProgress = 4
@@ -256,7 +256,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("1 of 2 unlocked").assertIsDisplayed()
         composeRule.onNodeWithText("Unlocked").assertIsDisplayed()
         composeRule.onNodeWithText("First Finish").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("First Finish achievement symbol").assertIsDisplayed()
         composeRule.onNodeWithText("Page Turner").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Page Turner achievement symbol").assertIsDisplayed()
         composeRule.onNodeWithText("4 / 10").assertIsDisplayed()
     }
 
