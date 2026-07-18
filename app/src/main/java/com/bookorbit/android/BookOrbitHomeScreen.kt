@@ -212,6 +212,13 @@ private fun buildAlphabetJumpTargets(
     }
 }
 
+internal fun catalogJumpRailLabels(direction: SortDirection): List<Char> =
+    if (direction == SortDirection.DESCENDING) {
+        ('Z' downTo 'A').toList() + '#'
+    } else {
+        LIBRARY_JUMP_LABELS
+    }
+
 internal fun buildServerLibraryJumpTargets(
     buckets: List<LibraryJumpBucket>,
     itemCount: Int
@@ -1388,6 +1395,7 @@ private fun SeriesCatalogScreen(
         if (hasJumpRail) {
             LibraryJumpRail(
                 targets = jumpTargets,
+                direction = filter.direction,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -3122,6 +3130,7 @@ private fun LibraryBooks(
         if (hasJumpRail) {
             LibraryJumpRail(
                 targets = jumpTargets,
+                direction = filter?.direction ?: SortDirection.ASCENDING,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -3142,9 +3151,11 @@ private fun LibraryBooks(
 @Composable
 private fun LibraryJumpRail(
     targets: List<Pair<Char, Int>>,
+    direction: SortDirection,
     modifier: Modifier,
     onJump: (Int) -> Unit
 ) {
+    val targetsByLabel = targets.toMap()
     Column(
         modifier = modifier
             .testTag("catalog_jump_rail")
@@ -3155,19 +3166,30 @@ private fun LibraryJumpRail(
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        targets.forEach { (label, index) ->
+        catalogJumpRailLabels(direction).forEach { label ->
+            val index = targetsByLabel[label]
             Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clickable { onJump(index) },
+                modifier = Modifier.size(20.dp).then(
+                    if (index != null) {
+                        Modifier
+                            .clickable { onJump(index) }
+                            .semantics { contentDescription = "Jump to $label" }
+                    } else {
+                        Modifier.semantics {
+                            contentDescription = "$label unavailable"
+                            disabled()
+                        }
+                    }
+                ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = label.toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Jump to $label"
+                    color = if (index != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                     }
                 )
             }

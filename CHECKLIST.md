@@ -328,7 +328,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Return from Library selection by tapping the top-left Libraries title
 - [x] Cache full downloaded-book metadata for server-free local detail screens
 - [x] Cache versioned rich details for every opened book and invalidate them when catalog metadata changes
-- [x] Show only represented #/letter buckets on Library and Series jump rails; retain valid server absolute indexes and do not expose missing-letter forward-fallback labels
+- [x] Render the full stable #/A–Z (or Z–A/# descending) vocabulary whenever Library or Series rails are eligible; keep only exact represented targets clickable and expose missing labels as disabled/unavailable without forward fallback
 - [x] Persist complete per-server/per-library book metadata in Room and render it before cold-start network checks finish
 - [x] Reconcile every server page atomically, writing only changed/new/reordered rows and deleting titles no longer returned by BookOrbit
 - [x] Remove Browse's near-end lazy loading and apply Browse filters/sorts to the complete local catalog
@@ -375,7 +375,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Replace the horizontally scrolling `book-detail-actions` row with a wrapping `FlowRow` so Read, Preview, Download/Update/Cancel/Delete local, and the directly labeled live Mark as read/unread tile remain visible on narrow screens
 - [ ] Restore embedded image rendering inside opened EPUB content
 - [ ] Diagnose the separate remote EPUB Preview preparation/authentication/transport regression that persists after relogin and reports `This EPUB could not be prepared for reading. Download it first or reconnect to the server.`; CBZ/CBR Preview remains the working comparison, and the failure may share a cause with missing EPUB images
-- [ ] Restore the full #/A–Z Library and Series jump rail, rendering unrepresented letters with existing disabled/grey tokens and accessibility semantics and making them non-selectable
+- [x] Restore the full #/A–Z Library and Series jump rail: retain sort/catalog hiding rules and the existing grid gutter, but render unrepresented letters with 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action
 - [ ] Add a Local books shelf at the bottom of top-level Home containing every local/downloaded book across the server, plus a selected-library-only Local books shelf at the bottom of each Library Home; confirm empty-state, item limit, and navigation behavior before implementation
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell

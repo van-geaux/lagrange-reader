@@ -312,7 +312,7 @@ Implement next, in order:
 16. [x] Add a profile Achievements destination backed by the official authenticated `GET /api/v1/achievements` contract. Show an overall earned/available summary and adaptive cards split into Unlocked then Locked. Earned cards show award date; locked cards show current/threshold progress only when both values exist; server-censored secret fields remain preserved. Treat HTTP 404 as an older-server unsupported state and other failures as retryable. The functional flow works on the target server.
 17. [x] Prevent visible Library Browse and Series catalog jump rails from overlaying trailing grid cards. Both grids now reserve 32 dp trailing content padding only while the shared 20 dp rail is visible, accounting for the 20 dp rail, 4 dp outer edge, and 8 dp card-to-rail separation; without a rail they retain 16 dp full-width padding. Target-device spacing is validated; additional responsive layouts remain pending.
 18. [x] Make Change server a silent no-op when the submitted URL normalizes to the current URL: close the editor without a warning or state change.
-19. [x] Show only actual represented #/letter labels on Library and Series jump rails, retaining server absolute indexes where available and removing missing-letter forward-fallback labels.
+19. [x] Replace missing-letter forward fallback with a full stable #/A–Z rail whenever Library or Series navigation is eligible. Ascending uses #/A–Z and descending uses Z–A/#; only exact represented targets are clickable, while absent labels are disabled and unavailable.
 20. [x] Raise the fresh EPUB Top margin default to 30% while keeping Bottom/Left/Right at 15%; preserve every saved per-book margin value unchanged.
 21. [x] Restyle Achievements as Library-like adaptive poster tiles with server-driven symbols. The implementation works on the target device but the tiles are too large for favicon-like symbols and are superseded by the compact information-card follow-up below.
 22. [x] Restyle series Previous/Next as transparent borderless 46 dp controls matching detail actions and retain the first complete series load so adjacent navigation does not reload it.
@@ -329,7 +329,7 @@ Pending follow-up:
 2. [x] Replace the horizontally scrolling book-detail action `LazyRow` with a wrapping `FlowRow`, keeping Download/Update/Cancel/Delete labels and replacing More with a directly labeled live Mark as read or Mark as unread tile.
 3. [ ] Restore embedded image rendering inside EPUB reading content.
 4. [ ] Diagnose and fix remote non-local EPUB Preview preparation after relogin; it currently always reports that the EPUB could not be prepared, while CBZ/CBR Preview works. Treat this as a separate preparation/authentication/transport regression while checking for a shared cause with missing EPUB images.
-5. [ ] Restore the full #/A–Z Library and Series jump rail, but render unrepresented letters disabled/grey and non-selectable instead of removing them.
+5. [x] Restore the full #/A–Z Library and Series jump rail while retaining sort/catalog hiding rules and the existing grid gutter. Missing labels use 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action; descending order is Z–A/#.
 6. [ ] Add a Local books shelf at the bottom of top-level Home containing all local books on the server, and at the bottom of each Library Home containing only that library's local books. Confirm empty-state, item limit, and navigation behavior before implementation.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
@@ -362,7 +362,9 @@ The completed five-option app-theme step passes 205 JVM tests across 33 suites w
 
 The completed Achievements step passes 208 JVM tests across 34 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. The functional target-server/device flow is validated, and the oversized poster tiles are now replaced by compact 260 dp-minimum information cards with 22 dp server-driven icons.
 
-The compact Achievement/action-row follow-up passes focused `AchievementIconTest`, `BookDetailReadingStatusActionTest`, and Android-test Kotlin compilation. The full gate remains pending.
+The compact Achievement/action-row follow-up passes the full gate: 208 JVM tests across 34 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Focused coverage includes `AchievementIconTest`, `BookDetailReadingStatusActionTest`, and Android-test Kotlin compilation.
+
+The full disabled-letter jump-rail follow-up passes 209 JVM tests across 34 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Unit coverage exercises `catalogJumpRailLabels`; compiled Compose assertions verify unavailable `B` entries in both Library and Series.
 
 The completed combined feedback batch passes 206 JVM tests across 33 suites with zero failures/errors/skips after removing the obsolete haptic suite; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Coverage includes same-server no-op handling, represented jump-rail labels, fresh EPUB margin defaults with saved-value preservation, retained series loading with transparent 46 dp neighbor controls, and complete app-haptic removal. APK: `app/build/outputs/apk/debug/app-debug.apk`.
 

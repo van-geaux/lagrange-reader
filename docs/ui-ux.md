@@ -112,7 +112,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Make the top-left Libraries title return from the picker to the selected library page.
 - [x] Replace Browse's Load more action with automatic near-end page loading (superseded by complete Room caching).
 - [x] Add a right-side title-initial jump rail while preserving the left side for normal scrolling.
-- [x] Show only represented #/letter labels on eligible Library and Series jump rails; preserve server absolute indexes and remove missing-letter forward fallbacks.
+- [x] Show the full stable #/A–Z vocabulary on eligible Library and Series jump rails (Z–A/# descending); preserve exact represented targets and expose missing labels as disabled/unavailable without forward fallback.
 - [x] Order collapsed series by series name and restore the nearest scroll anchor after collapse/expand.
 - [x] Route background authenticated-load expiry through login recovery instead of silently returning empty content.
 - [x] Show downloaded-book details from cached metadata without requiring a server request.
@@ -141,7 +141,7 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Keep cached cards interactive while refresh reconciles all server pages, and keep the prior complete catalog if refresh is interrupted.
 - [x] Remove automatic end-of-grid page loading and run Browse filters/sorts against the complete local catalog.
 - [x] Use BookOrbit's absolute jump-bucket indexes for the unfiltered default listing; use complete local indexes for filtered/title/author and collapsed-series views.
-- [x] Keep eligible letter rails hidden until the complete result is ready, then show only represented #/letter buckets with no missing-letter forward fallbacks.
+- [x] Keep eligible letter rails hidden until the complete result is ready, then show full stable ordered labels with only represented targets enabled and no missing-letter forward fallback.
 - [ ] Validate first-sync messaging, instant reopen, refresh continuity, exact jumps, filters, and large-library scroll performance on the target device.
 
 ### Large-library thumbnail/detail cache - 2026-07-13
@@ -208,13 +208,14 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Add a functional profile Achievements destination and validate its server data on the target device. The poster-grid presentation works but is superseded by the compact-card follow-up below because the favicon-like symbols do not justify large poster tiles.
 - [x] Prevent visible Library and Series jump rails from covering trailing grid cards. Reserve 32 dp trailing grid padding only while the shared 20 dp rail is visible (20 dp rail + 4 dp edge + 8 dp separation); otherwise retain 16 dp full-width padding. Target-device spacing validation passed; broader responsive checks remain pending.
 - [x] Make same-URL Change server submission normalize, close silently, and leave state unchanged.
-- [x] Show only actual represented #/letter labels on Library and Series rails, without forward-fallback labels. This behavior is superseded by the disabled-letter follow-up below.
+- [x] Remove missing-letter forward fallback from Library and Series rails; the completed disabled-letter follow-up below supersedes the earlier represented-only presentation.
 - [x] Raise the fresh EPUB Top margin default to 30% while retaining 15% Bottom/Left/Right and all saved per-book values.
 - [x] Prevent the debug pending-progress count from remaining stuck on stale/deleted non-audio file IDs: remap one 404 to the current primary file, or acknowledge terminal INVALID targets.
 - [x] Replace Achievement posters with compact adaptive information cards: 260 dp minimum width, 22 dp server-driven symbol immediately before the title, lock/unlock state at the title row's end, and description/category/rarity plus progress/date inside the card.
 - [x] Make every book-detail action discoverable on narrow screens with a wrapping `FlowRow`; keep labels for every context action and expose Mark as read/unread directly.
 - [ ] Restore EPUB embedded images and diagnose the remote non-local EPUB Preview preparation failure that persists after relogin; verify whether both regressions share resource URL/authentication handling.
-- [ ] Retain the full #/A–Z jump rail, rendering unavailable entries with disabled color/semantics and no click action.
+- [x] Retain the full stable #/A–Z jump rail when eligible (Z–A/# descending), rendering unavailable entries with 38%-alpha `onSurfaceVariant`, disabled semantics, content descriptions such as `B unavailable`, and no click action. Existing sort/catalog hiding and grid gutter behavior remain unchanged.
+- The full gate passes 209 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; `catalogJumpRailLabels` and compiled Library/Series assertions cover unavailable labels.
 - [ ] Add a bottom Local books shelf to Home using all server-local titles and to Library Home using only titles local to the selected library; confirm empty-state, item limit, and navigation behavior before implementation.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 

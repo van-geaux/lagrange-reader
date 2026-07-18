@@ -848,6 +848,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Series").performClick()
 
         composeRule.onNodeWithContentDescription("Jump to A").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("B unavailable").assertIsDisplayed().assertHasNoClickAction()
         val seriesCardBounds = composeRule.onNodeWithTag("series_card_series-a")
             .fetchSemanticsNode().boundsInRoot
         val jumpRailBounds = composeRule.onNodeWithTag("catalog_jump_rail")
@@ -885,6 +886,9 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithText("Libraries").performClick()
         composeRule.onNodeWithText("Browse").performClick()
+
+        composeRule.onNodeWithContentDescription("Jump to A").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("B unavailable").assertIsDisplayed().assertHasNoClickAction()
 
         val bookCardBounds = composeRule.onNodeWithContentDescription("Alpha Book")
             .fetchSemanticsNode().boundsInRoot

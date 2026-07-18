@@ -12,6 +12,12 @@ class LibraryNavigationTest {
     }
 
     @Test
+    fun `visible jump rail keeps the full alphabet in sort order`() {
+        assertEquals(listOf('#') + ('A'..'Z'), catalogJumpRailLabels(SortDirection.ASCENDING))
+        assertEquals(('Z' downTo 'A').toList() + '#', catalogJumpRailLabels(SortDirection.DESCENDING))
+    }
+
+    @Test
     fun `jump rail exposes only labels represented by books`() {
         val targets = listOf(
             BookSummary("library", "numeric", null, "123 Stories"),
