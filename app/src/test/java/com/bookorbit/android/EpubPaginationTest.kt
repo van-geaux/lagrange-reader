@@ -66,6 +66,25 @@ class EpubPaginationTest {
     }
 
     @Test
+    fun `rendered epub chapter keeps resources relative to its source directory`() {
+        val rendered = styleEpubHtml(
+            html = "<html><head><link href=\"../Styles/book.css\" rel=\"stylesheet\"></head>" +
+                "<body><img src=\"../Images/cover.jpg\"></body></html>",
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1f,
+            startAtEnd = false,
+            chapterBaseUrl = "https://appassets.androidplatform.net/OEBPS/Text/?edition=one&mode=reader"
+        )
+
+        assertTrue(
+            rendered.contains(
+                "<base href=\"https://appassets.androidplatform.net/OEBPS/Text/?edition=one&amp;mode=reader\">"
+            )
+        )
+        assertTrue(rendered.indexOf("<base href=") < rendered.indexOf("<link href="))
+    }
+
+    @Test
     fun `epub padding percentages map to a quarter of the viewport`() {
         val rendered = styleEpubHtml(
             html = "<p>Readable chapter text</p>",

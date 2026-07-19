@@ -1364,14 +1364,14 @@ private fun EpubReaderView(
                     }
                 },
             factory = { webContext ->
-                val assetLoader = epubAssetLoader(webContext, epubBook.rootDir)
+                val assetSession = EpubWebViewAssetSession(webContext, epubBook.rootDir)
                 WebView(webContext).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
                     settings.setSupportZoom(false)
-                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
                     isHorizontalScrollBarEnabled = false
                     isVerticalScrollBarEnabled = false
                     overScrollMode = WebView.OVER_SCROLL_NEVER
@@ -1380,7 +1380,7 @@ private fun EpubReaderView(
                             view: WebView,
                             request: WebResourceRequest
                         ): WebResourceResponse? {
-                            return assetLoader.shouldInterceptRequest(request.url)
+                            return assetSession.assetLoader.shouldInterceptRequest(request.url)
                                 ?: super.shouldInterceptRequest(view, request)
                         }
 
@@ -1400,36 +1400,43 @@ private fun EpubReaderView(
                         ),
                         EPUB_READER_BRIDGE
                     )
-                }.also { readerWebView[0] = it }
+                }.also {
+                    it.tag = EpubWebViewRenderState(
+                        documentKey = null,
+                        padding = null,
+                        assetSession = assetSession
+                    )
+                    readerWebView[0] = it
+                }
             },
             update = { webView ->
                 val chapter = currentChapterState
                 val documentKey = "${chapter.file.absolutePath}|${selectedTheme.name}|$fontScale|$openChapterAtEnd"
-                val previousState = webView.tag as? EpubWebViewRenderState
-                val nextState = EpubWebViewRenderState(documentKey, appliedPadding)
-                if (previousState?.documentKey != documentKey) {
-                    val firstRender = previousState == null
+                val previousState = requireNotNull(webView.tag as? EpubWebViewRenderState)
+                val nextState = previousState.copy(documentKey = documentKey, padding = appliedPadding)
+                if (previousState.documentKey != documentKey) {
+                    val firstRender = previousState.documentKey == null
                     webView.tag = nextState
                     currentPage = if (firstRender) initialPage.coerceAtLeast(0) else 0
                     currentPageCount = 1
                     val html = chapter.file.readText()
                     webView.setBackgroundColor(selectedTheme.backgroundColor)
-                    webView.loadDataWithBaseURL(
-                        epubChapterBaseUrl(epubBook.rootDir, chapter.file),
-                        styleEpubHtml(
-                            html = html,
-                            theme = selectedTheme,
-                            fontScale = fontScale,
-                            topPaddingPercent = 0f,
-                            bottomPaddingPercent = 0f,
-                            leftPaddingPercent = appliedPadding.left,
-                            rightPaddingPercent = appliedPadding.right,
-                            initialPage = if (firstRender) initialPage else 0,
-                            startAtEnd = openChapterAtEnd
-                        ),
-                        "text/html",
-                        Charsets.UTF_8.name(),
-                        null
+                    val chapterBaseUrl = epubChapterBaseUrl(epubBook.rootDir, chapter.file)
+                    webView.loadUrl(
+                        previousState.assetSession.registerRenderedDocument(
+                            styleEpubHtml(
+                                html = html,
+                                theme = selectedTheme,
+                                fontScale = fontScale,
+                                topPaddingPercent = 0f,
+                                bottomPaddingPercent = 0f,
+                                leftPaddingPercent = appliedPadding.left,
+                                rightPaddingPercent = appliedPadding.right,
+                                initialPage = if (firstRender) initialPage else 0,
+                                startAtEnd = openChapterAtEnd,
+                                chapterBaseUrl = chapterBaseUrl
+                            )
+                        )
                     )
                 } else if (previousState.padding != appliedPadding) {
                     webView.tag = nextState
@@ -1510,14 +1517,14 @@ private fun EpubChapterPageCountMeasurer(
     AndroidView(
         modifier = modifier,
         factory = { webContext ->
-            val assetLoader = epubAssetLoader(webContext, rootDir)
+            val assetSession = EpubWebViewAssetSession(webContext, rootDir)
             WebView(webContext).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 settings.setSupportZoom(false)
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 isHorizontalScrollBarEnabled = false
                 isVerticalScrollBarEnabled = false
                 isClickable = false
@@ -1529,7 +1536,7 @@ private fun EpubChapterPageCountMeasurer(
                         view: WebView,
                         request: WebResourceRequest
                     ): WebResourceResponse? {
-                        return assetLoader.shouldInterceptRequest(request.url)
+                        return assetSession.assetLoader.shouldInterceptRequest(request.url)
                             ?: super.shouldInterceptRequest(view, request)
                     }
                 }
@@ -1539,6 +1546,8 @@ private fun EpubChapterPageCountMeasurer(
                     },
                     EPUB_READER_BRIDGE
                 )
+            }.also {
+                it.tag = EpubMeasurementRenderState(documentKey = null, assetSession = assetSession)
             }
         },
         update = { webView ->
@@ -1551,25 +1560,26 @@ private fun EpubChapterPageCountMeasurer(
                 padding.right,
                 chapterIndex
             ).joinToString("|")
-            if (webView.tag != documentKey) {
-                webView.tag = documentKey
+            val previousState = requireNotNull(webView.tag as? EpubMeasurementRenderState)
+            if (previousState.documentKey != documentKey) {
+                webView.tag = previousState.copy(documentKey = documentKey)
                 webView.setBackgroundColor(theme.backgroundColor)
-                webView.loadDataWithBaseURL(
-                    epubChapterBaseUrl(rootDir, chapter.file),
-                    styleEpubHtml(
-                        html = chapter.file.readText(),
-                        theme = theme,
-                        fontScale = fontScale,
-                        startAtEnd = false,
-                        topPaddingPercent = 0f,
-                        bottomPaddingPercent = 0f,
-                        leftPaddingPercent = padding.left,
-                        rightPaddingPercent = padding.right,
-                        measurementChapterIndex = chapterIndex
-                    ),
-                    "text/html",
-                    Charsets.UTF_8.name(),
-                    null
+                val chapterBaseUrl = epubChapterBaseUrl(rootDir, chapter.file)
+                webView.loadUrl(
+                    previousState.assetSession.registerRenderedDocument(
+                        styleEpubHtml(
+                            html = chapter.file.readText(),
+                            theme = theme,
+                            fontScale = fontScale,
+                            startAtEnd = false,
+                            topPaddingPercent = 0f,
+                            bottomPaddingPercent = 0f,
+                            leftPaddingPercent = padding.left,
+                            rightPaddingPercent = padding.right,
+                            measurementChapterIndex = chapterIndex,
+                            chapterBaseUrl = chapterBaseUrl
+                        )
+                    )
                 )
             }
         },
@@ -2567,7 +2577,8 @@ internal fun styleEpubHtml(
     leftPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     rightPaddingPercent: Float = EPUB_DEFAULT_PADDING_PERCENT,
     initialPage: Int = 0,
-    measurementChapterIndex: Int? = null
+    measurementChapterIndex: Int? = null,
+    chapterBaseUrl: String? = null
 ): String {
     val fontPercent = (fontScale * 100f).roundToInt()
     val topInset = epubPaddingViewportPercent(topPaddingPercent)
@@ -2576,6 +2587,9 @@ internal fun styleEpubHtml(
     val rightInset = epubPaddingViewportPercent(rightPaddingPercent)
     val pageInsetHeight = topInset + bottomInset
     val pageInsetWidth = leftInset + rightInset
+    val chapterBaseTag = chapterBaseUrl?.let { url ->
+        "<base href=\"${escapeEpubHtmlAttribute(url)}\">"
+    }.orEmpty()
     val readerAssets = """
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
@@ -2801,13 +2815,21 @@ internal fun styleEpubHtml(
         })();
         </script>
     """.trimIndent()
-    return if (html.contains("</head>", ignoreCase = true)) {
-        html.replaceFirst("</head>", "$readerAssets</head>", ignoreCase = true)
+    val headTag = Regex("<head(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+    val headMatch = headTag.find(html)
+    val htmlWithBase = if (chapterBaseTag.isNotEmpty() && headMatch != null) {
+        val insertionIndex = headMatch.range.last + 1
+        html.substring(0, insertionIndex) + chapterBaseTag + html.substring(insertionIndex)
+    } else {
+        html
+    }
+    return if (htmlWithBase.contains("</head>", ignoreCase = true)) {
+        htmlWithBase.replaceFirst("</head>", "$readerAssets</head>", ignoreCase = true)
     } else {
         """
         <html>
-          <head>$readerAssets</head>
-          <body>$html</body>
+          <head>$chapterBaseTag$readerAssets</head>
+          <body>$htmlWithBase</body>
         </html>
         """.trimIndent()
     }
@@ -2838,6 +2860,14 @@ private fun formatEpubCssPercent(value: Float): String {
     return String.format(Locale.US, "%.2f", value)
 }
 
+private fun escapeEpubHtmlAttribute(value: String): String {
+    return value
+        .replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+}
+
 internal fun epubPaddingViewportPercent(value: Float): Float {
     return value.coerceIn(0f, 100f) / 4f
 }
@@ -2854,8 +2884,14 @@ internal fun EpubPaddingPercentages.forWebViewContent(): EpubPaddingPercentages 
 }
 
 private data class EpubWebViewRenderState(
-    val documentKey: String,
-    val padding: EpubPaddingPercentages
+    val documentKey: String?,
+    val padding: EpubPaddingPercentages?,
+    val assetSession: EpubWebViewAssetSession
+)
+
+private data class EpubMeasurementRenderState(
+    val documentKey: String?,
+    val assetSession: EpubWebViewAssetSession
 )
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
