@@ -12,7 +12,7 @@ class EpubAssetUrlTest {
         val chapter = File(root, "OEBPS/Text Part/chapter.xhtml")
 
         assertEquals(
-            "https://appassets.androidplatform.net/epub/OEBPS/Text%20Part/",
+            "https://appassets.androidplatform.net/OEBPS/Text%20Part/",
             epubChapterBaseUrl(root, chapter)
         )
     }

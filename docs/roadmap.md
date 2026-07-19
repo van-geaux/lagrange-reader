@@ -30,6 +30,8 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
+The July 19 EPUB compatibility work order below overrides the general phase sequence: no book-detail, reader-chrome, or remaining validation work advances until the appassets-root/SVG candidate passes the physical four-sample EPUB retest.
+
 ### 1. UI/UX direction and design system
 
 - Agree on the product's visual character, density, and accessibility goals
@@ -334,13 +336,15 @@ Pending follow-up:
 
 ### Reader controls work order - 2026-07-19
 
-The target-device pass found a real EPUB regression: embedded images did not render when EPUBs opened, while CBZ/CBR images rendered correctly. The implementation now carries the full dedicated `extractedRoot` through package parsing and `EpubBook.rootDir`, so `WebViewAssetLoader` mounts the whole extracted EPUB rather than only the OPF package directory. This permits parent-relative chapter resources that stay inside the archive while crossing outside `OEBPS`/the package directory. The extraction root, package file, and chapter paths are canonicalized, and any package/chapter path escaping the extraction root is rejected. `EpubAssetUrlTest` now expects an extraction-root base URL including `OEBPS`, and `EpubWebViewInstrumentedTest` crosses from `OEBPS/Text/chapter.xhtml` to `../../Images/cover.png`.
+The first extraction-root compatibility fix remained insufficient on the target device. `your name.` and `Overlord, Vol. 5` still show no images; some books miss the cover but render later images; `Zero Damage Sword Saing Vol. 4` renders all images and is the control. This format-dependent pattern keeps EPUB compatibility above every other planned item.
 
-The full combined gate rerun passes 213 JVM tests across 35 suites with zero failures/errors/skips, `assembleDebug`, `assembleDebugAndroidTest`, and `lintDebug`. The fix is implemented in code, but the physical regression remains open until the user verifies the new APK at `app/build/outputs/apk/debug/app-debug.apk`.
+The new implementation closes two additional gaps. First, `WebViewAssetLoader` mounts the dedicated per-book extraction root at `/`, and chapter base URLs omit the former `/epub/` prefix. Root-relative references such as `/Images/cover.png` therefore remain on `appassets.androidplatform.net` and resolve inside the active book instead of escaping the handler. Second, normal `img` content receives containment sizing separately, while outer full-page SVG wrappers no longer receive a forced `height:auto`; their authored dimensions and `xlink:href` illustrations are preserved. Security remains scoped to the per-book extracted root, canonical package/chapter escape checks remain active, and broad WebView file/content access remains disabled.
+
+The expanded WebView fixture renders `OEBPS/Text/chapter.xhtml` with `../../Images/cover.png`, `/Images/cover.png`, and a full-page SVG using `xlink:href=/Images/cover.png`; it asserts both image references load and SVG layout height is nonzero. `EpubPaginationTest` asserts SVG rules do not force `height:auto`. The full gate passes 214 JVM tests across 35 suites with zero failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. Physical success remains unconfirmed.
 
 Execute the current work in this order:
 
-1. Physically verify the implemented EPUB extraction-root fix for local/opened and nonlocal Preview paths, covering nested and package-boundary-crossing parent-relative resources; regression-check CBZ/CBR image rendering and do not claim resolution until this passes.
+1. Physically verify the appassets-root/SVG compatibility build using `your name.`, `Overlord, Vol. 5`, a mixed title whose cover fails while later images work, and the fully working `Zero Damage Sword Saing Vol. 4` control. Cover parent-relative, root-relative, and full-page SVG resources in local/opened and nonlocal Preview paths, regression-check CBZ/CBR, and do not claim resolution or advance other work until this passes.
 2. Implement one exact, non-wrapping, non-overflowing book-detail action row. Read and Preview remain labeled and always inline. Eligible Download is icon-only, always inline while the book is not local, and absent when local. Delete local is always in the three-dot overlay and never inline. Mark as read/unread stays inline only when space permits and otherwise moves into the overlay. Show More whenever any applicable action is hidden, preserving at least Read, Preview, eligible Download, and required More on every width. Specify and test Download/Update/Cancel state mapping during implementation rather than inventing it in planning.
 3. After the user confirms its exact visual placement, show canonical 0-100 progress on book details when a title is currently reading or read/completed. Do not fabricate a value when both server and local progress are unknown. Cover zero, partial, completed, and unknown states.
 4. Continue the existing Suwayomi-inspired reader work: implement lightweight center-tap chrome first, then the one-second initial-entry tap-zone tutorial so Menu teaches the final behavior. Retain the separate Back/Close/title header, left vertical chapter control with previous/next chapter actions, bottom Chapter list and cog-to-full-options actions, and the documented equal-third Previous/Menu/Next colors.

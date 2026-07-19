@@ -14,7 +14,7 @@ The current app flow is:
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy; nonlocal sources are downloaded through the authenticated client into a temporary reader cache without applying comic archive rules.
-7. EPUB titles are extracted into app cache and rendered chapter by chapter from the EPUB spine through a scoped `WebViewAssetLoader` origin.
+7. EPUB titles are extracted into a dedicated per-book app cache root and rendered chapter by chapter from the EPUB spine through a scoped `WebViewAssetLoader` origin mounted at appassets path `/`.
 
 ## Main components
 
@@ -79,6 +79,7 @@ The current app flow is:
 - Catalog coverage asserts the real GET libraries call and POST paginated library-books request with page size 100, then parses EPUB media kind and server progress.
 - Queue coverage confirms a locally queued event makes zero HTTP requests until explicit replay, then asserts file-progress and book-`reading` status payloads before exact queue acknowledgement.
 - Cases isolate and clear progress stores, cancel unique background work, and clear server/session state. The androidTest APK compiles; connected execution remains pending because adb enumeration did not produce a usable target.
+- EPUB WebView compatibility coverage builds `OEBPS/Text/chapter.xhtml` with a parent-relative `../../Images/cover.png`, root-relative `/Images/cover.png`, and full-page SVG `xlink:href=/Images/cover.png`. It requires both normal images to load and the SVG wrapper to retain nonzero layout height. JVM pagination coverage separately prevents reader CSS from applying forced `height:auto` to outer SVG wrappers.
 
 ### Local persistence
 
@@ -132,11 +133,12 @@ The current app flow is:
   - the `.epub` is resolved from downloads or fetched into app cache
   - `META-INF/container.xml` is parsed to locate the OPF package
   - the OPF manifest and spine are parsed
-  - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter through `https://appassets.androidplatform.net/epub/`
+  - HTML/XHTML spine items are rendered in a `WebView` chapter by chapter through `https://appassets.androidplatform.net/`; the path handler mounts only the current book's dedicated extracted root at `/`, and chapter base URLs intentionally omit the former `/epub/` prefix so root-relative EPUB references stay on appassets and resolve inside that book
   - reflowable chapter content uses the last device-known-good single absolute page strip with `overflow: visible`; page turns translate that strip without adding a clipped HTML wrapper around it
+  - reader CSS sizes normal `img` content with containment behavior, but it does not force `height:auto` on outer SVG elements; full-page SVG cover/illustration wrappers retain authored dimensions and can resolve their nested `xlink:href` image
   - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls with one visible Close action, and tapping exposed book content also dismisses them
   - EPUB keeps the native top status bar visible for Android-managed battery, network, time, and notification indicators while hiding the bottom navigation bar. The status-bar background and light/dark icon appearance follow the selected reader theme. Permanent app chrome remains hidden; chapter selection, themes, and text sizing live in transient overlays. Android Back dismisses an open overlay first, then exits the reader when the overlay is closed.
-  - safe nested/encoded chapter base URLs resolve relative resources within the extracted EPUB root through `WebViewAssetLoader`; paths outside that root are rejected, and broad WebView file/content access remains disabled
+  - safe nested/encoded chapter base URLs resolve parent-relative and root-relative resources within the dedicated extracted EPUB root through `WebViewAssetLoader`; the extraction root, package file, and chapter paths are canonicalized, package/chapter escapes are rejected, and broad WebView file/content access remains disabled
   - progress percentage includes the current in-chapter page, and persisted chapter/page identity restores the exact local page after layout
   - an always-visible theme-matched footer displays weighted completion, current chapter/count, exact current chapter page/count, and measured whole-book current/total pages. A hidden same-size WebView measures every spine chapter sequentially from the same extracted root and appassets loader as the visible reader, with the current viewport, margins, font scale, theme, assets, and external top/bottom geometry; bounded font/image readiness waits prevent hangs. Until all counts settle, the footer says `Book pages calculating`. Counts reset when measurement inputs change, while the visible known-good renderer and exact chapter/page resume remain unchanged
   - Reading position retains the existing Choose chapter button and chapter-chip selector. A slider beneath them shows `Page X of Y` from the primary WebView's current chapter page count, disables when that count is one, and sends immediate page jumps while dragging. It is deliberately chapter-local rather than tied to the hidden whole-book measurement
@@ -165,6 +167,7 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
+- EPUB image compatibility remains physically unresolved. The extraction-root-only candidate still failed for `your name.` and `Overlord, Vol. 5`; some titles miss covers while rendering later images, while `Zero Damage Sword Saing Vol. 4` renders all images. The appassets-root/SVG candidate passes 214 JVM tests across 35 suites plus lint and both APK assemblies, but all four sample patterns require target-device verification before later UI work proceeds.
 - EPUB exact in-chapter page restore is implemented; exact restore, visible-overflow pagination, external vertical padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
 - Native username/password login completion is verified through `/api/v1/auth/me` before coordinator resume. Other server auth variants and real rate-limit responses remain outside that completed check.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
@@ -174,7 +177,7 @@ Validated against the live server and BookOrbit source:
 
 ## UI/UX phase boundary
 
-The functional architecture is stable enough for UI/UX changes to begin. Theme tokens and shared shell components should be established before screen-specific restyling, followed by setup/login, library browsing, and the EPUB reader. Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ, and the general comic reading flow is target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation, while offline CBR/CB7 extraction remains optional. Audiobook-specific refinement remains deferred until a representative file is available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
+The functional architecture supports later UI/UX changes, but current execution is blocked on physical EPUB image compatibility verification. The appassets-root/SVG candidate must pass the affected, mixed-result, and working-control sample matrix before book-detail or reader-chrome work advances. Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ, and the general comic reading flow is target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation, while offline CBR/CB7 extraction remains optional. Audiobook-specific refinement remains deferred until a representative file is available. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
 
 The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.
 

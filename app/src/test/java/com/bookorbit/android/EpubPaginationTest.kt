@@ -45,6 +45,27 @@ class EpubPaginationTest {
     }
 
     @Test
+    fun `epub image sizing preserves full page svg dimensions`() {
+        val rendered = styleEpubHtml(
+            html = """
+                <svg width="100%" height="100%" viewBox="0 0 1200 1800">
+                  <image width="1200" height="1800" href="/Images/illustration.jpg" />
+                </svg>
+            """.trimIndent(),
+            theme = EpubReaderTheme.Sepia,
+            fontScale = 1f,
+            startAtEnd = false
+        )
+
+        val svgRules = rendered.substringAfter("svg {").substringBefore('}')
+        assertTrue(rendered.contains("img {"))
+        assertTrue(rendered.contains("object-fit: contain"))
+        assertTrue(rendered.contains("svg {"))
+        assertFalse(rendered.contains("img, svg"))
+        assertFalse(svgRules.contains("height: auto"))
+    }
+
+    @Test
     fun `epub padding percentages map to a quarter of the viewport`() {
         val rendered = styleEpubHtml(
             html = "<p>Readable chapter text</p>",

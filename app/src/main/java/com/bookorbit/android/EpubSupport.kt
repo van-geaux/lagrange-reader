@@ -24,7 +24,7 @@ data class EpubChapter(
 )
 
 private const val EPUB_ASSET_DOMAIN = "appassets.androidplatform.net"
-private const val EPUB_ASSET_PATH = "/epub/"
+private const val EPUB_ASSET_PATH = "/"
 
 internal fun epubAssetLoader(context: Context, rootDir: File): WebViewAssetLoader {
     return WebViewAssetLoader.Builder()

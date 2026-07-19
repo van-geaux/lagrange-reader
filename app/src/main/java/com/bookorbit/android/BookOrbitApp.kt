@@ -2606,10 +2606,16 @@ internal fun styleEpubHtml(
             word-wrap: break-word;
             will-change: transform;
         }
-        img, svg {
+        img {
             max-width: 100%;
             max-height: var(--bookorbit-reader-page-height);
             height: auto;
+            object-fit: contain;
+            break-inside: avoid;
+        }
+        svg {
+            max-width: 100%;
+            max-height: var(--bookorbit-reader-page-height);
             break-inside: avoid;
         }
         a { color: ${theme.linkCss}; }

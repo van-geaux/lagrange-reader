@@ -227,7 +227,22 @@ class EpubWebViewInstrumentedTest {
         val textDir = File(root, "OEBPS/Text").apply { mkdirs() }
         val imageDir = File(root, "Images").apply { mkdirs() }
         val chapterFile = File(textDir, "chapter.xhtml").apply {
-            writeText("<html><head></head><body><img id=\"cover\" src=\"../../Images/cover.png\"></body></html>")
+            writeText(
+                """
+                <html>
+                  <head></head>
+                  <body>
+                    <img id="relative-cover" src="../../Images/cover.png">
+                    <img id="root-cover" src="/Images/cover.png">
+                    <svg id="svg-cover" xmlns="http://www.w3.org/2000/svg"
+                         xmlns:xlink="http://www.w3.org/1999/xlink"
+                         width="100%" height="100%" viewBox="0 0 2 2">
+                      <image width="2" height="2" xlink:href="/Images/cover.png" />
+                    </svg>
+                  </body>
+                </html>
+                """.trimIndent()
+            )
         }
         File(imageDir, "cover.png").outputStream().use { output ->
             Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {
@@ -280,9 +295,15 @@ class EpubWebViewInstrumentedTest {
 
         assertTrue("EPUB WebView did not finish loading", loaded.await(10, TimeUnit.SECONDS))
         val imageState = awaitJson(webView) { state ->
-            state.optBoolean("complete") && state.optInt("naturalWidth") > 0
+            state.optBoolean("relativeComplete") &&
+                state.optInt("relativeNaturalWidth") > 0 &&
+                state.optBoolean("rootComplete") &&
+                state.optInt("rootNaturalWidth") > 0 &&
+                state.optDouble("svgHeight") > 0
         }
-        assertTrue(imageState.getInt("naturalWidth") > 0)
+        assertTrue(imageState.getInt("relativeNaturalWidth") > 0)
+        assertTrue(imageState.getInt("rootNaturalWidth") > 0)
+        assertTrue(imageState.getDouble("svgHeight") > 0)
     }
 
     private fun awaitGeometry(
@@ -299,8 +320,20 @@ class EpubWebViewInstrumentedTest {
 
     private fun awaitJson(webView: WebView, condition: (JSONObject) -> Boolean): JSONObject {
         repeat(50) {
-            val script = "JSON.stringify((() => { const image = document.getElementById('cover'); " +
-                "return image ? { complete: image.complete, naturalWidth: image.naturalWidth } : {}; })())"
+            val script = """
+                JSON.stringify((() => {
+                  const relative = document.getElementById('relative-cover');
+                  const root = document.getElementById('root-cover');
+                  const svg = document.getElementById('svg-cover');
+                  return {
+                    relativeComplete: Boolean(relative && relative.complete),
+                    relativeNaturalWidth: relative ? relative.naturalWidth : 0,
+                    rootComplete: Boolean(root && root.complete),
+                    rootNaturalWidth: root ? root.naturalWidth : 0,
+                    svgHeight: svg ? svg.getBoundingClientRect().height : 0
+                  };
+                })())
+            """.trimIndent()
             val value = JSONObject(decodeJavascriptString(evaluateJavascript(webView, script)))
             if (condition(value)) return value
             Thread.sleep(100)
