@@ -2627,6 +2627,15 @@ internal fun styleEpubHtml(
             object-fit: contain;
             break-inside: avoid;
         }
+        img.bookorbit-svg-raster {
+            display: block !important;
+            width: auto !important;
+            height: auto !important;
+            max-width: 100% !important;
+            max-height: var(--bookorbit-reader-page-height) !important;
+            margin: 0 auto !important;
+            object-fit: contain !important;
+        }
         svg {
             max-width: 100%;
             max-height: var(--bookorbit-reader-page-height);
@@ -2654,6 +2663,34 @@ internal fun styleEpubHtml(
           const measurementChapterIndex = ${measurementChapterIndex?.coerceAtLeast(0) ?: "null"};
           let measurementToken = 0;
           const bridge = window.$EPUB_READER_BRIDGE;
+          const normalizeBitmapOnlySvgPages = () => {
+            const vectorContentSelector = [
+              'path', 'rect', 'polygon', 'polyline', 'line', 'circle', 'ellipse',
+              'text', 'use', 'foreignObject'
+            ].join(',');
+            Array.from(document.querySelectorAll('svg')).forEach((svg) => {
+              const rasterImages = svg.querySelectorAll('image');
+              if (rasterImages.length !== 1 || svg.querySelector(vectorContentSelector)) return;
+              const rasterImage = rasterImages[0];
+              const source = rasterImage.getAttribute('href') ||
+                rasterImage.getAttribute('xlink:href') ||
+                rasterImage.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+              if (!source) return;
+              const replacement = document.createElement('img');
+              replacement.src = source;
+              replacement.alt = svg.getAttribute('aria-label') ||
+                rasterImage.getAttribute('aria-label') ||
+                rasterImage.getAttribute('alt') || '';
+              replacement.className = [svg.getAttribute('class'), 'bookorbit-svg-raster']
+                .filter(Boolean)
+                .join(' ');
+              if (svg.id) replacement.id = svg.id;
+              replacement.loading = 'eager';
+              replacement.decoding = 'sync';
+              replacement.setAttribute('data-bookorbit-normalized-svg', 'true');
+              svg.replaceWith(replacement);
+            });
+          };
           const normalizeInset = (value) => Math.min(25, Math.max(0, Number(value) || 0));
           const pageHeight = () => Math.max(
             1,
@@ -2764,6 +2801,7 @@ internal fun styleEpubHtml(
             goToPage: jumpToPage
           });
           window.addEventListener('load', () => {
+            normalizeBitmapOnlySvgPages();
             strip = document.createElement('main');
             strip.id = 'bookorbit-page-strip';
             Array.from(document.body.childNodes).forEach((node) => strip.appendChild(node));

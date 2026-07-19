@@ -56,6 +56,10 @@ class EpubAssetLoadingInstrumentedTest {
                          width="100%" height="100%" viewBox="0 0 2 2">
                       <image width="2" height="2" xlink:href="/Images/cover.png" />
                     </svg>
+                    <svg id="vector-mark" xmlns="http://www.w3.org/2000/svg"
+                         width="10" height="10" viewBox="0 0 10 10">
+                      <rect width="10" height="10" fill="magenta" />
+                    </svg>
                   </body>
                 </html>
                 """.trimIndent()
@@ -128,7 +132,12 @@ class EpubAssetLoadingInstrumentedTest {
             assertEquals(2, state.getInt("rootNaturalWidth"))
             assertTrue(state.getDouble("relativeWidth") > 0.0)
             assertTrue(state.getDouble("rootWidth") > 0.0)
-            assertTrue(state.getDouble("svgHeight") > 0.0)
+            assertEquals("IMG", state.getString("normalizedSvgTag"))
+            assertEquals(2, state.getInt("normalizedSvgNaturalWidth"))
+            assertTrue(state.getDouble("normalizedSvgWidth") > 0.0)
+            assertTrue(state.getDouble("normalizedSvgHeight") > 0.0)
+            assertEquals("svg", state.getString("vectorTag"))
+            assertTrue(state.getDouble("vectorWidth") > 0.0)
             synchronized(handledRequests) {
                 assertTrue(handledRequests.any { it.contains("/_bookorbit-reader/") })
                 assertTrue(handledRequests.any { it.endsWith("/OEBPS/Styles/book.css") })
@@ -150,7 +159,8 @@ class EpubAssetLoadingInstrumentedTest {
             JSON.stringify((() => {
               const relative = document.getElementById('relative-cover');
               const root = document.getElementById('root-cover');
-              const svg = document.getElementById('svg-cover');
+              const normalizedSvg = document.getElementById('svg-cover');
+              const vector = document.getElementById('vector-mark');
               const relativeRect = relative ? relative.getBoundingClientRect() : null;
               const rootRect = root ? root.getBoundingClientRect() : null;
               return {
@@ -159,7 +169,14 @@ class EpubAssetLoadingInstrumentedTest {
                 rootNaturalWidth: root ? root.naturalWidth : 0,
                 relativeWidth: relativeRect ? relativeRect.width : 0,
                 rootWidth: rootRect ? rootRect.width : 0,
-                svgHeight: svg ? svg.getBoundingClientRect().height : 0
+                normalizedSvgTag: normalizedSvg ? normalizedSvg.tagName : '',
+                normalizedSvgNaturalWidth: normalizedSvg && normalizedSvg.tagName === 'IMG'
+                  ? normalizedSvg.naturalWidth
+                  : 0,
+                normalizedSvgWidth: normalizedSvg ? normalizedSvg.getBoundingClientRect().width : 0,
+                normalizedSvgHeight: normalizedSvg ? normalizedSvg.getBoundingClientRect().height : 0,
+                vectorTag: vector ? vector.tagName : '',
+                vectorWidth: vector ? vector.getBoundingClientRect().width : 0
               };
             })())
         """.trimIndent()
@@ -179,7 +196,12 @@ class EpubAssetLoadingInstrumentedTest {
                 result.optInt("rootNaturalWidth") > 0 &&
                 result.optDouble("relativeWidth") > 0.0 &&
                 result.optDouble("rootWidth") > 0.0 &&
-                result.optDouble("svgHeight") > 0.0
+                result.optString("normalizedSvgTag") == "IMG" &&
+                result.optInt("normalizedSvgNaturalWidth") > 0 &&
+                result.optDouble("normalizedSvgWidth") > 0.0 &&
+                result.optDouble("normalizedSvgHeight") > 0.0 &&
+                result.optString("vectorTag") == "svg" &&
+                result.optDouble("vectorWidth") > 0.0
             ) {
                 return result
             }

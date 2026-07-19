@@ -63,6 +63,9 @@ class EpubPaginationTest {
         assertTrue(rendered.contains("svg {"))
         assertFalse(rendered.contains("img, svg"))
         assertFalse(svgRules.contains("height: auto"))
+        assertTrue(rendered.contains("normalizeBitmapOnlySvgPages"))
+        assertTrue(rendered.contains("bookorbit-svg-raster"))
+        assertTrue(rendered.contains("data-bookorbit-normalized-svg"))
     }
 
     @Test

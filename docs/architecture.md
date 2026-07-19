@@ -79,7 +79,7 @@ The current app flow is:
 - Catalog coverage asserts the real GET libraries call and POST paginated library-books request with page size 100, then parses EPUB media kind and server progress.
 - Queue coverage confirms a locally queued event makes zero HTTP requests until explicit replay, then asserts file-progress and book-`reading` status payloads before exact queue acknowledgement.
 - Cases isolate and clear progress stores, cancel unique background work, and clear server/session state. The androidTest APK compiles. The targeted plain-WebView test executes on the available Android 17 emulator; the existing Compose WebView class cannot execute there because its Espresso version reflects a removed `InputManager.getInstance` API before test assertions, so broader connected coverage still requires a compatible device/emulator.
-- Exact-sample diagnostics run every image-bearing spine chapter from the three supplied EPUBs through the production virtual-document path under Android WebView 149; every referenced `img`/SVG image decodes and receives nonzero layout. Permanent plain-WebView `EpubAssetLoadingInstrumentedTest` asserts the virtual main document and parent-relative, root-relative, and SVG/`xlink:href` resources are handled at appassets and laid out under a sample-like 95%-height wrapper. The targeted emulator test passes 1/1; the obsolete Compose `loadDataWithBaseURL` image test is removed.
+- Permanent plain-WebView `EpubAssetLoadingInstrumentedTest` exercises the production virtual-document path, stylesheet routing, and parent/root images. It proves a bitmap-only SVG cover becomes an `IMG` with decoded `naturalWidth` and nonzero fitted dimensions, while a genuine vector SVG containing a `rect` remains an SVG and lays out. The targeted emulator test passes 1/1.
 
 ### Local persistence
 
@@ -137,7 +137,8 @@ The current app flow is:
   - an escaped `<base>` is injected before EPUB stylesheet links and points to the original chapter directory, retaining relative, parent-relative, and root-relative resource behavior; the current book's dedicated extracted root remains mounted at appassets `/`
   - each session retains at most four virtual document byte arrays, and both visible and hidden WebViews use `LOAD_NO_CACHE` to avoid stale phone-specific document/resource reuse
   - reflowable chapter content uses the last device-known-good single absolute page strip with `overflow: visible`; page turns translate that strip without adding a clipped HTML wrapper around it
-  - reader CSS sizes normal `img` content with containment behavior, but it does not force `height:auto` on outer SVG elements; full-page SVG cover/illustration wrappers retain authored dimensions and can resolve their nested `xlink:href` image
+  - before pagination, `normalizeBitmapOnlySvgPages` converts only SVG elements containing exactly one raster `image` and no vector primitives into eager/sync ordinary `img` elements, preserving source, id, class, and accessibility text; genuine vector SVGs and ordinary images remain unchanged
+  - normalized covers receive the `bookorbit-svg-raster` class, whose strong CSS supplies block layout, auto dimensions, page max bounds, centered margin, and contain fitting
   - left and right outer-quarter taps, plus left/right swipes, move one page; the center opens overlay controls with one visible Close action, and tapping exposed book content also dismisses them
   - EPUB keeps the native top status bar visible for Android-managed battery, network, time, and notification indicators while hiding the bottom navigation bar. The status-bar background and light/dark icon appearance follow the selected reader theme. Permanent app chrome remains hidden; chapter selection, themes, and text sizing live in transient overlays. Android Back dismisses an open overlay first, then exits the reader when the overlay is closed.
   - safe nested/encoded chapter base URLs resolve parent-relative and root-relative resources within the dedicated extracted EPUB root through `WebViewAssetLoader`; the extraction root, package file, and chapter paths are canonicalized, package/chapter escapes are rejected, and broad WebView file/content access remains disabled
@@ -169,7 +170,7 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB image compatibility remains physically unresolved on the Samsung Galaxy S24. The supplied `your name.`, `Zero Damage Sword Saint ... Volume 4`, and `Overlord, Vol. 5` files are valid/unencrypted, render in Calibre, and pass exact-sample WebView 149 diagnostics. The virtual no-store document implementation passes 215 JVM tests across 35 suites, lint, both APK assemblies, and targeted emulator test 1/1, but requires the S24 retest before later UI work proceeds.
+- EPUB image compatibility remains physically unresolved on the Samsung Galaxy S24. Commit `4854b0b` still failed for `your name.` and Overlord; Overlord Vol. 1 confirms a bitmap-only SVG cover fails while a later ordinary image works. Bitmap-only SVG normalization passes the narrow genuine-vector-preservation emulator regression and the unchanged 215-test/lint/APK gate, but requires the S24 retest before later UI work proceeds.
 - EPUB exact in-chapter page restore is implemented; exact restore, visible-overflow pagination, external vertical padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
 - Native username/password login completion is verified through `/api/v1/auth/me` before coordinator resume. Other server auth variants and real rate-limit responses remain outside that completed check.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
@@ -179,7 +180,7 @@ Validated against the live server and BookOrbit source:
 
 ## UI/UX phase boundary
 
-The functional architecture supports later UI/UX changes, but current execution is blocked on Samsung Galaxy S24 EPUB verification. The virtual no-store document candidate must pass all three supplied EPUBs plus the mixed cover/later-image case before book-detail or reader-chrome work advances. Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ, and the general comic reading flow is target-device validated; remaining comic/audiobook work stays later. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
+The functional architecture supports later UI/UX changes, but current execution is blocked on Samsung Galaxy S24 EPUB verification. The bitmap-only SVG normalization candidate must pass `your name.`, Overlord Vol. 1/5, and the no-SVG Zero Damage control before book-detail or reader-chrome work advances. Comic/audiobook work stays later. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
 
 The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.
 
