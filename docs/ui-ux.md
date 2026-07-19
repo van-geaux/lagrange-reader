@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to begin. EPUB remains the validated representative reader path. The manga unsupported-format regression is fixed in code: bare CBZ/CBR/CB7 formats now open the comic reader, with authenticated server pages for online reading and on-device ZIP extraction for offline CBZ/mislabeled ZIP archives. Comics use a target-device-validated black fullscreen fitted-image surface with an always-visible page footer, gesture/tap page turns, and a dark center-tap options sheet. Downloaded CBR/CB7 remains valid but requires a connection for server-side extraction in this build. Validation of online CBZ/CBR/CB7 and offline downloaded comic formats remains open; offline CBR/CB7 extraction is optional future work. Audiobook validation remains deferred without a representative sample.
+The functional prototype is stable enough for UI/UX work to continue. EPUB embedded-image rendering remains the highest-priority physical verification: the prior target-device build opened chapter text but did not render embedded images, while CBZ/CBR images worked. The code now mounts the entire dedicated extracted EPUB root rather than only the OPF package directory, and automated coverage passes, but the user must verify the new APK before the regression is considered fixed. The manga unsupported-format regression remains fixed in code: bare CBZ/CBR/CB7 formats open the comic reader, with authenticated server pages for online reading and on-device ZIP extraction for offline CBZ/mislabeled ZIP archives. Downloaded CBR/CB7 remains valid but requires a connection for server-side extraction in this build. Validation of CB7 and remaining downloaded-comic formats remains open; offline CBR/CB7 extraction is optional future work. Audiobook validation remains deferred without a representative sample.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -63,7 +63,7 @@ Detail refinement candidate: book details mirror the reader-relevant content of 
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center opens one rounded bottom sheet containing the current location, chapters, theme, text size, and independent Top/Bottom/Left/Right percentage sliders. Continue reading dismisses the sheet without leaving the book, while Close book immediately restores cached Browser content (or Loading when no cache exists) and lets persistence, sync, cleanup, and refresh finish in the background. Exposed-book taps or Android Back dismiss the sheet; Android Back exits the reader only when the sheet is closed. The sheet matches Light, Sepia, and Dark reader palettes with verified normal-text contrast. Android's native top status bar remains visible for battery and network indicators with reader-theme-aware contrast, while the bottom navigation bar stays immersive. Fresh books default Top to 30% and Bottom/Left/Right to 15%; saved per-book values remain unchanged. A value of 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android `WebView` outside the EPUB HTML, while Left/Right update the known-good page strip in place. Embedded chapter resources now load through safe appassets URLs shared by the visible renderer and hidden measurer. Target-device testing confirms restored content rendering and visible independent edge changes; physical confirmation of embedded images plus remaining page-break, chapter-boundary, and tap-zone behavior is still required before Checkpoint 4 is complete.
+Implementation candidate: EPUB follows Komga's paginated interaction pattern. Reading uses transient controls; left/right outer-quarter taps change pages and the center currently opens one rounded bottom sheet containing the current location, chapters, theme, text size, and independent Top/Bottom/Left/Right percentage sliders. Continue reading dismisses the sheet without leaving the book, while Close book immediately restores cached Browser content (or Loading when no cache exists) and lets persistence, sync, cleanup, and refresh finish in the background. Exposed-book taps or Android Back dismiss the sheet; Android Back exits the reader only when the sheet is closed. The sheet matches Light, Sepia, and Dark reader palettes with verified normal-text contrast. Android's native top status bar remains visible for battery and network indicators with reader-theme-aware contrast, while the bottom navigation bar stays immersive. Fresh books default Top to 30% and Bottom/Left/Right to 15%; saved per-book values remain unchanged. A value of 100% represents one quarter of the relevant viewport dimension. Top/Bottom resize the Android `WebView` outside the EPUB HTML, while Left/Right update the known-good page strip in place. The extraction-root implementation and compiled safe-appassets coverage are complete; physical verification of embedded images is required before the planned lightweight reader chrome or tutorial.
 
 ### Device feedback workplan
 
@@ -214,12 +214,45 @@ Implementation candidate: EPUB follows Komga's paginated interaction pattern. Re
 - [x] Replace Achievement posters with compact adaptive information cards: 260 dp minimum width, 22 dp server-driven symbol immediately before the title, lock/unlock state at the title row's end, and description/category/rarity plus progress/date inside the card.
 - [x] Make every book-detail action discoverable on narrow screens with a wrapping `FlowRow`; keep labels for every context action and expose Mark as read/unread directly.
 - [x] Restore EPUB embedded images through `WebViewAssetLoader` with safe nested/encoded appassets base URLs, one extracted root shared by visible/hidden renderers, and broad file/content access disabled. Fix nonlocal EPUB/PDF Preview by preparing an authenticated temporary reader copy without applying comic archive detection.
-- The EPUB fix passes 213 JVM tests across 35 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Compiled integration/WebView coverage verifies the authenticated Preview download and parent-relative embedded image loading; no device was attached, so instrumentation execution and physical sample validation remain pending.
+- The extraction-root EPUB fix passes the full combined gate: 213 JVM tests across 35 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Package parsing and `EpubBook.rootDir` retain the full extraction root, and the WebView regression resolves `../../Images/cover.png` from `OEBPS/Text/chapter.xhtml`, crossing the package-directory boundary while remaining inside the archive. Canonical extraction-root, package, and chapter checks reject any package/chapter path that escapes the archive root. Physical target-device confirmation remains required; compiled coverage alone does not close the regression.
 - [x] Retain the full stable #/A–Z jump rail when eligible (Z–A/# descending), rendering unavailable entries with 38%-alpha `onSurfaceVariant`, disabled semantics, content descriptions such as `B unavailable`, and no click action. Existing sort/catalog hiding and grid gutter behavior remain unchanged.
 - The full gate passes 209 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; `catalogJumpRailLabels` and compiled Library/Series assertions cover unavailable labels.
 - [x] Add a bottom Local books shelf to top-level Home using server-wide local titles and to Library Recommended using only titles local to the selected library. Both use deterministic deduplicated alphabetical previews capped at 12 and reuse normal shelf cards/actions/covers; See all opens global or library-scoped Local books with the appropriate title, while More > Local books remains global.
 - The full gate passes 210 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; compiled coverage exercises the global shelf, global See all, and library-scope exclusion.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
+
+### Reader controls work order - 2026-07-19
+
+Before the reader-chrome refinement, implement the user's final book-detail action-row decision:
+
+- Use exactly one row with no wrapping, horizontal scrolling, or clipped overflow.
+- Read and Preview are always visible, labeled actions.
+- When the book is not local, eligible Download is always visible inline as an icon-only action; it is absent when the book is local and is never moved into overflow while eligible.
+- Delete local, whenever applicable, is always in the three-dot overlay and never inline.
+- Mark as read/unread is inline only when width permits; otherwise it moves into the three-dot overlay.
+- Show the three-dot action whenever any applicable action is hidden. At minimum, the row must preserve Read, Preview, eligible Download, and required More at every supported width.
+- Preserve active download/update/cancel behavior, but decide and cover the exact state-to-inline/overflow mapping during implementation rather than inventing it here.
+
+Book details must also show canonical 0-100 progress for currently-reading and read/completed states when a real server or local value is known. Unknown progress remains absent, not synthesized. The user must confirm the exact visual placement before this GUI change is implemented.
+
+The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy while retaining the user's explicit Lagrange adaptation:
+
+- A center tap toggles lightweight chrome instead of opening the complete reader-options sheet immediately.
+- The top bar contains separate Back and Close buttons plus the book title.
+- The left side contains a vertical chapter jump/progress control with previous- and next-chapter actions.
+- The bottom contains a Chapter list button and a cog/settings button. The cog is the deliberate route to the existing full reader options; the lightweight surface does not duplicate those settings.
+- On initial reader entry/open, show a labeled tap-zone preview as three equal-width, full-height thirds: left Previous in `rgba(255, 114, 118, 0.5)`, center Menu in `rgba(0, 0, 0, 0.5)`, and right Next in `rgba(144, 238, 144, 0.5)`. These are Suwayomi's `RIGHT_LEFT` preview colors at 50% opacity.
+- Keep the preview visible for exactly 1 second, then dismiss it automatically. This intentionally overrides Suwayomi's five-second initial preview.
+
+Working order:
+
+1. [ ] Physically verify the implemented extraction-root fix with opened/local and nonlocal Preview EPUB samples, including nested and package-boundary-crossing parent-relative resources; confirm CBZ/CBR images remain unaffected.
+2. [ ] Implement and test the exact single-row book-detail action policy above, including responsive behavior and explicit Download/Update/Cancel state mapping.
+3. [ ] After the user confirms placement, implement and test the conditional canonical progress percentage without fabricating unknown values.
+4. [ ] Implement the lightweight reader chrome, including the separate Back/Close Lagrange header and cog route to full options, then add the exact one-second tap-zone preview so Menu teaches that final center-tap behavior.
+5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
+
+The current wording deliberately limits the tutorial trigger to initial reader entry/open. Persistence scope across books, files, app installs, repeat opens, Preview, and comic readers must be confirmed before implementation rather than inferred.
 
 ### Checkpoint 5: Other media readers - partially implemented
 

@@ -224,10 +224,10 @@ class EpubWebViewInstrumentedTest {
             deleteRecursively()
             mkdirs()
         }
-        val textDir = File(root, "Text").apply { mkdirs() }
+        val textDir = File(root, "OEBPS/Text").apply { mkdirs() }
         val imageDir = File(root, "Images").apply { mkdirs() }
         val chapterFile = File(textDir, "chapter.xhtml").apply {
-            writeText("<html><head></head><body><img id=\"cover\" src=\"../Images/cover.png\"></body></html>")
+            writeText("<html><head></head><body><img id=\"cover\" src=\"../../Images/cover.png\"></body></html>")
         }
         File(imageDir, "cover.png").outputStream().use { output ->
             Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {

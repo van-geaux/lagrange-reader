@@ -55,19 +55,22 @@ internal fun epubChapterBaseUrl(rootDir: File, chapterFile: File): String {
 
 fun loadEpubBook(context: Context, sourceFile: File): EpubBook? {
     return runCatching {
-        val extractedRoot = extractEpubIfNeeded(context, sourceFile)
+        val extractedRoot = extractEpubIfNeeded(context, sourceFile).canonicalFile
         val containerFile = File(extractedRoot, "META-INF/container.xml")
         if (!containerFile.exists()) {
             return null
         }
 
         val packageRelativePath = parseContainerPath(containerFile) ?: return null
-        val packageFile = File(extractedRoot, packageRelativePath.replace('/', File.separatorChar))
-        if (!packageFile.exists()) {
+        val packageFile = File(
+            extractedRoot,
+            packageRelativePath.replace('/', File.separatorChar)
+        ).canonicalFile
+        if (!packageFile.toPath().startsWith(extractedRoot.toPath()) || !packageFile.exists()) {
             return null
         }
 
-        parsePackage(packageFile)
+        parsePackage(packageFile, extractedRoot)
     }.getOrNull()
 }
 
@@ -126,7 +129,7 @@ private fun parseContainerPath(containerFile: File): String? {
     return null
 }
 
-private fun parsePackage(packageFile: File): EpubBook {
+private fun parsePackage(packageFile: File, extractedRoot: File): EpubBook {
     val manifest = linkedMapOf<String, Pair<String, String?>>()
     val spine = mutableListOf<String>()
     var title: String? = null
@@ -160,6 +163,7 @@ private fun parsePackage(packageFile: File): EpubBook {
     val baseDir = requireNotNull(packageFile.parentFile) {
         "EPUB package file must have a parent directory."
     }
+    val extractedRootPath = extractedRoot.canonicalFile.toPath()
     val chapters = spine.mapNotNull { idref ->
         val manifestEntry = manifest[idref] ?: return@mapNotNull null
         val href = manifestEntry.first
@@ -169,7 +173,7 @@ private fun parsePackage(packageFile: File): EpubBook {
         }
 
         val chapterFile = File(baseDir, href.replace('/', File.separatorChar)).canonicalFile
-        if (!chapterFile.exists()) {
+        if (!chapterFile.toPath().startsWith(extractedRootPath) || !chapterFile.exists()) {
             return@mapNotNull null
         }
 
@@ -180,7 +184,7 @@ private fun parsePackage(packageFile: File): EpubBook {
     }
 
     return EpubBook(
-        rootDir = baseDir,
+        rootDir = extractedRoot.canonicalFile,
         chapters = chapters,
         title = title
     )

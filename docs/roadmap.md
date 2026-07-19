@@ -332,6 +332,22 @@ Pending follow-up:
 5. [x] Restore the full #/A–Z Library and Series jump rail while retaining sort/catalog hiding rules and the existing grid gutter. Missing labels use 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action; descending order is Z–A/#.
 6. [x] Add a Local books shelf at the bottom of top-level Home from server-wide `homeBooks` and at the bottom of Library Recommended from selected-library books. `HomeFeed` derives a deterministic deduplicated alphabetical preview capped at 12, reuses `ShelfBookCard` actions/covers, and routes See all to global Local books or a selected-library-scoped Local books destination/title. More > Local books remains global.
 
+### Reader controls work order - 2026-07-19
+
+The target-device pass found a real EPUB regression: embedded images did not render when EPUBs opened, while CBZ/CBR images rendered correctly. The implementation now carries the full dedicated `extractedRoot` through package parsing and `EpubBook.rootDir`, so `WebViewAssetLoader` mounts the whole extracted EPUB rather than only the OPF package directory. This permits parent-relative chapter resources that stay inside the archive while crossing outside `OEBPS`/the package directory. The extraction root, package file, and chapter paths are canonicalized, and any package/chapter path escaping the extraction root is rejected. `EpubAssetUrlTest` now expects an extraction-root base URL including `OEBPS`, and `EpubWebViewInstrumentedTest` crosses from `OEBPS/Text/chapter.xhtml` to `../../Images/cover.png`.
+
+The full combined gate rerun passes 213 JVM tests across 35 suites with zero failures/errors/skips, `assembleDebug`, `assembleDebugAndroidTest`, and `lintDebug`. The fix is implemented in code, but the physical regression remains open until the user verifies the new APK at `app/build/outputs/apk/debug/app-debug.apk`.
+
+Execute the current work in this order:
+
+1. Physically verify the implemented EPUB extraction-root fix for local/opened and nonlocal Preview paths, covering nested and package-boundary-crossing parent-relative resources; regression-check CBZ/CBR image rendering and do not claim resolution until this passes.
+2. Implement one exact, non-wrapping, non-overflowing book-detail action row. Read and Preview remain labeled and always inline. Eligible Download is icon-only, always inline while the book is not local, and absent when local. Delete local is always in the three-dot overlay and never inline. Mark as read/unread stays inline only when space permits and otherwise moves into the overlay. Show More whenever any applicable action is hidden, preserving at least Read, Preview, eligible Download, and required More on every width. Specify and test Download/Update/Cancel state mapping during implementation rather than inventing it in planning.
+3. After the user confirms its exact visual placement, show canonical 0-100 progress on book details when a title is currently reading or read/completed. Do not fabricate a value when both server and local progress are unknown. Cover zero, partial, completed, and unknown states.
+4. Continue the existing Suwayomi-inspired reader work: implement lightweight center-tap chrome first, then the one-second initial-entry tap-zone tutorial so Menu teaches the final behavior. Retain the separate Back/Close/title header, left vertical chapter control with previous/next chapter actions, bottom Chapter list and cog-to-full-options actions, and the documented equal-third Previous/Menu/Next colors.
+5. Run automated, target-device, accessibility, large-text, responsive, orientation, theme, timing, resume/sync, Preview-isolation, and offline checks, then resume CB7, representative PDF/audiobook, compact Achievement, series-neighbor, jump-rail, and partial-refresh edge validation.
+
+The requested scope is initial reader entry/open. Do not infer a per-book, per-file, per-install, repeated-preview, or comic-reader persistence rule until the user confirms it.
+
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.

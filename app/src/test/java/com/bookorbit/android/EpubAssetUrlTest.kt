@@ -8,11 +8,11 @@ import org.junit.Test
 class EpubAssetUrlTest {
     @Test
     fun `chapter base url preserves nested paths and encodes spaces`() {
-        val root = File("reader cache/epub/OEBPS").absoluteFile
-        val chapter = File(root, "Text Part/chapter.xhtml")
+        val root = File("reader cache/epub").absoluteFile
+        val chapter = File(root, "OEBPS/Text Part/chapter.xhtml")
 
         assertEquals(
-            "https://appassets.androidplatform.net/epub/Text%20Part/",
+            "https://appassets.androidplatform.net/epub/OEBPS/Text%20Part/",
             epubChapterBaseUrl(root, chapter)
         )
     }
