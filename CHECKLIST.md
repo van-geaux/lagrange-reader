@@ -425,6 +425,17 @@ Execute in this order:
 4. [x] Remove Back from the center-tap lightweight reader chrome. Move labeled Exit/X leftmost; tapping the reading surface/center scrim remains the route back to unobstructed reading.
 5. [x] Extend the tutorial to exactly 3,000 ms from first pre-draw. All three full-screen regions consume taps, call dismissal, and do not forward the tap to reader navigation or chrome; EPUB and comic activities hide the tutorial immediately.
 6. [ ] The full gate passes 244 JVM tests across 41 suites, lint, debug APK assembly, and Android-test APK assembly. Physical-device validation remains for refresh/sync races, repeated reader opens, EPUB/comic Read and Preview, tutorial timeout/tap dismissal, Android Back behavior, and revised Exit placement.
+
+Target-device feedback confirms the reported sync/refresh/download reader replacement no longer occurs, Exit works, and the tutorial timeout/tap dismissal works.
+
+### Reader tutorial, Series grouping, and profile-menu follow-up - 2026-07-20
+
+Execute in this order:
+
+1. [ ] Remove the background behind the Previous/Menu/Next tutorial labels and enlarge the label text to approximately twice its current size while preserving the colored tap regions, exact 3,000 ms timeout, and consumed tap dismissal.
+2. [ ] Add mutually exclusive Series-detail grouping controls below Genres for grouping books by Library or Format. Library is the default, tapping the active choice can leave both inactive, and the selected state persists globally across every Series.
+3. [ ] Reorder the profile dropdown to Achievements, Options, About, divider, Change server, and Log out/Sign in. Give Options a cogwheel icon instead of the three-dot icon and remove About from the More sheet.
+4. [ ] Run focused coverage, the full JVM/lint/APK gate, build the debug APK, and physically validate tutorial readability, Series grouping/persistence, dropdown ordering/icons/divider, and About navigation.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

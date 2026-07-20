@@ -265,6 +265,15 @@ The implemented trigger is every initial reader activity entry/open for EPUB and
 - [x] Show the tutorial for exactly three seconds unless the user taps anywhere on the tutorial layer, in which case consume that tap and dismiss immediately.
 - [ ] Validate the final layout and behavior across EPUB/comic Read and Preview, status-bar insets, large text, portrait/landscape, themes, refresh/sync activity, and repeated opens.
 
+Target-device feedback confirms reader ownership during sync/refresh/download activity, Exit behavior, and tutorial timeout/tap dismissal.
+
+### Reader tutorial, Series grouping, and profile-menu revision - 2026-07-20
+
+- [ ] Remove the tutorial-label background and enlarge Previous/Menu/Next text to approximately twice its current size.
+- [ ] Add globally persistent, mutually exclusive Library and Format grouping controls below Series-detail Genres. Library is the default and both controls may be inactive.
+- [ ] Order the profile dropdown as Achievements, Options with cogwheel, About, divider, Change server, and Log out/Sign in; remove About from More.
+- [ ] Validate accessibility, large text, grouping headers/order/persistence, menu semantics, and About routing.
+
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 
 - Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, the outer page rail/list, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the revised flow on the target device.

@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the July 20 reader/detail follow-ups. Reader screen ownership is guarded against delayed browser updates; lightweight chrome has no visible Back action, places labeled Exit/X leftmost, and retains surface/scrim dismissal. The tutorial now lasts exactly 3,000 ms and any of its three consumed regions dismisses it immediately. The full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies; physical-device validation remains pending.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the three-second tap-dismissible tutorial behaves correctly. Next: improve tutorial-label visibility, add globally persistent Series-detail grouping by Library/Format/none, and reorganize the profile dropdown with Achievements and Options above About plus a divider before session actions. The last full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies.
 
 ### 1. UI/UX direction and design system
 
@@ -361,6 +361,15 @@ The implemented trigger is every initial EPUB/comic reader activity entry/open, 
 4. [x] Remove the lightweight chrome Back button and place labeled Exit/X leftmost. Center/content-scrim taps continue to dismiss chrome and return to reading.
 5. [x] Change the tutorial to exactly 3,000 ms. All three full-screen regions consume taps, call dismissal, and are hidden immediately by the EPUB/comic activities.
 6. [ ] The complete automated gate passes and the debug APK is built. Validate refresh/sync races and revised reader interactions on the Samsung Galaxy S24 before resuming the remaining media/responsive queue.
+
+Target-device feedback confirms the original reader replacement race is resolved during sync/refresh/download activity, Exit works, and tutorial timeout/tap dismissal works. Broader format/responsive validation remains open.
+
+### Reader tutorial, Series grouping, and profile-menu follow-up - 2026-07-20
+
+1. Remove the tutorial-label background and enlarge Previous/Menu/Next text to approximately twice its current size without changing region colors, timing, or tap consumption.
+2. Add mutually exclusive Library and Format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series.
+3. Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More.
+4. Add deterministic state/grouping and compiled Compose coverage, run the full gate, build the debug APK, and complete target-device validation.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
