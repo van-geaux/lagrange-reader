@@ -414,6 +414,16 @@ The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` pre
 5. [x] Label Back at the top-left and place labeled Exit with X at the top-right.
 6. [x] Extend the tap-zone tutorial from one second to two seconds.
 7. [x] Keep the book-detail three-dot More action at the row's right/trailing edge whenever it appears.
+
+### Reader stability and interaction follow-up - 2026-07-20
+
+Execute in this order:
+
+1. [x] Diagnose books being replaced by Home during sync/refresh. Source: `AppCoordinator.showBrowser()` always updates both `lastBrowserState` and `_screen`; active catalog refreshes and other background browser-state callbacks can therefore replace `ReaderLoading` or `Reader`. `openBook()` neither cancels the active catalog job nor establishes a navigation generation/ownership guard. No fix is implemented yet.
+2. [ ] Separate background browser-snapshot updates from explicit navigation. Add deterministic coordinator regressions that hold a catalog refresh, open a book, release the refresh, and prove `ReaderLoading`/`Reader` remains active while the browser snapshot still updates. Cover other asynchronous callers such as download progress/state changes, and preserve explicit reader close, session-expiry, and sign-out navigation.
+3. [ ] Remove Back from the center-tap lightweight reader chrome. Move the labeled Exit/X action to the left; tapping the reading surface/center again remains the route back to unobstructed reading.
+4. [ ] Extend the tutorial to exactly 3,000 ms from first pre-draw and dismiss it immediately on any tutorial-layer tap without forwarding that tap to reader navigation or chrome.
+5. [ ] Run JVM, lint, debug APK, Android-test APK, and physical-device validation for refresh/sync races, repeated reader opens, EPUB/comic Read and Preview, tutorial timeout/tap dismissal, Back behavior, and the revised Exit placement.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

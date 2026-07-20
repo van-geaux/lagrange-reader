@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-Version `0.2.7` includes the July 20 reader/detail follow-up. The shared rail is now on the right at about 75% height and page-based; EPUB adds separate chapter arrows and retains the outer Chapters picker. Cog options no longer duplicate position selection, the status-bar-safe top bar labels Back and Exit/X at opposite edges, the tutorial lasts 2,000 ms, and book-detail More is trailing-edge aligned. Samsung Galaxy S24 validation remains open.
+Version `0.2.7` includes the first July 20 reader/detail follow-up. The next interaction revision removes the redundant chrome Back action, moves Exit/X left, and changes the tutorial to a tap-dismissible three seconds. Before those visual changes, the diagnosed refresh/navigation race must be fixed so background work cannot replace an opening or active reader with Home.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -256,6 +256,14 @@ Working order:
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
 
 The implemented trigger is every initial reader activity entry/open for EPUB and comics, including both Read and Preview; it does not persist a seen-state across repeat opens, books, files, or installs.
+
+### Pending reader stability/interaction revision - 2026-07-20
+
+- [x] Identify why readers are sometimes replaced by Home during sync/refresh: background browser updates call the navigation-owning `showBrowser()` after reader launch, with no reader ownership/generation guard.
+- [ ] Split browser snapshot updates from screen navigation and prove delayed refresh/download callbacks cannot replace `ReaderLoading` or `Reader`.
+- [ ] Remove Back from lightweight chrome and place labeled Exit/X at the left edge. Center/content tap remains the dismiss-to-reading interaction; Android Back continues to dismiss overlays before exiting.
+- [ ] Show the tutorial for exactly three seconds unless the user taps anywhere on the tutorial layer, in which case consume that tap and dismiss immediately.
+- [ ] Validate the final layout and behavior across EPUB/comic Read and Preview, status-bar insets, large text, portrait/landscape, themes, refresh/sync activity, and repeated opens.
 
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 

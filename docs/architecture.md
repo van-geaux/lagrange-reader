@@ -135,6 +135,8 @@ The current app flow is:
 
 ### Reader implementations
 
+- Diagnosed reader-screen ownership defect (fix pending): `AppCoordinator.showBrowser()` currently both stores `lastBrowserState` and assigns `AppScreen.Browser`. Catalog refresh, library selection, download-state, and other asynchronous callbacks reuse it. Because `openBook()` does not cancel/invalidate those operations, a stale completion can replace `ReaderLoading` or `Reader` with Home. The planned correction separates background snapshot mutation from explicit navigation and adds a gated refresh-versus-reader regression while preserving deliberate Close/Exit and authentication transitions.
+
 - EPUB, PDF, and comic reader composition marks the host view to keep the display awake and restores its prior value when the reader leaves composition. Audio and unsupported screens retain the normal device timeout.
 - Audio uses ExoPlayer against a local file or authenticated stream URL.
 - PDF uses `PdfRenderer` with simple page-by-page navigation against local downloads or authenticated cache copies.

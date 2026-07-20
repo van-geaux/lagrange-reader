@@ -16,7 +16,7 @@ You can begin manual testing once these conditions are true:
 
 Current automated coverage includes the EPUB Readium suite plus `ReadiumComicReaderRoutingTest` for direct CBZ routing, connected CBR/CB7 routing, and image signatures. Two connected `ReadiumComicOpenInstrumentedTest` cases exercise CBZ opening/locator behavior, authenticated-page preparation and cache reuse, and a real injected center tap opening Lagrange's comic controls.
 
-Reader/detail baseline on July 20, 2026: version `0.2.7` (`versionCode` 9) uses a status-bar-safe labeled Back/Exit bar, right-side 75%-height page rail, separate EPUB chapter arrows, outer-only chapter/page selection, a two-second tutorial, and trailing-edge book-detail More placement. The full gate passes 242 JVM tests across 41 suites with zero failures/errors/skips plus lint and both APK assemblies. No device is attached; Samsung Galaxy S24 validation remains pending.
+Reader/detail baseline on July 20, 2026: version `0.2.7` (`versionCode` 9) uses a status-bar-safe labeled Back/Exit bar, right-side 75%-height page rail, separate EPUB chapter arrows, outer-only chapter/page selection, a two-second tutorial, and trailing-edge book-detail More placement. A follow-up is now queued to remove Back, move Exit left, and use a tap-dismissible three-second tutorial. The reported kick-to-Home issue is diagnosed as unguarded background `showBrowser()` navigation during reader launch/use; its fix and regression coverage are the next work item. The last completed gate passes 242 JVM tests across 41 suites plus lint and both APK assemblies.
 
 ## Latest device feedback — July 12, 2026
 
@@ -122,6 +122,8 @@ Reader/detail baseline on July 20, 2026: version `0.2.7` (`versionCode` 9) uses 
 ## Current Priority Manual Pass - July 19, 2026
 
 Run these after each corresponding implementation step, in order:
+
+0. Before physical reader UI validation, implement and automate the refresh/navigation isolation fix. Gate a catalog refresh, open a book, release the refresh, and confirm `ReaderLoading`/`Reader` remains active while cached browser data updates. Repeat with asynchronous download state/progress updates. Confirm explicit Exit/Close still navigates to Browser and session expiry/sign-out still navigate to authentication destinations.
 
 1. On the Samsung Galaxy S24, install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk`. Do not modify the supplied files in `sample/`.
 2. Validate local/online CBZ and connected CBR/CB7 through normal Read and Preview. Confirm the dark reader, 25% edge navigation, center-tap lightweight chrome, page rail/footer, Back/Exit ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Reopen connected CBR/CB7 to confirm the cached CBZ is reused. Go offline with a downloaded CBR/CB7 and confirm it remains retained but clearly requires the server; reconnect and confirm it opens. Spot-check EPUB, PDF, and audio. Keep the comic migration marked as awaiting physical validation until this pass succeeds.
