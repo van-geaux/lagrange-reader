@@ -363,7 +363,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Download").assertIsEnabled()
         composeRule.onNodeWithText("Read").assertIsDisplayed()
         composeRule.onNodeWithText("Preview").assertIsDisplayed()
-        composeRule.onNodeWithText("Download").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Download").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("Mark as read").assertIsDisplayed().performClick()
         composeRule.waitUntil { dataSource.markedReadBooks.any { it.id == book.id } }
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
@@ -442,7 +442,7 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
-    fun downloadedBookDetailsShowLabeledDeleteLocalAction() {
+    fun downloadedBookDetailsKeepDeleteLocalInMore() {
         val book = BookSummary(
             libraryId = "lib-1",
             id = "book-downloaded",
@@ -474,12 +474,13 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithContentDescription("Downloaded Book").performClick()
-        composeRule.onNodeWithContentDescription("Delete local").assertIsEnabled()
+        composeRule.onAllNodesWithText("Delete local").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("More book actions").performClick()
         composeRule.onNodeWithText("Delete local").assertIsDisplayed()
     }
 
     @Test
-    fun outdatedDownloadedBookDetailsShowUpdateLocalAction() {
+    fun outdatedDownloadedBookDetailsKeepUpdateAndDeleteInMore() {
         val book = BookSummary(
             libraryId = "lib-1",
             id = "book-outdated-download",
@@ -513,10 +514,11 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithContentDescription("Updated Book").performClick()
-        composeRule.onNodeWithContentDescription("Update local").assertIsEnabled()
+        composeRule.onAllNodesWithText("Update local").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("More book actions").performClick()
         composeRule.onNodeWithText("Update local").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Delete local").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("Update local").performClick()
+        composeRule.onNodeWithText("Delete local").assertIsDisplayed()
+        composeRule.onNodeWithText("Update local").performClick()
         composeRule.waitUntil { dataSource.downloadedBooks == listOf(book) }
     }
 

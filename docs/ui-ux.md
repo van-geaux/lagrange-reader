@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to continue, but planned UI work remains behind physical validation of the comic migration. Version `0.2.3` upgrades Readium to 3.0.2 and moves local/readable CBZ plus connected server-prepared CBR/CB7 into its image navigator while retaining Lagrange's comic controls/footer/resume behavior. Offline CBR/CB7 remains server-required. EPUB stays on Readium; PDF/audio are unchanged. Automation passes; Samsung Galaxy S24 comic validation is next.
+Version `0.2.4` completes the responsive book-detail action row as one fixed-height, non-wrapping, non-scrolling line. Required actions remain visible through typography-aware status placement and extreme-width Read/Preview compaction. Automation passes; Samsung Galaxy S24 action-row validation remains open. The next GUI decision is the exact placement of detail progress percentage, which must be confirmed with the user before implementation; Suwayomi chrome/tutorial follows.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -55,7 +55,7 @@ The first Home shelf renders as Currently reading. It recognizes active percenta
 
 Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while the profile menu exposes Options and Achievements, then Change server immediately above Log out/Sign in. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from complete Room-cached Browse content.
 
-Detail refinement candidate: book details mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Primary actions use compact labeled tiles in an adaptive wrapping row, keeping every action discoverable without horizontal scrolling. The final tile directly exposes the live Mark as read/unread action instead of a three-dot menu. The series eyebrow is a visible navigation affordance into the existing Series detail page, and a dedicated stable Previous/Next row directly below identity/series metadata moves among series books without leaving the detail screen. Genre and Tag chips wrap independently, and the lower hierarchy groups Publication, Identifiers, and Library/file values into compact cards. Tapping the cover opens a dark full-screen viewer, and tapping the displayed cover or pressing Android Back dismisses it. Compose regression coverage exercises the action area, metadata content, cover-viewer tap dismissal, and Series navigation. Series details continue to load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books.
+Detail refinement: book details mirror the reader-relevant BookOrbit metadata and use one 46 dp-high action row. Read/Preview stay labeled; a nonlocal icon slot maps Download/Retry/Cancel and remains disabled in place when unavailable; local Delete and Update/Cancel update live in More. Mark as read/unread uses current typography/font-scale measurements and remains inline only if the complete row fits. More appears whenever anything is hidden, and only Read/Preview become weighted at extreme widths. The series eyebrow/neighbor controls, independently wrapped Genre/Tag chips, compact metadata cards, and full-screen dismissible cover viewer remain unchanged.
 
 ### Checkpoint 4: EPUB reader - Readium migration device-functional, broader validation pending
 
@@ -223,15 +223,15 @@ Implemented baseline: normal EPUB Read and Preview use Readium, with the current
 
 ### Reader controls work order - 2026-07-19
 
-Before the reader-chrome refinement, implement the user's final book-detail action-row decision:
+The user's final book-detail action-row decision is implemented:
 
 - Use exactly one row with no wrapping, horizontal scrolling, or clipped overflow.
 - Read and Preview are always visible, labeled actions.
-- When the book is not local, eligible Download is always visible inline as an icon-only action; it is absent when the book is local and is never moved into overflow while eligible.
+- When the book is not local, one 46 dp inline slot maps to Download, Retry download, or Cancel download and stays present but disabled when unavailable/offline. It disappears once local.
 - Delete local, whenever applicable, is always in the three-dot overlay and never inline.
 - Mark as read/unread is inline only when width permits; otherwise it moves into the three-dot overlay.
 - Show the three-dot action whenever any applicable action is hidden. At minimum, the row must preserve Read, Preview, eligible Download, and required More at every supported width.
-- Preserve active download/update/cancel behavior, but decide and cover the exact state-to-inline/overflow mapping during implementation rather than inventing it here.
+- Local Update local or Cancel update shares More with Delete local. Status copy directs local update cancellation/retry through More. Only Read/Preview compact through weights at extreme widths.
 
 Book details must also show canonical 0-100 progress for currently-reading and read/completed states when a real server or local value is known. Unknown progress remains absent, not synthesized. The user must confirm the exact visual placement before this GUI change is implemented.
 
@@ -246,8 +246,8 @@ The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy
 
 Working order:
 
-1. [ ] Install version 0.2.3 on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7. Confirm retained dark controls/footer, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, dark system bars, and cached-CBZ reuse. Confirm downloaded CBR/CB7 stays retained but requires the server offline. Spot-check unchanged EPUB, PDF, and audio paths. Keep later items blocked until this comic pass succeeds.
-2. [ ] Implement and test the exact single-row book-detail action policy above, including responsive behavior and explicit Download/Update/Cancel state mapping.
+1. [ ] Install version 0.2.4 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
+2. [x] Implement and test the exact single-row policy, including inline nonlocal Download/Retry/Cancel, local Delete/Update/Cancel update in More, typography-aware Mark placement, disabled transfer-slot stability, and extreme-width compaction. Physical S24 validation remains pending.
 3. [ ] After the user confirms placement, implement and test the conditional canonical progress percentage without fabricating unknown values.
 4. [ ] Implement the lightweight reader chrome, including the separate Back/Close Lagrange header and cog route to full options, then add the exact one-second tap-zone preview so Menu teaches that final center-tap behavior.
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
