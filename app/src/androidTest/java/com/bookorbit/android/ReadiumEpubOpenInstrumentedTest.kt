@@ -2,9 +2,14 @@ package com.bookorbit.android
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.SystemClock
 import android.util.Size
+import android.view.InputDevice
+import android.view.MotionEvent
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.CRC32
@@ -15,6 +20,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.readium.r2.navigator.epub.EpubNavigatorFragment
+import org.readium.r2.navigator.preferences.ColumnCount
+import org.readium.r2.navigator.preferences.Theme
+import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.publication.services.coverFitting
@@ -34,6 +43,11 @@ class ReadiumEpubOpenInstrumentedTest {
             assertTrue(publication.conformsTo(Publication.Profile.EPUB))
             assertEquals("Readium SVG Cover", publication.metadata.title)
             assertEquals(1, publication.readingOrder.size)
+            val locator = requireNotNull(publication.locatorFromLink(publication.readingOrder.first()))
+                .copyWithLocations(progression = 0.4, totalProgression = 0.4)
+            val locatorKey = "instrumented-${System.nanoTime()}"
+            ReadiumEpubLocatorStore(context).save(locatorKey, locator)
+            assertEquals(locator, ReadiumEpubLocatorStore(context).read(locatorKey))
             val cover = requireNotNull(publication.cover())
             assertTrue(cover.width > 0)
             assertTrue(cover.height > 0)
@@ -46,6 +60,81 @@ class ReadiumEpubOpenInstrumentedTest {
             publication.close()
             epub.delete()
         }
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun mapsExistingAppearanceToReadiumPreferences() {
+        val preferences = readiumPreferences(EpubReaderTheme.Dark, fontScale = 1.2f)
+
+        assertEquals(Theme.DARK, preferences.theme)
+        assertEquals(1.2, requireNotNull(preferences.fontSize), 0.0001)
+        assertEquals(0.0, requireNotNull(preferences.pageMargins), 0.0001)
+        assertEquals(ColumnCount.ONE, preferences.columnCount)
+        assertEquals(false, preferences.scroll)
+        assertEquals(EpubReaderTheme.Dark.backgroundColor, preferences.backgroundColor?.int)
+    }
+
+    @Test
+    fun centerTapOpensExistingReaderOptions() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-center-tap.epub")
+        writeSvgCoverEpub(epub)
+
+        ActivityScenario.launch<ReadiumEpubReaderActivity>(
+            ReadiumEpubReaderActivity.createIntent(
+                context = context,
+                file = epub,
+                title = "Readium SVG Cover",
+                readerKey = "instrumented-center-tap",
+                launchMode = ReaderLaunchMode.NORMAL,
+                initialChapter = 0,
+                initialPage = 0,
+                initialPageCount = 1,
+                initialPercent = null
+            )
+        ).use { scenario ->
+            var navigatorReady = false
+            var attempts = 0
+            while (!navigatorReady && attempts < 40) {
+                scenario.onActivity { activity ->
+                    navigatorReady = activity.supportFragmentManager
+                        .findFragmentByTag("readium_epub_navigator") is EpubNavigatorFragment
+                }
+                if (!navigatorReady) SystemClock.sleep(250)
+                attempts += 1
+            }
+            assertTrue("Readium navigator did not become ready", navigatorReady)
+            SystemClock.sleep(1500)
+            var tapX = 0f
+            var tapY = 0f
+            scenario.onActivity { activity ->
+                val decor = activity.window.decorView
+                val location = IntArray(2)
+                decor.getLocationOnScreen(location)
+                tapX = location[0] + decor.width / 2f
+                tapY = location[1] + decor.height / 2f
+            }
+            val downTime = SystemClock.uptimeMillis()
+            val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+            MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, tapX, tapY, 0).also { event ->
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                automation.injectInputEvent(event, true)
+                event.recycle()
+            }
+            MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, tapX, tapY, 0).also { event ->
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                automation.injectInputEvent(event, true)
+                event.recycle()
+            }
+            SystemClock.sleep(500)
+            var controlsVisible = false
+            scenario.onActivity { activity ->
+                controlsVisible = activity.areReaderControlsVisible()
+            }
+            assertTrue("Center tap did not open the existing reader options", controlsVisible)
+        }
+        epub.delete()
     }
 
     private fun writeSvgCoverEpub(target: File) {

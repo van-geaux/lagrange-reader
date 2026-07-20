@@ -673,14 +673,31 @@ private fun ReaderScreen(
     } else {
         onProgress
     }
-    if (shouldUseReadiumEpubPreview(state.book.mediaKind, state.launchMode)) {
-        val previewFile = state.localFile
-        if (previewFile == null || !previewFile.exists()) {
-            ReaderMessage("Unable to prepare this EPUB preview.")
+    if (shouldUseReadiumEpubReader(state.book.mediaKind)) {
+        val readerFile = state.localFile
+        if (readerFile == null || !readerFile.exists()) {
+            ReaderMessage("Unable to prepare this EPUB.")
         } else {
-            ReadiumEpubPreviewLauncher(
-                file = previewFile,
-                title = "Preview · ${state.book.title}",
+            ReadiumEpubReaderLauncher(
+                file = readerFile,
+                title = state.book.title,
+                readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+                launchMode = state.launchMode,
+                initialChapter = if (isPreview) 0 else state.pageIndex,
+                initialPage = if (isPreview) 0 else state.readerPageIndex,
+                initialPageCount = if (isPreview) 1 else state.book.readerPageCount ?: 1,
+                initialPercent = if (isPreview) null else state.progressPercent,
+                onProgress = { chapterIndex, pageIndex, pageCount, percent ->
+                    readerProgress(
+                        state.book.copy(
+                            readerPageIndex = pageIndex,
+                            readerPageCount = pageCount
+                        ),
+                        0L,
+                        chapterIndex,
+                        percent
+                    )
+                },
                 onFinished = onBack
             )
         }
@@ -2947,7 +2964,8 @@ private data class EpubMeasurementRenderState(
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
 internal const val EPUB_DEFAULT_TOP_PADDING_PERCENT = 30f
-private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = 30.dp
+internal const val EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP = 30
+private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP.dp
 
 private val AUDIO_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f)
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")

@@ -18,8 +18,9 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".ReadiumEpubPreviewActivity"
-            android:exported="false" />
+            android:name=".ReadiumEpubReaderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BookOrbit.Reader" />
 
         <activity
             android:name=".MainActivity"

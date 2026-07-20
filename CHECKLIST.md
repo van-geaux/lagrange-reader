@@ -104,7 +104,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
-- [x] Add an isolated Readium Kotlin Toolkit 3.0.0 EPUB Preview proof in a dedicated activity; retain the custom EPUB reader for normal Read and leave comic/audiobook routing unchanged
+- [x] Route every EPUB Read and Preview launch through `ReadiumEpubReaderActivity` on Readium Kotlin Toolkit 3.0.0; leave PDF, comic, and audiobook routing unchanged
 
 ## 7. Download For Offline Use
 
@@ -183,6 +183,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
+- [x] Preserve the Lagrange EPUB options over Readium: 25% edge navigation, center options, chapter/page jumps, stored themes, 90-150% text, four stored margins, progress footer, reader system bars, orientation lock, and keep-awake behavior
+- [x] Persist exact Readium locators for normal Read, restore legacy chapter/page/percentage state when no locator exists, and keep Preview progress/location-free
 - [x] Restore and validate the last device-known-good visible-overflow EPUB page strip after the clipped-wrapper regression
 - [x] Validate visible Top/Bottom EPUB padding and repagination on the target device; vertical padding resizes the WebView outside the known-good HTML renderer
 - [x] Persist independent EPUB padding values across reader close/reopen
@@ -226,7 +228,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add repository HTTP integration tests for offline queue replay
 - [ ] Execute the repository HTTP integration tests on a usable connected device/emulator; current androidTest APK compiles but adb enumeration did not provide a runnable target
 - [x] Add an Android WebView instrumentation regression for EPUB padding geometry and translated-page visibility
-- [x] Add Readium Preview routing coverage and an instrumentation EPUB fixture that verifies opening a bitmap-only SVG-cover publication plus `publication.cover()`/`coverFitting()`
+- [x] Add Readium routing/progress fallback coverage and three connected EPUB tests for bitmap-only SVG cover plus locator persistence, settings mapping, and injected center-tap controls
 - [x] Add Compose instrumentation regression coverage for book-detail actions, wrapped metadata, the full-screen cover viewer, and Series navigation
 - [x] Add at least one end-to-end manual test matrix
 
@@ -382,9 +384,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. Commit `4854b0b` and the later custom-renderer SVG normalization still failed on the Samsung Galaxy S24 for the reported samples. An isolated Readium Kotlin Toolkit 3.0.0 proof now routes only EPUB Preview through a dedicated activity, leaving normal Read on the custom reader as a fallback. The supplied samples all opened in that Readium activity on the emulator, where screenshots visually confirmed their covers. Automated verification passes 216 JVM tests across 36 suites plus lint and both APK assemblies; the focused Readium instrumentation test opens a generated bitmap-only SVG-cover EPUB and verifies `publication.cover()` and `coverFitting()`.
+Implement and validate in this dependency order. The custom renderer remained unreliable for the reported Samsung samples, while the earlier Readium Preview cover proof passed on the phone. Version 0.2.2 now routes both normal Read and Preview through Readium 3.0.0. Normal Read preserves the Lagrange options, exact locator resume, legacy progress fallback, and coordinator progress return; Preview remains isolated and starts at the beginning. Emulator diagnostics opened all four supplied books through normal Read and visually confirmed covers, footer, and options. Automated verification passes 218 JVM tests across 36 suites plus lint and both APK assemblies; all three focused Readium connected tests pass.
 
-1. [ ] Install `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and open `your name.`, Overlord Vol. 1, Overlord Vol. 5, and `Zero Damage Sword Saint Volume 4` with Preview. Confirm the Readium Preview cover and later inline images render, Back returns cleanly, and Preview does not affect normal progress. Normal Read deliberately remains the custom fallback. Decide whether to extend Readium only after this phone proof passes; also confirm CBZ/CBR and audiobook behavior remains unchanged.
+1. [ ] Install version 0.2.2 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and open all four supplied EPUBs through normal Read. Confirm covers and later images, edge taps, center options, chapter/page jumps, themes, text size, four margins, footer, system bars, orientation lock, keep-awake, exact resume, and coordinator/server progress. Confirm Preview still starts at the beginning without saving progress/location, then spot-check PDF, CBZ/CBR, and audiobook routing. Do not overrule the earlier successful phone Preview cover proof; this pass validates the full normal-Read migration.
 2. [ ] Replace the wrapping book-detail actions with exactly one non-wrapping, non-horizontally-overflowing row. Read and Preview are always inline and labeled. When no local copy exists, an eligible Download action is always inline, icon-only, and never relegated to overflow; it is absent when the book is local. Delete local is always in the three-dot overlay and never inline. Mark as read/unread is inline only when width permits and otherwise moves into that overlay. Show the three-dot action whenever any applicable action is hidden; at minimum keep Read, Preview, eligible Download, and required More visible in the row. Add explicit implementation and regression coverage for Download/Update/Cancel state mapping instead of inferring unapproved behavior.
 3. [ ] Show the canonical 0-100 progress percentage on book details when the status is currently reading or read/completed. Omit the percentage when server/local progress is genuinely unknown. Confirm the exact visual placement with the user before implementation, then cover known, zero, completed, and unknown progress states in tests.
 4. [ ] Implement the Suwayomi-inspired reader chrome, then its tutorial. Center tap toggles lightweight controls instead of full options: separate Back and Close plus book title at top, a left vertical chapter jump/progress control with previous/next chapter actions, and bottom Chapter list plus cog/settings opening the existing full options. After the final chrome exists, add three full-height equal-width tutorial thirds: Previous in `rgba(255, 114, 118, 0.5)`, Menu in `rgba(0, 0, 0, 0.5)`, and Next in `rgba(144, 238, 144, 0.5)`, visible for exactly 1 second on initial reader entry/open.
@@ -428,9 +430,9 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 UI/UX discussion and design-system work can start now:
 
 - The functional and JVM baseline is ready.
-- EPUB remains the representative reader path. The isolated Readium Preview proof passes its generated-cover instrumentation test and visually renders all four supplied sample covers on the emulator; Samsung Galaxy S24 Preview verification is the highest-priority next task before any wider migration decision.
+- EPUB now uses Readium for both normal Read and Preview. The full migration passes its unit/build gate, three connected tests, and four-sample emulator diagnostics; Samsung Galaxy S24 normal-Read/settings/resume/progress validation is the highest-priority next task.
 - Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ. Fullscreen tap/swipe/options behavior is target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation. Offline CBR/CB7 extraction is optional future work. Audiobook-specific testing remains deferred until a representative sample is available.
-- The immediate order is the July 19 work order above as revised by the staged proof: physical Readium EPUB Preview verification and migration decision, single-row detail actions, conditional detail progress after placement confirmation, then Suwayomi-inspired reader chrome/tutorial and remaining validation.
+- The immediate order is: physical validation of version 0.2.2's normal Read migration, single-row detail actions, conditional detail progress after placement confirmation, then the still-unfinished Suwayomi lightweight chrome/tutorial and remaining validation.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server
