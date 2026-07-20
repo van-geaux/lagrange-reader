@@ -52,6 +52,8 @@ dependencies {
     implementation("org.readium.kotlin-toolkit:readium-shared:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-streamer:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.2")
+    implementation("org.readium.kotlin-toolkit:readium-navigator-media-audio:3.0.2")
+    implementation("org.readium.kotlin-toolkit:readium-adapter-exoplayer-audio:3.0.2")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
 
@@ -73,6 +75,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
