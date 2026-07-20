@@ -123,6 +123,7 @@ private fun BookDetailInfo.toJson(): JSONObject = JSONObject().apply {
     put("fileCount", fileCount)
     putNullable("totalSizeBytes", totalSizeBytes)
     putNullable("durationSeconds", durationSeconds)
+    put("audioChapters", audioChapters.toJson())
 }
 
 private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
@@ -150,6 +151,7 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     putNullable("lastReadAtMillis", lastReadAtMillis)
     putNullable("readerPageIndex", readerPageIndex)
     putNullable("readerPageCount", readerPageCount)
+    put("audioChapters", audioChapters.toJson())
 }
 
 private fun JSONObject.toBookDetail(): BookDetailInfo? {
@@ -171,7 +173,8 @@ private fun JSONObject.toBookDetail(): BookDetailInfo? {
         narrators = stringList("narrators"),
         fileCount = optInt("fileCount"),
         totalSizeBytes = optionalLong("totalSizeBytes"),
-        durationSeconds = optionalLong("durationSeconds")
+        durationSeconds = optionalLong("durationSeconds"),
+        audioChapters = audiobookChapters("audioChapters")
     )
 }
 
@@ -199,8 +202,32 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     updatedAtMillis = optionalLong("updatedAtMillis"),
     lastReadAtMillis = optionalLong("lastReadAtMillis"),
     readerPageIndex = optionalInt("readerPageIndex"),
-    readerPageCount = optionalInt("readerPageCount")
+    readerPageCount = optionalInt("readerPageCount"),
+    audioChapters = audiobookChapters("audioChapters")
 )
+
+private fun List<AudiobookChapter>.toJson(): JSONArray = JSONArray(
+    map { chapter ->
+        JSONObject()
+            .put("title", chapter.title)
+            .put("startMs", chapter.startMs)
+    }
+)
+
+private fun JSONObject.audiobookChapters(key: String): List<AudiobookChapter> {
+    val chapters = optJSONArray(key) ?: return emptyList()
+    return buildList {
+        for (index in 0 until chapters.length()) {
+            val chapter = chapters.optJSONObject(index) ?: continue
+            add(
+                AudiobookChapter(
+                    title = chapter.optString("title", "Chapter ${index + 1}"),
+                    startMs = chapter.optLong("startMs").coerceAtLeast(0L)
+                )
+            )
+        }
+    }
+}
 
 private fun JSONObject.putNullable(key: String, value: Any?) {
     put(key, value ?: JSONObject.NULL)

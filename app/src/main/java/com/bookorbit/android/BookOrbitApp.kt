@@ -60,22 +60,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -138,6 +141,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import java.io.File
 import java.net.URI
 import java.util.Locale
@@ -161,10 +165,11 @@ fun BookOrbitApp(
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange
         )
-        audioPlaybackController?.let { controller ->
+        if (screen !is AppScreen.Browser) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
                 controller = controller,
                 onClosed = coordinator::onAudioPlaybackClosed,
+                onCoverClick = controller::requestBookDetail,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -223,7 +228,20 @@ private fun BookOrbitDestination(
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
             storageUsageLoader = coordinator::loadStorageUsage,
-            onClearCache = coordinator::clearAppCache
+            onClearCache = coordinator::clearAppCache,
+            bookDetailRequest = audioPlaybackController?.bookDetailRequest?.collectAsState()?.value,
+            onBookDetailRequestConsumed = { sequence ->
+                audioPlaybackController?.consumeBookDetailRequest(sequence)
+            },
+            bottomOverlay = audioPlaybackController?.let { controller ->
+                {
+                    ReadiumCompactAudioPlayer(
+                        controller = controller,
+                        onClosed = coordinator::onAudioPlaybackClosed,
+                        onCoverClick = controller::requestBookDetail
+                    )
+                }
+            }
         )
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,
@@ -1068,6 +1086,7 @@ private fun AudioReader(
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
     onClosed: (BookSummary, ReaderLaunchMode) -> Unit = { _, _ -> },
+    onCoverClick: (BookSummary) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val session by produceState<ReadiumAudioPlaybackService.Session?>(null, controller) {
@@ -1075,19 +1094,31 @@ internal fun ReadiumCompactAudioPlayer(
     }
     val current = session ?: return
     val playback by current.navigator.playback.collectAsState()
+    val settings by current.navigator.settings.collectAsState()
     val positionMs = audioPlaybackPositionMs(current.navigator)
     val durationMs = current.navigator.readingOrder.duration
         ?.inWholeMilliseconds
         ?.takeIf { it > 0L }
-    val progress = durationMs?.let {
-        (positionMs.toFloat() / it.toFloat()).coerceIn(0f, 1f)
-    }
     val scope = rememberCoroutineScope()
+    var chapterMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
+    var speedMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
+    var isSeeking by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
+    var seekPositionMs by remember(current.book.id, current.book.fileId) {
+        mutableStateOf(positionMs.toFloat())
+    }
+    LaunchedEffect(positionMs, isSeeking) {
+        if (!isSeeking) seekPositionMs = positionMs.toFloat()
+    }
+    val chapters = current.book.audioChapters
+    val activeChapterIndex = chapters.indexOfLast { it.startMs <= positionMs }.coerceAtLeast(0)
+    val remainingMs = durationMs
+        ?.minus(if (isSeeking) seekPositionMs.toLong() else positionMs)
+        ?.coerceAtLeast(0L)
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
             .semantics {
                 contentDescription = "Audiobook player for ${current.book.title}"
                 stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
@@ -1097,87 +1128,188 @@ internal fun ReadiumCompactAudioPlayer(
         tonalElevation = 8.dp,
         shadowElevation = 8.dp
     ) {
-        Column {
-            if (progress != null) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CompactAudiobookCover(
+                book = current.book,
+                coverLoader = controller::loadCover,
+                onClick = { onCoverClick(current.book) }
+            )
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(68.dp)
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f)
+                    .padding(start = 8.dp)
             ) {
-                CompactAudiobookCover(current.book, controller::loadCover)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        current.book.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        current.book.author.orEmpty().ifBlank {
-                            "${formatPlaybackTime(positionMs)} / ${formatPlaybackTime(durationMs ?: 0L)}"
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                TextButton(
-                    onClick = { current.navigator.skip((-15).seconds) },
-                    modifier = Modifier.semantics { contentDescription = "Skip back 15 seconds" },
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    Text("−15", style = MaterialTheme.typography.labelMedium)
-                }
-                IconButton(
-                    onClick = {
-                        if (playback.playWhenReady) current.navigator.pause() else current.navigator.play()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            current.book.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            current.book.author.orEmpty(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = if (playback.playWhenReady) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playback.playWhenReady) "Pause audiobook" else "Play audiobook"
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                controller.close()
+                                onClosed(current.book, current.launchMode)
+                            }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close audiobook player")
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatPlaybackTime(if (isSeeking) seekPositionMs.toLong() else positionMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = seekPositionMs.coerceIn(0f, (durationMs ?: 1L).toFloat()),
+                        onValueChange = {
+                            isSeeking = true
+                            seekPositionMs = it
+                        },
+                        onValueChangeFinished = {
+                            seekAudioTo(current.navigator, seekPositionMs.toLong())
+                            isSeeking = false
+                        },
+                        valueRange = 0f..(durationMs ?: 1L).toFloat(),
+                        enabled = durationMs != null,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(32.dp)
+                            .padding(horizontal = 4.dp)
+                    )
+                    Text(
+                        remainingMs?.let { "−${formatPlaybackTime(it)}" } ?: "−–:––",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(
-                    onClick = { current.navigator.skip(30.seconds) },
-                    modifier = Modifier.semantics { contentDescription = "Skip forward 30 seconds" },
-                    contentPadding = PaddingValues(horizontal = 4.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("+30", style = MaterialTheme.typography.labelMedium)
-                }
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            controller.close()
-                            onClosed(current.book, current.launchMode)
+                    Box {
+                        IconButton(
+                            onClick = { chapterMenuExpanded = true },
+                            enabled = chapters.isNotEmpty(),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.List,
+                                contentDescription = if (chapters.isEmpty()) {
+                                    "No audiobook chapters available"
+                                } else {
+                                    "Select audiobook chapter"
+                                }
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = chapterMenuExpanded,
+                            onDismissRequest = { chapterMenuExpanded = false }
+                        ) {
+                            chapters.forEachIndexed { index, chapter ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            chapter.title.ifBlank { "Chapter ${index + 1}" },
+                                            fontWeight = if (index == activeChapterIndex) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
+                                        )
+                                    },
+                                    onClick = {
+                                        chapterMenuExpanded = false
+                                        seekAudioTo(current.navigator, chapter.startMs)
+                                    }
+                                )
+                            }
                         }
                     }
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close audiobook player")
+                    IconButton(
+                        onClick = { current.navigator.skip((-10).seconds) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Default.Replay10, contentDescription = "Skip back 10 seconds")
+                    }
+                    IconButton(
+                        onClick = {
+                            if (playback.playWhenReady) current.navigator.pause() else current.navigator.play()
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (playback.playWhenReady) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playback.playWhenReady) "Pause audiobook" else "Play audiobook"
+                        )
+                    }
+                    IconButton(
+                        onClick = { current.navigator.skip(30.seconds) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Default.Forward30, contentDescription = "Skip forward 30 seconds")
+                    }
+                    Box {
+                        TextButton(
+                            onClick = { speedMenuExpanded = true },
+                            modifier = Modifier
+                                .height(40.dp)
+                                .semantics { contentDescription = "Select playback speed" },
+                            contentPadding = PaddingValues(horizontal = 6.dp)
+                        ) {
+                            Text("${formatPlaybackSpeed(settings.speed)}×")
+                        }
+                        DropdownMenu(
+                            expanded = speedMenuExpanded,
+                            onDismissRequest = { speedMenuExpanded = false }
+                        ) {
+                            listOf(0.75, 1.0, 1.25, 1.5, 2.0).forEach { speed ->
+                                DropdownMenuItem(
+                                    text = { Text("${formatPlaybackSpeed(speed)}×") },
+                                    onClick = {
+                                        speedMenuExpanded = false
+                                        current.navigator.submitPreferences(ExoPlayerPreferences(speed = speed))
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+private fun formatPlaybackSpeed(speed: Double): String =
+    if (speed % 1.0 == 0.0) speed.toInt().toString() else speed.toString()
+
 @Composable
 private fun CompactAudiobookCover(
     book: BookSummary,
-    coverLoader: suspend (BookSummary) -> ByteArray?
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onClick: () -> Unit = {}
 ) {
     val bitmap by produceState<Bitmap?>(null, book.id, book.coverUrl, book.updatedAtMillis) {
         value = runCatching { coverLoader(book) }
@@ -1187,11 +1319,13 @@ private fun CompactAudiobookCover(
     }
     Box(
         modifier = Modifier
-            .size(56.dp)
+            .size(72.dp)
             .background(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(8.dp)
-            ),
+            )
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "Open details for ${book.title}" },
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {

@@ -27,7 +27,8 @@ class ActiveReaderStoreTest {
             localPath = "/tmp/book.epub",
             progressPercent = 35f,
             progressPositionMs = 12_000L,
-            progressPageIndex = 4
+            progressPageIndex = 4,
+            audioChapters = listOf(AudiobookChapter("Opening", 0L))
         )
 
         store.save("https://example.test", book)

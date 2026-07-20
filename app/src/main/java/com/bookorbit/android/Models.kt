@@ -10,6 +10,11 @@ enum class MediaKind {
     UNKNOWN
 }
 
+data class AudiobookChapter(
+    val title: String,
+    val startMs: Long
+)
+
 data class LibrarySummary(
     val id: String,
     val name: String,
@@ -41,7 +46,8 @@ data class BookSummary(
     val updatedAtMillis: Long? = null,
     val lastReadAtMillis: Long? = null,
     val readerPageIndex: Int? = null,
-    val readerPageCount: Int? = null
+    val readerPageCount: Int? = null,
+    val audioChapters: List<AudiobookChapter> = emptyList()
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
     val hasDownloadUpdate: Boolean
@@ -77,7 +83,8 @@ data class BookDetailInfo(
     val narrators: List<String> = emptyList(),
     val fileCount: Int = 0,
     val totalSizeBytes: Long? = null,
-    val durationSeconds: Long? = null
+    val durationSeconds: Long? = null,
+    val audioChapters: List<AudiobookChapter> = emptyList()
 )
 
 data class SeriesDetailInfo(

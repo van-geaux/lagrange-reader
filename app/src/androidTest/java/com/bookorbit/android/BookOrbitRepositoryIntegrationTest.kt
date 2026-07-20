@@ -336,6 +336,32 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals("/api/v1/books/files/preview-epub-file/download", request.path)
     }
 
+    @Test
+    fun nonLocalAudiobookPreviewDownloadsAnAuthenticatedTemporaryReaderCopy() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "audio/mpeg")
+                .setBody("test-audio-payload")
+        )
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "preview-audio",
+            fileId = "preview-audio-file",
+            title = "Remote Audiobook Preview",
+            format = "mp3",
+            mediaKind = MediaKind.AUDIO
+        )
+
+        val state = repository.buildReaderState(book, localOnly = false)
+
+        assertTrue(state.localFile?.exists() == true)
+        assertTrue(ReaderFileValidator.isReadable(MediaKind.AUDIO, state.localFile!!))
+        val request = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", request.method)
+        assertEquals("/api/v1/books/files/preview-audio-file/download", request.path)
+    }
+
     private fun jsonResponse(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")

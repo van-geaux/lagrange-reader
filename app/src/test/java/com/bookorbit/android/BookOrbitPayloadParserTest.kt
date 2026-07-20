@@ -450,6 +450,12 @@ class BookOrbitPayloadParserTest {
                   "rating": 4.25,
                   "authors": [{"name": "Ada Reader"}],
                   "narrators": [{"name": "Nora Voice"}],
+                  "audioMetadata": {
+                    "chapters": [
+                      {"title": "Second", "startMs": 120000},
+                      {"title": "Opening", "startMs": 0}
+                    ]
+                  },
                   "genres": ["Science Fiction", {"name": "Adventure"}],
                   "tags": ["Owned"],
                   "files": [
@@ -473,6 +479,14 @@ class BookOrbitPayloadParserTest {
         assertEquals(2, detail.fileCount)
         assertEquals(3_145_728L, detail.totalSizeBytes)
         assertEquals(7_200L, detail.durationSeconds)
+        assertEquals(
+            listOf(
+                AudiobookChapter("Opening", 0L),
+                AudiobookChapter("Second", 120_000L)
+            ),
+            detail.audioChapters
+        )
+        assertEquals(detail.audioChapters, detail.book.audioChapters)
     }
 
     @Test

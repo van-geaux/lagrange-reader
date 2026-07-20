@@ -28,7 +28,8 @@ class BookDetailCacheStoreTest {
                 tags = listOf("Local"),
                 narrators = listOf("Narrator"),
                 fileCount = 1,
-                pageCount = 320
+                pageCount = 320,
+                audioChapters = listOf(AudiobookChapter("Opening", 0L))
             )
             val first = BookDetailCacheStore(filesDir)
             first.save("https://example.test", "book-1", "file-1", detail)
@@ -41,6 +42,7 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.synopsis, restored?.synopsis)
             assertEquals(detail.genres, restored?.genres)
             assertEquals(detail.pageCount, restored?.pageCount)
+            assertEquals(detail.audioChapters, restored?.audioChapters)
             filesDir.deleteRecursively()
         }
     }

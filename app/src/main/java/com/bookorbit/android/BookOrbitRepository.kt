@@ -1650,7 +1650,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         return readable
     }
 
-    private suspend fun clearCookies() {
+    private suspend fun clearCookies() = withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine { continuation ->
             val manager = CookieManager.getInstance()
             manager.removeSessionCookies(null)
@@ -1994,8 +1994,10 @@ internal object BookOrbitPayloadParser {
         val files = obj.optJSONArray("files")
         val publishedDate = obj.stringValue("publishedDate", "publicationDate")
             ?: obj.numberValue("publishedYear", "publicationYear")?.toInt()?.toString()
+        val audioMetadata = obj.optJSONObject("audioMetadata")
+        val audioChapters = audioMetadata.audioChapters()
         return BookDetailInfo(
-            book = book,
+            book = book.copy(audioChapters = audioChapters),
             libraryName = obj.stringValue("libraryName"),
             subtitle = obj.stringValue("subtitle"),
             synopsis = obj.stringValue("description", "synopsis", "summary"),
@@ -2012,7 +2014,8 @@ internal object BookOrbitPayloadParser {
             fileCount = files?.length() ?: 0,
             totalSizeBytes = files.sumLong("sizeBytes", "size"),
             durationSeconds = files.maxLong("durationSeconds", "duration")
-                ?: obj.optJSONObject("audioMetadata")?.numberValue("durationSeconds", "duration")?.toLong()
+                ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong(),
+            audioChapters = audioChapters
         )
     }
 
@@ -2313,6 +2316,24 @@ internal object BookOrbitPayloadParser {
                 }
             }
         }.distinct()
+    }
+
+    private fun JSONObject?.audioChapters(): List<AudiobookChapter> {
+        val array = this?.optJSONArray("chapters") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val chapter = array.optJSONObject(index) ?: continue
+                val startMs = chapter.numberValue("startMs")?.toLong()
+                    ?: chapter.numberValue("start")?.times(1_000.0)?.toLong()
+                    ?: continue
+                add(
+                    AudiobookChapter(
+                        title = chapter.stringValue("title", "name") ?: "Chapter ${index + 1}",
+                        startMs = startMs.coerceAtLeast(0L)
+                    )
+                )
+            }
+        }.sortedBy(AudiobookChapter::startMs)
     }
 
     private fun JSONObject.numberList(key: String): List<Double> {
@@ -2856,9 +2877,9 @@ internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolea
     }
     return when (book.mediaKind) {
         MediaKind.EPUB,
-        MediaKind.PDF -> true
+        MediaKind.PDF,
+        MediaKind.AUDIO -> true
         MediaKind.COMIC -> book.hasZipComicHint()
-        MediaKind.AUDIO,
         MediaKind.UNKNOWN -> false
     }
 }

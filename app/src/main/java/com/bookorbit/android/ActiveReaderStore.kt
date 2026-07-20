@@ -3,6 +3,7 @@ package com.bookorbit.android
 import android.content.Context
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -50,6 +51,11 @@ class ActiveReaderStore private constructor(
                 put("lastReadAtMillis", book.lastReadAtMillis)
                 put("readerPageIndex", book.readerPageIndex)
                 put("readerPageCount", book.readerPageCount)
+                put("audioChapters", JSONArray(book.audioChapters.map { chapter ->
+                    JSONObject()
+                        .put("title", chapter.title)
+                        .put("startMs", chapter.startMs)
+                }))
             })
         }
         file.parentFile?.mkdirs()
@@ -89,7 +95,20 @@ class ActiveReaderStore private constructor(
             updatedAtMillis = if (book.has("updatedAtMillis") && !book.isNull("updatedAtMillis")) book.optLong("updatedAtMillis") else null,
             lastReadAtMillis = if (book.has("lastReadAtMillis") && !book.isNull("lastReadAtMillis")) book.optLong("lastReadAtMillis") else null,
             readerPageIndex = if (book.has("readerPageIndex") && !book.isNull("readerPageIndex")) book.optInt("readerPageIndex") else null,
-            readerPageCount = if (book.has("readerPageCount") && !book.isNull("readerPageCount")) book.optInt("readerPageCount") else null
+            readerPageCount = if (book.has("readerPageCount") && !book.isNull("readerPageCount")) book.optInt("readerPageCount") else null,
+            audioChapters = book.optJSONArray("audioChapters")?.let { chapters ->
+                buildList {
+                    for (index in 0 until chapters.length()) {
+                        val chapter = chapters.optJSONObject(index) ?: continue
+                        add(
+                            AudiobookChapter(
+                                title = chapter.optString("title", "Chapter ${index + 1}"),
+                                startMs = chapter.optLong("startMs").coerceAtLeast(0L)
+                            )
+                        )
+                    }
+                }
+            }.orEmpty()
         )
     }
 

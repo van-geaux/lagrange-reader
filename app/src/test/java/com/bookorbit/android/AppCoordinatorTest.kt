@@ -436,6 +436,40 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `audio reader loads chapter metadata before preparing playback`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val chapters = listOf(AudiobookChapter("Opening", 0L))
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(
+                book = audiobook.copy(audioChapters = chapters),
+                audioChapters = chapters
+            ),
+            buildReaderResult = ReaderState(
+                book = audiobook.copy(audioChapters = chapters),
+                localFile = File("sample.m4b")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+
+        coordinator.openBook(audiobook)
+        advanceUntilIdle()
+
+        assertEquals(chapters, repository.buildReaderBooks.single().audioChapters)
+    }
+
+    @Test
     fun `failed Readium audio launch clears active reader and returns to browser`() = runTest {
         val audiobook = book.copy(
             title = "Sample Audiobook",
@@ -1132,6 +1166,7 @@ private class FakeBookOrbitDataSource(
         )
     ),
     var buildReaderError: Throwable? = null,
+    var bookDetailResult: BookDetailInfo? = null,
     var downloadError: Throwable? = null,
     var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
@@ -1153,6 +1188,7 @@ private class FakeBookOrbitDataSource(
 ) : BookOrbitDataSource {
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
+    val buildReaderBooks = mutableListOf<BookSummary>()
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
     val queuedProgress = mutableListOf<BookSummary>()
@@ -1248,7 +1284,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
 
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
+        buildReaderBooks += book
         buildReaderLocalOnlyCalls += localOnly
         buildReaderError?.let { throw it }
         return buildReaderResult

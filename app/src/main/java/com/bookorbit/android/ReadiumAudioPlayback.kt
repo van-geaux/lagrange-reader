@@ -60,6 +60,31 @@ internal fun audioPlaybackPercent(navigator: BookOrbitAudioNavigator): Float? {
         .toFloat()
 }
 
+@OptIn(ExperimentalReadiumApi::class)
+internal fun seekAudioTo(navigator: BookOrbitAudioNavigator, absolutePositionMs: Long) {
+    val readingOrder = navigator.readingOrder.items
+    if (readingOrder.isEmpty()) return
+
+    val totalDurationMs = navigator.readingOrder.duration?.inWholeMilliseconds
+    val targetMs = absolutePositionMs
+        .coerceAtLeast(0L)
+        .let { position -> totalDurationMs?.let { position.coerceAtMost(it) } ?: position }
+    var precedingMs = 0L
+    var targetIndex = 0
+    while (targetIndex < readingOrder.lastIndex) {
+        val itemDurationMs = readingOrder[targetIndex].duration?.inWholeMilliseconds ?: 0L
+        if (targetMs < precedingMs + itemDurationMs) break
+        precedingMs += itemDurationMs
+        targetIndex += 1
+    }
+    navigator.skipTo(targetIndex, (targetMs - precedingMs).coerceAtLeast(0L).milliseconds)
+}
+
+internal data class AudioBookDetailRequest(
+    val sequence: Long,
+    val book: BookSummary
+)
+
 internal fun readiumAudioMediaType(filenameOrFormat: String): MediaType? {
     val normalized = filenameOrFormat.trim().lowercase()
     val extension = normalized.substringAfterLast('.').substringAfterLast('/')
@@ -277,6 +302,10 @@ class ReadiumAudioPlaybackController internal constructor(
     private var progressJob: Job? = null
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
+    private val mutableBookDetailRequest = MutableStateFlow<AudioBookDetailRequest?>(null)
+    internal val bookDetailRequest: StateFlow<AudioBookDetailRequest?> =
+        mutableBookDetailRequest.asStateFlow()
+    private var bookDetailRequestSequence = 0L
 
     fun setProgressListener(
         listener: (BookSummary, Long, Float?, ReaderLaunchMode) -> Unit
@@ -289,6 +318,17 @@ class ReadiumAudioPlaybackController internal constructor(
     }
 
     internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)
+
+    internal fun requestBookDetail(book: BookSummary) {
+        bookDetailRequestSequence += 1L
+        mutableBookDetailRequest.value = AudioBookDetailRequest(bookDetailRequestSequence, book)
+    }
+
+    internal fun consumeBookDetailRequest(sequence: Long) {
+        if (mutableBookDetailRequest.value?.sequence == sequence) {
+            mutableBookDetailRequest.value = null
+        }
+    }
 
     internal suspend fun session(): StateFlow<ReadiumAudioPlaybackService.Session?> = binder().session
 

@@ -649,8 +649,18 @@ class AppCoordinator(
         scope.launch {
             _screen.value = AppScreen.ReaderLoading(book, launchMode)
             runCatching {
+                val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
+                    runCatching { repository.loadBookDetail(book)?.book }
+                        .getOrNull()
+                        ?.let { detailBook ->
+                            detailBook.copy(localPath = book.localPath ?: detailBook.localPath)
+                        }
+                        ?: book
+                } else {
+                    book
+                }
                 val preparedState = repository.buildReaderState(
-                    book = book,
+                    book = readerBook,
                     localOnly = lastBrowserState?.isOfflineSnapshot == true
                 )
                 val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {

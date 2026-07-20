@@ -15,7 +15,13 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(root: FrameLayout) {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             BookOrbitTheme(themeMode = themeMode) {
-                ReadiumCompactAudioPlayer(controller = controller)
+                ReadiumCompactAudioPlayer(
+                    controller = controller,
+                    onCoverClick = { book ->
+                        controller.requestBookDetail(book)
+                        finish()
+                    }
+                )
             }
         }
     }

@@ -395,7 +395,10 @@ internal fun NativeLibraryBrowserScreen(
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
-    onClearCache: suspend () -> Unit = {}
+    onClearCache: suspend () -> Unit = {},
+    bookDetailRequest: AudioBookDetailRequest? = null,
+    onBookDetailRequestConsumed: (Long) -> Unit = {},
+    bottomOverlay: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
     var destination by rememberSaveable {
@@ -423,6 +426,19 @@ internal fun NativeLibraryBrowserScreen(
     var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
     var changeServerError by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingServerChange by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(bookDetailRequest?.sequence) {
+        val request = bookDetailRequest ?: return@LaunchedEffect
+        detailReturnDestination = destination
+        isSearchOpen = false
+        query = ""
+        activeBookGenre = null
+        activeSeriesGenre = null
+        selectedSeriesKey = null
+        selectedAuthor = null
+        selectedBook = request.book
+        onBookDetailRequestConsumed(request.sequence)
+    }
     val requestDownload: (BookSummary) -> Unit = { book ->
         when (
             cellularDownloadDecision(
@@ -827,25 +843,28 @@ internal fun NativeLibraryBrowserScreen(
             }
         },
         bottomBar = {
-            if (!isSearchOpen && activeBookGenre == null && activeSeriesGenre == null && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
-                BrowserBottomNavigation(
-                    destination = destination,
-                    onHome = {
-                        destination = BrowserDestination.HOME
-                        query = ""
-                        selectedAuthor = null
-                        selectedSeriesKey = null
-                    },
-                    onLibraries = {
-                        destination = BrowserDestination.LIBRARY
-                        showLibraryPicker = state.selectedLibraryId == null
-                        libraryTab = LibraryTab.RECOMMENDED
-                        query = ""
-                        selectedAuthor = null
-                        selectedSeriesKey = null
-                    },
-                    onMore = { showMoreMenu = true }
-                )
+            Column {
+                bottomOverlay?.invoke()
+                if (!isSearchOpen && activeBookGenre == null && activeSeriesGenre == null && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
+                    BrowserBottomNavigation(
+                        destination = destination,
+                        onHome = {
+                            destination = BrowserDestination.HOME
+                            query = ""
+                            selectedAuthor = null
+                            selectedSeriesKey = null
+                        },
+                        onLibraries = {
+                            destination = BrowserDestination.LIBRARY
+                            showLibraryPicker = state.selectedLibraryId == null
+                            libraryTab = LibraryTab.RECOMMENDED
+                            query = ""
+                            selectedAuthor = null
+                            selectedSeriesKey = null
+                        },
+                        onMore = { showMoreMenu = true }
+                    )
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -3551,7 +3570,8 @@ private fun BookDetails(
         lastReadAtMillis = if (canonicalStateBook != null) currentBook.lastReadAtMillis else currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
         isRead = currentBook.isRead,
         updatedAtMillis = currentBook.updatedAtMillis ?: detail.book.updatedAtMillis,
-        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis,
+        audioChapters = detail.audioChapters.ifEmpty { currentBook.audioChapters }
     )
     val fileId = displayBook.fileId
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
@@ -3702,7 +3722,8 @@ private fun BookDetails(
                 val textWidth = textMeasurer.measure(label, style = labelStyle, maxLines = 1).size.width.toDp()
                 maxOf(minimumDp.dp, 20.dp + 24.dp + 6.dp + textWidth).value
             }
-            val readWidth = actionWidth("Read", 82f)
+            val primaryActionLabel = bookDetailPrimaryActionLabel(displayBook)
+            val readWidth = actionWidth(primaryActionLabel, 82f)
             val previewWidth = actionWidth("Preview", 94f)
             val markWidth = actionWidth(statusActionLabel, 118f)
             Column(
@@ -3750,7 +3771,7 @@ private fun BookDetails(
                             Modifier.width(previewWidth.dp).height(46.dp)
                         }
                         DetailActionTile(
-                            label = "Read",
+                            label = primaryActionLabel,
                             icon = Icons.Default.PlayArrow,
                             showLabel = true,
                             emphasized = true,
@@ -4075,6 +4096,9 @@ internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String {
     val completed = book.isRead || book.progressPercent?.let { it >= 99.5f } == true
     return if (completed) "Mark as unread" else "Mark as read"
 }
+
+internal fun bookDetailPrimaryActionLabel(book: BookSummary): String =
+    if (book.mediaKind == MediaKind.AUDIO) "Play" else "Read"
 
 internal fun bookDetailReadingProgressLabel(book: BookSummary): String? {
     val progress = normalizeStoredProgressPercent(book.progressPercent?.takeIf { it.isFinite() })
