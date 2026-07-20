@@ -677,7 +677,7 @@ class AppCoordinator(
                 }
                 val fallback = lastBrowserState
                 if (fallback != null) {
-                    showBrowser(
+                    navigateToBrowser(
                         fallback.copy(
                             message = userMessage(error, "Unable to open ${book.title}.")
                         )
@@ -1016,7 +1016,7 @@ class AppCoordinator(
     fun closeReader() {
         val reader = _screen.value as? AppScreen.Reader
         lastBrowserState?.let { browser ->
-            showBrowser(
+            navigateToBrowser(
                 browser.copy(
                     books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
                     homeBooks = mergeKnownProgress(browser.homeBooks, null),
@@ -1081,6 +1081,14 @@ class AppCoordinator(
     }
 
     private fun showBrowser(state: BrowserState) {
+        lastBrowserState = state
+        if (_screen.value is AppScreen.ReaderLoading || _screen.value is AppScreen.Reader) {
+            return
+        }
+        _screen.value = AppScreen.Browser(browserState = state)
+    }
+
+    private fun navigateToBrowser(state: BrowserState) {
         lastBrowserState = state
         _screen.value = AppScreen.Browser(browserState = state)
     }

@@ -260,7 +260,7 @@ The implemented trigger is every initial reader activity entry/open for EPUB and
 ### Pending reader stability/interaction revision - 2026-07-20
 
 - [x] Identify why readers are sometimes replaced by Home during sync/refresh: background browser updates call the navigation-owning `showBrowser()` after reader launch, with no reader ownership/generation guard.
-- [ ] Split browser snapshot updates from screen navigation and prove delayed refresh/download callbacks cannot replace `ReaderLoading` or `Reader`.
+- [x] Split browser snapshot updates from screen navigation. Guarded snapshot updates preserve `ReaderLoading`/`Reader`, explicit reader failure/close retains deliberate navigation, and focused delayed-refresh/download regressions pass.
 - [ ] Remove Back from lightweight chrome and place labeled Exit/X at the left edge. Center/content tap remains the dismiss-to-reading interaction; Android Back continues to dismiss overlays before exiting.
 - [ ] Show the tutorial for exactly three seconds unless the user taps anywhere on the tutorial layer, in which case consume that tap and dismiss immediately.
 - [ ] Validate the final layout and behavior across EPUB/comic Read and Preview, status-bar insets, large text, portrait/landscape, themes, refresh/sync activity, and repeated opens.

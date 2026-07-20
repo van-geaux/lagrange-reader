@@ -266,6 +266,68 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `finishing refresh updates browser snapshot without replacing active reader`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val refreshedBook = book.copy(title = "Refreshed title")
+        val refreshGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                isComplete = true
+            ),
+            refreshLibraryCatalogResult = LibraryBooksPage(
+                items = listOf(refreshedBook),
+                total = 1,
+                isComplete = true
+            ),
+            refreshLibraryCatalogGate = refreshGate,
+            buildReaderResult = ReaderState(book = cachedBook, localFile = File("cached.epub"))
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+        coordinator.openBook(cachedBook)
+        runCurrent()
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+        coordinator.closeReader()
+        val restored = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(refreshedBook), restored.browserState.books)
+    }
+
+    @Test
+    fun `download state updates do not replace active reader`() = runTest {
+        val downloadGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = downloadGate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.downloadBook(book)
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+        runCurrent()
+
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+        downloadGate.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+    }
+
+    @Test
     fun `failed reconciliation keeps the complete cached catalog usable`() = runTest {
         val cachedBook = book.copy(title = "Cached title")
         val repository = FakeBookOrbitDataSource(

@@ -355,11 +355,12 @@ The implemented trigger is every initial EPUB/comic reader activity entry/open, 
 
 ### Reader stability and interaction follow-up - 2026-07-20
 
-1. Diagnosis complete, fix pending: `AppCoordinator.showBrowser()` conflates browser-snapshot mutation with navigation by always assigning `AppScreen.Browser`. An in-flight `loadBrowser()`/catalog refresh or another asynchronous browser-state update can complete after `openBook()` sets `ReaderLoading`/`Reader` and replace it. Reader launch has no cancellation or generation guard against that stale completion.
-2. Implement the stability fix first. Background refresh/download/progress reconciliation must update `lastBrowserState` without navigating away from `ReaderLoading` or `Reader`; explicit Close/Exit, sign-out, and authentication recovery must retain deliberate navigation. Add a gated refresh-versus-open regression plus asynchronous browser-update coverage.
-3. Remove the lightweight chrome Back button and place labeled Exit/X on the left. Center/content tap continues to dismiss chrome and return to reading.
-4. Change the tutorial to exactly 3,000 ms and allow any consumed tutorial-layer tap to dismiss it immediately.
-5. Run the complete automated gate, build the debug APK before device testing, then validate refresh/sync races and revised reader interactions on the Samsung Galaxy S24 before resuming the remaining media/responsive queue.
+1. [x] Diagnosis complete: the former `AppCoordinator.showBrowser()` conflated browser-snapshot mutation with navigation, allowing delayed refresh or download-state callbacks to replace `ReaderLoading` or `Reader`.
+2. [x] Implement the stability fix. Guarded `showBrowser()` updates `lastBrowserState` while preserving `ReaderLoading`/`Reader`; explicit reader open failure and close call `navigateToBrowser()`. Two deterministic `AppCoordinatorTest` regressions cover delayed catalog refresh and download-state updates, and the focused test run passes.
+3. [ ] Run the full automated gate and physical-device validation, including refresh/download activity during reader open/use plus explicit failure and close navigation.
+4. Remove the lightweight chrome Back button and place labeled Exit/X on the left. Center/content tap continues to dismiss chrome and return to reading.
+5. Change the tutorial to exactly 3,000 ms and allow any consumed tutorial-layer tap to dismiss it immediately.
+6. Run the complete automated gate, build the debug APK before device testing, then validate refresh/sync races and revised reader interactions on the Samsung Galaxy S24 before resuming the remaining media/responsive queue.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
