@@ -406,6 +406,67 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `audio reader is not persisted until Readium playback succeeds`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val repository = FakeBookOrbitDataSource(
+            buildReaderResult = ReaderState(
+                book = audiobook,
+                localFile = File("sample.m4b")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+
+        coordinator.openBook(audiobook)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+        assertTrue(repository.savedActiveReaders.isEmpty())
+    }
+
+    @Test
+    fun `failed Readium audio launch clears active reader and returns to browser`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+        coordinator.setScreenForTest(
+            AppScreen.Reader(
+                ReaderState(book = audiobook, localFile = File("sample.m4b"))
+            )
+        )
+
+        coordinator.onAudioPlaybackFailed(audiobook, "Audiobook preparation failed safely.")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearActiveReaderCalls)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertTrue(browser.browserState.message.orEmpty().contains("Unable to open Sample Audiobook"))
+    }
+
+    @Test
     fun `load browser falls back to cached snapshot on network failure`() = runTest {
         val cachedState = BrowserState(
             serverUrl = serverUrl,

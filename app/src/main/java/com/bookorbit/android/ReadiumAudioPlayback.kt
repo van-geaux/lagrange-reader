@@ -121,30 +121,34 @@ internal suspend fun openReadiumAudio(
         return@withContext ReadiumAudioOpenResult.Error("Readium did not recognize this file as an audiobook.")
     }
 
-    val engineProvider = ExoPlayerEngineProvider(
-        application = application,
-        metadataProvider = DefaultMediaMetadataProvider(
-            title = book.title,
-            author = book.author
+    // Readium's ExoPlayer adapter creates a main-looper Player. Media3 requires every
+    // subsequent configuration call to run on that same thread.
+    withContext(Dispatchers.Main.immediate) main@{
+        val engineProvider = ExoPlayerEngineProvider(
+            application = application,
+            metadataProvider = DefaultMediaMetadataProvider(
+                title = book.title,
+                author = book.author
+            )
         )
-    )
-    val factory = AudioNavigatorFactory(publication, engineProvider)
-        ?: run {
-            publication.close()
-            return@withContext ReadiumAudioOpenResult.Error("Readium could not prepare this audiobook.")
-        }
-    val initialLocator = publication.readingOrder.firstOrNull()
-        ?.let(publication::locatorFromLink)
-        ?.copyWithLocations(fragments = listOf("t=${initialPositionMs.coerceAtLeast(0L).milliseconds.inWholeSeconds}"))
-    val navigator = factory.createNavigator(
-        initialLocator = initialLocator,
-        initialPreferences = ExoPlayerPreferences()
-    ).getOrNull()
-        ?: run {
-            publication.close()
-            return@withContext ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
-        }
-    ReadiumAudioOpenResult.Opened(publication, navigator)
+        val factory = AudioNavigatorFactory(publication, engineProvider)
+            ?: run {
+                publication.close()
+                return@main ReadiumAudioOpenResult.Error("Readium could not prepare this audiobook.")
+            }
+        val initialLocator = publication.readingOrder.firstOrNull()
+            ?.let(publication::locatorFromLink)
+            ?.copyWithLocations(fragments = listOf("t=${initialPositionMs.coerceAtLeast(0L).milliseconds.inWholeSeconds}"))
+        val navigator = factory.createNavigator(
+            initialLocator = initialLocator,
+            initialPreferences = ExoPlayerPreferences()
+        ).getOrNull()
+            ?: run {
+                publication.close()
+                return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
+            }
+        ReadiumAudioOpenResult.Opened(publication, navigator)
+    }
 }
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -296,32 +300,40 @@ class ReadiumAudioPlaybackController internal constructor(
         playWhenReady: Boolean = true
     ): ReadiumAudioOpenResult {
         ReadiumAudioPlaybackService.start(application)
-        binder().session.value?.takeIf { current ->
+        val serviceBinder = binder()
+        serviceBinder.session.value?.takeIf { current ->
             current.book.libraryId == book.libraryId &&
                 current.book.id == book.id &&
                 current.book.fileId == book.fileId &&
                 current.launchMode == launchMode
         }?.let { current ->
-            if (playWhenReady) current.navigator.play()
-            startProgressUpdates(current)
+            withContext(Dispatchers.Main.immediate) {
+                if (playWhenReady) current.navigator.play()
+                startProgressUpdates(current)
+            }
             return ReadiumAudioOpenResult.Opened(current.publication, current.navigator)
         }
         return when (val opened = openReadiumAudio(application, book, file, initialPositionMs)) {
             is ReadiumAudioOpenResult.Error -> opened
             is ReadiumAudioOpenResult.Opened -> {
-                binder().openSession(book, launchMode, opened.publication, opened.navigator)
-                if (playWhenReady) opened.navigator.play()
-                startProgressUpdates(requireNotNull(binder().session.value))
+                withContext(Dispatchers.Main.immediate) {
+                    serviceBinder.openSession(book, launchMode, opened.publication, opened.navigator)
+                    if (playWhenReady) opened.navigator.play()
+                    startProgressUpdates(requireNotNull(serviceBinder.session.value))
+                }
                 opened
             }
         }
     }
 
     suspend fun close() {
-        binder().session.value?.let(::publishProgress)
-        progressJob?.cancel()
-        progressJob = null
-        binder().stop()
+        val serviceBinder = binder()
+        withContext(Dispatchers.Main.immediate) {
+            serviceBinder.session.value?.let(::publishProgress)
+            progressJob?.cancel()
+            progressJob = null
+            serviceBinder.stop()
+        }
     }
 
     private fun startProgressUpdates(session: ReadiumAudioPlaybackService.Session) {

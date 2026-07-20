@@ -274,7 +274,7 @@ Target-device feedback confirms reader ownership during sync/refresh/download ac
 - [x] Order the profile dropdown as Achievements, Options with cogwheel, About, divider, Change server, and Log out/Sign in; remove About from More. Compiled Compose coverage passes; target-device feedback confirms the menu ordering. Cog icon, divider semantics, and About routing remain separately unvalidated.
 - [ ] Validate accessibility, large text, the Options cog icon, profile divider semantics, and About routing.
 
-Automated gate: 252 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly pass. Tutorial readability, Series grouping/persistence, section label/divider layout, and profile-menu ordering are target-device validated; icon/divider/About and accessibility checks remain.
+Automated gate: 256 JVM tests across 43 suites, lint, debug APK assembly, and Android-test APK assembly pass. Tutorial readability, Series grouping/persistence, section label/divider layout, and profile-menu ordering are target-device validated; icon/divider/About and accessibility checks remain.
 
 ### Readium, library cover aspect, and persistent audiobook player - 2026-07-20
 
@@ -283,6 +283,7 @@ Automated gate: 252 JVM tests across 42 suites, lint, debug APK assembly, and An
 - [ ] Respect each BookOrbit library's `coverAspectRatio`: 2/3 cards remain portrait and 1/1 cards are genuinely square with no top/bottom padding. Resolve the shape from each book's owning library everywhere, including mixed-library Home, Search, Series, Authors, Local books, and player surfaces.
 - [x] Build persistent Readium audio with an application-scoped controller. It samples progress every 1.5 seconds independently of UI/background navigation; Preview is isolated, explicit Close publishes final normal progress and stops the service, Readium handles focus/noisy output, and Android 13 notification permission is requested on first playback.
 - [x] Keep one compact player across main destinations and separate Readium EPUB/comic activities until explicitly closed. Normal Read/Preview returns to the browser with playback retained. The Audiobookshelf-inspired small player shows compact cover, title/author, progress, −15, play/pause, +30, and Close. It never expands and there is no fullscreen audiobook surface.
+- [x] Fix the actual M4B launch crash by keeping parsing on IO and moving Readium player/navigator/session/play/close work to the main dispatcher. The pushed fixture opens, plays with active media session/foreground service/audio focus, and closes under instrumentation. Failed preparation clears stale reader state and returns to the browser instead of entering a restart loop.
 - [ ] Run runtime/device validation for notification/lock-screen/headset/Bluetooth controls, offline and interruption behavior, accessibility/responsive layout, and service/process recreation.
 - [ ] Validate square/portrait and mixed-library layouts plus background audio across process/service recreation, interruptions, offline/online transitions, progress sync, Preview isolation, accessibility, large text, orientation, themes, and every migrated format.
 

@@ -663,7 +663,7 @@ class AppCoordinator(
                 } else {
                     preparedState.copy(launchMode = ReaderLaunchMode.NORMAL)
                 }
-                if (launchMode == ReaderLaunchMode.NORMAL) {
+                if (launchMode == ReaderLaunchMode.NORMAL && book.mediaKind != MediaKind.AUDIO) {
                     repository.saveActiveReader(readerState.book)
                 }
                 _screen.value = AppScreen.Reader(readerState)
@@ -1050,6 +1050,24 @@ class AppCoordinator(
                 }
             }
             runCatching { repository.syncPendingProgress() }
+        }
+    }
+
+    fun onAudioPlaybackFailed(book: BookSummary, message: String) {
+        scope.launch {
+            repository.clearActiveReader()
+            val browser = lastBrowserState
+            if (browser != null) {
+                navigateToBrowser(
+                    browser.copy(
+                        books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
+                        homeBooks = mergeKnownProgress(browser.homeBooks, null),
+                        message = "Unable to open ${book.title} with Readium. $message"
+                    )
+                )
+            } else {
+                loadBrowser()
+            }
         }
     }
 

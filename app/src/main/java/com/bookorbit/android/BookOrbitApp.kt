@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -235,7 +236,8 @@ private fun BookOrbitDestination(
             onProgress = coordinator::onProgress,
             comicPageLoader = coordinator::loadCatalogImage,
             audioPlaybackController = audioPlaybackController,
-            onAudioReady = coordinator::minimizeAudioReader
+            onAudioReady = coordinator::minimizeAudioReader,
+            onAudioFailure = coordinator::onAudioPlaybackFailed
         )
     }
 }
@@ -725,7 +727,8 @@ private fun ReaderScreen(
     onProgress: (BookSummary, Long, Int, Float?) -> Unit,
     comicPageLoader: suspend (String) -> ByteArray?,
     audioPlaybackController: ReadiumAudioPlaybackController?,
-    onAudioReady: () -> Unit
+    onAudioReady: () -> Unit,
+    onAudioFailure: (BookSummary, String) -> Unit
 ) {
     if (readerKeepsScreenAwake(state.book.mediaKind)) {
         KeepReaderScreenAwake()
@@ -840,7 +843,8 @@ private fun ReaderScreen(
                 MediaKind.AUDIO -> AudioReader(
                     state = state,
                     controller = audioPlaybackController,
-                    onReady = onAudioReady
+                    onReady = onAudioReady,
+                    onFailure = onAudioFailure
                 )
                 MediaKind.PDF -> PdfReaderView(
                     file = state.localFile,
@@ -995,7 +999,8 @@ internal fun EpubReaderSystemBars(theme: EpubReaderTheme) {
 private fun AudioReader(
     state: ReaderState,
     controller: ReadiumAudioPlaybackController?,
-    onReady: () -> Unit
+    onReady: () -> Unit,
+    onFailure: (BookSummary, String) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var errorMessage by remember(state.book.id, state.book.fileId, state.launchMode) {
@@ -1005,17 +1010,25 @@ private fun AudioReader(
         val audioController = controller
         val file = state.localFile?.takeIf { it.isFile }
         if (audioController == null || file == null) {
-            errorMessage = "Unable to prepare this audiobook for Readium playback."
+            val message = "Unable to prepare this audiobook for Readium playback."
+            errorMessage = message
+            onFailure(state.book, message)
             return@LaunchedEffect
         }
-        when (
-            val result = audioController.open(
+        val result = try {
+            audioController.open(
                 book = state.book,
                 file = file,
                 initialPositionMs = state.lastKnownPosition,
                 launchMode = state.launchMode
             )
-        ) {
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Log.e("ReadiumAudio", "Audiobook preparation failed for ${state.book.id}", error)
+            ReadiumAudioOpenResult.Error("Audiobook preparation failed safely.")
+        }
+        when (result) {
             is ReadiumAudioOpenResult.Error -> errorMessage = result.message
             is ReadiumAudioOpenResult.Opened -> {
                 if (
@@ -1035,6 +1048,10 @@ private fun AudioReader(
                 }
                 onReady()
             }
+        }
+        if (result is ReadiumAudioOpenResult.Error) {
+            runCatching { audioController.close() }
+            onFailure(state.book, result.message)
         }
     }
     if (errorMessage != null) {
