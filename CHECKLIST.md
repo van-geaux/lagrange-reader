@@ -282,7 +282,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Restore the exact in-chapter EPUB page on reopen and restart
 - [x] Render library books with the same adaptive poster cards used by Series and Authors
 - [x] Rename visible app branding to Lagrange with the subtitle "a BookOrbit reader"
-- [x] Add an About destination after Options in the More menu
+- [x] Add an About destination; its original More-menu placement was later superseded by the profile-dropdown revision
 - [x] Show the Lagrange subtitle only on the splash/loading presentation
 - [x] Add a Libraries control to collapse series into representative cards and restore all books
 - [x] Add Local books before Options in the More menu
@@ -391,7 +391,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. Version 0.2.7 includes the July 20 reader/detail feedback follow-up. The current gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies. No device is attached, so the revised chrome, tutorial, stability race, and detail alignment remain physically unvalidated.
+Implement and validate in this dependency order. Version 0.2.7 includes the July 20 reader/detail feedback follow-up. The current gate passes 250 JVM tests across 42 suites plus lint and both APK assemblies. The reported reader-ownership race, Exit, and tutorial timing/dismissal are target-device validated; broader format/responsive checks remain.
 
 1. [ ] Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, right page rail/footer, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
 2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. Samsung Galaxy S24 manual validation remains pending.
@@ -434,8 +434,8 @@ Execute in this order:
 
 1. [x] Remove the background behind the Previous/Menu/Next tutorial labels and enlarge the label text to 28 sp, approximately twice its prior size, while preserving the colored tap regions, exact 3,000 ms timeout, and consumed tap dismissal. Focused JVM and Android-test compilation pass.
 2. [x] Add mutually exclusive Series-detail grouping controls below Genres for grouping books by Library or File format. Library is the default, tapping the active choice can leave both inactive, and the selected state persists globally across every Series. Full-width section headers follow configured library order or normalized alphabetical format order; books retain series-index order. Focused JVM and Android-test compilation pass.
-3. [ ] Reorder the profile dropdown to Achievements, Options, About, divider, Change server, and Log out/Sign in. Give Options a cogwheel icon instead of the three-dot icon and remove About from the More sheet.
-4. [ ] Run focused coverage, the full JVM/lint/APK gate, build the debug APK, and physically validate tutorial readability, Series grouping/persistence, dropdown ordering/icons/divider, and About navigation.
+3. [x] Reorder the profile dropdown to Achievements, Options, About, divider, Change server, and Log out/Sign in. Give Options a cogwheel icon instead of the three-dot icon and remove About from the More sheet. Compiled Compose coverage asserts ordering, icon semantics, divider placement, About routing, and the reduced More contents.
+4. [ ] Focused coverage and the full gate pass: 250 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Physically validate tutorial readability, Series grouping/persistence, dropdown ordering/icons/divider, and About navigation.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial behaves correctly. Tutorial labels are transparent-backed 28 sp text. Series details now persist a global Library/Format/none grouping choice, default Library, and render deterministic full-width group headers. Next: reorganize the profile dropdown with Achievements and Options above About plus a divider before session actions. The last full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial behaves correctly. Tutorial labels are transparent-backed 28 sp text. Series details persist Library/Format/none grouping globally. The profile dropdown now places Achievements, Options, and About above a divider before session actions. The full gate passes 250 JVM tests across 42 suites plus lint and both APK assemblies; target-device validation of the new visuals/grouping/menu remains.
 
 ### 1. UI/UX direction and design system
 
@@ -87,7 +87,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 1. Implemented: restore the exact EPUB page within the current chapter on close/reopen and full app restart, while preserving the existing server progress percentage and chapter-boundary behavior; physical-device validation remains required.
 2. Implemented: change the selected-library book browser from list rows to the adaptive poster-card grid used by Series and Authors, preserving metadata, offline-disabled cards, and detail actions; physical-device validation remains required.
 3. Implemented: rename the visible app brand to `Lagrange` and add the subtitle `a BookOrbit reader` to the logo/launch presentation. BookOrbit remains the connected server/product name; physical-device branding validation remains required.
-4. Implemented: add an About destination after Options in the More menu, using placeholder app/version/server information until the About content is reviewed.
+4. Implemented: add an About destination with placeholder app/version/server information until the About content is reviewed. Its original More-menu placement was later superseded by the profile-dropdown revision.
 
 ## Latest device feedback workplan — 2026-07-13 (continued)
 
@@ -368,14 +368,14 @@ Target-device feedback confirms the original reader replacement race is resolved
 
 1. [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size, without changing region colors, timing, or tap consumption. Focused JVM and Android-test compilation pass.
 2. [x] Add mutually exclusive Library and File format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series. Library sections follow configured library order, format sections use normalized alphabetical labels, and books retain series-index order. Focused grouping/preference tests and Android-test compilation pass.
-3. Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More.
-4. Add deterministic state/grouping and compiled Compose coverage, run the full gate, build the debug APK, and complete target-device validation.
+3. [x] Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More. Compiled Compose coverage checks the order, icon, divider, routing, and remaining More destinations.
+4. [ ] Deterministic state/grouping and compiled Compose coverage are in place; the full gate passes 250 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Complete target-device validation.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.
 
-The current reader/detail, stability, and interaction gate passes 244 JVM tests across 41 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage includes the 3,000 ms timing, tap dismissal, revised chrome semantics, and delayed refresh/download reader-ownership regressions. Physical-device execution remains pending.
+The current reader/detail, stability, tutorial-label, Series-grouping, and profile-menu gate passes 250 JVM tests across 42 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage includes timing/dismissal, revised chrome and tutorial labels, delayed refresh/download reader ownership, persisted grouping, section ordering, and profile-menu structure. New visual/grouping/menu device validation remains pending.
 
 The completed immediate reader-close step passes 184 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Focused coordinator coverage verifies cached-browser restoration before background work and final-progress preservation.
 

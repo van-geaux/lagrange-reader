@@ -769,7 +769,7 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
-    fun homeSearchAndMoreActionsOpenNativeLayers() {
+    fun homeSearchProfileAndMoreActionsOpenNativeLayers() {
         composeRule.setContent {
             BookOrbitTheme {
                 BookOrbitApp(
@@ -790,14 +790,35 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Search your library").assertIsDisplayed()
         composeRule.onNodeWithText("Back").performClick()
         composeRule.onAllNodesWithText("a BookOrbit reader").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("User profile").performClick()
+        composeRule.onNodeWithContentDescription("Options icon").assertIsDisplayed()
+        composeRule.onNodeWithTag("profile-session-divider").assertIsDisplayed()
+        val achievementsBounds = composeRule.onNodeWithText("Achievements")
+            .fetchSemanticsNode().boundsInRoot
+        val optionsBounds = composeRule.onNodeWithText("Options")
+            .fetchSemanticsNode().boundsInRoot
+        val aboutBounds = composeRule.onNodeWithText("About")
+            .fetchSemanticsNode().boundsInRoot
+        val dividerBounds = composeRule.onNodeWithTag("profile-session-divider")
+            .fetchSemanticsNode().boundsInRoot
+        val changeServerBounds = composeRule.onNodeWithText("Change server")
+            .fetchSemanticsNode().boundsInRoot
+        val logoutBounds = composeRule.onNodeWithText("Log out")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(achievementsBounds.top < optionsBounds.top)
+        assertTrue(optionsBounds.top < aboutBounds.top)
+        assertTrue(aboutBounds.bottom <= dividerBounds.top)
+        assertTrue(dividerBounds.bottom <= changeServerBounds.top)
+        assertTrue(changeServerBounds.top < logoutBounds.top)
+        composeRule.onNodeWithText("About").performClick()
+        composeRule.onNodeWithText("About details and acknowledgements will be expanded here.")
+            .assertIsDisplayed()
+
         composeRule.onNodeWithText("More").performClick()
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
         composeRule.onAllNodesWithText("Options").assertCountEquals(0)
-        composeRule.onNodeWithText("About").performClick()
-        composeRule.onNodeWithContentDescription("User profile").performClick()
-        composeRule.onNodeWithText("Options").assertIsDisplayed()
     }
 
     @Test

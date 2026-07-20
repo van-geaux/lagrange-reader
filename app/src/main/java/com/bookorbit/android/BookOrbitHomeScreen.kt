@@ -55,10 +55,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
@@ -475,6 +477,19 @@ internal fun NativeLibraryBrowserScreen(
         genreSourceSeriesKey = null
         selectedBook = null
     }
+    val openAbout = {
+        showProfileMenu = false
+        showMoreMenu = false
+        destination = BrowserDestination.ABOUT
+        query = ""
+        selectedAuthor = null
+        selectedSeriesKey = null
+        activeBookGenre = null
+        activeSeriesGenre = null
+        genreSourceBook = null
+        genreSourceSeriesKey = null
+        selectedBook = null
+    }
     val openChangeServerEditor = {
         showProfileMenu = false
         changeServerUrl = state.serverUrl
@@ -526,13 +541,6 @@ internal fun NativeLibraryBrowserScreen(
                     showMoreMenu = false
                     localBooksLibraryId = null
                     destination = BrowserDestination.LOCAL_BOOKS
-                    query = ""
-                    selectedAuthor = null
-                    selectedSeriesKey = null
-                },
-                onAbout = {
-                    showMoreMenu = false
-                    destination = BrowserDestination.ABOUT
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
@@ -687,6 +695,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 activeBookGenre != null -> BrowserTopBar(
@@ -706,6 +715,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 activeSeriesGenre != null -> BrowserTopBar(
@@ -725,6 +735,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedBook != null -> BrowserTopBar(
@@ -741,6 +752,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedSeriesKey != null -> BrowserTopBar(
@@ -757,6 +769,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 selectedAuthor != null -> BrowserTopBar(
@@ -773,6 +786,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
                 else -> BrowserTopBar(
@@ -807,6 +821,7 @@ internal fun NativeLibraryBrowserScreen(
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onAchievements = openAchievements,
+                    onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
             }
@@ -1087,6 +1102,7 @@ private fun BrowserTopBar(
     sessionActionLabel: String,
     onOptions: () -> Unit = {},
     onAchievements: () -> Unit = {},
+    onAbout: () -> Unit = {},
     onChangeServer: () -> Unit = {},
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
@@ -1112,20 +1128,35 @@ private fun BrowserTopBar(
                     onDismissRequest = onDismissProfile
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Options") },
-                        leadingIcon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
-                        onClick = {
-                            onDismissProfile()
-                            onOptions()
-                        }
-                    )
-                    DropdownMenuItem(
                         text = { Text("Achievements") },
                         leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
                         onClick = {
                             onDismissProfile()
                             onAchievements()
                         }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Options") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Settings, contentDescription = "Options icon")
+                        },
+                        onClick = {
+                            onDismissProfile()
+                            onOptions()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("About") },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                        onClick = {
+                            onDismissProfile()
+                            onAbout()
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .testTag("profile-session-divider")
                     )
                     DropdownMenuItem(
                         text = { Text("Change server") },
@@ -1181,8 +1212,7 @@ private fun BrowserBottomNavigation(
 private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
-    onLocalBooks: () -> Unit,
-    onAbout: () -> Unit
+    onLocalBooks: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1209,11 +1239,6 @@ private fun MoreMenu(
             headlineContent = { Text("Local books") },
             leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
             modifier = Modifier.clickable(onClick = onLocalBooks)
-        )
-        ListItem(
-            headlineContent = { Text("About") },
-            leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
-            modifier = Modifier.clickable(onClick = onAbout)
         )
     }
 }
