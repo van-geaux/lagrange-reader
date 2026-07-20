@@ -7,7 +7,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -58,14 +60,14 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithTag("reader-lightweight-position-control").assertIsDisplayed()
         composeRule.onNodeWithTag("reader-lightweight-bottom-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Test Book").assertIsDisplayed()
-        composeRule.onNodeWithText("Back").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Back").assertCountEquals(0)
         composeRule.onNodeWithText("Exit").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Previous chapter").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Next chapter").assertIsEnabled().performClick()
         composeRule.onNodeWithContentDescription("Previous page").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Next page").assertIsEnabled().performClick()
         composeRule.onNodeWithContentDescription("Page jump bar").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Back to reading").performClick()
+        composeRule.onNodeWithContentDescription("Dismiss reader controls and continue reading").performClick()
         composeRule.onNodeWithContentDescription("Close book").performClick()
         composeRule.onNodeWithContentDescription("Reader settings").performClick()
         composeRule.onNodeWithText("Chapters").performClick()
@@ -80,6 +82,9 @@ class ReaderLightweightChromeInstrumentedTest {
         }
 
         val rootBounds = composeRule.onNodeWithTag("reader-root").fetchSemanticsNode().boundsInRoot
+        val exitBounds = composeRule.onNodeWithText("Exit").fetchSemanticsNode().boundsInRoot
+        val titleBounds = composeRule.onNodeWithText("Test Book").fetchSemanticsNode().boundsInRoot
+        assertTrue(exitBounds.left < titleBounds.left)
         val controlBounds = composeRule
             .onNodeWithTag("reader-lightweight-position-control")
             .fetchSemanticsNode()
@@ -116,8 +121,9 @@ class ReaderLightweightChromeInstrumentedTest {
 
     @Test
     fun tapZoneTutorialShowsThreeEqualLabeledRegions() {
+        val dismissCount = mutableIntStateOf(0)
         composeRule.setContent {
-            ReaderTapZoneTutorial()
+            ReaderTapZoneTutorial(onDismiss = { dismissCount.intValue++ })
         }
 
         composeRule.onNodeWithTag("reader-tap-zone-tutorial").assertIsDisplayed()
@@ -138,5 +144,9 @@ class ReaderLightweightChromeInstrumentedTest {
         assertEquals(bounds[1].width, bounds[2].width, 1f)
         assertTrue(bounds[0].left < bounds[1].left)
         assertTrue(bounds[1].left < bounds[2].left)
+        regionTags.forEach { tag -> composeRule.onNodeWithTag(tag).performClick() }
+        composeRule.runOnIdle {
+            assertEquals(3, dismissCount.intValue)
+        }
     }
 }

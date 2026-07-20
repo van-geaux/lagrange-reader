@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-Version `0.2.7` includes the first July 20 reader/detail follow-up. The next interaction revision removes the redundant chrome Back action, moves Exit/X left, and changes the tutorial to a tap-dismissible three seconds. Before those visual changes, the diagnosed refresh/navigation race must be fixed so background work cannot replace an opening or active reader with Home.
+Version `0.2.7` includes the July 20 reader/detail follow-ups. Reader ownership is isolated from delayed browser updates, chrome has no visible Back action and places labeled Exit/X leftmost, and the tutorial is tap-dismissible with an exact three-second timeout. The automated gate passes; target-device validation remains.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -63,7 +63,7 @@ Detail refinement: book details mirror the reader-relevant BookOrbit metadata an
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Every activity entry first shows the completed two-second Previous/Menu/Next tutorial after rendering readiness; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, exact locator resume, progress, and Preview isolation remain.
+Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Every activity entry first shows the Previous/Menu/Next tutorial for exactly 3,000 ms after rendering readiness, or until any consumed tutorial-region tap dismisses it; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, exact locator resume, progress, and Preview isolation remain.
 
 ### Device feedback workplan
 
@@ -238,7 +238,7 @@ Book details now show the selected compact primary progress line directly above 
 The Suwayomi-inspired lightweight hierarchy is implemented with the user's selected Lagrange adaptation:
 
 - A center tap toggles lightweight chrome instead of opening the complete reader-options sheet immediately.
-- The status-bar-safe top bar contains labeled Back at left, the book title, and labeled Exit with X at right.
+- The status-bar-safe top bar contains leftmost labeled Exit/X and the book title, with no visible Back action. Tapping the reading surface/center scrim dismisses chrome.
 - The right side contains an approximately 75%-height page rail. Its arrows move one page for EPUB and comics; EPUB adds a second previous/next arrow pair for chapter movement.
 - The bottom contains a Chapter list button and a cog/settings button. The cog is the deliberate route to the existing full reader options; the lightweight surface does not duplicate those settings.
 - On initial reader entry/open, show a labeled tap-zone preview as three equal-width, full-height thirds: left Previous in `rgba(255, 114, 118, 0.5)`, center Menu in `rgba(0, 0, 0, 0.5)`, and right Next in `rgba(144, 238, 144, 0.5)`. These are Suwayomi's `RIGHT_LEFT` preview colors at 50% opacity.
@@ -249,9 +249,9 @@ Working order:
 1. [ ] Install version 0.2.7 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
 2. [x] Implement and test the exact single-row policy, including inline nonlocal Download/Retry/Cancel, local Delete/Update/Cancel update in More, typography-aware Mark placement, disabled transfer-slot stability, and extreme-width compaction. Physical S24 validation remains pending.
 3. [x] Implement option A with canonical formatting, zero/reset distinction, unknown status-only output, identity de-duplication, canonical BrowserState precedence, and immediate read-to-unread removal. Physical S24 validation remains pending.
-4. [x] Implement lightweight chrome with labeled Back/Exit semantics, a right-side page rail, separate EPUB chapter arrows, outer list/cog routes, theme-aware status-inset-safe bars, landscape adaptation, and layered Back dismissal.
+4. [x] Implement lightweight chrome with leftmost labeled Exit/X and no visible Back action, a right-side page rail, separate EPUB chapter arrows, outer list/cog routes, theme-aware status-inset-safe bars, surface/scrim dismissal, landscape adaptation, and layered Android Back dismissal.
    [x] Remove duplicate chapter/page selectors from cog options and retain the outer list button as the only chapter/page picker.
-   [x] Implement the exact two-second tap-zone preview on every EPUB/comic Read and Preview entry, above all UI and consuming taps until first-frame-timed dismissal.
+   [x] Implement the exact 3,000 ms tap-zone preview on every EPUB/comic Read and Preview entry, above all UI; every region consumes taps and dismisses immediately.
    [x] Align book-detail More to the right/trailing edge whenever it is shown and space permits.
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
 
@@ -261,13 +261,13 @@ The implemented trigger is every initial reader activity entry/open for EPUB and
 
 - [x] Identify why readers are sometimes replaced by Home during sync/refresh: background browser updates call the navigation-owning `showBrowser()` after reader launch, with no reader ownership/generation guard.
 - [x] Split browser snapshot updates from screen navigation. Guarded snapshot updates preserve `ReaderLoading`/`Reader`, explicit reader failure/close retains deliberate navigation, and focused delayed-refresh/download regressions pass.
-- [ ] Remove Back from lightweight chrome and place labeled Exit/X at the left edge. Center/content tap remains the dismiss-to-reading interaction; Android Back continues to dismiss overlays before exiting.
-- [ ] Show the tutorial for exactly three seconds unless the user taps anywhere on the tutorial layer, in which case consume that tap and dismiss immediately.
+- [x] Remove Back from lightweight chrome and place labeled Exit/X at the left edge. Center/content tap remains the dismiss-to-reading interaction; Android Back continues to dismiss overlays before exiting.
+- [x] Show the tutorial for exactly three seconds unless the user taps anywhere on the tutorial layer, in which case consume that tap and dismiss immediately.
 - [ ] Validate the final layout and behavior across EPUB/comic Read and Preview, status-bar insets, large text, portrait/landscape, themes, refresh/sync activity, and repeated opens.
 
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 
-- Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, the outer page rail/list, labeled Back/Exit ordering, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the revised flow on the target device.
+- Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, the outer page rail/list, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the revised flow on the target device.
 - Keep downloaded CBR/CB7 available but show the connection requirement for server-side extraction; client-side RAR/7z support is optional future work.
 - Defer audiobook-specific UX until a representative sample is available.
 

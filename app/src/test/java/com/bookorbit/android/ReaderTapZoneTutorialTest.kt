@@ -5,8 +5,8 @@ import org.junit.Test
 
 class ReaderTapZoneTutorialTest {
     @Test
-    fun `tutorial duration is exactly two seconds`() {
-        assertEquals(2_000L, READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
+    fun `tutorial duration is exactly three seconds`() {
+        assertEquals(3_000L, READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
     }
 
     @Test

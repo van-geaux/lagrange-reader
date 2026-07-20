@@ -250,7 +250,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             setContent {
                 BookOrbitTheme {
-                    ReaderTapZoneTutorial(modifier = Modifier.fillMaxSize())
+                    ReaderTapZoneTutorial(
+                        onDismiss = ::hideTapZoneTutorial,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
@@ -392,9 +395,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         tapZoneTutorialView.doOnPreDraw {
             lifecycleScope.launch {
                 delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
-                tapZoneTutorialView.visibility = View.GONE
+                hideTapZoneTutorial()
             }
         }
+    }
+
+    private fun hideTapZoneTutorial() {
+        tapZoneTutorialView.visibility = View.GONE
     }
 
     internal fun areReaderControlsVisible(): Boolean =

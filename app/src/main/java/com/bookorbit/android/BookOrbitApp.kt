@@ -1706,7 +1706,7 @@ internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): Reade
     )
 }
 
-internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 2_000L
+internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 3_000L
 internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
 
 internal data class ReaderTapZoneTutorialRegion(
@@ -1725,7 +1725,10 @@ internal val READER_TAP_ZONE_TUTORIAL_REGIONS = listOf(
 )
 
 @Composable
-internal fun ReaderTapZoneTutorial(modifier: Modifier = Modifier) {
+internal fun ReaderTapZoneTutorial(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val interactionSources = remember {
         List(READER_TAP_ZONE_TUTORIAL_REGIONS.size) { MutableInteractionSource() }
     }
@@ -1747,7 +1750,7 @@ internal fun ReaderTapZoneTutorial(modifier: Modifier = Modifier) {
                         .clickable(
                             interactionSource = interactionSources[index],
                             indication = null,
-                            onClick = {}
+                            onClick = onDismiss
                         )
                         .testTag("reader-tap-zone-${region.label.lowercase()}")
                         .semantics { contentDescription = "${region.label} tap region" },
@@ -1858,12 +1861,12 @@ internal fun ReaderLightweightChrome(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
-                        onClick = onBackToReading,
-                        modifier = Modifier.semantics { contentDescription = "Back to reading" },
+                        onClick = onCloseBook,
+                        modifier = Modifier.semantics { contentDescription = "Close book" },
                         contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                        Text("Back", modifier = Modifier.padding(start = 4.dp))
+                        Icon(Icons.Default.Close, contentDescription = null)
+                        Text("Exit", modifier = Modifier.padding(start = 4.dp))
                     }
                     Text(
                         text = title,
@@ -1872,14 +1875,6 @@ internal fun ReaderLightweightChrome(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
-                    TextButton(
-                        onClick = onCloseBook,
-                        modifier = Modifier.semantics { contentDescription = "Close book" },
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        Text("Exit", modifier = Modifier.padding(end = 4.dp))
-                        Icon(Icons.Default.Close, contentDescription = null)
-                    }
                 }
             }
 

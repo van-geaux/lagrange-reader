@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the first July 20 reader/detail follow-up. The next stack starts with the diagnosed refresh/navigation race that can replace an opening or active reader with Home, then removes the redundant chrome Back action, moves Exit/X left, and changes the tutorial to a tap-dismissible three seconds.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Reader screen ownership is guarded against delayed browser updates; lightweight chrome has no visible Back action, places labeled Exit/X leftmost, and retains surface/scrim dismissal. The tutorial now lasts exactly 3,000 ms and any of its three consumed regions dismisses it immediately. The full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies; physical-device validation remains pending.
 
 ### 1. UI/UX direction and design system
 
@@ -347,8 +347,8 @@ Execute the current work in this order:
 1. Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm retained controls/footer/system behavior, exact normal locator resume/progress, Preview isolation, cached reuse after the first connected CBR/CB7 preparation, and clear offline failure for downloaded CBR/CB7. Spot-check unchanged EPUB, PDF, and audio paths. Do not overstate comic validation until this physical pass succeeds.
 2. Completed in version 0.2.4: use one fixed 46 dp-high, non-wrapping, non-scrolling row. Read/Preview are labeled. Nonlocal books always keep an inline 46 dp Download/Retry/Cancel slot, disabled but present when unavailable/offline. Local books have no inline transfer; Delete and eligible Update/Cancel update live in More. Mark as read/unread uses current typography/font-scale measurement and moves to More unless the full row fits. More appears whenever anything is hidden. At extreme widths only Read/Preview compact through weights. Physical S24 validation remains pending.
 3. Completed in version 0.2.5: show a compact primary-colored `Reading · n%` or `Read · n%` line directly above actions. Use finite canonical progress clamped to 0–100 with at most two decimals; opened 0% is valid, unread-reset 0% is absent, and unknown percentage renders status-only. Keep identity metadata free of duplicate reading status and prefer canonical BrowserState over stale detail cache so Mark as unread removes the line immediately. Physical S24 validation remains pending.
-4. Completed in version 0.2.7: after navigator readiness, every EPUB/comic Read and Preview entry shows an above-all-UI, tap-consuming tutorial. Three equal full-height thirds are Previous RGB(255,114,118), Menu RGB(0,0,0), and Next RGB(144,238,144), each alpha 0.5. The exact 2,000 ms dismissal starts on first pre-draw.
-5. Completed July 20: move the shared rail to the right and approximately 75% height; make its primary unit Page; add EPUB chapter arrows plus the retained outer Chapters picker; remove duplicate cog position controls; keep the labeled Back/title/Exit bar below status insets; and pin book-detail More to the trailing edge. The gate passes 242 JVM tests across 41 suites, lint, debug APK assembly, and Android-test APK assembly.
+4. Completed in version 0.2.7: after navigator readiness, every EPUB/comic Read and Preview entry shows an above-all-UI tutorial. Three equal full-height thirds are Previous RGB(255,114,118), Menu RGB(0,0,0), and Next RGB(144,238,144), each alpha 0.5. The current exact 3,000 ms timeout starts on first pre-draw; every region consumes taps and dismisses immediately.
+5. Completed July 20: move the shared rail to the right and approximately 75% height; make its primary unit Page; add EPUB chapter arrows plus the retained outer Chapters picker; remove duplicate cog position controls; keep chrome below status insets; remove its visible Back action, place labeled Exit/X leftmost, retain surface/scrim dismissal; and pin book-detail More to the trailing edge. The current gate passes 244 JVM tests across 41 suites, lint, debug APK assembly, and Android-test APK assembly.
 6. Run target-device, accessibility, large-text, responsive, orientation, theme, timing, resume/sync, Preview-isolation, and offline checks, then resume CB7, representative PDF/audiobook, compact Achievement, series-neighbor, jump-rail, and partial-refresh edge validation.
 
 The implemented trigger is every initial EPUB/comic reader activity entry/open, including Read and Preview. No seen-state is persisted across repeat opens, books, files, or installs.
@@ -357,16 +357,16 @@ The implemented trigger is every initial EPUB/comic reader activity entry/open, 
 
 1. [x] Diagnosis complete: the former `AppCoordinator.showBrowser()` conflated browser-snapshot mutation with navigation, allowing delayed refresh or download-state callbacks to replace `ReaderLoading` or `Reader`.
 2. [x] Implement the stability fix. Guarded `showBrowser()` updates `lastBrowserState` while preserving `ReaderLoading`/`Reader`; explicit reader open failure and close call `navigateToBrowser()`. Two deterministic `AppCoordinatorTest` regressions cover delayed catalog refresh and download-state updates, and the focused test run passes.
-3. [ ] Run the full automated gate and physical-device validation, including refresh/download activity during reader open/use plus explicit failure and close navigation.
-4. Remove the lightweight chrome Back button and place labeled Exit/X on the left. Center/content tap continues to dismiss chrome and return to reading.
-5. Change the tutorial to exactly 3,000 ms and allow any consumed tutorial-layer tap to dismiss it immediately.
-6. Run the complete automated gate, build the debug APK before device testing, then validate refresh/sync races and revised reader interactions on the Samsung Galaxy S24 before resuming the remaining media/responsive queue.
+3. [ ] The full automated gate passes. Run physical-device validation, including refresh/download activity during reader open/use plus explicit failure and close navigation.
+4. [x] Remove the lightweight chrome Back button and place labeled Exit/X leftmost. Center/content-scrim taps continue to dismiss chrome and return to reading.
+5. [x] Change the tutorial to exactly 3,000 ms. All three full-screen regions consume taps, call dismissal, and are hidden immediately by the EPUB/comic activities.
+6. [ ] The complete automated gate passes and the debug APK is built. Validate refresh/sync races and revised reader interactions on the Samsung Galaxy S24 before resuming the remaining media/responsive queue.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.
 
-The reader/detail follow-up passes 242 JVM tests across 41 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage checks two-second timing, right-side 75% geometry, page/chapter separation, outer-only options, labeled actions, and trailing-edge More placement. No device is attached for physical execution.
+The current reader/detail, stability, and interaction gate passes 244 JVM tests across 41 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage includes the 3,000 ms timing, tap dismissal, revised chrome semantics, and delayed refresh/download reader-ownership regressions. Physical-device execution remains pending.
 
 The completed immediate reader-close step passes 184 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Focused coordinator coverage verifies cached-browser restoration before background work and final-progress preservation.
 
