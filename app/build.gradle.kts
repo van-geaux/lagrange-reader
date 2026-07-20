@@ -15,8 +15,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 4
-        versionName = "0.2.2"
+        versionCode = 5
+        versionName = "0.2.3"
     }
 
     buildFeatures {
@@ -49,9 +49,9 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
-    implementation("org.readium.kotlin-toolkit:readium-shared:3.0.0")
-    implementation("org.readium.kotlin-toolkit:readium-streamer:3.0.0")
-    implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.0")
+    implementation("org.readium.kotlin-toolkit:readium-shared:3.0.2")
+    implementation("org.readium.kotlin-toolkit:readium-streamer:3.0.2")
+    implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.2")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
 

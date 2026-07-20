@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-The July 19 EPUB compatibility work order below overrides the general phase sequence. Version 0.2.2 routes both normal EPUB Read and Preview through Readium Kotlin Toolkit 3.0.0 while retaining Lagrange's existing options/progress behavior. Samsung Galaxy S24 validation of the full normal-Read migration comes before book-detail and reader-chrome work.
+The reader compatibility work order below overrides the general phase sequence. Version 0.2.3 uses Readium Kotlin Toolkit 3.0.2 for EPUB and comics while retaining Lagrange controls/progress behavior. Samsung Galaxy S24 comic validation comes before book-detail and reader-chrome work.
 
 ### 1. UI/UX direction and design system
 
@@ -57,10 +57,10 @@ The July 19 EPUB compatibility work order below overrides the general phase sequ
 ### 4. Media-specific validation
 
 - Completed in code: recognize bare CBZ/CBR/CB7 BookOrbit format tokens, include CB7 in filters/download naming, and route all three through the comic reader instead of unsupported-format handling
-- Completed in code: read remote comics through authenticated `/api/v1/cbz/files/{fileId}/pages` and `/pages/{pageIndex}`, with page progress; retain local ZIP extraction for offline CBZ and mislabeled ZIP archives
+- Completed in code: open local/readable CBZ with Readium's image navigator; for connected CBR/CB7, fetch authenticated BookOrbit pages and build/reuse a cached CBZ before opening Readium
 - Treat RAR4/RAR5/7z signatures as valid downloaded comics so they are not deleted as corrupt; downloaded/local CBR/CB7 still requires server page extraction in this build
 - Completed and target-device validated: give comics the established novel-reader interaction model with a black fullscreen fitted-image surface, always-visible page footer, outer tap zones and horizontal swipes for page changes, center-tap options, exposed-content/Back dismissal, and Back-to-exit only after options close
-- Device-validate online CBZ/CBR/CB7 and offline ZIP/CBZ behavior; client-side offline RAR/7z extraction remains an optional future enhancement
+- Device-validate the Readium CBZ path and connected CBR/CB7 cache preparation; offline downloaded CBR/CB7 remains unsupported without the server, and client-side RAR/7z extraction is optional future work
 - Obtain representative audiobook and PDF files; audiobook testing remains deferred without a sample
 
 ### 5. Release readiness
@@ -338,13 +338,13 @@ Pending follow-up:
 
 The virtual no-store document candidate in commit `4854b0b` and its later custom-renderer SVG normalization remained insufficient on the Samsung Galaxy S24. The supplied books isolated bitmap-only SVG cover pages as a recurring failure shape, while Overlord Vol. 1's ordinary chapter-3 image could render.
 
-All samples correctly identify a JPEG manifest item with EPUB3 `properties=cover-image` (Zero Damage also carries legacy metadata), so missing OPF cover metadata is not the cause. Readium Kotlin Toolkit remains pinned at 3.0.0 for the current Kotlin 1.9.24/compileSdk 35 toolchain. Version 0.2.2 routes every EPUB launch into `ReadiumEpubReaderActivity`; PDF, comics, and audiobooks keep their existing implementations.
+All samples correctly identify a JPEG manifest item with EPUB3 `properties=cover-image` (Zero Damage also carries legacy metadata), so missing OPF cover metadata is not the cause. Readium Kotlin Toolkit is now pinned at 3.0.2: 3.0.0's image navigator crashed during construction, while 3.0.2 fixes it and remains compatible with Kotlin 1.9.24. EPUB and comics use dedicated Readium activities; PDF and audio remain unchanged.
 
-Permanent coverage now includes `ReadiumEpubReaderRoutingTest`, which proves every EPUB uses Readium and covers progress fallback, plus three `ReadiumEpubOpenInstrumentedTest` cases for bitmap-only SVG cover and locator persistence, settings mapping, and an injected center tap opening the real controls. The full gate passes 218 JVM tests across 36 suites with zero failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`; all three focused connected tests pass. Temporary emulator diagnostics opened all four supplied books through normal Read and visually confirmed covers plus the Lagrange footer/options. Samsung physical validation of normal Read remains open.
+Permanent coverage includes EPUB routing/progress and three connected EPUB cases plus comic routing/preparation and two connected comic cases. The full gate passes 222 JVM tests across 37 suites with zero failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`; all five focused connected tests pass. Samsung physical validation of the new comic path remains open.
 
 Execute the current work in this order:
 
-1. Install version 0.2.2 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate all four supplied EPUBs through normal Read. Confirm images, existing Lagrange controls/settings, exact resume, close-time coordinator progress, system bars, orientation lock, and keep-awake. Confirm Preview remains start-at-beginning and progress/location-free, then spot-check unchanged PDF, comic, and audiobook routing. The earlier physical Preview cover proof already passed; do not overstate normal-Read validation until this new pass succeeds.
+1. Install version 0.2.3 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm retained controls/footer/system behavior, exact normal locator resume/progress, Preview isolation, cached reuse after the first connected CBR/CB7 preparation, and clear offline failure for downloaded CBR/CB7. Spot-check unchanged EPUB, PDF, and audio paths. Do not overstate comic validation until this physical pass succeeds.
 2. Implement one exact, non-wrapping, non-overflowing book-detail action row. Read and Preview remain labeled and always inline. Eligible Download is icon-only, always inline while the book is not local, and absent when local. Delete local is always in the three-dot overlay and never inline. Mark as read/unread stays inline only when space permits and otherwise moves into the overlay. Show More whenever any applicable action is hidden, preserving at least Read, Preview, eligible Download, and required More on every width. Specify and test Download/Update/Cancel state mapping during implementation rather than inventing it in planning.
 3. After the user confirms its exact visual placement, show canonical 0-100 progress on book details when a title is currently reading or read/completed. Do not fabricate a value when both server and local progress are unknown. Cover zero, partial, completed, and unknown states.
 4. Continue the existing Suwayomi-inspired reader work: implement lightweight center-tap chrome first, then the one-second initial-entry tap-zone tutorial so Menu teaches the final behavior. Retain the separate Back/Close/title header, left vertical chapter control with previous/next chapter actions, bottom Chapter list and cog-to-full-options actions, and the documented equal-third Previous/Menu/Next colors.

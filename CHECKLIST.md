@@ -104,7 +104,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
-- [x] Route every EPUB Read and Preview launch through `ReadiumEpubReaderActivity` on Readium Kotlin Toolkit 3.0.0; leave PDF, comic, and audiobook routing unchanged
+- [x] Route every EPUB launch through `ReadiumEpubReaderActivity` and every locally readable comic through `ReadiumComicReaderActivity` on Readium 3.0.2; leave PDF and audio unchanged
+- [x] Build and reuse a cached CBZ from authenticated BookOrbit pages for connected CBR/CB7 before opening Readium; keep offline downloaded CBR/CB7 explicitly server-required
 
 ## 7. Download For Offline Use
 
@@ -229,6 +230,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [ ] Execute the repository HTTP integration tests on a usable connected device/emulator; current androidTest APK compiles but adb enumeration did not provide a runnable target
 - [x] Add an Android WebView instrumentation regression for EPUB padding geometry and translated-page visibility
 - [x] Add Readium routing/progress fallback coverage and three connected EPUB tests for bitmap-only SVG cover plus locator persistence, settings mapping, and injected center-tap controls
+- [x] Add Readium comic routing/preparation coverage and two connected tests for CBZ opening/navigation plus injected center-tap controls
 - [x] Add Compose instrumentation regression coverage for book-detail actions, wrapped metadata, the full-screen cover viewer, and Series navigation
 - [x] Add at least one end-to-end manual test matrix
 
@@ -384,9 +386,9 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. The custom renderer remained unreliable for the reported Samsung samples, while the earlier Readium Preview cover proof passed on the phone. Version 0.2.2 now routes both normal Read and Preview through Readium 3.0.0. Normal Read preserves the Lagrange options, exact locator resume, legacy progress fallback, and coordinator progress return; Preview remains isolated and starts at the beginning. Emulator diagnostics opened all four supplied books through normal Read and visually confirmed covers, footer, and options. Automated verification passes 218 JVM tests across 36 suites plus lint and both APK assemblies; all three focused Readium connected tests pass.
+Implement and validate in this dependency order. Version 0.2.3 upgrades Readium from 3.0.0 to 3.0.2 because 3.0.0's `ImageNavigatorFragment` crashed during construction. EPUB remains migrated. Local/readable CBZ now uses the dedicated Readium comic activity; connected CBR/CB7 is rebuilt from authenticated BookOrbit pages into a reusable cached CBZ. Normal comic Read stores an exact locator and returns progress; Preview starts at page 1 and stores neither. The existing dark controls/footer/system behavior remain. Automated verification passes 222 JVM tests across 37 suites plus lint and both APK assemblies; five focused connected tests pass.
 
-1. [ ] Install version 0.2.2 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and open all four supplied EPUBs through normal Read. Confirm covers and later images, edge taps, center options, chapter/page jumps, themes, text size, four margins, footer, system bars, orientation lock, keep-awake, exact resume, and coordinator/server progress. Confirm Preview still starts at the beginning without saving progress/location, then spot-check PDF, CBZ/CBR, and audiobook routing. Do not overrule the earlier successful phone Preview cover proof; this pass validates the full normal-Read migration.
+1. [ ] Install version 0.2.3 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, page slider/footer, Back/Close ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
 2. [ ] Replace the wrapping book-detail actions with exactly one non-wrapping, non-horizontally-overflowing row. Read and Preview are always inline and labeled. When no local copy exists, an eligible Download action is always inline, icon-only, and never relegated to overflow; it is absent when the book is local. Delete local is always in the three-dot overlay and never inline. Mark as read/unread is inline only when width permits and otherwise moves into that overlay. Show the three-dot action whenever any applicable action is hidden; at minimum keep Read, Preview, eligible Download, and required More visible in the row. Add explicit implementation and regression coverage for Download/Update/Cancel state mapping instead of inferring unapproved behavior.
 3. [ ] Show the canonical 0-100 progress percentage on book details when the status is currently reading or read/completed. Omit the percentage when server/local progress is genuinely unknown. Confirm the exact visual placement with the user before implementation, then cover known, zero, completed, and unknown progress states in tests.
 4. [ ] Implement the Suwayomi-inspired reader chrome, then its tutorial. Center tap toggles lightweight controls instead of full options: separate Back and Close plus book title at top, a left vertical chapter jump/progress control with previous/next chapter actions, and bottom Chapter list plus cog/settings opening the existing full options. After the final chrome exists, add three full-height equal-width tutorial thirds: Previous in `rgba(255, 114, 118, 0.5)`, Menu in `rgba(0, 0, 0, 0.5)`, and Next in `rgba(144, 238, 144, 0.5)`, visible for exactly 1 second on initial reader entry/open.
@@ -430,9 +432,9 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 UI/UX discussion and design-system work can start now:
 
 - The functional and JVM baseline is ready.
-- EPUB now uses Readium for both normal Read and Preview. The full migration passes its unit/build gate, three connected tests, and four-sample emulator diagnostics; Samsung Galaxy S24 normal-Read/settings/resume/progress validation is the highest-priority next task.
-- Comic routing is implemented for online CBZ/CBR/CB7 and offline ZIP/CBZ. Fullscreen tap/swipe/options behavior is target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation. Offline CBR/CB7 extraction is optional future work. Audiobook-specific testing remains deferred until a representative sample is available.
-- The immediate order is: physical validation of version 0.2.2's normal Read migration, single-row detail actions, conditional detail progress after placement confirmation, then the still-unfinished Suwayomi lightweight chrome/tutorial and remaining validation.
+- EPUB and comics now use Readium 3.0.2. Five focused connected tests pass; Samsung Galaxy S24 comic validation is the highest-priority next task.
+- Local/readable CBZ opens directly. Connected CBR/CB7 uses authenticated server pages to prepare a cached CBZ; downloaded CBR/CB7 remains unsupported offline because no local RAR/7z extraction is bundled. PDF and audio are unchanged.
+- The immediate order is: physical comic validation, single-row detail actions, conditional detail progress after placement confirmation, then the still-unfinished Suwayomi lightweight chrome/tutorial and remaining validation.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server

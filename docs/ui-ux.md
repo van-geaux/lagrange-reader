@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The functional prototype is stable enough for UI/UX work to continue, but planned UI work remains behind physical validation of the full EPUB migration. Version `0.2.2` routes normal Read and Preview through Readium Kotlin Toolkit 3.0.0 while keeping the existing Lagrange options/footer/settings. PDF, comic, and audiobook behavior is unchanged. Automation and four-sample emulator diagnostics pass; Samsung Galaxy S24 normal-Read/settings/resume/progress validation is next. The earlier phone Preview cover proof already passed.
+The functional prototype is stable enough for UI/UX work to continue, but planned UI work remains behind physical validation of the comic migration. Version `0.2.3` upgrades Readium to 3.0.2 and moves local/readable CBZ plus connected server-prepared CBR/CB7 into its image navigator while retaining Lagrange's comic controls/footer/resume behavior. Offline CBR/CB7 remains server-required. EPUB stays on Readium; PDF/audio are unchanged. Automation passes; Samsung Galaxy S24 comic validation is next.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -57,7 +57,7 @@ Current refinement: book poster cards use roughly half of the first candidate si
 
 Detail refinement candidate: book details mirror the reader-relevant content of BookOrbit's main detail page, including identity, synopsis, genres/tags, publication data, identifiers, rating, library, format, and file metadata. Primary actions use compact labeled tiles in an adaptive wrapping row, keeping every action discoverable without horizontal scrolling. The final tile directly exposes the live Mark as read/unread action instead of a three-dot menu. The series eyebrow is a visible navigation affordance into the existing Series detail page, and a dedicated stable Previous/Next row directly below identity/series metadata moves among series books without leaving the detail screen. Genre and Tag chips wrap independently, and the lower hierarchy groups Publication, Identifiers, and Library/file values into compact cards. Tapping the cover opens a dark full-screen viewer, and tapping the displayed cover or pressing Android Back dismisses it. Compose regression coverage exercises the action area, metadata content, cover-viewer tap dismissal, and Series navigation. Series details continue to load the complete server series, authors, read completion, possible gaps, first-book synopsis, and ordered books.
 
-### Checkpoint 4: EPUB reader - Readium migration implemented, device validation pending
+### Checkpoint 4: EPUB reader - Readium migration device-functional, broader validation pending
 
 - Refine reading chrome, chapter navigation, theme controls, typography controls, and distraction-free states.
 - Preserve the validated resume, local-image, offline, and progress behavior.
@@ -194,7 +194,7 @@ Implemented baseline: normal EPUB Read and Preview use Readium, with the current
 - [x] Restore genuinely in-progress titles from any server library to Currently reading; target-device/server validation passed.
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; target-device/server validation passed.
 - [x] Reduce server-wide Home loading latency by refreshing nonselected libraries in ordered batches of at most three after the selected library becomes current; merge completed slices incrementally and retain cached failures with partial-cache messaging. Device/server latency and load validation remain pending.
-- [x] Fix the bare-format unsupported regression and route online CBZ/CBR/CB7 plus offline ZIP/CBZ through the comic reader; general comic reading is target-device validated, while online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation.
+- [x] Migrate local/readable CBZ to Readium 3.0.2 and prepare connected CBR/CB7 as reusable cached CBZ publications from authenticated BookOrbit pages; offline downloaded CBR/CB7 remains explicitly unsupported without the server.
 - [x] Match the novel reader's fullscreen interaction model in comics: outer tap zones and horizontal swipes change pages, center tap opens options, exposed content or Back dismisses options first, and Back exits only when options are closed; target-device validation passed.
 - [x] Replace the former three-dot overflow with a directly labeled live Mark as read/unread tile in the wrapping action row, using selected-library/server-wide Home status and remaining disabled for offline snapshots.
 - [x] Make Close book dismiss the reader immediately to cached Browser state (or Loading without a cache), merge the latest visible progress into Home/Library, and continue persistence, sync, cleanup, and refresh in the background; target-device validation passed.
@@ -214,7 +214,7 @@ Implemented baseline: normal EPUB Read and Preview use Readium, with the current
 - [x] Replace Achievement posters with compact adaptive information cards: 260 dp minimum width, 22 dp server-driven symbol immediately before the title, lock/unlock state at the title row's end, and description/category/rarity plus progress/date inside the card.
 - [x] Make every book-detail action discoverable on narrow screens with a wrapping `FlowRow`; keep labels for every context action and expose Mark as read/unread directly.
 - [x] Restore EPUB embedded images through `WebViewAssetLoader` with safe nested/encoded appassets base URLs, one extracted root shared by visible/hidden renderers, and broad file/content access disabled. Fix nonlocal EPUB/PDF Preview by preparing an authenticated temporary reader copy without applying comic archive detection.
-- [x] Migrate both normal EPUB Read and Preview to Readium 3.0.0 while restoring existing Lagrange controls, settings, locator resume, Preview isolation, footer, system bars, orientation lock, and keep-awake behavior. The full gate passes 218 JVM tests across 36 suites plus lint and both APK assemblies; three focused connected tests pass. Emulator diagnostics visually confirm covers and controls for all four supplied samples. S24 normal-Read validation remains required.
+- [x] Migrate both normal EPUB Read and Preview to Readium, then retain that behavior through the 3.0.2 comic-compatible upgrade. The S24 normal-Read path and restored controls have a successful functional report; exact resume/progress and the broader regression matrix remain explicit follow-up checks.
 - [x] Retain the full stable #/A–Z jump rail when eligible (Z–A/# descending), rendering unavailable entries with 38%-alpha `onSurfaceVariant`, disabled semantics, content descriptions such as `B unavailable`, and no click action. Existing sort/catalog hiding and grid gutter behavior remain unchanged.
 - The full gate passes 209 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; `catalogJumpRailLabels` and compiled Library/Series assertions cover unavailable labels.
 - [x] Add a bottom Local books shelf to top-level Home using server-wide local titles and to Library Recommended using only titles local to the selected library. Both use deterministic deduplicated alphabetical previews capped at 12 and reuse normal shelf cards/actions/covers; See all opens global or library-scoped Local books with the appropriate title, while More > Local books remains global.
@@ -246,7 +246,7 @@ The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy
 
 Working order:
 
-1. [ ] Install version 0.2.2 on the Samsung Galaxy S24 and use normal Read for `your name.`, Overlord Vol. 1, Overlord Vol. 5, and the no-SVG `Zero Damage Sword Saint Volume 4` control. Confirm covers/later images, restored controls/settings, exact resume, and progress return. Confirm Preview still starts at the beginning without persisting progress/location, and spot-check unchanged PDF/comic/audiobook routing. Keep every later item blocked until this full normal-Read pass succeeds; the earlier phone Preview cover proof already passed.
+1. [ ] Install version 0.2.3 on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7. Confirm retained dark controls/footer, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, dark system bars, and cached-CBZ reuse. Confirm downloaded CBR/CB7 stays retained but requires the server offline. Spot-check unchanged EPUB, PDF, and audio paths. Keep later items blocked until this comic pass succeeds.
 2. [ ] Implement and test the exact single-row book-detail action policy above, including responsive behavior and explicit Download/Update/Cancel state mapping.
 3. [ ] After the user confirms placement, implement and test the conditional canonical progress percentage without fabricating unknown values.
 4. [ ] Implement the lightweight reader chrome, including the separate Back/Close Lagrange header and cog route to full options, then add the exact one-second tap-zone preview so Menu teaches that final center-tap behavior.
@@ -254,9 +254,9 @@ Working order:
 
 The current wording deliberately limits the tutorial trigger to initial reader entry/open. Persistence scope across books, files, app installs, repeat opens, Preview, and comic readers must be confirmed before implementation rather than inferred.
 
-### Checkpoint 5: Other media readers - partially implemented
+### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 
-- Fullscreen image fitting/footer, tap and swipe navigation, options actions/slider, and Back dismissal/exit ordering are target-device validated. Finish validating authenticated online CBZ/CBR/CB7 page loading/progress and offline downloaded comic formats with the available manga samples.
+- Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, options actions/slider, Back/Close ordering, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the migrated flow on the target device.
 - Keep downloaded CBR/CB7 available but show the connection requirement for server-side extraction; client-side RAR/7z support is optional future work.
 - Defer audiobook-specific UX until a representative sample is available.
 

@@ -21,6 +21,10 @@
             android:name=".ReadiumEpubReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.BookOrbit.Reader" />
+        <activity
+            android:name=".ReadiumComicReaderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BookOrbit.Reader" />
 
         <activity
             android:name=".MainActivity"

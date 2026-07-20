@@ -2830,7 +2830,7 @@ internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolea
     }
 }
 
-private fun BookSummary.comicArchiveExtension(): String? {
+internal fun BookSummary.comicArchiveExtension(): String? {
     val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
     return when {
         token.contains("cb7") || token.contains("7z") -> "cb7"

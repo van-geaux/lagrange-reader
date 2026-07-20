@@ -727,6 +727,23 @@ private fun ReaderScreen(
         )
         return
     }
+    if (shouldUseReadiumComicReader(state.book, state.localFile, state.comicPagesUrl)) {
+        ReadiumComicReaderLauncher(
+            book = state.book,
+            file = state.localFile,
+            pagesUrl = state.comicPagesUrl,
+            pageLoader = comicPageLoader,
+            title = state.book.title,
+            readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+            launchMode = state.launchMode,
+            initialPage = if (isPreview) 0 else state.pageIndex,
+            onProgress = { pageIndex, _, percent ->
+                readerProgress(state.book, 0L, pageIndex, percent)
+            },
+            onFinished = onBack
+        )
+        return
+    }
     if (state.book.mediaKind == MediaKind.COMIC) {
         ComicReaderView(
             title = if (isPreview) "Preview · ${state.book.title}" else state.book.title,
