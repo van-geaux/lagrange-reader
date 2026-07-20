@@ -10,7 +10,10 @@ class ReadiumAudioPlaybackTest {
     fun supportedAudioExtensionsMapToReadiumMediaTypes() {
         assertEquals(MediaType.MP4, readiumAudioMediaType("book.m4b"))
         assertEquals(MediaType.MP4, readiumAudioMediaType("BOOK.M4A"))
+        assertEquals(MediaType.MP4, readiumAudioMediaType("m4b"))
+        assertEquals(MediaType.MP4, readiumAudioMediaType("audio/x-m4b"))
         assertEquals(MediaType.MP3, readiumAudioMediaType("book.mp3"))
+        assertEquals(MediaType.MP3, readiumAudioMediaType("audio/mpeg"))
         assertEquals(MediaType.AAC, readiumAudioMediaType("book.aac"))
         assertEquals(MediaType.AIFF, readiumAudioMediaType("book.aiff"))
         assertEquals(MediaType.FLAC, readiumAudioMediaType("book.flac"))

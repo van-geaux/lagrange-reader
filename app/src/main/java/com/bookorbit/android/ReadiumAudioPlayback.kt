@@ -13,10 +13,16 @@ import androidx.media3.session.MediaSessionService
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
@@ -35,10 +41,31 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
-internal fun readiumAudioMediaType(filename: String): MediaType? =
-    when (filename.substringAfterLast('.', missingDelimiterValue = "").lowercase()) {
+@OptIn(ExperimentalReadiumApi::class)
+internal fun audioPlaybackPositionMs(navigator: BookOrbitAudioNavigator): Long {
+    val playback = navigator.playback.value
+    val preceding = navigator.readingOrder.items
+        .take(playback.index)
+        .mapNotNull { it.duration }
+        .sumOf { it.inWholeMilliseconds }
+    return preceding + playback.offset.inWholeMilliseconds
+}
+
+@OptIn(ExperimentalReadiumApi::class)
+internal fun audioPlaybackPercent(navigator: BookOrbitAudioNavigator): Float? {
+    val duration = navigator.readingOrder.duration?.inWholeMilliseconds?.takeIf { it > 0L }
+        ?: return null
+    return ((audioPlaybackPositionMs(navigator).toDouble() / duration.toDouble()) * 100.0)
+        .coerceIn(0.0, 100.0)
+        .toFloat()
+}
+
+internal fun readiumAudioMediaType(filenameOrFormat: String): MediaType? {
+    val normalized = filenameOrFormat.trim().lowercase()
+    val extension = normalized.substringAfterLast('.').substringAfterLast('/')
+    return when (extension) {
         "m4a", "m4b", "mp4" -> MediaType.MP4
-        "mp3" -> MediaType.MP3
+        "mp3", "mpeg" -> MediaType.MP3
         "aac" -> MediaType.AAC
         "aif", "aiff" -> MediaType.AIFF
         "flac" -> MediaType.FLAC
@@ -46,8 +73,10 @@ internal fun readiumAudioMediaType(filename: String): MediaType? =
         "opus" -> MediaType.OPUS
         "wav" -> MediaType.WAV
         "webm" -> MediaType.WEBM_AUDIO
+        "x-m4b" -> MediaType.MP4
         else -> null
     }
+}
 
 @OptIn(ExperimentalReadiumApi::class)
 internal sealed interface ReadiumAudioOpenResult {
@@ -69,7 +98,8 @@ internal suspend fun openReadiumAudio(
     if (!file.isFile || file.length() <= 0L) {
         return@withContext ReadiumAudioOpenResult.Error("The audiobook file is unavailable.")
     }
-    val mediaType = readiumAudioMediaType(file.name)
+    val mediaType = book.format?.let(::readiumAudioMediaType)
+        ?: readiumAudioMediaType(file.name)
         ?: return@withContext ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
     val httpClient = DefaultHttpClient()
     val assetRetriever = AssetRetriever(application.contentResolver, httpClient)
@@ -122,6 +152,7 @@ internal suspend fun openReadiumAudio(
 class ReadiumAudioPlaybackService : MediaSessionService() {
     internal data class Session(
         val book: BookSummary,
+        val launchMode: ReaderLaunchMode,
         val publication: Publication,
         val navigator: BookOrbitAudioNavigator,
         val mediaSession: MediaSession
@@ -133,6 +164,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun openSession(
             book: BookSummary,
+            launchMode: ReaderLaunchMode,
             publication: Publication,
             navigator: BookOrbitAudioNavigator
         ) {
@@ -142,7 +174,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                 .setSessionActivity(createSessionActivityIntent())
                 .build()
             addSession(mediaSession)
-            mutableSession.value = Session(book, publication, navigator, mediaSession)
+            mutableSession.value = Session(book, launchMode, publication, navigator, mediaSession)
         }
 
         fun closeSession() {
@@ -237,6 +269,22 @@ class ReadiumAudioPlaybackController internal constructor(
     private val application: Application
 ) {
     private val binderDeferred = CompletableDeferred<ReadiumAudioPlaybackService.Binder>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var progressJob: Job? = null
+    private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
+    private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
+
+    fun setProgressListener(
+        listener: (BookSummary, Long, Float?, ReaderLaunchMode) -> Unit
+    ) {
+        progressListener = listener
+    }
+
+    fun setCoverLoader(loader: suspend (BookSummary) -> ByteArray?) {
+        coverLoader = loader
+    }
+
+    internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)
 
     internal suspend fun session(): StateFlow<ReadiumAudioPlaybackService.Session?> = binder().session
 
@@ -244,21 +292,55 @@ class ReadiumAudioPlaybackController internal constructor(
         book: BookSummary,
         file: File,
         initialPositionMs: Long,
+        launchMode: ReaderLaunchMode,
         playWhenReady: Boolean = true
     ): ReadiumAudioOpenResult {
         ReadiumAudioPlaybackService.start(application)
+        binder().session.value?.takeIf { current ->
+            current.book.libraryId == book.libraryId &&
+                current.book.id == book.id &&
+                current.book.fileId == book.fileId &&
+                current.launchMode == launchMode
+        }?.let { current ->
+            if (playWhenReady) current.navigator.play()
+            startProgressUpdates(current)
+            return ReadiumAudioOpenResult.Opened(current.publication, current.navigator)
+        }
         return when (val opened = openReadiumAudio(application, book, file, initialPositionMs)) {
             is ReadiumAudioOpenResult.Error -> opened
             is ReadiumAudioOpenResult.Opened -> {
-                binder().openSession(book, opened.publication, opened.navigator)
+                binder().openSession(book, launchMode, opened.publication, opened.navigator)
                 if (playWhenReady) opened.navigator.play()
+                startProgressUpdates(requireNotNull(binder().session.value))
                 opened
             }
         }
     }
 
     suspend fun close() {
+        binder().session.value?.let(::publishProgress)
+        progressJob?.cancel()
+        progressJob = null
         binder().stop()
+    }
+
+    private fun startProgressUpdates(session: ReadiumAudioPlaybackService.Session) {
+        progressJob?.cancel()
+        progressJob = scope.launch {
+            while (isActive) {
+                publishProgress(session)
+                delay(1_500L)
+            }
+        }
+    }
+
+    private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
+        progressListener?.invoke(
+            session.book,
+            audioPlaybackPositionMs(session.navigator),
+            audioPlaybackPercent(session.navigator),
+            session.launchMode
+        )
     }
 
     private suspend fun binder(): ReadiumAudioPlaybackService.Binder {

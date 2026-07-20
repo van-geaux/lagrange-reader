@@ -29,6 +29,10 @@ class MainActivity : ComponentActivity() {
 
         val graph = AppGraph(this)
         val preferencesStore = AppPreferencesStore(this)
+        val audioPlaybackController =
+            (application as BookOrbitApplication).audioPlaybackController
+        audioPlaybackController.setProgressListener(graph.coordinator::onAudioPlaybackProgress)
+        audioPlaybackController.setCoverLoader(graph.coordinator::loadBookCover)
         splashScreen.setKeepOnScreenCondition {
             graph.coordinator.screen.value is AppScreen.Loading
         }
@@ -55,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     BookOrbitApp(
                         screen = screen,
                         coordinator = graph.coordinator,
+                        audioPlaybackController = audioPlaybackController,
                         appPreferences = appPreferences,
                         onAppPreferencesChange = { updated ->
                             val refreshPolicyChanged =

@@ -348,6 +348,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        addReadiumAudioPlayerOverlay(rootView)
         setContentView(rootView)
         rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
     }

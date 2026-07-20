@@ -1013,6 +1013,46 @@ class AppCoordinator(
         }
     }
 
+    fun minimizeAudioReader() {
+        val reader = (_screen.value as? AppScreen.Reader)?.readerState ?: return
+        if (reader.book.mediaKind != MediaKind.AUDIO) return
+        lastBrowserState?.let { browser ->
+            navigateToBrowser(
+                browser.copy(
+                    books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
+                    homeBooks = mergeKnownProgress(browser.homeBooks, null)
+                )
+            )
+        } ?: loadBrowser()
+    }
+
+    fun onAudioPlaybackProgress(
+        book: BookSummary,
+        position: Long,
+        progressPercent: Float?,
+        launchMode: ReaderLaunchMode
+    ) {
+        if (launchMode == ReaderLaunchMode.PREVIEW) return
+        onProgress(book, position, 0, progressPercent)
+    }
+
+    fun onAudioPlaybackClosed(book: BookSummary, launchMode: ReaderLaunchMode) {
+        if (launchMode == ReaderLaunchMode.PREVIEW) return
+        scope.launch {
+            val key = book.progressKey()
+            latestProgressByTarget[key]?.let { progress ->
+                if (ProgressQueuePolicy.isMeaningfullyDifferent(
+                        progress.toSnapshot(),
+                        queuedProgressByTarget[key]?.toSnapshot()
+                    )
+                ) {
+                    queueProgress(key, progress)
+                }
+            }
+            runCatching { repository.syncPendingProgress() }
+        }
+    }
+
     fun closeReader() {
         val reader = _screen.value as? AppScreen.Reader
         lastBrowserState?.let { browser ->

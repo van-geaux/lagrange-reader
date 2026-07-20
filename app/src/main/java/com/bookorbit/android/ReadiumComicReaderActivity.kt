@@ -264,6 +264,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        addReadiumAudioPlayerOverlay(rootView)
         setContentView(rootView)
     }
 
