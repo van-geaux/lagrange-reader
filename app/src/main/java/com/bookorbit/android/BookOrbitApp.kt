@@ -673,6 +673,19 @@ private fun ReaderScreen(
     } else {
         onProgress
     }
+    if (shouldUseReadiumEpubPreview(state.book.mediaKind, state.launchMode)) {
+        val previewFile = state.localFile
+        if (previewFile == null || !previewFile.exists()) {
+            ReaderMessage("Unable to prepare this EPUB preview.")
+        } else {
+            ReadiumEpubPreviewLauncher(
+                file = previewFile,
+                title = "Preview · ${state.book.title}",
+                onFinished = onBack
+            )
+        }
+        return
+    }
     if (state.book.mediaKind == MediaKind.EPUB) {
         EpubReaderView(
             title = state.book.title,

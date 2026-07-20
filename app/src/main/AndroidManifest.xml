@@ -18,6 +18,10 @@
         android:usesCleartextTraffic="true">
 
         <activity
+            android:name=".ReadiumEpubPreviewActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>

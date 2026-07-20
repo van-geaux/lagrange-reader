@@ -14,7 +14,8 @@ The current app flow is:
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy; nonlocal sources are downloaded through the authenticated client into a temporary reader cache without applying comic archive rules.
-7. EPUB titles are extracted into a dedicated per-book app cache root and rendered chapter by chapter through `EpubWebViewAssetSession`, which serves each styled chapter as a unique no-store virtual document on the scoped appassets origin.
+7. EPUB Preview is an isolated Readium Kotlin Toolkit proof opened from the prepared local copy in `ReadiumEpubPreviewActivity`. Normal EPUB Read still uses the custom extraction/WebView path as a fallback.
+8. In the custom path, EPUB titles are extracted into a dedicated per-book app cache root and rendered chapter by chapter through `EpubWebViewAssetSession`, which serves each styled chapter as a unique no-store virtual document on the scoped appassets origin.
 
 ## Main components
 
@@ -47,6 +48,7 @@ The current app flow is:
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
 - Native username/password is the current authentication flow. Embedded server/OIDC sign-in is intentionally deferred until its provider and redirect contract are defined.
 - Preview reader launches start at the beginning and do not write active-reader or progress state.
+- `shouldUseReadiumEpubPreview` restricts the experimental activity launch to `MediaKind.EPUB` plus `ReaderLaunchMode.PREVIEW`; every normal Read and every non-EPUB Preview keeps the established route.
 
 ### Data and API layer
 
@@ -80,6 +82,7 @@ The current app flow is:
 - Queue coverage confirms a locally queued event makes zero HTTP requests until explicit replay, then asserts file-progress and book-`reading` status payloads before exact queue acknowledgement.
 - Cases isolate and clear progress stores, cancel unique background work, and clear server/session state. The androidTest APK compiles. The targeted plain-WebView test executes on the available Android 17 emulator; the existing Compose WebView class cannot execute there because its Espresso version reflects a removed `InputManager.getInstance` API before test assertions, so broader connected coverage still requires a compatible device/emulator.
 - Permanent plain-WebView `EpubAssetLoadingInstrumentedTest` exercises the production virtual-document path, stylesheet routing, and parent/root images. It proves a bitmap-only SVG cover becomes an `IMG` with decoded `naturalWidth` and nonzero fitted dimensions, while a genuine vector SVG containing a `rect` remains an SVG and lays out. The targeted emulator test passes 1/1.
+- `ReadiumEpubPreviewRoutingTest` proves only EPUB Preview enters the experimental activity. `ReadiumEpubOpenInstrumentedTest` generates a bitmap-only SVG-cover EPUB and verifies Readium publication opening, metadata/reading order, `publication.cover()`, and a bounded `coverFitting()` result. The focused connected test passes on the emulator.
 
 ### Local persistence
 
@@ -129,6 +132,7 @@ The current app flow is:
 - EPUB, PDF, and comic reader composition marks the host view to keep the display awake and restores its prior value when the reader leaves composition. Audio and unsupported screens retain the normal device timeout.
 - Audio uses ExoPlayer against a local file or authenticated stream URL.
 - PDF uses `PdfRenderer` with simple page-by-page navigation against local downloads or authenticated cache copies.
+- EPUB Preview uses Readium Kotlin Toolkit `readium-shared`, `readium-streamer`, and `readium-navigator` 3.0.0 with core-library desugaring. Version 3.0.0 is intentionally pinned to align with the existing Kotlin 1.9.24/compileSdk 35 build rather than coupling this proof to a toolchain migration. `openReadiumEpub` retrieves the local EPUB asset, opens and validates an EPUB `Publication`, and hands it to an `EpubNavigatorFragment` with directional navigation inside a non-exported dedicated activity. Returning from that activity invokes the existing Preview close/cleanup path. This is not yet the normal reader and does not replace comic or audiobook implementations.
 - EPUB uses a local extraction flow:
   - the `.epub` is resolved from downloads or fetched into app cache
   - `META-INF/container.xml` is parsed to locate the OPF package
@@ -170,7 +174,7 @@ Validated against the live server and BookOrbit source:
 
 ## Known architectural gaps
 
-- EPUB image compatibility remains physically unresolved on the Samsung Galaxy S24. Commit `4854b0b` still failed for `your name.` and Overlord; Overlord Vol. 1 confirms a bitmap-only SVG cover fails while a later ordinary image works. Bitmap-only SVG normalization passes the narrow genuine-vector-preservation emulator regression and the unchanged 215-test/lint/APK gate, but requires the S24 retest before later UI work proceeds.
+- EPUB image compatibility remains physically unresolved on the Samsung Galaxy S24. The isolated Readium Preview proof renders the four supplied sample covers in emulator screenshots and passes its generated SVG-cover instrumentation case, but physical Preview verification is required before deciding whether to migrate normal Read. The custom reader remains available and retains its known S24 image limitation.
 - EPUB exact in-chapter page restore is implemented; exact restore, visible-overflow pagination, external vertical padding, and swipe behavior still require real-device validation against the representative sample. RTL direction controls are not implemented.
 - Native username/password login completion is verified through `/api/v1/auth/me` before coordinator resume. Other server auth variants and real rate-limit responses remain outside that completed check.
 - Sync retry/backoff behavior still needs hardening and live replay verification.
@@ -180,7 +184,7 @@ Validated against the live server and BookOrbit source:
 
 ## UI/UX phase boundary
 
-The functional architecture supports later UI/UX changes, but current execution is blocked on Samsung Galaxy S24 EPUB verification. The bitmap-only SVG normalization candidate must pass `your name.`, Overlord Vol. 1/5, and the no-SVG Zero Damage control before book-detail or reader-chrome work advances. Comic/audiobook work stays later. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
+The functional architecture supports later UI/UX changes, but current execution is blocked on Samsung Galaxy S24 EPUB Preview verification. The Readium proof must pass `your name.`, Overlord Vol. 1/5, and the no-SVG Zero Damage control before a wider migration decision or later book-detail/reader-chrome work. Comic/audiobook work stays later. See [ui-ux.md](./ui-ux.md) for checkpoints and regression guardrails.
 
 The first design-system candidate uses explicit BookOrbit light/dark color schemes, typography, and shapes instead of platform dynamic colors. Shared `BookOrbitTopBar`, `OrbitMessage`, and `OrbitEyebrow` components establish the initial shell vocabulary while keeping coordinator behavior outside the presentation layer.
 
