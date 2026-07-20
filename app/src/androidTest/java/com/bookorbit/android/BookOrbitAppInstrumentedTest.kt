@@ -487,6 +487,11 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("Downloaded Book").performClick()
         composeRule.onAllNodesWithText("Delete local").assertCountEquals(0)
+        val actionBounds = composeRule.onNodeWithTag("book-detail-actions")
+            .fetchSemanticsNode().boundsInRoot
+        val moreBounds = composeRule.onNodeWithTag("book-detail-more")
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(actionBounds.right, moreBounds.right, 1f)
         composeRule.onNodeWithContentDescription("More book actions").performClick()
         composeRule.onNodeWithText("Delete local").assertIsDisplayed()
     }

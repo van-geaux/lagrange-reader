@@ -7,6 +7,11 @@ import org.junit.Test
 
 class ReaderChromePositionStateTest {
     @Test
+    fun `position rail targets three quarters of the reader height`() {
+        assertEquals(0.75f, READER_POSITION_CONTROL_HEIGHT_FRACTION)
+    }
+
+    @Test
     fun `first position enables only next`() {
         val state = readerChromePositionState(currentIndex = 0, itemCount = 4)
 

@@ -72,6 +72,7 @@ class BookDetailActionRowTest {
         assertFalse(layout.showInlineStatusAction)
         assertTrue(layout.showMore)
         assertFalse(layout.compactRequiredActions)
+        assertTrue(layout.pinMoreToEnd)
     }
 
     @Test
@@ -85,6 +86,7 @@ class BookDetailActionRowTest {
         assertFalse(layout.showInlineStatusAction)
         assertTrue(layout.showMore)
         assertTrue(layout.compactRequiredActions)
+        assertFalse(layout.pinMoreToEnd)
     }
 
     @Test
@@ -112,6 +114,7 @@ class BookDetailActionRowTest {
         )
         assertTrue(wide.showInlineStatusAction)
         assertTrue(wide.showMore)
+        assertTrue(wide.pinMoreToEnd)
 
         val narrow = layout(
             availableWidth = 260f,

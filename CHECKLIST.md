@@ -391,16 +391,29 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. Version 0.2.7 completes the tutorial on every EPUB/comic Read and Preview entry after navigator readiness. It sits above all reader UI, consumes taps, uses equal full-height Previous/Menu/Next thirds with exact RGB/0.5 colors, and starts its exact 1,000 ms timer on first pre-draw. The gate passes 241 JVM tests across 41 suites plus lint and both APK assemblies; all five focused connected tests pass.
+Implement and validate in this dependency order. Version 0.2.7 includes the July 20 reader/detail feedback follow-up. The current gate passes 242 JVM tests across 41 suites plus lint and both APK assemblies. No device is attached, so the revised chrome and detail alignment remain physically unvalidated.
 
-1. [ ] Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, page slider/footer, Back/Close ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
+1. [ ] Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, right page rail/footer, labeled Back/Exit ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
 2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. Samsung Galaxy S24 manual validation remains pending.
 3. [x] Implement the user-selected compact progress line directly above actions, covering canonical known/zero/completed values, unknown status-only labels, explicit unread-reset omission, identity de-duplication, and immediate stale-cache-safe removal after Mark as unread. Physical S24 validation remains pending.
-4. [x] Implement shared theme-aware lightweight chrome for EPUB and comics with selected A/A top semantics, responsive left chapter/page position control, bottom list/cog, unchanged full options, and options→chrome→exit Back order.
-   [x] Add the exact one-second Previous/Menu/Next tutorial on every Read/Preview entry with first-render timing and tap consumption.
+4. [x] Implement shared theme-aware lightweight chrome for EPUB and comics with a status-bar-safe labeled Back/title/Exit top bar, a right-side page rail occupying about 75% of screen height, bottom list/cog, and options→chrome→exit Back order.
+   [x] EPUB primary slider/arrows move one page; a separate arrow pair moves chapters, and the outer Chapters button remains the chapter picker. Comics remain page-only.
+   [x] Remove duplicate chapter selection and page sliders from cog options while retaining position status and appearance/margin settings.
+   [x] Add the exact two-second Previous/Menu/Next tutorial on every Read/Preview entry with first-render timing and tap consumption.
+   [x] Pin the book-detail three-dot More action to the row's right/trailing edge whenever it is shown and layout space permits.
 5. [ ] Add automated and target-device coverage for the new detail/reader behavior, including accessibility, large text, orientation, narrow/wide layouts, reader themes, exact tutorial timing, resume/sync, Preview isolation, and offline behavior; then continue CB7 and representative PDF/audiobook coverage, compact Achievement edges, series Previous/Next edges, jump-rail responsiveness, and partial multi-library refresh failures.
 
-The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` preview, except Suwayomi's five-second preview duration is replaced by the user's exact one-second requirement. The implemented trigger is every initial EPUB/comic reader activity entry/open, including Read and Preview, with no seen-state persisted across repeat opens, books, files, or installs.
+The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` preview, except Suwayomi's five-second preview duration is replaced by the user's two-second requirement. The implemented trigger is every initial EPUB/comic reader activity entry/open, including Read and Preview, with no seen-state persisted across repeat opens, books, files, or installs.
+
+### Reader/detail feedback follow-up - 2026-07-20
+
+1. [x] Move the shared location rail from left to right and size the control to approximately 75% of reader height. Physical-device validation remains pending.
+2. [x] Make EPUB rail/primary arrows page-based in one-page increments and add separate previous/next chapter arrows while retaining the outer Chapters selector.
+3. [x] Keep the reader chrome top bar below the phone status bar.
+4. [x] Remove the duplicate chapter selector and page sliders from cog options; outer controls are the only position selectors.
+5. [x] Label Back at the top-left and place labeled Exit with X at the top-right.
+6. [x] Extend the tap-zone tutorial from one second to two seconds.
+7. [x] Keep the book-detail three-dot More action at the row's right/trailing edge whenever it appears.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

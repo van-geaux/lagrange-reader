@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.platform.testTag
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,20 +27,29 @@ class ReaderLightweightChromeInstrumentedTest {
         val backCount = mutableIntStateOf(0)
         val closeCount = mutableIntStateOf(0)
         val settingsCount = mutableIntStateOf(0)
+        val selectedPage = mutableIntStateOf(-1)
         val selectedChapter = mutableIntStateOf(-1)
 
         composeRule.setContent {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().testTag("reader-root")) {
                 ReaderLightweightChrome(
                     title = "Test Book",
                     theme = EpubReaderTheme.Sepia,
-                    positionKind = "Chapter",
-                    positionTitles = listOf("Opening", "Second Chapter", "Finale"),
-                    currentPosition = 0,
+                    positionKind = "Page",
+                    positionTitles = listOf("Page 1", "Page 2", "Page 3", "Page 4"),
+                    currentPosition = 1,
                     onBackToReading = { backCount.intValue++ },
                     onCloseBook = { closeCount.intValue++ },
                     onOpenSettings = { settingsCount.intValue++ },
-                    onPositionSelected = { selectedChapter.intValue = it }
+                    onPositionSelected = { selectedPage.intValue = it },
+                    listPositionKind = "Chapter",
+                    listPositionTitles = listOf("Opening", "Second Chapter", "Finale"),
+                    currentListPosition = 0,
+                    onListPositionSelected = { selectedChapter.intValue = it },
+                    secondaryPositionKind = "Chapter",
+                    secondaryCurrentPosition = 0,
+                    secondaryPositionCount = 3,
+                    onSecondaryPositionSelected = { selectedChapter.intValue = it }
                 )
             }
         }
@@ -48,9 +58,13 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithTag("reader-lightweight-position-control").assertIsDisplayed()
         composeRule.onNodeWithTag("reader-lightweight-bottom-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Test Book").assertIsDisplayed()
+        composeRule.onNodeWithText("Back").assertIsDisplayed()
+        composeRule.onNodeWithText("Exit").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Previous chapter").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Next chapter").assertIsEnabled().performClick()
-        composeRule.onNodeWithContentDescription("Chapter jump bar").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Previous page").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Next page").assertIsEnabled().performClick()
+        composeRule.onNodeWithContentDescription("Page jump bar").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back to reading").performClick()
         composeRule.onNodeWithContentDescription("Close book").performClick()
         composeRule.onNodeWithContentDescription("Reader settings").performClick()
@@ -61,8 +75,21 @@ class ReaderLightweightChromeInstrumentedTest {
             assertEquals(1, backCount.intValue)
             assertEquals(1, closeCount.intValue)
             assertEquals(1, settingsCount.intValue)
+            assertEquals(2, selectedPage.intValue)
             assertEquals(1, selectedChapter.intValue)
         }
+
+        val rootBounds = composeRule.onNodeWithTag("reader-root").fetchSemanticsNode().boundsInRoot
+        val controlBounds = composeRule
+            .onNodeWithTag("reader-lightweight-position-control")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        assertEquals(rootBounds.right, controlBounds.right, 1f)
+        assertEquals(
+            rootBounds.height * READER_POSITION_CONTROL_HEIGHT_FRACTION,
+            controlBounds.height,
+            2f
+        )
     }
 
     @Test

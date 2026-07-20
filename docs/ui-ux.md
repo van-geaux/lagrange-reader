@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-Version `0.2.7` completes the exact tap-zone tutorial for EPUB and comics. Every Read and Preview entry shows it after navigator readiness, above all reader UI, with taps consumed until it dismisses exactly 1,000 ms after first pre-draw. Equal full-height Previous/Menu/Next thirds use the specified red/black/green RGB colors at 50% opacity. Version 0.2.6 lightweight chrome is unchanged. Samsung Galaxy S24 validation remains open; validation and remaining edge/media work are next.
+Version `0.2.7` includes the July 20 reader/detail follow-up. The shared rail is now on the right at about 75% height and page-based; EPUB adds separate chapter arrows and retains the outer Chapters picker. Cog options no longer duplicate position selection, the status-bar-safe top bar labels Back and Exit/X at opposite edges, the tutorial lasts 2,000 ms, and book-detail More is trailing-edge aligned. Samsung Galaxy S24 validation remains open.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -63,7 +63,7 @@ Detail refinement: book details mirror the reader-relevant BookOrbit metadata an
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Every activity entry first shows the completed one-second Previous/Menu/Next tutorial after rendering readiness; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing controls, settings, footer, system bars, orientation, keep-awake, exact locator resume, progress, and Preview isolation remain.
+Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Every activity entry first shows the completed two-second Previous/Menu/Next tutorial after rendering readiness; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, exact locator resume, progress, and Preview isolation remain.
 
 ### Device feedback workplan
 
@@ -238,26 +238,28 @@ Book details now show the selected compact primary progress line directly above 
 The Suwayomi-inspired lightweight hierarchy is implemented with the user's selected Lagrange adaptation:
 
 - A center tap toggles lightweight chrome instead of opening the complete reader-options sheet immediately.
-- The top bar contains separate Back and Close buttons plus the book title.
-- The left side contains a vertical chapter jump/progress control with previous- and next-chapter actions.
+- The status-bar-safe top bar contains labeled Back at left, the book title, and labeled Exit with X at right.
+- The right side contains an approximately 75%-height page rail. Its arrows move one page for EPUB and comics; EPUB adds a second previous/next arrow pair for chapter movement.
 - The bottom contains a Chapter list button and a cog/settings button. The cog is the deliberate route to the existing full reader options; the lightweight surface does not duplicate those settings.
 - On initial reader entry/open, show a labeled tap-zone preview as three equal-width, full-height thirds: left Previous in `rgba(255, 114, 118, 0.5)`, center Menu in `rgba(0, 0, 0, 0.5)`, and right Next in `rgba(144, 238, 144, 0.5)`. These are Suwayomi's `RIGHT_LEFT` preview colors at 50% opacity.
-- Keep the preview visible for exactly 1 second, then dismiss it automatically. This intentionally overrides Suwayomi's five-second initial preview.
+- Keep the preview visible for exactly 2 seconds, then dismiss it automatically. This intentionally overrides Suwayomi's five-second initial preview.
 
 Working order:
 
 1. [ ] Install version 0.2.7 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
 2. [x] Implement and test the exact single-row policy, including inline nonlocal Download/Retry/Cancel, local Delete/Update/Cancel update in More, typography-aware Mark placement, disabled transfer-slot stability, and extreme-width compaction. Physical S24 validation remains pending.
 3. [x] Implement option A with canonical formatting, zero/reset distinction, unknown status-only output, identity de-duplication, canonical BrowserState precedence, and immediate read-to-unread removal. Physical S24 validation remains pending.
-4. [x] Implement lightweight chrome with A/A Back/Close semantics, shared EPUB/comic position controls, list/cog routes, theme-aware bars, landscape adaptation, and layered Back dismissal.
-   [x] Implement the exact one-second tap-zone preview on every EPUB/comic Read and Preview entry, above all UI and consuming taps until first-frame-timed dismissal.
+4. [x] Implement lightweight chrome with labeled Back/Exit semantics, a right-side page rail, separate EPUB chapter arrows, outer list/cog routes, theme-aware status-inset-safe bars, landscape adaptation, and layered Back dismissal.
+   [x] Remove duplicate chapter/page selectors from cog options and retain the outer list button as the only chapter/page picker.
+   [x] Implement the exact two-second tap-zone preview on every EPUB/comic Read and Preview entry, above all UI and consuming taps until first-frame-timed dismissal.
+   [x] Align book-detail More to the right/trailing edge whenever it is shown and space permits.
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
 
 The implemented trigger is every initial reader activity entry/open for EPUB and comics, including both Read and Preview; it does not persist a seen-state across repeat opens, books, files, or installs.
 
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 
-- Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, options actions/slider, Back/Close ordering, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the migrated flow on the target device.
+- Readium 3.0.2 retains fullscreen image fitting/footer, 25% edge navigation, the outer page rail/list, labeled Back/Exit ordering, exact normal locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Validate the revised flow on the target device.
 - Keep downloaded CBR/CB7 available but show the connection requirement for server-side extraction; client-side RAR/7z support is optional future work.
 - Defer audiobook-specific UX until a representative sample is available.
 

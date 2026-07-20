@@ -167,7 +167,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentPercent by mutableStateOf(0f)
     private var currentBookPage by mutableStateOf<Int?>(null)
     private var bookPositionCount by mutableStateOf<Int?>(null)
-    private var showChapterPicker by mutableStateOf(false)
     private var tapZoneTutorialHasShown = false
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
@@ -268,13 +267,23 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     ReaderLightweightChrome(
                         title = if (isPreview) "Preview · $displayTitle" else displayTitle,
                         theme = selectedTheme,
-                        positionKind = "Chapter",
-                        positionTitles = chapterTitles,
-                        currentPosition = currentChapter,
+                        positionKind = "Page",
+                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index ->
+                            "Page ${index + 1}"
+                        },
+                        currentPosition = currentPage,
                         onBackToReading = ::hideChrome,
                         onCloseBook = ::finishReader,
                         onOpenSettings = ::showOptions,
-                        onPositionSelected = ::goToChapter,
+                        onPositionSelected = ::goToPage,
+                        listPositionKind = "Chapter",
+                        listPositionTitles = chapterTitles,
+                        currentListPosition = currentChapter,
+                        onListPositionSelected = ::goToChapter,
+                        secondaryPositionKind = "Chapter",
+                        secondaryCurrentPosition = currentChapter,
+                        secondaryPositionCount = chapterTitles.size,
+                        onSecondaryPositionSelected = ::goToChapter,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -298,18 +307,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             status = "Chapter ${currentChapter + 1}/${chapterTitles.size.coerceAtLeast(1)} · " +
                                 "Page ${currentPage + 1}/${currentPageCount.coerceAtLeast(1)}",
                             theme = selectedTheme,
-                            chapterTitles = chapterTitles,
-                            currentChapter = currentChapter,
-                            showChapterPicker = showChapterPicker,
-                            currentPage = currentPage,
-                            currentPageCount = currentPageCount,
                             padding = padding,
                             fontScale = fontScale,
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
-                            onToggleChapterPicker = { showChapterPicker = !showChapterPicker },
-                            onChapterSelected = ::goToChapter,
-                            onPageSelected = ::goToPage,
                             onThemeSelected = ::applyTheme,
                             onPaddingChange = ::applyPadding,
                             onPaddingChangeFinished = { paddingStore.save(readerKey, padding) },
@@ -494,7 +495,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun goToChapter(index: Int) {
         val link = publication?.readingOrder?.getOrNull(index) ?: return
         navigator?.go(link)
-        showChapterPicker = false
     }
 
     private fun goToPage(index: Int) {
@@ -559,7 +559,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun hideOptions() {
-        showChapterPicker = false
         optionsView.visibility = View.GONE
     }
 

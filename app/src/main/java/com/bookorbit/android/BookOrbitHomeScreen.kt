@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -3777,11 +3778,14 @@ private fun BookDetails(
                             )
                         }
                         if (layout.showMore) {
+                            if (layout.pinMoreToEnd) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                             Box {
                                 DetailActionTile(
                                     label = "More book actions",
                                     icon = Icons.Default.MoreVert,
-                                    modifier = Modifier.size(46.dp),
+                                    modifier = Modifier.size(46.dp).testTag("book-detail-more"),
                                     applyDefaultSize = false,
                                     onClick = { showActionMenu = true }
                                 )
@@ -4104,7 +4108,8 @@ internal fun bookDetailActionState(
 internal data class BookDetailActionRowLayout(
     val showInlineStatusAction: Boolean,
     val showMore: Boolean,
-    val compactRequiredActions: Boolean
+    val compactRequiredActions: Boolean,
+    val pinMoreToEnd: Boolean
 )
 
 internal fun bookDetailActionRowLayout(
@@ -4139,7 +4144,8 @@ internal fun bookDetailActionRowLayout(
     return BookDetailActionRowLayout(
         showInlineStatusAction = showInlineStatus,
         showMore = showMore,
-        compactRequiredActions = occupied(visibleRequired) > availableWidth
+        compactRequiredActions = occupied(visibleRequired) > availableWidth,
+        pinMoreToEnd = showMore && occupied(visibleRequired) + spacing <= availableWidth
     )
 }
 

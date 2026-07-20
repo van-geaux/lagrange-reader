@@ -230,7 +230,6 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                             title = if (isPreview) "Preview · $displayTitle" else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
-                            onPageSelected = ::goToPage,
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()

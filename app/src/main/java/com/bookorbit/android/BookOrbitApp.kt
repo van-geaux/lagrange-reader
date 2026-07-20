@@ -36,13 +36,20 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -1284,11 +1291,6 @@ private fun EpubReaderView(
     }
 
     val chapterCount = epubBook.chapters.size
-    val chapterTitles = remember(epubBook) {
-        epubBook.chapters.mapIndexed { index, chapter ->
-            chapter.title.ifBlank { "Chapter ${index + 1}" }
-        }
-    }
     val estimatedChapter = remember(chapterCount, initialPercent, isPreview) {
         if (isPreview) 0 else percentToChapterIndex(initialPercent, chapterCount)
     }
@@ -1307,7 +1309,6 @@ private fun EpubReaderView(
     var paddingDraft by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
     var appliedPadding by remember(file, readerKey) { mutableStateOf(paddingStore.read(readerKey)) }
     var showControls by remember(file) { mutableStateOf(false) }
-    var showChapterPicker by remember(file) { mutableStateOf(false) }
     var currentPage by remember(file, initialPage) { mutableStateOf(initialPage.coerceAtLeast(0)) }
     var currentPageCount by remember(file) { mutableStateOf(1) }
     var measuredChapterPageCounts by remember(file, fontScale, appliedPadding, selectedTheme) {
@@ -1325,7 +1326,6 @@ private fun EpubReaderView(
     }
     val dismissControls = {
         showControls = false
-        showChapterPicker = false
     }
     BackHandler {
         if (showControls) dismissControls() else onBack()
@@ -1523,28 +1523,12 @@ private fun EpubReaderView(
                 title = if (isPreview) "Preview · ${epubBook.title ?: title}" else (epubBook.title ?: title),
                 status = "Chapter ${currentChapter + 1}/$chapterCount · Page ${currentPage + 1}/$currentPageCount",
                 theme = selectedTheme,
-                chapterTitles = chapterTitles,
-                currentChapter = currentChapter,
-                showChapterPicker = showChapterPicker,
-                currentPage = currentPage,
-                currentPageCount = currentPageCount,
                 padding = paddingDraft,
                 fontScale = fontScale,
                 onContinueReading = dismissControls,
                 onCloseBook = {
                     dismissControls()
                     onBack()
-                },
-                onToggleChapterPicker = { showChapterPicker = !showChapterPicker },
-                onChapterSelected = { index ->
-                    openChapterAtEnd = false
-                    currentChapter = index
-                    showChapterPicker = false
-                },
-                onPageSelected = { pageIndex ->
-                    val target = pageIndex.coerceIn(0, (currentPageCount - 1).coerceAtLeast(0))
-                    currentPage = target
-                    readerWebView[0]?.evaluateJavascript(epubPageJumpJavascript(target), null)
                 },
                 onThemeSelected = { theme ->
                     selectedTheme = theme
@@ -1722,7 +1706,8 @@ internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): Reade
     )
 }
 
-internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 1_000L
+internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 2_000L
+internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
 
 internal data class ReaderTapZoneTutorialRegion(
     val label: String,
@@ -1794,10 +1779,23 @@ internal fun ReaderLightweightChrome(
     onCloseBook: () -> Unit,
     onOpenSettings: () -> Unit,
     onPositionSelected: (Int) -> Unit,
+    listPositionKind: String = positionKind,
+    listPositionTitles: List<String> = positionTitles,
+    currentListPosition: Int = currentPosition,
+    onListPositionSelected: (Int) -> Unit = onPositionSelected,
+    secondaryPositionKind: String? = null,
+    secondaryCurrentPosition: Int = 0,
+    secondaryPositionCount: Int = 0,
+    onSecondaryPositionSelected: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val entries = positionTitles.ifEmpty { listOf(positionKind) }
     val position = readerChromePositionState(currentPosition, entries.size)
+    val listEntries = listPositionTitles.ifEmpty { listOf(listPositionKind) }
+    val listPosition = readerChromePositionState(currentListPosition, listEntries.size)
+    val secondaryPosition = secondaryPositionKind?.let {
+        readerChromePositionState(secondaryCurrentPosition, secondaryPositionCount)
+    }
     var sliderPosition by remember(position.currentIndex) { mutableStateOf(position.currentIndex.toFloat()) }
     var showPositionList by remember { mutableStateOf(false) }
     val palette = theme.readerOptionsPalette()
@@ -1837,9 +1835,9 @@ internal fun ReaderLightweightChrome(
 
     MaterialTheme(colorScheme = colors, typography = parentTypography, shapes = parentShapes) {
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-            val verticalSliderHeight = (
-                maxHeight - 56.dp - 58.dp - EPUB_READER_PROGRESS_FOOTER_HEIGHT - 144.dp
-            ).coerceIn(56.dp, 164.dp)
+            val positionControlHeight = (maxHeight * READER_POSITION_CONTROL_HEIGHT_FRACTION)
+                .coerceAtLeast(240.dp)
+                .coerceAtMost(maxHeight)
             EpubReaderDismissScrim(
                 backgroundAlpha = 0f,
                 contentDescription = "Dismiss reader controls and continue reading",
@@ -1849,6 +1847,7 @@ internal fun ReaderLightweightChrome(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
                     .testTag("reader-lightweight-top-bar"),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                 contentColor = MaterialTheme.colorScheme.onSurface,
@@ -1858,11 +1857,13 @@ internal fun ReaderLightweightChrome(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBackToReading) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to reading")
-                    }
-                    IconButton(onClick = onCloseBook) {
-                        Icon(Icons.Default.Close, contentDescription = "Close book")
+                    TextButton(
+                        onClick = onBackToReading,
+                        modifier = Modifier.semantics { contentDescription = "Back to reading" },
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Text("Back", modifier = Modifier.padding(start = 4.dp))
                     }
                     Text(
                         text = title,
@@ -1871,21 +1872,30 @@ internal fun ReaderLightweightChrome(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
+                    TextButton(
+                        onClick = onCloseBook,
+                        modifier = Modifier.semantics { contentDescription = "Close book" },
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("Exit", modifier = Modifier.padding(end = 4.dp))
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
                 }
             }
 
             Surface(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(64.dp)
+                    .align(Alignment.CenterEnd)
+                    .width(72.dp)
+                    .height(positionControlHeight)
                     .testTag("reader-lightweight-position-control"),
-                shape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp),
+                shape = RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 shadowElevation = 5.dp
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxHeight().padding(horizontal = 4.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -1899,26 +1909,28 @@ internal fun ReaderLightweightChrome(
                         )
                     }
                     Box(
-                        modifier = Modifier.width(56.dp).height(verticalSliderHeight),
+                        modifier = Modifier.width(64.dp).weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Slider(
-                            value = sliderPosition,
-                            onValueChange = { sliderPosition = it },
-                            onValueChangeFinished = {
-                                onPositionSelected(sliderPosition.roundToInt().coerceIn(0, position.itemCount - 1))
-                            },
-                            valueRange = 0f..(position.itemCount - 1).coerceAtLeast(1).toFloat(),
-                            steps = (position.itemCount - 2).coerceAtLeast(0),
-                            enabled = position.itemCount > 1,
-                            modifier = Modifier
-                                .width(verticalSliderHeight)
-                                .rotate(90f)
-                                .semantics {
-                                    contentDescription = "$positionKind jump bar"
-                                    stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
-                                }
-                        )
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            Slider(
+                                value = sliderPosition,
+                                onValueChange = { sliderPosition = it },
+                                onValueChangeFinished = {
+                                    onPositionSelected(sliderPosition.roundToInt().coerceIn(0, position.itemCount - 1))
+                                },
+                                valueRange = 0f..(position.itemCount - 1).coerceAtLeast(1).toFloat(),
+                                steps = (position.itemCount - 2).coerceAtLeast(0),
+                                enabled = position.itemCount > 1,
+                                modifier = Modifier
+                                    .requiredWidth(maxHeight)
+                                    .rotate(90f)
+                                    .semantics {
+                                        contentDescription = "$positionKind jump bar"
+                                        stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
+                                    }
+                            )
+                        }
                     }
                     Text(
                         "${position.currentIndex + 1}/${position.itemCount}",
@@ -1933,6 +1945,40 @@ internal fun ReaderLightweightChrome(
                             Icons.Default.KeyboardArrowDown,
                             contentDescription = "Next ${positionKind.lowercase()}"
                         )
+                    }
+                    if (
+                        secondaryPositionKind != null &&
+                        secondaryPosition != null &&
+                        onSecondaryPositionSelected != null
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                        IconButton(
+                            enabled = secondaryPosition.canGoPrevious,
+                            onClick = {
+                                onSecondaryPositionSelected(secondaryPosition.currentIndex - 1)
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Previous ${secondaryPositionKind.lowercase()}"
+                            )
+                        }
+                        Text(
+                            "Chapter ${secondaryPosition.currentIndex + 1}/${secondaryPosition.itemCount}",
+                            maxLines = 1,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        IconButton(
+                            enabled = secondaryPosition.canGoNext,
+                            onClick = {
+                                onSecondaryPositionSelected(secondaryPosition.currentIndex + 1)
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Next ${secondaryPositionKind.lowercase()}"
+                            )
+                        }
                     }
                 }
             }
@@ -1955,7 +2001,7 @@ internal fun ReaderLightweightChrome(
                     OutlinedButton(onClick = { showPositionList = true }) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
                         Text(
-                            text = if (positionKind == "Chapter") "Chapters" else "Pages",
+                            text = if (listPositionKind == "Chapter") "Chapters" else "Pages",
                             modifier = Modifier.padding(start = 8.dp)
                         )
                     }
@@ -1968,13 +2014,13 @@ internal fun ReaderLightweightChrome(
 
         if (showPositionList) {
             ReaderPositionListDialog(
-                positionKind = positionKind,
-                entries = entries,
-                currentPosition = position.currentIndex,
+                positionKind = listPositionKind,
+                entries = listEntries,
+                currentPosition = listPosition.currentIndex,
                 onDismiss = { showPositionList = false },
                 onPositionSelected = { index ->
                     showPositionList = false
-                    onPositionSelected(index)
+                    onListPositionSelected(index)
                 }
             )
         }
@@ -2092,18 +2138,10 @@ internal fun EpubReaderOptionsBottomSheet(
     title: String,
     status: String,
     theme: EpubReaderTheme,
-    chapterTitles: List<String>,
-    currentChapter: Int,
-    showChapterPicker: Boolean,
-    currentPage: Int,
-    currentPageCount: Int,
     padding: EpubPaddingPercentages,
     fontScale: Float,
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
-    onToggleChapterPicker: () -> Unit,
-    onChapterSelected: (Int) -> Unit,
-    onPageSelected: (Int) -> Unit,
     onThemeSelected: (EpubReaderTheme) -> Unit,
     onPaddingChange: (EpubPaddingPercentages) -> Unit,
     onPaddingChangeFinished: () -> Unit,
@@ -2216,31 +2254,6 @@ internal fun EpubReaderOptionsBottomSheet(
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Reading position", style = MaterialTheme.typography.titleMedium)
-                    OutlinedButton(onClick = onToggleChapterPicker) {
-                        Text(if (showChapterPicker) "Hide chapters" else "Choose chapter")
-                    }
-                    if (showChapterPicker) {
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            chapterTitles.forEachIndexed { index, chapterTitle ->
-                                FilterChip(
-                                    selected = index == currentChapter,
-                                    onClick = { onChapterSelected(index) },
-                                    label = { Text(chapterTitle) }
-                                )
-                            }
-                        }
-                    }
-                    EpubChapterPageSlider(
-                        pageIndex = currentPage,
-                        pageCount = currentPageCount,
-                        onPageSelected = onPageSelected
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Appearance", style = MaterialTheme.typography.titleMedium)
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -2301,36 +2314,6 @@ internal fun EpubReaderOptionsBottomSheet(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun EpubChapterPageSlider(
-    pageIndex: Int,
-    pageCount: Int,
-    onPageSelected: (Int) -> Unit
-) {
-    val safePageCount = pageCount.coerceAtLeast(1)
-    val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            "Page ${safePageIndex + 1} of $safePageCount",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Slider(
-            value = safePageIndex.toFloat(),
-            onValueChange = { value ->
-                val target = value.roundToInt().coerceIn(0, safePageCount - 1)
-                if (target != safePageIndex) onPageSelected(target)
-            },
-            valueRange = 0f..(safePageCount - 1).coerceAtLeast(1).toFloat(),
-            enabled = safePageCount > 1,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = "Chapter page ${safePageIndex + 1} of $safePageCount"
-                }
-        )
     }
 }
 
@@ -2561,7 +2544,6 @@ private fun ComicReaderView(
                 title = title,
                 currentPage = currentPage,
                 pageCount = pageCount,
-                onPageSelected = { currentPage = it.coerceIn(0, pageCount - 1) },
                 onContinueReading = dismissControls,
                 onCloseBook = {
                     dismissControls()
@@ -2632,7 +2614,6 @@ internal fun ComicReaderOptionsBottomSheet(
     title: String,
     currentPage: Int,
     pageCount: Int,
-    onPageSelected: (Int) -> Unit,
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     modifier: Modifier = Modifier
@@ -2711,19 +2692,6 @@ internal fun ComicReaderOptionsBottomSheet(
                     OutlinedButton(onClick = onCloseBook, modifier = Modifier.weight(1f)) {
                         Text("Close book")
                     }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Reading position", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = currentPage.toFloat(),
-                        onValueChange = { onPageSelected(it.roundToInt()) },
-                        valueRange = 0f..(pageCount - 1).coerceAtLeast(1).toFloat(),
-                        enabled = pageCount > 1,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Comic reading position"
-                        }
-                    )
                 }
             }
         }
