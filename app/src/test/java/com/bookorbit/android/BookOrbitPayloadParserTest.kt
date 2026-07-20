@@ -571,6 +571,35 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseSeriesBooksPage applies scoped library when book cards omit ownership`() {
+        val page = BookOrbitPayloadParser.parseSeriesBooksPage(
+            seriesId = "cross-library-series",
+            payload = """
+                {
+                  "items": [
+                    {"id":"book-1","title":"First","seriesIndex":1},
+                    {"id":"book-2","title":"Second","seriesIndex":2}
+                  ],
+                  "total": 2,
+                  "page": 0,
+                  "size": 100,
+                  "seriesInfo": {
+                    "id": "cross-library-series",
+                    "name": "Cross-library Series",
+                    "bookCount": 2,
+                    "readCount": 0
+                  }
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test",
+            libraryId = "library-2"
+        )
+
+        assertEquals(listOf("library-2", "library-2"), page.books.map { it.libraryId })
+    }
+
+    @Test
     fun `parse catalog pages maps counts and resolves relative images`() {
         val series = BookOrbitPayloadParser.parseSeriesCatalogPage(
             payload = """

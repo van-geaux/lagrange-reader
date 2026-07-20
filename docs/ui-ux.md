@@ -270,11 +270,11 @@ Target-device feedback confirms reader ownership during sync/refresh/download ac
 ### Reader tutorial, Series grouping, and profile-menu revision - 2026-07-20
 
 - [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size. Focused JVM and Android-test compilation pass; device readability validation remains.
-- [x] Add globally persistent, mutually exclusive Library and File format grouping chips below Series-detail Genres. Library is the default, tapping the active chip leaves both inactive, and full-width section headers retain series-index order. Focused JVM and Android-test compilation pass; device layout/persistence validation remains.
+- [x] Add globally persistent, mutually exclusive Library and File format grouping chips below Series-detail Genres. Library is the default and tapping the active chip leaves both inactive. Scoped per-library Series requests restore ownership omitted by unscoped BookCard payloads, so cross-library Library sections separate correctly. Each section label shares its row with a trailing divider while books retain series-index order. Focused JVM and Android-test compilation pass; device cross-library layout/persistence validation remains.
 - [x] Order the profile dropdown as Achievements, Options with cogwheel, About, divider, Change server, and Log out/Sign in; remove About from More. Compiled Compose coverage passes; device validation remains.
 - [ ] Validate accessibility, large text, grouping headers/order/persistence, menu semantics, and About routing.
 
-Automated gate: 250 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly pass. Target-device validation remains for the new label readability, grouping, and menu layout.
+Automated gate: 252 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly pass. Target-device validation remains for the new label readability, grouping, and menu layout.
 
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending
 

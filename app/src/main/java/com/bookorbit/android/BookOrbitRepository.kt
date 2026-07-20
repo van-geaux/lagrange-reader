@@ -684,6 +684,25 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 serverBase = serverBase()
             )
         }
+        val libraries = BookOrbitPayloadParser.parseLibraries(
+            request("/api/v1/libraries", "GET", null)
+        )
+        val libraryBooks = libraries.flatMap { library ->
+            val encodedLibraryId = java.net.URLEncoder.encode(library.id, Charsets.UTF_8.name())
+            loadCompleteSeriesPages { page ->
+                BookOrbitPayloadParser.parseSeriesBooksPage(
+                    seriesId = seriesId,
+                    payload = request(
+                        "/api/v1/series/$seriesId/books?page=$page&size=100&sort=seriesIndex&order=asc&libraryId=$encodedLibraryId",
+                        "GET",
+                        null
+                    ),
+                    downloads = downloads,
+                    serverBase = serverBase(),
+                    libraryId = library.id
+                )
+            }.flatMap { it.books }
+        }
         val firstPage = requireNotNull(pages.firstOrNull())
         val responseTotal = pages.mapNotNull { it.total }.maxOrNull()
         val metadataBookCount = firstPage.seriesInfo.metadataBookCount
@@ -697,7 +716,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val completeDetail = firstPage.seriesInfo.copy(
             bookCount = responseTotal ?: firstPage.seriesInfo.bookCount,
             responseTotal = responseTotal ?: firstPage.seriesInfo.responseTotal,
-            books = mergeSeriesBooks(pages)
+            books = mergeSeriesBooksWithLibraryOwnership(
+                unscopedBooks = mergeSeriesBooks(pages),
+                libraryBooks = libraryBooks
+            )
         )
         completeDetail.copy(
             firstBook = completeDetail.books.firstOrNull()?.let { first ->
@@ -2010,11 +2032,12 @@ internal object BookOrbitPayloadParser {
         seriesId: String,
         payload: String,
         downloads: Map<String, DownloadRecord>,
-        serverBase: String
+        serverBase: String,
+        libraryId: String = ""
     ): SeriesBooksPage {
         val root = extractObject(payload, "load series details")
         val books = parseBooks(
-            libraryId = "",
+            libraryId = libraryId,
             payload = root.toString(),
             downloads = downloads,
             serverBase = serverBase
@@ -2669,6 +2692,16 @@ internal fun mergeSeriesBooks(pages: List<SeriesBooksPage>): List<BookSummary> {
         .flatMap { it.books }
         .distinctBy { it.id }
         .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
+}
+
+internal fun mergeSeriesBooksWithLibraryOwnership(
+    unscopedBooks: List<BookSummary>,
+    libraryBooks: List<BookSummary>
+): List<BookSummary> {
+    val libraryIdByBookId = libraryBooks.associate { it.id to it.libraryId }
+    return unscopedBooks.map { book ->
+        libraryIdByBookId[book.id]?.let { libraryId -> book.copy(libraryId = libraryId) } ?: book
+    }
 }
 
 internal fun coverThumbnailUrl(coverUrl: String): String {

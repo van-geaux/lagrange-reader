@@ -4606,13 +4606,21 @@ private fun SeriesDetails(
                     key = "series-section-${section.key}",
                     span = { GridItemSpan(maxLineSpan) }
                 ) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
+                    Row(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .padding(top = 6.dp)
-                            .testTag("series-section-${section.key}")
-                    )
+                            .testTag("series-section-${section.key}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(title, style = MaterialTheme.typography.titleMedium)
+                        HorizontalDivider(
+                            modifier = Modifier
+                                .padding(start = 12.dp)
+                                .weight(1f)
+                                .testTag("series-section-divider-${section.key}")
+                        )
+                    }
                 }
             }
             gridItems(section.books, key = { "series-detail-${it.id}" }) { book ->

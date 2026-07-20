@@ -170,6 +170,22 @@ class SeriesPaginationTest {
         assertEquals("Second", merged[1].title)
     }
 
+    @Test
+    fun `library ownership from scoped pages is applied to unscoped series books`() {
+        val unscoped = listOf(
+            book("book-1", "First", 1.0).copy(libraryId = ""),
+            book("book-2", "Second", 2.0).copy(libraryId = "")
+        )
+        val scoped = listOf(
+            book("book-1", "First", 1.0).copy(libraryId = "library-1"),
+            book("book-2", "Second", 2.0).copy(libraryId = "library-2")
+        )
+
+        val merged = mergeSeriesBooksWithLibraryOwnership(unscoped, scoped)
+
+        assertEquals(listOf("library-1", "library-2"), merged.map { it.libraryId })
+    }
+
     private fun page(
         page: Int,
         total: Int,

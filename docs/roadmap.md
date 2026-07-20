@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial behaves correctly. Tutorial labels are transparent-backed 28 sp text. Series details persist Library/Format/none grouping globally. The profile dropdown now places Achievements, Options, and About above a divider before session actions. The full gate passes 250 JVM tests across 42 suites plus lint and both APK assemblies; target-device validation of the new visuals/grouping/menu remains.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial behaves correctly. Tutorial labels are transparent-backed 28 sp text. Series details persist Library/Format/none grouping globally. The profile dropdown now places Achievements, Options, and About above a divider before session actions. The full gate passes 252 JVM tests across 42 suites plus lint and both APK assemblies; target-device validation of the new visuals/grouping/menu remains.
 
 ### 1. UI/UX direction and design system
 
@@ -367,15 +367,15 @@ Target-device feedback confirms the original reader replacement race is resolved
 ### Reader tutorial, Series grouping, and profile-menu follow-up - 2026-07-20
 
 1. [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size, without changing region colors, timing, or tap consumption. Focused JVM and Android-test compilation pass.
-2. [x] Add mutually exclusive Library and File format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series. Library sections follow configured library order, format sections use normalized alphabetical labels, and books retain series-index order. Focused grouping/preference tests and Android-test compilation pass.
+2. [x] Add mutually exclusive Library and File format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series. Because unscoped BookCard payloads omit `libraryId`, fetch Series books per configured library and merge ownership by book ID so Library sections separate correctly. Library sections follow configured order, formats use normalized alphabetical labels, books retain series-index order, and each section label has an inline trailing divider. Focused grouping/preference tests and Android-test compilation pass.
 3. [x] Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More. Compiled Compose coverage checks the order, icon, divider, routing, and remaining More destinations.
-4. [ ] Deterministic state/grouping and compiled Compose coverage are in place; the full gate passes 250 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Complete target-device validation.
+4. [ ] Deterministic state/grouping and compiled Compose coverage are in place; the full gate passes 252 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Complete target-device validation.
 
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.
 
-The current reader/detail, stability, tutorial-label, Series-grouping, and profile-menu gate passes 250 JVM tests across 42 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage includes timing/dismissal, revised chrome and tutorial labels, delayed refresh/download reader ownership, persisted grouping, section ordering, and profile-menu structure. New visual/grouping/menu device validation remains pending.
+The current reader/detail, stability, tutorial-label, Series-grouping, and profile-menu gate passes 252 JVM tests across 42 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. JVM/compiled Compose coverage includes timing/dismissal, revised chrome and tutorial labels, delayed refresh/download reader ownership, persisted grouping, section ordering, and profile-menu structure. New visual/grouping/menu device validation remains pending.
 
 The completed immediate reader-close step passes 184 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Focused coordinator coverage verifies cached-browser restoration before background work and final-progress preservation.
 

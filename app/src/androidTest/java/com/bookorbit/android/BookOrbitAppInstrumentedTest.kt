@@ -517,6 +517,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("series-group-by-format").assertIsNotSelected()
         composeRule.onNodeWithTag("series-section-lib-books").assertIsDisplayed()
         composeRule.onNodeWithTag("series-section-lib-comics").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-section-divider-lib-books").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-section-divider-lib-comics").assertIsDisplayed()
 
         composeRule.onNodeWithTag("series-group-by-format").performClick()
         composeRule.runOnIdle {
