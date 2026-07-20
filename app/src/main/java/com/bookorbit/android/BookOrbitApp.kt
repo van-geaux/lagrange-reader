@@ -41,9 +41,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -52,6 +60,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -72,6 +82,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -94,6 +105,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -1670,20 +1683,304 @@ internal fun EpubReaderProgressFooter(
 @Composable
 internal fun EpubReaderDismissScrim(
     modifier: Modifier = Modifier,
+    backgroundAlpha: Float = 0.32f,
+    contentDescription: String = "Dismiss reader options and continue reading",
     onDismiss: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.32f))
+            .background(Color.Black.copy(alpha = backgroundAlpha.coerceIn(0f, 1f)))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onDismiss
             )
-            .semantics { contentDescription = "Dismiss reader options and continue reading" }
+            .semantics { this.contentDescription = contentDescription }
     )
+}
+
+internal data class ReaderChromePositionState(
+    val currentIndex: Int,
+    val itemCount: Int,
+    val canGoPrevious: Boolean,
+    val canGoNext: Boolean
+)
+
+internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): ReaderChromePositionState {
+    val safeCount = itemCount.coerceAtLeast(1)
+    val safeIndex = currentIndex.coerceIn(0, safeCount - 1)
+    return ReaderChromePositionState(
+        currentIndex = safeIndex,
+        itemCount = safeCount,
+        canGoPrevious = safeIndex > 0,
+        canGoNext = safeIndex < safeCount - 1
+    )
+}
+
+@Composable
+internal fun ReaderLightweightChrome(
+    title: String,
+    theme: EpubReaderTheme,
+    positionKind: String,
+    positionTitles: List<String>,
+    currentPosition: Int,
+    onBackToReading: () -> Unit,
+    onCloseBook: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onPositionSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val entries = positionTitles.ifEmpty { listOf(positionKind) }
+    val position = readerChromePositionState(currentPosition, entries.size)
+    var sliderPosition by remember(position.currentIndex) { mutableStateOf(position.currentIndex.toFloat()) }
+    var showPositionList by remember { mutableStateOf(false) }
+    val palette = theme.readerOptionsPalette()
+    val parentTypography = MaterialTheme.typography
+    val parentShapes = MaterialTheme.shapes
+    val colors = remember(theme) {
+        if (theme == EpubReaderTheme.Dark) {
+            darkColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
+                primaryContainer = Color(palette.surfaceVariant),
+                onPrimaryContainer = Color(palette.content),
+                background = Color(palette.container),
+                onBackground = Color(palette.content),
+                surface = Color(palette.container),
+                onSurface = Color(palette.content),
+                surfaceVariant = Color(palette.surfaceVariant),
+                onSurfaceVariant = Color(palette.mutedContent),
+                outline = Color(palette.outline)
+            )
+        } else {
+            lightColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
+                primaryContainer = Color(palette.surfaceVariant),
+                onPrimaryContainer = Color(palette.content),
+                background = Color(palette.container),
+                onBackground = Color(palette.content),
+                surface = Color(palette.container),
+                onSurface = Color(palette.content),
+                surfaceVariant = Color(palette.surfaceVariant),
+                onSurfaceVariant = Color(palette.mutedContent),
+                outline = Color(palette.outline)
+            )
+        }
+    }
+
+    MaterialTheme(colorScheme = colors, typography = parentTypography, shapes = parentShapes) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+            val verticalSliderHeight = (
+                maxHeight - 56.dp - 58.dp - EPUB_READER_PROGRESS_FOOTER_HEIGHT - 144.dp
+            ).coerceIn(56.dp, 164.dp)
+            EpubReaderDismissScrim(
+                backgroundAlpha = 0f,
+                contentDescription = "Dismiss reader controls and continue reading",
+                onDismiss = onBackToReading
+            )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .testTag("reader-lightweight-top-bar"),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 5.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackToReading) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to reading")
+                    }
+                    IconButton(onClick = onCloseBook) {
+                        Icon(Icons.Default.Close, contentDescription = "Close book")
+                    }
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(64.dp)
+                    .testTag("reader-lightweight-position-control"),
+                shape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 5.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        enabled = position.canGoPrevious,
+                        onClick = { onPositionSelected(position.currentIndex - 1) }
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Previous ${positionKind.lowercase()}"
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.width(56.dp).height(verticalSliderHeight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Slider(
+                            value = sliderPosition,
+                            onValueChange = { sliderPosition = it },
+                            onValueChangeFinished = {
+                                onPositionSelected(sliderPosition.roundToInt().coerceIn(0, position.itemCount - 1))
+                            },
+                            valueRange = 0f..(position.itemCount - 1).coerceAtLeast(1).toFloat(),
+                            steps = (position.itemCount - 2).coerceAtLeast(0),
+                            enabled = position.itemCount > 1,
+                            modifier = Modifier
+                                .width(verticalSliderHeight)
+                                .rotate(90f)
+                                .semantics {
+                                    contentDescription = "$positionKind jump bar"
+                                    stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
+                                }
+                        )
+                    }
+                    Text(
+                        "${position.currentIndex + 1}/${position.itemCount}",
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    IconButton(
+                        enabled = position.canGoNext,
+                        onClick = { onPositionSelected(position.currentIndex + 1) }
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Next ${positionKind.lowercase()}"
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = EPUB_READER_PROGRESS_FOOTER_HEIGHT)
+                    .testTag("reader-lightweight-bottom-bar"),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 5.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(onClick = { showPositionList = true }) {
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+                        Text(
+                            text = if (positionKind == "Chapter") "Chapters" else "Pages",
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Reader settings")
+                    }
+                }
+            }
+        }
+
+        if (showPositionList) {
+            ReaderPositionListDialog(
+                positionKind = positionKind,
+                entries = entries,
+                currentPosition = position.currentIndex,
+                onDismiss = { showPositionList = false },
+                onPositionSelected = { index ->
+                    showPositionList = false
+                    onPositionSelected(index)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReaderPositionListDialog(
+    positionKind: String,
+    entries: List<String>,
+    currentPosition: Int,
+    onDismiss: () -> Unit,
+    onPositionSelected: (Int) -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.9f).heightIn(max = 560.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 12.dp
+        ) {
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                Text(
+                    text = if (positionKind == "Chapter") "Chapters" else "Pages",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
+                    items(entries.indices.toList(), key = { it }) { index ->
+                        val selected = index == currentPosition
+                        Surface(
+                            onClick = { onPositionSelected(index) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .semantics {
+                                    contentDescription = "Select ${positionKind.lowercase()} ${index + 1}: ${entries[index]}"
+                                    if (selected) stateDescription = "Current"
+                                },
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                Color.Transparent
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                                Text(
+                                    "$positionKind ${index + 1}",
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Text(
+                                    entries[index],
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 internal data class EpubReaderOptionsPalette(

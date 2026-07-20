@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-The current work order below overrides the general phase sequence. Version 0.2.5 completes the selected detail-progress placement. Samsung Galaxy S24 validation remains open; the next implementation is the Suwayomi lightweight reader chrome, followed by its one-second tutorial.
+The current work order below overrides the general phase sequence. Version 0.2.6 completes shared lightweight reader chrome for EPUB and comics. Samsung Galaxy S24 validation remains open; the exact one-second tap-zone tutorial is next and remains unimplemented.
 
 ### 1. UI/UX direction and design system
 
@@ -344,10 +344,10 @@ Permanent coverage includes EPUB routing/progress and three connected EPUB cases
 
 Execute the current work in this order:
 
-1. Install version 0.2.5 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm retained controls/footer/system behavior, exact normal locator resume/progress, Preview isolation, cached reuse after the first connected CBR/CB7 preparation, and clear offline failure for downloaded CBR/CB7. Spot-check unchanged EPUB, PDF, and audio paths. Do not overstate comic validation until this physical pass succeeds.
+1. Install version 0.2.6 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm retained controls/footer/system behavior, exact normal locator resume/progress, Preview isolation, cached reuse after the first connected CBR/CB7 preparation, and clear offline failure for downloaded CBR/CB7. Spot-check unchanged EPUB, PDF, and audio paths. Do not overstate comic validation until this physical pass succeeds.
 2. Completed in version 0.2.4: use one fixed 46 dp-high, non-wrapping, non-scrolling row. Read/Preview are labeled. Nonlocal books always keep an inline 46 dp Download/Retry/Cancel slot, disabled but present when unavailable/offline. Local books have no inline transfer; Delete and eligible Update/Cancel update live in More. Mark as read/unread uses current typography/font-scale measurement and moves to More unless the full row fits. More appears whenever anything is hidden. At extreme widths only Read/Preview compact through weights. Physical S24 validation remains pending.
 3. Completed in version 0.2.5: show a compact primary-colored `Reading · n%` or `Read · n%` line directly above actions. Use finite canonical progress clamped to 0–100 with at most two decimals; opened 0% is valid, unread-reset 0% is absent, and unknown percentage renders status-only. Keep identity metadata free of duplicate reading status and prefer canonical BrowserState over stale detail cache so Mark as unread removes the line immediately. Physical S24 validation remains pending.
-4. Continue the existing Suwayomi-inspired reader work: implement lightweight center-tap chrome first, then the one-second initial-entry tap-zone tutorial so Menu teaches the final behavior. Retain the separate Back/Close/title header, left vertical chapter control with previous/next chapter actions, bottom Chapter list and cog-to-full-options actions, and the documented equal-third Previous/Menu/Next colors.
+4. Chrome complete in version 0.2.6: center tap toggles shared theme-aware chrome; top Back hides/resumes, Close exits, and title remains; the responsive left slider plus previous/next maps to EPUB chapters or comic pages; bottom Chapters/Pages and cog provide list/settings access; cog hides chrome and opens unchanged full options; Android Back dismisses options, then chrome, then exits. Next: implement only the exact one-second initial-entry Previous/Menu/Next tutorial.
 5. Run automated, target-device, accessibility, large-text, responsive, orientation, theme, timing, resume/sync, Preview-isolation, and offline checks, then resume CB7, representative PDF/audiobook, compact Achievement, series-neighbor, jump-rail, and partial-refresh edge validation.
 
 The requested scope is initial reader entry/open. Do not infer a per-book, per-file, per-install, repeated-preview, or comic-reader persistence rule until the user confirms it.
@@ -356,7 +356,7 @@ The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.
 
-The detail-progress step passes 235 JVM tests across 39 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Six `BookDetailReadingProgressTest` cases cover zero, partial, completed, manual-read, reset, and unknown behavior. Compose detail coverage verifies placement and read-to-unread removal at compile time; execution on API 37 remains blocked because Espresso 3.6.1 reflects removed `InputManager.getInstance` before app assertions.
+The lightweight-chrome step passes 238 JVM tests across 40 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Three position-state JVM cases and two compiled Compose cases cover shared chrome; five focused Readium connected tests pass with injected center taps proving chrome visible while full options stays closed. API 37 Compose execution retains the Espresso limitation.
 
 The completed immediate reader-close step passes 184 JVM tests across 30 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Focused coordinator coverage verifies cached-browser restoration before background work and final-progress preservation.
 

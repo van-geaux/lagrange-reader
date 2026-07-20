@@ -47,7 +47,7 @@ class ReadiumComicOpenInstrumentedTest {
     }
 
     @Test
-    fun preparesOnlineNonZipComicPagesAndCenterTapOpensComicOptions() = runBlocking {
+    fun preparesOnlineNonZipComicPagesAndCenterTapOpensComicChrome() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val pagesUrl = "https://bookorbit.test/api/v1/cbz/files/file/pages"
         val pages = listOf(pageBytes(Color.MAGENTA), pageBytes(Color.GREEN))
@@ -193,10 +193,13 @@ class ReadiumComicOpenInstrumentedTest {
             }
             SystemClock.sleep(500)
             var controlsVisible = false
+            var optionsVisible = true
             scenario.onActivity { activity ->
-                controlsVisible = activity.areReaderControlsVisible()
+                controlsVisible = activity.areLightweightControlsVisible()
+                optionsVisible = activity.areReaderOptionsVisible()
             }
-            assertTrue("Center tap did not open comic reader options", controlsVisible)
+            assertTrue("Center tap did not open comic reader chrome", controlsVisible)
+            assertEquals(false, optionsVisible)
         }
         cbz.delete()
         cb7Cache.delete()

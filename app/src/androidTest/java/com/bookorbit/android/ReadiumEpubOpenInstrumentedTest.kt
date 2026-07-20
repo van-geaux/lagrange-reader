@@ -76,7 +76,7 @@ class ReadiumEpubOpenInstrumentedTest {
     }
 
     @Test
-    fun centerTapOpensExistingReaderOptions() {
+    fun centerTapOpensLightweightReaderChrome() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val epub = File(context.cacheDir, "readium-center-tap.epub")
         writeSvgCoverEpub(epub)
@@ -129,10 +129,13 @@ class ReadiumEpubOpenInstrumentedTest {
             }
             SystemClock.sleep(500)
             var controlsVisible = false
+            var optionsVisible = true
             scenario.onActivity { activity ->
-                controlsVisible = activity.areReaderControlsVisible()
+                controlsVisible = activity.areLightweightControlsVisible()
+                optionsVisible = activity.areReaderOptionsVisible()
             }
-            assertTrue("Center tap did not open the existing reader options", controlsVisible)
+            assertTrue("Center tap did not open the lightweight reader chrome", controlsVisible)
+            assertEquals(false, optionsVisible)
         }
         epub.delete()
     }

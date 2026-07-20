@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-Version `0.2.5` implements option A for book-detail progress: a compact primary-colored `Reading · n%` or `Read · n%` line immediately above the fixed action row. It appears only for real reading/completed state, never fabricates unknown percentage, distinguishes opened 0% from unread-reset 0%, and disappears immediately after Mark as unread. Automation passes; Samsung Galaxy S24 validation remains open. Suwayomi lightweight chrome and its one-second tutorial are next.
+Version `0.2.6` completes shared lightweight chrome for EPUB and comics. Center tap toggles it instead of full options; selected A/A semantics make top Back hide/resume and Close exit. The left chapter/page slider is responsive, with previous/next and landscape shrink; the bottom list and cog expose Chapters/Pages and unchanged full options. Samsung Galaxy S24 validation remains open. The exact one-second tap-zone tutorial is next and is not implemented.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -63,7 +63,7 @@ Detail refinement: book details mirror the reader-relevant BookOrbit metadata an
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implemented baseline: normal EPUB Read and Preview use Readium, with the current Lagrange controls layered over its navigator. Outer 25% taps turn pages and center tap opens the existing full options sheet; chapter/page jumps, Light/Sepia/Dark, 90-150% text size, four stored margins, the footer, reader system bars, orientation lock, keep-awake, exact locator resume, and close-time progress are retained. Preview starts at the beginning without saving location/progress. This restores the current control set; it does not implement the separately planned Suwayomi lightweight top/left/bottom chrome or one-second tutorial.
+Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Outer 25% taps turn pages and center toggles chrome. Top Back hides/resumes, Close exits, and title remains; the left responsive control navigates chapters/pages; bottom Chapters/Pages and cog expose the list/full options. Existing settings, footer, reader system bars, orientation lock, keep-awake, exact locator resume, progress, and Preview isolation remain. The one-second tutorial is still separate and unfinished.
 
 ### Device feedback workplan
 
@@ -235,7 +235,7 @@ The user's final book-detail action-row decision is implemented:
 
 Book details now show the selected compact primary progress line directly above actions. Finite canonical progress is clamped to 0–100 and displayed with up to two decimals. Opened 0% is valid when activity exists; explicit unread-reset 0% omits the line. Unknown percentages retain status-only `Reading`/`Read`, and identity metadata retains only availability/format to avoid duplication.
 
-The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy while retaining the user's explicit Lagrange adaptation:
+The Suwayomi-inspired lightweight hierarchy is implemented with the user's selected Lagrange adaptation:
 
 - A center tap toggles lightweight chrome instead of opening the complete reader-options sheet immediately.
 - The top bar contains separate Back and Close buttons plus the book title.
@@ -246,10 +246,11 @@ The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy
 
 Working order:
 
-1. [ ] Install version 0.2.5 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
+1. [ ] Install version 0.2.6 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
 2. [x] Implement and test the exact single-row policy, including inline nonlocal Download/Retry/Cancel, local Delete/Update/Cancel update in More, typography-aware Mark placement, disabled transfer-slot stability, and extreme-width compaction. Physical S24 validation remains pending.
 3. [x] Implement option A with canonical formatting, zero/reset distinction, unknown status-only output, identity de-duplication, canonical BrowserState precedence, and immediate read-to-unread removal. Physical S24 validation remains pending.
-4. [ ] Implement the lightweight reader chrome, including the separate Back/Close Lagrange header and cog route to full options, then add the exact one-second tap-zone preview so Menu teaches that final center-tap behavior.
+4. [x] Implement lightweight chrome with A/A Back/Close semantics, shared EPUB/comic position controls, list/cog routes, theme-aware bars, landscape adaptation, and layered Back dismissal.
+   [ ] Implement the separate exact one-second tap-zone preview next.
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
 
 The current wording deliberately limits the tutorial trigger to initial reader entry/open. Persistence scope across books, files, app installs, repeat opens, Preview, and comic readers must be confirmed before implementation rather than inferred.

@@ -99,7 +99,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var readerContainerId: Int = View.NO_ID
     private lateinit var rootView: FrameLayout
     private lateinit var readerContainer: FrameLayout
-    private lateinit var controlsView: ComposeView
+    private lateinit var chromeView: ComposeView
+    private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
 
     private lateinit var readerKey: String
@@ -189,18 +190,44 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 Gravity.BOTTOM
             )
         )
-        controlsView = ComposeView(this).apply {
+        chromeView = ComposeView(this).apply {
+            visibility = View.GONE
+            setContent {
+                BookOrbitTheme {
+                    ReaderLightweightChrome(
+                        title = if (isPreview) "Preview · $displayTitle" else displayTitle,
+                        theme = EpubReaderTheme.Dark,
+                        positionKind = "Page",
+                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index -> "Page ${index + 1}" },
+                        currentPosition = currentPage,
+                        onBackToReading = ::hideChrome,
+                        onCloseBook = ::finishReader,
+                        onOpenSettings = ::showOptions,
+                        onPositionSelected = ::goToPage,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+        rootView.addView(
+            chromeView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        optionsView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
                 BookOrbitTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        EpubReaderDismissScrim(onDismiss = ::hideControls)
+                        EpubReaderDismissScrim(onDismiss = ::hideOptions)
                         ComicReaderOptionsBottomSheet(
                             title = if (isPreview) "Preview · $displayTitle" else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
                             onPageSelected = ::goToPage,
-                            onContinueReading = ::hideControls,
+                            onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
@@ -209,7 +236,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             }
         }
         rootView.addView(
-            controlsView,
+            optionsView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -223,7 +250,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (controlsView.visibility == View.VISIBLE) hideControls() else finishReader()
+                    when {
+                        optionsView.visibility == View.VISIBLE -> hideOptions()
+                        chromeView.visibility == View.VISIBLE -> hideChrome()
+                        else -> finishReader()
+                    }
                 }
             }
         )
@@ -263,7 +294,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         fragment.addInputListener(
             object : InputListener {
                 override fun onTap(event: TapEvent): Boolean {
-                    toggleControls()
+                    toggleChrome()
                     return true
                 }
             }
@@ -313,20 +344,36 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         navigator?.go(link)
     }
 
-    private fun toggleControls() {
-        if (controlsView.visibility == View.VISIBLE) hideControls() else showControls()
+    private fun toggleChrome() {
+        if (chromeView.visibility == View.VISIBLE) hideChrome() else showChrome()
     }
 
-    private fun showControls() {
-        controlsView.visibility = View.VISIBLE
+    private fun showChrome() {
+        hideOptions()
+        chromeView.visibility = View.VISIBLE
     }
 
-    private fun hideControls() {
-        controlsView.visibility = View.GONE
+    private fun hideChrome() {
+        chromeView.visibility = View.GONE
+    }
+
+    private fun showOptions() {
+        hideChrome()
+        optionsView.visibility = View.VISIBLE
+    }
+
+    private fun hideOptions() {
+        optionsView.visibility = View.GONE
     }
 
     internal fun areReaderControlsVisible(): Boolean =
-        ::controlsView.isInitialized && controlsView.visibility == View.VISIBLE
+        areLightweightControlsVisible() || areReaderOptionsVisible()
+
+    internal fun areLightweightControlsVisible(): Boolean =
+        ::chromeView.isInitialized && chromeView.visibility == View.VISIBLE
+
+    internal fun areReaderOptionsVisible(): Boolean =
+        ::optionsView.isInitialized && optionsView.visibility == View.VISIBLE
 
     private fun updateResult() {
         if (isPreview) return
