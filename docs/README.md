@@ -46,10 +46,10 @@ Network policy is now explicit: cleartext HTTP is blocked by default and only al
 
 Compose instrumentation coverage now exists for server-setup validation, login recovery and server-change routing, populated and loading browser states, and cached-offline browser behavior. The `androidTest` target compiles locally.
 
-The functional baseline is now sufficient to begin UI/UX work. The discussion and implementation gates are defined in [UI/UX Workstream](./ui-ux.md); setup/login/browser and EPUB work can proceed without waiting for unavailable audiobook, PDF, or CBZ samples.
+The functional baseline is now sufficient to begin UI/UX work. The discussion and implementation gates are defined in [UI/UX Workstream](./ui-ux.md); setup/login/browser and EPUB work can proceed, and a local M4B plus chapter metadata are now available for audiobook work.
 
 The main gaps are:
 
 - server-forced session-expiry recovery verification on a real server
-- audiobook, PDF, and CBZ device validation when representative samples are available
+- audiobook validation with the local M4B/chapter-metadata fixture, plus PDF and CBZ device validation with representative content
 - broader integration and end-to-end test coverage

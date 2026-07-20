@@ -437,13 +437,26 @@ Execute in this order:
 3. [x] Reorder the profile dropdown to Achievements, Options, About, divider, Change server, and Log out/Sign in. Give Options a cogwheel icon instead of the three-dot icon and remove About from the More sheet. Compiled Compose coverage asserts ordering, icon semantics, divider placement, About routing, and the reduced More contents.
 4. [x] Focused coverage and the full gate pass: 252 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Target-device validation confirms tutorial readability, cross-library Series grouping and persistence, the inline section label/divider layout, and profile-menu ordering.
 5. [ ] Separately validate the Options cog icon, profile divider semantics, About routing, accessibility, and large-text layouts; these were not covered by the latest device feedback.
+
+### Readium, library cover shape, and persistent audiobook work order - 2026-07-20
+
+Execute in this dependency order:
+
+1. [x] Record the current target-device baseline: EPUB and CBZ work directly through Readium, and connected CBR works after BookOrbit page extraction is normalized into a cached CBZ for Readium. The local `sample/86 Volume 01/` fixture contains a 489,114,453-byte M4B plus companion metadata with 17 chapter ranges.
+2. [ ] Build a format capability and migration matrix for EPUB/KEPUB, PDF, audiobook formats, CBZ/CBR/CB7, MOBI/AZW/AZW3, and FB2. Make Readium the single publication layer wherever its parser/navigator supports the format. Where a source container is unsupported, normalize it into a supported Readium publication before launch instead of retaining a parallel legacy reader. Resolve the current MOBI/AZW3-as-EPUB classification that does not produce a valid EPUB publication.
+3. [ ] Extend the Library API/model/cache contract with BookOrbit's `coverAspectRatio` value (`2/3` or `1/1`), including tolerant fallback for older payloads and persistence through Room/offline snapshots.
+4. [ ] Render every book using its owning library's cover aspect on Home, Libraries, Search, Series, Authors, Local books, details, player UI, and other mixed-library surfaces. Keep 2/3 portrait cards; use a true 1/1 square cover/card area with no artificial top or bottom padding. Add cross-library and offline regression coverage.
+5. [ ] Move audiobook playback from the screen-owned ExoPlayer composable into a Media3 foreground media-playback service and MediaSession. Back/navigation and backgrounding must not stop playback. Publish cover/title/author/progress plus play/pause and timed rewind/forward to the Android media notification, lock screen, headset, and Bluetooth controls; handle audio focus, noisy output, notification permission, service restoration, and explicit Close-to-stop behavior.
+6. [ ] Add one app-global audiobook player above every destination. Match the official Audiobookshelf interaction model as closely as appropriate: a persistent collapsed mini-player that expands into a full player with cover-derived background/gradient, collapse and More/Close, cover, title/author, elapsed/remaining progress, play/pause, timed rewind/forward, previous/next chapter, speed, sleep timer, and chapter list. Treat bookmarks and casting as later parity only if BookOrbit supports them. Preserve progress sync/offline behavior and explicitly settle Preview minimization/close semantics before implementation.
+7. [ ] Migrate remaining PDF, audiobook, comic, and ebook paths according to the capability matrix, removing superseded parallel readers only after format-specific progress, resume, Preview isolation, download/cache, and failure-state parity is proven.
+8. [ ] Run the full automated gate and a target-device matrix covering every supported format, portrait/square libraries, mixed-library screens, local/streamed audio, Back and cross-app backgrounding, notification/lock-screen/headset controls, interruptions/audio focus, offline transitions, process/service recreation, accessibility, large text, themes, and explicit player close.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
 - [ ] Checkpoint 3a: validate and refine native book/series detail hierarchy, density, metadata, and actions
 - [ ] Checkpoint 4: refine the EPUB reader with available sample content
 - [x] Implement the Checkpoint 4 fullscreen paginated EPUB reader candidate with Komga-style tap zones
-- [ ] Checkpoint 5: fullscreen comic interactions plus online/local CBZ and CBR are device-validated; validate CB7, consider optional offline CBR/CB7 extraction, and refine audiobook/PDF readers when representative samples are available
+- [ ] Checkpoint 5: fullscreen comic interactions plus online/local CBZ and CBR are device-validated; validate CB7, consider optional offline CBR/CB7 extraction, refine PDF, and use the available local M4B/chapter-metadata fixture for audiobook work
 - [ ] Checkpoint 6: complete accessibility, responsive-layout, theme, and device validation
 
 ## Options backlog

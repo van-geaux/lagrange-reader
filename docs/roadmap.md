@@ -61,7 +61,7 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Treat RAR4/RAR5/7z signatures as valid downloaded comics so they are not deleted as corrupt; downloaded/local CBR/CB7 still requires server page extraction in this build
 - Completed and target-device validated: give comics the established novel-reader interaction model with a black fullscreen fitted-image surface, always-visible page footer, outer tap zones and horizontal swipes for page changes, center-tap options, exposed-content/Back dismissal, and Back-to-exit only after options close
 - Device-validate the Readium CBZ path and connected CBR/CB7 cache preparation; offline downloaded CBR/CB7 remains unsupported without the server, and client-side RAR/7z extraction is optional future work
-- Obtain representative audiobook and PDF files; audiobook testing remains deferred without a sample
+- Use the available local M4B/chapter-metadata fixture for audiobook work and obtain a representative PDF
 
 ### 5. Release readiness
 
@@ -262,7 +262,7 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [ ] Add and validate direct OIDC/SSO authentication after the provider and redirect contract are confirmed; native username/password remains current.
 - [x] Complete the revised detail density, title expansion, multi-selection, genre navigation, and series-index implementation in code/tests.
 - [ ] Run remaining device validation for revised detail density and interrupted-download recovery; multi-selection and genre filtering are validated.
-- [ ] Keep audiobook validation deferred until a representative sample is available; device-validate the implemented online CBZ/CBR/CB7 and offline ZIP/CBZ paths.
+- [ ] Use the available local M4B/chapter-metadata fixture for audiobook implementation/validation; device-validate the implemented online CBZ/CBR/CB7 and offline ZIP/CBZ paths.
 - [x] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
 - [x] Expose active per-file download progress, percentage/linear or indeterminate state, cancel guidance, and retry failure status from book details.
 
@@ -372,6 +372,15 @@ Target-device feedback confirms the original reader replacement race is resolved
 4. [x] Deterministic state/grouping and compiled Compose coverage are in place; the full gate passes 252 JVM tests across 42 suites, lint, debug APK assembly, and Android-test APK assembly. Tutorial readability, cross-library grouping and persistence, section label/divider layout, and profile-menu ordering pass target-device validation.
 5. [ ] Separately validate the Options cog icon, profile divider semantics, About routing, accessibility, and large-text layouts.
 
+### Readium, per-library cover shape, and persistent audiobook player - 2026-07-20
+
+1. [x] Baseline Readium on the target device: EPUB and CBZ work directly; connected CBR works through BookOrbit page extraction followed by cached-CBZ normalization. The local `sample/86 Volume 01/` fixture supplies a 489,114,453-byte M4B and companion metadata with 17 chapter ranges for the audio migration and validation pass.
+2. [ ] Audit Readium parser/navigator support and define the one-path migration matrix for EPUB/KEPUB, PDF, supported audiobook containers, CBZ/CBR/CB7, MOBI/AZW/AZW3, and FB2. Normalize unsupported source containers into supported Readium publications where feasible, and correct false format classification rather than silently routing invalid publications.
+3. [ ] Parse and persist BookOrbit Library `coverAspectRatio` (`2/3` or `1/1`) and propagate the owning library's shape to every single- and mixed-library cover surface. Square libraries use true square geometry without top/bottom padding; portrait libraries retain 2/3 geometry.
+4. [ ] Replace composable-owned audiobook playback with a Media3 foreground service, MediaSession, public media notification, audio-focus/noisy handling, and explicit close lifecycle so playback survives Back, navigation, and app backgrounding.
+5. [ ] Add an app-global collapsed/expanded player modeled on the official Audiobookshelf app: persistent mini-player plus cover-derived full player with metadata, progress, chapter/timed navigation, speed, sleep timer, chapters, and explicit Close. Add bookmarks/casting only after core parity and BookOrbit contract review.
+6. [ ] Migrate remaining legacy reader paths behind the audited Readium pipeline, then validate the full format, aspect-ratio, notification/background, sync/offline, process recreation, accessibility, and responsive-layout matrix before removing fallbacks.
+
 The completed fullscreen comic-reader step passes 178 JVM tests across 28 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Compose instrumentation compiles tap-next, right/left swipe, options-open, and Continue reading dismissal regressions.
 
 The earlier haptic-perceptibility step was later superseded: its preference, UI, provider, manual requests, and obsolete tests are now removed.
@@ -414,7 +423,7 @@ The completed combined feedback batch passes 206 JVM tests across 33 suites with
 
 The stuck progress-queue fix passes 207 JVM tests across 33 suites with zero failures/errors/skips; `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. A parser unit regression covers current-primary-file extraction, while a compiled real-repository MockWebServer case proves stale-to-current remapping, both progress and status writes, and a final queue count of zero. APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-Audiobook validation remains deferred without a representative sample. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
+Audiobook implementation and validation can use the local M4B/chapter-metadata fixture. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 
 ## Source of truth
 
