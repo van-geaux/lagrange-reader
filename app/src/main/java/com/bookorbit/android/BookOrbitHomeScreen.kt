@@ -908,6 +908,11 @@ internal fun NativeLibraryBrowserScreen(
                 selectedSeriesKey != null -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
                     books = state.books,
+                    libraries = state.libraries,
+                    groupingMode = appPreferences.seriesGroupingMode,
+                    onGroupingModeChange = { mode ->
+                        onAppPreferencesChange(appPreferences.copy(seriesGroupingMode = mode))
+                    },
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = seriesDetailLoader,
@@ -4369,10 +4374,120 @@ private fun FullScreenCoverViewer(
     }
 }
 
+internal data class SeriesBookSection(
+    val key: String,
+    val title: String?,
+    val books: List<BookSummary>
+)
+
+internal fun toggledSeriesGroupingMode(
+    current: SeriesGroupingMode,
+    requested: SeriesGroupingMode
+): SeriesGroupingMode = if (current == requested) SeriesGroupingMode.NONE else requested
+
+internal fun seriesBookSections(
+    books: List<BookSummary>,
+    libraries: List<LibrarySummary>,
+    groupingMode: SeriesGroupingMode
+): List<SeriesBookSection> {
+    val orderedBooks = books.sortedWith(
+        compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+            .thenBy { it.title.lowercase() }
+            .thenBy { it.id }
+    )
+    if (groupingMode == SeriesGroupingMode.NONE) {
+        return listOf(SeriesBookSection(key = "all", title = null, books = orderedBooks))
+    }
+
+    val libraryNames = libraries.associate { it.id to it.name }
+    val libraryOrder = libraries.mapIndexed { index, library -> library.id to index }.toMap()
+    val keyedBooks = orderedBooks.map { book ->
+        when (groupingMode) {
+            SeriesGroupingMode.LIBRARY -> {
+                val title = libraryNames[book.libraryId] ?: book.libraryId
+                Triple(book.libraryId, title, book)
+            }
+            SeriesGroupingMode.FORMAT -> {
+                val title = book.format
+                    ?.trim()
+                    ?.trimStart('.')
+                    ?.takeIf { it.isNotBlank() }
+                    ?.uppercase()
+                    ?: book.mediaKind.name
+                        .takeUnless { book.mediaKind == MediaKind.UNKNOWN }
+                        ?: "Unknown format"
+                Triple(title.lowercase(), title, book)
+            }
+            SeriesGroupingMode.NONE -> error("Handled above")
+        }
+    }
+    return keyedBooks
+        .groupBy { it.first }
+        .map { (key, entries) ->
+            SeriesBookSection(
+                key = key,
+                title = entries.first().second,
+                books = entries.map { it.third }
+            )
+        }
+        .sortedWith(
+            when (groupingMode) {
+                SeriesGroupingMode.LIBRARY -> compareBy<SeriesBookSection>(
+                    { libraryOrder[it.key] ?: Int.MAX_VALUE },
+                    { it.title?.lowercase().orEmpty() }
+                )
+                SeriesGroupingMode.FORMAT -> compareBy { it.title?.lowercase().orEmpty() }
+                SeriesGroupingMode.NONE -> compareBy { 0 }
+            }
+        )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeriesGroupingControls(
+    groupingMode: SeriesGroupingMode,
+    onGroupingModeChange: (SeriesGroupingMode) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("series-grouping-controls"),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text("Separate by", style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = groupingMode == SeriesGroupingMode.LIBRARY,
+                onClick = {
+                    onGroupingModeChange(
+                        toggledSeriesGroupingMode(groupingMode, SeriesGroupingMode.LIBRARY)
+                    )
+                },
+                label = { Text("Library") },
+                modifier = Modifier.testTag("series-group-by-library")
+            )
+            FilterChip(
+                selected = groupingMode == SeriesGroupingMode.FORMAT,
+                onClick = {
+                    onGroupingModeChange(
+                        toggledSeriesGroupingMode(groupingMode, SeriesGroupingMode.FORMAT)
+                    )
+                },
+                label = { Text("File format") },
+                modifier = Modifier.testTag("series-group-by-format")
+            )
+        }
+    }
+}
+
 @Composable
 private fun SeriesDetails(
     seriesKey: String,
     books: List<BookSummary>,
+    libraries: List<LibrarySummary>,
+    groupingMode: SeriesGroupingMode,
+    onGroupingModeChange: (SeriesGroupingMode) -> Unit,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (String) -> SeriesDetailInfo?,
@@ -4395,6 +4510,7 @@ private fun SeriesDetails(
     val detail by produceState(initialValue = localDetail, seriesKey) {
         value = detailLoader(seriesKey) ?: value
     }
+    val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
@@ -4442,6 +4558,14 @@ private fun SeriesDetails(
                     DetailLabelGroup("Genres", first.genres, onGenreSelected)
                 }
             }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            SeriesGroupingControls(
+                groupingMode = groupingMode,
+                onGroupingModeChange = onGroupingModeChange
+            )
+        }
+        detail.firstBook?.let { first ->
             if (first.tags.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     DetailLabelGroup("Tags", first.tags)
@@ -4451,15 +4575,31 @@ private fun SeriesDetails(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text("Books", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
         }
-        gridItems(detail.books, key = { "series-detail-${it.id}" }) { book ->
-            BookPosterCard(
-                book = book,
-                coverLoader = coverLoader,
-                onClick = { onBookSelected(book) },
-                showSeriesIndex = true,
-                onMarkAsRead = { onMarkAsRead(book) },
-                onMarkAsUnread = { onMarkAsUnread(book) }
-            )
+        bookSections.forEach { section ->
+            section.title?.let { title ->
+                item(
+                    key = "series-section-${section.key}",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .testTag("series-section-${section.key}")
+                    )
+                }
+            }
+            gridItems(section.books, key = { "series-detail-${it.id}" }) { book ->
+                BookPosterCard(
+                    book = book,
+                    coverLoader = coverLoader,
+                    onClick = { onBookSelected(book) },
+                    showSeriesIndex = true,
+                    onMarkAsRead = { onMarkAsRead(book) },
+                    onMarkAsUnread = { onMarkAsUnread(book) }
+                )
+            }
         }
     }
 }

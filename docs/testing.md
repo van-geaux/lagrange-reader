@@ -20,6 +20,8 @@ Reader/detail baseline on July 20, 2026: version `0.2.7` (`versionCode` 9) isola
 
 Tutorial-label readability follow-up: the black rounded label backing is removed and Previous/Menu/Next use 28 sp bold white text over the existing colored regions. `ReaderTapZoneTutorialTest` and `compileDebugAndroidTestKotlin` pass; target-device readability validation remains pending.
 
+Series-detail grouping follow-up: `SeriesBookGroupingTest` covers configured Library section order, normalized alphabetical File format sections, series-index ordering, the ungrouped state, and mutually exclusive toggle behavior. `AppPreferencesStoreTest` covers NONE/LIBRARY/FORMAT persistence with Library as the default; compiled Compose coverage switches between all three states and the recreation test persists Format. Focused JVM tests and `compileDebugAndroidTestKotlin` pass; target-device layout/persistence validation remains pending.
+
 ## Latest device feedback — July 12, 2026
 
 - Server setup and login passed.

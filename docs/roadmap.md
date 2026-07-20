@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the three-second tap-dismissible tutorial behaves correctly. Next: improve tutorial-label visibility, add globally persistent Series-detail grouping by Library/Format/none, and reorganize the profile dropdown with Achievements and Options above About plus a divider before session actions. The last full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial behaves correctly. Tutorial labels are transparent-backed 28 sp text. Series details now persist a global Library/Format/none grouping choice, default Library, and render deterministic full-width group headers. Next: reorganize the profile dropdown with Achievements and Options above About plus a divider before session actions. The last full gate passes 244 JVM tests across 41 suites plus lint and both APK assemblies.
 
 ### 1. UI/UX direction and design system
 
@@ -367,7 +367,7 @@ Target-device feedback confirms the original reader replacement race is resolved
 ### Reader tutorial, Series grouping, and profile-menu follow-up - 2026-07-20
 
 1. [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size, without changing region colors, timing, or tap consumption. Focused JVM and Android-test compilation pass.
-2. Add mutually exclusive Library and Format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series.
+2. [x] Add mutually exclusive Library and File format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series. Library sections follow configured library order, format sections use normalized alphabetical labels, and books retain series-index order. Focused grouping/preference tests and Android-test compilation pass.
 3. Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More.
 4. Add deterministic state/grouping and compiled Compose coverage, run the full gate, build the debug APK, and complete target-device validation.
 

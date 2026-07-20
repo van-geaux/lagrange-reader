@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -451,6 +453,84 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Previous book in Test Series: #2 \u00B7 Current Book")
             .assertIsEnabled()
         composeRule.runOnIdle { assertEquals(1, dataSource.seriesDetailLoadCalls) }
+    }
+
+    @Test
+    fun seriesDetailsGroupByPersistentLibraryFormatOrNeither() {
+        val first = BookSummary(
+            libraryId = "lib-books",
+            id = "first",
+            fileId = "file-first",
+            title = "First Volume",
+            format = "epub",
+            mediaKind = MediaKind.EPUB,
+            seriesId = "series-grouped",
+            seriesName = "Grouped Series",
+            seriesIndex = 1.0
+        )
+        val second = first.copy(
+            libraryId = "lib-comics",
+            id = "second",
+            fileId = "file-second",
+            title = "Second Volume",
+            format = "cbz",
+            mediaKind = MediaKind.COMIC,
+            seriesIndex = 2.0
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            bookDetailResult = BookDetailInfo(book = first)
+            seriesDetailResult = SeriesDetailInfo(
+                id = "series-grouped",
+                name = "Grouped Series",
+                bookCount = 2,
+                readCount = 0,
+                books = listOf(first, second),
+                firstBook = BookDetailInfo(book = first, genres = listOf("Adventure"))
+            )
+        }
+        val preferences = mutableStateOf(AppPreferences())
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(
+                                LibrarySummary(id = "lib-books", name = "Books"),
+                                LibrarySummary(id = "lib-comics", name = "Comics")
+                            ),
+                            selectedLibraryId = "lib-books",
+                            books = listOf(first, second)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main),
+                    appPreferences = preferences.value,
+                    onAppPreferencesChange = { preferences.value = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("First Volume").performClick()
+        composeRule.onNodeWithContentDescription("Open series Grouped Series").performClick()
+        composeRule.onNodeWithTag("series-group-by-library").performScrollTo().assertIsSelected()
+        composeRule.onNodeWithTag("series-group-by-format").assertIsNotSelected()
+        composeRule.onNodeWithTag("series-section-lib-books").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-section-lib-comics").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("series-group-by-format").performClick()
+        composeRule.runOnIdle {
+            assertEquals(SeriesGroupingMode.FORMAT, preferences.value.seriesGroupingMode)
+        }
+        composeRule.onNodeWithTag("series-section-epub").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-section-cbz").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("series-group-by-format").performClick()
+        composeRule.runOnIdle {
+            assertEquals(SeriesGroupingMode.NONE, preferences.value.seriesGroupingMode)
+        }
+        composeRule.onAllNodesWithTag("series-section-epub").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("series-section-cbz").assertCountEquals(0)
     }
 
     @Test

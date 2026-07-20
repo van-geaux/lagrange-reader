@@ -69,6 +69,18 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `stored series grouping modes round trip and default to library`() {
+        SeriesGroupingMode.values().forEach { value ->
+            assertEquals(
+                value,
+                seriesGroupingModeFromStorage(seriesGroupingModeStorageValue(value))
+            )
+        }
+        assertEquals(SeriesGroupingMode.LIBRARY, seriesGroupingModeFromStorage("unknown"))
+        assertEquals(SeriesGroupingMode.LIBRARY, seriesGroupingModeFromStorage(null))
+    }
+
+    @Test
     fun `cellular policy decides whether to start ask or block`() {
         assertEquals(
             CellularDownloadDecision.START,

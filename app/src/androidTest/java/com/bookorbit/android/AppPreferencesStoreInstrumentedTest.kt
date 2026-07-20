@@ -20,7 +20,8 @@ class AppPreferencesStoreInstrumentedTest {
             reduceMotion = true,
             cellularDownloadPolicy = CellularDownloadPolicy.ALWAYS,
             backgroundRefreshNetworkPolicy = BackgroundRefreshNetworkPolicy.DISABLED,
-            confirmDeleteLocalCopy = false
+            confirmDeleteLocalCopy = false,
+            seriesGroupingMode = SeriesGroupingMode.FORMAT
         )
 
         try {

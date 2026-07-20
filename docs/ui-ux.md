@@ -270,7 +270,7 @@ Target-device feedback confirms reader ownership during sync/refresh/download ac
 ### Reader tutorial, Series grouping, and profile-menu revision - 2026-07-20
 
 - [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size. Focused JVM and Android-test compilation pass; device readability validation remains.
-- [ ] Add globally persistent, mutually exclusive Library and Format grouping controls below Series-detail Genres. Library is the default and both controls may be inactive.
+- [x] Add globally persistent, mutually exclusive Library and File format grouping chips below Series-detail Genres. Library is the default, tapping the active chip leaves both inactive, and full-width section headers retain series-index order. Focused JVM and Android-test compilation pass; device layout/persistence validation remains.
 - [ ] Order the profile dropdown as Achievements, Options with cogwheel, About, divider, Change server, and Log out/Sign in; remove About from More.
 - [ ] Validate accessibility, large text, grouping headers/order/persistence, menu semantics, and About routing.
 

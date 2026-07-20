@@ -28,6 +28,12 @@ enum class BackgroundRefreshNetworkPolicy(val displayName: String) {
     DISABLED("Disabled")
 }
 
+enum class SeriesGroupingMode {
+    NONE,
+    LIBRARY,
+    FORMAT
+}
+
 data class AppPreferences(
     val lockOrientation: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
@@ -36,7 +42,8 @@ data class AppPreferences(
     val cellularDownloadPolicy: CellularDownloadPolicy = CellularDownloadPolicy.ASK_FOR_CONFIRMATION,
     val backgroundRefreshNetworkPolicy: BackgroundRefreshNetworkPolicy =
         BackgroundRefreshNetworkPolicy.WIFI_ONLY,
-    val confirmDeleteLocalCopy: Boolean = true
+    val confirmDeleteLocalCopy: Boolean = true,
+    val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY
 )
 
 internal class AppPreferencesStore(context: Context) {
@@ -58,7 +65,10 @@ internal class AppPreferencesStore(context: Context) {
         backgroundRefreshNetworkPolicy = backgroundRefreshNetworkPolicyFromStorage(
             preferences.getString(BACKGROUND_REFRESH_NETWORK_POLICY_KEY, null)
         ),
-        confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true)
+        confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
+        seriesGroupingMode = seriesGroupingModeFromStorage(
+            preferences.getString(SERIES_GROUPING_MODE_KEY, null)
+        )
     )
 
     fun save(value: AppPreferences) {
@@ -79,6 +89,10 @@ internal class AppPreferencesStore(context: Context) {
                 backgroundRefreshNetworkPolicyStorageValue(value.backgroundRefreshNetworkPolicy)
             )
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
+            .putString(
+                SERIES_GROUPING_MODE_KEY,
+                seriesGroupingModeStorageValue(value.seriesGroupingMode)
+            )
             .apply()
     }
 
@@ -91,6 +105,7 @@ internal class AppPreferencesStore(context: Context) {
         const val CELLULAR_DOWNLOAD_POLICY_KEY = "cellular_download_policy"
         const val BACKGROUND_REFRESH_NETWORK_POLICY_KEY = "background_refresh_network_policy"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
+        const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
     }
 }
 
@@ -135,4 +150,15 @@ internal fun backgroundRefreshNetworkPolicyFromStorage(
     "any_network" -> BackgroundRefreshNetworkPolicy.ANY_NETWORK
     "disabled" -> BackgroundRefreshNetworkPolicy.DISABLED
     else -> BackgroundRefreshNetworkPolicy.WIFI_ONLY
+}
+
+internal fun seriesGroupingModeStorageValue(value: SeriesGroupingMode): String =
+    value.name.lowercase()
+
+internal fun seriesGroupingModeFromStorage(value: String?): SeriesGroupingMode = when (
+    value?.trim()?.lowercase()
+) {
+    "none" -> SeriesGroupingMode.NONE
+    "format" -> SeriesGroupingMode.FORMAT
+    else -> SeriesGroupingMode.LIBRARY
 }
