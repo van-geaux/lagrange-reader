@@ -184,7 +184,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add playback speed controls if allowed within read/listen scope
 - [x] Add chapter support if API/file format exposes it
 - [x] Add EPUB pagination/theme/font handling
-- [x] Preserve the Lagrange EPUB options over Readium: 25% edge navigation, center options, chapter/page jumps, stored themes, 90-150% text, four stored margins, progress footer, reader system bars, orientation lock, and keep-awake behavior
+- [x] Preserve the Lagrange EPUB behavior over Readium: 25% edge navigation, center-tap reader controls, chapter/page jumps, stored themes, 90-150% text, four stored margins, progress footer, reader system bars, orientation lock, and keep-awake behavior
 - [x] Persist exact Readium locators for normal Read, restore legacy chapter/page/percentage state when no locator exists, and keep Preview progress/location-free
 - [x] Restore and validate the last device-known-good visible-overflow EPUB page strip after the clipped-wrapper regression
 - [x] Validate visible Top/Bottom EPUB padding and repagination on the target device; vertical padding resizes the WebView outside the known-good HTML renderer
@@ -234,6 +234,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add `BookDetailActionRowTest` coverage for nonlocal idle/retry/cancel, local update/delete/cancel overflow, and wide/narrow/extreme/large-text layout decisions
 - [x] Add six `BookDetailReadingProgressTest` cases for opened/reset zero, partial formatting, completion, manual read with retained progress, and unknown status-only labels
 - [x] Add three `ReaderChromePositionStateTest` cases and two compiled `ReaderLightweightChromeInstrumentedTest` cases; update five connected Readium tests to prove center tap opens chrome without full options
+- [x] Add three reader tutorial contract JVM tests, a compiled geometry/labels Compose case, and connected assertions for tutorial launch/dismissal before center-tap chrome
 - [x] Add Compose instrumentation regression coverage for book-detail actions, wrapped metadata, the full-screen cover viewer, and Series navigation
 - [x] Add at least one end-to-end manual test matrix
 
@@ -390,16 +391,16 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. Version 0.2.6 completes the shared lightweight chrome for EPUB and comics. Center tap toggles it; top Back hides/resumes, Close exits, and title remains visible. The responsive left control maps to chapters or pages with previous/next; the bottom list and cog map to Chapters/Pages and unchanged full options. Back dismisses full options, then chrome, then exits. The gate passes 238 JVM tests across 40 suites plus lint and both APK assemblies; all five focused connected tests pass.
+Implement and validate in this dependency order. Version 0.2.7 completes the tutorial on every EPUB/comic Read and Preview entry after navigator readiness. It sits above all reader UI, consumes taps, uses equal full-height Previous/Menu/Next thirds with exact RGB/0.5 colors, and starts its exact 1,000 ms timer on first pre-draw. The gate passes 241 JVM tests across 41 suites plus lint and both APK assemblies; all five focused connected tests pass.
 
-1. [ ] Install version 0.2.6 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, page slider/footer, Back/Close ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
+1. [ ] Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, page slider/footer, Back/Close ordering, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
 2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. Samsung Galaxy S24 manual validation remains pending.
 3. [x] Implement the user-selected compact progress line directly above actions, covering canonical known/zero/completed values, unknown status-only labels, explicit unread-reset omission, identity de-duplication, and immediate stale-cache-safe removal after Mark as unread. Physical S24 validation remains pending.
 4. [x] Implement shared theme-aware lightweight chrome for EPUB and comics with selected A/A top semantics, responsive left chapter/page position control, bottom list/cog, unchanged full options, and options→chrome→exit Back order.
-   [ ] Add the separate exact one-second Previous/Menu/Next tutorial; it is not implemented yet.
+   [x] Add the exact one-second Previous/Menu/Next tutorial on every Read/Preview entry with first-render timing and tap consumption.
 5. [ ] Add automated and target-device coverage for the new detail/reader behavior, including accessibility, large text, orientation, narrow/wide layouts, reader themes, exact tutorial timing, resume/sync, Preview isolation, and offline behavior; then continue CB7 and representative PDF/audiobook coverage, compact Achievement edges, series Previous/Next edges, jump-rail responsiveness, and partial multi-library refresh failures.
 
-The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` preview, except Suwayomi's five-second preview duration is replaced by the user's exact one-second requirement. This work order applies to initial reader entry/open; do not invent a broader per-book, per-file, per-install, or comic-reader persistence policy without user confirmation.
+The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` preview, except Suwayomi's five-second preview duration is replaced by the user's exact one-second requirement. The implemented trigger is every initial EPUB/comic reader activity entry/open, including Read and Preview, with no seen-state persisted across repeat opens, books, files, or installs.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
@@ -439,7 +440,7 @@ UI/UX discussion and design-system work can start now:
 - The functional and JVM baseline is ready.
 - EPUB and comics now use Readium 3.0.2. Five focused connected tests pass; Samsung Galaxy S24 comic validation is the highest-priority next task.
 - Local/readable CBZ opens directly. Connected CBR/CB7 uses authenticated server pages to prepare a cached CBZ; downloaded CBR/CB7 remains unsupported offline because no local RAR/7z extraction is bundled. PDF and audio are unchanged.
-- The next implementation is the exact one-second Previous/Menu/Next tap-zone tutorial. Physical chrome/detail/comic checks remain in the device-validation queue.
+- The reader tutorial work order is implemented. Next: target-device, accessibility, responsive, theme, exact timing, resume, Preview-isolation, offline, edge-state, and remaining media validation.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 
 - [x] Validate live BookOrbit authentication and library APIs with the server

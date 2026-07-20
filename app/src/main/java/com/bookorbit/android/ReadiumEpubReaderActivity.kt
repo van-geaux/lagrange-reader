@@ -26,12 +26,14 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -150,6 +152,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
+    private lateinit var tapZoneTutorialView: ComposeView
 
     private lateinit var readerKey: String
     private lateinit var displayTitle: String
@@ -165,6 +168,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentBookPage by mutableStateOf<Int?>(null)
     private var bookPositionCount by mutableStateOf<Int?>(null)
     private var showChapterPicker by mutableStateOf(false)
+    private var tapZoneTutorialHasShown = false
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
@@ -324,6 +328,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        tapZoneTutorialView = ComposeView(this).apply {
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            setContent {
+                BookOrbitTheme {
+                    ReaderTapZoneTutorial(modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+        rootView.addView(
+            tapZoneTutorialView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
         setContentView(rootView)
         rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
     }
@@ -402,6 +422,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         progressView?.visibility = View.GONE
         applyReaderPadding()
+        showTapZoneTutorial()
     }
 
     private fun initialLocator(openedPublication: Publication): Locator {
@@ -542,6 +563,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         optionsView.visibility = View.GONE
     }
 
+    private fun showTapZoneTutorial() {
+        tapZoneTutorialHasShown = true
+        tapZoneTutorialView.visibility = View.VISIBLE
+        tapZoneTutorialView.doOnPreDraw {
+            lifecycleScope.launch {
+                delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
+                tapZoneTutorialView.visibility = View.GONE
+            }
+        }
+    }
+
     internal fun areReaderControlsVisible(): Boolean =
         areLightweightControlsVisible() || areReaderOptionsVisible()
 
@@ -550,6 +582,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     internal fun areReaderOptionsVisible(): Boolean =
         ::optionsView.isInitialized && optionsView.visibility == View.VISIBLE
+
+    internal fun isTapZoneTutorialVisible(): Boolean =
+        ::tapZoneTutorialView.isInitialized && tapZoneTutorialView.visibility == View.VISIBLE
+
+    internal fun hasShownTapZoneTutorial(): Boolean = tapZoneTutorialHasShown
 
     private fun updateResult() {
         if (isPreview) return

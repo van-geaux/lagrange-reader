@@ -73,6 +73,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -101,7 +102,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1717,6 +1720,67 @@ internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): Reade
         canGoPrevious = safeIndex > 0,
         canGoNext = safeIndex < safeCount - 1
     )
+}
+
+internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 1_000L
+
+internal data class ReaderTapZoneTutorialRegion(
+    val label: String,
+    val red: Int,
+    val green: Int,
+    val blue: Int,
+    val alpha: Float,
+    val widthWeight: Float = 1f
+)
+
+internal val READER_TAP_ZONE_TUTORIAL_REGIONS = listOf(
+    ReaderTapZoneTutorialRegion("Previous", red = 255, green = 114, blue = 118, alpha = 0.5f),
+    ReaderTapZoneTutorialRegion("Menu", red = 0, green = 0, blue = 0, alpha = 0.5f),
+    ReaderTapZoneTutorialRegion("Next", red = 144, green = 238, blue = 144, alpha = 0.5f)
+)
+
+@Composable
+internal fun ReaderTapZoneTutorial(modifier: Modifier = Modifier) {
+    val interactionSources = remember {
+        List(READER_TAP_ZONE_TUTORIAL_REGIONS.size) { MutableInteractionSource() }
+    }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .testTag("reader-tap-zone-tutorial")
+                .semantics { contentDescription = "Reader tap regions tutorial" }
+        ) {
+            READER_TAP_ZONE_TUTORIAL_REGIONS.forEachIndexed { index, region ->
+                Box(
+                    modifier = Modifier
+                        .weight(region.widthWeight)
+                        .fillMaxSize()
+                        .background(
+                            Color(region.red, region.green, region.blue).copy(alpha = region.alpha)
+                        )
+                        .clickable(
+                            interactionSource = interactionSources[index],
+                            indication = null,
+                            onClick = {}
+                        )
+                        .testTag("reader-tap-zone-${region.label.lowercase()}")
+                        .semantics { contentDescription = "${region.label} tap region" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = region.label,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

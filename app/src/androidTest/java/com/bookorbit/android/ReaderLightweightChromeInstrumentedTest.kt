@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -84,5 +85,31 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithContentDescription("Previous page").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Next page").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Page jump bar").assertIsDisplayed()
+    }
+
+    @Test
+    fun tapZoneTutorialShowsThreeEqualLabeledRegions() {
+        composeRule.setContent {
+            ReaderTapZoneTutorial()
+        }
+
+        composeRule.onNodeWithTag("reader-tap-zone-tutorial").assertIsDisplayed()
+        val regionTags = listOf(
+            "reader-tap-zone-previous",
+            "reader-tap-zone-menu",
+            "reader-tap-zone-next"
+        )
+        regionTags.forEach { tag -> composeRule.onNodeWithTag(tag).assertIsDisplayed() }
+        composeRule.onNodeWithText("Previous").assertIsDisplayed()
+        composeRule.onNodeWithText("Menu").assertIsDisplayed()
+        composeRule.onNodeWithText("Next").assertIsDisplayed()
+
+        val bounds = regionTags.map { tag ->
+            composeRule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        }
+        assertEquals(bounds[0].width, bounds[1].width, 1f)
+        assertEquals(bounds[1].width, bounds[2].width, 1f)
+        assertTrue(bounds[0].left < bounds[1].left)
+        assertTrue(bounds[1].left < bounds[2].left)
     }
 }

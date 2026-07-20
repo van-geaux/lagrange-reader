@@ -169,7 +169,16 @@ class ReadiumComicOpenInstrumentedTest {
                 attempts += 1
             }
             assertTrue("Readium comic navigator did not become ready", navigatorReady)
-            SystemClock.sleep(500)
+            var tutorialWasShown = false
+            var tutorialVisible = false
+            scenario.onActivity { activity ->
+                tutorialWasShown = activity.hasShownTapZoneTutorial()
+                tutorialVisible = activity.isTapZoneTutorialVisible()
+            }
+            assertTrue("Comic tap-zone tutorial was not shown on reader entry", tutorialWasShown)
+            SystemClock.sleep(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS + 250L)
+            scenario.onActivity { activity -> tutorialVisible = activity.isTapZoneTutorialVisible() }
+            assertEquals(false, tutorialVisible)
             var tapX = 0f
             var tapY = 0f
             scenario.onActivity { activity ->
