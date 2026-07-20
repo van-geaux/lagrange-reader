@@ -323,7 +323,9 @@ class BookOrbitAppInstrumentedTest {
             seriesName = "Orbit Saga",
             seriesIndex = 2.0,
             format = "epub",
-            mediaKind = MediaKind.EPUB
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 42.5f,
+            lastReadAtMillis = 1L
         )
         val dataSource = InstrumentedFakeDataSource().apply {
             loadBooksResult = listOf(book)
@@ -357,6 +359,12 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithContentDescription("Orbit Rising").performClick()
+        composeRule.onNodeWithText("Reading \u00B7 42.5%").assertIsDisplayed()
+        val progressBounds = composeRule.onNodeWithTag("book-detail-reading-progress")
+            .fetchSemanticsNode().boundsInRoot
+        val actionBounds = composeRule.onNodeWithTag("book-detail-actions")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(progressBounds.bottom <= actionBounds.top)
         composeRule.onNodeWithTag("book-detail-actions").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Read").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Preview").assertIsEnabled()
@@ -366,6 +374,10 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onAllNodesWithText("Download").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("Mark as read").assertIsDisplayed().performClick()
         composeRule.waitUntil { dataSource.markedReadBooks.any { it.id == book.id } }
+        composeRule.onNodeWithText("Read \u00B7 42.5%").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Mark as unread").assertIsDisplayed().performClick()
+        composeRule.waitUntil { dataSource.resetReadingStateBooks.any { it.id == book.id } }
+        composeRule.onAllNodesWithTag("book-detail-reading-progress").assertCountEquals(0)
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
         composeRule.onNodeWithText("Science fiction").assertIsDisplayed()
         composeRule.onNodeWithText("Tags").assertIsDisplayed()

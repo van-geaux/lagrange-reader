@@ -3476,9 +3476,9 @@ private fun BookDetails(
     onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
-    val stateBook = state.books.firstOrNull { it.id == book.id }
+    val canonicalStateBook = state.books.firstOrNull { it.id == book.id }
         ?: state.homeBooks.firstOrNull { it.id == book.id }
-        ?: book
+    val stateBook = canonicalStateBook ?: book
     val currentBook = stateBook.fileId?.let { fileId ->
         if (state.localFilePathOverrides.containsKey(fileId)) {
             stateBook.copy(localPath = state.localFilePathOverrides[fileId])
@@ -3513,11 +3513,11 @@ private fun BookDetails(
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
     val displayBook = detail.book.copy(
         localPath = currentBook.localPath,
-        progressLabel = currentBook.progressLabel ?: detail.book.progressLabel,
-        progressPercent = currentBook.progressPercent ?: detail.book.progressPercent,
-        progressPositionMs = currentBook.progressPositionMs ?: detail.book.progressPositionMs,
-        progressPageIndex = currentBook.progressPageIndex ?: detail.book.progressPageIndex,
-        lastReadAtMillis = currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
+        progressLabel = if (canonicalStateBook != null) currentBook.progressLabel else currentBook.progressLabel ?: detail.book.progressLabel,
+        progressPercent = if (canonicalStateBook != null) currentBook.progressPercent else currentBook.progressPercent ?: detail.book.progressPercent,
+        progressPositionMs = if (canonicalStateBook != null) currentBook.progressPositionMs else currentBook.progressPositionMs ?: detail.book.progressPositionMs,
+        progressPageIndex = if (canonicalStateBook != null) currentBook.progressPageIndex else currentBook.progressPageIndex ?: detail.book.progressPageIndex,
+        lastReadAtMillis = if (canonicalStateBook != null) currentBook.lastReadAtMillis else currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
         isRead = currentBook.isRead,
         updatedAtMillis = currentBook.updatedAtMillis ?: detail.book.updatedAtMillis,
         downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
@@ -3630,7 +3630,10 @@ private fun BookDetails(
                     detail.narrators.takeIf { it.isNotEmpty() }?.let {
                         Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text(nativeBookStatus(displayBook, state.isOfflineSnapshot), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        bookDetailIdentityStatus(displayBook, state.isOfflineSnapshot),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
@@ -3644,6 +3647,7 @@ private fun BookDetails(
             }
         }
         item {
+            val readingProgressLabel = bookDetailReadingProgressLabel(displayBook)
             val actionState = bookDetailActionState(
                 isDownloaded = displayBook.isDownloaded,
                 isDownloading = isDownloading,
@@ -3670,154 +3674,170 @@ private fun BookDetails(
             val readWidth = actionWidth("Read", 82f)
             val previewWidth = actionWidth("Preview", 94f)
             val markWidth = actionWidth(statusActionLabel, 118f)
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .testTag("book-detail-actions")
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val layout = bookDetailActionRowLayout(
-                    availableWidth = maxWidth.value,
-                    readWidth = readWidth,
-                    previewWidth = previewWidth,
-                    markWidth = markWidth,
-                    hasInlineTransfer = actionState.inlineTransfer != null,
-                    hasFixedOverflow = actionState.hasFixedOverflow
-                )
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                readingProgressLabel?.let { label ->
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("book-detail-reading-progress"),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .testTag("book-detail-actions")
                 ) {
-                    val readModifier = if (layout.compactRequiredActions) {
-                        Modifier.weight(1f).height(46.dp)
-                    } else {
-                        Modifier.width(readWidth.dp).height(46.dp)
-                    }
-                    val previewModifier = if (layout.compactRequiredActions) {
-                        Modifier.weight(1f).height(46.dp)
-                    } else {
-                        Modifier.width(previewWidth.dp).height(46.dp)
-                    }
-                    DetailActionTile(
-                        label = "Read",
-                        icon = Icons.Default.PlayArrow,
-                        showLabel = true,
-                        emphasized = true,
-                        enabled = !isDownloading && !unavailableOffline,
-                        modifier = readModifier,
-                        applyDefaultSize = false,
-                        onClick = { onRead(displayBook) }
+                    val layout = bookDetailActionRowLayout(
+                        availableWidth = maxWidth.value,
+                        readWidth = readWidth,
+                        previewWidth = previewWidth,
+                        markWidth = markWidth,
+                        hasInlineTransfer = actionState.inlineTransfer != null,
+                        hasFixedOverflow = actionState.hasFixedOverflow
                     )
-                    DetailActionTile(
-                        label = "Preview",
-                        icon = Icons.Default.Visibility,
-                        showLabel = true,
-                        enabled = !isDownloading && !unavailableOffline,
-                        modifier = previewModifier,
-                        applyDefaultSize = false,
-                        onClick = { onPreview(displayBook) }
-                    )
-                    actionState.inlineTransfer?.let { transfer ->
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val readModifier = if (layout.compactRequiredActions) {
+                            Modifier.weight(1f).height(46.dp)
+                        } else {
+                            Modifier.width(readWidth.dp).height(46.dp)
+                        }
+                        val previewModifier = if (layout.compactRequiredActions) {
+                            Modifier.weight(1f).height(46.dp)
+                        } else {
+                            Modifier.width(previewWidth.dp).height(46.dp)
+                        }
                         DetailActionTile(
-                            label = transfer.contentDescription,
-                            icon = if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
-                                Icons.Default.Close
-                            } else {
-                                Icons.Default.Download
-                            },
-                            enabled = transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD ||
-                                (fileId != null && !state.isOfflineSnapshot),
-                            modifier = Modifier.size(46.dp),
-                            applyDefaultSize = false,
-                            onClick = {
-                                if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
-                                    onCancelDownload(displayBook)
-                                } else {
-                                    onDownload(displayBook)
-                                }
-                            }
-                        )
-                    }
-                    if (layout.showInlineStatusAction) {
-                        DetailActionTile(
-                            label = statusActionLabel,
-                            icon = if (statusActionLabel == "Mark as unread") {
-                                Icons.AutoMirrored.Filled.Undo
-                            } else {
-                                Icons.Default.CheckCircle
-                            },
+                            label = "Read",
+                            icon = Icons.Default.PlayArrow,
                             showLabel = true,
-                            enabled = !state.isOfflineSnapshot,
-                            modifier = Modifier
-                                .width(markWidth.dp)
-                                .height(46.dp)
-                                .testTag("book-detail-status-inline"),
+                            emphasized = true,
+                            enabled = !isDownloading && !unavailableOffline,
+                            modifier = readModifier,
                             applyDefaultSize = false,
-                            onClick = performStatusAction
+                            onClick = { onRead(displayBook) }
                         )
-                    }
-                    if (layout.showMore) {
-                        Box {
+                        DetailActionTile(
+                            label = "Preview",
+                            icon = Icons.Default.Visibility,
+                            showLabel = true,
+                            enabled = !isDownloading && !unavailableOffline,
+                            modifier = previewModifier,
+                            applyDefaultSize = false,
+                            onClick = { onPreview(displayBook) }
+                        )
+                        actionState.inlineTransfer?.let { transfer ->
                             DetailActionTile(
-                                label = "More book actions",
-                                icon = Icons.Default.MoreVert,
+                                label = transfer.contentDescription,
+                                icon = if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
+                                    Icons.Default.Close
+                                } else {
+                                    Icons.Default.Download
+                                },
+                                enabled = transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD ||
+                                    (fileId != null && !state.isOfflineSnapshot),
                                 modifier = Modifier.size(46.dp),
                                 applyDefaultSize = false,
-                                onClick = { showActionMenu = true }
+                                onClick = {
+                                    if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
+                                        onCancelDownload(displayBook)
+                                    } else {
+                                        onDownload(displayBook)
+                                    }
+                                }
                             )
-                            DropdownMenu(
-                                expanded = showActionMenu,
-                                onDismissRequest = { showActionMenu = false }
-                            ) {
-                                actionState.overflowTransferLabel?.let { transferLabel ->
-                                    DropdownMenuItem(
-                                        text = { Text(transferLabel) },
-                                        leadingIcon = {
-                                            Icon(
-                                                if (transferLabel.startsWith("Cancel")) Icons.Default.Close else Icons.Default.Download,
-                                                contentDescription = null
-                                            )
-                                        },
-                                        onClick = {
-                                            showActionMenu = false
-                                            if (transferLabel.startsWith("Cancel")) {
-                                                onCancelDownload(displayBook)
-                                            } else {
-                                                onDownload(displayBook)
-                                            }
-                                        }
-                                    )
-                                }
-                                if (actionState.showDeleteLocal) {
-                                    DropdownMenuItem(
-                                        text = { Text("Delete local") },
-                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                        onClick = {
-                                            showActionMenu = false
-                                            onDeleteLocalCopy(displayBook)
-                                        }
-                                    )
-                                }
-                                if (!layout.showInlineStatusAction) {
-                                    DropdownMenuItem(
-                                        text = { Text(statusActionLabel) },
-                                        leadingIcon = {
-                                            Icon(
-                                                if (statusActionLabel == "Mark as unread") {
-                                                    Icons.AutoMirrored.Filled.Undo
+                        }
+                        if (layout.showInlineStatusAction) {
+                            DetailActionTile(
+                                label = statusActionLabel,
+                                icon = if (statusActionLabel == "Mark as unread") {
+                                    Icons.AutoMirrored.Filled.Undo
+                                } else {
+                                    Icons.Default.CheckCircle
+                                },
+                                showLabel = true,
+                                enabled = !state.isOfflineSnapshot,
+                                modifier = Modifier
+                                    .width(markWidth.dp)
+                                    .height(46.dp)
+                                    .testTag("book-detail-status-inline"),
+                                applyDefaultSize = false,
+                                onClick = performStatusAction
+                            )
+                        }
+                        if (layout.showMore) {
+                            Box {
+                                DetailActionTile(
+                                    label = "More book actions",
+                                    icon = Icons.Default.MoreVert,
+                                    modifier = Modifier.size(46.dp),
+                                    applyDefaultSize = false,
+                                    onClick = { showActionMenu = true }
+                                )
+                                DropdownMenu(
+                                    expanded = showActionMenu,
+                                    onDismissRequest = { showActionMenu = false }
+                                ) {
+                                    actionState.overflowTransferLabel?.let { transferLabel ->
+                                        DropdownMenuItem(
+                                            text = { Text(transferLabel) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    if (transferLabel.startsWith("Cancel")) Icons.Default.Close else Icons.Default.Download,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            onClick = {
+                                                showActionMenu = false
+                                                if (transferLabel.startsWith("Cancel")) {
+                                                    onCancelDownload(displayBook)
                                                 } else {
-                                                    Icons.Default.CheckCircle
-                                                },
-                                                contentDescription = null
-                                            )
-                                        },
-                                        enabled = !state.isOfflineSnapshot,
-                                        onClick = {
-                                            showActionMenu = false
-                                            performStatusAction()
-                                        }
-                                    )
+                                                    onDownload(displayBook)
+                                                }
+                                            }
+                                        )
+                                    }
+                                    if (actionState.showDeleteLocal) {
+                                        DropdownMenuItem(
+                                            text = { Text("Delete local") },
+                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                            onClick = {
+                                                showActionMenu = false
+                                                onDeleteLocalCopy(displayBook)
+                                            }
+                                        )
+                                    }
+                                    if (!layout.showInlineStatusAction) {
+                                        DropdownMenuItem(
+                                            text = { Text(statusActionLabel) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    if (statusActionLabel == "Mark as unread") {
+                                                        Icons.AutoMirrored.Filled.Undo
+                                                    } else {
+                                                        Icons.Default.CheckCircle
+                                                    },
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            enabled = !state.isOfflineSnapshot,
+                                            onClick = {
+                                                showActionMenu = false
+                                                performStatusAction()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -4021,6 +4041,22 @@ internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String {
     val completed = book.isRead || book.progressPercent?.let { it >= 99.5f } == true
     return if (completed) "Mark as unread" else "Mark as read"
 }
+
+internal fun bookDetailReadingProgressLabel(book: BookSummary): String? {
+    val progress = normalizeStoredProgressPercent(book.progressPercent?.takeIf { it.isFinite() })
+    val completed = book.isRead || progress?.let { it >= 99.5f } == true
+    val currentlyReading = !completed && book.hasReadingActivity() && book.isStillInProgress()
+    if (!completed && !currentlyReading) return null
+
+    val status = if (completed) "Read" else "Reading"
+    val percentage = progress?.let(::formatBookDetailProgressPercent) ?: return status
+    return "$status \u00B7 $percentage%"
+}
+
+private fun formatBookDetailProgressPercent(progress: Float): String =
+    String.format(java.util.Locale.US, "%.2f", progress.coerceIn(0f, 100f))
+        .trimEnd('0')
+        .trimEnd('.')
 
 internal enum class BookDetailInlineTransfer(val contentDescription: String) {
     DOWNLOAD("Download"),
@@ -4602,6 +4638,15 @@ private fun nativeBookStatus(book: BookSummary, offline: Boolean): String {
         offline -> "Online only"
         book.isRead -> "Read"
         !book.progressLabel.isNullOrBlank() -> book.progressLabel
+        !book.format.isNullOrBlank() -> book.format.uppercase()
+        else -> book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+    }
+}
+
+private fun bookDetailIdentityStatus(book: BookSummary, offline: Boolean): String {
+    return when {
+        book.isDownloaded -> "Downloaded"
+        offline -> "Online only"
         !book.format.isNullOrBlank() -> book.format.uppercase()
         else -> book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
     }

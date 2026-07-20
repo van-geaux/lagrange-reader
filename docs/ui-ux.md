@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-Version `0.2.4` completes the responsive book-detail action row as one fixed-height, non-wrapping, non-scrolling line. Required actions remain visible through typography-aware status placement and extreme-width Read/Preview compaction. Automation passes; Samsung Galaxy S24 action-row validation remains open. The next GUI decision is the exact placement of detail progress percentage, which must be confirmed with the user before implementation; Suwayomi chrome/tutorial follows.
+Version `0.2.5` implements option A for book-detail progress: a compact primary-colored `Reading · n%` or `Read · n%` line immediately above the fixed action row. It appears only for real reading/completed state, never fabricates unknown percentage, distinguishes opened 0% from unread-reset 0%, and disappears immediately after Mark as unread. Automation passes; Samsung Galaxy S24 validation remains open. Suwayomi lightweight chrome and its one-second tutorial are next.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication remains native username/password; direct OIDC/SSO is deferred.
 
@@ -233,7 +233,7 @@ The user's final book-detail action-row decision is implemented:
 - Show the three-dot action whenever any applicable action is hidden. At minimum, the row must preserve Read, Preview, eligible Download, and required More at every supported width.
 - Local Update local or Cancel update shares More with Delete local. Status copy directs local update cancellation/retry through More. Only Read/Preview compact through weights at extreme widths.
 
-Book details must also show canonical 0-100 progress for currently-reading and read/completed states when a real server or local value is known. Unknown progress remains absent, not synthesized. The user must confirm the exact visual placement before this GUI change is implemented.
+Book details now show the selected compact primary progress line directly above actions. Finite canonical progress is clamped to 0–100 and displayed with up to two decimals. Opened 0% is valid when activity exists; explicit unread-reset 0% omits the line. Unknown percentages retain status-only `Reading`/`Read`, and identity metadata retains only availability/format to avoid duplication.
 
 The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy while retaining the user's explicit Lagrange adaptation:
 
@@ -246,9 +246,9 @@ The subsequent reader refinement adopts Suwayomi's lightweight control hierarchy
 
 Working order:
 
-1. [ ] Install version 0.2.4 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
+1. [ ] Install version 0.2.5 on the Samsung Galaxy S24 and validate the action row across normal/large text, narrow/wide widths, portrait/landscape, local/nonlocal, online/offline, Download/Retry/Cancel, Update/Cancel update, Delete, and Mark read/unread states. Confirm no wrapping, scrolling, clipping, or missing required action. Keep comic validation in the remaining device queue.
 2. [x] Implement and test the exact single-row policy, including inline nonlocal Download/Retry/Cancel, local Delete/Update/Cancel update in More, typography-aware Mark placement, disabled transfer-slot stability, and extreme-width compaction. Physical S24 validation remains pending.
-3. [ ] After the user confirms placement, implement and test the conditional canonical progress percentage without fabricating unknown values.
+3. [x] Implement option A with canonical formatting, zero/reset distinction, unknown status-only output, identity de-duplication, canonical BrowserState precedence, and immediate read-to-unread removal. Physical S24 validation remains pending.
 4. [ ] Implement the lightweight reader chrome, including the separate Back/Close Lagrange header and cog route to full options, then add the exact one-second tap-zone preview so Menu teaches that final center-tap behavior.
 5. [ ] Validate accessibility semantics, large text, themes/contrast, narrow/wide layouts, orientation, gestures, Back behavior, tutorial timing, resume/sync, Preview isolation, and offline behavior, then continue remaining media and edge-state validation.
 
