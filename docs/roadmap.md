@@ -366,7 +366,7 @@ Target-device feedback confirms the original reader replacement race is resolved
 
 ### Reader tutorial, Series grouping, and profile-menu follow-up - 2026-07-20
 
-1. Remove the tutorial-label background and enlarge Previous/Menu/Next text to approximately twice its current size without changing region colors, timing, or tap consumption.
+1. [x] Remove the tutorial-label background and enlarge Previous/Menu/Next text to 28 sp, approximately twice its prior size, without changing region colors, timing, or tap consumption. Focused JVM and Android-test compilation pass.
 2. Add mutually exclusive Library and Format grouping controls below Series-detail Genres. Default to Library; allow neither; persist the selection globally across Series.
 3. Reorder the profile dropdown to Achievements, Options with a cogwheel, About, divider, Change server, and Log out/Sign in. Remove About from More.
 4. Add deterministic state/grouping and compiled Compose coverage, run the full gate, build the debug APK, and complete target-device validation.

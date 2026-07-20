@@ -10,6 +10,11 @@ class ReaderTapZoneTutorialTest {
     }
 
     @Test
+    fun `tutorial labels use the enlarged font size`() {
+        assertEquals(28, READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP)
+    }
+
+    @Test
     fun `tutorial uses three equally sized regions in reading order`() {
         assertEquals(listOf("Previous", "Menu", "Next"), READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.label })
         assertEquals(listOf(1f, 1f, 1f), READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.widthWeight })

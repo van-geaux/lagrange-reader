@@ -432,7 +432,7 @@ Target-device feedback confirms the reported sync/refresh/download reader replac
 
 Execute in this order:
 
-1. [ ] Remove the background behind the Previous/Menu/Next tutorial labels and enlarge the label text to approximately twice its current size while preserving the colored tap regions, exact 3,000 ms timeout, and consumed tap dismissal.
+1. [x] Remove the background behind the Previous/Menu/Next tutorial labels and enlarge the label text to 28 sp, approximately twice its prior size, while preserving the colored tap regions, exact 3,000 ms timeout, and consumed tap dismissal. Focused JVM and Android-test compilation pass.
 2. [ ] Add mutually exclusive Series-detail grouping controls below Genres for grouping books by Library or Format. Library is the default, tapping the active choice can leave both inactive, and the selected state persists globally across every Series.
 3. [ ] Reorder the profile dropdown to Achievements, Options, About, divider, Change server, and Log out/Sign in. Give Options a cogwheel icon instead of the three-dot icon and remove About from the More sheet.
 4. [ ] Run focused coverage, the full JVM/lint/APK gate, build the debug APK, and physically validate tutorial readability, Series grouping/persistence, dropdown ordering/icons/divider, and About navigation.

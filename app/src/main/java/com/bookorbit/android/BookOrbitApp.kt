@@ -111,6 +111,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -1707,6 +1708,7 @@ internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): Reade
 }
 
 internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 3_000L
+internal const val READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP = 28
 internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
 
 internal data class ReaderTapZoneTutorialRegion(
@@ -1758,12 +1760,9 @@ internal fun ReaderTapZoneTutorial(
                 ) {
                     Text(
                         text = region.label,
-                        modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge
+                        fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
                     )
                 }
             }

@@ -18,6 +18,8 @@ Current automated coverage includes the EPUB Readium suite plus `ReadiumComicRea
 
 Reader/detail baseline on July 20, 2026: version `0.2.7` (`versionCode` 9) isolates reader screen ownership from delayed browser updates and uses status-bar-safe chrome with no visible Back action, leftmost labeled Exit/X, reading-surface/center-scrim dismissal, a right-side 75%-height page rail, separate EPUB chapter arrows, and outer-only chapter/page selection. The tutorial lasts exactly 3,000 ms; every full-screen Previous/Menu/Next region consumes taps and dismisses immediately. The full gate passes 244 JVM tests across 41 suites plus `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. Target-device feedback confirms sync/refresh/download activity no longer replaces the reader, Exit works, and tutorial timeout/tap dismissal works; broader format/responsive validation remains pending.
 
+Tutorial-label readability follow-up: the black rounded label backing is removed and Previous/Menu/Next use 28 sp bold white text over the existing colored regions. `ReaderTapZoneTutorialTest` and `compileDebugAndroidTestKotlin` pass; target-device readability validation remains pending.
+
 ## Latest device feedback — July 12, 2026
 
 - Server setup and login passed.
