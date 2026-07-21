@@ -479,10 +479,10 @@ Execute in this order after confirming any required UI choices:
 Keep whole-file authenticated preparation for EPUB and PDF, but replace full-file preparation for large audio/video containers and comics:
 
 1. [x] Select the Readium-compatible remote-resource architecture: keep Readium/service ownership and supply authenticated remote byte ranges or lazy page resources with bounded read-through caches.
-2. [ ] Stream M4B/MP4 and other supported audiobook containers through HTTP byte ranges without waiting for the complete file; retain chapter navigation, seeking, resume, Preview isolation, background playback, notification controls, and explicit offline downloads.
+2. [x] Stream M4B/MP4 and other supported audiobook containers through authenticated Readium HTTP byte ranges without waiting for the complete file; retain chapter navigation, seeking, resume, Preview isolation, background playback, notification controls, local playback, and explicit offline downloads. Credentials are restricted to the configured server origin, and one 401/403 recovery retry refreshes them.
 3. [ ] Open CBZ lazily through range-capable archive access when supported, with a BookOrbit page-endpoint fallback where needed. Stream connected CBR/CB7 as individual server-rendered pages instead of downloading every page and building a complete CBZ first.
 4. [ ] Bound and evict disposable media/page caches independently from explicit Local books downloads; handle authentication renewal, servers without usable range support, interrupted requests, retries, and offline transitions.
-5. [ ] Add deterministic HTTP/range/page-cache tests, Readium/service regressions, and target-device validation with representative large CBZ/CBR and M4B/MP4 files.
+5. [ ] Complete deterministic HTTP/range/page-cache tests, Readium/service regressions, and target-device validation with representative large CBZ/CBR and M4B/MP4 files. The audio transport now has JVM authentication/header-policy coverage plus a compiled Android regression proving a bounded Readium range request carries Bearer/cookie authentication without a whole-file GET.
 
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell

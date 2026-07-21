@@ -31,6 +31,7 @@ import okhttp3.CookieJar
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -184,6 +185,25 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
+
+    internal suspend fun streamingRequestHeaders(url: String): Map<String, String> {
+        val serverUrl = getServerUrl().orEmpty()
+        if (!sameHttpOrigin(url, serverUrl)) return emptyMap()
+        return buildMap {
+            context.dataStore.data.first()[Keys.ACCESS_TOKEN]
+                ?.takeIf { it.isNotBlank() }
+                ?.let { put("Authorization", "Bearer $it") }
+            CookieManager.getInstance()
+                .getCookie(url)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { put("Cookie", it) }
+        }
+    }
+
+    internal suspend fun recoverStreamingAuthentication(): Boolean =
+        withContext(Dispatchers.IO) {
+            refreshSession(sessionAccessToken())
+        }
 
     override suspend fun setServerUrl(serverUrl: String) {
         context.dataStore.edit { prefs ->
@@ -2908,11 +2928,19 @@ internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolea
     }
     return when (book.mediaKind) {
         MediaKind.EPUB,
-        MediaKind.PDF,
-        MediaKind.AUDIO -> true
+        MediaKind.PDF -> true
+        MediaKind.AUDIO -> false
         MediaKind.COMIC -> book.hasZipComicHint()
         MediaKind.UNKNOWN -> false
     }
+}
+
+internal fun sameHttpOrigin(requestUrl: String, serverUrl: String): Boolean {
+    val request = requestUrl.toHttpUrlOrNull() ?: return false
+    val server = serverUrl.toHttpUrlOrNull() ?: return false
+    return request.scheme == server.scheme &&
+        request.host == server.host &&
+        request.port == server.port
 }
 
 internal fun readerCacheExtension(book: BookSummary): String = when (book.mediaKind) {

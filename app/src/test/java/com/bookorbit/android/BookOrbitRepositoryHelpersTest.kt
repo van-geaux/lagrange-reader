@@ -140,7 +140,7 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
-    fun `remote reader cache prepares EPUB and PDF without applying comic archive rules`() {
+    fun `remote reader cache keeps small documents local and leaves audio for streaming`() {
         val epub = BookSummary("library", "epub", "epub-file", "EPUB", mediaKind = MediaKind.EPUB)
         val pdf = BookSummary("library", "pdf", "pdf-file", "PDF", mediaKind = MediaKind.PDF)
         val audio = BookSummary("library", "audio", "audio-file", "Audio", mediaKind = MediaKind.AUDIO)
@@ -149,13 +149,41 @@ class BookOrbitRepositoryHelpersTest {
 
         assertTrue(shouldCacheReadableCopy(epub, allowRemoteCache = true))
         assertTrue(shouldCacheReadableCopy(pdf, allowRemoteCache = true))
-        assertTrue(shouldCacheReadableCopy(audio, allowRemoteCache = true))
+        assertFalse(shouldCacheReadableCopy(audio, allowRemoteCache = true))
         assertTrue(shouldCacheReadableCopy(cbz, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(cbr, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(epub, allowRemoteCache = false))
         assertFalse(shouldCacheReadableCopy(epub.copy(fileId = null), allowRemoteCache = true))
         assertEquals("audio-v2.m4b", readerCacheExtension(audio.copy(format = "audio/x-m4b")))
         assertEquals("audio-v2.mp3", readerCacheExtension(audio.copy(format = null, title = "Sample.mp3")))
+    }
+
+    @Test
+    fun `stream authentication is restricted to the configured server origin`() {
+        assertTrue(
+            sameHttpOrigin(
+                "https://books.example.test/api/v1/books/files/1/serve",
+                "https://books.example.test"
+            )
+        )
+        assertFalse(
+            sameHttpOrigin(
+                "https://cdn.example.test/audio.m4b",
+                "https://books.example.test"
+            )
+        )
+        assertFalse(
+            sameHttpOrigin(
+                "http://books.example.test/api/v1/books/files/1/serve",
+                "https://books.example.test"
+            )
+        )
+        assertFalse(
+            sameHttpOrigin(
+                "https://books.example.test:8443/api/v1/books/files/1/serve",
+                "https://books.example.test"
+            )
+        )
     }
 
     @Test

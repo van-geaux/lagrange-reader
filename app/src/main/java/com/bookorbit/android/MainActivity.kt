@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         )
         val audioPlaybackController =
             (application as BookOrbitApplication).audioPlaybackController
+        graph.configureAudioPlayback(audioPlaybackController)
         audioPlaybackController.setProgressListener(graph.coordinator::onAudioPlaybackProgress)
         audioPlaybackController.setCoverLoader(graph.coordinator::loadBookCover)
         splashScreen.setKeepOnScreenCondition {

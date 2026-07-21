@@ -1004,10 +1004,17 @@ private fun AudioReader(
     var errorMessage by remember(state.book.id, state.book.fileId, state.launchMode) {
         mutableStateOf<String?>(null)
     }
-    LaunchedEffect(state.book.id, state.book.fileId, state.launchMode, state.localFile) {
+    LaunchedEffect(
+        state.book.id,
+        state.book.fileId,
+        state.launchMode,
+        state.localFile,
+        state.streamUrl
+    ) {
         val audioController = controller
         val file = state.localFile?.takeIf { it.isFile }
-        if (audioController == null || file == null) {
+        val streamUrl = state.streamUrl?.takeIf { it.isNotBlank() }
+        if (audioController == null || (file == null && streamUrl == null)) {
             val message = "Unable to prepare this audiobook for Readium playback."
             errorMessage = message
             onFailure(state.book, message)
@@ -1018,6 +1025,7 @@ private fun AudioReader(
                 audioController.open(
                     book = state.book,
                     file = file,
+                    streamUrl = streamUrl,
                     initialPositionMs = state.lastKnownPosition,
                     launchMode = state.launchMode
                 )

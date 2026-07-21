@@ -32,9 +32,12 @@ import org.readium.navigator.media.audio.AudioNavigator
 import org.readium.navigator.media.audio.AudioNavigatorFactory
 import org.readium.navigator.media.common.DefaultMediaMetadataProvider
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.DelicateReadiumApi
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
+import org.readium.r2.shared.util.http.HttpClient
 import org.readium.r2.shared.util.mediatype.MediaType
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
@@ -114,23 +117,41 @@ internal sealed interface ReadiumAudioOpenResult {
     data class Error(val message: String) : ReadiumAudioOpenResult
 }
 
-@OptIn(ExperimentalReadiumApi::class)
+@OptIn(ExperimentalReadiumApi::class, DelicateReadiumApi::class)
 internal suspend fun openReadiumAudio(
     application: Application,
     book: BookSummary,
-    file: File,
-    initialPositionMs: Long
+    file: File? = null,
+    streamUrl: String? = null,
+    initialPositionMs: Long,
+    httpClient: HttpClient = DefaultHttpClient()
 ): ReadiumAudioOpenResult = withContext(Dispatchers.IO) {
-    if (!file.isFile || file.length() <= 0L) {
-        return@withContext ReadiumAudioOpenResult.Error("The audiobook file is unavailable.")
+    val localFile = file?.takeIf { it.isFile && it.length() > 0L }
+    val remoteUrl = if (localFile == null) {
+        streamUrl?.takeIf { it.isNotBlank() }?.let { AbsoluteUrl(it) }
+    } else {
+        null
+    }
+    if (localFile == null && remoteUrl == null) {
+        return@withContext ReadiumAudioOpenResult.Error(
+            "The audiobook is unavailable locally and has no valid server stream."
+        )
     }
     val mediaType = book.format?.let(::readiumAudioMediaType)
-        ?: readiumAudioMediaType(file.name)
+        ?: localFile?.name?.let(::readiumAudioMediaType)
         ?: return@withContext ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
-    val httpClient = DefaultHttpClient()
     val assetRetriever = AssetRetriever(application.contentResolver, httpClient)
-    val asset = assetRetriever.retrieve(file, mediaType).getOrNull()
-        ?: return@withContext ReadiumAudioOpenResult.Error("Readium could not read this audiobook file.")
+    val asset = if (localFile != null) {
+        assetRetriever.retrieve(localFile, mediaType).getOrNull()
+    } else {
+        assetRetriever.retrieve(requireNotNull(remoteUrl), mediaType).getOrNull()
+    } ?: return@withContext ReadiumAudioOpenResult.Error(
+        if (localFile != null) {
+            "Readium could not read this audiobook file."
+        } else {
+            "Readium could not open the audiobook stream from the server."
+        }
+    )
     val parser = DefaultPublicationParser(
         context = application,
         httpClient = httpClient,
@@ -312,6 +333,10 @@ class ReadiumAudioPlaybackController internal constructor(
     private var progressJob: Job? = null
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
+    private var streamingHeadersProvider: suspend (AbsoluteUrl) -> Map<String, String> = {
+        emptyMap()
+    }
+    private var streamingAuthenticationRecovery: suspend () -> Boolean = { false }
     private val mutableBookDetailRequest = MutableStateFlow<AudioBookDetailRequest?>(null)
     internal val bookDetailRequest: StateFlow<AudioBookDetailRequest?> =
         mutableBookDetailRequest.asStateFlow()
@@ -325,6 +350,14 @@ class ReadiumAudioPlaybackController internal constructor(
 
     fun setCoverLoader(loader: suspend (BookSummary) -> ByteArray?) {
         coverLoader = loader
+    }
+
+    internal fun setStreamingAuthentication(
+        headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
+        recoverAuthentication: suspend () -> Boolean
+    ) {
+        streamingHeadersProvider = headersProvider
+        streamingAuthenticationRecovery = recoverAuthentication
     }
 
     internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)
@@ -344,7 +377,8 @@ class ReadiumAudioPlaybackController internal constructor(
 
     internal suspend fun open(
         book: BookSummary,
-        file: File,
+        file: File? = null,
+        streamUrl: String? = null,
         initialPositionMs: Long,
         launchMode: ReaderLaunchMode,
         playWhenReady: Boolean = true
@@ -363,7 +397,25 @@ class ReadiumAudioPlaybackController internal constructor(
             }
             return ReadiumAudioOpenResult.Opened(current.publication, current.navigator)
         }
-        return when (val opened = openReadiumAudio(application, book, file, initialPositionMs)) {
+        val httpClient: HttpClient = if (file?.isFile == true) {
+            DefaultHttpClient()
+        } else {
+            AuthenticatedReadiumHttpClient(
+                delegate = DefaultHttpClient(),
+                headersProvider = streamingHeadersProvider,
+                recoverAuthentication = streamingAuthenticationRecovery
+            )
+        }
+        return when (
+            val opened = openReadiumAudio(
+                application = application,
+                book = book,
+                file = file,
+                streamUrl = streamUrl,
+                initialPositionMs = initialPositionMs,
+                httpClient = httpClient
+            )
+        ) {
             is ReadiumAudioOpenResult.Error -> opened
             is ReadiumAudioOpenResult.Opened -> {
                 withContext(Dispatchers.Main.immediate) {
