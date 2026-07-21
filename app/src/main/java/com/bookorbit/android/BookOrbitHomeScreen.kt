@@ -3138,20 +3138,49 @@ private fun LibraryBooks(
         }
         if (targetIndex >= 0) {
             if (reduceMotion) {
-                gridState.scrollToItem(targetIndex + 1)
+                gridState.scrollToItem(targetIndex)
             } else {
-                gridState.animateScrollToItem(targetIndex + 1)
+                gridState.animateScrollToItem(targetIndex)
             }
         }
         pendingAnchor = null
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        val hasJumpRail = jumpTargets.isNotEmpty()
+    val hasJumpRail = jumpTargets.isNotEmpty()
+    Column(modifier = modifier.fillMaxSize()) {
+        LibraryBooksToolbar(
+            selectedBooks = selectedBooks,
+            onMarkAsRead = onMarkAsRead,
+            onMarkAsUnread = onMarkAsUnread,
+            onClearSelection = { selectedBookIds = emptySet() },
+            bookCount = totalBooks ?: state.books.size,
+            seriesCount = seriesCount,
+            filterActive = filter?.isActive == true,
+            onFilterClick = onFilterClick,
+            showSeriesCollapse = allowSeriesCollapse && seriesKeys.isNotEmpty(),
+            seriesCollapsed = seriesCollapsed,
+            onToggleSeriesCollapse = {
+                val anchor = displayedBooks.getOrNull(gridState.firstVisibleItemIndex)
+                pendingAnchor = anchor?.let { (book, seriesKey) ->
+                    LibraryGridAnchor(
+                        bookId = book.id,
+                        seriesKey = seriesKey ?: book.seriesId ?: book.seriesName
+                    )
+                }
+                seriesCollapsed = !seriesCollapsed
+            }
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("library_books_grid"),
             contentPadding = PaddingValues(
                 start = CATALOG_GRID_PADDING,
                 top = CATALOG_GRID_PADDING,
@@ -3161,68 +3190,6 @@ private fun LibraryBooks(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (selectedBookIds.isNotEmpty()) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("${selectedBookIds.size} selected", style = MaterialTheme.typography.titleMedium)
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TextButton(onClick = { selectedBooks.forEach { onMarkAsRead?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark read") }
-                            TextButton(onClick = { selectedBooks.forEach { onMarkAsUnread?.invoke(it) }; selectedBookIds = emptySet() }) { Text("Mark unread") }
-                            TextButton(onClick = { selectedBookIds = emptySet() }) { Text("Clear selection") }
-                        }
-                    }
-                }
-                if (selectedBookIds.isEmpty()) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                    Text(
-                        buildString {
-                            val bookCount = totalBooks ?: state.books.size
-                            append("$bookCount ${if (bookCount == 1) "book" else "books"}")
-                            if (seriesCount != null && seriesCount > 0) append(" · $seriesCount series")
-                        },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (onFilterClick != null) {
-                    val filterAction = onFilterClick
-                    OutlinedButton(onClick = filterAction) {
-                        Text(if (filter?.isActive == true) "Filter · active" else "Filter")
-                    }
-                }
-                if (allowSeriesCollapse && seriesKeys.isNotEmpty()) {
-                    TextButton(
-                        onClick = {
-                            val contentIndex = gridState.firstVisibleItemIndex - 1
-                            val anchor = displayedBooks.getOrNull(contentIndex)
-                            pendingAnchor = anchor?.let { (book, seriesKey) ->
-                                LibraryGridAnchor(
-                                    bookId = book.id,
-                                    seriesKey = seriesKey ?: book.seriesId ?: book.seriesName
-                                )
-                            }
-                            seriesCollapsed = !seriesCollapsed
-                        },
-                        modifier = Modifier.semantics {
-                            contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
-                        }
-                    ) {
-                        Text(if (seriesCollapsed) "Expand series" else "Collapse series")
-                    }
-                }
-                }
-            }
-        }
         if (state.isLoadingBooks) {
             item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
         }
@@ -3283,13 +3250,100 @@ private fun LibraryBooks(
                 onJump = { index ->
                     scope.launch {
                         if (reduceMotion) {
-                            gridState.scrollToItem(index + 1)
+                            gridState.scrollToItem(index)
                         } else {
-                            gridState.animateScrollToItem(index + 1)
+                            gridState.animateScrollToItem(index)
                         }
                     }
                 }
             )
+        }
+        }
+    }
+}
+
+@Composable
+private fun LibraryBooksToolbar(
+    selectedBooks: List<BookSummary>,
+    onMarkAsRead: ((BookSummary) -> Unit)?,
+    onMarkAsUnread: ((BookSummary) -> Unit)?,
+    onClearSelection: () -> Unit,
+    bookCount: Int,
+    seriesCount: Int?,
+    filterActive: Boolean,
+    onFilterClick: (() -> Unit)?,
+    showSeriesCollapse: Boolean,
+    seriesCollapsed: Boolean,
+    onToggleSeriesCollapse: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("library_books_toolbar")
+            .padding(
+                start = CATALOG_GRID_PADDING,
+                top = CATALOG_GRID_PADDING,
+                end = CATALOG_GRID_PADDING
+            ),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (selectedBooks.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("${selectedBooks.size} selected", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            selectedBooks.forEach { onMarkAsRead?.invoke(it) }
+                            onClearSelection()
+                        }
+                    ) { Text("Mark read") }
+                    TextButton(
+                        onClick = {
+                            selectedBooks.forEach { onMarkAsUnread?.invoke(it) }
+                            onClearSelection()
+                        }
+                    ) { Text("Mark unread") }
+                    TextButton(onClick = onClearSelection) { Text("Clear selection") }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    buildString {
+                        append("$bookCount ${if (bookCount == 1) "book" else "books"}")
+                        if (seriesCount != null && seriesCount > 0) {
+                            append(" · $seriesCount series")
+                        }
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (onFilterClick != null) {
+                OutlinedButton(onClick = onFilterClick) {
+                    Text(if (filterActive) "Filter · active" else "Filter")
+                }
+            }
+            if (showSeriesCollapse) {
+                TextButton(
+                    onClick = onToggleSeriesCollapse,
+                    modifier = Modifier.semantics {
+                        contentDescription = if (seriesCollapsed) {
+                            "Expand series"
+                        } else {
+                            "Collapse series"
+                        }
+                    }
+                ) {
+                    Text(if (seriesCollapsed) "Expand series" else "Collapse series")
+                }
+            }
         }
     }
 }

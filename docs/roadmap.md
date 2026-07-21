@@ -69,12 +69,12 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Replace complete M4B/MP4/audiobook preparation with authenticated HTTP byte-range playback and a bounded read-through cache while preserving Readium, service-owned background playback, seeking, chapters, progress, Preview isolation, and explicit offline downloads.
 - Replace complete comic preparation with lazy access: range-capable CBZ archive resources when supported, and BookOrbit page-by-page loading for connected CBR/CB7 instead of building a complete cached CBZ before opening.
 - Specify cache limits/eviction, authentication renewal, non-range fallback behavior, interrupted-request recovery, offline transitions, automated coverage, and representative large-file device validation before implementation.
-- Confirm the final architecture with the user before implementation; retaining Readium and supplying authenticated remote resources is the recommended direction.
+- Product direction selected: retain Readium and the existing service/progress model while supplying authenticated remote resources with bounded read-through caches.
 
 ### 6. Reader and library follow-ups
 
 - Fix portrait orientation lock after returning from a landscape-oriented app; Lagrange must enter and remain in portrait instead of inheriting the previous app's landscape orientation.
-- Keep the Library Browse statistics and filter/collapse action row fixed while the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture.
+- Completed in code: keep the Library Browse statistics and filter/collapse or multi-selection action row fixed while only the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture; collapse anchors and jump targets now use direct grid indexes.
 - Add a multi-select `Delete local` action to the Local books screen.
 - Add the shared #/A-Z jump rail to the Authors screen, following the established availability, sorting, accessibility, and responsive-gutter behavior.
 - Give Libraries, Series, Authors, and Local books distinct destination icons. Confirm the icon set and visual direction with the user before implementation.

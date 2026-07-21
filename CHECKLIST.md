@@ -469,7 +469,7 @@ Execute in this order after confirming any required UI choices:
 
 1. [x] Persist the portrait or landscape orientation active when Lock orientation is enabled and restore that explicit orientation in the main app plus EPUB, PDF, and comic activities. Legacy enabled preferences default to portrait instead of inheriting another app's landscape orientation. The full gate passes 267 JVM tests across 46 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly.
    - [ ] On the target device, enable the lock in portrait, switch to a landscape-only app, then return to and cold-start Lagrange; confirm the main app and every reader remain portrait. Repeat after enabling the lock in landscape.
-2. [ ] Keep the Library Browse statistics and filter/collapse action row fixed while the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture.
+2. [x] Move the Library Browse statistics and filter/collapse or multi-selection action row outside the lazy grid so it remains fixed while the catalog scrolls or handles downward swipe/pull-to-refresh gestures. Remove the former header-item offset from collapse-anchor restoration and jump-rail targets. Compiled Compose coverage scrolls to the final card and verifies unchanged toolbar bounds plus visible statistics and Filter controls. The full gate passes 267 JVM tests across 46 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly.
 3. [ ] Add a multi-select `Delete local` action to the Local books screen, including confirmation, partial-failure handling, state reconciliation, and focused automated/device coverage.
 4. [ ] Add the shared #/A-Z jump rail to Authors, preserving the established availability, sorting, disabled-label accessibility, and responsive-gutter behavior.
 5. [ ] Give Libraries, Series, Authors, and Local books distinct destination icons after the user selects an icon direction.
@@ -478,7 +478,7 @@ Execute in this order after confirming any required UI choices:
 
 Keep whole-file authenticated preparation for EPUB and PDF, but replace full-file preparation for large audio/video containers and comics:
 
-1. [ ] Confirm the streaming architecture before implementation. The recommended direction keeps Readium/service ownership and supplies authenticated remote resources with bounded read-through caches.
+1. [x] Select the Readium-compatible remote-resource architecture: keep Readium/service ownership and supply authenticated remote byte ranges or lazy page resources with bounded read-through caches.
 2. [ ] Stream M4B/MP4 and other supported audiobook containers through HTTP byte ranges without waiting for the complete file; retain chapter navigation, seeking, resume, Preview isolation, background playback, notification controls, and explicit offline downloads.
 3. [ ] Open CBZ lazily through range-capable archive access when supported, with a BookOrbit page-endpoint fallback where needed. Stream connected CBR/CB7 as individual server-rendered pages instead of downloading every page and building a complete CBZ first.
 4. [ ] Bound and evict disposable media/page caches independently from explicit Local books downloads; handle authentication renewal, servers without usable range support, interrupted requests, retries, and offline transitions.

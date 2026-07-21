@@ -1163,6 +1163,52 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun libraryBrowseToolbarStaysFixedWhenCatalogScrolls() {
+        val books = (1..40).map { index ->
+            BookSummary(
+                libraryId = "lib-1",
+                id = "book-$index",
+                fileId = "file-$index",
+                title = "Book ${index.toString().padStart(2, '0')}",
+                mediaKind = MediaKind.EPUB
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = books,
+                            booksTotal = books.size,
+                            isCatalogComplete = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Browse").performClick()
+        val toolbarBefore = composeRule.onNodeWithTag("library_books_toolbar")
+            .fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithText("Book 40").performScrollTo().assertIsDisplayed()
+
+        val toolbarAfter = composeRule.onNodeWithTag("library_books_toolbar")
+            .assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(toolbarBefore.top, toolbarAfter.top, 0.5f)
+        assertEquals(toolbarBefore.bottom, toolbarAfter.bottom, 0.5f)
+        composeRule.onNodeWithText("40 books").assertIsDisplayed()
+        composeRule.onNodeWithText("Filter").assertIsDisplayed()
+    }
+
+    @Test
     fun libraryBrowseCanLoadMorePages() {
         val first = BookSummary(
             libraryId = "lib-1",
