@@ -4,134 +4,148 @@ Last updated: 2026-07-21
 
 ## Current outcome
 
-The current reader, audiobook, cover-layout, series-grouping, and profile-menu work order is implemented. Every supported publication route now uses Readium 3.0.2:
+The July 21 reader/library follow-up and remote-media work orders are implemented and committed locally.
 
-- EPUB and KEPUB open directly with Readium.
-- PDF uses the Readium PDF navigator with the pinned Pdfium adapter.
-- Audiobooks use the Readium audio navigator through a persistent compact player and media service.
-- CBZ opens directly; connected CBR/CB7 is normalized to cached CBZ before opening.
-- MOBI, AZW, AZW3, and FB2 remain explicitly unsupported by user choice. They route to `UNSUPPORTED_EBOOK`/`UNKNOWN`, not to a legacy reader or an invalid EPUB attempt.
+- Orientation lock now persists the exact portrait or landscape orientation selected in Lagrange instead of inheriting the orientation of the previous app.
+- Library Browse statistics and filter/collapse or multi-selection controls are fixed while only the catalog scrolls.
+- Local books supports multi-selection and batch Delete local.
+- Authors loads the complete catalog and provides the shared represented-label #/A-Z jump rail.
+- Libraries, Series, Authors, and Local books have distinct filled destination icons.
+- BookOrbit's exact eight reading-state values are parsed and persisted through Room, browser snapshots, detail cache, and active-reader state.
+- Currently reading contains Reading and Rereading; Want to read contains Want to Read; Recently read contains Read and Skimmed.
+- On Deck is deliberately series-derived rather than mapped from On Hold: a series with at least one Read volume contributes its first non-Read volume unless that candidate is Reading or Rereading. Standalone and unstarted series are excluded.
+- Connected CBZ/CBR/CB7 uses lazy authenticated BookOrbit page resources, so opening and navigation fetch only required pages.
+- Connected audiobooks now follow BookOrbit's own WebUI delivery model: the authenticated `/api/v1/books/files/{fileId}/serve` URL is passed directly to Media3. Readium is not used to interpret a standalone remote audio file.
+- Explicit local audiobook downloads retain the proven Readium 3.0.2 audio navigator. Both local Readium and connected direct Media3 engines share the foreground media service, compact controls, progress, chapters, speed, Preview isolation, and Close behavior.
+- EPUB and PDF continue using authenticated complete-file preparation and Readium. MOBI/AZW/AZW3/FB2 remain explicitly unsupported by product choice.
+- The requested format-filter follow-up was scrapped.
 
-Legacy routed EPUB, PDF, and comic reader fallbacks have been removed. Preview remains isolated from normal progress and active-reader state, and normal reading restores exact Readium locators.
-
-The latest cover change honors each library's `2/3` portrait or `1/1` square cover setting throughout mixed-library data. Square covers retain their true dimensions and sit at the bottom of the portrait-height card slot so labels align across rows.
+No application version was created or bumped. Testing uses the debug APK until the user explicitly requests a version.
 
 ## Repository and publishing state
 
 - Repository: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-- Current implementation HEAD: `5a3f82c`
-- Before the handover commit, local `main` is 15 commits ahead of `origin/main`.
-- The user requested that the handover commit and all preceding local commits be pushed to `origin/main`.
+- Current implementation/documentation HEAD before this handover commit: `8eb0a38`
+- Local `main` is 13 commits ahead of `origin/main` before this handover commit.
+- Do not push until the user explicitly requests it.
 
-Latest 15 commits, newest first:
+Local commits since `origin/main`, newest first:
 
-- `5a3f82c refine supported formats and cover alignment`
-- `8751fa3 test: verify Readium PDF opening on Android`
-- `46ab10f feat: migrate PDF reading to Readium`
-- `e3cb58f feat: respect library cover aspect ratios`
-- `545c16a fix: audit Readium publication routes`
-- `91a0d51 fix: reopen browser for active audiobook`
-- `d9fa4f6 fix: keep readers above compact player`
-- `36654d1 fix: restore audiobook preparation`
-- `c4fafe2 feat: refine compact audiobook playback`
-- `e6dafcb fix: keep Readium audio on main thread`
-- `b2089d0 feat: add persistent compact audiobook player`
-- `ea99caa feat: add Readium audiobook service foundation`
-- `f48178c docs: scope compact Readium audio player`
-- `3ea11ca docs: queue Readium and audiobook work`
-- `dda4ea6 docs: record reader and menu validation`
+- `8eb0a38 docs: record audio and on deck validation`
+- `4dba8bf fix: restore on deck and remote audio streaming`
+- `c0137bb feat: map BookOrbit reading state shelves`
+- `d17e8c7 feat: distinguish library destinations`
+- `f5c9a51 feat: add authors jump rail`
+- `e566844 feat: delete selected local books`
+- `e3ad493 fix: enforce bounded remote media streaming`
+- `9260978 feat: load connected comics page by page`
+- `3109fb4 feat: stream remote audiobooks with byte ranges` (its Readium remote-audio path is superseded by `4dba8bf`)
+- `bc8ea08 fix: pin library browse controls`
+- `d04cb35 fix: persist locked app orientation`
+- `7d5ffcd docs: drop format filter follow-up`
+- `4e89809 docs: queue reader and library follow-ups`
 
-## Implemented reader and UI state
+## Current reader and media architecture
 
-### Reader chrome and tutorial
+### EPUB, PDF, and comics
 
-- The location rail is on the right and occupies about 75% of the reader height.
-- EPUB page controls advance one page at a time; a separate control pair changes chapters.
-- The options bar sits below the system status bar. Center-tapping toggles it, so its redundant Back action was removed and Exit is on the left with a label.
-- Chapter selection and the page rail live in the outer reader UI rather than being duplicated inside the cog menu.
-- Tutorial timing is three seconds and any screen tap dismisses it immediately. Tutorial labels have transparent backgrounds and enlarged text.
-- The sync/refresh/download lifecycle no longer ejects an active reader to Home.
+- EPUB/KEPUB opens with Readium EPUB.
+- PDF opens with Readium PDF and the pinned Pdfium adapter.
+- Connected CBZ/CBR/CB7 opens as a lazy Readium image publication backed by BookOrbit page endpoints.
+- Local/downloaded CBZ remains file-backed.
+- Connected CBR/CB7 no longer requires constructing a complete cached CBZ before first display.
+- EPUB/PDF retain complete authenticated preparation; explicit downloads remain separate offline copies.
+- MOBI, AZW, AZW3, and FB2 remain `UNSUPPORTED_EBOOK`/`MediaKind.UNKNOWN`.
 
-### Series and profile UI
+### Audiobooks
 
-- Series can be grouped by owning library or file format, with only one mode active at a time and both modes allowed to be inactive. Library grouping is the default and the selected mode persists globally across series.
-- Group headers separate books using a label followed by a line extending toward the row edge.
-- The main profile menu orders Achievements above Options, uses a cog for Options, places About beneath Options, and separates those items from Change server and Log out.
-- Book-detail overflow menus stay near the right edge of their row.
+- `ReadiumAudioPlaybackService` remains the foreground `MediaSessionService` and owns the active session.
+- Explicit local/downloaded audio uses Readium's `AudioNavigator` and ExoPlayer adapter.
+- Connected M4B/M4A/MP3/Opus/OGG/FLAC uses a direct Media3 item pointed at BookOrbit's serve route.
+- `AuthenticatedMedia3HttpDataSource` resolves current same-origin Bearer/cookie credentials for every open and retries once after a 401/403 session renewal.
+- Media3 issues bounded HTTP Range requests; connected playback creates no implicit complete audio copy.
+- The compact player operates against the common Media3 `Player` boundary and keeps chapters, seeking, playback speed, background/media-session controls, resume, progress sampling, and explicit Close.
+- Normal Read and Preview return to Browser while playback continues; Preview remains progress-isolated.
+- Persisted audio progress must not restore a transient fullscreen Reader during bootstrap. Browser opens first and the surviving service supplies the compact player.
 
-### Compact audiobook playback
+### Home shelves
 
-- The app deliberately has no fullscreen audiobook player. The persistent compact player overlays app content above bottom navigation and remains available while browsing or opening details.
-- Reader content and controls reserve space above the compact player instead of rendering underneath it. Detail-screen placement also stays above Android navigation.
-- The player provides chapter selection, seek with elapsed and remaining time, playback speed, rotating-arrow skip controls, and cover-to-book-detail navigation.
-- Audiobook details label the primary action Play. Authenticated Preview uses the same Readium preparation route.
-- `ReadiumAudioPlaybackService` owns the active navigator and Media3 session so playback can continue in the background and expose Android media controls.
-- On process/app relaunch, `AppCoordinator` restores Browser first and lets the surviving service repopulate the compact player. It must not restore AUDIO as a fullscreen reader, which previously caused the perpetual preparation screen.
+- Home uses the server-wide catalog; Library Recommended uses the selected-library catalog.
+- Shelf order is Currently reading, On Deck, then Want to read.
+- Currently reading: exact Reading/Rereading.
+- On Deck: first non-Read volume from a series containing a Read volume, hidden while the candidate is Reading/Rereading.
+- Want to read: exact Want to Read.
+- Recently read: exact Read/Skimmed.
+- Unread, Abandoned, On Hold, null, and unknown states do not receive their own reading-state shelf.
 
-### Covers
+## User validation completed
 
-- Library `coverAspectRatio` is parsed and propagated to books by owning library, including mixed-library and series results.
-- The value is persisted through Room catalog rows, Browser snapshots, active-reader state, and detail cache; portrait is the compatibility fallback.
-- Poster/shelf cards, cover-viewer artwork, and compact-player artwork render at their true `2/3` or `1/1` aspect ratio. Square poster covers are bottom-aligned within portrait-height slots so adjacent labels line up.
+The user confirmed on the target device:
 
-## User validation already completed
+- Portrait orientation lock works correctly after returning from another app.
+- Local books batch actions work.
+- Authors jump rail works.
+- Destination icons are good.
+- Exact reading-state behavior works.
+- Restored series-progression On Deck works correctly.
+- Direct remote audiobook streaming opens and plays nicely.
 
-The user has confirmed on the target device/server:
-
-- EPUB, CBZ, connected CBR, and audiobook opening/playback work.
-- Sync, refresh, and downloads no longer kick the user out of the reading screen.
-- Reader Exit and the revised tutorial overlay work.
-- Series grouping and its labels work for both library and file-format separation.
-- The revised profile-menu ordering works.
-- The compact audiobook player works after preparation, placement, controls, Preview, and reader/detail overlap fixes.
-
-The latest square-cover bottom alignment and Readium PDF interaction matrix still need target-device confirmation.
+Earlier target-device confirmations still apply for EPUB, CBZ, connected CBR, local audiobook playback, reader Exit/tutorial behavior, compact-player placement/controls, series grouping, profile-menu ordering, and protection against refresh/download ejecting an active reader.
 
 ## Verification completed
 
-The final combined gate passed:
+The final implementation gate passed:
 
 ```powershell
-.\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
 Results:
 
-- 265 JVM tests across 46 suites
+- 280 JVM tests across 48 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
 - Android instrumentation-test APK assembly passed
-
-A generated three-page PDF was also opened by the connected `Medium_Phone` AVD (API 17). The test confirmed `Publication.Profile.PDF` and exactly three Readium positions.
+- Direct Media3 instrumentation coverage compiles exact authenticated byte ranges and one 401 renewal/retry.
+- Connected execution of the new Media3 MockWebServer tests remains pending because no Android device/ADB was attached to this environment.
 
 Debug APK:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Highest-priority next validation
+The last built APK is 71,143,595 bytes and was built on 2026-07-21 at approximately 21:18 Asia/Bangkok.
 
-1. Validate a real BookOrbit PDF in normal and Preview modes: first open, page navigation, options/chrome, resume locator, reopen, and exit.
-2. Check mixed portrait/square shelves and series on narrow and wide layouts. Confirm square covers sit at the bottom and every title/metadata label aligns.
-3. Recheck audiobook relaunch with an active session: the app must open Browser with the compact player, never a blank preparing screen.
-4. Validate authenticated audiobook Preview and the revised compact controls across narrow/wide layouts.
-5. Validate notification and lock-screen controls, wired-headset/Bluetooth controls, background playback, process recreation, accessibility announcements/touch targets, and responsive layouts.
+## Highest-priority next work
 
-Before handing target-device testing to the user, rebuild the debug APK and report the exact path above.
+No new implementation item has been selected after the successful On Deck and basic remote-audio checks. Continue the physical validation matrix before selecting another system/UI change:
+
+1. Remote audio: verify backward/forward seeking, chapter selection, speed, Preview isolation, background playback, notification/lock-screen/headset/Bluetooth controls, app relaunch with a surviving session, access-token renewal during a long stream, and explicit-download offline reopening.
+2. Remote comics: validate representative large CBZ, CBR, and CB7 files, selected-page-only loading, navigation, reconnect/error behavior, and explicit downloads.
+3. Library Browse: confirm the statistics and filter/collapse or selection row remains fixed during deep scrolling, downward swipes, pull-to-refresh, collapse/expand, and multi-selection.
+4. Reading shelves: repeat On Deck and the exact state shelves in selected-library Recommended and after offline/cold-cache reopening; confirm a candidate disappears from On Deck when it becomes Reading/Rereading.
+5. Readers/layout: validate a real BookOrbit PDF, mixed portrait/square cover alignment, compact-player relaunch/layout, accessibility, large text, themes, and responsive widths/orientations.
+
+Before asking the user to test another build, assemble the debug APK and report the exact path above. Do not create a release/version until the user asks.
 
 ## Architecture guardrails
 
-- All supported publication formats must remain on Readium routes; do not restore legacy reader fallbacks.
-- Keep MOBI/AZW/AZW3/FB2 explicitly unsupported unless the user revisits the conversion decision.
-- Keep Preview isolated from normal reading progress and active-reader persistence.
-- Persist exact Readium locators for normal reading rather than approximating position from percentages.
-- Keep audiobook playback service-owned and compact-only. Do not add a fullscreen audio player.
-- During bootstrap, skip restoring an AUDIO active reader; open Browser and allow the playback service to restore the compact player.
-- Keep reader content above the compact player and keep the compact player above app/system navigation.
-- Preserve per-library cover ownership and aspect-ratio persistence. Do not add top/bottom padding inside square artwork; use the bottom-aligned outer slot for card-label alignment.
-- Connected CBR/CB7 may normalize to cached CBZ. Offline direct CBR/CB7 remains unavailable without an approved local RAR/7z implementation or an existing cached CBZ.
+- Do not route connected standalone audio through Readium publication/asset retrieval again. Match BookOrbit by using the serve URL as direct authenticated Media3 media.
+- Keep explicit downloaded/local audio on the proven Readium path unless a future migration is explicitly approved.
+- Keep playback foreground-service-owned and compact-only; do not add a fullscreen audiobook player without a user-approved GUI/system decision.
+- Resolve streaming credentials only for the configured BookOrbit origin and retain one bounded 401/403 renewal retry.
+- Never implicitly download an entire large audio/comic item for ordinary connected Play/Read.
+- Keep explicit downloads independent and usable offline.
+- Preserve Preview isolation from normal progress and active-reader persistence.
+- During bootstrap, skip restoring AUDIO as a fullscreen Reader; open Browser and let the service restore the compact player.
+- Preserve the series-derived On Deck rule. Do not map On Hold into On Deck.
+- Preserve exact BookOrbit reading states independently from legacy `isRead`.
+- Keep shelf order Currently reading -> On Deck -> Want to read.
+- Keep MOBI/AZW/AZW3/FB2 explicitly unsupported unless the user revisits conversion.
+- Keep reader content above the compact player and the compact player above app/system navigation.
+- Preserve per-library cover ownership/aspect ratios and square-cover bottom alignment.
 - Pdfium currently requires Jetifier because of its transitive Android support-library dependency.
 
 ## Important files for the next session
@@ -146,34 +160,34 @@ Before handing target-device testing to the user, rebuild the debug APK and repo
 - `app/src/main/java/com/bookorbit/android/BookOrbitApp.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumPublicationRoute.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumPdfReaderLauncher.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumPdfReaderActivity.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumEpubReaderActivity.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumComicReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/AuthenticatedReadiumHttpClient.kt`
+- `app/src/main/java/com/bookorbit/android/AuthenticatedMedia3HttpDataSource.kt`
 - `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayback.kt`
 - `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayerOverlay.kt`
-- `app/src/androidTest/java/com/bookorbit/android/ReadiumPdfOpenInstrumentedTest.kt`
-- `app/src/test/java/com/bookorbit/android/ReadiumPdfReaderRoutingTest.kt`
-- `app/src/test/java/com/bookorbit/android/BookCoverLayoutTest.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumComicReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumEpubReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumPdfReaderActivity.kt`
+- `app/src/androidTest/java/com/bookorbit/android/ReadiumRemoteResourceInstrumentedTest.kt`
+- `app/src/test/java/com/bookorbit/android/HomeShelfTest.kt`
 
 ## Protected working-tree changes
 
-The following pre-existing user-owned changes are unrelated to this handover and must not be staged or committed:
+The following user-owned changes are unrelated to the handover and must not be staged or committed:
 
+- Modified `README.md`
 - Modified `app/src/main/res/drawable/ic_launcher_foreground.xml`
 - Modified `app/src/main/res/drawable/ic_launcher_monochrome.xml`
 - Modified `docs/README.md`
 - Untracked `.agents/`
 - Untracked `AGENTS.md`
-- Untracked `artwork/`
 - Untracked `sample/`
 
 ## Environment notes
 
 - JDK 17 and the Android SDK are installed and working.
-- The Readium PDF route pins `readium-adapter-pdfium:3.0.2`; `android.enableJetifier=true` is required for packaging compatibility.
-- The emulator and the Gradle daemon started for the latest work were stopped before this handover update.
+- The Readium PDF route pins `readium-adapter-pdfium:3.0.2`; `android.enableJetifier=true` remains required.
+- No Android device/ADB was attached during the latest automated verification.
+- The Gradle daemon started during this session was stopped before this handover update.
 - Git SSH authentication is configured through `origin`.
 
 ## Handover maintenance rule
