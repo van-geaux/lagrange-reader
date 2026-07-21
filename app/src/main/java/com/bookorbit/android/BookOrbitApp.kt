@@ -221,6 +221,7 @@ private fun BookOrbitDestination(
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,
             onDeleteLocalCopy = coordinator::deleteLocalCopy,
+            onDeleteLocalCopies = coordinator::deleteLocalCopies,
             onDismissMessage = coordinator::dismissBrowserMessage,
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
             onMarkAsRead = coordinator::markBookAsRead,

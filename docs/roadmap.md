@@ -75,7 +75,7 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 
 - Fix portrait orientation lock after returning from a landscape-oriented app; Lagrange must enter and remain in portrait instead of inheriting the previous app's landscape orientation.
 - Completed in code: keep the Library Browse statistics and filter/collapse or multi-selection action row fixed while only the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture; collapse anchors and jump targets now use direct grid indexes.
-- Add a multi-select `Delete local` action to the Local books screen.
+- Completed in code: add a Local books-only multi-select `Delete local` action governed by the existing confirmation preference. Cancel retains selection; confirmation runs one batch, reconciles successful files in one browser/local-list revision, preserves failed files, and reports partial failures. Focused JVM and compiled Compose coverage pass; target-device validation remains.
 - Add the shared #/A-Z jump rail to the Authors screen, following the established availability, sorting, accessibility, and responsive-gutter behavior.
 - Give Libraries, Series, Authors, and Local books distinct destination icons. Confirm the icon set and visual direction with the user before implementation.
 - Map BookOrbit reading states into both Home and Library Home shelves exactly: Reading and Re-reading belong in Currently Reading; Want to Read gets a dedicated section; Read plus recently Skimmed belong in Recently Read; On Hold belongs in On Deck; all other server states are excluded. Confirm exact API enum spellings and add deterministic parsing/shelf/device coverage.

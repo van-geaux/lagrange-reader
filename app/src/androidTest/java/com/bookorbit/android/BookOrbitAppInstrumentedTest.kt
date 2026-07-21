@@ -747,6 +747,84 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun localBooksMultiSelectConfirmsAndReconcilesPartialFailure() {
+        val first = BookSummary(
+            libraryId = "lib-1",
+            id = "local-delete-1",
+            fileId = "file-delete-1",
+            title = "Local Delete One",
+            localPath = "/local/delete-one.epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val second = BookSummary(
+            libraryId = "lib-1",
+            id = "local-delete-2",
+            fileId = "file-delete-2",
+            title = "Local Delete Two",
+            localPath = "/local/delete-two.epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val third = BookSummary(
+            libraryId = "lib-1",
+            id = "local-delete-3",
+            fileId = "file-delete-3",
+            title = "Local Delete Three",
+            localPath = "/local/delete-three.epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            localBooksResult = listOf(first, second, third)
+            deleteLocalErrorsByBookId = mapOf(
+                third.id to IllegalStateException("File is locked.")
+            )
+        }
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main),
+                    appPreferences = AppPreferences(confirmDeleteLocalCopy = true)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Local books").performClick()
+        composeRule.onNodeWithContentDescription("Local Delete One", substring = true)
+            .performTouchInput { longClick() }
+        composeRule.onNodeWithContentDescription("Local Delete Two", substring = true)
+            .performClick()
+        composeRule.onNodeWithContentDescription("Local Delete Three", substring = true)
+            .performClick()
+        composeRule.onNodeWithText("3 selected").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Delete local").performClick()
+        composeRule.onNodeWithText("Delete 3 local copies?").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("3 selected").assertIsDisplayed()
+        composeRule.runOnIdle { assertTrue(dataSource.deletedLocalBooks.isEmpty()) }
+
+        composeRule.onNodeWithText("Delete local").performClick()
+        composeRule.onNodeWithTag("confirm-delete-local-copies").performClick()
+        composeRule.waitUntil { dataSource.deletedLocalBooks == listOf(first, second) }
+        composeRule.onAllNodesWithContentDescription("Local Delete One", substring = true)
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription("Local Delete Two", substring = true)
+            .assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("Local Delete Three", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Removed 2 of 3 local copies. 1 could not be removed.")
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun dismissibleMessageSupportsCloseButtonAndHorizontalSwipe() {
         val showCloseMessage = mutableStateOf(true)
         val showSwipeMessage = mutableStateOf(true)
@@ -1361,6 +1439,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val downloadedBooks = mutableListOf<BookSummary>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
+    var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
     var searchBooksResult: List<BookSummary> = emptyList()
     var bookDetailResult: BookDetailInfo? = null
     var seriesDetailResult: SeriesDetailInfo? = null
@@ -1430,7 +1509,9 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         return File("unused")
     }
     override suspend fun deleteLocalCopy(book: BookSummary) {
+        deleteLocalErrorsByBookId[book.id]?.let { throw it }
         deletedLocalBooks += book
+        localBooksResult = localBooksResult.filterNot { it.id == book.id }
     }
     override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = Unit
     override suspend fun pendingProgressCount(): Int = 0

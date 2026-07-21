@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -788,6 +789,44 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bulk local deletion reconciles successes and reports partial failures`() = runTest {
+        val first = book.copy(localPath = "/downloads/first.epub")
+        val second = book.copy(
+            id = "book-2",
+            fileId = "file-2",
+            title = "Second Book",
+            localPath = "/downloads/second.epub"
+        )
+        val repository = FakeBookOrbitDataSource(
+            deleteLocalErrorsByBookId = mapOf(second.id to IOException("File is locked."))
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(first, second)
+            )
+        )
+
+        coordinator.deleteLocalCopies(listOf(first, second))
+        advanceUntilIdle()
+
+        val browser = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(first), repository.deletedLocalBooks)
+        assertEquals(null, browser.books.first { it.id == first.id }.localPath)
+        assertEquals(second.localPath, browser.books.first { it.id == second.id }.localPath)
+        assertTrue(browser.localFilePathOverrides.containsKey(requireNotNull(first.fileId)))
+        assertFalse(browser.localFilePathOverrides.containsKey(requireNotNull(second.fileId)))
+        assertEquals(1, browser.localBooksRevision)
+        assertEquals(
+            "Removed 1 of 2 local copies. 1 could not be removed.",
+            browser.message
+        )
+    }
+
+    @Test
     fun `dismissing a browser message clears it immediately`() = runTest {
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -1221,7 +1260,8 @@ private class FakeBookOrbitDataSource(
     var loginError: Throwable? = null,
     var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
     var pendingProgressCountResult: Int = 0,
-    var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success
+    var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success,
+    var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
 ) : BookOrbitDataSource {
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
@@ -1360,6 +1400,7 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun deleteLocalCopy(book: BookSummary) {
+        deleteLocalErrorsByBookId[book.id]?.let { throw it }
         deletedLocalBooks += book
     }
 

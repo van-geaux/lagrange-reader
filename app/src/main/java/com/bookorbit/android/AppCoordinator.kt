@@ -805,6 +805,35 @@ class AppCoordinator(
         }
     }
 
+    fun deleteLocalCopies(books: List<BookSummary>) {
+        if (books.isEmpty()) return
+        scope.launch {
+            val deletedFileIds = mutableSetOf<String>()
+            var failureCount = 0
+            books.forEach { book ->
+                try {
+                    repository.deleteLocalCopy(book)
+                    book.fileId?.let(deletedFileIds::add)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    failureCount += 1
+                }
+            }
+            val message = when {
+                failureCount == 0 -> null
+                deletedFileIds.isEmpty() -> "Unable to remove the selected local copies."
+                else -> "Removed ${deletedFileIds.size} of ${books.size} local copies. " +
+                    "$failureCount could not be removed."
+            }
+            if (deletedFileIds.isNotEmpty()) {
+                clearLocalFileStates(deletedFileIds, message)
+            } else if (message != null) {
+                showBrowserMessage(message)
+            }
+        }
+    }
+
     fun removeFromCurrentlyReading(book: BookSummary) {
         resetBookReadingState(
             book = book,
@@ -1199,6 +1228,24 @@ class AppCoordinator(
                 },
                 localFilePathOverrides = nextOverrides,
                 localBooksRevision = current.localBooksRevision + 1
+            )
+        )
+    }
+
+    private fun clearLocalFileStates(fileIds: Set<String>, message: String?) {
+        val current = lastBrowserState ?: return
+        val nextOverrides = current.localFilePathOverrides + fileIds.associateWith { null }
+        showBrowser(
+            current.copy(
+                books = current.books.map { book ->
+                    if (book.fileId in fileIds) book.copy(localPath = null) else book
+                },
+                homeBooks = current.homeBooks.map { book ->
+                    if (book.fileId in fileIds) book.copy(localPath = null) else book
+                },
+                localFilePathOverrides = nextOverrides,
+                localBooksRevision = current.localBooksRevision + 1,
+                message = message ?: current.message
             )
         )
     }

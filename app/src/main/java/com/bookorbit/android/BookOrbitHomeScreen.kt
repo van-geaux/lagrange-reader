@@ -389,6 +389,7 @@ internal fun NativeLibraryBrowserScreen(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onDismissMessage: () -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
@@ -1012,6 +1013,8 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.LOCAL_BOOKS
                         selectedBook = book
                     },
+                    confirmDeleteLocalCopy = appPreferences.confirmDeleteLocalCopy,
+                    onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -3072,13 +3075,16 @@ private fun LibraryBooks(
     serverJumpBuckets: List<LibraryJumpBucket> = emptyList(),
     onFilterClick: (() -> Unit)? = null,
     onMarkAsRead: ((BookSummary) -> Unit)? = null,
-    onMarkAsUnread: ((BookSummary) -> Unit)? = null
+    onMarkAsUnread: ((BookSummary) -> Unit)? = null,
+    confirmDeleteLocalCopy: Boolean = true,
+    onDeleteLocalCopies: ((List<BookSummary>) -> Unit)? = null
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
         ?: "Library"
     var seriesCollapsed by rememberSaveable(title) { mutableStateOf(false) }
     var selectedBookIds by remember(title) { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingLocalDeletes by remember(title) { mutableStateOf<List<BookSummary>?>(null) }
     val selectedBooks = state.books.filter { it.id in selectedBookIds }
     LaunchedEffect(state.books) {
         selectedBookIds = selectedBookIds.intersect(state.books.mapTo(mutableSetOf()) { it.id })
@@ -3152,6 +3158,16 @@ private fun LibraryBooks(
             selectedBooks = selectedBooks,
             onMarkAsRead = onMarkAsRead,
             onMarkAsUnread = onMarkAsUnread,
+            onDeleteLocalCopies = onDeleteLocalCopies?.let { deleteCopies ->
+                { books ->
+                    if (confirmDeleteLocalCopy) {
+                        pendingLocalDeletes = books
+                    } else {
+                        deleteCopies(books)
+                        selectedBookIds = emptySet()
+                    }
+                }
+            },
             onClearSelection = { selectedBookIds = emptySet() },
             bookCount = totalBooks ?: state.books.size,
             seriesCount = seriesCount,
@@ -3260,6 +3276,41 @@ private fun LibraryBooks(
         }
         }
     }
+    pendingLocalDeletes?.let { books ->
+        AlertDialog(
+            onDismissRequest = { pendingLocalDeletes = null },
+            title = {
+                Text(
+                    if (books.size == 1) "Delete local copy?"
+                    else "Delete ${books.size} local copies?"
+                )
+            },
+            text = {
+                Text(
+                    if (books.size == 1) {
+                        "The selected file will be removed from this device. " +
+                            "Your BookOrbit book is not deleted."
+                    } else {
+                        "The selected files will be removed from this device. " +
+                            "Your BookOrbit books are not deleted."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingLocalDeletes = null
+                        onDeleteLocalCopies?.invoke(books)
+                        selectedBookIds = emptySet()
+                    },
+                    modifier = Modifier.testTag("confirm-delete-local-copies")
+                ) { Text("Delete local") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLocalDeletes = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -3267,6 +3318,7 @@ private fun LibraryBooksToolbar(
     selectedBooks: List<BookSummary>,
     onMarkAsRead: ((BookSummary) -> Unit)?,
     onMarkAsUnread: ((BookSummary) -> Unit)?,
+    onDeleteLocalCopies: ((List<BookSummary>) -> Unit)?,
     onClearSelection: () -> Unit,
     bookCount: Int,
     seriesCount: Int?,
@@ -3307,6 +3359,11 @@ private fun LibraryBooksToolbar(
                             onClearSelection()
                         }
                     ) { Text("Mark unread") }
+                    if (onDeleteLocalCopies != null) {
+                        TextButton(onClick = { onDeleteLocalCopies(selectedBooks) }) {
+                            Text("Delete local")
+                        }
+                    }
                     TextButton(onClick = onClearSelection) { Text("Clear selection") }
                 }
             }
@@ -3405,6 +3462,8 @@ private fun LocalBooksScreen(
     libraryId: String?,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
+    confirmDeleteLocalCopy: Boolean,
+    onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
@@ -3423,7 +3482,6 @@ private fun LocalBooksScreen(
         state = state.copy(
             books = filteredBooks,
             isLoadingBooks = books == null,
-            message = null,
             isOfflineSnapshot = false
         ),
         modifier = modifier,
@@ -3438,6 +3496,8 @@ private fun LocalBooksScreen(
         filter = filter,
         onMarkAsRead = onMarkAsRead,
         onMarkAsUnread = onMarkAsUnread,
+        confirmDeleteLocalCopy = confirmDeleteLocalCopy,
+        onDeleteLocalCopies = onDeleteLocalCopies,
         onFilterClick = { showFilter = true }
     )
     if (showFilter) {

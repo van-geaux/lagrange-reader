@@ -1,5 +1,7 @@
 # Testing
 
+Local Books batch deletion (July 21): `AppCoordinatorTest` forces one success and one failure and verifies that the successful path is cleared from both live state and local overrides, the failed path remains, the Local books revision advances once, and the partial-result message is exact. Compiled `BookOrbitAppInstrumentedTest` coverage selects three local posters, confirms the Local books-only action appears, cancels once without losing selection, confirms the batch, and verifies two successful cards disappear while the failed card and partial-result message remain visible. The full gate passes 275 JVM tests across 47 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Connected execution is unavailable because no Android device/ADB is attached in this environment. On the target device, repeat the flow with several downloads, include a copy that cannot be removed if practical, and verify successful cards disappear while failed cards and the partial message remain. Turn off confirmation in Options and verify the selection action deletes immediately.
+
 This document marks the current point where manual app testing can start.
 
 Reader regression result on July 13, 2026: the restored visible-overflow page strip renders the real EPUB on the target device, and all four independent padding controls visibly update the reading surface. Top/Bottom use Android layout padding around the `WebView`, outside the EPUB HTML; Left/Right update the page strip in place.
