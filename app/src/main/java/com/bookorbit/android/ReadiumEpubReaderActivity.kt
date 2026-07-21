@@ -148,6 +148,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var progressView: ProgressBar? = null
     private var readerContainerId: Int = View.NO_ID
     private lateinit var rootView: FrameLayout
+    private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
@@ -219,12 +220,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         rootView = FrameLayout(this).apply {
             setBackgroundColor(selectedTheme.backgroundColor)
         }
+        readerViewport = FrameLayout(this).apply {
+            setBackgroundColor(selectedTheme.backgroundColor)
+        }
+        rootView.addView(
+            readerViewport,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
         readerContainerId = View.generateViewId()
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
             setBackgroundColor(selectedTheme.backgroundColor)
         }
-        rootView.addView(
+        readerViewport.addView(
             readerContainer,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -232,7 +243,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         progressView = ProgressBar(this).also { progress ->
-            rootView.addView(
+            readerViewport.addView(
                 progress,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -252,7 +263,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             footerView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -289,7 +300,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             chromeView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -322,7 +333,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             optionsView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -341,16 +352,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             tapZoneTutorialView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        addReadiumAudioPlayerOverlay(rootView)
+        addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
-        rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
+        readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
     }
 
     private fun installBackHandler() {
@@ -517,6 +528,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         selectedTheme = theme
         themeStore.save(theme)
         rootView.setBackgroundColor(theme.backgroundColor)
+        readerViewport.setBackgroundColor(theme.backgroundColor)
         readerContainer.setBackgroundColor(theme.backgroundColor)
         navigator?.submitPreferences(readiumPreferences(theme, fontScale))
         configureSystemBars()
@@ -533,9 +545,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun applyReaderPadding() {
-        if (!::rootView.isInitialized || rootView.width <= 0 || rootView.height <= 0) return
-        fun horizontal(value: Float): Int = (rootView.width * value.coerceIn(0f, 100f) / 400f).toInt()
-        fun vertical(value: Float): Int = (rootView.height * value.coerceIn(0f, 100f) / 400f).toInt()
+        if (!::readerViewport.isInitialized || readerViewport.width <= 0 || readerViewport.height <= 0) return
+        fun horizontal(value: Float): Int =
+            (readerViewport.width * value.coerceIn(0f, 100f) / 400f).toInt()
+        fun vertical(value: Float): Int =
+            (readerViewport.height * value.coerceIn(0f, 100f) / 400f).toInt()
         readerContainer.setPadding(
             horizontal(padding.left),
             vertical(padding.top),

@@ -100,6 +100,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var progressView: ProgressBar? = null
     private var readerContainerId: Int = View.NO_ID
     private lateinit var rootView: FrameLayout
+    private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
@@ -152,13 +153,21 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun createReaderViews() {
         rootView = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        readerViewport = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        rootView.addView(
+            readerViewport,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
         readerContainerId = View.generateViewId()
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
             setBackgroundColor(Color.BLACK)
             setPadding(0, 0, 0, dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP))
         }
-        rootView.addView(
+        readerViewport.addView(
             readerContainer,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -166,7 +175,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             )
         )
         progressView = ProgressBar(this).also { progress ->
-            rootView.addView(
+            readerViewport.addView(
                 progress,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -186,7 +195,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             footerView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -213,7 +222,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             chromeView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -238,7 +247,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             optionsView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -257,14 +266,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 }
             }
         }
-        rootView.addView(
+        readerViewport.addView(
             tapZoneTutorialView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        addReadiumAudioPlayerOverlay(rootView)
+        addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
     }
 

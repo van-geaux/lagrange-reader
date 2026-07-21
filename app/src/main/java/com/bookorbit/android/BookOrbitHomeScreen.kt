@@ -688,6 +688,14 @@ internal fun NativeLibraryBrowserScreen(
         )
     }
 
+    val showBrowserBottomNavigation =
+        !isSearchOpen &&
+            activeBookGenre == null &&
+            activeSeriesGenre == null &&
+            selectedBook == null &&
+            selectedSeriesKey == null &&
+            selectedAuthor == null
+
     Scaffold(
         topBar = {
             when {
@@ -843,9 +851,15 @@ internal fun NativeLibraryBrowserScreen(
             }
         },
         bottomBar = {
-            Column {
+            Column(
+                modifier = if (showBrowserBottomNavigation) {
+                    Modifier
+                } else {
+                    Modifier.navigationBarsPadding()
+                }
+            ) {
                 bottomOverlay?.invoke()
-                if (!isSearchOpen && activeBookGenre == null && activeSeriesGenre == null && selectedBook == null && selectedSeriesKey == null && selectedAuthor == null) {
+                if (showBrowserBottomNavigation) {
                     BrowserBottomNavigation(
                         destination = destination,
                         onHome = {
