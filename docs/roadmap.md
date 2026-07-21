@@ -70,7 +70,6 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Add a multi-select `Delete local` action to the Local books screen.
 - Add the shared #/A-Z jump rail to the Authors screen, following the established availability, sorting, accessibility, and responsive-gutter behavior.
 - Give Libraries, Series, Authors, and Local books distinct destination icons. Confirm the icon set and visual direction with the user before implementation.
-- Add the requested format filter after the user confirms which screen or view should receive it; the original request ended at add format filter to the.
 - Add more reading-direction options, including right-to-left and continuous scrolling with configurable space between pages for PDF and CBZ/CBR.
 - Allow a book to be moved to read status from Preview.
 - Add support for more book formats.

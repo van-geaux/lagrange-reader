@@ -472,7 +472,6 @@ Execute in this order after confirming any required UI choices:
 3. [ ] Add a multi-select `Delete local` action to the Local books screen, including confirmation, partial-failure handling, state reconciliation, and focused automated/device coverage.
 4. [ ] Add the shared #/A-Z jump rail to Authors, preserving the established availability, sorting, disabled-label accessibility, and responsive-gutter behavior.
 5. [ ] Give Libraries, Series, Authors, and Local books distinct destination icons after the user selects an icon direction.
-6. [ ] Add the requested format filter after the user confirms its destination; the original request ended at add format filter to the.
 
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
