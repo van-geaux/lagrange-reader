@@ -1,115 +1,97 @@
 # Handover
 
-Last updated: 2026-07-18
+Last updated: 2026-07-21
 
 ## Current outcome
 
-The active user work order is implemented through the EPUB preparation/resource follow-up. The latest app includes the revised book-detail actions, server-wide Home aggregation, Local books shelves, complete comic interactions, five app themes, server switching, Achievements, stable jump rails, series-neighbor navigation, stale progress recovery, and the latest EPUB fixes.
+The current reader, audiobook, cover-layout, series-grouping, and profile-menu work order is implemented. Every supported publication route now uses Readium 3.0.2:
 
-The newest EPUB step fixes two separate regressions:
+- EPUB and KEPUB open directly with Readium.
+- PDF uses the Readium PDF navigator with the pinned Pdfium adapter.
+- Audiobooks use the Readium audio navigator through a persistent compact player and media service.
+- CBZ opens directly; connected CBR/CB7 is normalized to cached CBZ before opening.
+- MOBI, AZW, AZW3, and FB2 remain explicitly unsupported by user choice. They route to `UNSUPPORTED_EBOOK`/`UNKNOWN`, not to a legacy reader or an invalid EPUB attempt.
 
-1. Nonlocal EPUB/PDF reading and Preview now download an authenticated temporary reader copy. The previous resolver accidentally applied a CBZ-only archive check to EPUB/PDF, so a nonlocal EPUB could never be prepared even after relogin.
-2. Extracted EPUB chapter resources now load through `WebViewAssetLoader` at `appassets.androidplatform.net`. Nested and parent-relative paths receive safe encoded base URLs, the visible reader and hidden page measurer share the same extracted root, and broad WebView file/content access is disabled. Read-only inspection of the live `your name.` sample confirmed matching `OEBPS` chapter references and image entries.
+Legacy routed EPUB, PDF, and comic reader fallbacks have been removed. Preview remains isolated from normal progress and active-reader state, and normal reading restores exact Readium locators.
 
-Automated verification passes. The next useful work is physical validation of nonlocal EPUB Preview after relogin and embedded images, followed by the remaining format and responsive edge checks.
+The latest cover change honors each library's `2/3` portrait or `1/1` square cover setting throughout mixed-library data. Square covers retain their true dimensions and sit at the bottom of the portrait-height card slot so labels align across rows.
 
 ## Repository and publishing state
 
-- GitHub: `https://github.com/van-geaux/lagrange-reader`
-- Local path: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
+- Repository: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-- Before this handover commit/push, local `main` is 45 commits ahead of `origin/main`.
-- The user requested this handover update and publication. Push is pending until the handover commit is created.
-- The user-owned untracked root `AGENTS.md` is intentionally untouched and must not be committed.
-- The untracked `.agents/` workspace directory is also intentionally untouched.
+- Current implementation HEAD: `5a3f82c`
+- Before the handover commit, local `main` is 15 commits ahead of `origin/main`.
+- The user requested that the handover commit and all preceding local commits be pushed to `origin/main`.
 
-Latest implementation commits:
+Latest 15 commits, newest first:
 
-- `596da23 fix: prepare and render epub resources`
-- `5f5c850 feat: add local books home shelves`
-- `87e240a feat: retain disabled jump rail letters`
-- `f5045cf feat: compact detail and achievement actions`
-- `7c929ae feat: redesign achievement tiles`
-- `d88a1ff fix: recover stale progress file ids`
-- `fc94aa5 fix: refine device feedback follow-ups`
-- `d7b866a feat: add achievements catalogue`
-- `894e511 feat: add selectable dark palettes`
-- `3b19388 feat: navigate adjacent series books`
-- `053227b feat: add confirmed server switching`
-- `e4683c5 fix: keep catalog cards clear of jump rails`
-- `7c999c2 fix: align genre filters with server contract`
-- `e424d54 feat: add safe local download updates`
-- `5a298ca perf: parallelize home library refresh`
-- `3b1c32a test: add repository http integration coverage`
-- `dd3255a feat: add chapter page slider`
-- `dc2df21 fix: make reader close immediate`
-- `631a94d feat: add fullscreen comic reader controls`
-- `abd806e feat: aggregate home across libraries`
-- `4f1c6a6 feat: add data preferences`
-- `d457855 feat: add interface preferences`
+- `5a3f82c refine supported formats and cover alignment`
+- `8751fa3 test: verify Readium PDF opening on Android`
+- `46ab10f feat: migrate PDF reading to Readium`
+- `e3cb58f feat: respect library cover aspect ratios`
+- `545c16a fix: audit Readium publication routes`
+- `91a0d51 fix: reopen browser for active audiobook`
+- `d9fa4f6 fix: keep readers above compact player`
+- `36654d1 fix: restore audiobook preparation`
+- `c4fafe2 feat: refine compact audiobook playback`
+- `e6dafcb fix: keep Readium audio on main thread`
+- `b2089d0 feat: add persistent compact audiobook player`
+- `ea99caa feat: add Readium audiobook service foundation`
+- `f48178c docs: scope compact Readium audio player`
+- `3ea11ca docs: queue Readium and audiobook work`
+- `dda4ea6 docs: record reader and menu validation`
 
-Consult `git log` plus `CHECKLIST.md` and `docs/roadmap.md` for the complete intervening commit history and work-order record.
+## Implemented reader and UI state
 
-## Latest implementation state
+### Reader chrome and tutorial
 
-### Book details and catalog actions
+- The location rail is on the right and occupies about 75% of the reader height.
+- EPUB page controls advance one page at a time; a separate control pair changes chapters.
+- The options bar sits below the system status bar. Center-tapping toggles it, so its redundant Back action was removed and Exit is on the left with a label.
+- Chapter selection and the page rail live in the outer reader UI rather than being duplicated inside the cog menu.
+- Tutorial timing is three seconds and any screen tap dismisses it immediately. Tutorial labels have transparent backgrounds and enlarged text.
+- The sync/refresh/download lifecycle no longer ejects an active reader to Home.
 
-- Book-detail actions use a wrapping `FlowRow`, so narrow screens no longer hide trailing controls behind an unexplained horizontal swipe.
-- Read, Preview, Download/Update/Cancel/Delete local, and the direct live Mark as read/unread action remain labeled.
-- The selected detail reconciles immediately after download, update, and Delete local without requiring the user to leave and reopen it.
-- Long titles expand from a five-line limit, series name/index remain visible, and series books expose transparent Previous/Next controls backed by one retained complete-series load.
-- Genre chips open the official paginated BookOrbit relation filter using singular `genre`, `includesAny`, and an array value. Tags remain informational.
-- Multi-book selection supports bulk Mark as read/unread.
-- The cover viewer dismisses from any full-screen tap or Android Back. Missing foreground covers fall through to the canonical thumbnail endpoint.
+### Series and profile UI
 
-### Home, local state, and large libraries
+- Series can be grouped by owning library or file format, with only one mode active at a time and both modes allowed to be inactive. Library grouping is the default and the selected mode persists globally across series.
+- Group headers separate books using a label followed by a line extending toward the row edge.
+- The main profile menu orders Achievements above Options, uses a cog for Options, places About beneath Options, and separates those items from Change server and Log out.
+- Book-detail overflow menus stay near the right edge of their row.
 
-- Top-level Home aggregates all libraries on the server. Selected-library screens remain scoped to their library.
-- Currently Reading and completed-only Recently read derive from the correct server-wide collections.
-- Top-level Home has a global Local books shelf; Library Recommended has a selected-library Local books shelf. Each uses a deterministic deduplicated alphabetical preview of up to 12 and a correctly scoped See all route.
-- Download/delete/update changes reconcile Room, snapshots, details, Local books, and Home immediately. Local books retain cached thumbnails offline.
-- Initial multi-library refresh makes the selected library current first, then refreshes nonselected libraries in deterministic batches of at most three concurrent libraries.
-- Library/Series grids reserve a rail gutter. Eligible rails retain the stable `#/A-Z` vocabulary (`Z-A/#` descending); unavailable entries are greyed, disabled, announced as unavailable, and cannot forward to another letter.
-- The stale pending-progress queue fix remaps one deleted/stale file-id 404 to the book's current primary file, or acknowledges a terminal invalid target so the debug queue can drain.
+### Compact audiobook playback
 
-### Readers and downloads
+- The app deliberately has no fullscreen audiobook player. The persistent compact player overlays app content above bottom navigation and remains available while browsing or opening details.
+- Reader content and controls reserve space above the compact player instead of rendering underneath it. Detail-screen placement also stays above Android navigation.
+- The player provides chapter selection, seek with elapsed and remaining time, playback speed, rotating-arrow skip controls, and cover-to-book-detail navigation.
+- Audiobook details label the primary action Play. Authenticated Preview uses the same Readium preparation route.
+- `ReadiumAudioPlaybackService` owns the active navigator and Media3 session so playback can continue in the background and expose Android media controls.
+- On process/app relaunch, `AppCoordinator` restores Browser first and lets the surviving service repopulate the compact player. It must not restore AUDIO as a fullscreen reader, which previously caused the perpetual preparation screen.
 
-- EPUB uses a fullscreen paginated reader with tap/swipe navigation, center-tap options, exact chapter/page resume, chapter selection, a current-chapter page slider, measured whole-book progress, independent margins, themes, and prompt close behavior.
-- EPUB resources use a scoped appassets origin instead of broad file URL access. Visible rendering and hidden page measurement resolve the same fonts/images/assets.
-- Nonlocal EPUB/PDF opens through an authenticated temporary reader cache; explicit offline downloads remain separate durable files.
-- Comic CBZ/CBR works online through authenticated server page extraction. Local ZIP/CBZ works offline. The comic reader matches the novel interaction model: fullscreen fitted pages, tap/swipe page turns, center options, page slider, and options-first Back behavior.
-- Download/Update local shows determinate or indeterminate progress, cancel/retry state, cellular policy handling, staged validation, and atomic replacement. Interrupted and large downloads are target-device validated.
-- Closing a reader restores cached Browser state immediately and completes persistence/sync/cleanup/refresh in the background. Preview remains isolated from normal progress and active-reader state.
+### Covers
 
-### Options, profile, and appearance
+- Library `coverAspectRatio` is parsed and propagated to books by owning library, including mixed-library and series results.
+- The value is persisted through Room catalog rows, Browser snapshots, active-reader state, and detail cache; portrait is the compatibility fallback.
+- Poster/shelf cards, cover-viewer artwork, and compact-player artwork render at their true `2/3` or `1/1` aspect ratio. Square poster covers are bottom-aligned within portrait-height slots so adjacent labels line up.
 
-- Interface options include lock orientation, default opening screen, Reduce motion, and a five-item theme list: Follow system, Light, Charcoal, Warm black, and OLED black.
-- The former haptic-feedback setting and explicit app-haptic paths were removed by user direction.
-- Data options include cellular download behavior (Always/Never/Ask), storage usage, cache clearing, delete-local confirmation, and background network policy.
-- Change server appears above Log out. An unchanged normalized URL is a silent no-op; an actual replacement warns, logs out, cancels transient work, validates the new URL, and prefills the next login/setup flow.
-- Achievements uses the authenticated server endpoint and compact adaptive information cards with a small server-provided icon, title-row state, metadata, and conditional progress/date.
-- Native username/password remains the only authentication flow. Direct OIDC/SSO is deferred until the provider/redirect contract is confirmed.
+## User validation already completed
 
-## Target-device validation already completed
+The user has confirmed on the target device/server:
 
-The user has validated the following on the target device/server:
+- EPUB, CBZ, connected CBR, and audiobook opening/playback work.
+- Sync, refresh, and downloads no longer kick the user out of the reading screen.
+- Reader Exit and the revised tutorial overlay work.
+- Series grouping and its labels work for both library and file-format separation.
+- The revised profile-menu ordering works.
+- The compact audiobook player works after preparation, placement, controls, Preview, and reader/detail overlap fixes.
 
-- Read/Preview/Download/Delete local labels, action wrapping, direct read-status action, long titles, and series-index presentation
-- Download progress, update/delete reconciliation, interrupted/large downloads, and cellular/background policies
-- Multi-selection and genre filtering
-- Local thumbnails and offline availability changes
-- Server-wide Home/Currently Reading aggregation
-- Prompt reader close, EPUB chapter-page slider, correct whole-book progress, and reader margin controls
-- Online/local CBZ and CBR plus fullscreen comic interactions
-- Series Previous/Next behavior, Change server, all five themes, system bars, jump-rail spacing, and stale queue recovery
-- Functional Achievements flow; the newest compact density still needs physical validation
-
-The newest EPUB resource/Preview fix still needs physical confirmation.
+The latest square-cover bottom alignment and Readium PDF interaction matrix still need target-device confirmation.
 
 ## Verification completed
 
-The final combined command passed before the handover update:
+The final combined gate passed:
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
@@ -117,20 +99,13 @@ The final combined command passed before the handover update:
 
 Results:
 
-- 213 JVM tests across 35 suites
+- 265 JVM tests across 46 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
-- Android instrumentation-test APK compilation passed
-- Focused EPUB cache/asset tests passed
-- `git diff --check` passed; only expected LF-to-CRLF warnings were reported
+- Android instrumentation-test APK assembly passed
 
-Compiled instrumentation coverage now includes:
-
-- A real `BookOrbitRepository`/MockWebServer case proving nonlocal EPUB preparation requests `/api/v1/books/files/{fileId}/download` and returns a validated local reader file.
-- A real WebView case proving a chapter in `Text/` resolves `../Images/cover.png` through the appassets loader with nonzero `naturalWidth`.
-
-No Android device or emulator was attached, so these newest instrumentation cases compiled but were not executed.
+A generated three-page PDF was also opened by the connected `Medium_Phone` AVD (API 17). The test confirmed `Publication.Profile.PDF` and exactly three Readium positions.
 
 Debug APK:
 
@@ -138,46 +113,26 @@ Debug APK:
 
 ## Highest-priority next validation
 
-### 1. EPUB Preview and embedded resources
+1. Validate a real BookOrbit PDF in normal and Preview modes: first open, page navigation, options/chrome, resume locator, reopen, and exit.
+2. Check mixed portrait/square shelves and series on narrow and wide layouts. Confirm square covers sit at the bottom and every title/metadata label aligns.
+3. Recheck audiobook relaunch with an active session: the app must open Browser with the compact player, never a blank preparing screen.
+4. Validate authenticated audiobook Preview and the revised compact controls across narrow/wide layouts.
+5. Validate notification and lock-screen controls, wired-headset/Bluetooth controls, background playback, process recreation, accessibility announcements/touch targets, and responsive layouts.
 
-1. Install the latest debug APK and sign in normally.
-2. Preview a nonlocal EPUB, including after a forced relogin, and confirm it opens instead of showing the prepare/download/reconnect error.
-3. Open `your name.` and representative EPUBs with nested/parent-relative resources. Confirm inline illustrations and covers render, remain page-constrained, and do not destabilize page counts.
-4. Confirm the same books reopen offline after an explicit durable download.
-5. If a device/emulator becomes attached to this workspace, execute the compiled repository and WebView instrumentation tests.
-
-### 2. Remaining format coverage
-
-- Obtain a representative audiobook before audiobook-specific validation/refinement.
-- Validate CB7 online and downloaded behavior. Offline client-side RAR/7z extraction remains an optional enhancement, not current scope.
-- Continue representative PDF validation when a suitable sample is available.
-
-### 3. Remaining responsive and failure edges
-
-- Check compact Achievement cards for secret/censored entries, unsupported-server response, retry, conditional metadata, and narrow/wide layouts.
-- Check series Previous/Next across long titles, responsive widths, loading transitions, and offline snapshots.
-- Check disabled jump rails/gutters across additional widths and orientations.
-- Exercise partial failure of a nonselected library during server-wide Home refresh and confirm cached slices remain usable with clear messaging.
-
-### 4. Deferred authentication
-
-- Direct OIDC/SSO remains deferred. Do not restore the embedded server login button without first confirming BookOrbit's provider discovery, redirect URI, token handoff, and mobile callback contract.
+Before handing target-device testing to the user, rebuild the debug APK and report the exact path above.
 
 ## Architecture guardrails
 
-- Do not restore network-backed Browse lazy paging; exact jumps rely on the complete local catalog.
-- Keep `LazyVerticalGrid`/lazy lists for UI virtualization; do not compose thousands of cards eagerly.
-- Keep Home server-wide while Library Recommended/Browse and library Local books remain selected-library scoped.
-- Preserve exact event-ID progress acknowledgement, stale-file remapping, 0-100 percentage scale, and the paired progress plus `reading`/`read` status operation.
-- Preserve Preview isolation from normal progress and active-reader state.
-- Keep nonlocal EPUB/PDF temporary reader copies separate from durable offline downloads.
-- Keep EPUB assets confined to the extracted root/appassets handler. Do not re-enable broad WebView file/content access.
-- Keep visible and hidden EPUB WebViews on the same extracted root so image/font timing and whole-book measurement agree.
-- Keep comic server-page routing for online CBZ/CBR/CB7 and local extraction only for supported ZIP content unless an approved RAR/7z implementation is added.
-- Keep thumbnail keys server/book/URL/catalog-version scoped and background warming bounded by the selected network policy.
-- Do not eagerly fetch every rich-detail endpoint for a large catalog.
-- Keep explicit HTTP opt-in; bare remote hosts default to HTTPS.
-- Do not infer or implement direct OIDC/SSO without an approved mobile redirect/token design.
+- All supported publication formats must remain on Readium routes; do not restore legacy reader fallbacks.
+- Keep MOBI/AZW/AZW3/FB2 explicitly unsupported unless the user revisits the conversion decision.
+- Keep Preview isolated from normal reading progress and active-reader persistence.
+- Persist exact Readium locators for normal reading rather than approximating position from percentages.
+- Keep audiobook playback service-owned and compact-only. Do not add a fullscreen audio player.
+- During bootstrap, skip restoring an AUDIO active reader; open Browser and allow the playback service to restore the compact player.
+- Keep reader content above the compact player and keep the compact player above app/system navigation.
+- Preserve per-library cover ownership and aspect-ratio persistence. Do not add top/bottom padding inside square artwork; use the bottom-aligned outer slot for card-label alignment.
+- Connected CBR/CB7 may normalize to cached CBZ. Offline direct CBR/CB7 remains unavailable without an approved local RAR/7z implementation or an existing cached CBZ.
+- Pdfium currently requires Jetifier because of its transitive Android support-library dependency.
 
 ## Important files for the next session
 
@@ -188,38 +143,40 @@ Debug APK:
 - `docs/architecture.md`
 - `docs/ui-ux.md`
 - `app/src/main/java/com/bookorbit/android/AppCoordinator.kt`
-- `app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt`
-- `app/src/main/java/com/bookorbit/android/EpubSupport.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitApp.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
-- `app/src/main/java/com/bookorbit/android/AchievementScreen.kt`
-- `app/src/main/java/com/bookorbit/android/ProgressQueueStore.kt`
-- `app/src/main/java/com/bookorbit/android/DownloadStore.kt`
-- `app/src/main/java/com/bookorbit/android/LibraryCatalogStore.kt`
-- `app/src/test/java/com/bookorbit/android/EpubAssetUrlTest.kt`
-- `app/src/test/java/com/bookorbit/android/BookOrbitRepositoryHelpersTest.kt`
-- `app/src/androidTest/java/com/bookorbit/android/BookOrbitRepositoryIntegrationTest.kt`
-- `app/src/androidTest/java/com/bookorbit/android/EpubWebViewInstrumentedTest.kt`
+- `app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumPublicationRoute.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumPdfReaderLauncher.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumPdfReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumEpubReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumComicReaderActivity.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayback.kt`
+- `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayerOverlay.kt`
+- `app/src/androidTest/java/com/bookorbit/android/ReadiumPdfOpenInstrumentedTest.kt`
+- `app/src/test/java/com/bookorbit/android/ReadiumPdfReaderRoutingTest.kt`
+- `app/src/test/java/com/bookorbit/android/BookCoverLayoutTest.kt`
 
-## Known remaining limitations
+## Protected working-tree changes
 
-- The newest nonlocal EPUB Preview and embedded-image fixes need target-device validation.
-- No connected device/emulator was available for the latest instrumentation execution.
-- Audiobook validation is deferred without a representative sample.
-- CB7 validation remains open; offline RAR/7z extraction is optional future work.
-- Direct OIDC/SSO is deferred pending a confirmed mobile authentication contract.
-- BookOrbit still lacks a reliable complete-catalog revision/delta contract, so metadata refresh must request all pages.
-- Some responsive, partial-failure, and unusual Achievement/series edge states remain validation work rather than known implementation failures.
+The following pre-existing user-owned changes are unrelated to this handover and must not be staged or committed:
+
+- Modified `app/src/main/res/drawable/ic_launcher_foreground.xml`
+- Modified `app/src/main/res/drawable/ic_launcher_monochrome.xml`
+- Modified `docs/README.md`
+- Untracked `.agents/`
+- Untracked `AGENTS.md`
+- Untracked `artwork/`
+- Untracked `sample/`
 
 ## Environment notes
 
 - JDK 17 and the Android SDK are installed and working.
-- `local.properties` points to the Android SDK.
-- Gradle requires access to the user cache under `C:\Users\vangeaux\.gradle`.
-- The Gradle daemon used for this session was stopped before this handover was updated.
+- The Readium PDF route pins `readium-adapter-pdfium:3.0.2`; `android.enableJetifier=true` is required for packaging compatibility.
+- The emulator and the Gradle daemon started for the latest work were stopped before this handover update.
 - Git SSH authentication is configured through `origin`.
 
 ## Handover maintenance rule
 
 - Update this file only when the user explicitly requests it.
-- Stop project servers, watchers, tasks, and session-started Gradle daemons before updating it.
+- Stop session-started project terminals, servers, watchers, emulators, and Gradle daemons before updating it.
