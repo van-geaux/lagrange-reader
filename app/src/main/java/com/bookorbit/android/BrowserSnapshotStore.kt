@@ -130,6 +130,7 @@ class BrowserSnapshotStore(context: Context) {
                             put("id", library.id)
                             put("name", library.name)
                             put("description", library.description)
+                            put("coverAspectRatio", library.coverAspectRatio.wireValue)
                         }
                     )
                 }
@@ -150,6 +151,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("streamUrl", book.streamUrl)
                                     put("downloadUrl", book.downloadUrl)
                                     put("coverUrl", book.coverUrl)
+                                    put("coverAspectRatio", book.coverAspectRatio.wireValue)
                                     put("localPath", book.localPath)
                                     put("progressLabel", book.progressLabel)
                                     put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
@@ -182,7 +184,8 @@ class BrowserSnapshotStore(context: Context) {
                     LibrarySummary(
                         id = item.optString("id"),
                         name = item.optString("name"),
-                        description = item.optString("description").takeIf { it.isNotBlank() }
+                        description = item.optString("description").takeIf { it.isNotBlank() },
+                        coverAspectRatio = CoverAspectRatio.fromWireValue(item.optString("coverAspectRatio"))
                     )
                 )
             }
@@ -208,6 +211,7 @@ class BrowserSnapshotStore(context: Context) {
                         streamUrl = item.optString("streamUrl").takeIf { it.isNotBlank() },
                         downloadUrl = item.optString("downloadUrl").takeIf { it.isNotBlank() },
                         coverUrl = item.optString("coverUrl").takeIf { it.isNotBlank() },
+                        coverAspectRatio = CoverAspectRatio.fromWireValue(item.optString("coverAspectRatio")),
                         localPath = item.optString("localPath").takeIf { it.isNotBlank() },
                         progressLabel = item.optString("progressLabel").takeIf { it.isNotBlank() },
                         progressPercent = normalizeStoredProgressPercent(item.optFloat("progressPercent")),

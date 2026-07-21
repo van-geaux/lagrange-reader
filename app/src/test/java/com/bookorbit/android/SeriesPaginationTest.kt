@@ -178,12 +178,19 @@ class SeriesPaginationTest {
         )
         val scoped = listOf(
             book("book-1", "First", 1.0).copy(libraryId = "library-1"),
-            book("book-2", "Second", 2.0).copy(libraryId = "library-2")
+            book("book-2", "Second", 2.0).copy(
+                libraryId = "library-2",
+                coverAspectRatio = CoverAspectRatio.SQUARE
+            )
         )
 
         val merged = mergeSeriesBooksWithLibraryOwnership(unscoped, scoped)
 
         assertEquals(listOf("library-1", "library-2"), merged.map { it.libraryId })
+        assertEquals(
+            listOf(CoverAspectRatio.PORTRAIT, CoverAspectRatio.SQUARE),
+            merged.map { it.coverAspectRatio }
+        )
     }
 
     private fun page(

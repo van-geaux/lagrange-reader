@@ -3,6 +3,7 @@ package com.bookorbit.android
 import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.Insert
@@ -11,6 +12,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -45,7 +48,9 @@ internal data class LibraryCatalogBookEntity(
     val updatedAtMillis: Long?,
     val lastReadAtMillis: Long?,
     val readerPageIndex: Int?,
-    val readerPageCount: Int?
+    val readerPageCount: Int?,
+    @ColumnInfo(defaultValue = "'2/3'")
+    val coverAspectRatio: String = CoverAspectRatio.PORTRAIT.wireValue
 )
 
 @Entity(
@@ -193,7 +198,7 @@ internal interface LibraryCatalogDao {
         LibraryCatalogMetadataEntity::class,
         LibraryCatalogJumpBucketEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 internal abstract class LibraryCatalogDatabase : RoomDatabase() {
@@ -302,7 +307,16 @@ internal class LibraryCatalogStore(context: Context) {
                 context.applicationContext,
                 LibraryCatalogDatabase::class.java,
                 "library-catalog.db"
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+        }
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE library_catalog_books " +
+                        "ADD COLUMN coverAspectRatio TEXT NOT NULL DEFAULT '2/3'"
+                )
+            }
         }
     }
 }
@@ -337,7 +351,8 @@ private fun BookSummary.toCatalogEntity(
     updatedAtMillis = updatedAtMillis,
     lastReadAtMillis = lastReadAtMillis,
     readerPageIndex = readerPageIndex,
-    readerPageCount = readerPageCount
+    readerPageCount = readerPageCount,
+    coverAspectRatio = coverAspectRatio.wireValue
 )
 
 private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
@@ -364,5 +379,6 @@ private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
     updatedAtMillis = updatedAtMillis,
     lastReadAtMillis = lastReadAtMillis,
     readerPageIndex = readerPageIndex,
-    readerPageCount = readerPageCount
+    readerPageCount = readerPageCount,
+    coverAspectRatio = CoverAspectRatio.fromWireValue(coverAspectRatio)
 )

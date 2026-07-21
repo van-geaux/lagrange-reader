@@ -7,6 +7,30 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `parseLibraries retains square covers and defaults unknown values to portrait`() {
+        val libraries = BookOrbitPayloadParser.parseLibraries(
+            """
+                [
+                  {"id":"portrait","name":"Books","coverAspectRatio":"2/3"},
+                  {"id":"square","name":"Audio","coverAspectRatio":"1/1"},
+                  {"id":"legacy","name":"Legacy"},
+                  {"id":"invalid","name":"Invalid","coverAspectRatio":"wide"}
+                ]
+            """.trimIndent()
+        )
+
+        assertEquals(
+            listOf(
+                CoverAspectRatio.PORTRAIT,
+                CoverAspectRatio.SQUARE,
+                CoverAspectRatio.PORTRAIT,
+                CoverAspectRatio.PORTRAIT
+            ),
+            libraries.map { it.coverAspectRatio }
+        )
+    }
+
+    @Test
     fun `parsePrimaryFileId prefers the current primary readable file`() {
         assertEquals(
             "file-new",

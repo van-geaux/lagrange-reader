@@ -10,6 +10,16 @@ enum class MediaKind {
     UNKNOWN
 }
 
+enum class CoverAspectRatio(val wireValue: String, val widthToHeight: Float) {
+    PORTRAIT("2/3", 2f / 3f),
+    SQUARE("1/1", 1f);
+
+    companion object {
+        fun fromWireValue(value: String?): CoverAspectRatio =
+            if (value?.trim() == SQUARE.wireValue) SQUARE else PORTRAIT
+    }
+}
+
 data class AudiobookChapter(
     val title: String,
     val startMs: Long
@@ -18,7 +28,8 @@ data class AudiobookChapter(
 data class LibrarySummary(
     val id: String,
     val name: String,
-    val description: String? = null
+    val description: String? = null,
+    val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT
 )
 
 data class BookSummary(
@@ -47,7 +58,8 @@ data class BookSummary(
     val lastReadAtMillis: Long? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
-    val audioChapters: List<AudiobookChapter> = emptyList()
+    val audioChapters: List<AudiobookChapter> = emptyList(),
+    val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
     val hasDownloadUpdate: Boolean

@@ -107,6 +107,27 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `owning library cover aspects enrich mixed book lists`() {
+        val books = listOf(
+            BookSummary(libraryId = "portrait", id = "one", fileId = null, title = "One"),
+            BookSummary(libraryId = "square", id = "two", fileId = null, title = "Two"),
+            BookSummary(libraryId = "missing", id = "three", fileId = null, title = "Three")
+        )
+
+        val enriched = books.withCoverAspectRatios(
+            mapOf(
+                "portrait" to CoverAspectRatio.PORTRAIT,
+                "square" to CoverAspectRatio.SQUARE
+            )
+        )
+
+        assertEquals(
+            listOf(CoverAspectRatio.PORTRAIT, CoverAspectRatio.SQUARE, CoverAspectRatio.PORTRAIT),
+            enriched.map { it.coverAspectRatio }
+        )
+    }
+
+    @Test
     fun `buildReaderStreamUrl suppresses live stream urls for local only restores`() {
         assertNull(buildReaderStreamUrl(fileId = "file-1", serverBase = "https://example.test", localOnly = true))
         assertNull(buildReaderStreamUrl(fileId = null, serverBase = "https://example.test", localOnly = false))

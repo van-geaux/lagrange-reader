@@ -21,7 +21,8 @@ class BookDetailCacheStoreTest {
                     title = "Cached Book",
                     author = "Reader",
                     mediaKind = MediaKind.EPUB,
-                    localPath = File(filesDir, "cached.epub").absolutePath
+                    localPath = File(filesDir, "cached.epub").absolutePath,
+                    coverAspectRatio = CoverAspectRatio.SQUARE
                 ),
                 synopsis = "Cached synopsis",
                 genres = listOf("Fiction"),
@@ -43,6 +44,7 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.genres, restored?.genres)
             assertEquals(detail.pageCount, restored?.pageCount)
             assertEquals(detail.audioChapters, restored?.audioChapters)
+            assertEquals(CoverAspectRatio.SQUARE, restored?.book?.coverAspectRatio)
             filesDir.deleteRecursively()
         }
     }

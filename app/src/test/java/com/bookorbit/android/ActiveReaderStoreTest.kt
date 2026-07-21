@@ -28,7 +28,8 @@ class ActiveReaderStoreTest {
             progressPercent = 35f,
             progressPositionMs = 12_000L,
             progressPageIndex = 4,
-            audioChapters = listOf(AudiobookChapter("Opening", 0L))
+            audioChapters = listOf(AudiobookChapter("Opening", 0L)),
+            coverAspectRatio = CoverAspectRatio.SQUARE
         )
 
         store.save("https://example.test", book)

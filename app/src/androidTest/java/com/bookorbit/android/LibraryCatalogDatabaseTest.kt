@@ -121,6 +121,13 @@ class LibraryCatalogDatabaseTest {
         assertNull(dao.readBooks(SERVER, LIBRARY).single().localPath)
     }
 
+    @Test
+    fun cover_aspect_ratio_is_persisted_with_catalog_books() = runBlocking {
+        dao.insertBooks(listOf(book("square", 0, "Square").copy(coverAspectRatio = "1/1")))
+
+        assertEquals("1/1", dao.readBooks(SERVER, LIBRARY).single().coverAspectRatio)
+    }
+
     private fun metadata(total: Int, refreshedAtMillis: Long) = LibraryCatalogMetadataEntity(
         serverUrl = SERVER,
         libraryId = LIBRARY,

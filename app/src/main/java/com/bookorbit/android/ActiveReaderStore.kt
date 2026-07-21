@@ -37,6 +37,7 @@ class ActiveReaderStore private constructor(
                 put("streamUrl", book.streamUrl)
                 put("downloadUrl", book.downloadUrl)
                 put("coverUrl", book.coverUrl)
+                put("coverAspectRatio", book.coverAspectRatio.wireValue)
                 put("localPath", book.localPath)
                 put("progressLabel", book.progressLabel)
                 put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
@@ -82,6 +83,7 @@ class ActiveReaderStore private constructor(
             streamUrl = book.optString("streamUrl").takeIf { it.isNotBlank() },
             downloadUrl = book.optString("downloadUrl").takeIf { it.isNotBlank() },
             coverUrl = book.optString("coverUrl").takeIf { it.isNotBlank() },
+            coverAspectRatio = CoverAspectRatio.fromWireValue(book.optString("coverAspectRatio")),
             localPath = book.optString("localPath").takeIf { it.isNotBlank() },
             progressLabel = book.optString("progressLabel").takeIf { it.isNotBlank() },
             progressPercent = if (book.has("progressPercent") && !book.isNull("progressPercent")) normalizeStoredProgressPercent(book.optDouble("progressPercent").toFloat()) else null,

@@ -176,6 +176,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         .followSslRedirects(true)
         .build()
     private val sessionRefreshLock = Any()
+    @Volatile
+    private var libraryCoverAspectRatios: Map<String, CoverAspectRatio> = emptyMap()
+
+    private fun rememberLibraryCoverAspectRatios(libraries: List<LibrarySummary>) {
+        libraryCoverAspectRatios = libraries.associate { it.id to it.coverAspectRatio }
+    }
 
     override suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
 
@@ -187,6 +193,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun clearServer() {
         CoverCacheWarmWorker.cancelAll(context)
+        libraryCoverAspectRatios = emptyMap()
         context.dataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
             prefs.remove(Keys.SELECTED_LIBRARY_ID)
@@ -253,6 +260,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
         BookOrbitPayloadParser.parseLibraries(request("/api/v1/libraries", "GET", null)).also { libraries ->
+            rememberLibraryCoverAspectRatios(libraries)
             browserSnapshotStore.saveLibraries(
                 serverUrl = getServerUrl().orEmpty(),
                 selectedLibraryId = getSelectedLibraryId(),
@@ -285,7 +293,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             val cached = libraryCatalogStore.read(serverUrl, libraryId) ?: return@withContext null
             val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
             LibraryBooksPage(
-                items = cached.books.withCurrentDownloads(downloads),
+                items = cached.books
+                    .withCoverAspectRatios(libraryCoverAspectRatios)
+                    .withCurrentDownloads(downloads),
                 total = cached.total,
                 seriesTotal = cached.seriesTotal,
                 page = 0,
@@ -307,7 +317,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 ?.flatten()
                 .orEmpty()
         }
-        books.withCurrentDownloads(downloads)
+        books.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads)
     }
 
     override suspend fun refreshLibraryCatalog(
@@ -390,7 +400,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             ),
             downloads = downloads,
             serverBase = serverBase()
-        )
+        ).withCoverAspectRatios(libraryCoverAspectRatios)
     }
 
     private fun requestLibraryJumpBuckets(
@@ -467,6 +477,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis
                 )
             }
+            .withCoverAspectRatios(libraryCoverAspectRatios)
     }
 
     override suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage =
@@ -531,6 +542,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             val payload = request(path, "GET", null)
             catalogSnapshotStore.saveAuthorBooks(serverUrl, authorId, page, payload)
             BookOrbitPayloadParser.parseAuthorBooksPage(authorId, payload, downloads, serverBase)
+                .withCoverAspectRatios(libraryCoverAspectRatios)
         } catch (error: Throwable) {
             if (error is AuthenticationRequiredException) throw error
             catalogSnapshotStore.readAuthorBooks(serverUrl, authorId, page)?.let { cached ->
@@ -539,7 +551,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     cached,
                     downloads,
                     serverBase
-                )
+                ).withCoverAspectRatios(libraryCoverAspectRatios)
             }
             throw error
         }
@@ -562,7 +574,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             payload = request("/api/v1/books/query", "POST", body),
             downloads = downloads,
             serverBase = serverBase()
-        )
+        ).withCoverAspectRatios(libraryCoverAspectRatios)
     }
 
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
@@ -655,7 +667,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     progressPositionMs = book.progressPositionMs ?: cached.book.progressPositionMs,
                     progressPageIndex = book.progressPageIndex ?: cached.book.progressPageIndex,
                     lastReadAtMillis = book.lastReadAtMillis ?: cached.book.lastReadAtMillis,
-                    isRead = book.isRead
+                    isRead = book.isRead,
+                    coverAspectRatio = book.coverAspectRatio
                 )
             )
         }
@@ -687,6 +700,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val libraries = BookOrbitPayloadParser.parseLibraries(
             request("/api/v1/libraries", "GET", null)
         )
+        rememberLibraryCoverAspectRatios(libraries)
         val libraryBooks = libraries.flatMap { library ->
             val encodedLibraryId = java.net.URLEncoder.encode(library.id, Charsets.UTF_8.name())
             loadCompleteSeriesPages { page ->
@@ -702,6 +716,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     libraryId = library.id
                 )
             }.flatMap { it.books }
+                .map { it.copy(coverAspectRatio = library.coverAspectRatio) }
         }
         val firstPage = requireNotNull(pages.firstOrNull())
         val responseTotal = pages.mapNotNull { it.total }.maxOrNull()
@@ -738,6 +753,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
+        rememberLibraryCoverAspectRatios(snapshot.libraries)
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
         val selectedLibraryId = resolveSelectedLibraryId(
             preferredId = libraryId
@@ -755,8 +771,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             serverUrl = serverUrl,
             libraries = snapshot.libraries,
             selectedLibraryId = selectedLibraryId,
-            books = books.withCurrentDownloads(downloads),
-            homeBooks = homeBooks.withCurrentDownloads(downloads),
+            books = books.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads),
+            homeBooks = homeBooks.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads),
             booksTotal = cachedCatalog?.total ?: books.size,
             booksSeriesTotal = cachedCatalog?.seriesTotal,
             booksPageSize = cachedCatalog?.pageSize,
@@ -1812,7 +1828,10 @@ internal object BookOrbitPayloadParser {
                             ?: "library-$index",
                         name = obj.stringValue("name", "title", "label")
                             ?: "Library ${index + 1}",
-                        description = obj.stringValue("description", "summary")
+                        description = obj.stringValue("description", "summary"),
+                        coverAspectRatio = CoverAspectRatio.fromWireValue(
+                            obj.stringValue("coverAspectRatio")
+                        )
                     )
                 )
             }
@@ -1986,6 +2005,7 @@ internal object BookOrbitPayloadParser {
             streamUrl = parsedBook.streamUrl ?: fallback.streamUrl,
             downloadUrl = parsedBook.downloadUrl ?: fallback.downloadUrl,
             coverUrl = parsedBook.coverUrl ?: fallback.coverUrl,
+            coverAspectRatio = fallback.coverAspectRatio,
             localPath = parsedBook.localPath ?: fallback.localPath,
             progressLabel = parsedBook.progressLabel ?: fallback.progressLabel,
             progressPercent = parsedBook.progressPercent ?: fallback.progressPercent,
@@ -2708,11 +2728,33 @@ internal fun mergeSeriesBooksWithLibraryOwnership(
     unscopedBooks: List<BookSummary>,
     libraryBooks: List<BookSummary>
 ): List<BookSummary> {
-    val libraryIdByBookId = libraryBooks.associate { it.id to it.libraryId }
+    val libraryBookById = libraryBooks.associateBy { it.id }
     return unscopedBooks.map { book ->
-        libraryIdByBookId[book.id]?.let { libraryId -> book.copy(libraryId = libraryId) } ?: book
+        libraryBookById[book.id]?.let { ownedBook ->
+            book.copy(
+                libraryId = ownedBook.libraryId,
+                coverAspectRatio = ownedBook.coverAspectRatio
+            )
+        } ?: book
     }
 }
+
+internal fun List<BookSummary>.withCoverAspectRatios(
+    ratiosByLibraryId: Map<String, CoverAspectRatio>
+): List<BookSummary> = map { book ->
+    ratiosByLibraryId[book.libraryId]
+        ?.takeIf { it != book.coverAspectRatio }
+        ?.let { book.copy(coverAspectRatio = it) }
+        ?: book
+}
+
+private fun LibraryBooksPage.withCoverAspectRatios(
+    ratiosByLibraryId: Map<String, CoverAspectRatio>
+): LibraryBooksPage = copy(items = items.withCoverAspectRatios(ratiosByLibraryId))
+
+private fun AuthorBooksPage.withCoverAspectRatios(
+    ratiosByLibraryId: Map<String, CoverAspectRatio>
+): AuthorBooksPage = copy(items = items.withCoverAspectRatios(ratiosByLibraryId))
 
 internal fun coverThumbnailUrl(coverUrl: String): String {
     return if (coverUrl.matches(Regex(".*/api/v1/books/[^/]+/cover$"))) {

@@ -2700,7 +2700,7 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.68f)
+            .aspectRatio(book.coverAspectRatio.widthToHeight)
             .clip(MaterialTheme.shapes.small)
             .background(Brush.linearGradient(colors))
             .semantics { contentDescription = "Cover for ${book.title}" },
@@ -4402,7 +4402,7 @@ private fun FullScreenCoverViewer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(0.68f)
+                    .aspectRatio(book.coverAspectRatio.widthToHeight)
                     .clip(MaterialTheme.shapes.small)
                     .background(
                         Brush.linearGradient(
