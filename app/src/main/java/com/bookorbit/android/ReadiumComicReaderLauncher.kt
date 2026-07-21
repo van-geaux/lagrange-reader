@@ -18,12 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import java.io.File
-import java.security.MessageDigest
 import java.util.Locale
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.readium.r2.shared.util.mediatype.MediaType
 
 internal fun shouldUseReadiumComicReader(
     book: BookSummary,
@@ -32,16 +30,22 @@ internal fun shouldUseReadiumComicReader(
 ): Boolean {
     if (book.mediaKind != MediaKind.COMIC) return false
     if (localFile?.let(ReaderFileValidator::canRenderComicLocally) == true) return true
-    return book.comicArchiveExtension() in setOf("cbr", "cb7") && !pagesUrl.isNullOrBlank()
+    return !pagesUrl.isNullOrBlank()
 }
 
 internal sealed interface ReadiumComicPreparationResult {
-    data class Ready(val file: File) : ReadiumComicPreparationResult
+    data class Local(val file: File) : ReadiumComicPreparationResult
+
+    data class Remote(
+        val pagesUrl: String,
+        val pageCount: Int,
+        val pageMediaType: MediaType
+    ) : ReadiumComicPreparationResult
+
     data class Error(val message: String) : ReadiumComicPreparationResult
 }
 
 internal suspend fun prepareReadiumComic(
-    context: Context,
     book: BookSummary,
     localFile: File?,
     pagesUrl: String?,
@@ -50,10 +54,10 @@ internal suspend fun prepareReadiumComic(
     localFile
         ?.takeIf(File::exists)
         ?.takeIf(ReaderFileValidator::canRenderComicLocally)
-        ?.let { return@withContext ReadiumComicPreparationResult.Ready(it) }
+        ?.let { return@withContext ReadiumComicPreparationResult.Local(it) }
 
     val archiveExtension = book.comicArchiveExtension()
-    if (archiveExtension !in setOf("cbr", "cb7") || pagesUrl.isNullOrBlank()) {
+    if (archiveExtension !in setOf("cbz", "cbr", "cb7") || pagesUrl.isNullOrBlank()) {
         return@withContext ReadiumComicPreparationResult.Error(
             "This comic could not be prepared as a Readium image publication."
         )
@@ -61,56 +65,36 @@ internal suspend fun prepareReadiumComic(
     val pageCount = runCatching { pageLoader(pagesUrl) }
         .getOrNull()
         ?.let(::parseComicPageCount)
+        ?.takeIf { it > 0 }
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit could not provide this ${archiveExtension.orEmpty().uppercase(Locale.US)} file's page list."
+            "BookOrbit could not provide this " +
+                archiveExtension.orEmpty().uppercase(Locale.US) +
+                " file's page list."
         )
-    val cacheDir = File(context.cacheDir, "readium-comics").apply { mkdirs() }
-    val cacheKey = sha256Hex(
-        listOf(
-            book.id,
-            book.fileId.orEmpty(),
-            pagesUrl,
-            pageCount.toString(),
-            book.updatedAtMillis?.toString().orEmpty()
-        ).joinToString("|")
+    val firstPage = runCatching { pageLoader(pagesUrl.trimEnd('/') + "/0") }
+        .getOrNull()
+        ?: return@withContext ReadiumComicPreparationResult.Error(
+            "BookOrbit could not provide the first comic page."
+        )
+    val mediaType = comicImageMediaType(firstPage)
+        ?: return@withContext ReadiumComicPreparationResult.Error(
+            "BookOrbit returned an unsupported comic-page image."
+        )
+    ReadiumComicPreparationResult.Remote(
+        pagesUrl = pagesUrl.trimEnd('/'),
+        pageCount = pageCount,
+        pageMediaType = mediaType
     )
-    val target = File(cacheDir, "$cacheKey.cbz")
-    if (ReaderFileValidator.canRenderComicLocally(target)) {
-        return@withContext ReadiumComicPreparationResult.Ready(target)
-    }
-    val staged = File(cacheDir, "$cacheKey.part")
-    runCatching {
-        if (staged.exists()) staged.delete()
-        ZipOutputStream(staged.outputStream().buffered()).use { zip ->
-            repeat(pageCount) { pageIndex ->
-                val bytes = pageLoader("$pagesUrl/$pageIndex")
-                    ?: error("Page ${pageIndex + 1} could not be downloaded.")
-                val extension = comicImageExtension(bytes)
-                    ?: error("Page ${pageIndex + 1} is not a supported image.")
-                zip.putNextEntry(
-                    ZipEntry("${pageIndex.toString().padStart(8, '0')}.$extension")
-                )
-                zip.write(bytes)
-                zip.closeEntry()
-            }
-        }
-        if (target.exists() && !target.delete()) error("The previous comic cache could not be replaced.")
-        if (!staged.renameTo(target)) {
-            staged.copyTo(target, overwrite = true)
-            staged.delete()
-        }
-        check(ReaderFileValidator.canRenderComicLocally(target))
-        target
-    }.fold(
-        onSuccess = { ReadiumComicPreparationResult.Ready(it) },
-        onFailure = { error ->
-            staged.delete()
-            target.takeIf { !ReaderFileValidator.canRenderComicLocally(it) }?.delete()
-            ReadiumComicPreparationResult.Error(
-                error.message ?: "The comic pages could not be prepared for Readium."
-            )
-        }
-    )
+}
+
+internal fun comicImageMediaType(bytes: ByteArray): MediaType? = when (comicImageExtension(bytes)) {
+    "jpg" -> MediaType.JPEG
+    "png" -> MediaType.PNG
+    "gif" -> MediaType.GIF
+    "webp" -> MediaType.WEBP
+    "bmp" -> MediaType.BMP
+    "tiff" -> MediaType.TIFF
+    else -> null
 }
 
 internal fun comicImageExtension(bytes: ByteArray): String? = when {
@@ -132,10 +116,6 @@ internal fun comicImageExtension(bytes: ByteArray): String? = when {
         ) -> "tiff"
     else -> null
 }
-
-private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
-    .digest(value.toByteArray())
-    .joinToString("") { byte -> "%02x".format(Locale.US, byte.toInt() and 0xFF) }
 
 @Composable
 internal fun ReadiumComicReaderLauncher(
@@ -167,7 +147,6 @@ internal fun ReadiumComicReaderLauncher(
     }
     LaunchedEffect(book, file, pagesUrl) {
         preparation = prepareReadiumComic(
-            context = context,
             book = book,
             localFile = file,
             pagesUrl = pagesUrl,
@@ -175,10 +154,9 @@ internal fun ReadiumComicReaderLauncher(
         )
     }
     LaunchedEffect(preparation, title, readerKey, launchMode) {
-        val ready = preparation as? ReadiumComicPreparationResult.Ready ?: return@LaunchedEffect
-        if (!launched) {
-            launched = true
-            launcher.launch(
+        if (launched) return@LaunchedEffect
+        val intent = when (val ready = preparation) {
+            is ReadiumComicPreparationResult.Local ->
                 ReadiumComicReaderActivity.createIntent(
                     context = context,
                     file = ready.file,
@@ -187,8 +165,21 @@ internal fun ReadiumComicReaderLauncher(
                     launchMode = launchMode,
                     initialPage = initialPage
                 )
-            )
-        }
+            is ReadiumComicPreparationResult.Remote ->
+                ReadiumComicReaderActivity.createRemoteIntent(
+                    context = context,
+                    pagesUrl = ready.pagesUrl,
+                    pageCount = ready.pageCount,
+                    pageMediaType = ready.pageMediaType,
+                    title = title,
+                    readerKey = readerKey,
+                    launchMode = launchMode,
+                    initialPage = initialPage
+                )
+            else -> null
+        } ?: return@LaunchedEffect
+        launched = true
+        launcher.launch(intent)
     }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (val result = preparation) {

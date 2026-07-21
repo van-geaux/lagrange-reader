@@ -14,12 +14,20 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.readium.r2.navigator.image.ImageNavigatorFragment
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.http.DefaultHttpClient
+import org.readium.r2.shared.util.mediatype.MediaType
 
 @RunWith(AndroidJUnit4::class)
 class ReadiumComicOpenInstrumentedTest {
@@ -36,7 +44,7 @@ class ReadiumComicOpenInstrumentedTest {
             assertTrue(publication.conformsTo(Publication.Profile.DIVINA))
             assertEquals(2, publication.readingOrder.size)
             val locator = requireNotNull(publication.locatorFromLink(publication.readingOrder[1]))
-            val key = "instrumented-comic-${System.nanoTime()}"
+            val key = "instrumented-comic-" + System.nanoTime()
             ReadiumComicLocatorStore(context).save(key, locator)
             assertEquals(locator, ReadiumComicLocatorStore(context).read(key))
         } finally {
@@ -47,113 +55,86 @@ class ReadiumComicOpenInstrumentedTest {
     }
 
     @Test
-    fun preparesOnlineNonZipComicPagesAndCenterTapOpensComicChrome() = runBlocking {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    fun connectedComicPreparationLoadsOnlyMetadataAndFirstPage() = runBlocking {
         val pagesUrl = "https://bookorbit.test/api/v1/cbz/files/file/pages"
-        val pages = listOf(pageBytes(Color.MAGENTA), pageBytes(Color.GREEN))
-        val result = prepareReadiumComic(
-            context = context,
-            book = BookSummary(
-                libraryId = "library",
-                id = "cbr-book-${System.nanoTime()}",
-                fileId = "file",
-                title = "CBR test",
-                format = "cbr",
-                mediaKind = MediaKind.COMIC
-            ),
-            localFile = null,
-            pagesUrl = pagesUrl,
-            pageLoader = { url ->
-                when (url) {
-                    pagesUrl -> "{\"pageCount\":2}".toByteArray()
-                    "$pagesUrl/0" -> pages[0]
-                    "$pagesUrl/1" -> pages[1]
-                    else -> null
-                }
-            }
-        )
-        assertTrue(result is ReadiumComicPreparationResult.Ready)
-        val cbz = (result as ReadiumComicPreparationResult.Ready).file
-        assertTrue(ReaderFileValidator.canRenderComicLocally(cbz))
-        val cb7Result = prepareReadiumComic(
-            context = context,
-            book = BookSummary(
-                libraryId = "library",
-                id = "cb7-book-${System.nanoTime()}",
-                fileId = "file-cb7",
-                title = "CB7 test",
-                format = "cb7",
-                mediaKind = MediaKind.COMIC
-            ),
-            localFile = null,
-            pagesUrl = pagesUrl,
-            pageLoader = { url ->
-                when (url) {
-                    pagesUrl -> "{\"pageCount\":2}".toByteArray()
-                    "$pagesUrl/0" -> pages[0]
-                    "$pagesUrl/1" -> pages[1]
-                    else -> null
-                }
-            }
-        )
-        assertTrue(cb7Result is ReadiumComicPreparationResult.Ready)
-        val cb7Cache = (cb7Result as ReadiumComicPreparationResult.Ready).file
-        assertTrue(ReaderFileValidator.canRenderComicLocally(cb7Cache))
-        var repeatedPageImageRequests = 0
-        val cacheReuseId = "cbr-cache-${System.nanoTime()}"
-        val reopenedResult = prepareReadiumComic(
-            context = context,
-            book = BookSummary(
-                libraryId = "library",
-                id = cacheReuseId,
-                fileId = cacheReuseId,
-                title = "CBR cache reuse",
-                format = "cbr",
-                mediaKind = MediaKind.COMIC
-            ),
-            localFile = null,
-            pagesUrl = pagesUrl,
-            pageLoader = { url ->
-                if (url == pagesUrl) {
-                    "{\"pageCount\":2}".toByteArray()
-                } else {
-                    repeatedPageImageRequests += 1
-                    pages[(url.substringAfterLast('/').toInt())]
-                }
-            }
-        )
-        assertTrue(reopenedResult is ReadiumComicPreparationResult.Ready)
-        val reopenedCache = (reopenedResult as ReadiumComicPreparationResult.Ready).file
-        repeatedPageImageRequests = 0
-        val reusedResult = prepareReadiumComic(
-            context = context,
-            book = BookSummary(
-                libraryId = "library",
-                id = cacheReuseId,
-                fileId = cacheReuseId,
-                title = "CBR cache reuse",
-                format = "cbr",
-                mediaKind = MediaKind.COMIC
-            ),
-            localFile = null,
-            pagesUrl = pagesUrl,
-            pageLoader = { url ->
-                if (url == pagesUrl) "{\"pageCount\":2}".toByteArray() else {
-                    repeatedPageImageRequests += 1
-                    null
-                }
-            }
-        )
-        assertTrue(reusedResult is ReadiumComicPreparationResult.Ready)
-        assertEquals(reopenedCache.absolutePath, (reusedResult as ReadiumComicPreparationResult.Ready).file.absolutePath)
-        assertEquals(0, repeatedPageImageRequests)
+        val firstPage = pageBytes(Color.MAGENTA)
+        val requested = mutableListOf<String>()
 
+        val result = prepareReadiumComic(
+            book = BookSummary(
+                libraryId = "library",
+                id = "remote-comic",
+                fileId = "file",
+                title = "Remote comic",
+                format = "cbr",
+                mediaKind = MediaKind.COMIC
+            ),
+            localFile = null,
+            pagesUrl = pagesUrl,
+            pageLoader = { url ->
+                requested += url
+                when (url) {
+                    pagesUrl -> org.json.JSONObject()
+                        .put("pageCount", 40)
+                        .toString()
+                        .toByteArray()
+                    pagesUrl + "/0" -> firstPage
+                    else -> error("Preparation fetched a page eagerly: " + url)
+                }
+            }
+        )
+
+        assertTrue(result is ReadiumComicPreparationResult.Remote)
+        result as ReadiumComicPreparationResult.Remote
+        assertEquals(40, result.pageCount)
+        assertEquals(MediaType.JPEG, result.pageMediaType)
+        assertEquals(listOf(pagesUrl, pagesUrl + "/0"), requested)
+    }
+
+    @Test
+    fun remotePublicationOpensWithoutFetchingAllPagesAndReadsSelectedPageOnly() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val pages = listOf(pageBytes(Color.RED), pageBytes(Color.GREEN))
+        val server = MockWebServer()
+        server.dispatcher = imagePageDispatcher(pages)
+        server.start()
+        try {
+            val result = openReadiumRemoteComic(
+                context = context,
+                title = "Remote comic",
+                pagesUrl = server.url("/pages").toString().trimEnd('/'),
+                pageCount = pages.size,
+                pageMediaType = MediaType.JPEG,
+                httpClient = DefaultHttpClient()
+            )
+            assertTrue(result is ReadiumComicOpenResult.Opened)
+            val publication = (result as ReadiumComicOpenResult.Opened).publication
+            try {
+                assertEquals(0, server.requestCount)
+                val secondPage = requireNotNull(publication.get(publication.readingOrder[1]))
+                val bytes = secondPage.read(0L..15L).getOrNull()
+                assertArrayEquals(pages[1].copyOfRange(0, 16), bytes)
+                assertEquals(1, server.requestCount)
+                assertEquals("/pages/1", server.takeRequest().path)
+            } finally {
+                publication.close()
+            }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun centerTapOpensComicChrome() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val cbz = File(context.cacheDir, "readium-comic-center-tap.cbz")
+        writeCbz(cbz, pageBytes(Color.MAGENTA), pageBytes(Color.GREEN))
         ActivityScenario.launch<ReadiumComicReaderActivity>(
             ReadiumComicReaderActivity.createIntent(
                 context = context,
                 file = cbz,
-                title = "CBR test",
-                readerKey = "instrumented-cbr-center-tap",
+                title = "Comic test",
+                readerKey = "instrumented-comic-center-tap",
                 launchMode = ReaderLaunchMode.NORMAL,
                 initialPage = 0
             )
@@ -177,7 +158,9 @@ class ReadiumComicOpenInstrumentedTest {
             }
             assertTrue("Comic tap-zone tutorial was not shown on reader entry", tutorialWasShown)
             SystemClock.sleep(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS + 250L)
-            scenario.onActivity { activity -> tutorialVisible = activity.isTapZoneTutorialVisible() }
+            scenario.onActivity { activity ->
+                tutorialVisible = activity.isTapZoneTutorialVisible()
+            }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
             var tapY = 0f
@@ -190,15 +173,15 @@ class ReadiumComicOpenInstrumentedTest {
             }
             val downTime = SystemClock.uptimeMillis()
             val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-            MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, tapX, tapY, 0).also { event ->
-                event.source = InputDevice.SOURCE_TOUCHSCREEN
-                automation.injectInputEvent(event, true)
-                event.recycle()
+            MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, tapX, tapY, 0).also {
+                it.source = InputDevice.SOURCE_TOUCHSCREEN
+                automation.injectInputEvent(it, true)
+                it.recycle()
             }
-            MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, tapX, tapY, 0).also { event ->
-                event.source = InputDevice.SOURCE_TOUCHSCREEN
-                automation.injectInputEvent(event, true)
-                event.recycle()
+            MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, tapX, tapY, 0).also {
+                it.source = InputDevice.SOURCE_TOUCHSCREEN
+                automation.injectInputEvent(it, true)
+                it.recycle()
             }
             SystemClock.sleep(500)
             var controlsVisible = false
@@ -211,9 +194,31 @@ class ReadiumComicOpenInstrumentedTest {
             assertEquals(false, optionsVisible)
         }
         cbz.delete()
-        cb7Cache.delete()
-        reopenedCache.delete()
-        Unit
+    }
+
+    private fun imagePageDispatcher(pages: List<ByteArray>): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            val pageIndex = request.path.orEmpty().substringAfterLast('/').toInt()
+            val page = pages[pageIndex]
+            val range = request.getHeader("Range")
+            if (range == null) {
+                return MockResponse()
+                    .setHeader("Content-Type", "image/jpeg")
+                    .setHeader("Content-Length", page.size)
+                    .setBody(Buffer().write(page))
+            }
+            val bounds = range.removePrefix("bytes=").split("-")
+            val start = bounds[0].toInt()
+            val end = bounds.getOrNull(1)?.toIntOrNull() ?: page.lastIndex
+            val slice = page.copyOfRange(start, end + 1)
+            return MockResponse()
+                .setResponseCode(206)
+                .setHeader("Accept-Ranges", "bytes")
+                .setHeader("Content-Range", "bytes " + start + "-" + end + "/" + page.size)
+                .setHeader("Content-Type", "image/jpeg")
+                .setHeader("Content-Length", slice.size)
+                .setBody(Buffer().write(slice))
+        }
     }
 
     private fun pageBytes(color: Int): ByteArray = ByteArrayOutputStream().use { output ->
@@ -228,7 +233,7 @@ class ReadiumComicOpenInstrumentedTest {
     private fun writeCbz(target: File, vararg pages: ByteArray) {
         ZipOutputStream(target.outputStream().buffered()).use { zip ->
             pages.forEachIndexed { index, bytes ->
-                zip.putNextEntry(ZipEntry("${index.toString().padStart(4, '0')}.jpg"))
+                zip.putNextEntry(ZipEntry(index.toString().padStart(4, '0') + ".jpg"))
                 zip.write(bytes)
                 zip.closeEntry()
             }

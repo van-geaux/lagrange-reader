@@ -16,7 +16,7 @@ The current app flow is:
 6. EPUB and PDF titles are opened from a local readable copy and may use an authenticated temporary reader cache. Online audiobooks instead open from the BookOrbit serve URL through authenticated Readium byte ranges; explicit downloads remain local and offline-capable.
 7. EPUB opens in `ReadiumEpubReaderActivity`, locally readable CBZ opens in `ReadiumComicReaderActivity`, and recognized local or authenticated remote audiobook formats open through Readium's media `AudioNavigator`, all on Readium Kotlin Toolkit 3.0.2. PDF remains on its existing route.
 8. Normal Read restores an exact stored Readium `Locator` when available, derives a fallback locator from legacy chapter/page/percentage state otherwise, and returns chapter/page/page-count/percentage through the existing coordinator on close. Preview always starts at the beginning and persists neither locator nor progress.
-9. Connected CBR/CB7 loads authenticated BookOrbit page data, builds or reuses a cache-keyed CBZ, and then opens the Readium image navigator. Offline downloaded CBR/CB7 still requires the server because client-side RAR/7z extraction is not bundled.
+9. Connected CBZ/CBR/CB7 loads only BookOrbit page-count metadata and the first page for media detection, then opens a synthetic Readium image publication backed by authenticated page URLs. Readium requests the selected page lazily instead of creating a complete cached CBZ. Local/downloaded CBZ remains file-backed; offline downloaded CBR/CB7 still requires the server because client-side RAR/7z extraction is not bundled.
 
 ## Main components
 

@@ -473,6 +473,7 @@ Execute in this order after confirming any required UI choices:
 3. [ ] Add a multi-select `Delete local` action to the Local books screen, including confirmation, partial-failure handling, state reconciliation, and focused automated/device coverage.
 4. [ ] Add the shared #/A-Z jump rail to Authors, preserving the established availability, sorting, disabled-label accessibility, and responsive-gutter behavior.
 5. [ ] Give Libraries, Series, Authors, and Local books distinct destination icons after the user selects an icon direction.
+6. [ ] Map BookOrbit reading states into Home and Library Home shelves exactly: Reading and Re-reading belong in Currently Reading; Want to Read gets its own section; Read plus recently Skimmed belong in Recently Read; On Hold books appear in On Deck; every other server state is excluded from these shelves. Confirm the server's exact enum spellings, preserve deterministic ordering, and add focused parsing/shelf/device coverage.
 
 ### Remote media streaming work order - 2026-07-21
 
@@ -480,8 +481,8 @@ Keep whole-file authenticated preparation for EPUB and PDF, but replace full-fil
 
 1. [x] Select the Readium-compatible remote-resource architecture: keep Readium/service ownership and supply authenticated remote byte ranges or lazy page resources with bounded read-through caches.
 2. [x] Stream M4B/MP4 and other supported audiobook containers through authenticated Readium HTTP byte ranges without waiting for the complete file; retain chapter navigation, seeking, resume, Preview isolation, background playback, notification controls, local playback, and explicit offline downloads. Credentials are restricted to the configured server origin, and one 401/403 recovery retry refreshes them.
-3. [ ] Open CBZ lazily through range-capable archive access when supported, with a BookOrbit page-endpoint fallback where needed. Stream connected CBR/CB7 as individual server-rendered pages instead of downloading every page and building a complete CBZ first.
-4. [ ] Bound and evict disposable media/page caches independently from explicit Local books downloads; handle authentication renewal, servers without usable range support, interrupted requests, retries, and offline transitions.
+3. [x] Open connected CBZ/CBR/CB7 lazily as authenticated Readium image publications backed by BookOrbit's page endpoints. Preparation reads only the page count and first page for media detection; navigation fetches the selected server-rendered page instead of downloading every page or building a complete cached CBZ. Local/downloaded CBZ remains file-backed.
+4. [ ] Bound and evict disposable media/page caches independently from explicit Local books downloads; handle authentication renewal, servers without usable range support, interrupted requests, retries, and offline transitions. Connected comics now create no persistent complete-archive/page cache; audio/non-range behavior and broader eviction policy remain.
 5. [ ] Complete deterministic HTTP/range/page-cache tests, Readium/service regressions, and target-device validation with representative large CBZ/CBR and M4B/MP4 files. The audio transport now has JVM authentication/header-policy coverage plus a compiled Android regression proving a bounded Readium range request carries Bearer/cookie authentication without a whole-file GET.
 
 - [ ] Checkpoint 1: agree on product direction and design-system tokens

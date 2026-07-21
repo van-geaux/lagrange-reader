@@ -2930,7 +2930,7 @@ internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolea
         MediaKind.EPUB,
         MediaKind.PDF -> true
         MediaKind.AUDIO -> false
-        MediaKind.COMIC -> book.hasZipComicHint()
+        MediaKind.COMIC -> false
         MediaKind.UNKNOWN -> false
     }
 }

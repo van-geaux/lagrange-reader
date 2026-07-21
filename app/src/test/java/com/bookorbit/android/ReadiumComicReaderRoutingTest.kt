@@ -38,6 +38,17 @@ class ReadiumComicReaderRoutingTest {
     }
 
     @Test
+    fun onlineCbzAlsoUsesLazyReadiumPageResources() {
+        assertTrue(
+            shouldUseReadiumComicReader(
+                comicBook(format = "cbz"),
+                localFile = null,
+                pagesUrl = "https://bookorbit.test/pages"
+            )
+        )
+    }
+
+    @Test
     fun onlineCb7AlsoUsesReadiumPageBridgeWhileNonComicDoesNot() {
         assertTrue(
             shouldUseReadiumComicReader(

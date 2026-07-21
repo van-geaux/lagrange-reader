@@ -150,7 +150,7 @@ class BookOrbitRepositoryHelpersTest {
         assertTrue(shouldCacheReadableCopy(epub, allowRemoteCache = true))
         assertTrue(shouldCacheReadableCopy(pdf, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(audio, allowRemoteCache = true))
-        assertTrue(shouldCacheReadableCopy(cbz, allowRemoteCache = true))
+        assertFalse(shouldCacheReadableCopy(cbz, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(cbr, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(epub, allowRemoteCache = false))
         assertFalse(shouldCacheReadableCopy(epub.copy(fileId = null), allowRemoteCache = true))

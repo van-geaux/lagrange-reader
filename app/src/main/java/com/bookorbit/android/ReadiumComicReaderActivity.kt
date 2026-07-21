@@ -41,10 +41,19 @@ import org.readium.r2.navigator.image.ImageNavigatorFragment
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.util.DirectionalNavigationAdapter
+import org.readium.r2.shared.DelicateReadiumApi
+import org.readium.r2.shared.publication.Href
+import org.readium.r2.shared.publication.Link
+import org.readium.r2.shared.publication.LocalizedString
 import org.readium.r2.shared.publication.Locator
+import org.readium.r2.shared.publication.Manifest
+import org.readium.r2.shared.publication.Metadata
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
+import org.readium.r2.shared.util.http.HttpClient
+import org.readium.r2.shared.util.http.HttpContainer
 import org.readium.r2.shared.util.mediatype.MediaType
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
@@ -84,6 +93,57 @@ internal suspend fun openReadiumComic(
     if (!publication.conformsTo(Publication.Profile.DIVINA)) {
         publication.close()
         return@withContext ReadiumComicOpenResult.Error("Readium did not recognize this file as an image publication.")
+    }
+    ReadiumComicOpenResult.Opened(publication)
+}
+
+@OptIn(DelicateReadiumApi::class)
+internal suspend fun openReadiumRemoteComic(
+    context: Context,
+    title: String,
+    pagesUrl: String,
+    pageCount: Int,
+    pageMediaType: MediaType,
+    httpClient: HttpClient? = null
+): ReadiumComicOpenResult = withContext(Dispatchers.IO) {
+    if (pageCount <= 0) {
+        return@withContext ReadiumComicOpenResult.Error("BookOrbit reported no comic pages.")
+    }
+    val normalizedPagesUrl = pagesUrl.trimEnd('/')
+    val baseUrl = AbsoluteUrl(normalizedPagesUrl + "/")
+        ?: return@withContext ReadiumComicOpenResult.Error("The comic page URL is invalid.")
+    val pageUrls = (0 until pageCount).mapNotNull { pageIndex ->
+        AbsoluteUrl(normalizedPagesUrl + "/" + pageIndex)
+    }
+    if (pageUrls.size != pageCount) {
+        return@withContext ReadiumComicOpenResult.Error("A comic page URL is invalid.")
+    }
+    val client = httpClient ?: BookOrbitRepository(context.applicationContext).let { repository ->
+        AuthenticatedReadiumHttpClient(
+            delegate = DefaultHttpClient(),
+            headersProvider = { url -> repository.streamingRequestHeaders(url.toString()) },
+            recoverAuthentication = repository::recoverStreamingAuthentication
+        )
+    }
+    val manifest = Manifest(
+        metadata = Metadata(
+            identifier = normalizedPagesUrl,
+            conformsTo = setOf(Publication.Profile.DIVINA),
+            localizedTitle = LocalizedString(title)
+        ),
+        readingOrder = pageUrls.map { pageUrl ->
+            Link(href = Href(pageUrl), mediaType = pageMediaType)
+        }
+    )
+    val publication = Publication(
+        manifest,
+        HttpContainer(baseUrl, pageUrls.toSet(), client)
+    )
+    if (!publication.conformsTo(Publication.Profile.DIVINA)) {
+        publication.close()
+        return@withContext ReadiumComicOpenResult.Error(
+            "Readium did not recognize the remote comic as an image publication."
+        )
     }
     ReadiumComicOpenResult.Opened(publication)
 }
@@ -142,12 +202,26 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         installBackHandler()
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
-        if (file == null) {
-            showError("The comic reader file is unavailable.")
-            return
-        }
+        val pagesUrl = intent.getStringExtra(EXTRA_PAGES_URL)
+        val pageCount = intent.getIntExtra(EXTRA_PAGE_COUNT, 0)
+        val pageMediaType = intent.getStringExtra(EXTRA_PAGE_MEDIA_TYPE)
+            ?.let(MediaType::invoke)
         lifecycleScope.launch {
-            when (val result = openReadiumComic(this@ReadiumComicReaderActivity, file)) {
+            val result = when {
+                file != null -> openReadiumComic(this@ReadiumComicReaderActivity, file)
+                !pagesUrl.isNullOrBlank() && pageCount > 0 && pageMediaType != null ->
+                    openReadiumRemoteComic(
+                        context = this@ReadiumComicReaderActivity,
+                        title = displayTitle,
+                        pagesUrl = pagesUrl,
+                        pageCount = pageCount,
+                        pageMediaType = pageMediaType
+                    )
+                else -> ReadiumComicOpenResult.Error(
+                    "The comic reader source is unavailable."
+                )
+            }
+            when (result) {
                 is ReadiumComicOpenResult.Error -> showError(result.message)
                 is ReadiumComicOpenResult.Opened -> showPublication(result.publication)
             }
@@ -495,6 +569,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     companion object {
         private const val EXTRA_FILE_PATH = "readium_comic_file_path"
+        private const val EXTRA_PAGES_URL = "readium_comic_pages_url"
+        private const val EXTRA_PAGE_COUNT = "readium_comic_page_count"
+        private const val EXTRA_PAGE_MEDIA_TYPE = "readium_comic_page_media_type"
         private const val EXTRA_TITLE = "readium_comic_title"
         private const val EXTRA_READER_KEY = "readium_comic_reader_key"
         private const val EXTRA_IS_PREVIEW = "readium_comic_is_preview"
@@ -513,6 +590,24 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             initialPage: Int
         ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            .putExtra(EXTRA_TITLE, title)
+            .putExtra(EXTRA_READER_KEY, readerKey)
+            .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
+            .putExtra(EXTRA_INITIAL_PAGE, initialPage)
+
+        fun createRemoteIntent(
+            context: Context,
+            pagesUrl: String,
+            pageCount: Int,
+            pageMediaType: MediaType,
+            title: String,
+            readerKey: String,
+            launchMode: ReaderLaunchMode,
+            initialPage: Int
+        ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
+            .putExtra(EXTRA_PAGES_URL, pagesUrl)
+            .putExtra(EXTRA_PAGE_COUNT, pageCount)
+            .putExtra(EXTRA_PAGE_MEDIA_TYPE, pageMediaType.toString())
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
