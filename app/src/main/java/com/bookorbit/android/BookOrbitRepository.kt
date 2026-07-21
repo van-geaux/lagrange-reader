@@ -1354,13 +1354,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private suspend fun cacheReadableCopy(book: BookSummary): File? {
         val serverUrl = getServerUrl().orEmpty()
         val fileId = book.fileId ?: return null
-        val extension = when (book.mediaKind) {
-            MediaKind.EPUB -> "epub"
-            MediaKind.PDF -> "pdf"
-            MediaKind.AUDIO -> "bin"
-            MediaKind.COMIC -> book.comicArchiveExtension() ?: "cbz"
-            MediaKind.UNKNOWN -> "bin"
-        }
+        val extension = readerCacheExtension(book)
         val targetDir = File(context.cacheDir, "reader-cache").apply { mkdirs() }
         val target = File(targetDir, ReaderCacheKey.build(serverUrl, fileId, extension))
         if (target.exists() && target.length() > 0L && ReaderFileValidator.isReadable(book.mediaKind, target)) {
@@ -1370,27 +1364,38 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             target.delete()
         }
 
-        val fetched = executeAuthenticated(
-            requestFactory = {
-                Request.Builder()
-                    .url(buildDownloadUrl(fileId))
-                    .get()
-                    .addSessionAccessToken()
-                    .build()
-            },
-            action = "prepare a reader file"
-        ) { response ->
-            val input = response.body?.byteStream() ?: return@executeAuthenticated false
-            target.outputStream().use { output -> input.copyTo(output) }
-            true
-        }
-        if (!fetched) {
-            return null
-        }
-        return runCatching {
-            ensureNonEmptyFile(target, "The server returned an empty reader file.")
+        val staged = File(targetDir, ".${target.name}.${UUID.randomUUID()}.part")
+        return try {
+            val fetched = executeAuthenticated(
+                requestFactory = {
+                    Request.Builder()
+                        .url(buildDownloadUrl(fileId))
+                        .get()
+                        .addSessionAccessToken()
+                        .build()
+                },
+                action = "prepare a reader file"
+            ) { response ->
+                val body = response.body ?: return@executeAuthenticated false
+                val expectedLength = body.contentLength().takeIf { it >= 0L }
+                val copiedLength = body.byteStream().use { input ->
+                    staged.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (expectedLength != null && copiedLength != expectedLength) {
+                    throw IOException("The reader file download ended before it was complete.")
+                }
+                true
+            }
+            if (!fetched) return null
+            ensureNonEmptyFile(staged, "The server returned an empty reader file.")
+            if (!ReaderFileValidator.isReadable(book.mediaKind, staged)) {
+                throw UserFacingException("The reader file did not pass integrity checks.")
+            }
+            atomicReplaceDownloadedFile(staged, target)
             target
-        }.getOrNull()
+        } finally {
+            if (staged.exists()) staged.delete()
+        }
     }
 
     private fun buildStreamUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/serve"
@@ -2881,6 +2886,28 @@ internal fun shouldCacheReadableCopy(book: BookSummary, allowRemoteCache: Boolea
         MediaKind.AUDIO -> true
         MediaKind.COMIC -> book.hasZipComicHint()
         MediaKind.UNKNOWN -> false
+    }
+}
+
+internal fun readerCacheExtension(book: BookSummary): String = when (book.mediaKind) {
+    MediaKind.EPUB -> "epub"
+    MediaKind.PDF -> "pdf"
+    MediaKind.AUDIO -> "audio-v2.${audiobookFileExtension(book) ?: "bin"}"
+    MediaKind.COMIC -> book.comicArchiveExtension() ?: "cbz"
+    MediaKind.UNKNOWN -> "bin"
+}
+
+private fun audiobookFileExtension(book: BookSummary): String? {
+    val suffixes = listOfNotNull(book.format, book.title).map { value ->
+        value.trim().lowercase(Locale.US).substringAfterLast('/').substringAfterLast('.')
+    }
+    return suffixes.firstNotNullOfOrNull { suffix ->
+        when (suffix) {
+            "m4a", "m4b", "mp4", "aac", "aif", "aiff", "flac", "ogg", "oga", "opus", "wav", "webm" -> suffix
+            "mp3", "mpeg" -> "mp3"
+            "x-m4b" -> "m4b"
+            else -> null
+        }
     }
 }
 

@@ -113,6 +113,8 @@ class BookOrbitRepositoryHelpersTest {
         assertFalse(shouldCacheReadableCopy(cbr, allowRemoteCache = true))
         assertFalse(shouldCacheReadableCopy(epub, allowRemoteCache = false))
         assertFalse(shouldCacheReadableCopy(epub.copy(fileId = null), allowRemoteCache = true))
+        assertEquals("audio-v2.m4b", readerCacheExtension(audio.copy(format = "audio/x-m4b")))
+        assertEquals("audio-v2.mp3", readerCacheExtension(audio.copy(format = null, title = "Sample.mp3")))
     }
 
     @Test

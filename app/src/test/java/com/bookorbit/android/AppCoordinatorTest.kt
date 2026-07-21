@@ -445,7 +445,12 @@ class AppCoordinatorTest {
         val chapters = listOf(AudiobookChapter("Opening", 0L))
         val repository = FakeBookOrbitDataSource(
             bookDetailResult = BookDetailInfo(
-                book = audiobook.copy(audioChapters = chapters),
+                book = audiobook.copy(
+                    fileId = "different-detail-file",
+                    format = "different-detail-format",
+                    localPath = "different-detail-path",
+                    audioChapters = chapters
+                ),
                 audioChapters = chapters
             ),
             buildReaderResult = ReaderState(
@@ -466,7 +471,7 @@ class AppCoordinatorTest {
         coordinator.openBook(audiobook)
         advanceUntilIdle()
 
-        assertEquals(chapters, repository.buildReaderBooks.single().audioChapters)
+        assertEquals(audiobook.copy(audioChapters = chapters), repository.buildReaderBooks.single())
     }
 
     @Test

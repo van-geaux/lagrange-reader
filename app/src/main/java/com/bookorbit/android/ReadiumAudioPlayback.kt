@@ -3,6 +3,7 @@ package com.bookorbit.android
 import android.app.Application
 import android.app.PendingIntent
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Build
@@ -284,7 +285,16 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                     }
                 }
             }
-            application.bindService(serviceIntent(application), connection, 0)
+            val bound = application.bindService(
+                serviceIntent(application),
+                connection,
+                Context.BIND_AUTO_CREATE
+            )
+            if (!bound && !result.isCompleted) {
+                result.completeExceptionally(
+                    IllegalStateException("Could not start the audiobook playback service binding.")
+                )
+            }
             return result.await()
         }
 

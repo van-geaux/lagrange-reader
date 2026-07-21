@@ -650,10 +650,13 @@ class AppCoordinator(
             _screen.value = AppScreen.ReaderLoading(book, launchMode)
             runCatching {
                 val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
-                    runCatching { repository.loadBookDetail(book)?.book }
+                    runCatching { repository.loadBookDetail(book) }
                         .getOrNull()
-                        ?.let { detailBook ->
-                            detailBook.copy(localPath = book.localPath ?: detailBook.localPath)
+                        ?.let { detail ->
+                            val chapters = detail.audioChapters.ifEmpty {
+                                detail.book.audioChapters
+                            }
+                            book.copy(audioChapters = chapters)
                         }
                         ?: book
                 } else {

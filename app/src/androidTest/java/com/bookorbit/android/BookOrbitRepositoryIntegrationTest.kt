@@ -362,6 +362,44 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals("/api/v1/books/files/preview-audio-file/download", request.path)
     }
 
+    @Test
+    fun interruptedAudiobookPreviewDoesNotReuseAPartialReaderCopy() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "audio/mpeg")
+                .setBody("partial")
+                .setHeader("Content-Length", "100")
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "audio/mpeg")
+                .setBody("complete-audio-payload")
+        )
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "preview-audio-retry",
+            fileId = "preview-audio-retry-file",
+            title = "Retry Audiobook Preview",
+            format = "mp3",
+            mediaKind = MediaKind.AUDIO
+        )
+
+        assertTrue(runCatching { repository.buildReaderState(book, localOnly = false) }.isFailure)
+        val state = repository.buildReaderState(book, localOnly = false)
+
+        assertEquals("complete-audio-payload", state.localFile?.readText())
+        assertEquals(
+            "/api/v1/books/files/preview-audio-retry-file/download",
+            server.takeRequest(5, TimeUnit.SECONDS)?.path
+        )
+        assertEquals(
+            "/api/v1/books/files/preview-audio-retry-file/download",
+            server.takeRequest(5, TimeUnit.SECONDS)?.path
+        )
+    }
+
     private fun jsonResponse(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")

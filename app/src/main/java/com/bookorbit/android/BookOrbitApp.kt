@@ -140,6 +140,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import java.io.File
@@ -1034,11 +1035,15 @@ private fun AudioReader(
             return@LaunchedEffect
         }
         val result = try {
-            audioController.open(
-                book = state.book,
-                file = file,
-                initialPositionMs = state.lastKnownPosition,
-                launchMode = state.launchMode
+            withTimeoutOrNull(AUDIO_PREPARATION_TIMEOUT_MILLIS) {
+                audioController.open(
+                    book = state.book,
+                    file = file,
+                    initialPositionMs = state.lastKnownPosition,
+                    launchMode = state.launchMode
+                )
+            } ?: ReadiumAudioOpenResult.Error(
+                "Audiobook preparation timed out. Try opening it again."
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -1068,7 +1073,9 @@ private fun AudioReader(
             }
         }
         if (result is ReadiumAudioOpenResult.Error) {
-            runCatching { audioController.close() }
+            withTimeoutOrNull(AUDIO_CLOSE_TIMEOUT_MILLIS) {
+                runCatching { audioController.close() }
+            }
             onFailure(state.book, result.message)
         }
     }
@@ -3511,6 +3518,8 @@ internal const val EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP = 30
 private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP.dp
 
 private const val AUDIO_NOTIFICATION_PERMISSION_REQUEST = 4102
+private const val AUDIO_PREPARATION_TIMEOUT_MILLIS = 30_000L
+private const val AUDIO_CLOSE_TIMEOUT_MILLIS = 5_000L
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
 private const val COMIC_SWIPE_THRESHOLD_FRACTION = 0.15f
 private const val EPUB_READER_BRIDGE = "BookOrbitReader"
