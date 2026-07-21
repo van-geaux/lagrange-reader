@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,10 +17,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 
-internal fun requestedOrientationForLock(enabled: Boolean): Int = if (enabled) {
-    ActivityInfo.SCREEN_ORIENTATION_LOCKED
-} else {
-    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+internal fun requestedOrientationForLock(
+    enabled: Boolean,
+    lockedOrientation: LockedOrientation = LockedOrientation.PORTRAIT
+): Int = when {
+    !enabled -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    lockedOrientation == LockedOrientation.LANDSCAPE ->
+        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+}
+
+internal fun preferencesForOrientationLockChange(
+    previous: AppPreferences,
+    updated: AppPreferences,
+    currentConfigurationOrientation: Int
+): AppPreferences {
+    if (!updated.lockOrientation || previous.lockOrientation) return updated
+    val lockedOrientation = if (
+        currentConfigurationOrientation == Configuration.ORIENTATION_LANDSCAPE
+    ) {
+        LockedOrientation.LANDSCAPE
+    } else {
+        LockedOrientation.PORTRAIT
+    }
+    return updated.copy(lockedOrientation = lockedOrientation)
 }
 
 class MainActivity : ComponentActivity() {
@@ -29,6 +50,11 @@ class MainActivity : ComponentActivity() {
 
         val graph = AppGraph(this)
         val preferencesStore = AppPreferencesStore(this)
+        val initialPreferences = preferencesStore.read()
+        requestedOrientation = requestedOrientationForLock(
+            enabled = initialPreferences.lockOrientation,
+            lockedOrientation = initialPreferences.lockedOrientation
+        )
         val audioPlaybackController =
             (application as BookOrbitApplication).audioPlaybackController
         audioPlaybackController.setProgressListener(graph.coordinator::onAudioPlaybackProgress)
@@ -45,12 +71,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val screen by graph.coordinator.screen.collectAsState()
-            var appPreferences by remember { mutableStateOf(preferencesStore.read()) }
+            var appPreferences by remember { mutableStateOf(initialPreferences) }
             LaunchedEffect(Unit) {
                 graph.coordinator.bootstrap()
             }
-            LaunchedEffect(appPreferences.lockOrientation) {
-                requestedOrientation = requestedOrientationForLock(appPreferences.lockOrientation)
+            LaunchedEffect(
+                appPreferences.lockOrientation,
+                appPreferences.lockedOrientation
+            ) {
+                requestedOrientation = requestedOrientationForLock(
+                    enabled = appPreferences.lockOrientation,
+                    lockedOrientation = appPreferences.lockedOrientation
+                )
             }
             CompositionLocalProvider(
                 LocalReduceMotion provides appPreferences.reduceMotion
@@ -62,11 +94,17 @@ class MainActivity : ComponentActivity() {
                         audioPlaybackController = audioPlaybackController,
                         appPreferences = appPreferences,
                         onAppPreferencesChange = { updated ->
+                            val persisted = preferencesForOrientationLockChange(
+                                previous = appPreferences,
+                                updated = updated,
+                                currentConfigurationOrientation =
+                                    resources.configuration.orientation
+                            )
                             val refreshPolicyChanged =
-                                updated.backgroundRefreshNetworkPolicy !=
+                                persisted.backgroundRefreshNetworkPolicy !=
                                     appPreferences.backgroundRefreshNetworkPolicy
-                            preferencesStore.save(updated)
-                            appPreferences = updated
+                            preferencesStore.save(persisted)
+                            appPreferences = persisted
                             if (refreshPolicyChanged) {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }

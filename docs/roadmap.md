@@ -63,7 +63,15 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Device-validate the Readium CBZ path and connected CBR/CB7 cache preparation; offline downloaded CBR/CB7 remains unsupported without the server, and client-side RAR/7z extraction is optional future work
 - Use the available local M4B/chapter-metadata fixture for audiobook work and obtain a representative PDF
 
-### 5. Reader and library follow-ups
+### 5. Remote media streaming
+
+- Keep whole-file authenticated preparation for EPUB and PDF.
+- Replace complete M4B/MP4/audiobook preparation with authenticated HTTP byte-range playback and a bounded read-through cache while preserving Readium, service-owned background playback, seeking, chapters, progress, Preview isolation, and explicit offline downloads.
+- Replace complete comic preparation with lazy access: range-capable CBZ archive resources when supported, and BookOrbit page-by-page loading for connected CBR/CB7 instead of building a complete cached CBZ before opening.
+- Specify cache limits/eviction, authentication renewal, non-range fallback behavior, interrupted-request recovery, offline transitions, automated coverage, and representative large-file device validation before implementation.
+- Confirm the final architecture with the user before implementation; retaining Readium and supplying authenticated remote resources is the recommended direction.
+
+### 6. Reader and library follow-ups
 
 - Fix portrait orientation lock after returning from a landscape-oriented app; Lagrange must enter and remain in portrait instead of inheriting the previous app's landscape orientation.
 - Keep the Library Browse statistics and filter/collapse action row fixed while the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture.
@@ -74,7 +82,7 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Allow a book to be moved to read status from Preview.
 - Add support for more book formats.
 
-### 5. Release readiness
+### 7. Release readiness
 
 - Complete accessibility, large-text, narrow-screen, rotation, and theme checks
 - Run unit, lint, debug, instrumentation-compile, and release build gates

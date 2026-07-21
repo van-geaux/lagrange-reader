@@ -34,8 +34,14 @@ enum class SeriesGroupingMode {
     FORMAT
 }
 
+enum class LockedOrientation {
+    PORTRAIT,
+    LANDSCAPE
+}
+
 data class AppPreferences(
     val lockOrientation: Boolean = false,
+    val lockedOrientation: LockedOrientation = LockedOrientation.PORTRAIT,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val defaultOpeningScreen: DefaultOpeningScreen = DefaultOpeningScreen.HOME,
     val reduceMotion: Boolean = false,
@@ -54,6 +60,9 @@ internal class AppPreferencesStore(context: Context) {
 
     fun read(): AppPreferences = AppPreferences(
         lockOrientation = preferences.getBoolean(LOCK_ORIENTATION_KEY, false),
+        lockedOrientation = lockedOrientationFromStorage(
+            preferences.getString(LOCKED_ORIENTATION_KEY, null)
+        ),
         themeMode = appThemeModeFromStorage(preferences.getString(THEME_MODE_KEY, null)),
         defaultOpeningScreen = defaultOpeningScreenFromStorage(
             preferences.getString(DEFAULT_OPENING_SCREEN_KEY, null)
@@ -74,6 +83,10 @@ internal class AppPreferencesStore(context: Context) {
     fun save(value: AppPreferences) {
         preferences.edit()
             .putBoolean(LOCK_ORIENTATION_KEY, value.lockOrientation)
+            .putString(
+                LOCKED_ORIENTATION_KEY,
+                lockedOrientationStorageValue(value.lockedOrientation)
+            )
             .putString(THEME_MODE_KEY, appThemeModeStorageValue(value.themeMode))
             .putString(
                 DEFAULT_OPENING_SCREEN_KEY,
@@ -99,6 +112,7 @@ internal class AppPreferencesStore(context: Context) {
     private companion object {
         const val APP_PREFERENCES_FILE = "app_preferences"
         const val LOCK_ORIENTATION_KEY = "lock_orientation"
+        const val LOCKED_ORIENTATION_KEY = "locked_orientation"
         const val THEME_MODE_KEY = "theme_mode"
         const val DEFAULT_OPENING_SCREEN_KEY = "default_opening_screen"
         const val REDUCE_MOTION_KEY = "reduce_motion"
@@ -107,6 +121,16 @@ internal class AppPreferencesStore(context: Context) {
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
     }
+}
+
+internal fun lockedOrientationStorageValue(value: LockedOrientation): String =
+    value.name.lowercase()
+
+internal fun lockedOrientationFromStorage(value: String?): LockedOrientation = when (
+    value?.trim()?.lowercase()
+) {
+    "landscape" -> LockedOrientation.LANDSCAPE
+    else -> LockedOrientation.PORTRAIT
 }
 
 internal fun appThemeModeStorageValue(value: AppThemeMode): String = value.name.lowercase()

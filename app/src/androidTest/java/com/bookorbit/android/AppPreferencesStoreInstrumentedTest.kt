@@ -15,6 +15,7 @@ class AppPreferencesStoreInstrumentedTest {
         val original = store.read()
         val expected = AppPreferences(
             lockOrientation = true,
+            lockedOrientation = LockedOrientation.LANDSCAPE,
             themeMode = AppThemeMode.WARM_BLACK,
             defaultOpeningScreen = DefaultOpeningScreen.LOCAL_BOOKS,
             reduceMotion = true,

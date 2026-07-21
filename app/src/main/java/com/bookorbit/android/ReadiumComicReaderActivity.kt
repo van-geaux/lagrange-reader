@@ -127,9 +127,12 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             return
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        requestedOrientation = requestedOrientationForLock(
-            AppPreferencesStore(this).read().lockOrientation
-        )
+        AppPreferencesStore(this).read().let { preferences ->
+            requestedOrientation = requestedOrientationForLock(
+                enabled = preferences.lockOrientation,
+                lockedOrientation = preferences.lockedOrientation
+            )
+        }
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()

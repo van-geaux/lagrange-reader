@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import androidx.work.NetworkType
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -33,9 +34,50 @@ class AppPreferencesStoreTest {
     }
 
     @Test
-    fun `orientation preference locks the current orientation`() {
-        assertEquals(ActivityInfo.SCREEN_ORIENTATION_LOCKED, requestedOrientationForLock(true))
+    fun `orientation preference restores the orientation captured when enabled`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            requestedOrientationForLock(true, LockedOrientation.PORTRAIT)
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            requestedOrientationForLock(true, LockedOrientation.LANDSCAPE)
+        )
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientationForLock(false))
+    }
+
+    @Test
+    fun `enabling orientation lock captures the current app orientation`() {
+        val previous = AppPreferences(lockOrientation = false)
+
+        assertEquals(
+            LockedOrientation.LANDSCAPE,
+            preferencesForOrientationLockChange(
+                previous = previous,
+                updated = previous.copy(lockOrientation = true),
+                currentConfigurationOrientation = Configuration.ORIENTATION_LANDSCAPE
+            ).lockedOrientation
+        )
+        assertEquals(
+            LockedOrientation.PORTRAIT,
+            preferencesForOrientationLockChange(
+                previous = previous,
+                updated = previous.copy(lockOrientation = true),
+                currentConfigurationOrientation = Configuration.ORIENTATION_PORTRAIT
+            ).lockedOrientation
+        )
+    }
+
+    @Test
+    fun `stored orientation values round trip and legacy values default to portrait`() {
+        LockedOrientation.values().forEach { value ->
+            assertEquals(
+                value,
+                lockedOrientationFromStorage(lockedOrientationStorageValue(value))
+            )
+        }
+        assertEquals(LockedOrientation.PORTRAIT, lockedOrientationFromStorage(null))
+        assertEquals(LockedOrientation.PORTRAIT, lockedOrientationFromStorage("unknown"))
     }
 
     @Test
