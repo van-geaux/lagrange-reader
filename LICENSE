@@ -1,0 +1,100 @@
+LAGRANGE READER PERSONAL AND NON-COMMERCIAL LICENSE
+Version 1.0 — 2026
+
+Copyright © 2026 the Lagrange Reader project owner.
+
+IMPORTANT: This is a custom source-available license. It is not the GNU
+General Public License, the GNU Affero General Public License, or an
+OSI-approved open-source license.
+
+1. Definitions
+
+"Software" means the source code, documentation, and other copyrightable
+materials in this repository that are identified as being provided under this
+License.
+
+"You" means any person or organization exercising a permission granted by
+this License.
+
+"Non-Commercial" means use that is not primarily intended for commercial
+advantage or monetary compensation. Non-Commercial use includes personal,
+private, educational, research, evaluation, and other unpaid use.
+
+"Commercial Use" includes, without limitation:
+
+  a. selling, licensing, renting, leasing, or charging a fee for the Software
+     or a modified version;
+  b. distributing the Software as part of a paid product, paid service, or
+     commercial offering;
+  c. using the Software to provide a paid or advertising-supported service;
+  d. monetizing access to a compiled application or hosted service based on
+     the Software; or
+  e. using the Software primarily to obtain commercial advantage or monetary
+     compensation.
+
+2. Non-Commercial Permission
+
+Subject to the terms of this License, the copyright holder grants You a
+worldwide, royalty-free, non-exclusive, non-transferable license to:
+
+  a. use the Software for Non-Commercial purposes;
+  b. study and inspect the source code;
+  c. modify the Software for Non-Commercial purposes;
+  d. compile and run modified versions for Non-Commercial purposes; and
+  e. copy and redistribute the original or modified Software without charge
+     for Non-Commercial purposes.
+
+3. Conditions for Redistribution
+
+If You redistribute the Software or a modified version, You must:
+
+  a. provide the corresponding source code or a clear, no-charge way to obtain
+     the corresponding source code;
+  b. include a copy of this License;
+  c. retain existing copyright, attribution, and license notices;
+  d. clearly identify files or substantial portions that You changed; and
+  e. ensure that the redistributed work remains subject to this License and
+     is not presented as an official product of the Lagrange Reader project or
+     BookOrbit.
+
+You may not impose additional restrictions that remove the permissions granted
+by this License for Non-Commercial users.
+
+4. Commercial Rights Reserved
+
+This License grants no permission for Commercial Use. All commercial rights,
+including the right to sell, license, monetize, or authorize commercial
+versions of the Software, are reserved exclusively to the copyright holder.
+Commercial permission may be granted separately in writing by the copyright
+holder.
+
+5. Trademarks and Third-Party Materials
+
+This License does not grant permission to use the names, logos, trademarks, or
+service marks of Lagrange Reader, BookOrbit, or any third party. Materials
+identified as belonging to third parties, including dependencies, artwork, and
+sample content, may be governed by separate licenses. You are responsible for
+complying with those licenses.
+
+6. Termination
+
+The permissions granted by this License terminate automatically if You breach
+its terms. Permissions will be reinstated if the breach is fully cured within
+thirty days after You become aware of it, unless the copyright holder provides
+written notice that reinstatement is not granted. Termination does not affect
+permissions already validly granted to recipients who are not in breach.
+
+7. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+8. Acceptance
+
+By exercising any permission granted by this License, You accept and agree to
+be bound by its terms.
