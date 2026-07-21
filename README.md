@@ -42,6 +42,7 @@ The following screenshots show the main reading and library experience. More scr
   <img src="screenshots/06-app-options.jpg" alt="Image 5" width="200">
   <img src="screenshots/07-achievements.jpg" alt="Image 6" width="200">
   <img src="screenshots/10-audiobook-read-along.jpg" alt="Image 7" width="200">
+  <img src="screenshots/11-light-mode-library.jpg" alt="Image 7" width="200">
 </p>
 
 </details>
