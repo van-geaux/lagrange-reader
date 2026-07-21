@@ -17,19 +17,21 @@ import org.readium.r2.shared.publication.services.positions
 @RunWith(AndroidJUnit4::class)
 class ReadiumPdfOpenInstrumentedTest {
     @Test
-    fun pdfium_adapter_opens_pdf_as_readium_publication_with_page_positions() = runBlocking {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val file = File(context.cacheDir, "readium-${System.nanoTime()}.pdf")
-        createPdf(file, pageCount = 3)
+    fun pdfium_adapter_opens_pdf_as_readium_publication_with_page_positions() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val file = File(context.cacheDir, "readium-${System.nanoTime()}.pdf")
+            createPdf(file, pageCount = 3)
 
-        val result = openReadiumPdf(context, file)
+            val result = openReadiumPdf(context, file)
 
-        assertTrue(result is ReadiumPdfOpenResult.Opened)
-        val publication = (result as ReadiumPdfOpenResult.Opened).publication
-        assertTrue(publication.conformsTo(Publication.Profile.PDF))
-        assertEquals(3, publication.positions().size)
-        publication.close()
-        file.delete()
+            assertTrue(result is ReadiumPdfOpenResult.Opened)
+            val publication = (result as ReadiumPdfOpenResult.Opened).publication
+            assertTrue(publication.conformsTo(Publication.Profile.PDF))
+            assertEquals(3, publication.positions().size)
+            publication.close()
+            file.delete()
+        }
     }
 
     private fun createPdf(file: File, pageCount: Int) {
