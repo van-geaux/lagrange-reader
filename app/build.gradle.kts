@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
 apply(plugin = "kotlin-kapt")
+
+val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+
+val releaseKeystoreProperties = Properties().apply {
+    if (releaseKeystorePropertiesFile.exists()) {
+        load(releaseKeystorePropertiesFile.inputStream())
+    }
+}
 
 android {
     namespace = "com.bookorbit.android"
@@ -17,6 +27,23 @@ android {
         // Release marker: update versionCode and versionName together for every distributed build.
         versionCode = 10
         versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (releaseKeystorePropertiesFile.exists()) {
+                storeFile = rootProject.file(releaseKeystoreProperties["storeFile"] as String)
+                storePassword = releaseKeystoreProperties["storePassword"] as String
+                keyAlias = releaseKeystoreProperties["keyAlias"] as String
+                keyPassword = releaseKeystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {

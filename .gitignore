@@ -23,3 +23,6 @@ Thumbs.db
 artwork/*
 !artwork/lagrange-app-icon-512.png`r`nscreenshots/*
 !screenshots/.gitkeep
+# Local release signing credentials
+release-key.jks
+keystore.properties

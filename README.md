@@ -71,17 +71,19 @@ _Screenshot placeholder_
 - Android SDK with API 35 installed.
 - An Android device or emulator running API 26 or newer for manual testing.
 
-Clone the repository, open it in Android Studio, and let it use the included Gradle wrapper. From a terminal at the repository root, the usual debug build is:
+Clone the repository, open it in Android Studio, and let it use the included Gradle wrapper. From a terminal at the repository root, the release build is:
 
 ```powershell
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleRelease
 ```
 
 The generated APK is:
 
 ```text
-app/build/outputs/apk/debug/app-debug.apk
+app/build/outputs/apk/release/app-release.apk
 ```
+
+The signed APK is generated at `app/build/outputs/apk/release/app-release.apk`. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
 
 Useful verification commands are:
 
@@ -93,7 +95,7 @@ For machine setup details and the manual test matrix, see [`docs/setup.md`](docs
 
 ## Relationship with BookOrbit
 
-I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first—roughly another two to three weeks of real-world use—before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
+I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first, roughly another two to three weeks of real world use, before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
 ## Project status
 
