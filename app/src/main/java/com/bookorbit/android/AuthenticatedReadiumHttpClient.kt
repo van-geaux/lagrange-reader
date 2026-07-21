@@ -39,6 +39,38 @@ internal class AuthenticatedReadiumHttpClient(
     }
 }
 
+internal enum class RemoteByteRangeSupport {
+    SUPPORTED,
+    UNSUPPORTED,
+    UNAVAILABLE
+}
+
+internal suspend fun probeRemoteByteRangeSupport(
+    url: AbsoluteUrl,
+    httpClient: HttpClient
+): RemoteByteRangeSupport {
+    val request = HttpRequest(url) {
+        setRange(0L..0L)
+    }
+    val streamed = httpClient.stream(request).getOrNull()
+        ?: return RemoteByteRangeSupport.UNAVAILABLE
+    return streamed.body.use {
+        remoteByteRangeSupport(
+            statusCode = streamed.response.statusCode.code,
+            acceptsByteRanges = streamed.response.acceptsByteRanges
+        )
+    }
+}
+
+internal fun remoteByteRangeSupport(
+    statusCode: Int,
+    acceptsByteRanges: Boolean
+): RemoteByteRangeSupport = if (statusCode == 206 && acceptsByteRanges) {
+    RemoteByteRangeSupport.SUPPORTED
+} else {
+    RemoteByteRangeSupport.UNSUPPORTED
+}
+
 internal fun isReadiumAuthenticationFailure(error: HttpError?): Boolean =
     error is HttpError.ErrorResponse && error.status.code in setOf(401, 403)
 

@@ -34,6 +34,18 @@ internal class AppStorageManager private constructor(
         deleteChildren(File(filesDir, "cover_cache"))
         deleteChildren(cacheDir)
     }
+
+    suspend fun pruneLegacyFullMediaCaches() = withContext(Dispatchers.IO) {
+        File(cacheDir, "reader-cache").listFiles()?.forEach { file ->
+            if (
+                file.isFile &&
+                (file.name.contains(".audio-v2.") || file.name.endsWith(".cbz"))
+            ) {
+                file.delete()
+            }
+        }
+        deleteChildren(File(cacheDir, "readium-comics"))
+    }
 }
 
 internal fun fileTreeSize(root: File): Long {

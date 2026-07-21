@@ -179,6 +179,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val sessionRefreshLock = Any()
     @Volatile
     private var libraryCoverAspectRatios: Map<String, CoverAspectRatio> = emptyMap()
+    @Volatile
+    private var legacyFullMediaCachesPruned = false
 
     private fun rememberLibraryCoverAspectRatios(libraries: List<LibrarySummary>) {
         libraryCoverAspectRatios = libraries.associate { it.id to it.coverAspectRatio }
@@ -1343,6 +1345,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             ?.takeIf { it.isReadableLocalReaderFile(book) }
         if (downloaded != null) {
             return downloaded
+        }
+        if (
+            allowRemoteCache &&
+            book.mediaKind in setOf(MediaKind.AUDIO, MediaKind.COMIC) &&
+            !legacyFullMediaCachesPruned
+        ) {
+            val shouldPrune = synchronized(this@BookOrbitRepository) {
+                if (!legacyFullMediaCachesPruned) {
+                    legacyFullMediaCachesPruned = true
+                    true
+                } else {
+                    false
+                }
+            }
+            if (shouldPrune) {
+                appStorageManager.pruneLegacyFullMediaCaches()
+            }
         }
         return if (shouldCacheReadableCopy(book, allowRemoteCache)) {
             cacheReadableCopy(book)

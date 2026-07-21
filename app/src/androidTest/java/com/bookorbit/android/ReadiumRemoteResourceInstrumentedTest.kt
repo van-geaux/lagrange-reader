@@ -24,6 +24,71 @@ import org.readium.r2.shared.util.mediatype.MediaType
 @OptIn(DelicateReadiumApi::class)
 class ReadiumRemoteResourceInstrumentedTest {
     @Test
+    fun rangeProbeRejectsServerThatIgnoresTheRangeHeader() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Accept-Ranges", "bytes")
+                .setHeader("Content-Type", "audio/mp4")
+                .setBody(Buffer().write(ByteArray(1_024)))
+        )
+        server.start()
+        try {
+            val url = requireNotNull(AbsoluteUrl(server.url("/audio.m4b").toString()))
+            val result = probeRemoteByteRangeSupport(url, DefaultHttpClient())
+
+            assertEquals(RemoteByteRangeSupport.UNSUPPORTED, result)
+            assertEquals("bytes=0-0", server.takeRequest().getHeader("Range"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun rangeProbeRenewsAuthenticationOnceBeforeRetrying() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(206)
+                .setHeader("Accept-Ranges", "bytes")
+                .setHeader("Content-Range", "bytes 0-0/128")
+                .setHeader("Content-Length", 1)
+                .setHeader("Content-Type", "audio/mp4")
+                .setBody(Buffer().writeByte(0))
+        )
+        server.start()
+        try {
+            var token = "stale"
+            var recoveryCount = 0
+            val client = AuthenticatedReadiumHttpClient(
+                delegate = DefaultHttpClient(),
+                headersProvider = { mapOf("Authorization" to "Bearer " + token) },
+                recoverAuthentication = {
+                    recoveryCount += 1
+                    token = "current"
+                    true
+                }
+            )
+            val url = requireNotNull(AbsoluteUrl(server.url("/audio.m4b").toString()))
+
+            assertEquals(
+                RemoteByteRangeSupport.SUPPORTED,
+                probeRemoteByteRangeSupport(url, client)
+            )
+            assertEquals(1, recoveryCount)
+            val first = server.takeRequest()
+            val second = server.takeRequest()
+            assertEquals("Bearer stale", first.getHeader("Authorization"))
+            assertEquals("Bearer current", second.getHeader("Authorization"))
+            assertEquals("bytes=0-0", second.getHeader("Range"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun authenticatedReadiumResourceReadsOnlyTheRequestedByteRange() = runBlocking {
         val content = ByteArray(128) { it.toByte() }
         val server = MockWebServer()

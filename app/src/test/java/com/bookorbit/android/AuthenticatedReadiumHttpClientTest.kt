@@ -55,4 +55,20 @@ class AuthenticatedReadiumHttpClientTest {
 
         assertEquals(existing, mergeReadiumRequestHeaders(existing, emptyMap()))
     }
+
+    @Test
+    fun `range probe accepts only a partial response that advertises byte ranges`() {
+        assertEquals(
+            RemoteByteRangeSupport.SUPPORTED,
+            remoteByteRangeSupport(statusCode = 206, acceptsByteRanges = true)
+        )
+        assertEquals(
+            RemoteByteRangeSupport.UNSUPPORTED,
+            remoteByteRangeSupport(statusCode = 200, acceptsByteRanges = true)
+        )
+        assertEquals(
+            RemoteByteRangeSupport.UNSUPPORTED,
+            remoteByteRangeSupport(statusCode = 206, acceptsByteRanges = false)
+        )
+    }
 }

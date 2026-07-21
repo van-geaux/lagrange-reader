@@ -140,6 +140,21 @@ internal suspend fun openReadiumAudio(
     val mediaType = book.format?.let(::readiumAudioMediaType)
         ?: localFile?.name?.let(::readiumAudioMediaType)
         ?: return@withContext ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
+    if (remoteUrl != null) {
+        when (probeRemoteByteRangeSupport(remoteUrl, httpClient)) {
+            RemoteByteRangeSupport.SUPPORTED -> Unit
+            RemoteByteRangeSupport.UNSUPPORTED ->
+                return@withContext ReadiumAudioOpenResult.Error(
+                    "This server does not support byte-range streaming for this audiobook. " +
+                        "Download it explicitly for local playback."
+                )
+            RemoteByteRangeSupport.UNAVAILABLE ->
+                return@withContext ReadiumAudioOpenResult.Error(
+                    "Lagrange could not verify byte-range streaming for this audiobook. " +
+                        "Check the connection or download it explicitly."
+                )
+        }
+    }
     val assetRetriever = AssetRetriever(application.contentResolver, httpClient)
     val asset = if (localFile != null) {
         assetRetriever.retrieve(localFile, mediaType).getOrNull()
