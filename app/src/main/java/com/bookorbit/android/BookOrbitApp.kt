@@ -855,7 +855,7 @@ private fun ReaderScreen(
                 MediaKind.COMIC -> Unit
                 MediaKind.UNKNOWN -> UnsupportedReaderView(
                     title = state.book.title,
-                    message = "This file format is not supported yet."
+                    message = "This file format is not supported."
                 )
             }
         }

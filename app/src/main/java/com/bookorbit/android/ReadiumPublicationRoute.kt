@@ -8,7 +8,7 @@ internal enum class ReadiumPublicationRoute {
     AUDIO,
     COMIC,
     NORMALIZE_COMIC_TO_CBZ,
-    NORMALIZE_EBOOK_TO_EPUB,
+    UNSUPPORTED_EBOOK,
     UNSUPPORTED
 }
 
@@ -17,7 +17,7 @@ internal fun readiumPublicationRoute(format: String?, title: String?): ReadiumPu
     val parts = token.split(Regex("[^a-z0-9]+"))
     return when {
         parts.any { it in setOf("mobi", "azw", "azw3", "fb2") } ->
-            ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB
+            ReadiumPublicationRoute.UNSUPPORTED_EBOOK
         parts.any { it == "cbr" || it == "cb7" } || token.contains("rar") || token.contains("7z") ->
             ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ
         token.contains("epub") || parts.any { it == "kepub" } -> ReadiumPublicationRoute.EPUB
@@ -37,6 +37,6 @@ internal fun ReadiumPublicationRoute.mediaKind(): MediaKind = when (this) {
     ReadiumPublicationRoute.AUDIO -> MediaKind.AUDIO
     ReadiumPublicationRoute.COMIC,
     ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ -> MediaKind.COMIC
-    ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB,
+    ReadiumPublicationRoute.UNSUPPORTED_EBOOK,
     ReadiumPublicationRoute.UNSUPPORTED -> MediaKind.UNKNOWN
 }

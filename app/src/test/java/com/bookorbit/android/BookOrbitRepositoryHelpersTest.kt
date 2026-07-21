@@ -59,9 +59,11 @@ class BookOrbitRepositoryHelpersTest {
         assertEquals(ReadiumPublicationRoute.COMIC, readiumPublicationRoute("cbz", null))
         assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cbr", null))
         assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cb7", null))
-        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("mobi", null))
-        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("azw3", null))
-        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("fb2", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED_EBOOK, readiumPublicationRoute("mobi", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED_EBOOK, readiumPublicationRoute("azw", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED_EBOOK, readiumPublicationRoute("azw3", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED_EBOOK, readiumPublicationRoute("fb2", null))
+        assertEquals(MediaKind.UNKNOWN, ReadiumPublicationRoute.UNSUPPORTED_EBOOK.mediaKind())
         assertEquals(ReadiumPublicationRoute.UNSUPPORTED, readiumPublicationRoute("bin", null))
     }
 

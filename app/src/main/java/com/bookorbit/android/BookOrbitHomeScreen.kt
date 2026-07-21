@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -1870,8 +1871,7 @@ private fun BookPosterCard(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Box {
-                BookCover(book, coverLoader)
+            BookCardCoverSlot(book, coverLoader) {
                 if (hasActions) {
                     Box(modifier = Modifier.align(Alignment.TopEnd)) {
                         IconButton(
@@ -2603,8 +2603,7 @@ private fun ShelfBookCard(
             ),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Box {
-            BookCover(book, coverLoader)
+        BookCardCoverSlot(book, coverLoader) {
             if (hasActions) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(
@@ -2685,6 +2684,33 @@ private fun ShelfBookCard(
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+}
+
+internal val BOOK_CARD_COVER_SLOT_ASPECT_RATIO = CoverAspectRatio.PORTRAIT.widthToHeight
+internal val BOOK_CARD_COVER_ALIGNMENT: Alignment = Alignment.BottomCenter
+
+@Composable
+private fun BookCardCoverSlot(
+    book: BookSummary,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    overlay: @Composable BoxScope.() -> Unit = {}
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(BOOK_CARD_COVER_SLOT_ASPECT_RATIO),
+        contentAlignment = BOOK_CARD_COVER_ALIGNMENT
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(book.coverAspectRatio.widthToHeight),
+            content = {
+                BookCover(book, coverLoader)
+                overlay()
+            }
+        )
     }
 }
 
