@@ -1,124 +1,106 @@
 # Lagrange Reader
 
-Android client for BookOrbit focused on reading and listening.
+![Lagrange Reader logo](artwork/lagrange-app-icon-512.png)
 
-## Current scope
+Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It started with a simple personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
-- Connect to a user-provided BookOrbit server
-- Authenticate through the server login flow
-- Browse libraries and books
-- Stream supported content
-- Download books for offline reading or listening
-- Queue progress updates offline and sync them later
+This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
-## Project status
+## What it does
 
-Audiobook preparation regression fix (2026-07-21): chapter enrichment in `AppCoordinator` had replaced the exact catalog/download `BookSummary` selected by the user with the separately parsed detail-book identity. That could change `fileId`, format, or `localPath`, leaving Readium on a black screen while preparation waited on the wrong source. Enrichment now preserves the tapped audiobook identity and copies only `audioChapters`. The reader cache is versioned and format-aware, writes to staging, validates complete/nonempty/readable output, and atomically promotes it so an interrupted Preview cannot be reused as a partial publication. Service binding now uses `BIND_AUTO_CREATE` with explicit failure, Readium preparation is bounded to 30 seconds, and close cleanup to 5 seconds, preventing an indefinite Preparing state. The full 262-test/44-suite gate, lint, and both APK assemblies pass; connected regression coverage proves an interrupted Preview cannot reuse a partial cache, and the real 489,114,453-byte M4B reaches a delivered compact-player session. Target-device feedback confirms audiobook opening/playback now works well; authenticated Preview still requires a separate device check.
+- Connects to a BookOrbit server and signs in with your normal account.
+- Browses libraries, series, authors, search results, achievements, and local books.
+- Reads books online or after downloading them for offline use.
+- Keeps reading progress synchronized in both directions: local changes are sent to BookOrbit, and newer server progress/status can return to the app on refresh.
+- Queues progress from offline reading/listening sessions and syncs it automatically after the connection returns.
+- Provides reader themes, text size, margins, chapter/page navigation, orientation lock, and keep-awake behavior.
+- Plays audiobooks with a compact player, seeking, chapter selection, playback speed, and resume support.
+- Supports multiple app themes, cellular-download controls, cache management, and a cache-first offline browser.
 
-Audiobook crash fix (2026-07-20): the actual 489,114,453-byte M4B reproduced Media3's wrong-thread exception because Readium's main-looper ExoPlayer was configured from `DefaultDispatcher-worker-1`. Parsing remains on IO, while navigator/player creation, MediaSession opening, play, and close now run on `Dispatchers.Main.immediate`. The externally pushed fixture now opens, plays, activates the session/foreground service/audio focus, and closes in `ReadiumAudioOpenInstrumentedTest`. Failed preparation no longer creates an active-reader restart loop: exceptions become a logged safe failure, stale reader state is cleared, and the browser is restored. The user confirms the hardened current opening/playback flow works well.
+## Supported formats
 
-Readium audiobook integration update (2026-07-20): normal Read and Preview open recognized audio through Readium 3.0.2 and return to the browser with one application-scoped compact-only player above the bottom navigation; the old composable-owned ExoPlayer UI is removed and no fullscreen/expanded player exists. The player provides tappable cover-to-detail, title/author, elapsed/remaining seek slider, Replay 10, play/pause, Forward 30, a BookOrbit `audioMetadata` chapter picker, 0.75/1/1.25/1.5/2× speed, and explicit Close. Audiobook details label the primary action Play. Metadata loads before preparation and survives through active-reader/detail caches. Online Preview downloads an authenticated temporary audio copy and remains progress-isolated. The controller samples every 1.5 seconds; Close publishes final normal progress and stops the service. The full gate passes 262 JVM tests across 44 suites plus lint and both APK assemblies; the authenticated Preview connected test passes on the configured Medium_Phone emulator. Current audiobook opening/playback is target-device confirmed; authenticated Preview plus notification/background/process behavior still need target-device validation.
+| Format | Online | Offline | Notes |
+| --- | :---: | :---: | --- |
+| EPUB / KEPUB | Yes | Yes | Full paginated reader with themes, margins, chapters, and resume. |
+| PDF | Yes | Yes | Readium PDF reader with page navigation and resume. |
+| CBZ | Yes | Yes | Image-based comic reader. |
+| CBR / CB7 | Yes | Limited | Online page extraction is supported; offline reading requires the server and is not client-side RAR/7z extraction. |
+| Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. |
 
-Compact-player layout follow-up (2026-07-21): when audio is active in a separate Readium EPUB or comic activity, the activity measures the compact player and ends the complete reader viewport immediately above it. Publication content, chrome, options, tutorial, and footer all share that reduced viewport, then expand when the player closes. In the main app, Browser/detail destinations without the regular bottom navigation add Android navigation-bar padding beneath their bottom content, and non-Browser overlays use the same inset, keeping the player above system navigation buttons. `ReadiumAudioPlayerOverlayInstrumentedTest` passes with a 240 px reserve and restoration.
+The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
 
-Audiobook relaunch fix (2026-07-21): normal audio progress deliberately persists active-reader metadata for resume, but bootstrap incorrectly interpreted that record as a request to restore the transient `AppScreen.Reader`. Audiobooks have no persistent fullscreen reader; the playback service owns the surviving session and the app only needs its compact player. Both local-only and authenticated startup restoration now skip AUDIO reader destinations and continue normal Browser bootstrap, allowing the service/controller to supply the compact player without showing Preparing. The focused `AppCoordinatorTest` regression `bootstrap skips persisted audiobook reader and reopens browser for compact playback` failed before the fix and passes afterward. Target-device relaunch validation remains pending.
+## Roadmap
 
-Readium format-capability audit (2026-07-21): `ReadiumPublicationRoute` now makes the publication boundary explicit. EPUB/KEPUB route directly to EPUB, PDF routes directly to the implemented Readium PDF path, supported audio routes directly to audio, CBZ routes directly to the image publication path, and CBR/CB7 require cached-CBZ normalization. MOBI/AZW/AZW3/FB2 route to `UNSUPPORTED_EBOOK`, remain `MediaKind.UNKNOWN`, and show `This file format is not supported.` instead of falsely entering EPUB. `BookOrbitRepositoryHelpersTest` and `DownloadUpdateTest` pass for the routing and compatibility rules. These ebook formats are intentionally outside current product scope; conversion is optional future work only if product direction changes.
+Planned follow-up work includes:
 
-Per-library cover aspect (2026-07-21): `CoverAspectRatio` accepts the exact BookOrbit `2/3` portrait and `1/1` square values with portrait fallback. Library and book summaries carry the value, and repository enrichment resolves every mixed result from its owning library across search, authors, series, cache, and local flows. Browser snapshots, active-reader state, and detail caches persist it; Room catalog database v2 adds `coverAspectRatio` through a 1→2 migration defaulting existing rows to `2/3`. Shared book/fullscreen covers and the compact audiobook cover use Crop with true 2:3 or 1:1 geometry and no artificial vertical padding. `BookPosterCard` and `ShelfBookCard` place the true-aspect image at `BottomCenter` inside a portrait-height `BookCardCoverSlot`, aligning cover bottoms and labels across mixed shapes; More remains attached to the actual cover. `BookCoverLayoutTest` guards this contract. Physical mixed-library square/portrait alignment validation remains pending.
+- More reading-direction options, including right-to-left and continuous scrolling with configurable page spacing for PDF and CBZ/CBR.
+- Moving a book to read status directly from Preview.
+- Support for additional book formats.
+- Bulk deletion of local books.
 
-Readium PDF migration (2026-07-21): PDF now uses pinned `readium-adapter-pdfium:3.0.2`. `PdfiumDocumentFactory` and `PublicationOpener` parse the publication, while `PdfNavigatorFragment` with `PdfiumEngineProvider` renders it in `ReadiumPdfReaderActivity`. The reader retains exact normal locator resume/progress, Preview page-1 isolation, 25% edge turns, center chrome, page rail/footer/options/tutorial, orientation, keep-awake, system bars, progress return, and the global compact-audio overlay. Invalid PDFs fail explicitly, and the Compose `PdfRenderer` path is removed. Two JVM routing tests pass. The targeted connected `ReadiumPdfOpenInstrumentedTest` passes on Medium_Phone AVD API 17, proving a generated three-page PDF opens through Readium/PDFium as `Profile.PDF` with exactly three positions. Routed legacy EPUB/comic fallbacks are also removed: EPUB always uses Readium, while comic sources that cannot open directly or normalize to CBZ show explicit conversion/reconnect guidance. Physical target-device PDF UI validation remains pending.
+## Limitations to know about
 
-Current highest-priority work (2026-07-21): compact audiobook integration, Browser-first audio relaunch, the format-capability audit, per-library cover rendering/alignment, and Readium PDF migration are implemented. The full gate passes 265 JVM tests across 46 suites with zero failures/errors/skips plus `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`; the connected generated-PDF test passes. MOBI/AZW/AZW3/FB2 are intentionally unsupported. The next work is the physical/device validation matrix: representative PDF controls/resume/Preview, mixed-library square/portrait cover alignment, surviving-playback relaunch, authenticated Preview, revised player layout, background media behavior, accessibility, and responsive layouts. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+Lagrange needs a reachable BookOrbit server for sign-in, online browsing, progress synchronization, and CBR/CB7 page extraction. Downloaded EPUB, PDF, CBZ, and supported audiobook files can be opened without a connection. HTTPS is strongly recommended when connecting to a remote server; explicit HTTP URLs are supported for trusted networks.
 
-Working prototype (`0.2.7`, pre-1.0). The app shell, API wiring, local download tracking, sync queue, authenticated-session bootstrap, sign-out/session reset behavior, and EPUB/PDF/audio/CBZ/CBR/CB7 reading paths are in place. The visible app brand is Lagrange; the subtitle “a BookOrbit reader” appears on the splash/loading presentation only. The native browser uses a Plex-inspired Home/Libraries/More bottom bar, a Home-only top logo/search/profile bar, a library-name selector with dropdown affordance, a dedicated search layer, an About destination, a Local books destination, and a Library view split into Recommended and cache-backed Browse tabs. The profile menu exposes Achievements, Options with a cogwheel, and About above a divider, followed by Change server and Log out/Sign in. Achievements uses the authenticated BookOrbit endpoint and presents earned/available totals plus adaptive Unlocked and Locked cards, with graceful older-server and retry states; a Library-like visual redesign using official symbols remains pending. Global search results intentionally use compact list rows and expose Mark as read/unread through both a visible three-dot action and long-press. Library, Series, and Authors use compact adaptive poster cards; Series resolves BookOrbit's `coverBookIds` through the representative book thumbnail endpoint instead of assuming a nonexistent Series image route. Browse renders the complete selected-library catalog from a server-scoped Room cache, applies filters and sorts locally, supports series collapsing ordered by series name with an exact grouped-book count on each representative card, and uses BookOrbit's absolute jump-bucket indexes while showing only represented #/letter labels. Series also retrieves every page for the active server filter into a deduplicated in-memory catalog, replaces Load more with complete navigation, and exposes only represented #/letter labels when sorted by Name. Reopen displays cached metadata before network checks finish; refresh keeps that catalog usable while a full server reconciliation updates only changed rows and removes deleted titles atomically. Swipe-to-refresh is available on both Home and Libraries; versioned local cover thumbnails, versioned on-demand book details, and the raised More menu remain in place. Both normal EPUB Read and Preview use Readium 3.0.2. Normal Read retains 25% edge navigation, center-tap lightweight chrome, chapter/page jumps, stored themes/text size/margins, the progress footer, reader system bars, orientation lock, keep-awake, exact locator resume, legacy-state fallback, and coordinator progress return. Preview starts at the beginning and persists neither progress nor location. Local/readable CBZ uses the Readium image navigator; connected CBR/CB7 is rebuilt from authenticated server pages into a cached CBZ first. Normal comic Read stores an exact locator, while comic Preview starts on page 1 without saving locator/progress. Offline RAR/7z-backed CBR/CB7 remains unsupported without the server. Shared chrome provides a status-bar-safe top bar with leftmost labeled Exit/X and no visible Back action, a right-side page rail occupying about 75% of screen height, and bottom Chapters/Pages plus cog. EPUB page arrows move one page and a separate arrow pair moves chapters; comics remain page-only. The outer list button owns chapter/page selection, while cog options no longer duplicate those controls. Tapping the reading surface/center scrim or pressing Android Back dismisses chrome before exit. Every reader entry overlays the Previous/Menu/Next tutorial for exactly 3,000 ms after first pre-draw; every region consumes taps and dismisses the overlay immediately. Home derives its shelves, including Currently reading, from the server-wide cached catalog, while Library Recommended and Browse remain scoped to the selected library. Login access tokens are persisted and sent on authenticated API, cover, download, reader-cache, and Achievements requests; physical-device session-expiry recovery has been validated. Focused JVM coverage exercises coordinator bootstrap, cache-first reconciliation, catalog pagination, cached offline fallback, post-login resume flows, progress restoration, exact library and Series navigation helpers, alternate progress parsing, token extraction, and recoverable browser-load failures. Compose/instrumentation coverage includes setup, login recovery, live/loading browser states, cached offline behavior, Room reconciliation, the Home pull-to-refresh gesture, global-search list-row actions, Series jump navigation without Load more, collapsed-series count presentation, the profile destinations, EPUB theme persistence, and WebView reader geometry across external vertical resize and page translation. Comic fullscreen interactions are target-device validated; online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation, while offline CBR/CB7 extraction remains optional. Audiobook-specific implementation and validation can now use the local M4B/chapter-metadata fixture.
+The app currently uses the standard BookOrbit username/password login. Direct OIDC/SSO is deferred until the mobile redirect and token contract is confirmed. A connected Android device or emulator is also needed for the full physical validation matrix; automated JVM tests and APK builds are maintained in the repository.
 
-Book details show a compact primary-colored `Reading · n%` or `Read · n%` line immediately above one 46 dp-high row with no wrapping, scrolling, clipping, or off-screen actions. Read and Preview are always labeled. A nonlocal book always reserves a 46 dp icon-only transfer slot for Download, Retry download, or Cancel download; unavailable/offline transfer remains visible but disabled. Local books have no inline transfer slot: Delete local is always in More, alongside Update local or Cancel update when applicable. Mark as read/unread is measured with current typography/font scale and stays inline only when the full row fits; otherwise More contains it. More appears whenever anything is hidden and is pinned to the row's right/trailing edge whenever layout space permits; only weighted Read/Preview compaction is used at extreme widths. Update cancellation/retry guidance points to More. The progress line uses known canonical 0-100 progress without fabricating unknown values and disappears immediately after Mark as unread. Long titles remain constrained to five rows with expansion, series name/index metadata remains visible, and the full-screen cover viewer dismisses from any screen tap or Android Back. Library grids support multi-book selection with overlap-safe bulk read/unread actions and stale-selection pruning. Genre chips open fully paginated server-filtered Books or Series results; tags remain informational. Authentication currently remains native username/password; direct OIDC/SSO support is deferred.
+## Screenshots
 
-Latest device feedback confirms swipeable tiles, Series navigation, wrapped genre/tag metadata, grouped metadata cards, text wrapping, reader options, cache-first opening, exact jumps, thumbnail warnings, rapid-scroll cancellation, detail loading, and airplane-mode behavior. Current comics use Readium 3.0.2: local/readable ZIP/CBZ opens directly, while connected CBR/CB7 is rebuilt from authenticated BookOrbit pages into a reusable cached CBZ. The dark fullscreen reader retains 25% edge navigation, center-tap lightweight chrome, right page rail/footer, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal-Read locator resume, Preview isolation, orientation lock, keep-awake, and dark system bars. Offline downloaded CBR/CB7 still requires the server and is unsupported offline. Target-device feedback confirms the earlier fullscreen interactions work correctly; the revised chrome/tutorial plus online CBZ/CBR/CB7 and offline downloaded comic formats still need broader validation, while offline CBR/CB7 extraction remains optional. Audiobook work can now use the local M4B fixture and its chapter metadata. Direct OIDC/SSO remains open/deferred.
+Screenshots can be added manually to [`screenshots/`](screenshots/). The sections below are intentionally reserved for release documentation:
 
-Home and Library Recommended status messages now dismiss immediately through an explicit X button or horizontal swipe. Recently read contains only completed books, excludes titles still in Currently reading, orders by last-read/updated/title, and is capped at 12 items.
+<!-- Add screenshots here, for example: ![Home](screenshots/home.png) -->
 
-Options now has native grouped Interface and Data sections. Interface persists lock-current-orientation, one flat app Theme list (Follow system/Light/Charcoal/Warm black/OLED black), default opening screen (Home/Library/Local books), and Reduce motion settings. The former haptic setting, preference storage, provider, and explicit app-haptic requests were removed by user direction. Data persists downloads-over-cellular (Always/Never/Ask), reports downloaded/disposable-cache sizes, offers confirmed Clear cache that preserves downloads and downloaded-book metadata, controls current background cover work (and future metadata work) with Any network/Wi-Fi only/Disabled, and confirms local-copy deletion by default. Target-device feedback validates lock-current-orientation, all five themes, the default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, and local-copy delete confirmation. Detailed theme edge cases and background-network-policy device validation remain open.
+### Home and library browsing
 
-The browser/local-state work order is implemented: Delete local immediately changes the still-open detail action back to Download, refreshes Local books, and updates Room catalog plus legacy snapshot `localPath` state; Local books can recover cover and related metadata from the latest cached rich detail; and opening Options from a book detail dismisses the retained detail. Home has a separate server-wide `homeBooks` collection restored from all Room catalogs with legacy snapshot fallback and current download paths. Refresh reconciles the selected library first so it becomes usable/current, then processes remaining libraries in deterministic ordered batches of at most three concurrent library refreshes and publishes successful slices after each batch. Ordinary failures retain cached slices and are named in the partial-cache message; cancellation/authentication still interrupts immediately. Libraries Recommended/Browse remain selected-library scoped, and progress, read/unread, and local-path changes update both collections. Physical-device/server latency and load validation remain pending.
+_Screenshot placeholder_
 
-The latest combined-feedback verification passes 206 JVM tests across 33 suites with zero failures/errors/skips; `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass. Fresh APK: `app/build/outputs/apk/debug/app-debug.apk`.
+### Reading and offline books
 
-Close book now captures the current reader state and immediately restores cached Browser content before persistence, sync, cleanup, or network refresh work. The latest in-memory progress is merged into both the selected-library list and server-wide Home shelves at once, with refreshing/loading state visible while background work flushes progress, attempts pending sync, clears non-preview active-reader state, and refreshes. Without a cached browser, the app leaves the reader for Loading. Preview remains isolated and neither persists progress nor clears the normal active-reader state. Physical-device validation remains pending.
+_Screenshot placeholder_
 
-Foreground cover loading now tries normalized explicit thumbnail metadata first and the canonical `/api/v1/books/{bookId}/thumbnail` endpoint second, with ordered deduplication and fallback on empty/failing responses. This restores books such as `your name.` when explicit metadata is absent or stale, preserves cancellation and the existing `updatedAt`-versioned memory/disk cache, and leaves low-priority library-wide warming unchanged. Physical-device/server validation remains pending.
+### Audiobook player
 
-Android integration coverage now includes three `BookOrbitRepositoryIntegrationTest` flows using MockWebServer 4.12.0 with the real repository, Android context, and stores: login/token/Bearer session bootstrap, libraries plus paginated 100-item book request/parsing, and offline progress retention followed by explicit progress/status replay and acknowledgement. The androidTest APK compiles, but these tests have not run on-device because adb enumeration hung and no usable connected target was available.
+_Screenshot placeholder_
 
-Target-device follow-up confirms Read/Preview labels, live download progress, long-title expansion, series-index presentation, multi-selection, and correct layout-derived EPUB whole-book progress. Download/Delete local labels, immediate open-detail reconciliation after both download and local deletion, removal of the misleading Tag tap affordance, dismissible Home messages, and completed-only Recently read are implemented; the deletion refresh still needs target-device confirmation. Remaining EPUB validation covers timing/stability of page measurement on representative devices. Direct OIDC/SSO authentication remains deferred. A local M4B audiobook and chapter metadata are available for the queued audio work. Comic routing is implemented and awaiting device validation; offline CBR/CB7 extraction remains an optional future enhancement.
+## Building manually
 
-Progress reconciliation now follows BookOrbit's current API contract: card-level scalar `readingProgress` and nested `readStatus` are parsed, every reader and persisted payload uses one canonical 0-100 percentage scale, and newer reread/backward events can repair an older inflated marker. Foreground and WorkManager sync now share queue locks and acknowledge only the exact posted event IDs, so a newer page event cannot be erased by an older in-flight replay; rapid callbacks debounce into a trailing worker, and an unknown percentage is never submitted as a valid zero-progress update. Every accepted progress event also explicitly writes BookOrbit status as `reading`, or `read` at 99.5% and above; the queue acknowledges the event only after both writes succeed, preventing BookOrbit's status-backed Currently Reading widget from remaining empty when server-side automatic status promotion fails. After successful queue replay and a fresh page load, server progress replaces temporary local overlays so BookOrbit-side changes can flow back into Lagrange. Bidirectional target-server synchronization has been validated.
+### Requirements
 
-Book cards now expose visible overflow actions and the same menu on long-press across Home shelves and individual Library, Series, Author, and Local Books posters. Mark as read writes BookOrbit's `read` status, preserves the current position, and clears older queued status work; Mark as unread clears progress through the normal-user reset flow. Currently Reading retains its dedicated removal action. Removing or marking a title unread deletes the primary/current file progress (or writes explicit zero audio progress), sets the status to `unread`, clears its lifecycle dates, then clears matching local queued, last-synced, exact EPUB resume, active-reader, detail, snapshot, and Room-catalog progress so stale local work cannot restore it. Refresh parsing also ignores stale page/position/status timestamps when BookOrbit explicitly reports `unread` with no positive progress, preventing the reset status record's fresh `updatedAt` from repopulating Home. This fallback does not delete BookOrbit reading-session history or progress for additional non-primary files; BookOrbit reserves its broader reading-state reset endpoint for accounts with metadata-edit permission. On Deck now requires at least one completed book in a series, selects the first unread volume, and hides the shelf entry while that volume is actively being read. Mark as read/unread and stale-state refresh behavior have been validated on the target device and server.
+- Windows, macOS, or Linux with a current Android Studio installation.
+- JDK 17.
+- Android SDK with API 35 installed.
+- An Android device or emulator running API 26 or newer for manual testing.
 
-EPUB, PDF, and comic readers keep the display awake while their reading screen is visible, then restore the prior device timeout behavior when the user leaves. Audiobook playback continues to allow normal screen sleep. EPUB keeps Android's native top status bar visible for accurate battery and network indicators while the bottom navigation bar remains immersive; status icon contrast follows the selected reader theme. An always-visible, theme-matched footer reports weighted completion, the current chapter page, and a measured whole-book current/total page count; while hidden chapter measurements settle it reports `Book pages calculating`. Counts incorporate viewport, external top/bottom geometry, left/right margins, font scale, theme, and assets, and reset when those inputs change. EPUB options use one rounded, theme-matched bottom sheet with grouped reading-position, appearance, text-size, and page-margin controls. Reading position retains Choose chapter and its chip selector, adding a `Page X of Y` slider beneath them that uses the current chapter's primary-WebView page count, jumps immediately while dragging, disables for single-page chapters, and cannot cross chapter boundaries. Continue reading dismisses the sheet while remaining in the book; Close book exits the reader. Tapping exposed book content or pressing Android Back dismisses options before Back exits the reader. Physical-device validation of the page slider remains pending.
-
-Library metadata uses Room 2.6.1 with catalog schema version 2; migration 1→2 adds non-null `coverAspectRatio` defaulting existing rows to `2/3`. BookOrbit does not expose a reliable catalog revision/delta contract, so refresh retrieves every metadata page to detect additions, removals, and progress changes. Each large library refresh requests 100 books per page and uses ordered batches of at most four concurrent page requests; server-wide Home separately limits nonselected work to three concurrent library refreshes after the selected library is current. Total and duplicate checks still retry a catalog that changes during traversal. The local transaction compares rows and writes only additions, removals, ordering changes, or changed metadata. The old first-page JSON snapshot remains a migration fallback, not the active Browse data source.
-
-Large-library images now follow a cache-first pipeline. Visible cover requests are cancellable when cards leave composition, decoded thumbnails use a bounded memory cache, and persisted thumbnail keys include the catalog update version. After successful catalog reconciliation, a durable unmetered-network worker fills only missing or changed thumbnails in 50-image batches. Rich book details are cached for every opened title and reused until that title's catalog version changes; they are not eagerly fetched for all titles because that would add roughly one API request per book.
-
-## Build
-
-The earlier custom-reader pass also retries authenticated requests through a refresh-cookie renewal attempt before returning to login, retries and caches catalog thumbnails, updates Continue reading immediately after reading, flushes reader progress before the browser refreshes, and exposes server-aligned filters in Library Browse and Series with matching local filtering for Local books. Browse filters now run against the complete Room catalog instead of triggering lazy server pages; Series remains server-backed. It uses more compact typography and lays out book cards as title/series/index metadata rows. EPUB reader padding is stored independently per book/file; Top/Bottom change the actual Android WebView bounds and trigger its existing resize repagination, avoiding vertical clipping inside the known-good visible-overflow HTML renderer. The restored reader rendering and visible padding behavior pass target-device testing. JVM tests and Android instrumentation compilation pass, while the refresh endpoint, long-lived session behavior, catalog reconciliation, exact jump behavior, and filter results still need device validation against the target BookOrbit server.
-
-The current book-detail UI pass has passed `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. The debug APK is rebuilt before each manual-test handoff.
-
-From the project root:
+Clone the repository, open it in Android Studio, and let it use the included Gradle wrapper. From a terminal at the repository root, the usual debug build is:
 
 ```powershell
 .\gradlew.bat assembleDebug
 ```
 
-The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+The generated APK is:
 
-## Test
-
-Run the local JVM unit suite with:
-
-```powershell
-.\gradlew.bat testDebugUnitTest
+```text
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The release build also compiles locally with:
+Useful verification commands are:
 
 ```powershell
-.\gradlew.bat assembleRelease
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
-The repository now also includes a GitHub Actions workflow that runs `testDebugUnitTest`, `lintDebug`, `assembleDebugAndroidTest`, and `assembleDebug` on pushes to `main` and on pull requests.
+For machine setup details and the manual test matrix, see [`docs/setup.md`](docs/setup.md) and [`docs/testing.md`](docs/testing.md).
 
-Server policy: explicit `http://` and `https://` BookOrbit URLs are accepted. Bare remote hostnames default to HTTPS; bare localhost and common Android emulator loopback aliases default to HTTP. Cleartext HTTP does not protect credentials, session tokens, metadata, progress, or streamed content from interception, so HTTPS remains strongly recommended outside a trusted network.
+## Relationship with BookOrbit
 
-## Manual app testing
+I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first—roughly another two to three weeks of real-world use—before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
-The current manual test entry point is documented in [docs/testing.md](./docs/testing.md).
+## Project status
 
-Minimum baseline before manual app testing:
+Version **1.0.0** is considered feature-complete and worthy of release for personal and community testing. The remaining work is mostly wider device and format validation, not a claim that every BookOrbit server configuration or file is covered.
 
-- `.\gradlew.bat assembleDebug` passes
-- `.\gradlew.bat testDebugUnitTest` passes
-- a reachable BookOrbit server is available
-- a test account can sign in and access real content
+## License and acknowledgements
 
-## Local setup
+See [`docs/privacy.md`](docs/privacy.md) for the app's local-data and network behavior. The project builds on BookOrbit, Readium, AndroidX, Jetpack Compose, Kotlin, Media3, OkHttp, Room, and other open-source libraries; their respective licenses and notices remain authoritative.
 
-Machine-specific SDK setup and environment notes are in [docs/setup.md](./docs/setup.md).
-
-## Documentation
-
-- [docs/README.md](./docs/README.md)
-- [docs/architecture.md](./docs/architecture.md)
-- [docs/setup.md](./docs/setup.md)
-- [docs/privacy.md](./docs/privacy.md)
-- [docs/release.md](./docs/release.md)
-- [docs/bookorbit-api.md](./docs/bookorbit-api.md)
-- [docs/testing.md](./docs/testing.md)
-- [docs/ui-ux.md](./docs/ui-ux.md)
-- [docs/roadmap.md](./docs/roadmap.md)
-- [docs/handover.md](./docs/handover.md)
+Thank you to the BookOrbit maintainers and contributors for the server and library experience that inspired this app, to the Readium Foundation and open-source library authors whose work makes the reader possible, and to everyone who tests Lagrange and reports issues.

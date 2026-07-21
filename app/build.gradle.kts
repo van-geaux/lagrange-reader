@@ -15,8 +15,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 9
-        versionName = "0.2.7"
+        versionCode = 10
+        versionName = "1.0.0"
     }
 
     buildFeatures {

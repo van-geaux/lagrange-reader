@@ -18,3 +18,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Personal artwork and manually captured screenshots
+artwork/*
+!artwork/lagrange-app-icon-512.png`r`nscreenshots/*
+!screenshots/.gitkeep

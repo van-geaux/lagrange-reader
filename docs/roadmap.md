@@ -63,6 +63,13 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Device-validate the Readium CBZ path and connected CBR/CB7 cache preparation; offline downloaded CBR/CB7 remains unsupported without the server, and client-side RAR/7z extraction is optional future work
 - Use the available local M4B/chapter-metadata fixture for audiobook work and obtain a representative PDF
 
+### 5. Reader and library follow-ups
+
+- Add more reading-direction options, including right-to-left and continuous scrolling with configurable space between pages for PDF and CBZ/CBR.
+- Allow a book to be moved to read status from Preview.
+- Add support for more book formats.
+- Add bulk deletion of local books.
+
 ### 5. Release readiness
 
 - Complete accessibility, large-text, narrow-screen, rotation, and theme checks
@@ -70,7 +77,7 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Completed: audit the tracked tree and history for sensitive filenames, high-confidence key signatures, hardcoded credential assignments, and unexplained production/internal URLs
 - Create the first tagged release
 
-## User feedback workplan — 2026-07-12
+## User feedback workplan â€” 2026-07-12
 
 The latest debug APK passed login, session relaunch, browsing, EPUB reading, download/offline reopen, and progress-sync testing on the target device. The remaining device feedback is ordered as follows:
 
@@ -82,34 +89,34 @@ The latest debug APK passed login, session relaunch, browsing, EPUB reading, dow
 
 Each item must preserve session recovery, offline behavior, progress sync, Preview isolation, and reader resume.
 
-## Latest device feedback workplan — 2026-07-13
+## Latest device feedback workplan â€” 2026-07-13
 
 1. Implemented: restore the exact EPUB page within the current chapter on close/reopen and full app restart, while preserving the existing server progress percentage and chapter-boundary behavior; physical-device validation remains required.
 2. Implemented: change the selected-library book browser from list rows to the adaptive poster-card grid used by Series and Authors, preserving metadata, offline-disabled cards, and detail actions; physical-device validation remains required.
 3. Implemented: rename the visible app brand to `Lagrange` and add the subtitle `a BookOrbit reader` to the logo/launch presentation. BookOrbit remains the connected server/product name; physical-device branding validation remains required.
 4. Implemented: add an About destination with placeholder app/version/server information until the About content is reviewed. Its original More-menu placement was later superseded by the profile-dropdown revision.
 
-## Latest device feedback workplan — 2026-07-13 (continued)
+## Latest device feedback workplan â€” 2026-07-13 (continued)
 
 1. Implemented: show the `a BookOrbit reader` subtitle only on the splash/loading presentation; the opened app top bar and About screen now show the Lagrange name without the subtitle. Physical-device presentation validation remains required.
 2. Implemented: add a Libraries content control that collapses books belonging to the same series into one representative series card, with a Show all action to restore the full book grid; physical-device validation remains required.
 3. Implemented: add Local books to More immediately before Options, loading valid downloaded titles from local storage and presenting them with the same poster-card grid.
 
-## Latest device feedback workplan — 2026-07-13 (library refinement)
+## Latest device feedback workplan â€” 2026-07-13 (library refinement)
 
 1. Implemented: reduce the current book poster-card minimum width to 75% of its current value, which is half of the original candidate size; physical-device density validation remains required.
 2. Implemented: add paginated library loading with automatic near-end page fetching in the Browse tab using the library response total/page metadata.
 3. Implemented: show the Lagrange logo only on Home; Library now opens the first/selected library directly, and its library name replaces the logo as a tappable library selector.
 4. Implemented: split the selected Library view into Recommended, reusing the Home-style shelves for that library, and Browse, containing the complete paginated book grid.
 
-## Latest device feedback workplan — 2026-07-13 (final browser polish)
+## Latest device feedback workplan â€” 2026-07-13 (final browser polish)
 
 1. Implemented: make the Library, Series, and Authors poster-card grids visibly smaller on narrow phones by lowering their adaptive minimum width; physical-device density validation remains required.
 2. Implemented: add a downward-triangle affordance beside the selected Library name so its tap-to-select behavior is discoverable.
 3. Implemented: remove the Library refresh arrow and add swipe-down-to-refresh to the Library content tabs.
 4. Implemented: persist fetched book cover thumbnails locally and read that cache before attempting the server, including for Local books.
 
-## Latest device feedback workplan — 2026-07-13 (follow-up polish)
+## Latest device feedback workplan â€” 2026-07-13 (follow-up polish)
 
 1. Implemented: rename the collapsed-series action from Show all to Expand series while preserving the full-grid behavior.
 2. Implemented: improve cover-thumbnail decoding and retry behavior so slow or failed cover loads do not permanently remain as first-letter placeholders.
@@ -118,26 +125,26 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 5. Implemented: make the top-left Libraries title tappable while the picker is open so it returns to the selected library page.
 6. Implemented: cache full BookDetailInfo metadata for downloaded titles and prefer that cache when opening Local books.
 
-## Latest device feedback workplan — 2026-07-13 (lazy library navigation)
+## Latest device feedback workplan â€” 2026-07-13 (lazy library navigation)
 
 1. Implemented: replace Browse's Load more button with automatic page loading as the user approaches the end of the current grid.
 2. Implemented: add a right-side title-initial jump rail for fast movement through loaded library content.
 3. Superseded by the complete Room catalog workplan below; Browse no longer lazy-loads as the grid scrolls.
 
-## Latest device feedback workplan â€” 2026-07-13 (reader spacing)
+## Latest device feedback workplan Ã¢â‚¬â€ 2026-07-13 (reader spacing)
 
 1. Implemented: keep the existing overall Compact/Comfortable/Wide reader padding presets and add independent Top and Bottom controls using the same levels.
 2. Implemented: keep Comfortable as the default for all three controls and repaginate the current EPUB chapter whenever any padding value changes.
 
-## Latest device feedback workplan â€” 2026-07-13 (percentage padding and recovery)
+## Latest device feedback workplan Ã¢â‚¬â€ 2026-07-13 (percentage padding and recovery)
 
-1. Implemented: replace named reader padding presets with four independent percentage sliders for Top, Bottom, Left, and Right. Each slider ranges from 0–100%, where 100% maps to one quarter of the relevant viewport dimension. Fresh books now default Top to 30% and Bottom/Left/Right to 15%; saved per-book values remain unchanged.
+1. Implemented: replace named reader padding presets with four independent percentage sliders for Top, Bottom, Left, and Right. Each slider ranges from 0â€“100%, where 100% maps to one quarter of the relevant viewport dimension. Fresh books now default Top to 30% and Bottom/Left/Right to 15%; saved per-book values remain unchanged.
 2. Implemented: make edge changes independent and apply the new values when the slider is released, then repaginate the current EPUB chapter.
 3. Implemented, then refined: jump rails now show only #/letter buckets represented in the complete result; missing letters are no longer exposed as forward-fallback labels.
 4. Implemented: alphabetize collapsed library representatives by their series name and restore the nearest book/series scroll anchor when switching between collapsed and expanded views.
 5. Implemented: route authentication failures from background search, cover, catalog, detail, and paginated library loads through the login recovery screen instead of silently returning empty content. Physical-device expiry testing remains required.
 
-## Latest device feedback workplan — 2026-07-13 (reader, Home, and session follow-up)
+## Latest device feedback workplan â€” 2026-07-13 (reader, Home, and session follow-up)
 
 1. Implemented: apply Top, Bottom, Left, and Right reader padding changes continuously with a short debounce and an explicit page-strip height so slider changes visibly repaginate the chapter.
 2. Implemented, then superseded by later feedback: change the reader overlay's top-right action to Close and initially keep outside taps from dismissing it.
@@ -199,7 +206,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 5. Implemented: request `/api/v1/libraries/{id}/books/jump-buckets`, persist valid default-sort bucket indexes, and scroll directly to the server's absolute index. Only represented labels are shown; complete-cache local indexes cover filters, author/title sorts, collapsed series, Series, and older servers without inventing forward-fallback labels.
 6. Implemented: hide the rail while an initial full catalog is incomplete and for non-letter sort modes, preventing a rail tap from degenerating into end-of-list lazy loading.
 7. Added JVM coverage for pagination termination, duplicate handling, jump parsing/index mapping, and cache-first coordinator failure recovery. Added a compiled Android Room transaction test for changed rows and deletions.
-8. Physical-device validation remains required for first sync, instant reopen, pull refresh, additions/deletions/progress changes, offline browsing, and #/A–Z jumps across a large target-server library.
+8. Physical-device validation remains required for first sync, instant reopen, pull refresh, additions/deletions/progress changes, offline browsing, and #/Aâ€“Z jumps across a large target-server library.
 
 ### Latest device feedback workplan - 2026-07-13 (large-library thumbnails and details)
 
@@ -216,7 +223,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Redefine On Deck to show only the next unread book in a series after a completely read book; omit it when that next book is already in Currently reading. For example, after volumes 1 and 2 are read, show volume 3 until volume 3 becomes Currently reading.
 - [x] Add pull-down refresh to Home using the same refresh indicator and cache-preserving catalog reconciliation as Libraries.
 - [x] Fix missing thumbnails on Series cards by mapping BookOrbit's `coverBookIds` to representative book thumbnail URLs.
-- [x] Fetch every filtered Series page into a deduplicated in-memory catalog, remove Load more, and add #/A–Z or Z–A direct navigation for Name sorting.
+- [x] Fetch every filtered Series page into a deduplicated in-memory catalog, remove Load more, and add #/Aâ€“Z or Zâ€“A direct navigation for Name sorting.
 - [x] Show the number of books in collapsed Libraries series cards, matching the Series screen.
 - [x] Persist the reader background choice (light, dark, or sepia) across close/reopen and app sessions.
 
@@ -227,12 +234,12 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 - [x] Show battery and signal indicators in the reader's top-right area using Android's native status bar while keeping the bottom navigation bar immersive.
 - [x] Show book completion percentage, chapter page progress, and a measured whole-book page location in an always-visible EPUB footer.
 
-### Device validation follow-up and new work order — 2026-07-15
+### Device validation follow-up and new work order â€” 2026-07-15
 
 - [x] Validate explicit HTTP server setup and authenticated browsing/reading.
 - [x] Validate Mark as read/unread from supported book-card menus.
 - [x] Validate Android/BookOrbit progress synchronization in both directions.
-- [x] Validate large-library browsing, fast #/A–Z jumps, and airplane-mode behavior; undownloaded books correctly require a connection for full details.
+- [x] Validate large-library browsing, fast #/Aâ€“Z jumps, and airplane-mode behavior; undownloaded books correctly require a connection for full details.
 - [x] Validate session-expiry recovery, Series navigation, and Series thumbnails.
 - [x] Add the book context menu to global search results for both long-press and three-dot actions.
 - [x] Keep global search results as list rows rather than converting them to poster cards.
@@ -250,7 +257,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 The book-detail follow-up includes a Compose instrumentation regression for the action area, Genre/Tag content, cover-viewer tap dismissal, and Series navigation. `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass; physical-device layout, horizontal swiping, and Android Back dismissal remain to be validated.
 
-### Latest device feedback work order — 2026-07-17
+### Latest device feedback work order â€” 2026-07-17
 
 - [x] Dismiss the full-screen cover viewer when any part of the screen is tapped; retain Android Back dismissal.
 - [x] Replace oversized book-detail action cards with compact controls: Read/Preview labels beside clear icons and an icon-only Download action.
@@ -266,11 +273,11 @@ The book-detail follow-up includes a Compose instrumentation regression for the 
 - [x] Revise detail actions so Read and Preview show text beside clear icons, while Download uses an unmistakable download symbol.
 - [x] Expose active per-file download progress, percentage/linear or indeterminate state, cancel guidance, and retry failure status from book details.
 
-### Latest detail-action feedback — 2026-07-17
+### Latest detail-action feedback â€” 2026-07-17
 
 The full-screen cover viewer, long-title expansion, series-index presentation, revised action labels/icons, and download status presentation are implemented. Multi-select header overlap and stale-selection pruning are fixed. Genre chips navigate to fully paginated server-filtered Books or Series results and are target-server validated; tags remain informational. Interrupted and large downloads are target-device validated; direct OIDC/SSO remains deferred.
 
-### Target-device follow-up work order — 2026-07-17
+### Target-device follow-up work order â€” 2026-07-17
 
 - [x] Confirm Read/Preview labels, live download progress, long-title expansion, series-index layout, and multi-selection behavior.
 - [x] Add labels beside Download and Delete local, retaining their clear icons and compact layout.
@@ -314,14 +321,14 @@ Implement next, in order:
 16. [x] Add a profile Achievements destination backed by the official authenticated `GET /api/v1/achievements` contract. Show an overall earned/available summary and adaptive cards split into Unlocked then Locked. Earned cards show award date; locked cards show current/threshold progress only when both values exist; server-censored secret fields remain preserved. Treat HTTP 404 as an older-server unsupported state and other failures as retryable. The functional flow works on the target server.
 17. [x] Prevent visible Library Browse and Series catalog jump rails from overlaying trailing grid cards. Both grids now reserve 32 dp trailing content padding only while the shared 20 dp rail is visible, accounting for the 20 dp rail, 4 dp outer edge, and 8 dp card-to-rail separation; without a rail they retain 16 dp full-width padding. Target-device spacing is validated; additional responsive layouts remain pending.
 18. [x] Make Change server a silent no-op when the submitted URL normalizes to the current URL: close the editor without a warning or state change.
-19. [x] Replace missing-letter forward fallback with a full stable #/A–Z rail whenever Library or Series navigation is eligible. Ascending uses #/A–Z and descending uses Z–A/#; only exact represented targets are clickable, while absent labels are disabled and unavailable.
+19. [x] Replace missing-letter forward fallback with a full stable #/Aâ€“Z rail whenever Library or Series navigation is eligible. Ascending uses #/Aâ€“Z and descending uses Zâ€“A/#; only exact represented targets are clickable, while absent labels are disabled and unavailable.
 20. [x] Raise the fresh EPUB Top margin default to 30% while keeping Bottom/Left/Right at 15%; preserve every saved per-book margin value unchanged.
 21. [x] Restyle Achievements as Library-like adaptive poster tiles with server-driven symbols. The implementation works on the target device but the tiles are too large for favicon-like symbols and are superseded by the compact information-card follow-up below.
 22. [x] Restyle series Previous/Next as transparent borderless 46 dp controls matching detail actions and retain the first complete series load so adjacent navigation does not reload it.
 23. [x] Remove the haptic-feedback setting and every explicit app-haptic path by user direction.
 24. [x] Fix indefinitely stuck non-audio progress events caused by stale/deleted file IDs. On progress POST 404, load the current book, parse its primary file, and retry once with a changed replacement file ID before patching status. If the book/current file/remapped file is still 404 or the ID is unchanged, classify the event INVALID and acknowledge it so the queue drains instead of retrying forever.
 
-### Latest target-device feedback work order — 2026-07-18
+### Latest target-device feedback work order â€” 2026-07-18
 
 Target-device validation now passes for stale progress queue draining; Download/Delete local reconciliation; offline Local-book thumbnails; Options navigation from book detail; server-wide Home and Currently Reading aggregation; prompt reader close; the current-chapter slider; series Previous/Next; Change server; jump-rail spacing; theme/system-bar contrast; background network policy; interrupted and large downloads; and online/local CBZ and CBR reading.
 
@@ -331,7 +338,7 @@ Pending follow-up:
 2. [x] Replace the horizontally scrolling book-detail action `LazyRow` with a wrapping `FlowRow`, keeping Download/Update/Cancel/Delete labels and replacing More with a directly labeled live Mark as read or Mark as unread tile.
 3. [x] Restore embedded EPUB resources through `WebViewAssetLoader` at `appassets.androidplatform.net`. Generate safe nested/encoded base URLs from chapter paths, use one extracted EPUB root for the visible reader and hidden page measurer, and disable broad WebView file/content access.
 4. [x] Fix remote nonlocal EPUB/PDF preparation by downloading an authenticated temporary reader copy. Remove the incorrect CBZ-signature gate that prevented EPUB Preview even after a successful relogin.
-5. [x] Restore the full #/A–Z Library and Series jump rail while retaining sort/catalog hiding rules and the existing grid gutter. Missing labels use 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action; descending order is Z–A/#.
+5. [x] Restore the full #/Aâ€“Z Library and Series jump rail while retaining sort/catalog hiding rules and the existing grid gutter. Missing labels use 38%-alpha `onSurfaceVariant`, disabled semantics, unavailable content descriptions, and no click action; descending order is Zâ€“A/#.
 6. [x] Add a Local books shelf at the bottom of top-level Home from server-wide `homeBooks` and at the bottom of Library Recommended from selected-library books. `HomeFeed` derives a deterministic deduplicated alphabetical preview capped at 12, reuses `ShelfBookCard` actions/covers, and routes See all to global Local books or a selected-library-scoped Local books destination/title. More > Local books remains global.
 
 ### Reader controls work order - 2026-07-19
@@ -346,7 +353,7 @@ Execute the current work in this order:
 
 1. Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm retained controls/footer/system behavior, exact normal locator resume/progress, Preview isolation, cached reuse after the first connected CBR/CB7 preparation, and clear offline failure for downloaded CBR/CB7. Spot-check unchanged EPUB, PDF, and audio paths. Do not overstate comic validation until this physical pass succeeds.
 2. Completed in version 0.2.4: use one fixed 46 dp-high, non-wrapping, non-scrolling row. Read/Preview are labeled. Nonlocal books always keep an inline 46 dp Download/Retry/Cancel slot, disabled but present when unavailable/offline. Local books have no inline transfer; Delete and eligible Update/Cancel update live in More. Mark as read/unread uses current typography/font-scale measurement and moves to More unless the full row fits. More appears whenever anything is hidden. At extreme widths only Read/Preview compact through weights. Physical S24 validation remains pending.
-3. Completed in version 0.2.5: show a compact primary-colored `Reading · n%` or `Read · n%` line directly above actions. Use finite canonical progress clamped to 0–100 with at most two decimals; opened 0% is valid, unread-reset 0% is absent, and unknown percentage renders status-only. Keep identity metadata free of duplicate reading status and prefer canonical BrowserState over stale detail cache so Mark as unread removes the line immediately. Physical S24 validation remains pending.
+3. Completed in version 0.2.5: show a compact primary-colored `Reading Â· n%` or `Read Â· n%` line directly above actions. Use finite canonical progress clamped to 0â€“100 with at most two decimals; opened 0% is valid, unread-reset 0% is absent, and unknown percentage renders status-only. Keep identity metadata free of duplicate reading status and prefer canonical BrowserState over stale detail cache so Mark as unread removes the line immediately. Physical S24 validation remains pending.
 4. Completed in version 0.2.7: after navigator readiness, every EPUB/comic Read and Preview entry shows an above-all-UI tutorial. Three equal full-height thirds are Previous RGB(255,114,118), Menu RGB(0,0,0), and Next RGB(144,238,144), each alpha 0.5. The current exact 3,000 ms timeout starts on first pre-draw; every region consumes taps and dismisses immediately.
 5. Completed July 20: move the shared rail to the right and approximately 75% height; make its primary unit Page; add EPUB chapter arrows plus the retained outer Chapters picker; remove duplicate cog position controls; keep chrome below status insets; remove its visible Back action, place labeled Exit/X leftmost, retain surface/scrim dismissal; and pin book-detail More to the trailing edge. The current gate passes 244 JVM tests across 41 suites, lint, debug APK assembly, and Android-test APK assembly.
 6. Run target-device, accessibility, large-text, responsive, orientation, theme, timing, resume/sync, Preview-isolation, and offline checks, then resume CB7, representative PDF/audiobook, compact Achievement, series-neighbor, jump-rail, and partial-refresh edge validation.
@@ -376,9 +383,9 @@ Target-device feedback confirms the original reader replacement race is resolved
 
 1. [x] Baseline Readium on the target device: EPUB and CBZ work directly; connected CBR works through BookOrbit page extraction followed by cached-CBZ normalization. The local `sample/86 Volume 01/` fixture supplies a 489,114,453-byte M4B and companion metadata with 17 chapter ranges for the audio migration and validation pass.
 2. [x] Audit Readium parser/navigator capability and encode it in `ReadiumPublicationRoute`: EPUB/KEPUB use direct EPUB, PDF uses direct PDF, supported audio uses direct audio, CBZ uses direct image publication, CBR/CB7 normalize to cached CBZ, and MOBI/AZW/AZW3/FB2 use `UNSUPPORTED_EBOOK`. Unsupported ebooks map to `MediaKind.UNKNOWN` and show `This file format is not supported.` instead of silently entering an invalid EPUB reader. Focused repository-helper and download-update tests pass; conversion is deferred outside current product scope.
-3. [x] Parse exact BookOrbit `coverAspectRatio` values (`2/3` and `1/1`) with portrait fallback and propagate the owning library's aspect through Library/Book summaries, mixed search/author/series/cache/local enrichment, Browser/active-reader/detail persistence, and Room catalog v2's 1→2 migration with `2/3` default. Shared book/fullscreen and compact-audio covers use Crop with true 2:3 or 1:1 geometry and no artificial vertical padding. Poster/shelf cards use a portrait-height cover slot with the actual cover at `BottomCenter`, aligning cover bottoms and labels while attaching More to the image. Focused parsing, ownership, persistence, Room, and `BookCoverLayoutTest` coverage plus the 265-test/46-suite full gate pass; physical mixed-library alignment validation remains pending.
+3. [x] Parse exact BookOrbit `coverAspectRatio` values (`2/3` and `1/1`) with portrait fallback and propagate the owning library's aspect through Library/Book summaries, mixed search/author/series/cache/local enrichment, Browser/active-reader/detail persistence, and Room catalog v2's 1â†’2 migration with `2/3` default. Shared book/fullscreen and compact-audio covers use Crop with true 2:3 or 1:1 geometry and no artificial vertical padding. Poster/shelf cards use a portrait-height cover slot with the actual cover at `BottomCenter`, aligning cover bottoms and labels while attaching More to the image. Focused parsing, ownership, persistence, Room, and `BookCoverLayoutTest` coverage plus the 265-test/46-suite full gate pass; physical mixed-library alignment validation remains pending.
 4. [x] Establish persistent audiobook playback with Readium 3.0.2's media `AudioNavigator` and ExoPlayer adapter hosted by a foreground Media3 `MediaSessionService`. The application controller samples progress every 1.5 seconds independently of screen/background ownership; Readium handles audio focus/noisy output, Preview is isolated, explicit Close publishes final normal progress and stops the service, and Android 13 notification permission is requested on first playback.
-5. [x] Add only an app-global compact player above the browser bottom navigation, also visible in separate Readium EPUB/comic activities. It exposes tappable cover-to-detail, title/author, elapsed/remaining seek slider, Replay 10, play/pause, Forward 30, BookOrbit `audioMetadata` chapters, 0.75/1/1.25/1.5/2× speed, and Close; audiobook detail says Play. Metadata loads before preparation and persists through active-reader/detail caches. Authenticated online Preview uses a temporary audio copy and remains progress-isolated; `CookieManager` clearing is main-thread confined. No expanded/fullscreen player exists.
+5. [x] Add only an app-global compact player above the browser bottom navigation, also visible in separate Readium EPUB/comic activities. It exposes tappable cover-to-detail, title/author, elapsed/remaining seek slider, Replay 10, play/pause, Forward 30, BookOrbit `audioMetadata` chapters, 0.75/1/1.25/1.5/2Ã— speed, and Close; audiobook detail says Play. Metadata loads before preparation and persists through active-reader/detail caches. Authenticated online Preview uses a temporary audio copy and remains progress-isolated; `CookieManager` clearing is main-thread confined. No expanded/fullscreen player exists.
    - [x] Correct the July 21 black-screen/perpetual-Preparing regression: chapter enrichment retains the tapped book's `fileId`, format, and `localPath` and copies only chapter metadata. A versioned, format-aware reader cache now stages, verifies, and atomically promotes complete readable audio so interrupted Preview output cannot be reused. Playback binding explicitly auto-creates/fails, preparation times out after 30 seconds, and close cleanup after 5 seconds.
    - [x] Target-device feedback confirms the hardened audiobook opening/playback flow works well.
    - [x] Make the complete separate-activity EPUB/comic viewport end above the measured compact player and expand on Close. Protect Browser/detail bottom content when regular bottom navigation is absent and non-Browser overlays with Android navigation-bar insets. Focused connected coverage validates a 240 px reserve and restoration.
