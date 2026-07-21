@@ -462,6 +462,18 @@ Execute in this dependency order:
 7. [x] Migrate PDF to Readium 3.0.2 with `readium-adapter-pdfium`, `PdfiumDocumentFactory`/`PublicationOpener`, and `PdfNavigatorFragment`/`PdfiumEngineProvider`; enable Jetifier for the adapter's legacy Pdfium transitive dependency. Route Read/Preview through `ReadiumPdfReaderActivity`, preserve exact normal locator/progress and Preview page-1 isolation, retain shared page chrome/tutorial/orientation/keep-awake/system bars/audio overlay, fail invalid PDFs explicitly, and remove the legacy Compose `PdfRenderer` path. Remove routed legacy EPUB/comic fallbacks: EPUB always uses Readium, and comic sources that cannot open directly or normalize to CBZ show conversion/reconnect guidance. Two JVM routing tests pass, and the connected generated three-page test passes on Medium_Phone AVD API 17 with `Profile.PDF` and exactly three positions. The current full gate passes 265 JVM tests across 46 suites plus lint and both APK assemblies; physical target-device PDF UI validation remains pending.
 8. [x] Defer MOBI/AZW/AZW3/FB2 conversion by explicit product choice. Keep them `UNSUPPORTED_EBOOK`/`MediaKind.UNKNOWN` with the visible unsupported-format message; treat conversion only as optional future scope if product direction changes.
 9. [ ] Run the physical target-device matrix covering PDF controls/resume/Preview and every supported format, portrait/square libraries, mixed-library screens, local/streamed audio, Back and cross-app backgrounding, notification/lock-screen/headset controls, compact-player persistence on every destination, interruptions/audio focus, offline transitions, process/service recreation, accessibility, large text, themes, and explicit player close.
+
+### Reader and library feedback work order - 2026-07-21
+
+Execute in this order after confirming any required UI choices:
+
+1. [ ] Fix portrait orientation lock when Lagrange is opened or resumed from a landscape-oriented app; portrait lock must not inherit the previous app's landscape orientation.
+2. [ ] Keep the Library Browse statistics and filter/collapse action row fixed while the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture.
+3. [ ] Add a multi-select `Delete local` action to the Local books screen, including confirmation, partial-failure handling, state reconciliation, and focused automated/device coverage.
+4. [ ] Add the shared #/A-Z jump rail to Authors, preserving the established availability, sorting, disabled-label accessibility, and responsive-gutter behavior.
+5. [ ] Give Libraries, Series, Authors, and Local books distinct destination icons after the user selects an icon direction.
+6. [ ] Add the requested format filter after the user confirms its destination; the original request ended at add format filter to the.
+
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards

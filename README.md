@@ -16,6 +16,10 @@ An offline-first Android reader for BookOrbit.
 
 Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It started with a simple personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
+Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. BookOrbit supplies the authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
+
+Although `1.0.0` is the first release milestone, this is not a one-day prototype. The app has been developed iteratively through documented engineering work orders, automated test suites, emulator coverage, and repeated target-device validation of its online and offline flows.
+
 This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
 ## Screenshots

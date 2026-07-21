@@ -65,10 +65,15 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 
 ### 5. Reader and library follow-ups
 
+- Fix portrait orientation lock after returning from a landscape-oriented app; Lagrange must enter and remain in portrait instead of inheriting the previous app's landscape orientation.
+- Keep the Library Browse statistics and filter/collapse action row fixed while the book catalog scrolls or handles a downward swipe/pull-to-refresh gesture.
+- Add a multi-select `Delete local` action to the Local books screen.
+- Add the shared #/A-Z jump rail to the Authors screen, following the established availability, sorting, accessibility, and responsive-gutter behavior.
+- Give Libraries, Series, Authors, and Local books distinct destination icons. Confirm the icon set and visual direction with the user before implementation.
+- Add the requested format filter after the user confirms which screen or view should receive it; the original request ended at add format filter to the.
 - Add more reading-direction options, including right-to-left and continuous scrolling with configurable space between pages for PDF and CBZ/CBR.
 - Allow a book to be moved to read status from Preview.
 - Add support for more book formats.
-- Add bulk deletion of local books.
 
 ### 5. Release readiness
 
