@@ -89,7 +89,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Build stream URL from `fileId`
 - [x] Open audio stream with ExoPlayer
 - [x] Open PDF locally with a basic renderer
-- [x] Add generic fallback WebView/file path for unsupported formats
+- [x] Add generic fallback WebView/file path for unsupported formats (later superseded and removed from routing in favor of Readium or explicit unsupported/conversion guidance)
 - [ ] Verify streaming endpoint behavior with authenticated session
 - [ ] Confirm byte-range support and resume behavior for audio
 - [x] Replace generic ebook fallback with real EPUB reader
@@ -104,7 +104,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
-- [x] Route every EPUB launch through `ReadiumEpubReaderActivity` and every locally readable comic through `ReadiumComicReaderActivity` on Readium 3.0.2; leave PDF and audio unchanged
+- [x] Route every EPUB launch through `ReadiumEpubReaderActivity` and every locally readable comic through `ReadiumComicReaderActivity` on Readium 3.0.2; PDF and audio were unchanged at this checkpoint and migrated in later work-order steps
 - [x] Build and reuse a cached CBZ from authenticated BookOrbit pages for connected CBR/CB7 before opening Readium; keep offline downloaded CBR/CB7 explicitly server-required
 
 ## 7. Download For Offline Use
@@ -391,7 +391,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 ### Reader controls work order - 2026-07-19
 
-Implement and validate in this dependency order. Version 0.2.7 includes the July 20 reader/detail feedback follow-up. The current gate passes 262 JVM tests across 44 suites plus lint and both APK assemblies. The reported reader-ownership race, Exit, and tutorial timing/dismissal are target-device validated; broader format/responsive checks remain.
+Implement and validate in this dependency order. Version 0.2.7 includes the July 20 reader/detail feedback follow-up. The current gate passes 264 JVM tests across 45 suites plus lint and both APK assemblies. The reported reader-ownership race, Exit, and tutorial timing/dismissal are target-device validated; broader format/responsive checks remain.
 
 1. [ ] Install version 0.2.7 from `app/build/outputs/apk/debug/app-debug.apk` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, right page rail/footer, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
 2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. Samsung Galaxy S24 manual validation remains pending.
@@ -443,7 +443,7 @@ Execute in this order:
 Execute in this dependency order:
 
 1. [x] Record the current target-device baseline: EPUB and CBZ work directly through Readium, and connected CBR works after BookOrbit page extraction is normalized into a cached CBZ for Readium. The local `sample/86 Volume 01/` fixture contains a 489,114,453-byte M4B plus companion metadata with 17 chapter ranges.
-2. [x] Build the explicit `ReadiumPublicationRoute` capability/migration matrix: EPUB/KEPUB → direct EPUB, PDF → direct PDF target, supported audio → direct audio, CBZ → direct image publication, CBR/CB7 → normalize to cached CBZ, and MOBI/AZW/AZW3/FB2 → normalize to EPUB. The normalization-required ebook formats now remain `MediaKind.UNKNOWN` rather than being falsely treated as valid EPUB. Focused `BookOrbitRepositoryHelpersTest` and `DownloadUpdateTest` coverage passes. This completes classification only; PDF migration and ebook conversion remain in step 7.
+2. [x] Build the explicit `ReadiumPublicationRoute` capability/migration matrix: EPUB/KEPUB → direct EPUB, PDF → direct PDF, supported audio → direct audio, CBZ → direct image publication, CBR/CB7 → normalize to cached CBZ, and MOBI/AZW/AZW3/FB2 → normalize to EPUB. The normalization-required ebook formats remain `MediaKind.UNKNOWN` rather than being falsely treated as valid EPUB. Focused routing/update coverage passes; PDF execution is completed in step 7 while ebook conversion remains pending.
 3. [x] Implement the BookOrbit cover contract: `CoverAspectRatio` parses exact `2/3` and `1/1` with portrait fallback; `LibrarySummary` and `BookSummary` carry it; owning-library enrichment covers mixed search/author/series/cache/local results; BrowserSnapshotStore, ActiveReaderStore, and BookDetailCacheStore persist it; and Room catalog v2 migrates 1→2 with a non-null `2/3` default.
 4. [x] Render shared book/fullscreen covers and the compact audiobook cover with true 2:3 or 1:1 Crop geometry and no artificial square-cover top/bottom padding. Parsing/fallback, mixed enrichment, Series ownership, active/detail/browser persistence, and Room-column tests pass. The full gate passes 262 JVM tests across 44 suites with zero failures/errors/skips plus `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`; physical mixed-library square/portrait validation remains pending.
 5. [x] Establish the Readium audiobook playback foundation: Readium 3.0.2 media `AudioNavigator` with its ExoPlayer adapter, a Media3 foreground `MediaSessionService`, media-playback/notification permissions, an application-scoped controller, local M4B and other recognized audio opening, and an explicit task-removal survival policy. Focused format tests and compilation pass; device validation remains pending.
@@ -459,8 +459,9 @@ Execute in this dependency order:
    - [x] Prevent persisted normal-audio progress from reopening the transient Reader/Preparing destination during either local-only or authenticated bootstrap. Continue Browser startup and let the surviving playback service/controller provide the compact player.
    - [x] The focused `AppCoordinatorTest` case `bootstrap skips persisted audiobook reader and reopens browser for compact playback` fails without the guard and passes with it. The full gate now passes 262 JVM tests across 44 suites with zero failures/errors/skips, `lintDebug`, debug APK assembly, and Android-test APK assembly.
    - [ ] On the target device, play audio, leave or close the app without closing the player, and reopen it. Confirm Browser appears with the compact player and the Preparing screen never appears. Also validate the revised layout and authenticated Preview, then notification/lock-screen/headset/Bluetooth behavior and service/process recreation.
-7. [ ] Migrate remaining PDF, audiobook, comic, and ebook paths according to the capability matrix, removing superseded parallel readers only after format-specific progress, resume, Preview isolation, download/cache, and failure-state parity is proven.
-8. [ ] Run the full automated gate and a target-device matrix covering every supported format, portrait/square libraries, mixed-library screens, local/streamed audio, Back and cross-app backgrounding, notification/lock-screen/headset controls, compact-player persistence on every destination, interruptions/audio focus, offline transitions, process/service recreation, accessibility, large text, themes, and explicit player close.
+7. [x] Migrate PDF to Readium 3.0.2 with `readium-adapter-pdfium`, `PdfiumDocumentFactory`/`PublicationOpener`, and `PdfNavigatorFragment`/`PdfiumEngineProvider`; enable Jetifier for the adapter's legacy Pdfium transitive dependency. Route Read/Preview through `ReadiumPdfReaderActivity`, preserve exact normal locator/progress and Preview page-1 isolation, retain shared page chrome/tutorial/orientation/keep-awake/system bars/audio overlay, fail invalid PDFs explicitly, and remove the legacy Compose `PdfRenderer` path. Remove routed legacy EPUB/comic fallbacks: EPUB always uses Readium, and comic sources that cannot open directly or normalize to CBZ show conversion/reconnect guidance. Two JVM routing tests pass and the generated three-page `Profile.PDF` Android test compiles. The full gate passes 264 JVM tests across 45 suites plus lint and both APK assemblies; connected generated-PDF execution and target-device PDF UI validation remain pending.
+8. [ ] Implement real EPUB normalization for MOBI/AZW/AZW3/FB2 before presenting those formats as supported; they must remain explicit `MediaKind.UNKNOWN`/normalization-required cases until conversion succeeds.
+9. [ ] Run the connected generated-PDF test and a target-device matrix covering every supported format, portrait/square libraries, mixed-library screens, local/streamed audio, Back and cross-app backgrounding, notification/lock-screen/headset controls, compact-player persistence on every destination, interruptions/audio focus, offline transitions, process/service recreation, accessibility, large text, themes, and explicit player close.
 - [ ] Checkpoint 1: agree on product direction and design-system tokens
 - [ ] Checkpoint 2: refine server setup, login, and shared app shell
 - [ ] Checkpoint 3: validate and refine Home shelves, search, drawer, library selection, and book cards
@@ -498,8 +499,8 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 UI/UX discussion and design-system work can start now:
 
 - The functional and JVM baseline is ready.
-- EPUB and comics now use Readium 3.0.2. Five focused connected tests pass; Samsung Galaxy S24 comic validation is the highest-priority next task.
-- Local/readable CBZ opens directly. Connected CBR/CB7 uses authenticated server pages to prepare a cached CBZ; downloaded CBR/CB7 remains unsupported offline because no local RAR/7z extraction is bundled. PDF and audio are unchanged.
+- EPUB, PDF, audio, and supported comics now use Readium 3.0.2. The generated PDF opening test is compiled but still needs connected execution; Samsung Galaxy S24 PDF/comic validation remains open.
+- Local/readable CBZ opens directly. Connected CBR/CB7 uses authenticated server pages to prepare a cached CBZ; downloaded CBR/CB7 remains unsupported offline because no local RAR/7z extraction is bundled. Unsupported comic sources show conversion/reconnect guidance rather than entering a legacy fallback reader.
 - The reader tutorial work order is implemented. Next: target-device, accessibility, responsive, theme, exact timing, resume, Preview-isolation, offline, edge-state, and remaining media validation.
 - Use [docs/ui-ux.md](./docs/ui-ux.md) for UI/UX checkpoints and [docs/testing.md](./docs/testing.md) for validation.
 

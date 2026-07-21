@@ -28,6 +28,10 @@
             android:name=".ReadiumComicReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.BookOrbit.Reader" />
+        <activity
+            android:name=".ReadiumPdfReaderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BookOrbit.Reader" />
 
         <service
             android:name=".ReadiumAudioPlaybackService"
