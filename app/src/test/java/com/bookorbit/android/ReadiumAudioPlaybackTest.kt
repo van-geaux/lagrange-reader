@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import androidx.media3.common.MimeTypes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -29,5 +30,16 @@ class ReadiumAudioPlaybackTest {
         assertNull(readiumAudioMediaType("book.cbz"))
         assertNull(readiumAudioMediaType("book.pdf"))
         assertNull(readiumAudioMediaType("book"))
+    }
+
+    @Test
+    fun remoteAudioExtensionsMapToMedia3MimeTypes() {
+        assertEquals(MimeTypes.AUDIO_MP4, media3AudioMimeType("book.m4b"))
+        assertEquals(MimeTypes.AUDIO_MP4, media3AudioMimeType("BOOK.M4A"))
+        assertEquals(MimeTypes.AUDIO_MPEG, media3AudioMimeType("book.mp3"))
+        assertEquals(MimeTypes.AUDIO_FLAC, media3AudioMimeType("book.flac"))
+        assertEquals(MimeTypes.AUDIO_OGG, media3AudioMimeType("book.ogg"))
+        assertEquals(MimeTypes.AUDIO_OPUS, media3AudioMimeType("book.opus"))
+        assertNull(media3AudioMimeType("book.epub"))
     }
 }

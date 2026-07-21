@@ -132,6 +132,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -139,13 +140,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
-import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import java.io.File
 import java.net.URI
 import java.util.Locale
 import java.util.zip.ZipFile
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun BookOrbitApp(
@@ -1016,7 +1015,7 @@ private fun AudioReader(
         val file = state.localFile?.takeIf { it.isFile }
         val streamUrl = state.streamUrl?.takeIf { it.isNotBlank() }
         if (audioController == null || (file == null && streamUrl == null)) {
-            val message = "Unable to prepare this audiobook for Readium playback."
+            val message = "Unable to prepare this audiobook for playback."
             errorMessage = message
             onFailure(state.book, message)
             return@LaunchedEffect
@@ -1071,12 +1070,25 @@ private fun AudioReader(
         ReaderMessage(requireNotNull(errorMessage))
     } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LoadingRow("Preparing audiobook with Readium…")
+            LoadingRow("Preparing audiobook…")
         }
     }
 }
 
-@OptIn(org.readium.r2.shared.ExperimentalReadiumApi::class)
+private data class AudioPlayerSnapshot(
+    val playWhenReady: Boolean,
+    val positionMs: Long,
+    val durationMs: Long?,
+    val speed: Float
+)
+
+private fun audioPlayerSnapshot(player: Player): AudioPlayerSnapshot = AudioPlayerSnapshot(
+    playWhenReady = player.playWhenReady,
+    positionMs = player.currentPosition.coerceAtLeast(0L),
+    durationMs = player.duration.takeIf { it > 0L },
+    speed = player.playbackParameters.speed
+)
+
 @Composable
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
@@ -1088,12 +1100,24 @@ internal fun ReadiumCompactAudioPlayer(
         controller.session().collect { value = it }
     }
     val current = session ?: return
-    val playback by current.navigator.playback.collectAsState()
-    val settings by current.navigator.settings.collectAsState()
-    val positionMs = audioPlaybackPositionMs(current.navigator)
-    val durationMs = current.navigator.readingOrder.duration
-        ?.inWholeMilliseconds
-        ?.takeIf { it > 0L }
+    val playback by produceState(audioPlayerSnapshot(current.player), current.player) {
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                value = audioPlayerSnapshot(player)
+            }
+        }
+        current.player.addListener(listener)
+        try {
+            while (isActive) {
+                value = audioPlayerSnapshot(current.player)
+                delay(500L)
+            }
+        } finally {
+            current.player.removeListener(listener)
+        }
+    }
+    val positionMs = playback.positionMs
+    val durationMs = playback.durationMs
     val scope = rememberCoroutineScope()
     var chapterMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var speedMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
@@ -1182,7 +1206,7 @@ internal fun ReadiumCompactAudioPlayer(
                             seekPositionMs = it
                         },
                         onValueChangeFinished = {
-                            seekAudioTo(current.navigator, seekPositionMs.toLong())
+                            current.player.seekTo(seekPositionMs.toLong())
                             isSeeking = false
                         },
                         valueRange = 0f..(durationMs ?: 1L).toFloat(),
@@ -1237,21 +1261,23 @@ internal fun ReadiumCompactAudioPlayer(
                                     },
                                     onClick = {
                                         chapterMenuExpanded = false
-                                        seekAudioTo(current.navigator, chapter.startMs)
+                                        current.player.seekTo(chapter.startMs)
                                     }
                                 )
                             }
                         }
                     }
                     IconButton(
-                        onClick = { current.navigator.skip((-10).seconds) },
+                        onClick = {
+                            current.player.seekTo((current.player.currentPosition - 10_000L).coerceAtLeast(0L))
+                        },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(Icons.Default.Replay10, contentDescription = "Skip back 10 seconds")
                     }
                     IconButton(
                         onClick = {
-                            if (playback.playWhenReady) current.navigator.pause() else current.navigator.play()
+                            if (playback.playWhenReady) current.player.pause() else current.player.play()
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1261,7 +1287,10 @@ internal fun ReadiumCompactAudioPlayer(
                         )
                     }
                     IconButton(
-                        onClick = { current.navigator.skip(30.seconds) },
+                        onClick = {
+                            val target = current.player.currentPosition + 30_000L
+                            current.player.seekTo(playback.durationMs?.let(target::coerceAtMost) ?: target)
+                        },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(Icons.Default.Forward30, contentDescription = "Skip forward 30 seconds")
@@ -1274,7 +1303,7 @@ internal fun ReadiumCompactAudioPlayer(
                                 .semantics { contentDescription = "Select playback speed" },
                             contentPadding = PaddingValues(horizontal = 6.dp)
                         ) {
-                            Text("${formatPlaybackSpeed(settings.speed)}×")
+                            Text("${formatPlaybackSpeed(playback.speed.toDouble())}×")
                         }
                         DropdownMenu(
                             expanded = speedMenuExpanded,
@@ -1285,7 +1314,7 @@ internal fun ReadiumCompactAudioPlayer(
                                     text = { Text("${formatPlaybackSpeed(speed)}×") },
                                     onClick = {
                                         speedMenuExpanded = false
-                                        current.navigator.submitPreferences(ExoPlayerPreferences(speed = speed))
+                                        current.player.setPlaybackSpeed(speed.toFloat())
                                     }
                                 )
                             }

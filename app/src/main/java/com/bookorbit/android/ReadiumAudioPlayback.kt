@@ -9,6 +9,13 @@ import android.content.ServiceConnection
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import java.io.File
@@ -24,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
@@ -41,6 +49,7 @@ import org.readium.r2.shared.util.http.HttpClient
 import org.readium.r2.shared.util.mediatype.MediaType
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
+import kotlin.coroutines.resume
 
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
@@ -53,6 +62,110 @@ internal fun audioPlaybackPositionMs(navigator: BookOrbitAudioNavigator): Long {
         .mapNotNull { it.duration }
         .sumOf { it.inWholeMilliseconds }
     return preceding + playback.offset.inWholeMilliseconds
+}
+
+@UnstableApi
+internal suspend fun openDirectMedia3Audio(
+    application: Application,
+    book: BookSummary,
+    streamUrl: String?,
+    initialPositionMs: Long,
+    headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
+    recoverAuthentication: suspend () -> Boolean
+): ReadiumAudioOpenResult {
+    val url = streamUrl?.takeIf { it.isNotBlank() }
+        ?: return ReadiumAudioOpenResult.Error("The audiobook has no valid BookOrbit stream.")
+    val mimeType = book.format?.let(::media3AudioMimeType)
+        ?: return ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
+    return prepareDirectMedia3Audio(
+        application = application,
+        book = book,
+        streamUrl = url,
+        mimeType = mimeType,
+        initialPositionMs = initialPositionMs,
+        headersProvider = headersProvider,
+        recoverAuthentication = recoverAuthentication
+    )
+}
+
+@UnstableApi
+private suspend fun prepareDirectMedia3Audio(
+    application: Application,
+    book: BookSummary,
+    streamUrl: String,
+    mimeType: String,
+    initialPositionMs: Long,
+    headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
+    recoverAuthentication: suspend () -> Boolean
+): ReadiumAudioOpenResult = withContext(Dispatchers.Main.immediate) {
+    val player = ExoPlayer.Builder(application)
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(application).setDataSourceFactory(
+                AuthenticatedMedia3HttpDataSourceFactory(
+                    headersProvider = headersProvider,
+                    recoverAuthentication = recoverAuthentication
+                )
+            )
+        )
+        .build()
+    val mediaItem = MediaItem.Builder()
+        .setUri(streamUrl)
+        .setMimeType(mimeType)
+        .setMediaMetadata(
+            androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(book.title)
+                .setArtist(book.author)
+                .build()
+        )
+        .build()
+    player.setMediaItem(mediaItem)
+    player.seekTo(initialPositionMs.coerceAtLeast(0L))
+    player.prepare()
+
+    try {
+        val playbackError = awaitMedia3Ready(player)
+        if (playbackError == null) {
+            ReadiumAudioOpenResult.Opened(AudioPlaybackEngine.DirectMedia3(player))
+        } else {
+            player.release()
+            ReadiumAudioOpenResult.Error(
+                "Media3 could not open the audiobook stream from BookOrbit " +
+                    "(${playbackError.errorCodeName})."
+            )
+        }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        player.release()
+        throw cancelled
+    } catch (error: Throwable) {
+        player.release()
+        throw error
+    }
+}
+
+private suspend fun awaitMedia3Ready(player: Player): PlaybackException? {
+    player.playerError?.let { return it }
+    if (player.playbackState == Player.STATE_READY) return null
+    return suspendCancellableCoroutine { continuation ->
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY && continuation.isActive) {
+                    player.removeListener(this)
+                    continuation.resume(null)
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (continuation.isActive) {
+                    player.removeListener(this)
+                    continuation.resume(error)
+                }
+            }
+        }
+        player.addListener(listener)
+        continuation.invokeOnCancellation {
+            player.removeListener(listener)
+        }
+    }
 }
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -107,11 +220,52 @@ internal fun readiumAudioMediaType(filenameOrFormat: String): MediaType? {
     }
 }
 
+internal fun media3AudioMimeType(filenameOrFormat: String): String? {
+    val normalized = filenameOrFormat.trim().lowercase()
+    val extension = normalized.substringAfterLast('.').substringAfterLast('/')
+    return when (extension) {
+        "m4a", "m4b", "mp4", "x-m4b" -> MimeTypes.AUDIO_MP4
+        "mp3", "mpeg" -> MimeTypes.AUDIO_MPEG
+        "aac" -> MimeTypes.AUDIO_AAC
+        "aif", "aiff" -> "audio/aiff"
+        "flac" -> MimeTypes.AUDIO_FLAC
+        "ogg", "oga" -> MimeTypes.AUDIO_OGG
+        "opus" -> MimeTypes.AUDIO_OPUS
+        "wav" -> MimeTypes.AUDIO_WAV
+        "webm" -> MimeTypes.AUDIO_WEBM
+        else -> null
+    }
+}
+
+@OptIn(ExperimentalReadiumApi::class)
+internal sealed interface AudioPlaybackEngine {
+    val player: Player
+    fun close()
+
+    data class Readium(
+        val publication: Publication,
+        val navigator: BookOrbitAudioNavigator,
+        override val player: Player
+    ) : AudioPlaybackEngine {
+        override fun close() {
+            navigator.close()
+            publication.close()
+        }
+    }
+
+    data class DirectMedia3(
+        override val player: ExoPlayer
+    ) : AudioPlaybackEngine {
+        override fun close() {
+            player.release()
+        }
+    }
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 internal sealed interface ReadiumAudioOpenResult {
     data class Opened(
-        val publication: Publication,
-        val navigator: BookOrbitAudioNavigator
+        val engine: AudioPlaybackEngine
     ) : ReadiumAudioOpenResult
 
     data class Error(val message: String) : ReadiumAudioOpenResult
@@ -122,51 +276,23 @@ internal suspend fun openReadiumAudio(
     application: Application,
     book: BookSummary,
     file: File? = null,
-    streamUrl: String? = null,
     initialPositionMs: Long,
     httpClient: HttpClient = DefaultHttpClient()
 ): ReadiumAudioOpenResult = withContext(Dispatchers.IO) {
     val localFile = file?.takeIf { it.isFile && it.length() > 0L }
-    val remoteUrl = if (localFile == null) {
-        streamUrl?.takeIf { it.isNotBlank() }?.let { AbsoluteUrl(it) }
-    } else {
-        null
-    }
-    if (localFile == null && remoteUrl == null) {
+    if (localFile == null) {
         return@withContext ReadiumAudioOpenResult.Error(
-            "The audiobook is unavailable locally and has no valid server stream."
+            "The downloaded audiobook file is unavailable."
         )
     }
     val mediaType = book.format?.let(::readiumAudioMediaType)
-        ?: localFile?.name?.let(::readiumAudioMediaType)
+        ?: localFile.name.let(::readiumAudioMediaType)
         ?: return@withContext ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
-    if (remoteUrl != null) {
-        when (probeRemoteByteRangeSupport(remoteUrl, httpClient)) {
-            RemoteByteRangeSupport.SUPPORTED -> Unit
-            RemoteByteRangeSupport.UNSUPPORTED ->
-                return@withContext ReadiumAudioOpenResult.Error(
-                    "This server does not support byte-range streaming for this audiobook. " +
-                        "Download it explicitly for local playback."
-                )
-            RemoteByteRangeSupport.UNAVAILABLE ->
-                return@withContext ReadiumAudioOpenResult.Error(
-                    "Lagrange could not verify byte-range streaming for this audiobook. " +
-                        "Check the connection or download it explicitly."
-                )
-        }
-    }
     val assetRetriever = AssetRetriever(application.contentResolver, httpClient)
-    val asset = if (localFile != null) {
-        assetRetriever.retrieve(localFile, mediaType).getOrNull()
-    } else {
-        assetRetriever.retrieve(requireNotNull(remoteUrl), mediaType).getOrNull()
-    } ?: return@withContext ReadiumAudioOpenResult.Error(
-        if (localFile != null) {
+    val asset = assetRetriever.retrieve(localFile, mediaType).getOrNull()
+        ?: return@withContext ReadiumAudioOpenResult.Error(
             "Readium could not read this audiobook file."
-        } else {
-            "Readium could not open the audiobook stream from the server."
-        }
-    )
+        )
     val parser = DefaultPublicationParser(
         context = application,
         httpClient = httpClient,
@@ -209,7 +335,13 @@ internal suspend fun openReadiumAudio(
                 publication.close()
                 return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
             }
-        ReadiumAudioOpenResult.Opened(publication, navigator)
+        ReadiumAudioOpenResult.Opened(
+            AudioPlaybackEngine.Readium(
+                publication = publication,
+                navigator = navigator,
+                player = navigator.asMedia3Player()
+            )
+        )
     }
 }
 
@@ -219,10 +351,12 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
     internal data class Session(
         val book: BookSummary,
         val launchMode: ReaderLaunchMode,
-        val publication: Publication,
-        val navigator: BookOrbitAudioNavigator,
+        val engine: AudioPlaybackEngine,
         val mediaSession: MediaSession
-    )
+    ) {
+        val player: Player
+            get() = engine.player
+    }
 
     internal inner class Binder : android.os.Binder() {
         private val mutableSession = MutableStateFlow<Session?>(null)
@@ -231,23 +365,21 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         fun openSession(
             book: BookSummary,
             launchMode: ReaderLaunchMode,
-            publication: Publication,
-            navigator: BookOrbitAudioNavigator
+            engine: AudioPlaybackEngine
         ) {
             closeSession()
-            val mediaSession = MediaSession.Builder(applicationContext, navigator.asMedia3Player())
+            val mediaSession = MediaSession.Builder(applicationContext, engine.player)
                 .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
                 .setSessionActivity(createSessionActivityIntent())
                 .build()
             addSession(mediaSession)
-            mutableSession.value = Session(book, launchMode, publication, navigator, mediaSession)
+            mutableSession.value = Session(book, launchMode, engine, mediaSession)
         }
 
         fun closeSession() {
             mutableSession.value?.let { current ->
                 current.mediaSession.release()
-                current.navigator.close()
-                current.publication.close()
+                current.engine.close()
                 mutableSession.value = null
             }
         }
@@ -340,6 +472,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 }
 
 @OptIn(ExperimentalReadiumApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
 class ReadiumAudioPlaybackController internal constructor(
     private val application: Application
 ) {
@@ -407,35 +540,35 @@ class ReadiumAudioPlaybackController internal constructor(
                 current.launchMode == launchMode
         }?.let { current ->
             withContext(Dispatchers.Main.immediate) {
-                if (playWhenReady) current.navigator.play()
+                if (playWhenReady) current.player.play()
                 startProgressUpdates(current)
             }
-            return ReadiumAudioOpenResult.Opened(current.publication, current.navigator)
+            return ReadiumAudioOpenResult.Opened(current.engine)
         }
-        val httpClient: HttpClient = if (file?.isFile == true) {
-            DefaultHttpClient()
+        val opened = if (file?.isFile == true) {
+            openReadiumAudio(
+                application = application,
+                book = book,
+                file = file,
+                initialPositionMs = initialPositionMs,
+                httpClient = DefaultHttpClient()
+            )
         } else {
-            AuthenticatedReadiumHttpClient(
-                delegate = DefaultHttpClient(),
+            openDirectMedia3Audio(
+                application = application,
+                book = book,
+                streamUrl = streamUrl,
+                initialPositionMs = initialPositionMs,
                 headersProvider = streamingHeadersProvider,
                 recoverAuthentication = streamingAuthenticationRecovery
             )
         }
-        return when (
-            val opened = openReadiumAudio(
-                application = application,
-                book = book,
-                file = file,
-                streamUrl = streamUrl,
-                initialPositionMs = initialPositionMs,
-                httpClient = httpClient
-            )
-        ) {
+        return when (opened) {
             is ReadiumAudioOpenResult.Error -> opened
             is ReadiumAudioOpenResult.Opened -> {
                 withContext(Dispatchers.Main.immediate) {
-                    serviceBinder.openSession(book, launchMode, opened.publication, opened.navigator)
-                    if (playWhenReady) opened.navigator.play()
+                    serviceBinder.openSession(book, launchMode, opened.engine)
+                    if (playWhenReady) opened.engine.player.play()
                     startProgressUpdates(requireNotNull(serviceBinder.session.value))
                 }
                 opened
@@ -466,8 +599,14 @@ class ReadiumAudioPlaybackController internal constructor(
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
         progressListener?.invoke(
             session.book,
-            audioPlaybackPositionMs(session.navigator),
-            audioPlaybackPercent(session.navigator),
+            session.player.currentPosition.coerceAtLeast(0L),
+            session.player.duration
+                .takeIf { it > 0L }
+                ?.let { duration ->
+                    ((session.player.currentPosition.toDouble() / duration.toDouble()) * 100.0)
+                        .coerceIn(0.0, 100.0)
+                        .toFloat()
+                },
             session.launchMode
         )
     }

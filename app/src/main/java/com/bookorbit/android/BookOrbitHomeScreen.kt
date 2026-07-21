@@ -4941,8 +4941,24 @@ private fun LoadingFeedRow(text: String) {
 
 internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
     return books
-        .filter { it.readStatus == BookReadStatus.ON_HOLD }
-        .sortedWith(readingStateShelfComparator())
+        .filter { !it.seriesName.isNullOrBlank() }
+        .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
+        .values
+        .mapNotNull { seriesBooks ->
+            val ordered = seriesBooks.sortedWith(
+                compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                    .thenBy { it.title.lowercase() }
+                    .thenBy { it.id }
+            )
+            if (ordered.none { it.readStatus == BookReadStatus.READ }) {
+                return@mapNotNull null
+            }
+            ordered
+                .firstOrNull { it.readStatus != BookReadStatus.READ }
+                ?.takeUnless {
+                    it.readStatus in setOf(BookReadStatus.READING, BookReadStatus.REREADING)
+                }
+        }
         .take(12)
 }
 

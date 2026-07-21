@@ -29,14 +29,29 @@ class HomeShelfTest {
     }
 
     @Test
-    fun `on deck includes only on hold books including standalone titles`() {
-        val older = seriesBook("book-1", index = 1.0, status = BookReadStatus.ON_HOLD)
-            .copy(lastReadAtMillis = 100L)
-        val newerStandalone = seriesBook("book-2", index = 2.0, status = BookReadStatus.ON_HOLD)
-            .copy(seriesId = null, seriesName = null, lastReadAtMillis = 200L)
-        val unread = seriesBook("book-3", index = 3.0, status = BookReadStatus.UNREAD)
+    fun `on deck selects the next unread book after a series has been read`() {
+        val read = seriesBook("book-1", index = 1.0, status = BookReadStatus.READ, isRead = true)
+        val next = seriesBook("book-2", index = 2.0, status = BookReadStatus.WANT_TO_READ)
+        val later = seriesBook("book-3", index = 3.0, status = BookReadStatus.UNREAD)
 
-        assertEquals(listOf(newerStandalone, older), onDeckBooks(listOf(unread, older, newerStandalone)))
+        assertEquals(listOf(next), onDeckBooks(listOf(later, next, read)))
+    }
+
+    @Test
+    fun `on deck omits unstarted standalone and currently reading books`() {
+        val unstartedFirst = seriesBook("unstarted-1", index = 1.0, status = BookReadStatus.UNREAD)
+        val unstartedSecond = seriesBook("unstarted-2", index = 2.0, status = BookReadStatus.ON_HOLD)
+        val read = seriesBook("started-1", index = 1.0, status = BookReadStatus.READ, isRead = true)
+            .copy(seriesId = "series-2", seriesName = "Started Saga")
+        val reading = seriesBook("started-2", index = 2.0, status = BookReadStatus.READING)
+            .copy(seriesId = "series-2", seriesName = "Started Saga")
+        val standalone = seriesBook("standalone", index = 1.0, status = BookReadStatus.ON_HOLD)
+            .copy(seriesId = null, seriesName = null)
+
+        assertEquals(
+            emptyList<BookSummary>(),
+            onDeckBooks(listOf(unstartedSecond, standalone, reading, unstartedFirst, read))
+        )
     }
 
     @Test

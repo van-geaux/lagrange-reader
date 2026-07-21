@@ -2,6 +2,8 @@ package com.bookorbit.android
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSpec
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -22,6 +24,7 @@ import org.readium.r2.shared.util.mediatype.MediaType
 
 @RunWith(AndroidJUnit4::class)
 @OptIn(DelicateReadiumApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
 class ReadiumRemoteResourceInstrumentedTest {
     @Test
     fun rangeProbeRejectsServerThatIgnoresTheRangeHeader() = runBlocking {
@@ -83,6 +86,94 @@ class ReadiumRemoteResourceInstrumentedTest {
             assertEquals("Bearer stale", first.getHeader("Authorization"))
             assertEquals("Bearer current", second.getHeader("Authorization"))
             assertEquals("bytes=0-0", second.getHeader("Range"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun authenticatedMedia3DataSourceReadsOnlyTheRequestedByteRange() {
+        val content = ByteArray(128) { it.toByte() }
+        val server = MockWebServer()
+        server.dispatcher = rangeDispatcher(content)
+        server.start()
+        try {
+            val source = AuthenticatedMedia3HttpDataSourceFactory(
+                headersProvider = {
+                    mapOf(
+                        "Authorization" to "Bearer test-token",
+                        "Cookie" to "session=test-session"
+                    )
+                },
+                recoverAuthentication = { false }
+            ).createDataSource()
+            val dataSpec = DataSpec.Builder()
+                .setUri(server.url("/api/v1/books/files/42/serve").toString())
+                .setPosition(32L)
+                .setLength(16L)
+                .build()
+            val bytes = ByteArray(16)
+
+            source.open(dataSpec)
+            var offset = 0
+            while (offset < bytes.size) {
+                val read = source.read(bytes, offset, bytes.size - offset)
+                if (read == -1) break
+                offset += read
+            }
+            source.close()
+
+            assertEquals(16, offset)
+            assertArrayEquals(content.copyOfRange(32, 48), bytes)
+            val request = server.takeRequest()
+            assertEquals("bytes=32-47", request.getHeader("Range"))
+            assertEquals("Bearer test-token", request.getHeader("Authorization"))
+            assertEquals("session=test-session", request.getHeader("Cookie"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun media3DataSourceRenewsAuthenticationOnceBeforeRetrying() {
+        val content = byteArrayOf(42)
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(206)
+                .setHeader("Accept-Ranges", "bytes")
+                .setHeader("Content-Range", "bytes 0-0/1")
+                .setHeader("Content-Length", 1)
+                .setHeader("Content-Type", "audio/mp4")
+                .setBody(Buffer().write(content))
+        )
+        server.start()
+        try {
+            var token = "stale"
+            var recoveryCount = 0
+            val source = AuthenticatedMedia3HttpDataSourceFactory(
+                headersProvider = { mapOf("Authorization" to "Bearer " + token) },
+                recoverAuthentication = {
+                    recoveryCount += 1
+                    token = "current"
+                    true
+                }
+            ).createDataSource()
+            val dataSpec = DataSpec.Builder()
+                .setUri(server.url("/audio.m4b").toString())
+                .setLength(1L)
+                .build()
+
+            source.open(dataSpec)
+            val byte = ByteArray(1)
+            assertEquals(1, source.read(byte, 0, 1))
+            assertEquals(42, byte[0].toInt())
+            source.close()
+
+            assertEquals(1, recoveryCount)
+            assertEquals("Bearer stale", server.takeRequest().getHeader("Authorization"))
+            assertEquals("Bearer current", server.takeRequest().getHeader("Authorization"))
         } finally {
             server.shutdown()
         }
