@@ -121,8 +121,10 @@ class AppCoordinator(
             }
 
             repository.restoreActiveReaderState(localOnly = true)?.let { readerState ->
-                _screen.value = AppScreen.Reader(readerState)
-                return@launch
+                if (readerState.book.mediaKind != MediaKind.AUDIO) {
+                    _screen.value = AppScreen.Reader(readerState)
+                    return@launch
+                }
             }
 
             val startupCache = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
@@ -153,8 +155,10 @@ class AppCoordinator(
                 SessionState.Authenticated -> {
                     allowCachedLoginFallback = true
                     repository.restoreActiveReaderState()?.let { readerState ->
-                        _screen.value = AppScreen.Reader(readerState)
-                        return@launch
+                        if (readerState.book.mediaKind != MediaKind.AUDIO) {
+                            _screen.value = AppScreen.Reader(readerState)
+                            return@launch
+                        }
                     }
                     loadBrowser()
                 }

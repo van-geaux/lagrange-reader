@@ -274,7 +274,7 @@ Target-device feedback confirms reader ownership during sync/refresh/download ac
 - [x] Order the profile dropdown as Achievements, Options with cogwheel, About, divider, Change server, and Log out/Sign in; remove About from More. Compiled Compose coverage passes; target-device feedback confirms the menu ordering. Cog icon, divider semantics, and About routing remain separately unvalidated.
 - [ ] Validate accessibility, large text, the Options cog icon, profile divider semantics, and About routing.
 
-Automated gate: 258 JVM tests across 44 suites, lint, debug APK assembly, and Android-test APK assembly pass. Tutorial readability, Series grouping/persistence, section label/divider layout, profile-menu ordering, and hardened audiobook opening/playback are target-device validated; authenticated Preview, the revised audio layout, icon/divider/About, and accessibility checks remain open on device.
+Automated gate: 259 JVM tests across 44 suites, lint, debug APK assembly, and Android-test APK assembly pass. Tutorial readability, Series grouping/persistence, section label/divider layout, profile-menu ordering, and hardened audiobook opening/playback are target-device validated; audio relaunch, authenticated Preview, the revised audio layout, icon/divider/About, and accessibility checks remain open on device.
 
 ### Readium, library cover aspect, and persistent audiobook player - 2026-07-20
 
@@ -288,7 +288,8 @@ Automated gate: 258 JVM tests across 44 suites, lint, debug APK assembly, and An
 - [x] Fix the July 21 black-screen/perpetual-Preparing regression by retaining the exact tapped audiobook identity during chapter enrichment, invalidating old potentially partial reader-cache entries, staging and atomically promoting only complete readable copies, explicitly auto-creating/failing service binding, and bounding preparation/cleanup. Interrupted Preview and the real M4B session-delivery connected regressions pass.
 - [x] Target-device feedback confirms the hardened audiobook opening/playback flow works well.
 - [x] Keep active compact audio from covering separate EPUB/comic readers: their full content/chrome/options/tutorial/footer viewport ends above the measured player and expands on Close. When the main app does not show regular bottom navigation, keep Browser/detail bottom content and non-Browser overlays above Android navigation buttons. Focused connected coverage validates a 240 px reserve and restoration.
-- [ ] Validate authenticated Preview and the revised compact layout on the user device. Then validate notification/lock-screen/headset/Bluetooth controls, offline/interruption behavior, accessibility/responsive layout, and service/process recreation.
+- [x] On local-only and authenticated startup, never turn persisted AUDIO resume metadata into the transient Reader/Preparing screen. Bootstrap Browser and let the surviving service/controller supply the compact player. The focused coordinator regression fails before the fix and passes afterward.
+- [ ] Validate relaunch on the user device: play audio, leave or close the app without closing the player, reopen, and confirm Browser plus compact player appears without Preparing. Also validate authenticated Preview and the revised compact layout, then notification/lock-screen/headset/Bluetooth controls, offline/interruption behavior, accessibility/responsive layout, and service/process recreation.
 - [ ] Validate square/portrait and mixed-library layouts plus background audio across process/service recreation, interruptions, offline/online transitions, progress sync, Preview isolation, accessibility, large text, orientation, themes, and every migrated format.
 
 ### Checkpoint 5: Other media readers - Readium comics implemented, device validation pending

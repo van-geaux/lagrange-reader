@@ -71,6 +71,38 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bootstrap skips persisted audiobook reader and reopens browser for compact playback`() = runTest {
+        val audiobook = book.copy(
+            id = "audio-1",
+            fileId = "audio-file-1",
+            title = "Sample Audiobook",
+            mediaKind = MediaKind.AUDIO,
+            progressPositionMs = 12_000L
+        )
+        val readerState = ReaderState(
+            book = audiobook,
+            localFile = File("sample.m4b"),
+            lastKnownPosition = 12_000L
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated,
+            restoreActiveReaderLocalOnlyResult = readerState,
+            restoreActiveReaderResult = readerState
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(audiobook)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+    }
+
+    @Test
     fun `bootstrap loads browser for authenticated session when no reader state can be restored`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
