@@ -630,6 +630,7 @@ class BookOrbitAppInstrumentedTest {
             fileId = "file-current",
             title = "Current Book",
             mediaKind = MediaKind.EPUB,
+            readStatus = BookReadStatus.READING,
             progressPercent = 35f,
             lastReadAtMillis = 100L
         )

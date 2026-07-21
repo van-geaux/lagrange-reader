@@ -146,6 +146,7 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     putNullable("seriesId", seriesId)
     putNullable("seriesName", seriesName)
     putNullable("seriesIndex", seriesIndex)
+    putNullable("readStatus", readStatus?.wireValue)
     put("isRead", isRead)
     putNullable("addedAtMillis", addedAtMillis)
     putNullable("updatedAtMillis", updatedAtMillis)
@@ -199,6 +200,7 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     seriesId = optionalString("seriesId"),
     seriesName = optionalString("seriesName"),
     seriesIndex = optionalDouble("seriesIndex"),
+    readStatus = BookReadStatus.fromWireValue(optionalString("readStatus")),
     isRead = optBoolean("isRead"),
     addedAtMillis = optionalLong("addedAtMillis"),
     updatedAtMillis = optionalLong("updatedAtMillis"),

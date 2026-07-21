@@ -326,8 +326,8 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Keep native username/password as the current authentication flow and defer direct OIDC/SSO until its server contract is confirmed
 - [x] Make red Home/Library Recommended messages dismissible with horizontal swipe and an explicit close button
 - [x] Replace the normalized EPUB `Book x/1000` footer with an actual layout-derived whole-book page total, weighted completion, and calculating fallback
-- [x] Restrict Recently read to completed books and exclude titles still in progress
-- [x] Restore Currently reading for genuinely in-progress books when any server library contains active progress
+- [x] Restrict Recently read to completed books and exclude titles still in progress (historical heuristic; superseded by the exact Read/Skimmed state mapping below)
+- [x] Restore cross-library Currently reading aggregation for active titles (historical membership heuristic; superseded by the exact Reading/Rereading state mapping below)
 - [x] Aggregate Home shelves across every library on the connected server; keep selected-library scoping for Libraries/Recommended/Browse
 - [x] Validate server-wide Home aggregation and cross-library Currently reading on the target device/server
 - [ ] Validate incremental multi-library refresh latency and partial-cache messaging under a failing nonselected library
@@ -353,7 +353,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add visible overflow and long-press Currently reading actions that use normal-user APIs to clear primary/current progress, mark the title unread, and clear matching local progress
 - [x] Add the book context menu to global search results for both long-press and three-dot actions
 - [x] Keep global search results as list rows rather than poster cards
-- [x] Make On Deck show only the next unread book in a series after a completely read book, excluding books already present in Currently reading
+- [x] Implement the former series-progression On Deck heuristic (superseded by the exact On Hold state mapping below)
 - [x] Add pull-down refresh to the Home screen
 - [x] Restore visible thumbnails for series cards in the Series screen using BookOrbit's representative `coverBookIds`
 - [x] Add a #/A–Z jump rail to Name-sorted Series results and replace Load more with complete, deduplicated in-memory navigation
@@ -476,7 +476,8 @@ Execute in this order after confirming any required UI choices:
    - [ ] On the target device, open Authors with more than 100 entries, confirm every page loads without Load more, represented letters land on the exact author, unavailable letters remain disabled, and cards never extend beneath the rail at narrow/wide widths and both orientations.
 5. [x] Give Libraries, Series, Authors, and Local books distinct destination icons using the user-selected filled semantic direction: bookshelf (`LocalLibrary`), bookmarked collection (`CollectionsBookmark`), group (`Groups`), and offline download (`DownloadForOffline`). Each icon has a destination-specific accessibility description, and compiled Compose coverage asserts all four mappings. The full gate passes 278 JVM tests across 48 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly.
    - [ ] On the target device, confirm the four filled icons are visually distinct, legible in every theme, aligned with their labels, and understandable at default and large display/font scales.
-6. [ ] Map BookOrbit reading states into Home and Library Home shelves exactly: Reading and Re-reading belong in Currently Reading; Want to Read gets its own section; Read plus recently Skimmed belong in Recently Read; On Hold books appear in On Deck; every other server state is excluded from these shelves. Confirm the server's exact enum spellings, preserve deterministic ordering, and add focused parsing/shelf/device coverage.
+6. [x] Map BookOrbit's exact read-state values into Home and Library Recommended shelves. Reading/Rereading alone feed Currently reading, Want to Read has its own shelf, On Hold alone feeds On deck, and Read/Skimmed alone feed Recently read; null, unknown, Unread, Abandoned, and every other state are excluded from those four shelves. Persist the exact state through Room migration 2->3, snapshots, rich-detail cache, and active-reader recovery; keep deterministic activity/title ordering and focused parser/shelf/cache/coordinator coverage. The full gate passes 278 JVM tests across 48 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly.
+   - [ ] On the target device/server, place representative books in all eight states and confirm the four shelves and ordering on both server-wide Home and selected-library Recommended, including after an offline/cold-cache reopen.
 
 ### Remote media streaming work order - 2026-07-21
 

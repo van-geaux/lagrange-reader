@@ -689,6 +689,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     progressPositionMs = book.progressPositionMs ?: cached.book.progressPositionMs,
                     progressPageIndex = book.progressPageIndex ?: cached.book.progressPageIndex,
                     lastReadAtMillis = book.lastReadAtMillis ?: cached.book.lastReadAtMillis,
+                    readStatus = book.readStatus ?: cached.book.readStatus,
                     isRead = book.isRead,
                     coverAspectRatio = book.coverAspectRatio
                 )
@@ -1970,6 +1971,7 @@ internal object BookOrbitPayloadParser {
                             ?: obj.optString("series").takeIf { it.isNotBlank() },
                         seriesIndex = obj.numberValue("seriesIndex", "seriesNumber", "sequence")
                             ?: series?.numberValue("index", "number", "position"),
+                        readStatus = BookReadStatus.fromWireValue(readStatusValue),
                         isRead = progressPercent?.let { it >= 99.5f } == true ||
                             readingProgress.booleanValue("completed", "isRead", "read") ||
                             readStatusValue == "read" ||
@@ -2053,6 +2055,7 @@ internal object BookOrbitPayloadParser {
             seriesId = parsedBook.seriesId ?: fallback.seriesId,
             seriesName = parsedBook.seriesName ?: fallback.seriesName,
             seriesIndex = parsedBook.seriesIndex ?: fallback.seriesIndex,
+            readStatus = parsedBook.readStatus ?: fallback.readStatus,
             isRead = parsedBook.isRead || fallback.isRead
         ) ?: fallback
         val files = obj.optJSONArray("files")

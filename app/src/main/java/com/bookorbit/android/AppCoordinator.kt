@@ -854,14 +854,22 @@ class AppCoordinator(
                     current.copy(
                         books = current.books.map { currentBook ->
                             if (currentBook.id == book.id) {
-                                currentBook.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                                currentBook.copy(
+                                    readStatus = BookReadStatus.READ,
+                                    isRead = true,
+                                    lastReadAtMillis = markedAtMillis
+                                )
                             } else {
                                 currentBook
                             }
                         },
                         homeBooks = current.homeBooks.map { currentBook ->
                             if (currentBook.id == book.id) {
-                                currentBook.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                                currentBook.copy(
+                                    readStatus = BookReadStatus.READ,
+                                    isRead = true,
+                                    lastReadAtMillis = markedAtMillis
+                                )
                             } else {
                                 currentBook
                             }
@@ -1035,7 +1043,8 @@ class AppCoordinator(
                     progressPageIndex = if (book.mediaKind == MediaKind.EPUB) pageIndex else {
                         pageIndex.takeIf { it > 0 } ?: book.progressPageIndex
                     },
-                    progressPercent = progressPercent ?: book.progressPercent
+                    progressPercent = progressPercent ?: book.progressPercent,
+                    readStatus = readingStatusAfterProgress(progressPercent)
                 )
             )
             lastBrowserState?.let { browser ->
@@ -1261,6 +1270,7 @@ class AppCoordinator(
                 progressPercent = progress.progressPercent ?: book.progressPercent,
                 progressLabel = progress.progressPercent?.let { "${it}%" } ?: book.progressLabel,
                 lastReadAtMillis = progress.observedAtMillis,
+                readStatus = readingStatusAfterProgress(progress.progressPercent),
                 isRead = progress.progressPercent?.let { it >= 99.5f } ?: book.isRead
             )
         }
@@ -1279,11 +1289,17 @@ class AppCoordinator(
                     progressPercent = progress.progressPercent ?: progress.book.progressPercent,
                     progressLabel = progress.progressPercent?.let { "${it}%" } ?: progress.book.progressLabel,
                     lastReadAtMillis = progress.observedAtMillis,
+                    readStatus = readingStatusAfterProgress(progress.progressPercent),
                     isRead = progress.progressPercent?.let { it >= 99.5f } ?: progress.book.isRead
                 )
             }
             .toList()
         return merged + recentBooks
+    }
+
+    private fun readingStatusAfterProgress(progressPercent: Float?): BookReadStatus = when {
+        progressPercent != null && progressPercent >= 99.5f -> BookReadStatus.READ
+        else -> BookReadStatus.READING
     }
 
     private fun List<BookSummary>.onlyFrom(libraries: List<LibrarySummary>): List<BookSummary> {

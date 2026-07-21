@@ -46,6 +46,7 @@ class ActiveReaderStore private constructor(
                 put("seriesId", book.seriesId)
                 put("seriesName", book.seriesName)
                 put("seriesIndex", book.seriesIndex)
+                put("readStatus", book.readStatus?.wireValue)
                 put("isRead", book.isRead)
                 put("addedAtMillis", book.addedAtMillis)
                 put("updatedAtMillis", book.updatedAtMillis)
@@ -92,6 +93,7 @@ class ActiveReaderStore private constructor(
             seriesId = book.optString("seriesId").takeIf { it.isNotBlank() },
             seriesName = book.optString("seriesName").takeIf { it.isNotBlank() },
             seriesIndex = if (book.has("seriesIndex") && !book.isNull("seriesIndex")) book.optDouble("seriesIndex") else null,
+            readStatus = BookReadStatus.fromWireValue(book.optString("readStatus")),
             isRead = book.optBoolean("isRead"),
             addedAtMillis = if (book.has("addedAtMillis") && !book.isNull("addedAtMillis")) book.optLong("addedAtMillis") else null,
             updatedAtMillis = if (book.has("updatedAtMillis") && !book.isNull("updatedAtMillis")) book.optLong("updatedAtMillis") else null,

@@ -8,7 +8,7 @@ Follow-up action feedback is implemented: Read and Preview show visible labels b
 
 Audited implementation status: code and automated verification are complete; genre query compatibility and scope are target-server validated. Download interruption recovery and final responsive density remain open. Direct OIDC/SSO remains an open backlog item.
 
-Latest target-device feedback: Download and Delete local now have visible labels, and a completed download updates the still-open detail immediately. BookOrbit has no verified tag filter, so Tag chips are informational and non-clickable. Red Home/Library Recommended messages now support explicit X dismissal and horizontal swipe dismissal, clearing the message immediately. Recently read now contains only completed books, excludes every ID still in Currently reading, and is capped at 12. The reader footer now shows layout-derived whole-book pages with a calculating fallback; measurement timing/stability still requires device validation. Direct OIDC/SSO is deferred; native username/password remains current.
+Latest Home implementation: the four reading-state shelves follow BookOrbit's exact status contract rather than inferred progress. Currently reading contains only Reading/Rereading, Want to read has its own shelf, On deck contains only On Hold, and Recently read contains only Read/Skimmed. Unread, Abandoned, missing, unknown, and other states are excluded from those shelves. The mapping is shared by server-wide Home and selected-library Recommended and survives cached/offline reopen; representative target-device/server validation remains.
 
 Latest target-device validation: lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, delete-local confirmation, whole-book progress correctness, genre filtering, all five app themes, jump-rail spacing, basic series Previous/Next, and the functional Achievements flow work as intended. The haptic setting and all explicit app haptics were removed by user direction.
 
@@ -51,7 +51,7 @@ Implementation candidate: an editorial-observatory direction is now coded for re
 
 The first browser-shell candidate opened on a native Home feed with a hamburger drawer and integrated search. Device review found that interaction too web-like, so it is superseded by an approved Plex-inspired direction: standard Android status-bar space, bottom navigation for primary destinations, a top-level Libraries view with a library-change control, and a dedicated search layer opened from an icon. Home puts Currently reading first, while completed/recently read books remain available separately. Home shelves aggregate every library on the connected server; selected-library scoping belongs to Libraries Recommended/Browse, not Home.
 
-The first Home shelf renders as Currently reading. It recognizes active percentage, page, position, label, or timestamped progress across all server libraries and excludes completed books; Recently read books remains a separate history shelf. Cross-library restoration is target-device/server validated.
+The first Home shelf renders as Currently reading and accepts only BookOrbit Reading and Rereading states across all server libraries. On deck remains next and accepts only On Hold; Want to read follows as a dedicated shelf. Recently read books remains a separate history shelf containing only Read and Skimmed. These same rules apply to selected-library Recommended, and every other state is excluded from the four shelves.
 
 Current refinement: book poster cards use roughly half of the first candidate size, search uses BookOrbit's global query endpoint, and covers load through the authenticated API client. Series shelf cards open an ordered series detail list. Book selections open a detail screen with Read/Continue, Download, and local-copy actions instead of launching content immediately. The browser shell now uses Home, Libraries, and More in a bottom bar; More expands to Series, Authors, Local books, and About, while the profile menu exposes Options and Achievements, then Change server immediately above Log out/Sign in. The Home top bar carries the launcher mark, while Library uses the selected library name as its selector and separates Recommended shelves from complete Room-cached Browse content.
 
@@ -155,7 +155,7 @@ Implemented baseline: normal EPUB Read/Preview and comics use Readium with share
 ### New user feedback workplan - 2026-07-15
 
 - [x] Provide both a visible overflow menu and long-press menu for removing a title from Currently reading; the action uses normal-user APIs to clear primary/current BookOrbit progress, mark the title unread, clear local reading progress, and remains unavailable in an offline snapshot.
-- [x] Make On Deck represent series progression: show the next unread volume only when a prior volume is completely read, and hide it once that volume is Currently reading.
+- [x] Make the four reading-state shelves mirror BookOrbit exactly: Reading/Rereading in Currently reading, On Hold in On deck, Want to Read in its own shelf, and Read/Skimmed in Recently read; exclude all other states.
 - [x] Add swipe-to-refresh to Home using the established Libraries pull indicator and refresh behavior.
 - [x] Ensure Series cards display representative book thumbnails from BookOrbit's `coverBookIds` response field.
 - [x] Give Series complete, deduplicated in-memory results and #/A–Z or Z–A navigation for Name sorting instead of Load more.
@@ -191,7 +191,7 @@ Implemented baseline: normal EPUB Read/Preview and comics use Readium with share
 - [x] After Delete local succeeds, update the still-open detail actions and offline availability immediately; target-device validation passed.
 - [x] Show cached Local books thumbnails online and offline by recovering incomplete summaries from the latest rich-detail cache; target-device validation passed.
 - [x] Ensure the main Options destination opens from book details instead of retained detail state masking it; target-device validation passed.
-- [x] Restore genuinely in-progress titles from any server library to Currently reading; target-device/server validation passed.
+- [x] Restore cross-library Home aggregation; target-device/server validation passed. The former inferred-progress Currently reading membership was later superseded by exact Reading/Rereading states.
 - [x] Aggregate Home shelves across all server libraries while retaining selected-library scope in Libraries Recommended/Browse; target-device/server validation passed.
 - [x] Reduce server-wide Home loading latency by refreshing nonselected libraries in ordered batches of at most three after the selected library becomes current; merge completed slices incrementally and retain cached failures with partial-cache messaging. Device/server latency and load validation remain pending.
 - [x] Migrate local/readable CBZ to Readium 3.0.2 and prepare connected CBR/CB7 as reusable cached CBZ publications from authenticated BookOrbit pages; offline downloaded CBR/CB7 remains explicitly unsupported without the server.

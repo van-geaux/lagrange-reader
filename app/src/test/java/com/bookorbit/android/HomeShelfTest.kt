@@ -5,22 +5,19 @@ import org.junit.Test
 
 class HomeShelfTest {
     @Test
-    fun `currently reading includes any active progress and excludes completed books`() {
-        val current = seriesBook("book-current", index = 2.0).copy(
-            progressPercent = 25f,
-            lastReadAtMillis = 200L
-        )
-        val serverMarkedReadButInProgress = seriesBook("book-server-progress", index = 5.0, isRead = true).copy(
-            progressPercent = 42f,
-            lastReadAtMillis = 300L
-        )
-        val pageProgress = seriesBook("book-page", index = 3.0).copy(progressLabel = "Page 9")
-        val completed = seriesBook("book-complete", index = 1.0, isRead = true).copy(progressPercent = 100f)
-        val untouched = seriesBook("book-new", index = 4.0)
+    fun `currently reading includes only reading and rereading states`() {
+        val reading = seriesBook("book-reading", index = 1.0, status = BookReadStatus.READING)
+            .copy(lastReadAtMillis = 200L)
+        val rereading = seriesBook("book-rereading", index = 2.0, status = BookReadStatus.REREADING)
+            .copy(lastReadAtMillis = 300L)
+        val misleadingProgress = seriesBook("book-unread", index = 3.0, status = BookReadStatus.UNREAD)
+            .copy(progressPercent = 42f, lastReadAtMillis = 400L)
+        val legacyNoStatus = seriesBook("book-legacy", index = 4.0)
+            .copy(progressPercent = 55f, lastReadAtMillis = 500L)
 
         assertEquals(
-            listOf(serverMarkedReadButInProgress, current, pageProgress),
-            currentlyReadingBooks(listOf(untouched, completed, pageProgress, current, serverMarkedReadButInProgress))
+            listOf(rereading, reading),
+            currentlyReadingBooks(listOf(misleadingProgress, reading, legacyNoStatus, rereading))
         )
     }
 
@@ -32,53 +29,56 @@ class HomeShelfTest {
     }
 
     @Test
-    fun `on deck selects first unread book after a series has started`() {
-        val first = seriesBook("book-1", index = 1.0, isRead = true)
-        val next = seriesBook("book-2", index = 2.0)
-        val later = seriesBook("book-3", index = 3.0)
+    fun `on deck includes only on hold books including standalone titles`() {
+        val older = seriesBook("book-1", index = 1.0, status = BookReadStatus.ON_HOLD)
+            .copy(lastReadAtMillis = 100L)
+        val newerStandalone = seriesBook("book-2", index = 2.0, status = BookReadStatus.ON_HOLD)
+            .copy(seriesId = null, seriesName = null, lastReadAtMillis = 200L)
+        val unread = seriesBook("book-3", index = 3.0, status = BookReadStatus.UNREAD)
 
-        assertEquals(listOf(next), onDeckBooks(listOf(later, next, first)))
+        assertEquals(listOf(newerStandalone, older), onDeckBooks(listOf(unread, older, newerStandalone)))
     }
 
     @Test
-    fun `on deck omits series that have not started`() {
-        val first = seriesBook("book-1", index = 1.0)
-        val second = seriesBook("book-2", index = 2.0)
+    fun `want to read includes only the matching server state`() {
+        val older = seriesBook("book-1", index = 1.0, status = BookReadStatus.WANT_TO_READ)
+            .copy(updatedAtMillis = 100L)
+        val newer = seriesBook("book-2", index = 2.0, status = BookReadStatus.WANT_TO_READ)
+            .copy(updatedAtMillis = 200L)
+        val abandoned = seriesBook("book-3", index = 3.0, status = BookReadStatus.ABANDONED)
 
-        assertEquals(emptyList<BookSummary>(), onDeckBooks(listOf(first, second)))
+        assertEquals(listOf(newer, older), wantToReadBooks(listOf(older, abandoned, newer)))
     }
 
     @Test
-    fun `on deck requires a completed book rather than progress alone`() {
-        val current = seriesBook("book-1", index = 1.0).copy(progressPercent = 40f)
-        val next = seriesBook("book-2", index = 2.0)
-
-        assertEquals(emptyList<BookSummary>(), onDeckBooks(listOf(current, next)))
-    }
-
-    @Test
-    fun `on deck hides the next volume while it is currently reading`() {
-        val completed = seriesBook("book-1", index = 1.0, isRead = true)
-        val current = seriesBook("book-2", index = 2.0).copy(progressPercent = 25f)
-        val later = seriesBook("book-3", index = 3.0)
-
-        assertEquals(emptyList<BookSummary>(), onDeckBooks(listOf(completed, current, later)))
-    }
-
-    @Test
-    fun `recently read includes completed books and excludes unfinished activity`() {
-        val finished = seriesBook("book-finished", index = 1.0, isRead = true).copy(lastReadAtMillis = 300L)
-        val olderFinished = seriesBook("book-older", index = 2.0, isRead = true).copy(lastReadAtMillis = 100L)
-        val stillReading = seriesBook("book-current", index = 3.0, isRead = true).copy(
-            progressPercent = 42f,
-            lastReadAtMillis = 400L
-        )
-        val recentlyOpened = seriesBook("book-opened", index = 4.0).copy(lastReadAtMillis = 500L)
+    fun `recently read includes read and skimmed states only`() {
+        val read = seriesBook("book-read", index = 1.0, status = BookReadStatus.READ, isRead = true)
+            .copy(lastReadAtMillis = 300L)
+        val skimmed = seriesBook("book-skimmed", index = 2.0, status = BookReadStatus.SKIMMED, isRead = true)
+            .copy(lastReadAtMillis = 400L)
+        val misleadingLegacyRead = seriesBook("book-legacy", index = 3.0, isRead = true)
+            .copy(lastReadAtMillis = 500L)
+        val abandoned = seriesBook("book-abandoned", index = 4.0, status = BookReadStatus.ABANDONED)
 
         assertEquals(
-            listOf(finished, olderFinished),
-            recentlyReadBooks(listOf(recentlyOpened, olderFinished, stillReading, finished))
+            listOf(skimmed, read),
+            recentlyReadBooks(listOf(read, misleadingLegacyRead, abandoned, skimmed))
         )
+    }
+
+    @Test
+    fun `unmapped states do not enter any reading state shelf`() {
+        val excluded = listOf(
+            BookReadStatus.UNREAD,
+            BookReadStatus.ABANDONED
+        ).mapIndexed { index, status ->
+            seriesBook("excluded-$index", index.toDouble(), status = status)
+        } + seriesBook("unknown", 3.0)
+
+        assertEquals(emptyList<BookSummary>(), currentlyReadingBooks(excluded))
+        assertEquals(emptyList<BookSummary>(), wantToReadBooks(excluded))
+        assertEquals(emptyList<BookSummary>(), onDeckBooks(excluded))
+        assertEquals(emptyList<BookSummary>(), recentlyReadBooks(excluded))
     }
 
     @Test
@@ -111,6 +111,7 @@ class HomeShelfTest {
     private fun seriesBook(
         id: String,
         index: Double,
+        status: BookReadStatus? = null,
         isRead: Boolean = false,
         addedAt: Long? = null
     ) = BookSummary(
@@ -121,6 +122,7 @@ class HomeShelfTest {
         seriesId = "series-1",
         seriesName = "Orbit Saga",
         seriesIndex = index,
+        readStatus = status,
         isRead = isRead,
         addedAtMillis = addedAt
     )

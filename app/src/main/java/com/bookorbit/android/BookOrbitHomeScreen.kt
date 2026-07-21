@@ -2433,6 +2433,7 @@ private fun HomeFeed(
 ) {
     val currentlyReading = remember(books) { currentlyReadingBooks(books) }
     val onDeck = remember(books) { onDeckBooks(books) }
+    val wantToRead = remember(books) { wantToReadBooks(books) }
     val recentlyAddedBooks = books.sortedWith(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
@@ -2496,6 +2497,9 @@ private fun HomeFeed(
         }
         if (onDeck.isNotEmpty()) item {
             BookShelf("On deck", onDeck, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+        }
+        if (wantToRead.isNotEmpty()) item {
+            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
             BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
@@ -3736,6 +3740,7 @@ private fun BookDetails(
                 progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
                 progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
                 lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
+                readStatus = currentBook.readStatus ?: value.book.readStatus,
                 isRead = currentBook.isRead,
                 updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
                 downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
@@ -3751,6 +3756,7 @@ private fun BookDetails(
         progressPositionMs = if (canonicalStateBook != null) currentBook.progressPositionMs else currentBook.progressPositionMs ?: detail.book.progressPositionMs,
         progressPageIndex = if (canonicalStateBook != null) currentBook.progressPageIndex else currentBook.progressPageIndex ?: detail.book.progressPageIndex,
         lastReadAtMillis = if (canonicalStateBook != null) currentBook.lastReadAtMillis else currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
+        readStatus = if (canonicalStateBook != null) currentBook.readStatus else currentBook.readStatus ?: detail.book.readStatus,
         isRead = currentBook.isRead,
         updatedAtMillis = currentBook.updatedAtMillis ?: detail.book.updatedAtMillis,
         downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis,
@@ -4935,47 +4941,47 @@ private fun LoadingFeedRow(text: String) {
 
 internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
     return books
-        .filter { !it.seriesName.isNullOrBlank() }
-        .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
-        .values
-        .mapNotNull { seriesBooks ->
-            val ordered = seriesBooks.sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
-            val hasCompletedBook = ordered.any(BookSummary::isCompletedForSeriesProgression)
-            if (!hasCompletedBook) return@mapNotNull null
-
-            ordered
-                .firstOrNull { !it.isCompletedForSeriesProgression() }
-                ?.takeUnless { it.hasReadingActivity() && it.isStillInProgress() }
-        }
+        .filter { it.readStatus == BookReadStatus.ON_HOLD }
+        .sortedWith(readingStateShelfComparator())
         .take(12)
 }
 
-private fun BookSummary.isCompletedForSeriesProgression(): Boolean {
-    return isRead || progressPercent?.let { it >= 99.5f } == true
+internal fun wantToReadBooks(books: List<BookSummary>): List<BookSummary> {
+    return books
+        .filter { it.readStatus == BookReadStatus.WANT_TO_READ }
+        .sortedWith(readingStateShelfComparator())
+        .take(12)
 }
 
 internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> {
     return books
-        .filter { it.hasReadingActivity() && it.isStillInProgress() }
+        .filter {
+            it.readStatus == BookReadStatus.READING ||
+                it.readStatus == BookReadStatus.REREADING
+        }
         .sortedWith(
             compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
                 .thenByDescending { it.progressPercent ?: 0f }
+                .thenByDescending { it.updatedAtMillis ?: 0L }
                 .thenBy { it.title.lowercase() }
         )
         .take(12)
 }
 
 internal fun recentlyReadBooks(books: List<BookSummary>): List<BookSummary> {
-    val currentlyReadingIds = currentlyReadingBooks(books).mapTo(mutableSetOf()) { it.id }
     return books
-        .filter { it.isRead && it.id !in currentlyReadingIds }
-        .sortedWith(
-            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
-                .thenByDescending { it.updatedAtMillis ?: 0L }
-                .thenBy { it.title.lowercase() }
-        )
+        .filter {
+            it.readStatus == BookReadStatus.READ ||
+                it.readStatus == BookReadStatus.SKIMMED
+        }
+        .sortedWith(readingStateShelfComparator())
         .take(12)
 }
+
+private fun readingStateShelfComparator(): Comparator<BookSummary> =
+    compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+        .thenByDescending { it.updatedAtMillis ?: 0L }
+        .thenBy { it.title.lowercase() }
 
 private fun BookSummary.hasReadingActivity(): Boolean {
     return (progressPercent ?: 0f) > 0f ||

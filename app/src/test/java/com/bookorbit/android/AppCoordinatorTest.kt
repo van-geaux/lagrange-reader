@@ -134,6 +134,7 @@ class AppCoordinatorTest {
             id = "book-manga",
             fileId = "file-manga",
             title = "Reading Manga",
+            readStatus = BookReadStatus.READING,
             progressPercent = 35f,
             lastReadAtMillis = 500L
         )
@@ -1128,7 +1129,8 @@ class AppCoordinatorTest {
             progressLabel = "42%",
             progressPercent = 42f,
             progressPositionMs = 10_000L,
-            progressPageIndex = 4
+            progressPageIndex = 4,
+            readStatus = BookReadStatus.READING
         )
         val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -1148,6 +1150,7 @@ class AppCoordinatorTest {
         assertEquals(listOf(current), repository.markedReadBooks)
         val browser = coordinator.screen.value as AppScreen.Browser
         val marked = browser.browserState.books.single()
+        assertEquals(BookReadStatus.READ, marked.readStatus)
         assertTrue(marked.isRead)
         assertTrue((marked.lastReadAtMillis ?: 0L) > 0L)
         assertEquals("42%", marked.progressLabel)
@@ -1161,6 +1164,7 @@ class AppCoordinatorTest {
         val completed = book.copy(
             progressLabel = "100%",
             progressPercent = 100f,
+            readStatus = BookReadStatus.READ,
             isRead = true,
             lastReadAtMillis = 200L
         )
@@ -1181,6 +1185,7 @@ class AppCoordinatorTest {
         assertEquals(listOf(completed), repository.resetReadingStateBooks)
         val browser = coordinator.screen.value as AppScreen.Browser
         val reset = browser.browserState.books.single()
+        assertEquals(BookReadStatus.UNREAD, reset.readStatus)
         assertFalse(reset.isRead)
         assertNull(reset.progressPercent)
         assertNull(reset.progressLabel)

@@ -65,6 +65,7 @@ class LibraryCatalogDatabaseTest {
                     progressPercent = 42f,
                     progressPositionMs = 10_000L,
                     progressPageIndex = 4,
+                    readStatus = BookReadStatus.READING.wireValue,
                     isRead = true,
                     lastReadAtMillis = 100L,
                     readerPageIndex = 2,
@@ -80,6 +81,7 @@ class LibraryCatalogDatabaseTest {
         assertNull(reset.progressPercent)
         assertNull(reset.progressPositionMs)
         assertNull(reset.progressPageIndex)
+        assertEquals(BookReadStatus.UNREAD.wireValue, reset.readStatus)
         assertFalse(reset.isRead)
         assertNull(reset.lastReadAtMillis)
         assertNull(reset.readerPageIndex)
@@ -103,6 +105,7 @@ class LibraryCatalogDatabaseTest {
 
         val marked = dao.readBooks(SERVER, LIBRARY).single()
         assertEquals(true, marked.isRead)
+        assertEquals(BookReadStatus.READ.wireValue, marked.readStatus)
         assertEquals(500L, marked.lastReadAtMillis)
         assertEquals("42%", marked.progressLabel)
         assertEquals(42f, marked.progressPercent)

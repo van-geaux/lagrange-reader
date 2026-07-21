@@ -70,7 +70,11 @@ class BrowserSnapshotStore(context: Context) {
                 booksByLibraryId = current.booksByLibraryId.mapValues { (_, books) ->
                     books.map { book ->
                         if (book.id == bookId) {
-                            book.copy(isRead = true, lastReadAtMillis = markedAtMillis)
+                            book.copy(
+                                readStatus = BookReadStatus.READ,
+                                isRead = true,
+                                lastReadAtMillis = markedAtMillis
+                            )
                         } else {
                             book
                         }
@@ -160,6 +164,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("seriesId", book.seriesId)
                                     put("seriesName", book.seriesName)
                                     put("seriesIndex", book.seriesIndex)
+                                    put("readStatus", book.readStatus?.wireValue)
                                     put("isRead", book.isRead)
                                     put("addedAtMillis", book.addedAtMillis)
                                     put("updatedAtMillis", book.updatedAtMillis)
@@ -220,6 +225,7 @@ class BrowserSnapshotStore(context: Context) {
                         seriesId = item.optString("seriesId").takeIf { it.isNotBlank() },
                         seriesName = item.optString("seriesName").takeIf { it.isNotBlank() },
                         seriesIndex = item.optDoubleOrNull("seriesIndex"),
+                        readStatus = BookReadStatus.fromWireValue(item.optString("readStatus")),
                         isRead = item.optBoolean("isRead"),
                         addedAtMillis = item.optLongOrNull("addedAtMillis"),
                         updatedAtMillis = item.optLongOrNull("updatedAtMillis"),

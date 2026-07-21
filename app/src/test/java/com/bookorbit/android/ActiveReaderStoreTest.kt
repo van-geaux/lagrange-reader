@@ -28,6 +28,7 @@ class ActiveReaderStoreTest {
             progressPercent = 35f,
             progressPositionMs = 12_000L,
             progressPageIndex = 4,
+            readStatus = BookReadStatus.REREADING,
             audioChapters = listOf(AudiobookChapter("Opening", 0L)),
             coverAspectRatio = CoverAspectRatio.SQUARE
         )

@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import java.io.File
+import java.util.Locale
 
 enum class MediaKind {
     AUDIO,
@@ -8,6 +9,24 @@ enum class MediaKind {
     EPUB,
     COMIC,
     UNKNOWN
+}
+
+enum class BookReadStatus(val wireValue: String) {
+    UNREAD("unread"),
+    WANT_TO_READ("want_to_read"),
+    READING("reading"),
+    ON_HOLD("on_hold"),
+    REREADING("rereading"),
+    READ("read"),
+    SKIMMED("skimmed"),
+    ABANDONED("abandoned");
+
+    companion object {
+        fun fromWireValue(value: String?): BookReadStatus? {
+            val normalized = value?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() } ?: return null
+            return entries.firstOrNull { it.wireValue == normalized }
+        }
+    }
 }
 
 enum class CoverAspectRatio(val wireValue: String, val widthToHeight: Float) {
@@ -52,6 +71,7 @@ data class BookSummary(
     val seriesId: String? = null,
     val seriesName: String? = null,
     val seriesIndex: Double? = null,
+    val readStatus: BookReadStatus? = null,
     val isRead: Boolean = false,
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
@@ -72,6 +92,7 @@ internal fun BookSummary.withReadingStateReset(): BookSummary = copy(
     progressPercent = null,
     progressPositionMs = null,
     progressPageIndex = null,
+    readStatus = BookReadStatus.UNREAD,
     isRead = false,
     lastReadAtMillis = null,
     readerPageIndex = null,

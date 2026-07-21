@@ -306,8 +306,10 @@ class BookOrbitPayloadParserTest {
         assertEquals(42.5f, books[0].progressPercent)
         assertEquals("42.5%", books[0].progressLabel)
         assertEquals(1_783_686_896_000L, books[0].lastReadAtMillis)
+        assertEquals(BookReadStatus.READING, books[0].readStatus)
         assertEquals(false, books[0].isRead)
         assertEquals(100f, books[1].progressPercent)
+        assertEquals(BookReadStatus.READ, books[1].readStatus)
         assertTrue(books[1].isRead)
         assertEquals(1_783_728_000_000L, books[1].lastReadAtMillis)
     }
@@ -347,7 +349,38 @@ class BookOrbitPayloadParserTest {
         assertNull(book.progressPositionMs)
         assertNull(book.progressPageIndex)
         assertNull(book.lastReadAtMillis)
+        assertEquals(BookReadStatus.UNREAD, book.readStatus)
         assertTrue(currentlyReadingBooks(listOf(book)).isEmpty())
+    }
+
+    @Test
+    fun `parseBooks retains every exact BookOrbit read state and rejects unknown states`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-statuses",
+            payload = """
+                {
+                  "items": [
+                    {"id":"unread","title":"Unread","readStatus":{"status":"unread"}},
+                    {"id":"want","title":"Want","readStatus":{"status":"want_to_read"}},
+                    {"id":"reading","title":"Reading","readStatus":{"status":"reading"}},
+                    {"id":"hold","title":"Hold","readStatus":{"status":"on_hold"}},
+                    {"id":"rereading","title":"Rereading","readStatus":{"status":"rereading"}},
+                    {"id":"read","title":"Read","readStatus":{"status":"read"}},
+                    {"id":"skimmed","title":"Skimmed","readStatus":{"status":"skimmed"}},
+                    {"id":"abandoned","title":"Abandoned","readStatus":{"status":"abandoned"}},
+                    {"id":"unknown","title":"Unknown","readStatus":{"status":"paused"}},
+                    {"id":"missing","title":"Missing"}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(
+            BookReadStatus.entries + listOf(null, null),
+            books.map { it.readStatus }
+        )
     }
 
     @Test

@@ -43,6 +43,7 @@ internal data class LibraryCatalogBookEntity(
     val seriesId: String?,
     val seriesName: String?,
     val seriesIndex: Double?,
+    val readStatus: String? = null,
     val isRead: Boolean,
     val addedAtMillis: Long?,
     val updatedAtMillis: Long?,
@@ -144,6 +145,7 @@ internal interface LibraryCatalogDao {
             progressPercent = NULL,
             progressPositionMs = NULL,
             progressPageIndex = NULL,
+            readStatus = 'unread',
             isRead = 0,
             lastReadAtMillis = NULL,
             readerPageIndex = NULL,
@@ -156,7 +158,8 @@ internal interface LibraryCatalogDao {
     @Query(
         """
         UPDATE library_catalog_books
-        SET isRead = 1,
+        SET readStatus = 'read',
+            isRead = 1,
             lastReadAtMillis = :markedAtMillis
         WHERE serverUrl = :serverUrl AND bookId = :bookId
         """
@@ -198,7 +201,7 @@ internal interface LibraryCatalogDao {
         LibraryCatalogMetadataEntity::class,
         LibraryCatalogJumpBucketEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 internal abstract class LibraryCatalogDatabase : RoomDatabase() {
@@ -307,7 +310,7 @@ internal class LibraryCatalogStore(context: Context) {
                 context.applicationContext,
                 LibraryCatalogDatabase::class.java,
                 "library-catalog.db"
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -316,6 +319,12 @@ internal class LibraryCatalogStore(context: Context) {
                     "ALTER TABLE library_catalog_books " +
                         "ADD COLUMN coverAspectRatio TEXT NOT NULL DEFAULT '2/3'"
                 )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE library_catalog_books ADD COLUMN readStatus TEXT")
             }
         }
     }
@@ -346,6 +355,7 @@ private fun BookSummary.toCatalogEntity(
     seriesId = seriesId,
     seriesName = seriesName,
     seriesIndex = seriesIndex,
+    readStatus = readStatus?.wireValue,
     isRead = isRead,
     addedAtMillis = addedAtMillis,
     updatedAtMillis = updatedAtMillis,
@@ -374,6 +384,7 @@ private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
     seriesId = seriesId,
     seriesName = seriesName,
     seriesIndex = seriesIndex,
+    readStatus = BookReadStatus.fromWireValue(readStatus),
     isRead = isRead,
     addedAtMillis = addedAtMillis,
     updatedAtMillis = updatedAtMillis,
