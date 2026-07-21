@@ -78,6 +78,8 @@ Planned follow-up work includes but not limited to:
 - Support for additional book formats.
 - Bulk action of local books.
 
+More details are in the [Roadmap](docs/roadmap.md)
+
 ## Limitations to know about
 
 Lagrange needs a reachable BookOrbit server for sign-in, online browsing, progress synchronization, and CBR/CB7 page extraction. Downloaded EPUB, PDF, CBZ, and supported audiobook files can be opened without a connection. HTTPS is strongly recommended when connecting to a remote server; explicit HTTP URLs are supported for trusted networks.
