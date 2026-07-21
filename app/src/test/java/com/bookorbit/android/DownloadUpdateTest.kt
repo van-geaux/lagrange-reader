@@ -60,7 +60,7 @@ class DownloadUpdateTest {
     }
 
     @Test
-    fun `nonempty mobi and azw downloads are not rejected as malformed epub archives`() {
+    fun `unsupported ebook containers remain downloadable without being treated as epub`() {
         val dir = Files.createTempDirectory("download-update-ebook-formats").toFile()
         val mobi = File(dir, "book.mobi").apply { writeText("mobi-bytes") }
         val azw = File(dir, "book.azw3").apply { writeText("azw-bytes") }
@@ -68,14 +68,14 @@ class DownloadUpdateTest {
         assertTrue(
             downloadedFilePassesIntegrity(
                 downloadedBook(updatedAtMillis = 1L, downloadedSourceUpdatedAtMillis = null)
-                    .copy(format = "mobi"),
+                    .copy(format = "mobi", mediaKind = MediaKind.UNKNOWN),
                 mobi
             )
         )
         assertTrue(
             downloadedFilePassesIntegrity(
                 downloadedBook(updatedAtMillis = 1L, downloadedSourceUpdatedAtMillis = null)
-                    .copy(format = "azw3"),
+                    .copy(format = "azw3", mediaKind = MediaKind.UNKNOWN),
                 azw
             )
         )

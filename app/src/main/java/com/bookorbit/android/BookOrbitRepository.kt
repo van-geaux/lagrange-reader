@@ -2180,15 +2180,7 @@ internal object BookOrbitPayloadParser {
     }
 
     fun inferMediaKind(format: String?, title: String?): MediaKind {
-        val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
-        val parts = token.split(Regex("[^a-z0-9]+"))
-        return when {
-            token.endsWith(".mp3") || token.endsWith(".m4b") || token.contains("audio") -> MediaKind.AUDIO
-            token.endsWith(".pdf") || token.contains("pdf") -> MediaKind.PDF
-            parts.any { it == "cbz" || it == "cbr" || it == "cb7" } || token.contains("comic") -> MediaKind.COMIC
-            token.endsWith(".epub") || token.contains("epub") || token.contains("mobi") || token.contains("azw3") -> MediaKind.EPUB
-            else -> MediaKind.UNKNOWN
-        }
+        return readiumPublicationRoute(format, title).mediaKind()
     }
 
     private fun extractArray(payload: String, action: String): JSONArray {
@@ -2687,15 +2679,7 @@ internal fun downloadUpdateAvailable(book: BookSummary, record: DownloadRecord):
 
 internal fun downloadedFilePassesIntegrity(book: BookSummary, file: File): Boolean {
     if (!file.exists() || file.length() <= 0L) return false
-    if (book.mediaKind != MediaKind.EPUB) {
-        return ReaderFileValidator.isReadable(book.mediaKind, file)
-    }
-    val formatToken = listOfNotNull(book.format, book.title).joinToString(" ").lowercase()
-    return if (formatToken.contains("mobi") || formatToken.contains("azw3")) {
-        true
-    } else {
-        ReaderFileValidator.isReadable(book.mediaKind, file)
-    }
+    return ReaderFileValidator.isReadable(book.mediaKind, file)
 }
 
 internal fun atomicReplaceDownloadedFile(staged: File, target: File) {

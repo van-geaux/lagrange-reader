@@ -31,7 +31,7 @@ class BookOrbitRepositoryHelpersTest {
     @Test
     fun `inferMediaKind recognizes ebook and audio format hints`() {
         assertEquals(MediaKind.EPUB, BookOrbitPayloadParser.inferMediaKind("application/epub+zip", null))
-        assertEquals(MediaKind.EPUB, BookOrbitPayloadParser.inferMediaKind(null, "Novel.azw3"))
+        assertEquals(MediaKind.EPUB, BookOrbitPayloadParser.inferMediaKind("kepub", "Novel.kepub.epub"))
         assertEquals(MediaKind.EPUB, BookOrbitPayloadParser.inferMediaKind("application/octet-stream", "Novel.epub"))
         assertEquals(MediaKind.PDF, BookOrbitPayloadParser.inferMediaKind("application/pdf", null))
         assertEquals(MediaKind.AUDIO, BookOrbitPayloadParser.inferMediaKind("audio/x-m4b", null))
@@ -43,8 +43,26 @@ class BookOrbitRepositoryHelpersTest {
 
     @Test
     fun `inferMediaKind falls back to unknown for unsupported tokens`() {
+        assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, "Novel.mobi"))
+        assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, "Novel.azw"))
+        assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, "Novel.azw3"))
+        assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, "Novel.fb2"))
         assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind("application/octet-stream", "mystery.bin"))
         assertEquals(MediaKind.UNKNOWN, BookOrbitPayloadParser.inferMediaKind(null, null))
+    }
+
+    @Test
+    fun `readium routes distinguish direct and normalized publications`() {
+        assertEquals(ReadiumPublicationRoute.EPUB, readiumPublicationRoute("kepub", "Novel.kepub.epub"))
+        assertEquals(ReadiumPublicationRoute.PDF, readiumPublicationRoute("application/pdf", null))
+        assertEquals(ReadiumPublicationRoute.AUDIO, readiumPublicationRoute("audio/flac", null))
+        assertEquals(ReadiumPublicationRoute.COMIC, readiumPublicationRoute("cbz", null))
+        assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cbr", null))
+        assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cb7", null))
+        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("mobi", null))
+        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("azw3", null))
+        assertEquals(ReadiumPublicationRoute.NORMALIZE_EBOOK_TO_EPUB, readiumPublicationRoute("fb2", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED, readiumPublicationRoute("bin", null))
     }
 
     @Test
