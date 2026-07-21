@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" fill="none">
+  <title>Lagrange Bold Lagrange mark</title>
+  <path d="M18 61C18 40 34 25 54 23C72 22 87 31 91 46C95 62 85 78 67 85C47 92 27 84 19 69C17 66 17 63 18 61" stroke="#F0B429" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 39C36 37 46 39 53 45V78C45 73 36 71 25 73V39Z" fill="#F8FBFF"/>
+  <path d="M55 45C62 39 72 37 83 39V73C72 71 63 73 55 78V45Z" fill="#F8FBFF"/>
+  <circle cx="82" cy="54" r="6.5" fill="#F0B429"/>
+</svg>
