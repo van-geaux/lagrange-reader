@@ -46,22 +46,40 @@ The app currently uses the standard BookOrbit username/password login. Direct OI
 
 ## Screenshots
 
-Screenshots can be added manually to [`screenshots/`](screenshots/). The sections below are intentionally reserved for release documentation:
+The following screenshots show the main reading and library experience. More screenshots are available below.
 
-<!-- Add screenshots here, for example: ![Home](screenshots/home.png) -->
+<p align="center">
+  <img src="screenshots/03-home-screen.jpg" alt="Lagrange Reader home screen" width="220">
+  <img src="screenshots/05-reader-options.jpg" alt="Reader options" width="220">
+  <img src="screenshots/09-audiobook-player.jpg" alt="Audiobook player" width="220">
+</p>
 
-### Home and library browsing
+<details>
+<summary>More screenshots</summary>
 
-_Screenshot placeholder_
+### Connecting to a server
 
-### Reading and offline books
+![Server address](screenshots/01-server-input.jpg)
 
-_Screenshot placeholder_
+![Login](screenshots/02-login-screen.jpg)
 
-### Audiobook player
+### Books and downloads
 
-_Screenshot placeholder_
+![Book detail](screenshots/04-book-detail.jpg)
 
+![Downloaded local book](screenshots/08-download-local.jpg)
+
+### Settings and achievements
+
+![App options](screenshots/06-app-options.jpg)
+
+![Achievements](screenshots/07-achievements.jpg)
+
+### Audiobook read-along
+
+![Audiobook read-along](screenshots/10-audiobook-read-along.jpg)
+
+</details>
 ## Building manually
 
 ### Requirements
@@ -80,10 +98,10 @@ Clone the repository, open it in Android Studio, and let it use the included Gra
 The generated APK is:
 
 ```text
-app/build/outputs/apk/release/app-release.apk
+app/build/release-artifacts/Lagrange-1.0.0.apk
 ```
 
-The signed APK is generated at `app/build/outputs/apk/release/app-release.apk`. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
+The signed APK is generated at `app/build/release-artifacts/Lagrange-1.0.0.apk`. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
 
 Useful verification commands are:
 
