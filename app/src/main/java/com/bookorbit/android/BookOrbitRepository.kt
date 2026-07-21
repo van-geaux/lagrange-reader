@@ -2632,6 +2632,37 @@ internal suspend fun loadCompleteSeriesCatalog(
     )
 }
 
+internal suspend fun loadCompleteAuthorCatalog(
+    loadPage: suspend (Int) -> AuthorCatalogPage
+): AuthorCatalogPage {
+    val accumulated = linkedMapOf<String, AuthorSummary>()
+    var targetTotal: Int? = null
+    var firstPageSize: Int? = null
+    var pageNumber = 0
+
+    while (true) {
+        val page = loadPage(pageNumber)
+        targetTotal = listOfNotNull(targetTotal, page.total?.takeIf { it >= 0 }).maxOrNull()
+        firstPageSize = firstPageSize ?: page.size?.takeIf { it > 0 }
+
+        val countBeforePage = accumulated.size
+        page.items.forEach { author -> accumulated.putIfAbsent(author.id, author) }
+        val addedItems = accumulated.size - countBeforePage
+
+        if (page.items.isEmpty() || addedItems == 0) break
+        if (targetTotal != null && accumulated.size >= targetTotal) break
+        if (targetTotal == null && firstPageSize != null && page.items.size < firstPageSize) break
+        pageNumber += 1
+    }
+
+    return AuthorCatalogPage(
+        items = accumulated.values.toList(),
+        total = targetTotal ?: accumulated.size,
+        page = 0,
+        size = firstPageSize
+    )
+}
+
 internal suspend fun loadCompleteLibraryPages(
     firstPage: LibraryBooksPage? = null,
     loadPage: suspend (Int) -> LibraryBooksPage

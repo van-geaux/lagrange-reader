@@ -1112,6 +1112,57 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun authorsCatalogLoadsEveryPageAndUsesSharedJumpRail() {
+        val dataSource = InstrumentedFakeDataSource().apply {
+            authorCatalogPages[0] = AuthorCatalogPage(
+                items = listOf(
+                    AuthorSummary(id = "author-m", name = "Middle Author"),
+                    AuthorSummary(id = "author-a", name = "Alpha Author")
+                ),
+                total = 3,
+                page = 0,
+                size = 2
+            )
+            authorCatalogPages[1] = AuthorCatalogPage(
+                items = listOf(AuthorSummary(id = "author-z", name = "Zulu Author")),
+                total = 3,
+                page = 1,
+                size = 2
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Authors").performClick()
+        composeRule.waitUntil { dataSource.loadedAuthorCatalogPages == listOf(0, 1) }
+
+        composeRule.onNodeWithContentDescription("Jump to A").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("B unavailable").assertIsDisplayed().assertHasNoClickAction()
+        composeRule.onNodeWithContentDescription("Jump to Z").assertIsDisplayed()
+        val authorCardBounds = composeRule.onNodeWithTag("author_card_author-a")
+            .fetchSemanticsNode().boundsInRoot
+        val jumpRailBounds = composeRule.onNodeWithTag("catalog_jump_rail")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(authorCardBounds.right <= jumpRailBounds.left)
+        composeRule.onAllNodesWithText("Load more").assertCountEquals(0)
+    }
+
+    @Test
     fun libraryGridCardsEndBeforeTheVisibleJumpRail() {
         val book = BookSummary(
             libraryId = "lib-1",
@@ -1450,6 +1501,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val searchQueries = mutableListOf<String>()
     val libraryPageResults = mutableMapOf<Int, LibraryBooksPage>()
     val seriesCatalogPages = mutableMapOf<Int, SeriesCatalogPage>()
+    val authorCatalogPages = mutableMapOf<Int, AuthorCatalogPage>()
+    val loadedAuthorCatalogPages = mutableListOf<Int>()
     val catalogImageResults = mutableMapOf<String, ByteArray>()
     val loadedCatalogImageUrls = mutableListOf<String>()
 
@@ -1492,6 +1545,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     }
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         seriesCatalogPages[page] ?: SeriesCatalogPage(page = page)
+    override suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage {
+        loadedAuthorCatalogPages += page
+        return authorCatalogPages[page] ?: AuthorCatalogPage(page = page)
+    }
     override suspend fun loadLocalBooks(): List<BookSummary> = localBooksResult
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)

@@ -201,6 +201,13 @@ internal fun buildSeriesJumpTargets(
     direction = direction
 )
 
+internal fun buildAuthorJumpTargets(
+    authors: List<AuthorSummary>
+): List<Pair<Char, Int>> = buildAlphabetJumpTargets(
+    labels = authors.map { libraryJumpLabel(it.name) },
+    direction = SortDirection.ASCENDING
+)
+
 private fun buildAlphabetJumpTargets(
     labels: List<Char>,
     direction: SortDirection
@@ -1696,27 +1703,43 @@ private fun AuthorsCatalogScreen(
 ) {
     var items by remember(query) { mutableStateOf<List<AuthorSummary>>(emptyList()) }
     var total by remember(query) { mutableStateOf(0) }
-    var nextPage by remember(query) { mutableStateOf(1) }
     var isLoading by remember(query) { mutableStateOf(false) }
+    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
+    val reduceMotion = LocalReduceMotion.current
 
     LaunchedEffect(query) {
         isLoading = true
+        gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
-        val page = loader(query.takeIf { it.isNotBlank() }, 0)
-        items = page.items
-        total = page.total ?: page.items.size
-        nextPage = 1
+        val catalog = loadCompleteAuthorCatalog { page ->
+            loader(query.takeIf { it.isNotBlank() }, page)
+        }
+        items = catalog.items.sortedWith(
+            compareBy<AuthorSummary> { it.name.trim().lowercase() }.thenBy { it.id }
+        )
+        total = catalog.total ?: catalog.items.size
         isLoading = false
     }
+    val jumpTargets = remember(items, isLoading) {
+        if (isLoading) emptyList() else buildAuthorJumpTargets(items)
+    }
 
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        val hasJumpRail = jumpTargets.isNotEmpty()
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = CATALOG_GRID_PADDING,
+                top = CATALOG_GRID_PADDING,
+                end = catalogGridEndPadding(hasJumpRail),
+                bottom = CATALOG_GRID_PADDING
+            ),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 if (total > 0) "$total authors" else "Browse every accessible author",
@@ -1733,6 +1756,7 @@ private fun AuthorsCatalogScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag("author_card_${author.id}")
                     .clickable { onAuthorSelected(author) },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -1755,22 +1779,24 @@ private fun AuthorsCatalogScreen(
                 }
             }
         }
-        if (!isLoading && items.size < total) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            isLoading = true
-                            val page = loader(query.takeIf { it.isNotBlank() }, nextPage)
-                            items = (items + page.items).distinctBy { it.id }
-                            total = page.total ?: total
-                            nextPage += 1
-                            isLoading = false
+        }
+        if (hasJumpRail) {
+            LibraryJumpRail(
+                targets = jumpTargets,
+                direction = SortDirection.ASCENDING,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp, bottom = 12.dp),
+                onJump = { index ->
+                    scope.launch {
+                        if (reduceMotion) {
+                            gridState.scrollToItem(index + 1)
+                        } else {
+                            gridState.animateScrollToItem(index + 1)
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Load more") }
-            }
+                    }
+                }
+            )
         }
     }
 }
