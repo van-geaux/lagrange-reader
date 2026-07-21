@@ -894,10 +894,14 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("About details and acknowledgements will be expanded here.")
             .assertIsDisplayed()
 
+        composeRule.onNodeWithContentDescription("Libraries icon").assertIsDisplayed()
         composeRule.onNodeWithText("More").performClick()
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Series icon").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Authors icon").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Local books icon").assertIsDisplayed()
         composeRule.onAllNodesWithText("Options").assertCountEquals(0)
     }
 

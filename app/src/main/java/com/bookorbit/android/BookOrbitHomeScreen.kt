@@ -47,16 +47,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -1235,7 +1238,7 @@ private fun BrowserBottomNavigation(
         NavigationBarItem(
             selected = destination == BrowserDestination.LIBRARY,
             onClick = onLibraries,
-            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            icon = { Icon(Icons.Default.LocalLibrary, contentDescription = "Libraries icon") },
             label = { Text("Libraries") }
         )
         NavigationBarItem(
@@ -1271,17 +1274,17 @@ private fun MoreMenu(
         )
         ListItem(
             headlineContent = { Text("Series") },
-            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Series icon") },
             modifier = Modifier.clickable(onClick = onSeries)
         )
         ListItem(
             headlineContent = { Text("Authors") },
-            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
             modifier = Modifier.clickable(onClick = onAuthors)
         )
         ListItem(
             headlineContent = { Text("Local books") },
-            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            leadingContent = { Icon(Icons.Default.DownloadForOffline, contentDescription = "Local books icon") },
             modifier = Modifier.clickable(onClick = onLocalBooks)
         )
     }
