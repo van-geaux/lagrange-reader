@@ -13,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 
@@ -44,6 +43,16 @@ internal fun preferencesForOrientationLockChange(
 }
 
 class MainActivity : ComponentActivity() {
+    private lateinit var preferencesStore: AppPreferencesStore
+    private val appPreferencesState = mutableStateOf(AppPreferences())
+
+    override fun onResume() {
+        super.onResume()
+        if (::preferencesStore.isInitialized) {
+            appPreferencesState.value = preferencesStore.read()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -72,7 +81,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val screen by graph.coordinator.screen.collectAsState()
-            var appPreferences by remember { mutableStateOf(initialPreferences) }
+            var appPreferences by appPreferencesState
             LaunchedEffect(Unit) {
                 graph.coordinator.bootstrap()
             }

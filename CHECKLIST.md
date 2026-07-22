@@ -555,3 +555,10 @@ UI/UX discussion and design-system work can start now:
 
 - [x] Validate Book Detail Other versions, remote audio/comics, PDF, reader stability, Library/catalog/shelves, visual/UI/responsive/accessibility, and connected instrumentation coverage on device.
 - [x] Accept fast direct-to-content startup; a visible splash is not required.
+
+### Library-specific reader configuration - 2026-07-22
+
+1. [x] Add Reading configuration under main Options with a library-name dropdown. Persist one profile per library: reading direction (LTR/RTL), EPUB theme, text size, and margins.
+2. [x] Save in-reader EPUB preference changes back to the owning library profile. Carry the owning library ID through EPUB, PDF, and comic launches; apply logical edge taps/tutorial labels and direction-aware comic/PDF pager layout from that profile. Refresh main preferences after returning from a reader.
+3. [x] Focused coverage and the full gate pass 286 JVM tests across 49 suites with 0 failures/errors/skips, lint, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+   - [ ] Validate library switching, LTR/RTL edge gestures/tutorial/pager behavior, persistence after relaunch, and large-text/theme/margin combinations on a physical device.

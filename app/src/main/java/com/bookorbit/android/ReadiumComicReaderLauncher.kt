@@ -162,6 +162,7 @@ internal fun ReadiumComicReaderLauncher(
                     file = ready.file,
                     title = title,
                     readerKey = readerKey,
+                    libraryId = book.libraryId,
                     launchMode = launchMode,
                     initialPage = initialPage
                 )
@@ -173,6 +174,7 @@ internal fun ReadiumComicReaderLauncher(
                     pageMediaType = ready.pageMediaType,
                     title = title,
                     readerKey = readerKey,
+                    libraryId = book.libraryId,
                     launchMode = launchMode,
                     initialPage = initialPage
                 )

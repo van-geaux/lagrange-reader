@@ -490,3 +490,7 @@ Detailed checkpoint status is tracked in:
 ### Device validation pass - 2026-07-22
 
 The user confirmed the remaining device-validation groups are complete: Other versions; remote audio; remote comics; PDF; reader stability/interaction; Library/catalog/shelves; visual/UI/responsive/accessibility checks; and connected instrumentation coverage. The app opens directly into content without a noticeable splash because startup is fast; this is accepted as the intended behavior. No device-validation blocker remains before the next work-order selection.
+
+### Library-specific reader configuration - 2026-07-22
+
+Main Options now exposes Reading configuration with a library-name dropdown. Each library owns a persisted profile for LTR/RTL direction, EPUB theme, text size, and margins; EPUB reader edits save back to that owning profile. EPUB, PDF, and comic launches carry the library ID, so logical edge taps/tutorial wording and direction-aware comic/PDF pager layout follow the correct profile. Returning from a reader refreshes the main preference view. The full gate passes 286 JVM tests across 49 suites with 0 failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly; APK: `app/build/outputs/apk/debug/app-debug.apk`. Physical-device validation remains pending.

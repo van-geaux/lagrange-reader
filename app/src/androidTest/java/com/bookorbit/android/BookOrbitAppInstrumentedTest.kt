@@ -1558,6 +1558,42 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onAllNodesWithText("Reader options").assertCountEquals(0)
     }
 
+    @Test
+    fun optionsScopeReaderConfigurationToTheSelectedLibrary() {
+        val preferences = mutableStateOf(AppPreferences())
+        val libraries = listOf(
+            LibrarySummary(id = "novels", name = "Novels"),
+            LibrarySummary(id = "manga", name = "Manga")
+        )
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(
+                    preferences = preferences.value,
+                    libraries = libraries,
+                    selectedLibraryId = "novels",
+                    onPreferencesChange = { preferences.value = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("options-reading-library").performScrollTo().performClick()
+        composeRule.onNodeWithText("Manga").performClick()
+        composeRule.onNodeWithTag("options-reading-direction-right_to_left").performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(
+                LibraryReadingDirection.RIGHT_TO_LEFT,
+                preferences.value.readerPreferencesFor("manga").readingDirection
+            )
+            assertEquals(
+                LibraryReadingDirection.LEFT_TO_RIGHT,
+                preferences.value.readerPreferencesFor("novels").readingDirection
+            )
+        }
+        composeRule.onNodeWithTag("options-reading-direction-right_to_left").assertIsSelected()
+        composeRule.onNodeWithText("Typography").assertIsDisplayed()
+        composeRule.onNodeWithText("Page margins").assertIsDisplayed()
+    }
 }
 
 private class InstrumentedFakeDataSource : BookOrbitDataSource {

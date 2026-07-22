@@ -22,7 +22,15 @@ class AppPreferencesStoreInstrumentedTest {
             cellularDownloadPolicy = CellularDownloadPolicy.ALWAYS,
             backgroundRefreshNetworkPolicy = BackgroundRefreshNetworkPolicy.DISABLED,
             confirmDeleteLocalCopy = false,
-            seriesGroupingMode = SeriesGroupingMode.FORMAT
+            seriesGroupingMode = SeriesGroupingMode.FORMAT,
+            libraryReaderPreferences = mapOf(
+                "manga" to LibraryReaderPreferences(
+                    readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+                    theme = EpubReaderTheme.Dark,
+                    fontScale = 1.3f,
+                    padding = EpubPaddingPercentages(20f, 10f, 5f, 5f)
+                )
+            )
         )
 
         try {

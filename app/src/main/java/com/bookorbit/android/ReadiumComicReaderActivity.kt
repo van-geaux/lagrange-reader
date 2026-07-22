@@ -40,7 +40,6 @@ import org.json.JSONObject
 import org.readium.r2.navigator.image.ImageNavigatorFragment
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
-import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.DelicateReadiumApi
 import org.readium.r2.shared.publication.Href
 import org.readium.r2.shared.publication.Link
@@ -168,8 +167,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private lateinit var tapZoneTutorialView: ComposeView
 
     private lateinit var readerKey: String
+    private lateinit var libraryId: String
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
+    private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var tapZoneTutorialHasShown = false
@@ -196,6 +197,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
+        libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
+        readingDirection = AppPreferencesStore(this).read()
+            .readerPreferencesFor(libraryId).readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         configureSystemBars()
         createReaderViews()
@@ -338,6 +342,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 BookOrbitTheme {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
+                        readingDirection = readingDirection,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -394,10 +399,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         supportFragmentManager.beginTransaction()
             .replace(readerContainerId, fragment, NAVIGATOR_TAG)
             .commitNow()
+        fragment.publicationView.layoutDirection = if (
+            readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+        ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
         fragment.addInputListener(
-            DirectionalNavigationAdapter(
+            LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
-                horizontalEdgeThresholdPercent = 0.25
+                readingDirection = readingDirection,
+                horizontalEdgeThresholdPercent = 0.25f
             )
         )
         fragment.addInputListener(
@@ -574,6 +583,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         private const val EXTRA_PAGE_MEDIA_TYPE = "readium_comic_page_media_type"
         private const val EXTRA_TITLE = "readium_comic_title"
         private const val EXTRA_READER_KEY = "readium_comic_reader_key"
+        private const val EXTRA_LIBRARY_ID = "readium_comic_library_id"
         private const val EXTRA_IS_PREVIEW = "readium_comic_is_preview"
         private const val EXTRA_INITIAL_PAGE = "readium_comic_initial_page"
         private const val EXTRA_RESULT_PAGE = "readium_comic_result_page"
@@ -586,12 +596,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             file: File,
             title: String,
             readerKey: String,
+            libraryId: String = "",
             launchMode: ReaderLaunchMode,
             initialPage: Int
         ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
+            .putExtra(EXTRA_LIBRARY_ID, libraryId)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
             .putExtra(EXTRA_INITIAL_PAGE, initialPage)
 
@@ -602,6 +614,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             pageMediaType: MediaType,
             title: String,
             readerKey: String,
+            libraryId: String = "",
             launchMode: ReaderLaunchMode,
             initialPage: Int
         ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
@@ -610,6 +623,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_PAGE_MEDIA_TYPE, pageMediaType.toString())
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
+            .putExtra(EXTRA_LIBRARY_ID, libraryId)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
             .putExtra(EXTRA_INITIAL_PAGE, initialPage)
 

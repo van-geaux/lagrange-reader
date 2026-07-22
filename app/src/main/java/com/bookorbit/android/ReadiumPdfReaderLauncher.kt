@@ -25,6 +25,7 @@ internal fun ReadiumPdfReaderLauncher(
     file: File,
     title: String,
     readerKey: String,
+    libraryId: String,
     launchMode: ReaderLaunchMode,
     initialPage: Int,
     onProgress: (pageIndex: Int, pageCount: Int, percent: Float?) -> Unit,
@@ -42,7 +43,7 @@ internal fun ReadiumPdfReaderLauncher(
         }
         latestOnFinished()
     }
-    LaunchedEffect(file, title, readerKey, launchMode, initialPage) {
+    LaunchedEffect(file, title, readerKey, libraryId, launchMode, initialPage) {
         if (!launched) {
             launched = true
             launcher.launch(
@@ -51,6 +52,7 @@ internal fun ReadiumPdfReaderLauncher(
                     file = file,
                     title = title,
                     readerKey = readerKey,
+                    libraryId = libraryId,
                     launchMode = launchMode,
                     initialPage = initialPage
                 )

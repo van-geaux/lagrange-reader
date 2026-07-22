@@ -323,3 +323,7 @@ Automated gate: 265 JVM tests across 46 suites, lint, debug APK assembly, and An
 
 
 Device-validation completion (July 22, 2026): the remaining reader, media, catalog/shelf, Other versions, responsive, theme, accessibility, and profile/detail checks are confirmed complete by user testing. The app's fast direct-to-content startup is accepted instead of requiring a visible splash screen.
+
+### Library-specific reader configuration - 2026-07-22
+
+Options > Reading now starts with a library-name dropdown. Direction, EPUB theme, text size, and margins are independent per library; EPUB reader edits persist to the owning library. EPUB/PDF/comic launches retain library context, making edge taps and tutorial labels logical for LTR/RTL and aligning comic/PDF pager controls with that direction. Returning from a reader refreshes the main preference presentation. Automated coverage and the full 286-JVM-test gate (49 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation remains pending.

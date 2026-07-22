@@ -290,3 +290,7 @@ Open a book with a non-null series index and another accessible record at the ex
 
 
 Device-validation completion (July 22, 2026): user testing confirms the remaining Other versions, remote-audio, remote-comic, PDF, reader-stability, Library/catalog/shelf, visual/UI/responsive/accessibility, and connected-instrumentation checks. Startup is accepted: the app opens directly into content quickly, so no visible splash is required.
+
+### Library-specific reader configuration
+
+Open Options > Reading and choose each configured library from the library-name dropdown. Confirm every library retains independent LTR/RTL direction, EPUB theme, text size, and top/bottom/left/right margins. Open EPUB, PDF, and comic titles from each library and verify the library ID is carried into the reader: edge taps and tutorial labels use logical direction, and comic/PDF pager controls follow that direction. Change EPUB settings in-reader, return to the app, and confirm the owning library profile and the main Options view refresh immediately. Automated coverage passes 286 JVM tests across 49 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`; APK: `app/build/outputs/apk/debug/app-debug.apk`. Physical-device validation of switching, relaunch persistence, gestures, pager layout, accessibility, and large text remains pending.

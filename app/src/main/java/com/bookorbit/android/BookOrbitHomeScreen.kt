@@ -89,6 +89,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -1073,6 +1074,8 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
+                    libraries = state.libraries,
+                    selectedLibraryId = state.selectedLibraryId,
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
@@ -2041,6 +2044,8 @@ private fun BookPosterCard(
 @Composable
 internal fun OptionsScreen(
     preferences: AppPreferences,
+    libraries: List<LibrarySummary> = emptyList(),
+    selectedLibraryId: String? = null,
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
@@ -2050,6 +2055,15 @@ internal fun OptionsScreen(
     var storageRefreshKey by rememberSaveable { mutableStateOf(0) }
     var isClearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
+    var readingLibraryId by rememberSaveable {
+        mutableStateOf(selectedLibraryId ?: libraries.firstOrNull()?.id)
+    }
+    LaunchedEffect(libraries, selectedLibraryId) {
+        if (readingLibraryId !in libraries.map { it.id }) {
+            readingLibraryId = selectedLibraryId?.takeIf { id -> libraries.any { it.id == id } }
+                ?: libraries.firstOrNull()?.id
+        }
+    }
     val scope = rememberCoroutineScope()
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
         value = runCatching { storageUsageLoader() }.getOrNull()
@@ -2109,6 +2123,19 @@ internal fun OptionsScreen(
                 testTag = "options-reduce-motion",
                 onCheckedChange = {
                     onPreferencesChange(preferences.copy(reduceMotion = it))
+                }
+            )
+        }
+        item(key = "reading-configuration") {
+            LibraryReaderConfiguration(
+                libraries = libraries,
+                selectedLibraryId = readingLibraryId,
+                preferences = readingLibraryId?.let(preferences::readerPreferencesFor),
+                onLibrarySelected = { readingLibraryId = it },
+                onPreferencesChange = { libraryId, readerPreferences ->
+                    onPreferencesChange(
+                        preferences.withReaderPreferences(libraryId, readerPreferences)
+                    )
                 }
             )
         }
@@ -2269,6 +2296,153 @@ internal fun OptionsScreen(
     }
 }
 
+@Composable
+private fun LibraryReaderConfiguration(
+    libraries: List<LibrarySummary>,
+    selectedLibraryId: String?,
+    preferences: LibraryReaderPreferences?,
+    onLibrarySelected: (String) -> Unit,
+    onPreferencesChange: (String, LibraryReaderPreferences) -> Unit
+) {
+    var libraryMenuExpanded by remember { mutableStateOf(false) }
+    val selectedLibrary = libraries.firstOrNull { it.id == selectedLibraryId }
+    val value = preferences ?: LibraryReaderPreferences()
+    Column(
+        modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OrbitEyebrow("Reading configuration")
+        Text("Library reader profile", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Direction, typography, and margins are saved independently for each library.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { libraryMenuExpanded = true },
+                enabled = libraries.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().testTag("options-reading-library")
+            ) {
+                Text(
+                    selectedLibrary?.name ?: "No libraries available",
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Start
+                )
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+            }
+            DropdownMenu(
+                expanded = libraryMenuExpanded,
+                onDismissRequest = { libraryMenuExpanded = false }
+            ) {
+                libraries.forEach { library ->
+                    DropdownMenuItem(
+                        text = { Text(library.name) },
+                        onClick = {
+                            libraryMenuExpanded = false
+                            onLibrarySelected(library.id)
+                        },
+                        modifier = Modifier.testTag("options-reading-library-${library.id}")
+                    )
+                }
+            }
+        }
+        if (selectedLibrary != null) {
+            Text("Reading direction", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LibraryReadingDirection.values().forEach { direction ->
+                    FilterChip(
+                        selected = value.readingDirection == direction,
+                        onClick = {
+                            onPreferencesChange(
+                                selectedLibrary.id,
+                                value.copy(readingDirection = direction)
+                            )
+                        },
+                        label = { Text(direction.displayName) },
+                        modifier = Modifier.testTag(
+                            "options-reading-direction-${direction.name.lowercase()}"
+                        )
+                    )
+                }
+            }
+            Text("Typography", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                EPUB_THEME_OPTIONS.forEach { theme ->
+                    FilterChip(
+                        selected = value.theme == theme,
+                        onClick = {
+                            onPreferencesChange(selectedLibrary.id, value.copy(theme = theme))
+                        },
+                        label = { Text(theme.label) }
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        onPreferencesChange(
+                            selectedLibrary.id,
+                            value.copy(fontScale = value.fontScale - 0.1f)
+                        )
+                    }
+                ) { Text("A-") }
+                Text(
+                    "Text size ${formatEpubFontScale(value.fontScale)}",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedButton(
+                    onClick = {
+                        onPreferencesChange(
+                            selectedLibrary.id,
+                            value.copy(fontScale = value.fontScale + 0.1f)
+                        )
+                    }
+                ) { Text("A+") }
+            }
+            Text("Page margins", style = MaterialTheme.typography.titleMedium)
+            listOf(
+                "Top" to value.padding.top,
+                "Bottom" to value.padding.bottom,
+                "Left" to value.padding.left,
+                "Right" to value.padding.right
+            ).forEach { (label, margin) ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = margin,
+                        onValueChange = { next ->
+                            val padding = when (label) {
+                                "Top" -> value.padding.copy(top = next)
+                                "Bottom" -> value.padding.copy(bottom = next)
+                                "Left" -> value.padding.copy(left = next)
+                                else -> value.padding.copy(right = next)
+                            }
+                            onPreferencesChange(selectedLibrary.id, value.copy(padding = padding))
+                        },
+                        valueRange = 0f..100f,
+                        steps = 19,
+                        modifier = Modifier.testTag(
+                            "options-reading-margin-${label.lowercase()}"
+                        )
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
 @Composable
 private fun AppPreferenceSwitchRow(
     title: String,

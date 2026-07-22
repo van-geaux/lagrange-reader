@@ -49,7 +49,8 @@ data class AppPreferences(
     val backgroundRefreshNetworkPolicy: BackgroundRefreshNetworkPolicy =
         BackgroundRefreshNetworkPolicy.WIFI_ONLY,
     val confirmDeleteLocalCopy: Boolean = true,
-    val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY
+    val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
+    val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap()
 )
 
 internal class AppPreferencesStore(context: Context) {
@@ -77,6 +78,9 @@ internal class AppPreferencesStore(context: Context) {
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         seriesGroupingMode = seriesGroupingModeFromStorage(
             preferences.getString(SERIES_GROUPING_MODE_KEY, null)
+        ),
+        libraryReaderPreferences = libraryReaderPreferencesFromStorage(
+            preferences.getString(LIBRARY_READER_PREFERENCES_KEY, null)
         )
     )
 
@@ -106,6 +110,10 @@ internal class AppPreferencesStore(context: Context) {
                 SERIES_GROUPING_MODE_KEY,
                 seriesGroupingModeStorageValue(value.seriesGroupingMode)
             )
+            .putString(
+                LIBRARY_READER_PREFERENCES_KEY,
+                libraryReaderPreferencesStorageValue(value.libraryReaderPreferences)
+            )
             .apply()
     }
 
@@ -120,6 +128,7 @@ internal class AppPreferencesStore(context: Context) {
         const val BACKGROUND_REFRESH_NETWORK_POLICY_KEY = "background_refresh_network_policy"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
+        const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
     }
 }
 

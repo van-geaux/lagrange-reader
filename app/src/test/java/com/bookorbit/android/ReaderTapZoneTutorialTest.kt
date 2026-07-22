@@ -34,4 +34,15 @@ class ReaderTapZoneTutorialTest {
             assertEquals(0.5f, region.alpha)
         }
     }
+    @Test
+    fun `tutorial follows the selected library reading direction`() {
+        assertEquals(
+            listOf("Previous", "Menu", "Next"),
+            readerTapZoneTutorialRegions(LibraryReadingDirection.LEFT_TO_RIGHT).map { it.label }
+        )
+        assertEquals(
+            listOf("Next", "Menu", "Previous"),
+            readerTapZoneTutorialRegions(LibraryReadingDirection.RIGHT_TO_LEFT).map { it.label }
+        )
+    }
 }

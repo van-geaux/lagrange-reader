@@ -45,7 +45,7 @@ import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.preferences.Theme as ReadiumTheme
-import org.readium.r2.navigator.util.DirectionalNavigationAdapter
+import org.readium.r2.navigator.preferences.ReadingProgression as ReadiumReadingProgression
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
@@ -95,10 +95,21 @@ internal suspend fun openReadiumEpub(
     ReadiumEpubOpenResult.Opened(publication)
 }
 
+internal fun readiumReadingProgression(
+    readingDirection: LibraryReadingDirection
+): ReadiumReadingProgression = if (
+    readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+) {
+    ReadiumReadingProgression.RTL
+} else {
+    ReadiumReadingProgression.LTR
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 internal fun readiumPreferences(
     theme: EpubReaderTheme,
-    fontScale: Float
+    fontScale: Float,
+    readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
 ): EpubPreferences = EpubPreferences(
     backgroundColor = ReadiumColor(theme.backgroundColor),
     textColor = ReadiumColor(cssHexColorInt(theme.foregroundCss)),
@@ -108,6 +119,7 @@ internal fun readiumPreferences(
         EpubReaderTheme.Dark -> ReadiumTheme.DARK
     },
     fontSize = fontScale.coerceIn(0.9f, 1.5f).toDouble(),
+    readingProgression = readiumReadingProgression(readingDirection),
     pageMargins = 0.0,
     columnCount = ColumnCount.ONE,
     scroll = false
@@ -156,11 +168,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var tapZoneTutorialView: ComposeView
 
     private lateinit var readerKey: String
+    private lateinit var libraryId: String
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
     private var padding by mutableStateOf(EpubPaddingPercentages())
     private var fontScale by mutableStateOf(1f)
+    private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
     private var chapterTitles by mutableStateOf(emptyList<String>())
     private var currentChapter by mutableStateOf(0)
     private var currentPage by mutableStateOf(0)
@@ -172,6 +186,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
+    private val appPreferencesStore by lazy { AppPreferencesStore(this) }
     private val locatorStore by lazy { ReadiumEpubLocatorStore(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -194,9 +209,21 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
+        libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
-        selectedTheme = themeStore.read()
-        padding = paddingStore.read(readerKey)
+        val appPreferences = appPreferencesStore.read()
+        val readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
+            ?: LibraryReaderPreferences(
+                theme = themeStore.read(),
+                padding = paddingStore.read(readerKey)
+            )
+        selectedTheme = readerPreferences.theme
+        padding = readerPreferences.padding
+        fontScale = readerPreferences.fontScale
+        readingDirection = readerPreferences.readingDirection
+        appPreferencesStore.save(
+            appPreferences.withReaderPreferences(libraryId, readerPreferences)
+        )
         configureSystemBars()
         createReaderViews()
         installBackHandler()
@@ -327,7 +354,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             onCloseBook = ::finishReader,
                             onThemeSelected = ::applyTheme,
                             onPaddingChange = ::applyPadding,
-                            onPaddingChangeFinished = { paddingStore.save(readerKey, padding) },
+                            onPaddingChangeFinished = { saveLibraryReaderPreferences() },
                             onDecreaseFont = { applyFontScale(fontScale - 0.1f) },
                             onIncreaseFont = { applyFontScale(fontScale + 0.1f) },
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -350,6 +377,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 BookOrbitTheme {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
+                        readingDirection = readingDirection,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -407,7 +435,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val navigatorFactory = EpubNavigatorFactory(openedPublication)
         val fragmentFactory = navigatorFactory.createFragmentFactory(
             initialLocator = initialLocator,
-            initialPreferences = readiumPreferences(selectedTheme, fontScale),
+            initialPreferences = readiumPreferences(selectedTheme, fontScale, readingDirection),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false)
         )
@@ -420,9 +448,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .replace(readerContainerId, fragment, NAVIGATOR_TAG)
             .commitNow()
         fragment.addInputListener(
-            DirectionalNavigationAdapter(
+            LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
-                horizontalEdgeThresholdPercent = 0.25
+                readingDirection = readingDirection,
+                horizontalEdgeThresholdPercent = 0.25f
             )
         )
         fragment.addInputListener(
@@ -533,18 +562,37 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         rootView.setBackgroundColor(theme.backgroundColor)
         readerViewport.setBackgroundColor(theme.backgroundColor)
         readerContainer.setBackgroundColor(theme.backgroundColor)
-        navigator?.submitPreferences(readiumPreferences(theme, fontScale))
+        navigator?.submitPreferences(readiumPreferences(theme, fontScale, readingDirection))
+        saveLibraryReaderPreferences()
         configureSystemBars()
     }
 
     private fun applyFontScale(scale: Float) {
         fontScale = scale.coerceIn(0.9f, 1.5f)
-        navigator?.submitPreferences(readiumPreferences(selectedTheme, fontScale))
+        navigator?.submitPreferences(
+            readiumPreferences(selectedTheme, fontScale, readingDirection)
+        )
+        saveLibraryReaderPreferences()
     }
 
     private fun applyPadding(next: EpubPaddingPercentages) {
         padding = next
         applyReaderPadding()
+    }
+
+    private fun saveLibraryReaderPreferences() {
+        val current = appPreferencesStore.read()
+        appPreferencesStore.save(
+            current.withReaderPreferences(
+                libraryId,
+                LibraryReaderPreferences(
+                    readingDirection = readingDirection,
+                    theme = selectedTheme,
+                    fontScale = fontScale,
+                    padding = padding
+                )
+            )
+        )
     }
 
     private fun applyReaderPadding() {
@@ -685,6 +733,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_FILE_PATH = "readium_epub_file_path"
         private const val EXTRA_TITLE = "readium_epub_title"
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
+        private const val EXTRA_LIBRARY_ID = "readium_epub_library_id"
         private const val EXTRA_IS_PREVIEW = "readium_epub_is_preview"
         private const val EXTRA_INITIAL_CHAPTER = "readium_epub_initial_chapter"
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
@@ -701,6 +750,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             file: File,
             title: String,
             readerKey: String,
+            libraryId: String = "",
             launchMode: ReaderLaunchMode,
             initialChapter: Int,
             initialPage: Int,
@@ -710,6 +760,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
+            .putExtra(EXTRA_LIBRARY_ID, libraryId)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
             .putExtra(EXTRA_INITIAL_CHAPTER, initialChapter)
             .putExtra(EXTRA_INITIAL_PAGE, initialPage)

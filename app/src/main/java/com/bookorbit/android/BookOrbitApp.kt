@@ -766,6 +766,7 @@ private fun ReaderScreen(
                 file = readerFile,
                 title = state.book.title,
                 readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+                libraryId = state.book.libraryId,
                 launchMode = state.launchMode,
                 initialChapter = if (isPreview) 0 else state.pageIndex,
                 initialPage = if (isPreview) 0 else state.readerPageIndex,
@@ -816,6 +817,7 @@ private fun ReaderScreen(
             file = requireNotNull(state.localFile),
             title = state.book.title,
             readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+            libraryId = state.book.libraryId,
             launchMode = state.launchMode,
             initialPage = if (isPreview) 0 else state.pageIndex,
             onProgress = { pageIndex, _, percent ->
@@ -1457,13 +1459,25 @@ internal val READER_TAP_ZONE_TUTORIAL_REGIONS = listOf(
     ReaderTapZoneTutorialRegion("Next", red = 144, green = 238, blue = 144, alpha = 0.5f)
 )
 
+internal fun readerTapZoneTutorialRegions(
+    readingDirection: LibraryReadingDirection
+): List<ReaderTapZoneTutorialRegion> = if (
+    readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+) {
+    READER_TAP_ZONE_TUTORIAL_REGIONS.reversed()
+} else {
+    READER_TAP_ZONE_TUTORIAL_REGIONS
+}
+
 @Composable
 internal fun ReaderTapZoneTutorial(
     onDismiss: () -> Unit,
+    readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     modifier: Modifier = Modifier
 ) {
-    val interactionSources = remember {
-        List(READER_TAP_ZONE_TUTORIAL_REGIONS.size) { MutableInteractionSource() }
+    val regions = remember(readingDirection) { readerTapZoneTutorialRegions(readingDirection) }
+    val interactionSources = remember(readingDirection) {
+        List(regions.size) { MutableInteractionSource() }
     }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
@@ -1472,7 +1486,7 @@ internal fun ReaderTapZoneTutorial(
                 .testTag("reader-tap-zone-tutorial")
                 .semantics { contentDescription = "Reader tap regions tutorial" }
         ) {
-            READER_TAP_ZONE_TUTORIAL_REGIONS.forEachIndexed { index, region ->
+            regions.forEachIndexed { index, region ->
                 Box(
                     modifier = Modifier
                         .weight(region.widthWeight)
@@ -2691,7 +2705,7 @@ internal fun epubPageJumpJavascript(pageIndex: Int): String {
         "window.BookOrbitReaderLayout.goToPage(${pageIndex.coerceAtLeast(0)}); }"
 }
 
-private fun formatEpubFontScale(fontScale: Float): String {
+internal fun formatEpubFontScale(fontScale: Float): String {
     return String.format(Locale.US, "%.0f%%", fontScale * 100f)
 }
 
@@ -2711,7 +2725,7 @@ internal fun epubPaddingViewportPercent(value: Float): Float {
     return value.coerceIn(0f, 100f) / 4f
 }
 
-internal data class EpubPaddingPercentages(
+data class EpubPaddingPercentages(
     val top: Float = EPUB_DEFAULT_TOP_PADDING_PERCENT,
     val bottom: Float = EPUB_DEFAULT_PADDING_PERCENT,
     val left: Float = EPUB_DEFAULT_PADDING_PERCENT,
@@ -2744,13 +2758,13 @@ private const val AUDIO_CLOSE_TIMEOUT_MILLIS = 5_000L
 private val COMIC_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
 private const val COMIC_SWIPE_THRESHOLD_FRACTION = 0.15f
 private const val EPUB_READER_BRIDGE = "BookOrbitReader"
-private val EPUB_THEME_OPTIONS = listOf(
+internal val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,
     EpubReaderTheme.Dark
 )
 
-internal enum class EpubReaderTheme(
+enum class EpubReaderTheme(
     val label: String,
     val backgroundColor: Int,
     val backgroundCss: String,

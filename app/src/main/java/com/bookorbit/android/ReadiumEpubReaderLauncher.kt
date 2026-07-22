@@ -25,6 +25,7 @@ internal fun ReadiumEpubReaderLauncher(
     file: File,
     title: String,
     readerKey: String,
+    libraryId: String,
     launchMode: ReaderLaunchMode,
     initialChapter: Int,
     initialPage: Int,
@@ -50,7 +51,7 @@ internal fun ReadiumEpubReaderLauncher(
         }
         latestOnFinished()
     }
-    LaunchedEffect(file, title, readerKey, launchMode) {
+    LaunchedEffect(file, title, readerKey, libraryId, launchMode) {
         if (!launched) {
             launched = true
             launcher.launch(
@@ -59,6 +60,7 @@ internal fun ReadiumEpubReaderLauncher(
                     file = file,
                     title = title,
                     readerKey = readerKey,
+                    libraryId = libraryId,
                     launchMode = launchMode,
                     initialChapter = initialChapter,
                     initialPage = initialPage,
