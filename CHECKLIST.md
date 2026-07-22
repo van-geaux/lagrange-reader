@@ -562,3 +562,12 @@ UI/UX discussion and design-system work can start now:
 2. [x] Save in-reader EPUB preference changes back to the owning library profile. Carry the owning library ID through EPUB, PDF, and comic launches; apply logical edge taps/tutorial labels and direction-aware comic/PDF pager layout from that profile. Refresh main preferences after returning from a reader.
 3. [x] Focused coverage and the full gate pass 286 JVM tests across 49 suites with 0 failures/errors/skips, lint, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
    - [x] Physical-device validation confirms library switching, LTR/RTL edge gestures/tutorial/pager behavior, persistence after relaunch, and large-text/theme/margin combinations.
+
+### Per-library PDF and Comics layouts - 2026-07-22
+
+1. [x] Extend each library reader profile with independent PDF and Comics layout modes (`Paginated`/`Continuous`) plus a 0-48 dp continuous page gap. Defaults are PDF Continuous/16 dp and Comics Paginated/16 dp.
+2. [x] Expose separate PDF and Comics controls under Options > Reading. Disable each gap slider while its format is paginated.
+3. [x] Map PDF layout to Readium Pdfium `Axis.HORIZONTAL`/`Axis.VERTICAL` and native `pageSpacing`. Keep paginated comics on Readium `ImageNavigator`; route every supported local/remote comic through a custom continuous lazy vertical surface when Continuous is selected.
+4. [x] Bound continuous comics with visible/nearby page loading, viewport downsampling, a 64 MB source-page cap, a 16-million-pixel decoded-bitmap bound, retry state, resume/progress, LTR/RTL logical edge taps, menu tap, page-slider navigation, and Reduce motion behavior.
+5. [x] The full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+   - [ ] Validate PDF/comic mode switching, page gaps, local/remote continuous loading and retry, memory behavior, resume/progress, LTR/RTL gestures, slider navigation, and Reduce motion on a physical device.

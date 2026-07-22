@@ -327,3 +327,7 @@ Device-validation completion (July 22, 2026): the remaining reader, media, catal
 ### Library-specific reader configuration - 2026-07-22
 
 Options > Reading now starts with a library-name dropdown. Direction, EPUB theme, text size, and margins are independent per library; EPUB reader edits persist to the owning library. EPUB/PDF/comic launches retain library context, making edge taps and tutorial labels logical for LTR/RTL and aligning comic/PDF pager controls with that direction. Returning from a reader refreshes the main preference presentation. Automated coverage and the full 286-JVM-test gate (49 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation is complete.
+
+### Per-library PDF and Comics layouts - 2026-07-22
+
+Options > Reading now gives each library separate PDF and Comics `Paginated`/`Continuous` controls plus a 0-48 dp page-gap slider. Defaults are PDF Continuous/16 dp and Comics Paginated/16 dp; the gap slider is disabled while that format is paginated. PDF switches between horizontal pagination and vertical continuous layout with native spacing. Comics keep the established Readium paginated experience or use the bounded continuous vertical surface with progressive nearby loading, retry, resume/progress, logical LTR/RTL taps, menu tap, page-slider jumps, and Reduce motion. Automated coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation remains pending.

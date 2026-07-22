@@ -196,6 +196,52 @@ class ReadiumComicOpenInstrumentedTest {
         cbz.delete()
     }
 
+    @Test
+    fun continuousComicProfileOpensTheLazyReaderSurface() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val cbz = File(context.cacheDir, "readium-comic-continuous.cbz")
+        val libraryId = "instrumented-continuous-comics"
+        val store = AppPreferencesStore(context)
+        val original = store.read()
+        writeCbz(cbz, pageBytes(Color.YELLOW), pageBytes(Color.CYAN))
+        store.save(
+            original.withReaderPreferences(
+                libraryId,
+                LibraryReaderPreferences(
+                    comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
+                    comicPageGapDp = 24f
+                )
+            )
+        )
+        try {
+            ActivityScenario.launch<ReadiumComicReaderActivity>(
+                ReadiumComicReaderActivity.createIntent(
+                    context = context,
+                    file = cbz,
+                    title = "Continuous comic test",
+                    readerKey = "instrumented-comic-continuous",
+                    libraryId = libraryId,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    initialPage = 0
+                )
+            ).use { scenario ->
+                var continuousReaderReady = false
+                var attempts = 0
+                while (!continuousReaderReady && attempts < 40) {
+                    scenario.onActivity { activity ->
+                        continuousReaderReady = activity.isContinuousComicReaderVisible()
+                    }
+                    if (!continuousReaderReady) SystemClock.sleep(250)
+                    attempts += 1
+                }
+                assertTrue("Continuous comic reader did not become ready", continuousReaderReady)
+            }
+        } finally {
+            store.save(original)
+            cbz.delete()
+        }
+    }
+
     private fun imagePageDispatcher(pages: List<ByteArray>): Dispatcher = object : Dispatcher() {
         override fun dispatch(request: RecordedRequest): MockResponse {
             val pageIndex = request.path.orEmpty().substringAfterLast('/').toInt()

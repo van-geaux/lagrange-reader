@@ -40,9 +40,11 @@ import org.json.JSONObject
 import org.readium.adapter.pdfium.document.PdfiumDocumentFactory
 import org.readium.adapter.pdfium.navigator.PdfiumEngineProvider
 import org.readium.adapter.pdfium.navigator.PdfiumNavigatorFragment
+import org.readium.adapter.pdfium.navigator.PdfiumPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.pdf.PdfNavigatorFragment
+import org.readium.r2.navigator.preferences.Axis
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -99,6 +101,17 @@ internal data class ReadiumPdfProgressResult(
     val percent: Float?
 )
 
+internal fun pdfiumPreferencesFor(
+    preferences: LibraryReaderPreferences
+): PdfiumPreferences = PdfiumPreferences(
+    pageSpacing = preferences.pdfPageGapDp.toDouble(),
+    readingProgression = readiumReadingProgression(preferences.readingDirection),
+    scrollAxis = when (preferences.pdfLayoutMode) {
+        ReaderLayoutMode.PAGINATED -> Axis.HORIZONTAL
+        ReaderLayoutMode.CONTINUOUS -> Axis.VERTICAL
+    }
+)
+
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumPdfReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
@@ -118,6 +131,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
     private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
+    private var readerPreferences = LibraryReaderPreferences()
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var pageLocators: List<Locator> = emptyList()
@@ -148,8 +162,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
-        readingDirection = AppPreferencesStore(this).read()
-            .readerPreferencesFor(libraryId).readingDirection
+        readerPreferences = AppPreferencesStore(this).read().readerPreferencesFor(libraryId)
+        readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         configureSystemBars()
         createReaderViews()
@@ -327,6 +341,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val fragmentFactory = PdfNavigatorFragment.createFactory(
             publication = openedPublication,
             initialLocator = initialLocator,
+            preferences = pdfiumPreferencesFor(readerPreferences),
             pdfEngineProvider = PdfiumEngineProvider()
         )
         supportFragmentManager.fragmentFactory = fragmentFactory

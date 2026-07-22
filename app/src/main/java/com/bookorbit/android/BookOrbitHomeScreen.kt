@@ -2314,7 +2314,7 @@ private fun LibraryReaderConfiguration(
         OrbitEyebrow("Reading configuration")
         Text("Library reader profile", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Direction, typography, and margins are saved independently for each library.",
+            "Direction, typography, margins, and format layouts are saved independently for each library.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium
         )
@@ -2439,10 +2439,95 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ReaderFormatLayoutSettings(
+                formatLabel = "PDF",
+                layoutMode = value.pdfLayoutMode,
+                pageGapDp = value.pdfPageGapDp,
+                testTagPrefix = "options-reading-pdf",
+                onLayoutModeChange = { layoutMode ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(pdfLayoutMode = layoutMode)
+                    )
+                },
+                onPageGapChange = { pageGapDp ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(pdfPageGapDp = pageGapDp)
+                    )
+                }
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ReaderFormatLayoutSettings(
+                formatLabel = "Comics",
+                layoutMode = value.comicLayoutMode,
+                pageGapDp = value.comicPageGapDp,
+                testTagPrefix = "options-reading-comic",
+                onLayoutModeChange = { layoutMode ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(comicLayoutMode = layoutMode)
+                    )
+                },
+                onPageGapChange = { pageGapDp ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(comicPageGapDp = pageGapDp)
+                    )
+                }
+            )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
+
+@Composable
+private fun ReaderFormatLayoutSettings(
+    formatLabel: String,
+    layoutMode: ReaderLayoutMode,
+    pageGapDp: Float,
+    testTagPrefix: String,
+    onLayoutModeChange: (ReaderLayoutMode) -> Unit,
+    onPageGapChange: (Float) -> Unit
+) {
+    Text("$formatLabel layout", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ReaderLayoutMode.values().forEach { mode ->
+            FilterChip(
+                selected = layoutMode == mode,
+                onClick = { onLayoutModeChange(mode) },
+                label = { Text(mode.displayName) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-layout-${mode.name.lowercase()}"
+                )
+            )
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            "Continuous page gap ${pageGapDp.toInt()} dp",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (layoutMode == ReaderLayoutMode.CONTINUOUS) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+        Slider(
+            value = pageGapDp,
+            onValueChange = onPageGapChange,
+            enabled = layoutMode == ReaderLayoutMode.CONTINUOUS,
+            valueRange = 0f..MAX_READER_PAGE_GAP_DP,
+            steps = 11,
+            modifier = Modifier.testTag("$testTagPrefix-page-gap")
+        )
+    }
+}
+
 @Composable
 private fun AppPreferenceSwitchRow(
     title: String,

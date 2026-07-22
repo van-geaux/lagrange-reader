@@ -28,7 +28,11 @@ class AppPreferencesStoreInstrumentedTest {
                     readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
                     theme = EpubReaderTheme.Dark,
                     fontScale = 1.3f,
-                    padding = EpubPaddingPercentages(20f, 10f, 5f, 5f)
+                    padding = EpubPaddingPercentages(20f, 10f, 5f, 5f),
+                    pdfLayoutMode = ReaderLayoutMode.PAGINATED,
+                    pdfPageGapDp = 8f,
+                    comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
+                    comicPageGapDp = 24f
                 )
             )
         )

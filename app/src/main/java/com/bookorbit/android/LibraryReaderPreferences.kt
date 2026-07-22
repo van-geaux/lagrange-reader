@@ -7,15 +7,29 @@ enum class LibraryReadingDirection(val displayName: String) {
     RIGHT_TO_LEFT("Right to left")
 }
 
+enum class ReaderLayoutMode(val displayName: String) {
+    PAGINATED("Paginated"),
+    CONTINUOUS("Continuous")
+}
+
+internal const val DEFAULT_READER_PAGE_GAP_DP = 16f
+internal const val MAX_READER_PAGE_GAP_DP = 48f
+
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
     val fontScale: Float = 1f,
-    val padding: EpubPaddingPercentages = EpubPaddingPercentages()
+    val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
+    val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
+    val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
+    val comicLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
+    val comicPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP
 ) {
     fun normalized(): LibraryReaderPreferences = copy(
         fontScale = fontScale.coerceIn(0.9f, 1.5f),
-        padding = padding.normalizedReaderPadding()
+        padding = padding.normalizedReaderPadding(),
+        pdfPageGapDp = pdfPageGapDp.coerceIn(0f, MAX_READER_PAGE_GAP_DP),
+        comicPageGapDp = comicPageGapDp.coerceIn(0f, MAX_READER_PAGE_GAP_DP)
     )
 }
 
@@ -40,6 +54,18 @@ internal fun libraryReadingDirectionFromStorage(value: String?): LibraryReadingD
         LibraryReadingDirection.LEFT_TO_RIGHT
     }
 
+internal fun readerLayoutModeStorageValue(value: ReaderLayoutMode): String =
+    value.name.lowercase()
+
+internal fun readerLayoutModeFromStorage(
+    value: String?,
+    default: ReaderLayoutMode
+): ReaderLayoutMode = when (value?.trim()?.lowercase()) {
+    "paginated" -> ReaderLayoutMode.PAGINATED
+    "continuous" -> ReaderLayoutMode.CONTINUOUS
+    else -> default
+}
+
 internal fun libraryReaderPreferencesStorageValue(
     values: Map<String, LibraryReaderPreferences>
 ): String = JSONObject().apply {
@@ -54,6 +80,10 @@ internal fun libraryReaderPreferencesStorageValue(
             put("bottom", value.padding.bottom.toDouble())
             put("left", value.padding.left.toDouble())
             put("right", value.padding.right.toDouble())
+            put("pdfLayout", readerLayoutModeStorageValue(value.pdfLayoutMode))
+            put("pdfPageGapDp", value.pdfPageGapDp.toDouble())
+            put("comicLayout", readerLayoutModeStorageValue(value.comicLayoutMode))
+            put("comicPageGapDp", value.comicPageGapDp.toDouble())
         })
     }
 }.toString()
@@ -77,7 +107,23 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             bottom = item.optDouble("bottom", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
                             left = item.optDouble("left", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
                             right = item.optDouble("right", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat()
-                        )
+                        ),
+                        pdfLayoutMode = readerLayoutModeFromStorage(
+                            item.optString("pdfLayout"),
+                            ReaderLayoutMode.CONTINUOUS
+                        ),
+                        pdfPageGapDp = item.optDouble(
+                            "pdfPageGapDp",
+                            DEFAULT_READER_PAGE_GAP_DP.toDouble()
+                        ).toFloat(),
+                        comicLayoutMode = readerLayoutModeFromStorage(
+                            item.optString("comicLayout"),
+                            ReaderLayoutMode.PAGINATED
+                        ),
+                        comicPageGapDp = item.optDouble(
+                            "comicPageGapDp",
+                            DEFAULT_READER_PAGE_GAP_DP.toDouble()
+                        ).toFloat()
                     ).normalized()
                 )
             }
