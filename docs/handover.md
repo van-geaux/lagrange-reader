@@ -1,10 +1,10 @@
 # Handover
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Current outcome
 
-The July 21 reader/library follow-up and remote-media work orders are implemented and committed locally.
+The reader/library follow-ups, remote-media work, and audiobook session persistence work are implemented and committed locally.
 
 - Orientation lock now persists the exact portrait or landscape orientation selected in Lagrange instead of inheriting the orientation of the previous app.
 - Library Browse statistics and filter/collapse or multi-selection controls are fixed while only the catalog scrolls.
@@ -19,21 +19,25 @@ The July 21 reader/library follow-up and remote-media work orders are implemente
 - Explicit local audiobook downloads retain the proven Readium 3.0.2 audio navigator. Both local Readium and connected direct Media3 engines share the foreground media service, compact controls, progress, chapters, speed, Preview isolation, and Close behavior.
 - EPUB and PDF continue using authenticated complete-file preparation and Readium. MOBI/AZW/AZW3/FB2 remain explicitly unsupported by product choice.
 - The requested format-filter follow-up was scrapped.
+- Audiobook speed persists globally across books and compact-player close/reopen.
+- New audiobook opens prepare in the Browser with a compact-player spinner and autoplay after an explicit Book Detail Play action.
+- App/task restart restores the audiobook compact player at the saved position and speed but always paused.
 
-No application version was created or bumped. Testing uses the debug APK until the user explicitly requests a version.
+No application version was created or bumped yet. The user has requested a 1.1.0 release; release-note approval is pending before version bumping and release APK publication.
 
 ## Repository and publishing state
 
 - Repository: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-- Current implementation/documentation HEAD before this handover commit: `8eb0a38`
-- Local `main` is 13 commits ahead of `origin/main` before this handover commit.
-- Do not push until the user explicitly requests it.
++- Current implementation/documentation HEAD: `51c8993`
++- Local `main` contains the verified audiobook pause/autoplay follow-up and is ready to push.
 
 Local commits since `origin/main`, newest first:
 
-- `8eb0a38 docs: record audio and on deck validation`
++- `51c8993 fix: restore audiobook sessions paused`
++- `e02c1ba feat: persist audiobook playback sessions`
++- `9c7bf63 fix: smooth continuous comic cache reuse`
 - `4dba8bf fix: restore on deck and remote audio streaming`
 - `c0137bb feat: map BookOrbit reading state shelves`
 - `d17e8c7 feat: distinguish library destinations`
@@ -104,7 +108,7 @@ The final implementation gate passed:
 
 Results:
 
-- 280 JVM tests across 48 suites
++- 294 JVM tests across 50 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
@@ -116,11 +120,11 @@ Debug APK:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-The last built APK is 71,143,595 bytes and was built on 2026-07-21 at approximately 21:18 Asia/Bangkok.
+The last built APK is available at `app/build/outputs/apk/debug/app-debug.apk` and was built on 2026-07-22.
 
 ## Highest-priority next work
 
-No new implementation item has been selected after the successful On Deck and basic remote-audio checks. Continue the physical validation matrix before selecting another system/UI change:
+After the verified audiobook pause/autoplay behavior, prepare the 1.1.0 release once the release notes are approved. Then continue the physical validation matrix:
 
 1. Remote audio: verify backward/forward seeking, chapter selection, speed, Preview isolation, background playback, notification/lock-screen/headset/Bluetooth controls, app relaunch with a surviving session, access-token renewal during a long stream, and explicit-download offline reopening.
 2. Remote comics: validate representative large CBZ, CBR, and CB7 files, selected-page-only loading, navigation, reconnect/error behavior, and explicit downloads.
@@ -128,7 +132,7 @@ No new implementation item has been selected after the successful On Deck and ba
 4. Reading shelves: repeat On Deck and the exact state shelves in selected-library Recommended and after offline/cold-cache reopening; confirm a candidate disappears from On Deck when it becomes Reading/Rereading.
 5. Readers/layout: validate a real BookOrbit PDF, mixed portrait/square cover alignment, compact-player relaunch/layout, accessibility, large text, themes, and responsive widths/orientations.
 
-Before asking the user to test another build, assemble the debug APK and report the exact path above. Do not create a release/version until the user asks.
+Before asking the user to test another build, assemble the debug APK and report the exact path above. Do not bump the release version or publish a release APK until the user approves the release notes.
 
 ## Architecture guardrails
 
