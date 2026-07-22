@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -120,6 +121,8 @@ internal fun ContinuousComicReader(
     initialPage: Int,
     pageGapDp: Float,
     readingDirection: LibraryReadingDirection,
+    cachedPage: (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
+    cachedPageAspectRatio: (pageIndex: Int, targetWidthPx: Int) -> Float?,
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     onPageChanged: (Int) -> Unit,
     onTap: (ContinuousComicTapAction) -> Unit,
@@ -180,6 +183,8 @@ internal fun ContinuousComicReader(
                 ContinuousComicPage(
                     pageIndex = pageIndex,
                     targetWidthPx = targetWidthPx,
+                    cachedPage = cachedPage,
+                    cachedPageAspectRatio = cachedPageAspectRatio,
                     loadPage = loadPage,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -192,26 +197,37 @@ internal fun ContinuousComicReader(
 private fun ContinuousComicPage(
     pageIndex: Int,
     targetWidthPx: Int,
+    cachedPage: (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
+    cachedPageAspectRatio: (pageIndex: Int, targetWidthPx: Int) -> Float?,
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     modifier: Modifier = Modifier
 ) {
     var retryKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val cachedBitmap = cachedPage(pageIndex, targetWidthPx)
+    val knownAspectRatio = cachedBitmap
+        ?.let { bitmap -> bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1) }
+        ?: cachedPageAspectRatio(pageIndex, targetWidthPx)
+    val placeholderModifier = knownAspectRatio
+        ?.takeIf { ratio -> ratio.isFinite() && ratio > 0f }
+        ?.let { ratio -> modifier.aspectRatio(ratio) }
     val state by produceState<ContinuousComicPageState>(
-        initialValue = ContinuousComicPageState.Loading,
+        initialValue = cachedBitmap
+            ?.let(ContinuousComicPageState::Loaded)
+            ?: ContinuousComicPageState.Loading,
         pageIndex,
         targetWidthPx,
         retryKey
     ) {
         value = withContext(Dispatchers.IO) {
-            runCatching { loadPage(pageIndex, targetWidthPx) }
-                .getOrNull()
-                ?.let { bitmap -> ContinuousComicPageState.Loaded(bitmap) }
-                ?: ContinuousComicPageState.Failed
+            cachedPage(pageIndex, targetWidthPx)
+                ?: runCatching { loadPage(pageIndex, targetWidthPx) }.getOrNull()
         }
+            ?.let { bitmap -> ContinuousComicPageState.Loaded(bitmap) }
+            ?: ContinuousComicPageState.Failed
     }
     when (val pageState = state) {
         ContinuousComicPageState.Loading -> Box(
-            modifier = modifier.padding(vertical = 96.dp),
+            modifier = placeholderModifier ?: modifier.padding(vertical = 96.dp),
             contentAlignment = Alignment.Center
         ) { CircularProgressIndicator(color = Color.White) }
         is ContinuousComicPageState.Loaded -> Image(
@@ -221,7 +237,7 @@ private fun ContinuousComicPage(
             modifier = modifier
         )
         ContinuousComicPageState.Failed -> Box(
-            modifier = modifier.padding(vertical = 72.dp),
+            modifier = placeholderModifier ?: modifier.padding(vertical = 72.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

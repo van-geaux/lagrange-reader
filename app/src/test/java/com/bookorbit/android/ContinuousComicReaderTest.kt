@@ -5,6 +5,14 @@ import org.junit.Test
 
 class ContinuousComicReaderTest {
     @Test
+    fun cacheBudgetUsesHalfTheAppHeapWithoutTheLegacyCeiling() {
+        val mebibyte = 1024L * 1024L
+
+        assertEquals(256L * mebibyte, continuousComicCacheBudgetBytes(512L * mebibyte).toLong())
+        assertEquals(512L * mebibyte, continuousComicCacheBudgetBytes(1024L * mebibyte).toLong())
+    }
+
+    @Test
     fun `LTR edge taps keep previous on left and next on right`() {
         assertEquals(
             ContinuousComicTapAction.PREVIOUS,

@@ -1,6 +1,7 @@
 package com.bookorbit.android
 
 import android.app.Activity
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -35,10 +36,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.image.ImageNavigatorFragment
@@ -63,12 +67,12 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
-private const val MIN_CONTINUOUS_COMIC_CACHE_BYTES = 48L * 1024L * 1024L
-private const val MAX_CONTINUOUS_COMIC_CACHE_BYTES = 192L * 1024L * 1024L
 
-private fun continuousComicCacheBudgetBytes(): Int =
-    (Runtime.getRuntime().maxMemory() / 4L)
-        .coerceIn(MIN_CONTINUOUS_COMIC_CACHE_BYTES, MAX_CONTINUOUS_COMIC_CACHE_BYTES)
+internal fun continuousComicCacheBudgetBytes(
+    maxMemoryBytes: Long = Runtime.getRuntime().maxMemory()
+): Int =
+    (maxMemoryBytes / 2L)
+        .coerceIn(1L, Int.MAX_VALUE.toLong())
         .toInt()
 
 internal sealed interface ReadiumComicOpenResult {
@@ -201,6 +205,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     ) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+    private val continuousComicPageAspectRatios = mutableMapOf<String, Float>()
+    private val continuousComicPageLoadLocks = ConcurrentHashMap<String, Mutex>()
     private var continuousListState: LazyListState? = null
     private var continuousComicView: ComposeView? = null
     private var navigatorLocationJob: Job? = null
@@ -489,6 +495,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         initialPage = initialPage,
                         pageGapDp = readerPreferences.comicPageGapDp,
                         readingDirection = readingDirection,
+                        cachedPage = ::cachedContinuousComicPage,
+                        cachedPageAspectRatio = ::cachedContinuousComicPageAspectRatio,
                         loadPage = { pageIndex, targetWidthPx ->
                             loadContinuousComicPage(
                                 openedPublication,
@@ -518,26 +526,54 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         openedPublication: Publication,
         pageIndex: Int,
         targetWidthPx: Int
-    ) = withContext(Dispatchers.IO) {
-        val cacheKey = "$pageIndex:$targetWidthPx"
-        synchronized(continuousComicPageCache) {
-            continuousComicPageCache.get(cacheKey)
-        }?.let { cached -> return@withContext cached }
-        val link = openedPublication.readingOrder.getOrNull(pageIndex)
-            ?: return@withContext null
-        val resource = openedPublication.get(link) ?: return@withContext null
-        try {
-            val bytes = readContinuousComicPageBytes(resource)
-                ?: return@withContext null
-            val decoded = decodeContinuousComicPage(bytes, targetWidthPx)
-            if (decoded != null) {
-                synchronized(continuousComicPageCache) {
-                    continuousComicPageCache.put(cacheKey, decoded)
-                }
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        val cacheKey = continuousComicCacheKey(pageIndex, targetWidthPx)
+        cachedContinuousComicPage(pageIndex, targetWidthPx)?.let { cached ->
+            return@withContext cached
+        }
+        continuousComicPageLoadLocks.computeIfAbsent(cacheKey) { Mutex() }.withLock {
+            cachedContinuousComicPage(pageIndex, targetWidthPx)?.let { cached ->
+                return@withLock cached
             }
-            decoded
-        } finally {
-            resource.close()
+            val link = openedPublication.readingOrder.getOrNull(pageIndex)
+                ?: return@withLock null
+            val resource = openedPublication.get(link) ?: return@withLock null
+            try {
+                val bytes = readContinuousComicPageBytes(resource)
+                    ?: return@withLock null
+                val decoded = decodeContinuousComicPage(bytes, targetWidthPx)
+                if (decoded != null) {
+                    synchronized(continuousComicPageCache) {
+                        continuousComicPageAspectRatios[cacheKey] =
+                            decoded.width.toFloat() / decoded.height.coerceAtLeast(1)
+                        continuousComicPageCache.put(cacheKey, decoded)
+                    }
+                }
+                decoded
+            } finally {
+                resource.close()
+            }
+        }
+    }
+
+    private fun continuousComicCacheKey(pageIndex: Int, targetWidthPx: Int): String =
+        "$pageIndex:$targetWidthPx"
+
+    private fun cachedContinuousComicPage(pageIndex: Int, targetWidthPx: Int): Bitmap? =
+        synchronized(continuousComicPageCache) {
+            continuousComicPageCache.get(continuousComicCacheKey(pageIndex, targetWidthPx))
+        }
+
+    private fun cachedContinuousComicPageAspectRatio(
+        pageIndex: Int,
+        targetWidthPx: Int
+    ): Float? = synchronized(continuousComicPageCache) {
+        continuousComicPageAspectRatios[continuousComicCacheKey(pageIndex, targetWidthPx)]
+    }
+
+    private fun trimContinuousComicPageCache(targetBytes: Int) {
+        synchronized(continuousComicPageCache) {
+            continuousComicPageCache.trimToSize(targetBytes.coerceAtLeast(0))
         }
     }
 
@@ -755,13 +791,37 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) return
+        val targetBytes = when {
+            level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> 0
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ->
+                continuousComicPageCache.maxSize() / 4
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ->
+                continuousComicPageCache.maxSize() / 4
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ->
+                continuousComicPageCache.maxSize() / 2
+            else -> return
+        }
+        trimContinuousComicPageCache(targetBytes)
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        trimContinuousComicPageCache(0)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         publication?.close()
         publication = null
         synchronized(continuousComicPageCache) {
             continuousComicPageCache.evictAll()
+            continuousComicPageAspectRatios.clear()
         }
+        continuousComicPageLoadLocks.clear()
         navigatorLocationJob?.cancel()
         navigatorLocationJob = null
         navigator = null

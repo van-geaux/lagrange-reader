@@ -590,9 +590,11 @@ UI/UX discussion and design-system work can start now:
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
-1. [x] Scope decoded continuous-scroll bitmaps to the currently open book, key entries by page and viewport width, and retain recent pages in an adaptive LRU budget of roughly one quarter of app heap, clamped to 48-192 MB while scrolling back.
+1. [x] Scope decoded continuous-scroll bitmaps to the currently open book, key entries by page and viewport width, and retain recent pages in an LRU budget of half the Android app heap with no legacy 192 MiB cap while scrolling back.
 2. [x] Clear the decoded bitmap cache on reader close. Preserve the existing source-page/read protections: 64 MB response/read bound and 16M decoded-pixel bound.
-3. [x] Compile the continuous-reader coverage alongside the existing source/read-bound regression coverage; the full gate now passes 292 JVM tests across 50 suites with 0 failures/errors/skips, lint, and both APK assemblies.
+3. [x] Compile the continuous-reader coverage alongside the existing source/read-bound regression coverage; the full gate now passes 293 JVM tests across 50 suites with 0 failures/errors/skips, lint, and both APK assemblies.
    - [ ] On a physical device, scroll far down and back up through long CBR/CBZ documents and confirm recent pages reuse smoothly, memory remains stable, and closing/reopening starts with a cleared book-scoped cache.
 
 Continuous comic tutorial refinement: Continuous mode uses vertical Swipe up/Menu/Swipe down regions; paginated mode retains LR/RL Previous/Menu/Next. The cache prefetches two previous and two next pages around the visible range. Physical validation must cover long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch/reuse, close cleanup, and tutorial layout/labels.
+
+Cache smoothing completion: the LRU retains the whole decoded book when it fits and otherwise evicts least-recently-used pages. Cache hits are synchronous, known aspect ratios preserve page height while evicted pages reload, and simultaneous visible/prefetch loads deduplicate. Android memory pressure trims or clears the cache; closing the reader clears bitmaps, aspect metadata, and load locks. The ±2 prefetch window and continuous Swipe up/Menu/Swipe down tutorial remain unchanged. Physical-device long-book scroll-down/up smoothness and memory stability still require validation.
