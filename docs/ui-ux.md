@@ -342,6 +342,10 @@ EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complet
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
+### Audiobook system seek controls - 2026-07-22
+
+System controls now show 10-second backward and 30-second forward seek buttons; chapter selection remains in-app. Physical notification, lock-screen, headset, and Bluetooth validation remains pending.
+
 ### Audiobook speed and Browser-first session restoration - 2026-07-22
 
 The compact audiobook player uses one global persisted speed (0.75x/1x/1.25x/1.5x/2x) across books and close/reopen. NORMAL and PREVIEW launch modes survive active-session restoration. Explicit Play from Book Detail keeps the user on Browser while preparation continues in the compact player, replaces the play control with a spinner, and autoplays when ready. App/task restoration uses that Browser-first presentation but restores the saved position and speed paused and never autoplays. Explicit Close means stop and clear; task/app termination leaves the session marker for restoration, and failed restoration removes stale state. Automated coverage and the full 294-JVM-test gate pass; physical-device validation remains pending.

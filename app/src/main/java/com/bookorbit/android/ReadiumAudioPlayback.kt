@@ -16,6 +16,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import java.io.File
@@ -52,6 +53,17 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 import kotlin.coroutines.resume
 
 internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancelled."
+internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 10_000L
+internal const val AUDIO_SEEK_FORWARD_INCREMENT_MS = 30_000L
+
+internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
+    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+        .setPlayerCommand(Player.COMMAND_SEEK_BACK)
+        .build(),
+    CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+        .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+        .build()
+)
 
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
@@ -101,6 +113,8 @@ private suspend fun prepareDirectMedia3Audio(
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult = withContext(Dispatchers.Main.immediate) {
     val player = ExoPlayer.Builder(application)
+        .setSeekBackIncrementMs(AUDIO_SEEK_BACK_INCREMENT_MS)
+        .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(application).setDataSourceFactory(
                 AuthenticatedMedia3HttpDataSourceFactory(
@@ -383,6 +397,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             val mediaSession = MediaSession.Builder(applicationContext, engine.player)
                 .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
                 .setSessionActivity(createSessionActivityIntent())
+                .setMediaButtonPreferences(audiobookMediaButtonPreferences())
                 .build()
             addSession(mediaSession)
             mutableSession.value = Session(book, launchMode, engine, mediaSession)

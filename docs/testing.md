@@ -309,6 +309,10 @@ Open EPUB, PDF, and CBR/CBZ books from different libraries. In each reader's opt
 
 ### Bounded continuous CBR/CBZ bitmap cache
 
+### Audiobook system media controls
+
+System controls use 10-second backward and 30-second forward seek actions; chapter selection remains in-app. The full 295-test gate passes. Physical notification, lock-screen, headset, and Bluetooth validation remains pending.
+
 ### Audiobook speed and Browser-first session restoration
 
 Set each audiobook speed (0.75x, 1x, 1.25x, 1.5x, 2x), close/reopen the compact player, switch books, and restart the app; confirm the same global speed applies. Start both NORMAL and PREVIEW sessions and verify launch mode persists. From Book Detail, tap Play and confirm Browser remains visible, the compact player's play slot shows a spinner during preparation, and playback starts automatically when ready. Then terminate and reopen the app without explicitly closing the player; confirm the compact player restores at the saved position and speed but remains paused and never autoplays. Compare explicit Close (clears the active-session marker) with task/app termination (leaves it for restoration), then force a failed restore and confirm stale state clears. Automated coverage and the full 294 JVM-test/50-suite gate pass with 0 failures/errors/skips, lintDebug, assembleDebug, and assembleDebugAndroidTest; APK: app/build/outputs/apk/debug/app-debug.apk. Physical-device validation remains pending.

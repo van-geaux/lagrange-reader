@@ -521,7 +521,7 @@ Cache smoothing now serves hits synchronously to avoid placeholder flashes, pres
 
 ### New user feedback work order - 2026-07-22
 
-1. [ ] Replace Android system media-player chapter skip actions with backward and forward seek actions for audiobook playback, while retaining chapter navigation inside the app player.
+1. [x] Replace Android system media-player chapter skip actions with 10-second backward and 30-second forward seek actions for audiobook playback, while retaining chapter navigation inside the app player. Automated coverage and the full 295-JVM-test/50-suite gate passes; physical notification, lock-screen, headset, and Bluetooth validation remains pending.
 2. [ ] Add a star-rating control below the Book Detail cover, backed by the server's user-rating field and write endpoint. Confirm the server's rating scale and whether the control is display-only or editable before implementation.
 3. [ ] Rename the book-detail reading-status action to `Mark as...` and show the complete server status list: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed. Selecting a value must write it to the server and update local/cache state.
 4. [ ] Replace the About screen placeholder with the real app description, BookOrbit relationship/disclaimer, version/build information, acknowledgements, and relevant links.

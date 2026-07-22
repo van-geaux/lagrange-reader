@@ -532,7 +532,7 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
 ## 16. New User Feedback Work Order — 2026-07-22
 
-- [ ] Replace Android system audiobook chapter-skip actions with backward and forward seek actions while retaining chapter navigation in the app player
+- [x] Replace Android system audiobook chapter-skip actions with 10-second backward and 30-second forward seek actions while retaining chapter navigation in the app player; the full 295-test/50-suite automated gate passes, with physical notification/lock-screen/headset/Bluetooth validation pending
 - [ ] Add a server-backed star-rating control below the Book Detail cover; confirm the rating scale and write behavior
 - [ ] Change the reading-status action to `Mark as...` and expose all server statuses: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed
 - [ ] Replace About placeholder text with complete app description, BookOrbit disclaimer/relationship, version/build details, acknowledgements, and links
