@@ -325,6 +325,29 @@ private fun booksShareSeries(current: BookSummary, candidate: BookSummary): Bool
     }
 }
 
+internal fun bookDetailOtherVersions(
+    current: BookSummary,
+    candidates: List<BookSummary>
+): List<BookSummary> {
+    val seriesIndex = current.seriesIndex ?: return emptyList()
+    if (current.seriesId.isNullOrBlank() && current.seriesName.isNullOrBlank()) return emptyList()
+    return candidates
+        .asSequence()
+        .filter { candidate ->
+            candidate.id != current.id &&
+                booksShareSeries(current, candidate) &&
+                candidate.seriesIndex == seriesIndex
+        }
+        .distinctBy { it.id }
+        .sortedWith(
+            compareBy<BookSummary> { it.title.lowercase() }
+                .thenBy { it.format?.lowercase().orEmpty() }
+                .thenBy { it.libraryId }
+                .thenBy { it.id }
+        )
+        .toList()
+}
+
 internal fun seriesBookNeighbors(
     current: BookSummary,
     candidates: List<BookSummary>
@@ -342,11 +365,27 @@ internal fun seriesBookNeighbors(
                 .thenBy { it.title.lowercase() }
                 .thenBy { it.id }
         )
-    val currentIndex = sameSeries.indexOfFirst { it.id == current.id }
+    val positions = buildList<BookSummary> {
+        sameSeries.forEach { candidate ->
+            val index = candidate.seriesIndex
+            if (index == null) {
+                add(candidate)
+            } else if (none { it.seriesIndex == index }) {
+                add(if (current.seriesIndex == index) current else candidate)
+            }
+        }
+    }
+    val currentIndex = positions.indexOfFirst { candidate ->
+        if (current.seriesIndex != null) {
+            candidate.seriesIndex == current.seriesIndex
+        } else {
+            candidate.id == current.id
+        }
+    }
     return SeriesBookNeighbors(
-        previous = sameSeries.getOrNull(currentIndex - 1),
-        next = sameSeries.getOrNull(currentIndex + 1),
-        total = sameSeries.size
+        previous = positions.getOrNull(currentIndex - 1),
+        next = positions.getOrNull(currentIndex + 1),
+        total = positions.size
     )
 }
 
@@ -2624,7 +2663,9 @@ private fun ShelfBookCard(
     onClick: () -> Unit,
     onRemoveFromCurrentlyReading: (() -> Unit)? = null,
     onMarkAsRead: (() -> Unit)? = null,
-    onMarkAsUnread: (() -> Unit)? = null
+    onMarkAsUnread: (() -> Unit)? = null,
+    supportingText: String? = null,
+    modifier: Modifier = Modifier
 ) {
     val isBookCard = displayTitle == book.title
     var showActions by remember(book.id) { mutableStateOf(false) }
@@ -2633,6 +2674,7 @@ private fun ShelfBookCard(
         modifier = Modifier
             .width(84.dp)
             .testTag("book_card_${book.id}")
+            .then(modifier)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = if (hasActions) ({ showActions = true }) else null
@@ -2692,7 +2734,15 @@ private fun ShelfBookCard(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium
         )
-        if (isBookCard) {
+        if (supportingText != null) {
+            Text(
+                supportingText,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        } else if (isBookCard) {
             book.seriesName?.takeIf { it.isNotBlank() }?.let { seriesName ->
                 Text(
                     seriesName,
@@ -3784,6 +3834,12 @@ private fun BookDetails(
     val seriesNeighbors = remember(displayBook, seriesBooks) {
         seriesBookNeighbors(displayBook, seriesBooks)
     }
+    val otherVersions = remember(displayBook, seriesBooks) {
+        bookDetailOtherVersions(displayBook, seriesBooks)
+    }
+    val libraryNamesById = remember(state.libraries) {
+        state.libraries.associate { it.id to it.name }
+    }
     val publicationMetadata = buildList {
         detail.publisher?.let { add("Publisher" to it) }
         detail.publishedDate?.let { add("Published" to it) }
@@ -4139,6 +4195,16 @@ private fun BookDetails(
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
             item { ExpandableDescription("Synopsis", plainText(synopsis)) }
         }
+        if (otherVersions.isNotEmpty()) {
+            item {
+                BookDetailOtherVersions(
+                    versions = otherVersions,
+                    libraryNamesById = libraryNamesById,
+                    coverLoader = coverLoader,
+                    onBookSelected = onBookSelected
+                )
+            }
+        }
         if (detail.genres.isNotEmpty()) {
             item {
                 DetailLabelGroup(
@@ -4175,6 +4241,47 @@ private fun BookDetails(
                         DetailMetadataGroup("Library and file", fileMetadata)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookDetailOtherVersions(
+    versions: List<BookSummary>,
+    libraryNamesById: Map<String, String>,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("book-detail-other-versions"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("Other versions", style = MaterialTheme.typography.titleLarge)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(versions, key = { "other-version-${it.id}" }) { version ->
+                val format = version.format
+                    ?.trim()
+                    ?.trimStart('.')
+                    ?.takeIf { it.isNotBlank() }
+                    ?.uppercase()
+                    ?: version.mediaKind.name
+                        .lowercase()
+                        .replaceFirstChar { it.titlecase() }
+                        .takeUnless { version.mediaKind == MediaKind.UNKNOWN }
+                val supportingText = listOfNotNull(
+                    format,
+                    libraryNamesById[version.libraryId]
+                ).distinct().joinToString(" · ").takeIf { it.isNotBlank() }
+                ShelfBookCard(
+                    book = version,
+                    supportingText = supportingText,
+                    coverLoader = coverLoader,
+                    onClick = { onBookSelected(version) },
+                    modifier = Modifier.testTag("book-detail-other-version-${version.id}")
+                )
             }
         }
     }

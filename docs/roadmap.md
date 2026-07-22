@@ -454,6 +454,10 @@ The stuck progress-queue fix passes 207 JVM tests across 33 suites with zero fai
 
 Audiobook implementation and validation can use the local M4B/chapter-metadata fixture. Direct OIDC/SSO remains deferred until its provider/redirect contract is confirmed.
 
+### Book Detail other versions follow-up - 2026-07-22
+
+Completed in code: Book Detail now derives exact same-series, same-index BookOrbit records from the complete retained cross-library series result and places them in a compact horizontal `Other versions` row immediately below Synopsis. Cards show format/library context and selecting one stays in the existing detail destination. Previous/Next navigation collapses duplicate indexes so it moves between distinct series positions. JVM and compiled Compose coverage pass; physical target-device validation remains pending.
+
 ## Source of truth
 
 ### Options backlog

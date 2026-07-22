@@ -456,6 +456,82 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun bookDetailsShowSameIndexSeriesBooksAsOtherVersionsBelowSynopsis() {
+        fun seriesBook(
+            id: String,
+            title: String,
+            index: Double,
+            libraryId: String = "lib-1",
+            format: String = "epub",
+            mediaKind: MediaKind = MediaKind.EPUB
+        ) = BookSummary(
+            libraryId = libraryId,
+            id = id,
+            fileId = "file-$id",
+            title = title,
+            seriesId = "series-1",
+            seriesName = "Test Series",
+            seriesIndex = index,
+            format = format,
+            mediaKind = mediaKind
+        )
+        val first = seriesBook("first", "First Book", 1.0)
+        val current = seriesBook("current", "Current Book", 2.0)
+        val audioVersion = seriesBook(
+            id = "current-audio",
+            title = "Current Book Audio",
+            index = 2.0,
+            libraryId = "lib-audio",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val next = seriesBook("next", "Next Book", 3.0)
+        val dataSource = InstrumentedFakeDataSource().apply {
+            bookDetailResultsByBookId = mapOf(
+                current.id to BookDetailInfo(book = current, synopsis = "Current synopsis"),
+                audioVersion.id to BookDetailInfo(book = audioVersion, synopsis = "Audio synopsis")
+            )
+            seriesDetailResult = SeriesDetailInfo(
+                id = "series-1",
+                name = "Test Series",
+                bookCount = 4,
+                readCount = 0,
+                books = listOf(audioVersion, next, current, first)
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(
+                                LibrarySummary(id = "lib-1", name = "Main"),
+                                LibrarySummary(id = "lib-audio", name = "Audio")
+                            ),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(current)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Current Book").performClick()
+        composeRule.onNodeWithTag("book-detail-other-versions").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Other versions").assertIsDisplayed()
+        composeRule.onNodeWithText("M4B · Audio").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Next book in Test Series: #3 · Next Book")
+            .assertIsEnabled()
+        composeRule.onNodeWithTag("book-detail-other-version-current-audio").performClick()
+        composeRule.onNodeWithContentDescription("Open full-screen cover for Current Book Audio").assertIsDisplayed()
+        composeRule.onNodeWithText("Audio synopsis").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(1, dataSource.seriesDetailLoadCalls) }
+    }
+
+    @Test
     fun seriesDetailsGroupByPersistentLibraryFormatOrNeither() {
         val first = BookSummary(
             libraryId = "lib-books",
@@ -1498,6 +1574,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
     var searchBooksResult: List<BookSummary> = emptyList()
     var bookDetailResult: BookDetailInfo? = null
+    var bookDetailResultsByBookId: Map<String, BookDetailInfo> = emptyMap()
     var seriesDetailResult: SeriesDetailInfo? = null
     var seriesDetailLoadCalls = 0
     var achievementsResult: AchievementCatalogue = AchievementCatalogue(
@@ -1534,7 +1611,8 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         searchQueries += query
         return searchBooksResult
     }
-    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? =
+        bookDetailResultsByBookId[book.id] ?: bookDetailResult
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? {
         seriesDetailLoadCalls += 1
         return seriesDetailResult

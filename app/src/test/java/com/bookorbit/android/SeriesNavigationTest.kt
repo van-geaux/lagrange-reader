@@ -9,13 +9,45 @@ class SeriesNavigationTest {
     fun `neighbors follow numeric series index regardless of candidate order`() {
         val first = book("first", "First", 1.0)
         val current = book("current", "Current", 2.0)
+        val otherVersion = book("current-audio", "Current Audio", 2.0)
         val next = book("next", "Next", 3.0)
 
-        val neighbors = seriesBookNeighbors(current, listOf(next, current, first))
+        val neighbors = seriesBookNeighbors(current, listOf(next, otherVersion, current, first))
 
         assertEquals(first, neighbors.previous)
         assertEquals(next, neighbors.next)
         assertEquals(3, neighbors.total)
+    }
+
+    @Test
+    fun `other versions contain only distinct books at the same series index`() {
+        val current = book("current", "Current", 2.0)
+        val printVersion = book("print", "Current Print", 2.0).copy(format = "epub")
+        val audioVersion = book("audio", "Current Audio", 2.0).copy(format = "m4b")
+        val next = book("next", "Next", 3.0)
+        val unrelated = book("unrelated", "Unrelated", 2.0).copy(
+            seriesId = "other-series",
+            seriesName = "Other Series"
+        )
+
+        val versions = bookDetailOtherVersions(
+            current,
+            listOf(next, audioVersion, current, unrelated, printVersion, audioVersion)
+        )
+
+        assertEquals(listOf("audio", "print"), versions.map { it.id })
+    }
+
+    @Test
+    fun `other versions require a series and a concrete index`() {
+        val standalone = book("standalone", "Standalone", 1.0).copy(
+            seriesId = null,
+            seriesName = null
+        )
+        val unindexed = book("unindexed", "Unindexed", null)
+
+        assertEquals(emptyList<BookSummary>(), bookDetailOtherVersions(standalone, listOf(book("match", "Match", 1.0))))
+        assertEquals(emptyList<BookSummary>(), bookDetailOtherVersions(unindexed, listOf(book("other", "Other", null))))
     }
 
     @Test

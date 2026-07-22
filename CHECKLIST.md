@@ -538,3 +538,8 @@ UI/UX discussion and design-system work can start now:
 - [x] Replace generic ebook fallback with a real EPUB reader
 - [x] Test EPUB download/offline/sync end to end on real content
 - [x] Add queue compaction and stronger sync error handling
+
+### Book Detail other versions follow-up - 2026-07-22
+
+- [x] Show exact same-series, same-index BookOrbit records in an `Other versions` row immediately below Synopsis. The row reuses compact cover cards, labels format/library, and selecting a card replaces the current detail without leaving the detail destination. Duplicate-index records are excluded from Previous/Next volume navigation.
+- [x] Add JVM coverage for exact matching, distinctness, missing series/index behavior, and duplicate-index navigation collapse; add compiled Compose coverage for placement, labels, selection, and retained series loading. The full gate passes 282 JVM tests across 48 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. Physical target-device validation remains pending.
