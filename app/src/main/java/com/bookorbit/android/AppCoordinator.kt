@@ -54,6 +54,20 @@ class AppCoordinator(
         repository.loadBookDetail(book)
     }
 
+    suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo? {
+        return try {
+            repository.setBookUserRating(book, rating)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: AuthenticationRequiredException) {
+            recoverExpiredSession()
+            null
+        } catch (_: Throwable) {
+            showBrowserMessage("Unable to update the rating for ${book.title}.")
+            null
+        }
+    }
+
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = loadWithSessionRecovery(null) {
         repository.loadSeriesDetail(seriesId)
     }

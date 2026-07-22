@@ -112,7 +112,7 @@ data class BookDetailInfo(
     val isbn13: String? = null,
     val genres: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val rating: Double? = null,
+    val userRating: Int? = null,
     val narrators: List<String> = emptyList(),
     val fileCount: Int = 0,
     val totalSizeBytes: Long? = null,

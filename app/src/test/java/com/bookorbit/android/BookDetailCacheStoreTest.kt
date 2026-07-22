@@ -3,6 +3,7 @@ package com.bookorbit.android
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -31,6 +32,7 @@ class BookDetailCacheStoreTest {
                 narrators = listOf("Narrator"),
                 fileCount = 1,
                 pageCount = 320,
+                userRating = 4,
                 audioChapters = listOf(AudiobookChapter("Opening", 0L))
             )
             val first = BookDetailCacheStore(filesDir)
@@ -42,11 +44,24 @@ class BookDetailCacheStoreTest {
             assertTrue(restored != null)
             assertEquals(detail.book.title, restored?.book?.title)
             assertEquals(detail.synopsis, restored?.synopsis)
+            assertEquals(4, restored?.userRating)
             assertEquals(detail.genres, restored?.genres)
             assertEquals(detail.pageCount, restored?.pageCount)
             assertEquals(detail.audioChapters, restored?.audioChapters)
             assertEquals(BookReadStatus.WANT_TO_READ, restored?.book?.readStatus)
             assertEquals(CoverAspectRatio.SQUARE, restored?.book?.coverAspectRatio)
+            first.save("https://example.test", "book-1", "file-1", detail.copy(userRating = null))
+            assertNull(BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
+            val cacheFile = File(filesDir, "book_detail_cache.json")
+            val root = JSONObject(cacheFile.readText())
+            val serializedDetail = root.getJSONObject(root.keys().next()).getJSONObject("detail")
+            serializedDetail.remove("userRating")
+            serializedDetail.put("rating", 4)
+            cacheFile.writeText(root.toString())
+            assertEquals(4, BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
+            serializedDetail.put("rating", 4.25)
+            cacheFile.writeText(root.toString())
+            assertNull(BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
             filesDir.deleteRecursively()
         }
     }
@@ -63,7 +78,8 @@ class BookDetailCacheStoreTest {
                     title = "Versioned Book",
                     updatedAtMillis = 100L
                 ),
-                synopsis = "Cached synopsis"
+                synopsis = "Cached synopsis",
+                userRating = 4
             )
             val store = BookDetailCacheStore(filesDir)
             store.save("https://example.test", "book-1", "file-1", detail, 100L)

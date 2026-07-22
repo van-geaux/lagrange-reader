@@ -209,6 +209,7 @@ private fun BookOrbitDestination(
             libraryBooksPageLoader = coordinator::loadLibraryBooksPage,
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
+            onBookUserRatingChange = coordinator::setBookUserRating,
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,

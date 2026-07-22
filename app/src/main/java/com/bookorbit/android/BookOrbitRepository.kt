@@ -137,6 +137,10 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
+    suspend fun setBookUserRating(
+        book: BookSummary,
+        rating: Int?
+    ): BookDetailInfo = BookDetailInfo(book, userRating = rating)
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
@@ -683,8 +687,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        bookDetailCacheStore.read(serverUrl, book.id, book.fileId, book.updatedAtMillis)?.let { cached ->
-            return@withContext cached.copy(
+        val cached = bookDetailCacheStore.read(serverUrl, book.id, book.fileId, book.updatedAtMillis)
+        try {
+            fetchAuthoritativeBookDetail(book)
+        } catch (error: Throwable) {
+            if (error is CancellationException || error is AuthenticationRequiredException) throw error
+            cached?.copy(
                 book = cached.book.copy(
                     localPath = book.localPath ?: cached.book.localPath,
                     progressLabel = book.progressLabel ?: cached.book.progressLabel,
@@ -696,8 +704,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     isRead = book.isRead,
                     coverAspectRatio = book.coverAspectRatio
                 )
-            )
+            ) ?: throw error
         }
+    }
+
+    private suspend fun fetchAuthoritativeBookDetail(book: BookSummary): BookDetailInfo {
+        val serverUrl = getServerUrl().orEmpty()
         val detail = BookOrbitPayloadParser.parseBookDetail(
             fallback = book,
             payload = request("/api/v1/books/${book.id}", "GET", null),
@@ -705,6 +717,24 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             serverBase = serverBase()
         )
         bookDetailCacheStore.save(serverUrl, book.id, book.fileId, detail, book.updatedAtMillis)
+        return detail
+    }
+
+    override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo = withContext(Dispatchers.IO) {
+        require(rating == null || rating in 1..5) { "Rating must be null or an integer from 1 to 5." }
+        val id = book.id.toLongOrNull() ?: book.id
+        val body = JSONObject()
+            .put("bookIds", JSONArray().put(id))
+            .put("rating", rating ?: JSONObject.NULL)
+            .toString()
+            .toRequestBody(JSON)
+        request("/api/v1/books/bulk-set-rating", "POST", body)
+        val detail = fetchAuthoritativeBookDetail(book)
+        if (detail.userRating != rating) {
+            throw UserFacingException(
+                "BookOrbit did not accept the rating; rating metadata may be locked."
+            )
+        }
         detail
     }
 
@@ -2085,7 +2115,10 @@ internal object BookOrbitPayloadParser {
             isbn13 = obj.stringValue("isbn13", "isbn"),
             genres = obj.stringList("genres"),
             tags = obj.stringList("tags"),
-            rating = obj.numberValue("rating"),
+            userRating = obj.numberValue("userRating", "rating")
+                ?.takeIf { it.isFinite() && it % 1.0 == 0.0 }
+                ?.toInt()
+                ?.takeIf { it in 1..5 },
             narrators = obj.stringList("narrators"),
             fileCount = files?.length() ?: 0,
             totalSizeBytes = files.sumLong("sizeBytes", "size"),

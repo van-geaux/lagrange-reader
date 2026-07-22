@@ -525,6 +525,7 @@ class BookOrbitPayloadParserTest {
             serverBase = "https://example.test"
         )
 
+        assertNull(detail.userRating)
         assertEquals("The Native Orbit", detail.book.title)
         assertEquals("Ada Reader", detail.book.author)
         assertEquals("/downloads/book-8.epub", detail.book.localPath)
@@ -544,6 +545,15 @@ class BookOrbitPayloadParserTest {
             detail.audioChapters
         )
         assertEquals(detail.audioChapters, detail.book.audioChapters)
+    }
+
+    @Test
+    fun `parseBookDetail accepts only integer ratings from one through five`() {
+        val fallback = BookSummary(libraryId = "lib", id = "book", fileId = null, title = "Book")
+        listOf("4" to 4, "0" to null, "6" to null, "3.5" to null, "null" to null).forEach { (rating, expected) ->
+            val detail = BookOrbitPayloadParser.parseBookDetail(fallback, "{\"rating\":$rating}", emptyMap(), "https://example.test")
+            assertEquals(expected, detail.userRating)
+        }
     }
 
     @Test

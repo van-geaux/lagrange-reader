@@ -2,6 +2,7 @@ package com.bookorbit.android
 
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -1207,6 +1208,61 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `setting a personal rating returns authoritative detail and records request`() = runTest {
+        val authoritativeDetail = BookDetailInfo(book = book, userRating = 4)
+        val repository = FakeBookOrbitDataSource(userRatingResult = authoritativeDetail)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.setBookUserRating(book, 5)
+
+        assertEquals(authoritativeDetail, result)
+        assertEquals(listOf(book to 5), repository.userRatingUpdates)
+    }
+
+    @Test
+    fun `personal rating failure returns null and shows book specific message`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            setBookUserRatingError = IOException("rating write failed")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        val result = coordinator.setBookUserRating(book, 2)
+
+        assertNull(result)
+        assertEquals(listOf(book to 2), repository.userRatingUpdates)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertTrue(
+            browser.browserState.message.orEmpty()
+                .contains("Unable to update the rating for Sample Book.")
+        )
+    }
+
+    @Test
+    fun `personal rating cancellation is rethrown`() = runTest {
+        val cancellation = CancellationException("rating cancelled")
+        val repository = FakeBookOrbitDataSource(setBookUserRatingError = cancellation)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        var thrown: Throwable? = null
+        try {
+            coordinator.setBookUserRating(book, null)
+        } catch (error: Throwable) {
+            thrown = error
+        }
+
+        assertEquals(cancellation, thrown)
+        assertEquals(listOf(book to null), repository.userRatingUpdates)
+    }
+
+    @Test
     fun `live browser sign out clears session and returns to login`() = runTest {
         val repository = FakeBookOrbitDataSource(
             serverUrl = serverUrl,
@@ -1261,6 +1317,8 @@ private class FakeBookOrbitDataSource(
     ),
     var buildReaderError: Throwable? = null,
     var bookDetailResult: BookDetailInfo? = null,
+    var userRatingResult: BookDetailInfo? = null,
+    var setBookUserRatingError: Throwable? = null,
     var downloadError: Throwable? = null,
     var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
@@ -1289,6 +1347,7 @@ private class FakeBookOrbitDataSource(
     val queuedProgress = mutableListOf<BookSummary>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
+    val userRatingUpdates = mutableListOf<Pair<BookSummary, Int?>>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
     var clearServerCalls = 0
@@ -1380,6 +1439,12 @@ private class FakeBookOrbitDataSource(
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+
+    override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo {
+        userRatingUpdates += book to rating
+        setBookUserRatingError?.let { throw it }
+        return userRatingResult ?: BookDetailInfo(book = book, userRating = rating)
+    }
 
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
         buildReaderBooks += book

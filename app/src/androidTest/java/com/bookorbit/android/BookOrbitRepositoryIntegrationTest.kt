@@ -18,6 +18,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -80,6 +81,42 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals("GET", sessionRequest.method)
         assertEquals("/api/v1/auth/me", sessionRequest.path)
         assertEquals("Bearer integration-token", sessionRequest.getHeader("Authorization"))
+    }
+
+    @Test
+    fun setBookUserRatingWritesNumericRatingAndUsesAuthoritativeDetail() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        server.enqueue(jsonResponse("""{"id":"123","title":"Rated Book","rating":4}"""))
+        val rated = repository.setBookUserRating(BookSummary(libraryId = "library-1", id = "123", fileId = null, title = "Rated Book"), 4)
+        assertEquals(4, rated.userRating)
+        val post = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("POST", post.method)
+        assertEquals("/api/v1/books/bulk-set-rating", post.path)
+        val body = JSONObject(post.body.readUtf8())
+        assertEquals(123, body.getJSONArray("bookIds").getInt(0))
+        assertEquals(4, body.getInt("rating"))
+        val get = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", get.method)
+        assertEquals("/api/v1/books/123", get.path)
+    }
+
+    @Test
+    fun clearBookUserRatingWritesJsonNullAndUsesAuthoritativeDetail() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        server.enqueue(jsonResponse("""{"id":"123","title":"Rated Book","rating":null}"""))
+
+        val rated = repository.setBookUserRating(
+            BookSummary(libraryId = "library-1", id = "123", fileId = null, title = "Rated Book"),
+            null
+        )
+
+        assertNull(rated.userRating)
+        val post = server.takeRequest(5, TimeUnit.SECONDS)!!
+        val body = JSONObject(post.body.readUtf8())
+        assertTrue(body.isNull("rating"))
+        val get = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", get.method)
+        assertEquals("/api/v1/books/123", get.path)
     }
 
     @Test

@@ -340,7 +340,8 @@ class BookOrbitAppInstrumentedTest {
                 pageCount = 320,
                 isbn13 = "9781234567890",
                 genres = listOf("Science fiction"),
-                tags = listOf("Space opera")
+                tags = listOf("Space opera"),
+                userRating = 3,
             )
         }
 
@@ -361,6 +362,19 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithContentDescription("Orbit Rising").performClick()
+        composeRule.onNodeWithTag("book-detail-user-rating").assertIsDisplayed()
+        (1..5).forEach { rating ->
+            composeRule.onNodeWithTag("book-detail-user-rating-$rating").assertIsDisplayed()
+        }
+        composeRule.onNodeWithContentDescription("Clear 3-star rating").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("book-detail-user-rating-5").performClick()
+        composeRule.waitUntil { dataSource.userRatingUpdates == listOf(5) }
+        composeRule.onNodeWithContentDescription("Clear 5-star rating").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("book-detail-user-rating-5").performClick()
+        composeRule.waitUntil { dataSource.userRatingUpdates == listOf(5, null) }
+        composeRule.onNodeWithContentDescription("Set rating to 5 stars").assertIsDisplayed()
         composeRule.onNodeWithText("Reading \u00B7 42.5%").assertIsDisplayed()
         val progressBounds = composeRule.onNodeWithTag("book-detail-reading-progress")
             .fetchSemanticsNode().boundsInRoot
@@ -1638,6 +1652,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
+    val userRatingUpdates = mutableListOf<Int?>()
     var loadBooksResult: List<BookSummary> = emptyList()
     var localBooksResult: List<BookSummary> = emptyList()
     var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
@@ -1682,6 +1697,17 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? =
         bookDetailResultsByBookId[book.id] ?: bookDetailResult
+
+    override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo {
+        userRatingUpdates += rating
+        val updated = (
+            bookDetailResultsByBookId[book.id]
+                ?: bookDetailResult
+                ?: BookDetailInfo(book = book)
+            ).copy(userRating = rating)
+        bookDetailResult = updated
+        return updated
+    }
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? {
         seriesDetailLoadCalls += 1
         return seriesDetailResult

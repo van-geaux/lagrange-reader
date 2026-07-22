@@ -179,7 +179,35 @@ Endpoint:
 GET /api/v1/books/{id}
 ```
 
-The native detail screen maps the returned title, subtitle, authors, narrators, description, publisher, publication date/year, language, page count, ISBN-10, ISBN-13, rating, genres, tags, library name, series identity/order, and file metadata. The selected shelf summary remains the fallback if the detail request fails, so reader and offline actions remain usable.
+The native detail screen maps the returned title, subtitle, authors, narrators, description, publisher, publication date/year, language, page count, ISBN-10, ISBN-13, genres, tags, library name, series identity/order, file metadata, and authenticated user's `rating`. This rating is a whole value from 1 through 5 or null; it is not decimal or aggregate metadata. Detail loading is network-first when available, with a version-matching detail-cache fallback so reader and offline actions remain usable. The cache stores `userRating` and accepts a legacy `rating` only when it is an exact whole value from 1 through 5.
+
+### Personal rating
+
+Authenticated endpoint:
+
+```text
+POST /api/v1/books/bulk-set-rating
+```
+
+Set or clear the signed-in user's rating:
+
+```json
+{
+  "bookIds": [123],
+  "rating": 5
+}
+```
+
+Use JSON null to clear:
+
+```json
+{
+  "bookIds": [123],
+  "rating": null
+}
+```
+
+After a successful write, the client re-fetches `GET /api/v1/books/{id}` and uses that response as authoritative. If the returned rating differs from the requested integer or null, the client treats the write as rejected, including the server's metadata-locked behavior, and rolls back the optimistic UI state.
 
 ### Series detail
 

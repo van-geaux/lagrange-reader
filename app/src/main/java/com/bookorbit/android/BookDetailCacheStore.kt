@@ -118,7 +118,7 @@ private fun BookDetailInfo.toJson(): JSONObject = JSONObject().apply {
     putNullable("isbn13", isbn13)
     put("genres", JSONArray(genres))
     put("tags", JSONArray(tags))
-    putNullable("rating", rating)
+    putNullable("userRating", userRating)
     put("narrators", JSONArray(narrators))
     put("fileCount", fileCount)
     putNullable("totalSizeBytes", totalSizeBytes)
@@ -171,7 +171,7 @@ private fun JSONObject.toBookDetail(): BookDetailInfo? {
         isbn13 = optionalString("isbn13"),
         genres = stringList("genres"),
         tags = stringList("tags"),
-        rating = optionalDouble("rating"),
+        userRating = optionalUserRating(),
         narrators = stringList("narrators"),
         fileCount = optInt("fileCount"),
         totalSizeBytes = optionalLong("totalSizeBytes"),
@@ -260,6 +260,17 @@ private fun JSONObject.optionalFloat(key: String): Float? {
 private fun JSONObject.optionalDouble(key: String): Double? {
     if (!has(key) || isNull(key)) return null
     return optDouble(key)
+}
+
+private fun JSONObject.optionalUserRating(): Int? {
+    val key = when {
+        has("userRating") -> "userRating"
+        has("rating") -> "rating"
+        else -> return null
+    }
+    if (isNull(key)) return null
+    val value = optDouble(key)
+    return value.takeIf { it.isFinite() && it % 1.0 == 0.0 }?.toInt()?.takeIf { it in 1..5 }
 }
 
 private fun JSONObject.stringList(key: String): List<String> {

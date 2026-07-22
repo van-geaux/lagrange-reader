@@ -65,8 +65,10 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
@@ -428,6 +430,7 @@ internal fun NativeLibraryBrowserScreen(
     libraryBooksPageLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
@@ -986,6 +989,7 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
+                    onBookUserRatingChange = onBookUserRatingChange,
                     seriesDetailLoader = seriesDetailLoader,
                     onRead = onBookOpen,
                     onPreview = onPreview,
@@ -4147,6 +4151,7 @@ private fun BookDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onRead: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
@@ -4195,6 +4200,14 @@ private fun BookDetails(
         value = detailLoader(currentBook) ?: value
     }
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
+    var displayedUserRating by remember(book.id) { mutableStateOf<Int?>(null) }
+    var isUserRatingUpdating by remember(book.id) { mutableStateOf(false) }
+    val userRatingScope = rememberCoroutineScope()
+    LaunchedEffect(book.id, detail.userRating) {
+        if (!isUserRatingUpdating) {
+            displayedUserRating = detail.userRating
+        }
+    }
     val displayBook = detail.book.copy(
         localPath = currentBook.localPath,
         progressLabel = if (canonicalStateBook != null) currentBook.progressLabel else currentBook.progressLabel ?: detail.book.progressLabel,
@@ -4241,9 +4254,6 @@ private fun BookDetails(
         detail.publishedDate?.let { add("Published" to it) }
         detail.language?.let { add("Language" to it) }
         detail.pageCount?.let { add("Pages" to it.toString()) }
-        detail.rating?.let {
-            add("Rating" to String.format(java.util.Locale.US, "%.1f / 5", it))
-        }
     }
     val identifierMetadata = buildList {
         detail.isbn13?.let { add("ISBN-13" to it) }
@@ -4277,15 +4287,45 @@ private fun BookDetails(
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Box(
-                    modifier = Modifier
-                        .width(116.dp)
-                        .clickable { showCoverViewer = true }
-                        .semantics {
-                            contentDescription = "Open full-screen cover for ${displayBook.title}"
-                        }
+                Column(
+                    modifier = Modifier.width(116.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    BookCover(displayBook, coverLoader)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCoverViewer = true }
+                            .semantics {
+                                contentDescription = "Open full-screen cover for ${displayBook.title}"
+                            }
+                    ) {
+                        BookCover(displayBook, coverLoader)
+                    }
+                    BookUserRatingStars(
+                        rating = displayedUserRating,
+                        enabled = !state.isOfflineSnapshot && !isUserRatingUpdating,
+                        onRatingSelected = { selectedRating ->
+                            val previousRating = displayedUserRating
+                            val requestedRating = if (selectedRating == previousRating) null else selectedRating
+                            displayedUserRating = requestedRating
+                            isUserRatingUpdating = true
+                            userRatingScope.launch {
+                                try {
+                                    val authoritativeDetail = onBookUserRatingChange(displayBook, requestedRating)
+                                    displayedUserRating = if (authoritativeDetail == null) {
+                                        previousRating
+                                    } else {
+                                        authoritativeDetail.userRating
+                                    }
+                                } catch (error: CancellationException) {
+                                    displayedUserRating = previousRating
+                                    throw error
+                                } finally {
+                                    isUserRatingUpdating = false
+                                }
+                            }
+                        }
+                    )
                 }
                 Column(
                     modifier = Modifier.weight(1f),
@@ -4637,6 +4677,55 @@ private fun BookDetails(
                         DetailMetadataGroup("Library and file", fileMetadata)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookUserRatingStars(
+    rating: Int?,
+    enabled: Boolean,
+    onRatingSelected: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("book-detail-user-rating"),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        (1..5).forEach { star ->
+            val isCurrentRating = rating == star
+            IconButton(
+                onClick = { onRatingSelected(star) },
+                enabled = enabled,
+                modifier = Modifier
+                    .size(23.dp)
+                    .testTag("book-detail-user-rating-$star")
+                    .semantics {
+                        contentDescription = if (isCurrentRating) {
+                            "Clear $star-star rating"
+                        } else {
+                            "Set rating to $star ${if (star == 1) "star" else "stars"}"
+                        }
+                        stateDescription = if (isCurrentRating) "Selected" else "Not selected"
+                    }
+            ) {
+                Icon(
+                    imageVector = if (star <= (rating ?: 0)) {
+                        Icons.Filled.Star
+                    } else {
+                        Icons.Outlined.StarBorder
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (star <= (rating ?: 0)) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
             }
         }
     }
