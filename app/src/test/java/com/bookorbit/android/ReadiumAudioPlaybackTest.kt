@@ -3,11 +3,13 @@ package com.bookorbit.android
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.session.CommandButton
+import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.readium.r2.shared.util.mediatype.MediaType
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackTest {
     @Test
     fun supportedAudioExtensionsMapToReadiumMediaTypes() {
@@ -56,5 +58,13 @@ class ReadiumAudioPlaybackTest {
         assertEquals(Player.COMMAND_SEEK_FORWARD, preferences[1].playerCommand)
         assertEquals(10_000L, AUDIO_SEEK_BACK_INCREMENT_MS)
         assertEquals(30_000L, AUDIO_SEEK_FORWARD_INCREMENT_MS)
+    }
+
+    @Test
+    fun readiumEngineUsesTheSameTimedSeekIncrements() {
+        val configuration = audiobookReadiumEngineConfiguration()
+
+        assertEquals(10.seconds, configuration.seekBackwardIncrement)
+        assertEquals(30.seconds, configuration.seekForwardIncrement)
     }
 }
