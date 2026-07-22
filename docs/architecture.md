@@ -258,3 +258,7 @@ Paginated comics remain on Readium `ImageNavigator`. Continuous comics use a cus
 Reader preference updates are whole-profile writes keyed by the owning library. EPUB no longer persists only its fields and accidentally reconstructs defaults for PDF/CBR-CBZ layouts or gaps. EPUB, PDF, and CBR/CBZ activities receive the library context and render the full current-library Reading configuration without a selector. EPUB/PDF map and persist changes live; CBR/CBZ rebuilds the chosen paginated/continuous surface while restoring its current page. UI terminology uses `CBR/CBZ layout`.
 
 Continuous remote CBZ Preview accepts known, chunked, and unknown `Content-Length` page responses. Unknown-length bodies are consumed through a bounded read with a hard 64 MB cap before decoding, preserving the continuous reader's memory boundary. Regression coverage compiles and the 291-test/50-suite gate, lint, and both APK assemblies pass; physical-device validation remains pending.
+
+### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
+
+The continuous comic surface owns a decoded-bitmap LRU scoped to the currently open book. Entries are keyed by page and viewport width, capped at 48 MB, and retain recent pages for smooth back-scrolling; the cache is cleared when the reader closes. This decoded cache is separate from source preparation: page responses remain bounded at 64 MB and decoded images at 16M pixels. Continuous-reader coverage compiles with the full gate; physical scroll-back and memory-stability validation remains pending.

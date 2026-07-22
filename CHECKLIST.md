@@ -587,3 +587,10 @@ UI/UX discussion and design-system work can start now:
 4. [x] Allow continuous remote CBZ Preview to read chunked or unknown-`Content-Length` pages through a bounded response capped at 64 MB.
 5. [x] Regression coverage is added/compiled, and the full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
    - [ ] On a physical device, validate chunked/unknown-length CBZ Preview pages; confirm profiles do not reset across book opens; verify each reader options sheet is scoped to the current book's library; confirm EPUB/PDF live changes and CBR/CBZ retained-page rebuilds; and verify the `CBR/CBZ layout` label.
+
+### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
+
+1. [x] Scope decoded continuous-scroll bitmaps to the currently open book, key entries by page and viewport width, and retain recent pages in a 48 MB LRU budget while scrolling back.
+2. [x] Clear the decoded bitmap cache on reader close. Preserve the existing source-page/read protections: 64 MB response/read bound and 16M decoded-pixel bound.
+3. [x] Compile the continuous-reader coverage alongside the existing source/read-bound regression coverage; the full gate passes.
+   - [ ] On a physical device, scroll far down and back up through long CBR/CBZ documents and confirm recent pages reuse smoothly, memory remains stable, and closing/reopening starts with a cleared book-scoped cache.

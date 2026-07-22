@@ -3,8 +3,10 @@ package com.bookorbit.android
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
+import android.util.LruCache
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -61,6 +63,7 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
+private const val MAX_CONTINUOUS_COMIC_CACHE_BYTES = 48 * 1024 * 1024
 
 internal sealed interface ReadiumComicOpenResult {
     data class Opened(val publication: Publication) : ReadiumComicOpenResult
@@ -187,6 +190,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var isPreview: Boolean = false
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
+    private val continuousComicPageCache = object : LruCache<String, Bitmap>(
+        MAX_CONTINUOUS_COMIC_CACHE_BYTES
+    ) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
     private var continuousListState: LazyListState? = null
     private var continuousComicView: ComposeView? = null
     private var navigatorLocationJob: Job? = null
@@ -505,13 +513,23 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         pageIndex: Int,
         targetWidthPx: Int
     ) = withContext(Dispatchers.IO) {
+        val cacheKey = "$pageIndex:$targetWidthPx"
+        synchronized(continuousComicPageCache) {
+            continuousComicPageCache.get(cacheKey)
+        }?.let { cached -> return@withContext cached }
         val link = openedPublication.readingOrder.getOrNull(pageIndex)
             ?: return@withContext null
         val resource = openedPublication.get(link) ?: return@withContext null
         try {
             val bytes = readContinuousComicPageBytes(resource)
                 ?: return@withContext null
-            decodeContinuousComicPage(bytes, targetWidthPx)
+            val decoded = decodeContinuousComicPage(bytes, targetWidthPx)
+            if (decoded != null) {
+                synchronized(continuousComicPageCache) {
+                    continuousComicPageCache.put(cacheKey, decoded)
+                }
+            }
+            decoded
         } finally {
             resource.close()
         }
@@ -725,6 +743,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         super.onDestroy()
         publication?.close()
         publication = null
+        synchronized(continuousComicPageCache) {
+            continuousComicPageCache.evictAll()
+        }
         navigatorLocationJob?.cancel()
         navigatorLocationJob = null
         navigator = null

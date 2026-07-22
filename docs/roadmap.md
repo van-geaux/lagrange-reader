@@ -506,3 +506,7 @@ Each library reader profile now stores separate PDF and Comics layout modes (`Pa
 ### Reader profile persistence and in-reader configuration - 2026-07-22
 
 EPUB preference writes now persist the complete owning-library profile, preventing partial reader saves from resetting PDF/CBR-CBZ layout modes or page gaps. EPUB, PDF, and CBR/CBZ option sheets expose that book library's full Reading configuration without a library selector: EPUB/PDF apply and persist changes live, while CBR/CBZ rebuilds its layout and retains the current page. The visible label is now `CBR/CBZ layout`. Continuous remote CBZ Preview accepts chunked or unknown-`Content-Length` pages through a bounded read capped at 64 MB. Regression coverage is added/compiled; the full gate passes 291 JVM tests across 50 suites with zero failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly. APK: `app/build/outputs/apk/debug/app-debug.apk`. Focused physical-device validation remains pending.
+
+### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
+
+Continuous CBR/CBZ decoded bitmaps are now cached only for the currently open book, keyed by page and viewport width, with a 48 MB LRU budget that retains recent pages when scrolling back. Closing the reader clears this decoded cache. Source page/read protections remain a 64 MB bound and 16M decoded-pixel bound. Continuous-reader coverage compiles with the full gate; physical validation of long-document scroll-back and memory stability remains pending.

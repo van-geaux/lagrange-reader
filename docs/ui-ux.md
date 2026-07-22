@@ -339,3 +339,7 @@ Options > Reading now offers an EPUB Paginated/Continuous selector per library, 
 ### Reader profile persistence and in-reader configuration - 2026-07-22
 
 EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complete Reading configuration without a library selector. EPUB/PDF changes apply live; CBR/CBZ layout changes rebuild the reader while keeping the current page. Complete-profile persistence prevents one reader from resetting another format's mode or gap. The visible format label is `CBR/CBZ layout`. Continuous remote CBZ Preview also accepts chunked/unknown-length pages through the bounded 64 MB response path. Automated regression coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; focused physical-device validation remains pending.
+
+### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
+
+Continuous comic scrolling keeps only the current book's decoded pages, keyed by page and viewport width, in a 48 MB LRU so recent pages remain responsive when the reader scrolls back. Closing the reader clears those decoded pages; the underlying source/read limits remain 64 MB and 16M decoded pixels. Continuous-reader coverage compiles with the full gate; physical validation of long-document down/up scrolling, reuse, eviction, and memory stability remains pending.
