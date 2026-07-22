@@ -309,6 +309,10 @@ Open EPUB, PDF, and CBR/CBZ books from different libraries. In each reader's opt
 
 ### Bounded continuous CBR/CBZ bitmap cache
 
+### Audiobook speed and Browser-first session restoration
+
+Set each audiobook speed (0.75x, 1x, 1.25x, 1.5x, 2x), close/reopen the compact player, switch books, and restart the app; confirm the same global speed applies. Start both NORMAL and PREVIEW sessions and verify launch mode persists. During a new open and app restart, Browser must remain visible while preparation runs in the compact player and the play slot shows a spinner. Compare explicit Close (clears the active-session marker) with task/app termination (leaves it for restoration), then force a failed restore and confirm stale state clears. Automated coverage and the full 294 JVM-test/50-suite gate pass with 0 failures/errors/skips, lintDebug, assembleDebug, and assembleDebugAndroidTest; APK: app/build/outputs/apk/debug/app-debug.apk. Physical-device validation remains pending.
+
 Open a long continuous CBR/CBZ and scroll deeply downward, then back upward. Confirm pages at the same viewport width reuse recent decoded bitmaps, older entries evict within the LRU budget of half the Android app heap with no legacy 192 MiB cap, and a different book does not reuse the first book's decoded pages. Close and reopen the reader to verify the book-scoped cache is cleared. Exercise oversized/chunked source pages and confirm the 64 MB source/read bound and 16M decoded-pixel bound still reject unsafe input safely. Continuous-reader coverage compiles with the full gate; physical scroll-back and memory-stability validation remains pending.
 
 Continuous-mode tutorial/cache checks: verify Swipe up/Menu/Swipe down regions in continuous mode, LR/RL Previous/Menu/Next in paginated mode, and two-page-before/two-page-after prefetch. On a long book, scroll down and up repeatedly and monitor smoothness and adaptive cache memory stability; close to confirm cleanup. The full gate now passes 293 JVM tests across 50 suites with zero failures/errors/skips, lint, and both APK assemblies.

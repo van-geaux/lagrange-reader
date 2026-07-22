@@ -461,12 +461,14 @@ class AppCoordinatorTest {
                 books = listOf(audiobook)
             )
         )
+        coordinator.setAudioPlaybackOpener { false }
 
         coordinator.openBook(audiobook)
         advanceUntilIdle()
 
-        assertTrue(coordinator.screen.value is AppScreen.Reader)
-        assertTrue(repository.savedActiveReaders.isEmpty())
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(listOf(audiobook), repository.savedActiveReaders)
+        assertEquals(1, repository.clearActiveReaderCalls)
     }
 
     @Test
@@ -1375,7 +1377,10 @@ private class FakeBookOrbitDataSource(
         return buildReaderResult
     }
 
-    override suspend fun saveActiveReader(book: BookSummary) {
+    override suspend fun saveActiveReader(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode
+    ) {
         savedActiveReaders += book
     }
 

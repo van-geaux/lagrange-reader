@@ -1704,7 +1704,10 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun loadLocalBooks(): List<BookSummary> = localBooksResult
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = ReaderState(book)
-    override suspend fun saveActiveReader(book: BookSummary) = Unit
+    override suspend fun saveActiveReader(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode
+    ) = Unit
     override suspend fun clearActiveReader() = Unit
     override suspend fun markBookAsRead(book: BookSummary) {
         markedReadBooks += book

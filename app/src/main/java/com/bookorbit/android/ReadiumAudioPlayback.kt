@@ -51,6 +51,8 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import kotlin.coroutines.resume
 
+internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancelled."
+
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
@@ -200,6 +202,16 @@ internal fun seekAudioTo(navigator: BookOrbitAudioNavigator, absolutePositionMs:
 internal data class AudioBookDetailRequest(
     val sequence: Long,
     val book: BookSummary
+)
+
+internal enum class AudioPlaybackPreparationState {
+    IDLE,
+    PREPARING
+}
+
+internal data class AudioPreparingSession(
+    val book: BookSummary,
+    val launchMode: ReaderLaunchMode
 )
 
 internal fun readiumAudioMediaType(filenameOrFormat: String): MediaType? {
@@ -476,8 +488,16 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 class ReadiumAudioPlaybackController internal constructor(
     private val application: Application
 ) {
+    private val preferencesStore = AppPreferencesStore(application)
     private val binderDeferred = CompletableDeferred<ReadiumAudioPlaybackService.Binder>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mutablePreparationState = MutableStateFlow(AudioPlaybackPreparationState.IDLE)
+    internal val preparationState: StateFlow<AudioPlaybackPreparationState> =
+        mutablePreparationState.asStateFlow()
+    private val mutablePreparingSession = MutableStateFlow<AudioPreparingSession?>(null)
+    internal val preparingSession: StateFlow<AudioPreparingSession?> =
+        mutablePreparingSession.asStateFlow()
+    private var openGeneration = 0L
     private var progressJob: Job? = null
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
@@ -531,8 +551,19 @@ class ReadiumAudioPlaybackController internal constructor(
         launchMode: ReaderLaunchMode,
         playWhenReady: Boolean = true
     ): ReadiumAudioOpenResult {
-        ReadiumAudioPlaybackService.start(application)
-        val serviceBinder = binder()
+        val generation = withContext(Dispatchers.Main.immediate) {
+            openGeneration += 1L
+            mutablePreparationState.value = AudioPlaybackPreparationState.PREPARING
+            mutablePreparingSession.value = AudioPreparingSession(book, launchMode)
+            openGeneration
+        }
+        val serviceBinder = try {
+            ReadiumAudioPlaybackService.start(application)
+            binder()
+        } catch (error: Throwable) {
+            resetPreparationIfCurrent(generation)
+            throw error
+        }
         serviceBinder.session.value?.takeIf { current ->
             current.book.libraryId == book.libraryId &&
                 current.book.id == book.id &&
@@ -540,38 +571,106 @@ class ReadiumAudioPlaybackController internal constructor(
                 current.launchMode == launchMode
         }?.let { current ->
             withContext(Dispatchers.Main.immediate) {
+                applyPersistedAudioPlaybackSpeed(current.player)
                 if (playWhenReady) current.player.play()
                 startProgressUpdates(current)
+                mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                mutablePreparingSession.value = null
             }
             return ReadiumAudioOpenResult.Opened(current.engine)
         }
-        val opened = if (file?.isFile == true) {
-            openReadiumAudio(
-                application = application,
-                book = book,
-                file = file,
-                initialPositionMs = initialPositionMs,
-                httpClient = DefaultHttpClient()
-            )
-        } else {
-            openDirectMedia3Audio(
-                application = application,
-                book = book,
-                streamUrl = streamUrl,
-                initialPositionMs = initialPositionMs,
-                headersProvider = streamingHeadersProvider,
-                recoverAuthentication = streamingAuthenticationRecovery
-            )
+        val opened = try {
+            if (file?.isFile == true) {
+                openReadiumAudio(
+                    application = application,
+                    book = book,
+                    file = file,
+                    initialPositionMs = initialPositionMs,
+                    httpClient = DefaultHttpClient()
+                )
+            } else {
+                openDirectMedia3Audio(
+                    application = application,
+                    book = book,
+                    streamUrl = streamUrl,
+                    initialPositionMs = initialPositionMs,
+                    headersProvider = streamingHeadersProvider,
+                    recoverAuthentication = streamingAuthenticationRecovery
+                )
+            }
+        } catch (error: Throwable) {
+            resetPreparationIfCurrent(generation)
+            throw error
         }
         return when (opened) {
-            is ReadiumAudioOpenResult.Error -> opened
-            is ReadiumAudioOpenResult.Opened -> {
+            is ReadiumAudioOpenResult.Error -> {
                 withContext(Dispatchers.Main.immediate) {
-                    serviceBinder.openSession(book, launchMode, opened.engine)
-                    if (playWhenReady) opened.engine.player.play()
-                    startProgressUpdates(requireNotNull(serviceBinder.session.value))
+                    if (generation == openGeneration) {
+                        mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                        mutablePreparingSession.value = null
+                    }
                 }
                 opened
+            }
+            is ReadiumAudioOpenResult.Opened -> {
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation != openGeneration) {
+                        opened.engine.close()
+                        mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                        mutablePreparingSession.value = null
+                        ReadiumAudioOpenResult.Error(AUDIO_OPEN_CANCELLED_MESSAGE)
+                    } else {
+                        applyPersistedAudioPlaybackSpeed(opened.engine.player)
+                        serviceBinder.openSession(book, launchMode, opened.engine)
+                        if (playWhenReady) opened.engine.player.play()
+                        startProgressUpdates(requireNotNull(serviceBinder.session.value))
+                        mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                        mutablePreparingSession.value = null
+                        ReadiumAudioOpenResult.Opened(opened.engine)
+                    }
+                }
+            }
+        }
+    }
+
+    internal suspend fun restorePersistedSession(state: ReaderState): Boolean {
+        if (state.book.mediaKind != MediaKind.AUDIO) return false
+        return runCatching {
+            when (
+                open(
+                    book = state.book,
+                    file = state.localFile?.takeIf { it.isFile },
+                    streamUrl = state.streamUrl,
+                    initialPositionMs = if (state.launchMode == ReaderLaunchMode.PREVIEW) {
+                        0L
+                    } else {
+                        state.lastKnownPosition
+                    },
+                    launchMode = state.launchMode,
+                    playWhenReady = true
+                )
+            ) {
+                is ReadiumAudioOpenResult.Opened -> true
+                is ReadiumAudioOpenResult.Error -> false
+            }
+        }.getOrDefault(false)
+    }
+
+    internal fun setPlaybackSpeed(player: Player, speed: Float) {
+        val normalized = normalizeAudioPlaybackSpeed(speed)
+        player.setPlaybackSpeed(normalized)
+        preferencesStore.saveAudioPlaybackSpeed(normalized)
+    }
+
+    private fun applyPersistedAudioPlaybackSpeed(player: Player) {
+        player.setPlaybackSpeed(preferencesStore.readAudioPlaybackSpeed())
+    }
+
+    private suspend fun resetPreparationIfCurrent(generation: Long) {
+        withContext(Dispatchers.Main.immediate) {
+            if (generation == openGeneration) {
+                mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                mutablePreparingSession.value = null
             }
         }
     }
@@ -579,6 +678,9 @@ class ReadiumAudioPlaybackController internal constructor(
     suspend fun close() {
         val serviceBinder = binder()
         withContext(Dispatchers.Main.immediate) {
+            openGeneration += 1L
+            mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+            mutablePreparingSession.value = null
             serviceBinder.session.value?.let(::publishProgress)
             progressJob?.cancel()
             progressJob = null

@@ -342,6 +342,10 @@ EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complet
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
+### Audiobook speed and Browser-first session restoration - 2026-07-22
+
+The compact audiobook player uses one global persisted speed (0.75x/1x/1.25x/1.5x/2x) across books and close/reopen. NORMAL and PREVIEW launch modes survive active-session restoration. New opens and app restarts keep the user on Browser while preparation continues in the compact player, replacing the play control with a spinner. Explicit Close means stop and clear; task/app termination leaves the session marker for restoration, and failed restoration removes stale state. Automated coverage and the full 294-JVM-test gate pass; physical-device validation remains pending.
+
 Continuous comic scrolling keeps only the current book's decoded pages, keyed by page and viewport width, in an LRU sized to half the Android app heap with no legacy 192 MiB cap so recent pages remain responsive when the reader scrolls back. Closing the reader clears those decoded pages; the underlying source/read limits remain 64 MB and 16M decoded pixels. Continuous-reader coverage compiles with the full gate; physical validation of long-document down/up scrolling, reuse, eviction, and memory stability remains pending.
 
 Continuous comic mode uses vertical Swipe up/Menu/Swipe down tutorial regions and prefetches the two previous and two next pages; paginated mode retains LR/RL Previous/Menu/Next. The full gate now passes 293 JVM tests across 50 suites with zero failures/errors/skips, lint, and both APK assemblies. Validate tutorial labels/layout, long-book scroll-down/up smoothness, and adaptive cache memory stability on device.

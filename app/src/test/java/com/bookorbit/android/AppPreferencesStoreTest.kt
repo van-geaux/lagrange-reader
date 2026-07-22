@@ -8,6 +8,13 @@ import org.junit.Test
 
 class AppPreferencesStoreTest {
     @Test
+    fun audioPlaybackSpeedStaysWithinTheSupportedGlobalOptions() {
+        assertEquals(1.5f, normalizeAudioPlaybackSpeed(1.5f))
+        assertEquals(0.75f, normalizeAudioPlaybackSpeed(0.6f))
+        assertEquals(2f, normalizeAudioPlaybackSpeed(2.5f))
+    }
+
+    @Test
     fun `stored app theme values round trip and invalid values follow system`() {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))

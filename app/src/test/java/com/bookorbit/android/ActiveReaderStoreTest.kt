@@ -33,11 +33,17 @@ class ActiveReaderStoreTest {
             coverAspectRatio = CoverAspectRatio.SQUARE
         )
 
-        store.save("https://example.test", book)
+        store.save(
+            serverUrl = "https://example.test",
+            book = book,
+            launchMode = ReaderLaunchMode.PREVIEW
+        )
 
         val restored = store.read("https://example.test")
+        val restoredSession = store.readSession("https://example.test")
 
         assertEquals(book, restored)
+        assertEquals(ReaderLaunchMode.PREVIEW, restoredSession?.launchMode)
     }
 
     @Test

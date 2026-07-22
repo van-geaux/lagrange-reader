@@ -261,6 +261,10 @@ Continuous remote CBZ Preview accepts known, chunked, and unknown `Content-Lengt
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
+### Audiobook speed and Browser-first session restoration - 2026-07-22
+
+ReadiumAudioPlaybackController stores one global normalized speed (0.75/1/1.25/1.5/2x) and applies it whenever any session opens, so close/reopen and book changes retain the choice. Active-reader metadata stores ReaderLaunchMode.NORMAL or PREVIEW. Coordinator/bootstrap restoration never navigates to a fullscreen audio Reader: Browser remains active while the controller prepares and the compact player exposes a spinner in its play slot. Explicit Close clears the active-session marker; task/app termination preserves it for restart restoration, while a failed restore clears stale metadata. The full 294-test/50-suite gate, lint, and both APK assemblies pass; physical validation remains pending.
+
 The continuous comic surface owns a decoded-bitmap LRU scoped to the currently open book. Entries are keyed by page and viewport width, sized to half the Android app heap with no legacy 192 MiB cap, and retain recent pages for smooth back-scrolling; the cache is cleared when the reader closes. This decoded cache is separate from source preparation: page responses remain bounded at 64 MB and decoded images at 16M pixels. Continuous-reader coverage compiles with the full gate; physical scroll-back and memory-stability validation remains pending.
 
 The continuous surface prefetches two pages before and after the visible range. Its tutorial uses vertical Swipe up/Menu/Swipe down regions; paginated mode keeps LR/RL Previous/Menu/Next. The full gate now passes 293 JVM tests across 50 suites with zero failures/errors/skips, lint, and both APK assemblies. Physical validation should exercise long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch, and tutorial layout/labels.

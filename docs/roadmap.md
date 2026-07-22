@@ -509,6 +509,10 @@ EPUB preference writes now persist the complete owning-library profile, preventi
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
+### Audiobook speed and Browser-first session restoration - 2026-07-22
+
+Audiobook playback speed is now a global persisted value (0.75/1/1.25/1.5/2x), reapplied across books and compact-player close/reopen. Active sessions persist NORMAL or PREVIEW launch mode. New opens and app-restart restoration stay on Browser while preparation runs in the compact player, whose play slot shows a spinner; explicit Close clears the active-session marker, while task/app termination leaves it for restart restoration. A failed restore clears stale state. The full 294 JVM-test/50-suite gate passes with 0 failures/errors/skips, lint, debug APK assembly, and Android-test APK assembly; APK: app/build/outputs/apk/debug/app-debug.apk. Physical validation remains pending.
+
 Continuous CBR/CBZ decoded bitmaps are now cached only for the currently open book, keyed by page and viewport width, with an LRU budget of half the Android app heap with no legacy 192 MiB cap and retaining recent pages when scrolling back. Closing the reader clears this decoded cache. Source page/read protections remain a 64 MB bound and 16M decoded-pixel bound. Continuous-reader coverage compiles with the full gate; physical validation of long-document scroll-back and memory stability remains pending.
 
 Continuous-mode refinement: prefetch the two previous and two next pages around the visible range, and use vertical Swipe up/Menu/Swipe down tutorial regions; paginated mode retains LR/RL Previous/Menu/Next. The full gate now passes 293 JVM tests across 50 suites with zero failures/errors/skips, lint, and both APK assemblies. Physical validation must cover long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch/reuse, and tutorial layout/labels.

@@ -7,6 +7,8 @@ import android.widget.FrameLayout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /** Keeps the compact audiobook controls visible above Readium's separate reader activities. */
 internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
@@ -21,6 +23,11 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
             BookOrbitTheme(themeMode = themeMode) {
                 ReadiumCompactAudioPlayer(
                     controller = controller,
+                    onClosed = { _, _ ->
+                        lifecycleScope.launch {
+                            BookOrbitRepository(applicationContext).clearActiveReader()
+                        }
+                    },
                     onCoverClick = { book ->
                         controller.requestBookDetail(book)
                         finish()

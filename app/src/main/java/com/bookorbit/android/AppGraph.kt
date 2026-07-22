@@ -13,5 +13,8 @@ class AppGraph(context: Context) {
             },
             recoverAuthentication = repository::recoverStreamingAuthentication
         )
+        coordinator.setAudioPlaybackOpener { state ->
+            controller.restorePersistedSession(state)
+        }
     }
 }

@@ -117,6 +117,15 @@ internal class AppPreferencesStore(context: Context) {
             .apply()
     }
 
+    fun readAudioPlaybackSpeed(): Float =
+        normalizeAudioPlaybackSpeed(preferences.getFloat(AUDIO_PLAYBACK_SPEED_KEY, 1f))
+
+    fun saveAudioPlaybackSpeed(value: Float) {
+        preferences.edit()
+            .putFloat(AUDIO_PLAYBACK_SPEED_KEY, normalizeAudioPlaybackSpeed(value))
+            .apply()
+    }
+
     private companion object {
         const val APP_PREFERENCES_FILE = "app_preferences"
         const val LOCK_ORIENTATION_KEY = "lock_orientation"
@@ -129,8 +138,16 @@ internal class AppPreferencesStore(context: Context) {
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
+        const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
     }
 }
+
+internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
+    AUDIO_PLAYBACK_SPEED_OPTIONS
+        .minByOrNull { option -> kotlin.math.abs(option - value) }
+        ?: 1f
+
+internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
 internal fun lockedOrientationStorageValue(value: LockedOrientation): String =
     value.name.lowercase()

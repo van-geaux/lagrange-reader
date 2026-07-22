@@ -1101,7 +1101,78 @@ internal fun ReadiumCompactAudioPlayer(
     val session by produceState<ReadiumAudioPlaybackService.Session?>(null, controller) {
         controller.session().collect { value = it }
     }
-    val current = session ?: return
+    val preparingSession by controller.preparingSession.collectAsState()
+    val currentSession = session
+    if (currentSession == null) {
+        val preparing = preparingSession ?: return
+        val scope = rememberCoroutineScope()
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics {
+                    contentDescription = "Preparing audiobook player for ${preparing.book.title}"
+                },
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactAudiobookCover(
+                    book = preparing.book,
+                    coverLoader = controller::loadCover
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp)
+                ) {
+                    Text(
+                        preparing.book.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Preparing audiobook…",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                IconButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            controller.close()
+                            onClosed(preparing.book, preparing.launchMode)
+                        }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close audiobook player")
+                }
+            }
+        }
+        return
+    }
+    val current = requireNotNull(currentSession)
     val playback by produceState(audioPlayerSnapshot(current.player), current.player) {
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -1316,7 +1387,7 @@ internal fun ReadiumCompactAudioPlayer(
                                     text = { Text("${formatPlaybackSpeed(speed)}×") },
                                     onClick = {
                                         speedMenuExpanded = false
-                                        current.player.setPlaybackSpeed(speed.toFloat())
+                                        controller.setPlaybackSpeed(current.player, speed.toFloat())
                                     }
                                 )
                             }

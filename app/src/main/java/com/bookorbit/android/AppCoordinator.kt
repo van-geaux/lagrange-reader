@@ -110,6 +110,11 @@ class AppCoordinator(
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
+    private var audioPlaybackOpener: (suspend (ReaderState) -> Boolean)? = null
+
+    fun setAudioPlaybackOpener(opener: suspend (ReaderState) -> Boolean) {
+        audioPlaybackOpener = opener
+    }
 
     fun bootstrap() {
         scope.launch {
@@ -120,11 +125,12 @@ class AppCoordinator(
                 return@launch
             }
 
-            repository.restoreActiveReaderState(localOnly = true)?.let { readerState ->
+            val localAudioState = repository.restoreActiveReaderState(localOnly = true)?.let { readerState ->
                 if (readerState.book.mediaKind != MediaKind.AUDIO) {
                     _screen.value = AppScreen.Reader(readerState)
                     return@launch
                 }
+                readerState
             }
 
             val startupCache = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
@@ -159,7 +165,8 @@ class AppCoordinator(
                             _screen.value = AppScreen.Reader(readerState)
                             return@launch
                         }
-                    }
+                        restoreAudioInBackground(readerState)
+                    } ?: localAudioState?.let(::restoreAudioInBackground)
                     loadBrowser()
                 }
                 SessionState.Unauthenticated -> {
@@ -170,6 +177,7 @@ class AppCoordinator(
                     )
                 }
                 SessionState.Unavailable -> {
+                    localAudioState?.let(::restoreAudioInBackground)
                     val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
@@ -651,7 +659,9 @@ class AppCoordinator(
 
     private fun openBook(book: BookSummary, launchMode: ReaderLaunchMode) {
         scope.launch {
-            _screen.value = AppScreen.ReaderLoading(book, launchMode)
+            if (book.mediaKind != MediaKind.AUDIO) {
+                _screen.value = AppScreen.ReaderLoading(book, launchMode)
+            }
             runCatching {
                 val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
                     runCatching { repository.loadBookDetail(book) }
@@ -680,11 +690,24 @@ class AppCoordinator(
                 } else {
                     preparedState.copy(launchMode = ReaderLaunchMode.NORMAL)
                 }
-                if (launchMode == ReaderLaunchMode.NORMAL && book.mediaKind != MediaKind.AUDIO) {
-                    repository.saveActiveReader(readerState.book)
+                if (book.mediaKind == MediaKind.AUDIO) {
+                    val opener = audioPlaybackOpener
+                        ?: throw UserFacingException("Audiobook playback is unavailable.")
+                    repository.saveActiveReader(readerState.book, launchMode)
+                    if (!opener(readerState)) {
+                        repository.clearActiveReader()
+                        throw UserFacingException(AUDIO_OPEN_CANCELLED_MESSAGE)
+                    }
+                } else {
+                    if (launchMode == ReaderLaunchMode.NORMAL) {
+                        repository.saveActiveReader(readerState.book)
+                    }
+                    _screen.value = AppScreen.Reader(readerState)
                 }
-                _screen.value = AppScreen.Reader(readerState)
             }.onFailure { error ->
+                if (error.message == AUDIO_OPEN_CANCELLED_MESSAGE) {
+                    return@onFailure
+                }
                 if (error is AuthenticationRequiredException) {
                     showLogin(
                         message = "Your session expired. Sign in again to reopen ${book.title}.",
@@ -702,6 +725,15 @@ class AppCoordinator(
                 } else {
                     loadBrowser()
                 }
+            }
+        }
+    }
+
+    private fun restoreAudioInBackground(readerState: ReaderState) {
+        val opener = audioPlaybackOpener ?: return
+        scope.launch {
+            if (!opener(readerState)) {
+                repository.clearActiveReader()
             }
         }
     }
@@ -1092,19 +1124,21 @@ class AppCoordinator(
     }
 
     fun onAudioPlaybackClosed(book: BookSummary, launchMode: ReaderLaunchMode) {
-        if (launchMode == ReaderLaunchMode.PREVIEW) return
         scope.launch {
-            val key = book.progressKey()
-            latestProgressByTarget[key]?.let { progress ->
-                if (ProgressQueuePolicy.isMeaningfullyDifferent(
-                        progress.toSnapshot(),
-                        queuedProgressByTarget[key]?.toSnapshot()
-                    )
-                ) {
-                    queueProgress(key, progress)
+            if (launchMode == ReaderLaunchMode.NORMAL) {
+                val key = book.progressKey()
+                latestProgressByTarget[key]?.let { progress ->
+                    if (ProgressQueuePolicy.isMeaningfullyDifferent(
+                            progress.toSnapshot(),
+                            queuedProgressByTarget[key]?.toSnapshot()
+                        )
+                    ) {
+                        queueProgress(key, progress)
+                    }
                 }
+                runCatching { repository.syncPendingProgress() }
             }
-            runCatching { repository.syncPendingProgress() }
+            repository.clearActiveReader()
         }
     }
 

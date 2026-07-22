@@ -7,6 +7,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+internal data class ActiveReaderSession(
+    val book: BookSummary,
+    val launchMode: ReaderLaunchMode
+)
+
 class ActiveReaderStore private constructor(
     private val file: File,
     @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
@@ -23,9 +28,14 @@ class ActiveReaderStore private constructor(
         directFileConstructor = true
     )
 
-    suspend fun save(serverUrl: String, book: BookSummary) = mutex.withLock {
+    suspend fun save(
+        serverUrl: String,
+        book: BookSummary,
+        launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
+    ) = mutex.withLock {
         val root = JSONObject().apply {
             put("serverUrl", serverUrl)
+            put("launchMode", launchMode.name)
             put("book", JSONObject().apply {
                 put("libraryId", book.libraryId)
                 put("id", book.id)
@@ -64,7 +74,9 @@ class ActiveReaderStore private constructor(
         file.writeText(root.toString())
     }
 
-    suspend fun read(serverUrl: String): BookSummary? = mutex.withLock {
+    suspend fun read(serverUrl: String): BookSummary? = readSession(serverUrl)?.book
+
+    internal suspend fun readSession(serverUrl: String): ActiveReaderSession? = mutex.withLock {
         if (!file.exists()) {
             return@withLock null
         }
@@ -73,7 +85,7 @@ class ActiveReaderStore private constructor(
             return@withLock null
         }
         val book = root.optJSONObject("book") ?: return@withLock null
-        BookSummary(
+        val restoredBook = BookSummary(
             libraryId = book.optString("libraryId"),
             id = book.optString("id"),
             fileId = book.optString("fileId").takeIf { it.isNotBlank() },
@@ -113,6 +125,12 @@ class ActiveReaderStore private constructor(
                     }
                 }
             }.orEmpty()
+        )
+        ActiveReaderSession(
+            book = restoredBook,
+            launchMode = runCatching {
+                ReaderLaunchMode.valueOf(root.optString("launchMode"))
+            }.getOrDefault(ReaderLaunchMode.NORMAL)
         )
     }
 

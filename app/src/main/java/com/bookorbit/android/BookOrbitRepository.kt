@@ -140,7 +140,10 @@ interface BookOrbitDataSource {
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
-    suspend fun saveActiveReader(book: BookSummary)
+    suspend fun saveActiveReader(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
+    )
     suspend fun clearActiveReader()
     suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
@@ -847,10 +850,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         )
     }
 
-    override suspend fun saveActiveReader(book: BookSummary) = withContext(Dispatchers.IO) {
+    override suspend fun saveActiveReader(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode
+    ) = withContext(Dispatchers.IO) {
         activeReaderStore.save(
             serverUrl = getServerUrl().orEmpty(),
-            book = book
+            book = book,
+            launchMode = launchMode
         )
     }
 
@@ -932,7 +939,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         if (serverUrl.isBlank()) {
             return@withContext null
         }
-        val savedBook = activeReaderStore.read(serverUrl) ?: return@withContext null
+        val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
+        val savedBook = savedSession.book
         val localFile = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
         if (localOnly && localFile == null) {
             return@withContext null
@@ -978,7 +986,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             lastKnownPosition = restoredProgress.positionMs,
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
-            progressPercent = restoredProgress.progressPercent
+            progressPercent = restoredProgress.progressPercent,
+            launchMode = savedSession.launchMode
         )
     }
 
