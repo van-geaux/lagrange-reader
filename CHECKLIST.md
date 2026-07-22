@@ -530,6 +530,16 @@ Keep whole-file authenticated preparation for EPUB and PDF, but replace full-fil
 
 Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 
+## 16. New User Feedback Work Order — 2026-07-22
+
+- [ ] Replace Android system audiobook chapter-skip actions with backward and forward seek actions while retaining chapter navigation in the app player
+- [ ] Add a server-backed star-rating control below the Book Detail cover; confirm the rating scale and write behavior
+- [ ] Change the reading-status action to `Mark as...` and expose all server statuses: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed
+- [ ] Replace About placeholder text with complete app description, BookOrbit disclaimer/relationship, version/build details, acknowledgements, and links
+- [ ] Add device-only audiobook Session history below detail actions, recording play/pause time and playback timepoint, seeking on tap, surviving app updates, clearing on server change, and being removed with app uninstall
+
+Session history should use durable app-private storage keyed by canonical server origin plus BookOrbit book/file ID. Add duplicate-callback protection and a bounded per-book retention policy before implementation; do not send these events to BookOrbit.
+
 ## Immediate Next Stack
 
 UI/UX discussion and design-system work can start now:
