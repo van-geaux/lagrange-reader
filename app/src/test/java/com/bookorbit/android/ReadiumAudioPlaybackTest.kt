@@ -46,7 +46,7 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
-    fun audiobookMediaButtonsPreferTenSecondBackAndThirtySecondForwardSeeking() {
+    fun audiobookCustomLayoutExposesTenSecondBackAndThirtySecondForwardSeeking() {
         val preferences = audiobookMediaButtonPreferences()
 
         assertEquals(2, preferences.size)

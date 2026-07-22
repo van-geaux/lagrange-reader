@@ -261,6 +261,10 @@ Continuous remote CBZ Preview accepts known, chunked, and unknown `Content-Lengt
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
+### Audiobook preparation compatibility - 2026-07-22
+
+Readium 3.0.2's audio adapter remains paired with explicit Media3 1.4.1 dependencies; the incompatible 1.9.0 override was removed. The Android session still advertises Replay 10 and Forward 30 through the 1.4.1-compatible custom layout, so chapter navigation remains in-app without sacrificing system seek controls. Service binding is bounded to 10 seconds and engine preparation to 30 seconds. Timeout, cancellation, listener races, and finalization failures clear preparation state non-cancellably and close partially opened publications, engines, or sessions. Persisted restore errors are logged instead of silently swallowed. Instrumentation compiles; physical local/streamed and system-control validation remains pending.
+
 ### Audiobook speed and Browser-first session restoration - 2026-07-22
 
 ReadiumAudioPlaybackController stores one global normalized speed (0.75/1x/1.25x/1.5x/2x) and applies it whenever any session opens, so close/reopen and book changes retain the choice. Active-reader metadata stores ReaderLaunchMode.NORMAL or PREVIEW. Coordinator/bootstrap restoration never navigates to a fullscreen audio Reader: Browser remains active while the controller prepares and the compact player exposes a spinner in its play slot. The opener carries an explicit play-when-ready intent: Book Detail Play passes true and autoplays after preparation, while app/task restoration passes false and exposes the saved session paused at its saved position and speed. Explicit Close clears the active-session marker; task/app termination preserves it for restart restoration, while a failed restore clears stale metadata. The full 294-test/50-suite gate, lint, and both APK assemblies pass; physical validation remains pending.

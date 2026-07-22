@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import org.readium.adapter.exoplayer.audio.ExoPlayerSettings
@@ -55,7 +58,10 @@ import kotlin.coroutines.resume
 internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancelled."
 internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 10_000L
 internal const val AUDIO_SEEK_FORWARD_INCREMENT_MS = 30_000L
+private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
+private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
 
+@androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
     CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
         .setPlayerCommand(Player.COMMAND_SEEK_BACK)
@@ -178,6 +184,16 @@ private suspend fun awaitMedia3Ready(player: Player): PlaybackException? {
             }
         }
         player.addListener(listener)
+        player.playerError?.let { error ->
+            if (continuation.isActive) {
+                player.removeListener(listener)
+                continuation.resume(error)
+            }
+        }
+        if (player.playbackState == Player.STATE_READY && continuation.isActive) {
+            player.removeListener(listener)
+            continuation.resume(null)
+        }
         continuation.invokeOnCancellation {
             player.removeListener(listener)
         }
@@ -337,37 +353,46 @@ internal suspend fun openReadiumAudio(
 
     // Readium's ExoPlayer adapter creates a main-looper Player. Media3 requires every
     // subsequent configuration call to run on that same thread.
-    withContext(Dispatchers.Main.immediate) main@{
-        val engineProvider = ExoPlayerEngineProvider(
-            application = application,
-            metadataProvider = DefaultMediaMetadataProvider(
-                title = book.title,
-                author = book.author
+    try {
+        withContext(Dispatchers.Main.immediate) main@{
+            val engineProvider = ExoPlayerEngineProvider(
+                application = application,
+                metadataProvider = DefaultMediaMetadataProvider(
+                    title = book.title,
+                    author = book.author
+                )
             )
-        )
-        val factory = AudioNavigatorFactory(publication, engineProvider)
-            ?: run {
-                publication.close()
-                return@main ReadiumAudioOpenResult.Error("Readium could not prepare this audiobook.")
-            }
-        val initialLocator = publication.readingOrder.firstOrNull()
-            ?.let(publication::locatorFromLink)
-            ?.copyWithLocations(fragments = listOf("t=${initialPositionMs.coerceAtLeast(0L).milliseconds.inWholeSeconds}"))
-        val navigator = factory.createNavigator(
-            initialLocator = initialLocator,
-            initialPreferences = ExoPlayerPreferences()
-        ).getOrNull()
-            ?: run {
-                publication.close()
-                return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
-            }
-        ReadiumAudioOpenResult.Opened(
-            AudioPlaybackEngine.Readium(
-                publication = publication,
-                navigator = navigator,
-                player = navigator.asMedia3Player()
+            val factory = AudioNavigatorFactory(publication, engineProvider)
+                ?: run {
+                    publication.close()
+                    return@main ReadiumAudioOpenResult.Error("Readium could not prepare this audiobook.")
+                }
+            val initialLocator = publication.readingOrder.firstOrNull()
+                ?.let(publication::locatorFromLink)
+                ?.copyWithLocations(fragments = listOf("t=${initialPositionMs.coerceAtLeast(0L).milliseconds.inWholeSeconds}"))
+            val navigator = factory.createNavigator(
+                initialLocator = initialLocator,
+                initialPreferences = ExoPlayerPreferences()
+            ).getOrNull()
+                ?: run {
+                    publication.close()
+                    return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
+                }
+            ReadiumAudioOpenResult.Opened(
+                AudioPlaybackEngine.Readium(
+                    publication = publication,
+                    navigator = navigator,
+                    player = navigator.asMedia3Player()
+                )
             )
-        )
+        }
+    } catch (error: Throwable) {
+        withContext(NonCancellable) {
+            runCatching {
+                publication.close()
+            }
+        }
+        throw error
     }
 }
 
@@ -392,15 +417,25 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             book: BookSummary,
             launchMode: ReaderLaunchMode,
             engine: AudioPlaybackEngine
-        ) {
+        ): Session {
             closeSession()
-            val mediaSession = MediaSession.Builder(applicationContext, engine.player)
-                .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
-                .setSessionActivity(createSessionActivityIntent())
-                .setMediaButtonPreferences(audiobookMediaButtonPreferences())
-                .build()
-            addSession(mediaSession)
-            mutableSession.value = Session(book, launchMode, engine, mediaSession)
+            var mediaSession: MediaSession? = null
+            try {
+                val createdSession = MediaSession.Builder(applicationContext, engine.player)
+                    .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
+                    .setSessionActivity(createSessionActivityIntent())
+                    .setCustomLayout(audiobookMediaButtonPreferences())
+                    .build()
+                mediaSession = createdSession
+                addSession(createdSession)
+                return Session(book, launchMode, engine, createdSession).also { session ->
+                    mutableSession.value = session
+                }
+            } catch (error: Throwable) {
+                mediaSession?.release()
+                mutableSession.value = null
+                throw error
+            }
         }
 
         fun closeSession() {
@@ -574,45 +609,74 @@ class ReadiumAudioPlaybackController internal constructor(
         }
         val serviceBinder = try {
             ReadiumAudioPlaybackService.start(application)
-            binder()
+            withTimeoutOrNull(AUDIO_SERVICE_BIND_TIMEOUT_MILLIS) { binder() }
+                ?: run {
+                    resetPreparationIfCurrent(generation)
+                    return ReadiumAudioOpenResult.Error(
+                        "Timed out while connecting to audiobook playback."
+                    )
+                }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            resetPreparationIfCurrent(generation)
+            throw cancelled
         } catch (error: Throwable) {
             resetPreparationIfCurrent(generation)
             throw error
         }
-        serviceBinder.session.value?.takeIf { current ->
+        val matchingSession = serviceBinder.session.value?.takeIf { current ->
             current.book.libraryId == book.libraryId &&
                 current.book.id == book.id &&
                 current.book.fileId == book.fileId &&
                 current.launchMode == launchMode
-        }?.let { current ->
-            withContext(Dispatchers.Main.immediate) {
-                applyPersistedAudioPlaybackSpeed(current.player)
-                if (playWhenReady) current.player.play()
-                startProgressUpdates(current)
-                mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
-                mutablePreparingSession.value = null
+        }
+        if (matchingSession != null) {
+            return try {
+                withContext(Dispatchers.Main.immediate) {
+                    applyPersistedAudioPlaybackSpeed(matchingSession.player)
+                    if (playWhenReady) matchingSession.player.play()
+                    startProgressUpdates(matchingSession)
+                    mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                    mutablePreparingSession.value = null
+                }
+                ReadiumAudioOpenResult.Opened(matchingSession.engine)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                resetPreparationIfCurrent(generation)
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.e(TAG, "Could not resume audiobook playback.", error)
+                resetPreparationIfCurrent(generation)
+                ReadiumAudioOpenResult.Error("Could not resume audiobook playback.")
             }
-            return ReadiumAudioOpenResult.Opened(current.engine)
         }
         val opened = try {
-            if (file?.isFile == true) {
-                openReadiumAudio(
-                    application = application,
-                    book = book,
-                    file = file,
-                    initialPositionMs = initialPositionMs,
-                    httpClient = DefaultHttpClient()
-                )
-            } else {
-                openDirectMedia3Audio(
-                    application = application,
-                    book = book,
-                    streamUrl = streamUrl,
-                    initialPositionMs = initialPositionMs,
-                    headersProvider = streamingHeadersProvider,
-                    recoverAuthentication = streamingAuthenticationRecovery
+            withTimeoutOrNull(AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS) {
+                if (file?.isFile == true) {
+                    openReadiumAudio(
+                        application = application,
+                        book = book,
+                        file = file,
+                        initialPositionMs = initialPositionMs,
+                        httpClient = DefaultHttpClient()
+                    )
+                } else {
+                    openDirectMedia3Audio(
+                        application = application,
+                        book = book,
+                        streamUrl = streamUrl,
+                        initialPositionMs = initialPositionMs,
+                        headersProvider = streamingHeadersProvider,
+                        recoverAuthentication = streamingAuthenticationRecovery
+                    )
+                }
+            } ?: run {
+                resetPreparationIfCurrent(generation)
+                return ReadiumAudioOpenResult.Error(
+                    "Timed out while preparing the audiobook."
                 )
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            resetPreparationIfCurrent(generation)
+            throw cancelled
         } catch (error: Throwable) {
             resetPreparationIfCurrent(generation)
             throw error
@@ -628,21 +692,32 @@ class ReadiumAudioPlaybackController internal constructor(
                 opened
             }
             is ReadiumAudioOpenResult.Opened -> {
-                withContext(Dispatchers.Main.immediate) {
-                    if (generation != openGeneration) {
-                        opened.engine.close()
-                        mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
-                        mutablePreparingSession.value = null
-                        ReadiumAudioOpenResult.Error(AUDIO_OPEN_CANCELLED_MESSAGE)
-                    } else {
-                        applyPersistedAudioPlaybackSpeed(opened.engine.player)
-                        serviceBinder.openSession(book, launchMode, opened.engine)
-                        if (playWhenReady) opened.engine.player.play()
-                        startProgressUpdates(requireNotNull(serviceBinder.session.value))
-                        mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
-                        mutablePreparingSession.value = null
-                        ReadiumAudioOpenResult.Opened(opened.engine)
+                try {
+                    withContext(Dispatchers.Main.immediate) {
+                        if (generation != openGeneration) {
+                            opened.engine.close()
+                            mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                            mutablePreparingSession.value = null
+                            ReadiumAudioOpenResult.Error(AUDIO_OPEN_CANCELLED_MESSAGE)
+                        } else {
+                            applyPersistedAudioPlaybackSpeed(opened.engine.player)
+                            val session = serviceBinder.openSession(book, launchMode, opened.engine)
+                            if (playWhenReady) opened.engine.player.play()
+                            startProgressUpdates(session)
+                            mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
+                            mutablePreparingSession.value = null
+                            ReadiumAudioOpenResult.Opened(opened.engine)
+                        }
                     }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    closeOpenedEngineAfterFailure(serviceBinder, opened.engine)
+                    resetPreparationIfCurrent(generation)
+                    throw cancelled
+                } catch (error: Throwable) {
+                    Log.e(TAG, "Could not finalize audiobook playback.", error)
+                    closeOpenedEngineAfterFailure(serviceBinder, opened.engine)
+                    resetPreparationIfCurrent(generation)
+                    ReadiumAudioOpenResult.Error("Could not start audiobook playback.")
                 }
             }
         }
@@ -653,7 +728,7 @@ class ReadiumAudioPlaybackController internal constructor(
         playWhenReady: Boolean
     ): Boolean {
         if (state.book.mediaKind != MediaKind.AUDIO) return false
-        return runCatching {
+        return try {
             when (
                 open(
                     book = state.book,
@@ -671,7 +746,12 @@ class ReadiumAudioPlaybackController internal constructor(
                 is ReadiumAudioOpenResult.Opened -> true
                 is ReadiumAudioOpenResult.Error -> false
             }
-        }.getOrDefault(false)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Log.e(TAG, "Could not restore the persisted audiobook session.", error)
+            false
+        }
     }
 
     internal fun setPlaybackSpeed(player: Player, speed: Float) {
@@ -685,10 +765,23 @@ class ReadiumAudioPlaybackController internal constructor(
     }
 
     private suspend fun resetPreparationIfCurrent(generation: Long) {
-        withContext(Dispatchers.Main.immediate) {
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
             if (generation == openGeneration) {
                 mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
                 mutablePreparingSession.value = null
+            }
+        }
+    }
+
+    private suspend fun closeOpenedEngineAfterFailure(
+        serviceBinder: ReadiumAudioPlaybackService.Binder,
+        engine: AudioPlaybackEngine
+    ) {
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
+            if (serviceBinder.session.value?.engine === engine) {
+                serviceBinder.closeSession()
+            } else {
+                engine.close()
             }
         }
     }
@@ -733,10 +826,18 @@ class ReadiumAudioPlaybackController internal constructor(
 
     private suspend fun binder(): ReadiumAudioPlaybackService.Binder {
         if (!binderDeferred.isCompleted) {
-            runCatching { ReadiumAudioPlaybackService.bind(application) }
-                .onSuccess(binderDeferred::complete)
-                .onFailure(binderDeferred::completeExceptionally)
+            try {
+                binderDeferred.complete(ReadiumAudioPlaybackService.bind(application))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                binderDeferred.completeExceptionally(error)
+            }
         }
         return binderDeferred.await()
+    }
+
+    private companion object {
+        const val TAG = "ReadiumAudioPlayback"
     }
 }

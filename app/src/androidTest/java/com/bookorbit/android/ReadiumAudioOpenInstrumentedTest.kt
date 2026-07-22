@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
@@ -43,6 +45,8 @@ class ReadiumAudioOpenInstrumentedTest {
         } ?: fail("Opening the real M4B timed out.")
 
         assertTrue(result is ReadiumAudioOpenResult.Opened)
+        assertEquals(AudioPlaybackPreparationState.IDLE, controller.preparationState.value)
+        assertNull(controller.preparingSession.value)
         withTimeoutOrNull(5_000L) { observedSession.await() }
             ?: fail("The compact-player session observer did not receive the opened session.")
         controller.close()
@@ -66,8 +70,46 @@ class ReadiumAudioOpenInstrumentedTest {
             playWhenReady = true
         )
         assertTrue(result is ReadiumAudioOpenResult.Opened)
+        assertEquals(
+            AudioPlaybackPreparationState.IDLE,
+            application.audioPlaybackController.preparationState.value
+        )
+        assertNull(application.audioPlaybackController.preparingSession.value)
         delay(2_000L)
         application.audioPlaybackController.close()
+    }
+
+    @Test
+    fun unsupportedStreamFormatResetsPreparationState() = runBlocking {
+        val application = ApplicationProvider.getApplicationContext<BookOrbitApplication>()
+        val controller = application.audioPlaybackController
+        val book = BookSummary(
+            libraryId = "fixture-library",
+            id = "unsupported-stream",
+            fileId = "unsupported-file",
+            title = "Unsupported audiobook",
+            format = "epub",
+            mediaKind = MediaKind.AUDIO
+        )
+
+        try {
+            val result = withTimeoutOrNull(15_000L) {
+                controller.open(
+                    book = book,
+                    streamUrl = "https://example.invalid/audiobook.epub",
+                    initialPositionMs = 0L,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    playWhenReady = false
+                )
+            } ?: fail("Opening an unsupported stream did not return within the test timeout.")
+
+            assertTrue(result is ReadiumAudioOpenResult.Error)
+            assertEquals(AudioPlaybackPreparationState.IDLE, controller.preparationState.value)
+            assertNull(controller.preparingSession.value)
+        } finally {
+            withTimeoutOrNull(5_000L) { controller.close() }
+                ?: fail("Audiobook cleanup did not complete within the test timeout.")
+        }
     }
 
     private fun fixtureBook(fixture: File): BookSummary = BookSummary(

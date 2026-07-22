@@ -344,7 +344,7 @@ EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complet
 
 ### Audiobook system seek controls - 2026-07-22
 
-System controls now show 10-second backward and 30-second forward seek buttons; chapter selection remains in-app. Physical notification, lock-screen, headset, and Bluetooth validation remains pending.
+System controls show 10-second backward and 30-second forward seek buttons; chapter selection remains in-app. The follow-up preparation fix restores Readium-compatible Media3 1.4.1 without intentionally removing those buttons by moving their preference to the compatible MediaSession custom layout. Preparation now has bounded binding/engine phases and cannot leave the compact player permanently latched after cancellation or failure. The current 299-test/50-suite gate, lint, and both APK assemblies pass. Physical local/streamed opening plus notification, lock-screen, headset, and Bluetooth validation remains pending.
 
 ### Audiobook speed and Browser-first session restoration - 2026-07-22
 

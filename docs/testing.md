@@ -311,7 +311,9 @@ Open EPUB, PDF, and CBR/CBZ books from different libraries. In each reader's opt
 
 ### Audiobook system media controls
 
-System controls use 10-second backward and 30-second forward seek actions; chapter selection remains in-app. The full 295-test gate passes. Physical notification, lock-screen, headset, and Bluetooth validation remains pending.
+System controls use 10-second backward and 30-second forward seek actions; chapter selection remains in-app. The July 22 follow-up restores Media3 1.4.1 compatibility with Readium 3.0.2 and retains these actions through the MediaSession custom layout. Service binding is bounded to 10 seconds and engine preparation to 30 seconds. Timeout, cancellation, READY/error races, and finalization failures clear transient preparation state; partially opened publications, engines, and sessions are closed. The full gate passes 299 JVM tests across 50 suites with zero failures/errors/skips, lint with zero errors, and both APK assemblies. Updated instrumentation compiles but has not run because no device is connected.
+
+Install `app/build/outputs/apk/debug/app-debug.apk`. Open one downloaded/local audiobook and one non-downloaded streamed audiobook; each must leave Preparing and become playable within the bounded preparation window. Swipe down to the Android media player and verify Replay 10 and Forward 30 are present and seek by the stated increments, with chapter navigation remaining in-app. Repeat from the lock screen and with headset/Bluetooth controls where available. Physical validation remains pending.
 
 ### Audiobook speed and Browser-first session restoration
 
