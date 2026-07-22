@@ -23,21 +23,21 @@ The reader/library follow-ups, remote-media work, and audiobook session persiste
 - New audiobook opens prepare in the Browser with a compact-player spinner and autoplay after an explicit Book Detail Play action.
 - App/task restart restores the audiobook compact player at the saved position and speed but always paused.
 
-No application version was created or bumped yet. The user has requested a 1.1.0 release; release-note approval is pending before version bumping and release APK publication.
+Version 1.1.0 is now set at versionCode 11, and the signed release APK has been built and packaged after the user approved the release-note direction.
 
 ## Repository and publishing state
 
 - Repository: `C:\Users\vangeaux\Desktop\.git_projects\bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-+- Current implementation/documentation HEAD: `51c8993`
-+- Local `main` contains the verified audiobook pause/autoplay follow-up and is ready to push.
+- Current implementation/documentation HEAD before the release commit: `51c8993`
+- The 1.1.0 release metadata and signed artifact are ready to commit and push.
 
 Local commits since `origin/main`, newest first:
 
-+- `51c8993 fix: restore audiobook sessions paused`
-+- `e02c1ba feat: persist audiobook playback sessions`
-+- `9c7bf63 fix: smooth continuous comic cache reuse`
+- `51c8993 fix: restore audiobook sessions paused`
+- `e02c1ba feat: persist audiobook playback sessions`
+- `9c7bf63 fix: smooth continuous comic cache reuse`
 - `4dba8bf fix: restore on deck and remote audio streaming`
 - `c0137bb feat: map BookOrbit reading state shelves`
 - `d17e8c7 feat: distinguish library destinations`
@@ -108,7 +108,7 @@ The final implementation gate passed:
 
 Results:
 
-+- 294 JVM tests across 50 suites
+- 294 JVM tests across 50 suites
 - 0 failures, 0 errors, 0 skipped
 - Android lint passed
 - Debug APK assembly passed
@@ -120,11 +120,12 @@ Debug APK:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-The last built APK is available at `app/build/outputs/apk/debug/app-debug.apk` and was built on 2026-07-22.
+- Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
+- Release APK: `app/build/release-artifacts/Lagrange-1.1.0.apk`
 
 ## Highest-priority next work
 
-After the verified audiobook pause/autoplay behavior, prepare the 1.1.0 release once the release notes are approved. Then continue the physical validation matrix:
+After publishing the 1.1.0 release artifact, continue the physical validation matrix:
 
 1. Remote audio: verify backward/forward seeking, chapter selection, speed, Preview isolation, background playback, notification/lock-screen/headset/Bluetooth controls, app relaunch with a surviving session, access-token renewal during a long stream, and explicit-download offline reopening.
 2. Remote comics: validate representative large CBZ, CBR, and CB7 files, selected-page-only loading, navigation, reconnect/error behavior, and explicit downloads.
@@ -132,7 +133,7 @@ After the verified audiobook pause/autoplay behavior, prepare the 1.1.0 release 
 4. Reading shelves: repeat On Deck and the exact state shelves in selected-library Recommended and after offline/cold-cache reopening; confirm a candidate disappears from On Deck when it becomes Reading/Rereading.
 5. Readers/layout: validate a real BookOrbit PDF, mixed portrait/square cover alignment, compact-player relaunch/layout, accessibility, large text, themes, and responsive widths/orientations.
 
-Before asking the user to test another build, assemble the debug APK and report the exact path above. Do not bump the release version or publish a release APK until the user approves the release notes.
+Before asking the user to test another build, assemble the debug APK and report its exact path. Keep release signing material outside Git and update this handover only for explicit handover requests.
 
 ## Architecture guardrails
 

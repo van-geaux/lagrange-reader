@@ -26,8 +26,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 10
-        versionName = "1.0.0"
+        versionCode = 11
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -129,5 +129,5 @@ tasks.register<Copy>("packageReleaseApk") {
     dependsOn("assembleRelease")
     from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     into(layout.buildDirectory.dir("release-artifacts"))
-    rename { "Lagrange-1.0.0.apk" }
+    rename { "Lagrange-1.1.0.apk" }
 }

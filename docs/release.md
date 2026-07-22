@@ -34,10 +34,10 @@ If a rename is required later:
 
 ### Current version marker
 
-- current pre-1.0 release: `versionName 0.2.0`, `versionCode 2`
+- current release: `versionName 1.1.0`, `versionCode 11`
 - update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
 - the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
-- remain on the `0.x` version line until the product owner explicitly approves `1.0.0`
+- use the `1.x` minor-release line for additive feature releases and increment `versionCode` for every distributed build
 
 ## Signing strategy
 
@@ -50,6 +50,7 @@ If a rename is required later:
 ## Current state
 
 - debug and release compilation both pass locally
+- 1.1.0 release APK is packaged as `app/build/release-artifacts/Lagrange-1.1.0.apk`
 - no release keystore is committed in this repository
 - the tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses
 - there is not yet a production signing config wired into Gradle
