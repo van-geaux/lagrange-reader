@@ -30,7 +30,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Next execution order
 
-Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial timing/dismissal and revised label readability behave correctly. Series details persist Library/Format/none grouping globally; target-device feedback confirms cross-library separation, persistence, and the inline section label/divider layout. The profile dropdown now places Achievements, Options, and About above a divider before session actions, and its ordering is device-validated. Readium PDF migration is implemented, and its generated three-page connected opening test passes. Square covers now bottom-align with portrait covers and card labels. The full gate passes 265 JVM tests across 46 suites plus lint and both APK assemblies; target-device PDF checks, mixed-library cover alignment, the Options cog icon, divider semantics, About routing, accessibility, and large text remain.
+Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial timing/dismissal and revised label readability behave correctly. Series details persist Library/Format/none grouping globally; target-device feedback confirms cross-library separation, persistence, and the inline section label/divider layout. The profile dropdown now places Achievements, Options, and About above a divider before session actions, and its ordering is device-validated. Readium PDF migration is implemented, and its generated three-page connected opening test passes. Square covers now bottom-align with portrait covers and card labels. The full gate passes 280 JVM tests across 48 suites plus lint and both APK assemblies. Target-device validation now confirms the eight latest reader/library/media groups; splash/loading is accepted because the app opens directly to content quickly. Book Detail Other versions is validated on device, including the row, labels, horizontal scrolling, in-detail selection, navigation, accessibility, and responsive/large-text behavior.
 
 ### 1. UI/UX direction and design system
 
@@ -98,7 +98,7 @@ The latest debug APK passed login, session relaunch, browsing, EPUB reading, dow
 2. Completed: replace the hamburger/drawer browser shell with a Plex-inspired native bottom-navigation layout. Libraries open at the top-level library view, with a library-change control at the top of that screen; More expands to Series, Authors, and Options.
 3. Completed: add breathing room below the system status bar on Home, replace the persistent large search field with a top search icon, and open search in a dedicated layer. The standard Android status bar remains visible.
 4. Completed: add Compact, Comfortable, and Wide reader padding options, using Comfortable as the more generous default and repaginating when the setting changes.
-5. Implemented: keep the branded splash state through bootstrap and replace the post-splash spinner with the branded loading mark; validate the result on a physical device.
+5. Implemented: keep startup fast and open directly into content; a visible splash/loading presentation is not required and is accepted as complete.
 
 Each item must preserve session recovery, offline behavior, progress sync, Preview isolation, and reader resume.
 
@@ -111,7 +111,7 @@ Each item must preserve session recovery, offline behavior, progress sync, Previ
 
 ## Latest device feedback workplan â€” 2026-07-13 (continued)
 
-1. Implemented: show the `a BookOrbit reader` subtitle only on the splash/loading presentation; the opened app top bar and About screen now show the Lagrange name without the subtitle. Physical-device presentation validation remains required.
+1. Implemented: show the `a BookOrbit reader` subtitle only on the splash/loading presentation; the opened app top bar and About screen now show the Lagrange name without the subtitle. Physical-device presentation validation is complete; startup opens directly into content quickly without a visible splash.
 2. Implemented: add a Libraries content control that collapses books belonging to the same series into one representative series card, with a Show all action to restore the full book grid; physical-device validation remains required.
 3. Implemented: add Local books to More immediately before Options, loading valid downloaded titles from local storage and presenting them with the same poster-card grid.
 
@@ -456,7 +456,7 @@ Audiobook implementation and validation can use the local M4B/chapter-metadata f
 
 ### Book Detail other versions follow-up - 2026-07-22
 
-Completed in code: Book Detail now derives exact same-series, same-index BookOrbit records from the complete retained cross-library series result and places them in a compact horizontal `Other versions` row immediately below Synopsis. Cards show format/library context and selecting one stays in the existing detail destination. Previous/Next navigation collapses duplicate indexes so it moves between distinct series positions. JVM and compiled Compose coverage pass; physical target-device validation remains pending.
+Completed in code: Book Detail now derives exact same-series, same-index BookOrbit records from the complete retained cross-library series result and places them in a compact horizontal `Other versions` row immediately below Synopsis. Cards show format/library context and selecting one stays in the existing detail destination. Previous/Next navigation collapses duplicate indexes so it moves between distinct series positions. JVM and compiled Compose coverage pass; physical target-device validation is confirmed complete in the July 22 device pass.
 
 ## Source of truth
 
@@ -485,3 +485,8 @@ Detailed checkpoint status is tracked in:
 
 - [../CHECKLIST.md](../CHECKLIST.md)
 - [ui-ux.md](./ui-ux.md)
+
+
+### Device validation pass - 2026-07-22
+
+The user confirmed the remaining device-validation groups are complete: Other versions; remote audio; remote comics; PDF; reader stability/interaction; Library/catalog/shelves; visual/UI/responsive/accessibility checks; and connected instrumentation coverage. The app opens directly into content without a noticeable splash because startup is fast; this is accepted as the intended behavior. No device-validation blocker remains before the next work-order selection.

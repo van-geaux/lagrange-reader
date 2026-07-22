@@ -10,7 +10,7 @@ Audited implementation status: code and automated verification are complete; gen
 
 Latest Home implementation: the four reading-state shelves follow BookOrbit's exact status contract rather than inferred progress. Currently reading contains only Reading/Rereading, Want to read has its own shelf, On deck contains only On Hold, and Recently read contains only Read/Skimmed. Unread, Abandoned, missing, unknown, and other states are excluded from those shelves. The mapping is shared by server-wide Home and selected-library Recommended and survives cached/offline reopen; representative target-device/server validation remains.
 
-Latest target-device validation: lock-current-orientation, default opening screen, Reduce motion, downloads-over-cellular behavior, storage/cache clearing, delete-local confirmation, whole-book progress correctness, genre filtering, all five app themes, jump-rail spacing, basic series Previous/Next, and the functional Achievements flow work as intended. The haptic setting and all explicit app haptics were removed by user direction.
+Latest target-device validation confirms all eight latest reader/library/media groups: orientation persistence, fixed Library controls, Local batch deletion, Authors jump rail, destination icons, exact reading-state shelves, remote media, and the remaining reader/device matrix. Splash/loading is accepted because the app opens directly to content quickly; it is no longer blocking. The Book Detail Other versions row is target-device validated, including responsive, accessibility, and large-text behavior. The haptic setting and all explicit app haptics were removed by user direction.
 
 Latest implementation: Delete local immediately returns the still-open detail action to Download and refreshes Local books; incomplete Local books summaries recover thumbnails and related metadata from the latest cached rich detail; and Options now dismisses retained book-detail state before opening. These browser/local flows and server-wide Home/Currently Reading aggregation are target-device validated. Comic routing supports online CBZ/CBR/CB7 plus offline ZIP/CBZ and records page progress; fullscreen interactions and online/local CBZ/CBR are target-device validated, while CB7 validation and optional offline RAR/7z extraction remain open. Direct OIDC/SSO remains deferred.
 
@@ -219,7 +219,7 @@ Implemented baseline: normal EPUB Read/Preview and comics use Readium with share
 - The full gate passes 209 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; `catalogJumpRailLabels` and compiled Library/Series assertions cover unavailable labels.
 - [x] Add a bottom Local books shelf to top-level Home using server-wide local titles and to Library Recommended using only titles local to the selected library. Both use deterministic deduplicated alphabetical previews capped at 12 and reuse normal shelf cards/actions/covers; See all opens global or library-scoped Local books with the appropriate title, while More > Local books remains global.
 
-- [x] Add an `Other versions` row immediately below Book Detail Synopsis for exact same-series, same-index records. Reuse compact horizontal cover cards, show format/library context, keep alternate selection inside Book Detail, and reserve Previous/Next for distinct series positions. Target-device validation remains pending.
+- [x] Add an `Other versions` row immediately below Book Detail Synopsis for exact same-series, same-index records. Reuse compact horizontal cover cards, show format/library context, keep alternate selection inside Book Detail, and reserve Previous/Next for distinct series positions. Target-device validation is complete in the July 22 device pass.
 - The full gate passes 210 JVM tests across 34 suites, lint, debug APK assembly, and Android-test APK assembly; compiled coverage exercises the global shelf, global See all, and library-scope exclusion.
 - [ ] Optionally add offline client-side RAR/7z extraction for downloaded CBR/CB7; current UX must clearly require a connection without calling a valid archive corrupt.
 
@@ -320,3 +320,6 @@ Automated gate: 265 JVM tests across 46 suites, lint, debug APK assembly, and An
 - Prefer reusable Compose components and theme tokens over screen-local styling.
 - Keep interactive controls accessible and preserve meaningful semantics in tests.
 - Treat unavailable media types as deferred validation, not as completed UX work.
+
+
+Device-validation completion (July 22, 2026): the remaining reader, media, catalog/shelf, Other versions, responsive, theme, accessibility, and profile/detail checks are confirmed complete by user testing. The app's fast direct-to-content startup is accepted instead of requiring a visible splash screen.
