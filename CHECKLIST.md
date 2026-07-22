@@ -537,8 +537,9 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 - [ ] Change the reading-status action to `Mark as...` and expose all server statuses: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed
 - [ ] Replace About placeholder text with complete app description, BookOrbit disclaimer/relationship, version/build details, acknowledgements, and links
 - [ ] Add device-only audiobook Session history below detail actions, recording play/pause time and playback timepoint, seeking on tap, surviving app updates, clearing on server change, and being removed with app uninstall
+- [ ] Add one global Library card-size setting in Options: Small (current size), Medium, and Large, applied consistently across libraries and card types
 
-Session history should use durable app-private storage keyed by canonical server origin plus BookOrbit book/file ID. Add duplicate-callback protection and a bounded per-book retention policy before implementation; do not send these events to BookOrbit.
+Session history uses durable app-private Room storage keyed by canonical server origin plus BookOrbit book/file ID. A server switch purges the old namespace; duplicate-callback protection, bounded per-book retention, and clear-history support are required; events are never sent to BookOrbit.
 
 ## Immediate Next Stack
 
