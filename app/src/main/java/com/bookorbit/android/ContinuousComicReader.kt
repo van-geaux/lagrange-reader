@@ -35,7 +35,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal enum class ContinuousComicTapAction {
     PREVIOUS,
@@ -44,6 +49,7 @@ internal enum class ContinuousComicTapAction {
 }
 
 internal const val MAX_CONTINUOUS_COMIC_BITMAP_PIXELS = 16_000_000L
+internal const val CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT = 2
 
 internal fun continuousComicTapAction(
     x: Float,
@@ -133,6 +139,22 @@ internal fun ContinuousComicReader(
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val targetWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
+        LaunchedEffect(listState, targetWidthPx, pageIndexes) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .distinctUntilChanged()
+                .collectLatest { firstVisiblePage ->
+                    val prefetchPages = (-CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT..CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT)
+                        .map { firstVisiblePage + it }
+                        .filter { it in pageIndexes.indices && it != firstVisiblePage }
+                    coroutineScope {
+                        prefetchPages.map { pageIndex ->
+                            async(Dispatchers.IO) {
+                                runCatching { loadPage(pageIndexes[pageIndex], targetWidthPx) }
+                            }
+                        }.awaitAll()
+                    }
+                }
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier

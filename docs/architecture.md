@@ -261,4 +261,6 @@ Continuous remote CBZ Preview accepts known, chunked, and unknown `Content-Lengt
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
-The continuous comic surface owns a decoded-bitmap LRU scoped to the currently open book. Entries are keyed by page and viewport width, capped at 48 MB, and retain recent pages for smooth back-scrolling; the cache is cleared when the reader closes. This decoded cache is separate from source preparation: page responses remain bounded at 64 MB and decoded images at 16M pixels. Continuous-reader coverage compiles with the full gate; physical scroll-back and memory-stability validation remains pending.
+The continuous comic surface owns a decoded-bitmap LRU scoped to the currently open book. Entries are keyed by page and viewport width, sized to roughly one quarter of app heap and clamped to 48-192 MB, and retain recent pages for smooth back-scrolling; the cache is cleared when the reader closes. This decoded cache is separate from source preparation: page responses remain bounded at 64 MB and decoded images at 16M pixels. Continuous-reader coverage compiles with the full gate; physical scroll-back and memory-stability validation remains pending.
+
+The continuous surface prefetches two pages before and after the visible range. Its tutorial uses vertical Swipe up/Menu/Swipe down regions; paginated mode keeps LR/RL Previous/Menu/Next. Physical validation should exercise long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch, and tutorial layout/labels.

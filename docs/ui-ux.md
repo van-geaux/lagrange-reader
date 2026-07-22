@@ -342,4 +342,6 @@ EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complet
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
-Continuous comic scrolling keeps only the current book's decoded pages, keyed by page and viewport width, in a 48 MB LRU so recent pages remain responsive when the reader scrolls back. Closing the reader clears those decoded pages; the underlying source/read limits remain 64 MB and 16M decoded pixels. Continuous-reader coverage compiles with the full gate; physical validation of long-document down/up scrolling, reuse, eviction, and memory stability remains pending.
+Continuous comic scrolling keeps only the current book's decoded pages, keyed by page and viewport width, in an adaptive LRU of roughly one quarter of app heap, clamped to 48-192 MB so recent pages remain responsive when the reader scrolls back. Closing the reader clears those decoded pages; the underlying source/read limits remain 64 MB and 16M decoded pixels. Continuous-reader coverage compiles with the full gate; physical validation of long-document down/up scrolling, reuse, eviction, and memory stability remains pending.
+
+Continuous comic mode uses vertical Swipe up/Menu/Swipe down tutorial regions and prefetches the two previous and two next pages; paginated mode retains LR/RL Previous/Menu/Next. Validate tutorial labels/layout, long-book scroll-down/up smoothness, and adaptive cache memory stability on device.

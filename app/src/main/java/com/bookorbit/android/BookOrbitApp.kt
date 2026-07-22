@@ -1459,11 +1459,18 @@ internal val READER_TAP_ZONE_TUTORIAL_REGIONS = listOf(
     ReaderTapZoneTutorialRegion("Next", red = 144, green = 238, blue = 144, alpha = 0.5f)
 )
 
+internal val CONTINUOUS_SCROLL_TUTORIAL_REGIONS = listOf(
+    ReaderTapZoneTutorialRegion("Swipe up", red = 144, green = 238, blue = 144, alpha = 0.5f),
+    ReaderTapZoneTutorialRegion("Menu", red = 0, green = 0, blue = 0, alpha = 0.5f),
+    ReaderTapZoneTutorialRegion("Swipe down", red = 255, green = 114, blue = 118, alpha = 0.5f)
+)
+
 internal fun readerTapZoneTutorialRegions(
-    readingDirection: LibraryReadingDirection
-): List<ReaderTapZoneTutorialRegion> = if (
-    readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
-) {
+    readingDirection: LibraryReadingDirection,
+    continuous: Boolean = false
+): List<ReaderTapZoneTutorialRegion> = if (continuous) {
+    CONTINUOUS_SCROLL_TUTORIAL_REGIONS
+} else if (readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT) {
     READER_TAP_ZONE_TUTORIAL_REGIONS.reversed()
 } else {
     READER_TAP_ZONE_TUTORIAL_REGIONS
@@ -1473,45 +1480,71 @@ internal fun readerTapZoneTutorialRegions(
 internal fun ReaderTapZoneTutorial(
     onDismiss: () -> Unit,
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+    continuous: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val regions = remember(readingDirection) { readerTapZoneTutorialRegions(readingDirection) }
-    val interactionSources = remember(readingDirection) {
+    val regions = remember(readingDirection, continuous) {
+        readerTapZoneTutorialRegions(readingDirection, continuous)
+    }
+    val interactionSources = remember(readingDirection, continuous) {
         List(regions.size) { MutableInteractionSource() }
     }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Row(
-            modifier = modifier
-                .fillMaxSize()
-                .testTag("reader-tap-zone-tutorial")
-                .semantics { contentDescription = "Reader tap regions tutorial" }
-        ) {
-            regions.forEachIndexed { index, region ->
-                Box(
-                    modifier = Modifier
-                        .weight(region.widthWeight)
-                        .fillMaxSize()
-                        .background(
-                            Color(region.red, region.green, region.blue).copy(alpha = region.alpha)
-                        )
-                        .clickable(
-                            interactionSource = interactionSources[index],
-                            indication = null,
-                            onClick = onDismiss
-                        )
-                        .testTag("reader-tap-zone-${region.label.lowercase()}")
-                        .semantics { contentDescription = "${region.label} tap region" },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = region.label,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
+        val containerModifier = modifier
+            .fillMaxSize()
+            .testTag("reader-tap-zone-tutorial")
+            .semantics { contentDescription = "Reader tap regions tutorial" }
+        if (continuous) {
+            Column(modifier = containerModifier) {
+                regions.forEachIndexed { index, region ->
+                    ReaderTapZoneTutorialRegion(
+                        region = region,
+                        interactionSource = interactionSources[index],
+                        modifier = Modifier.weight(region.widthWeight).fillMaxWidth(),
+                        onDismiss = onDismiss
+                    )
+                }
+            }
+        } else {
+            Row(modifier = containerModifier) {
+                regions.forEachIndexed { index, region ->
+                    ReaderTapZoneTutorialRegion(
+                        region = region,
+                        interactionSource = interactionSources[index],
+                        modifier = Modifier.weight(region.widthWeight).fillMaxHeight(),
+                        onDismiss = onDismiss
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReaderTapZoneTutorialRegion(
+    region: ReaderTapZoneTutorialRegion,
+    interactionSource: MutableInteractionSource,
+    modifier: Modifier,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .background(Color(region.red, region.green, region.blue).copy(alpha = region.alpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDismiss
+            )
+            .testTag("reader-tap-zone-${region.label.lowercase().replace(' ', '-')}")
+            .semantics { contentDescription = "${region.label} tap region" },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = region.label,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
+        )
     }
 }
 

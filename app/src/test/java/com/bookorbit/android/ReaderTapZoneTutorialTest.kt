@@ -45,4 +45,15 @@ class ReaderTapZoneTutorialTest {
             readerTapZoneTutorialRegions(LibraryReadingDirection.RIGHT_TO_LEFT).map { it.label }
         )
     }
+
+    @Test
+    fun `continuous tutorial teaches vertical swipes instead of page turns`() {
+        assertEquals(
+            listOf("Swipe up", "Menu", "Swipe down"),
+            readerTapZoneTutorialRegions(
+                LibraryReadingDirection.RIGHT_TO_LEFT,
+                continuous = true
+            ).map { it.label }
+        )
+    }
 }

@@ -63,7 +63,13 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
-private const val MAX_CONTINUOUS_COMIC_CACHE_BYTES = 48 * 1024 * 1024
+private const val MIN_CONTINUOUS_COMIC_CACHE_BYTES = 48L * 1024L * 1024L
+private const val MAX_CONTINUOUS_COMIC_CACHE_BYTES = 192L * 1024L * 1024L
+
+private fun continuousComicCacheBudgetBytes(): Int =
+    (Runtime.getRuntime().maxMemory() / 4L)
+        .coerceIn(MIN_CONTINUOUS_COMIC_CACHE_BYTES, MAX_CONTINUOUS_COMIC_CACHE_BYTES)
+        .toInt()
 
 internal sealed interface ReadiumComicOpenResult {
     data class Opened(val publication: Publication) : ReadiumComicOpenResult
@@ -191,7 +197,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
     private val continuousComicPageCache = object : LruCache<String, Bitmap>(
-        MAX_CONTINUOUS_COMIC_CACHE_BYTES
+        continuousComicCacheBudgetBytes()
     ) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
@@ -423,7 +429,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         if (readerPreferences.comicLayoutMode == ReaderLayoutMode.CONTINUOUS) {
             showContinuousPublication(openedPublication, initialLocator)
             progressView?.visibility = View.GONE
-            if (showTutorial) showTapZoneTutorial()
+            if (showTutorial) showTapZoneTutorial(continuous = true)
             return
         }
         val fragmentFactory = ImageNavigatorFragment.createFactory(
@@ -652,9 +658,19 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         optionsView.visibility = View.GONE
     }
 
-    private fun showTapZoneTutorial() {
+    private fun showTapZoneTutorial(continuous: Boolean = false) {
         tapZoneTutorialHasShown = true
         tapZoneTutorialView.visibility = View.VISIBLE
+        tapZoneTutorialView.setContent {
+            BookOrbitTheme {
+                ReaderTapZoneTutorial(
+                    onDismiss = ::hideTapZoneTutorial,
+                    readingDirection = readingDirection,
+                    continuous = continuous,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
         tapZoneTutorialView.doOnPreDraw {
             lifecycleScope.launch {
                 delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
