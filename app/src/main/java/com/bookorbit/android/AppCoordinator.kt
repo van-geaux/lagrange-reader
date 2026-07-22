@@ -110,9 +110,9 @@ class AppCoordinator(
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
-    private var audioPlaybackOpener: (suspend (ReaderState) -> Boolean)? = null
+    private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
 
-    fun setAudioPlaybackOpener(opener: suspend (ReaderState) -> Boolean) {
+    fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
         audioPlaybackOpener = opener
     }
 
@@ -694,7 +694,7 @@ class AppCoordinator(
                     val opener = audioPlaybackOpener
                         ?: throw UserFacingException("Audiobook playback is unavailable.")
                     repository.saveActiveReader(readerState.book, launchMode)
-                    if (!opener(readerState)) {
+                    if (!opener(readerState, true)) {
                         repository.clearActiveReader()
                         throw UserFacingException(AUDIO_OPEN_CANCELLED_MESSAGE)
                     }
@@ -732,7 +732,7 @@ class AppCoordinator(
     private fun restoreAudioInBackground(readerState: ReaderState) {
         val opener = audioPlaybackOpener ?: return
         scope.launch {
-            if (!opener(readerState)) {
+            if (!opener(readerState, false)) {
                 repository.clearActiveReader()
             }
         }

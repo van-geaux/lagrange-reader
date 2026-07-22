@@ -95,11 +95,17 @@ class AppCoordinatorTest {
             loadBooksResult = listOf(audiobook)
         }
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        val autoplayRequests = mutableListOf<Boolean>()
+        coordinator.setAudioPlaybackOpener { _, playWhenReady ->
+            autoplayRequests += playWhenReady
+            true
+        }
 
         coordinator.bootstrap()
         advanceUntilIdle()
 
         assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(listOf(false), autoplayRequests)
         assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
     }
 
@@ -461,12 +467,17 @@ class AppCoordinatorTest {
                 books = listOf(audiobook)
             )
         )
-        coordinator.setAudioPlaybackOpener { false }
+        var requestedAutoPlay: Boolean? = null
+        coordinator.setAudioPlaybackOpener { _, playWhenReady ->
+            requestedAutoPlay = playWhenReady
+            false
+        }
 
         coordinator.openBook(audiobook)
         advanceUntilIdle()
 
         assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(true, requestedAutoPlay)
         assertEquals(listOf(audiobook), repository.savedActiveReaders)
         assertEquals(1, repository.clearActiveReaderCalls)
     }

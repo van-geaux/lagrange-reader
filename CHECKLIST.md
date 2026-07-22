@@ -602,7 +602,7 @@ Cache smoothing completion: the LRU retains the whole decoded book when it fits 
 ### Audiobook speed and Browser-first session restoration - 2026-07-22
 
 1. [x] Persist the global audiobook speed (0.75/1/1.25/1.5/2x) through compact-player close/reopen and apply it to every book.
-2. [x] Persist active audiobook launch mode for both NORMAL and PREVIEW sessions. New opens and app-restart restoration remain on Browser while preparation runs in the compact player, with a spinner in the play slot.
+2. [x] Persist active audiobook launch mode for both NORMAL and PREVIEW sessions. Explicit Play from Book Detail remains on Browser, prepares in the compact player with a spinner in the play slot, and autoplays when ready. App/task-restart restoration uses the same Browser-first preparation but restores the saved position and speed paused; it never autoplays.
 3. [x] Explicit Close clears the active-session marker; task/app termination leaves it for restart restoration, and failed restoration clears stale state.
 4. [x] Regression coverage passes with the full 294 JVM-test/50-suite gate, 0 failures/errors/skips, lintDebug, assembleDebug, and assembleDebugAndroidTest. APK: app/build/outputs/apk/debug/app-debug.apk.
-   - [ ] Validate speed persistence across books and process/task restarts, NORMAL/PREVIEW restoration, Browser-first preparation/spinner, explicit Close versus task termination, and stale-state recovery on a physical device.
+   - [ ] Validate speed persistence across books and process/task restarts, NORMAL/PREVIEW restoration, Book Detail Play autoplay after Browser-first preparation, paused restart restoration at the saved position/speed, explicit Close versus task termination, and stale-state recovery on a physical device.

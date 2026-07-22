@@ -633,7 +633,10 @@ class ReadiumAudioPlaybackController internal constructor(
         }
     }
 
-    internal suspend fun restorePersistedSession(state: ReaderState): Boolean {
+    internal suspend fun restorePersistedSession(
+        state: ReaderState,
+        playWhenReady: Boolean
+    ): Boolean {
         if (state.book.mediaKind != MediaKind.AUDIO) return false
         return runCatching {
             when (
@@ -647,7 +650,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         state.lastKnownPosition
                     },
                     launchMode = state.launchMode,
-                    playWhenReady = true
+                    playWhenReady = playWhenReady
                 )
             ) {
                 is ReadiumAudioOpenResult.Opened -> true
