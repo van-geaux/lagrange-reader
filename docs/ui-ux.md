@@ -331,3 +331,7 @@ Options > Reading now starts with a library-name dropdown. Direction, EPUB theme
 ### Per-library PDF and Comics layouts - 2026-07-22
 
 Options > Reading now gives each library separate PDF and Comics `Paginated`/`Continuous` controls plus a 0-48 dp page-gap slider. Defaults are PDF Continuous/16 dp and Comics Paginated/16 dp; the gap slider is disabled while that format is paginated. PDF switches between horizontal pagination and vertical continuous layout with native spacing. Comics keep the established Readium paginated experience or use the bounded continuous vertical surface with progressive nearby loading, retry, resume/progress, logical LTR/RTL taps, menu tap, page-slider jumps, and Reduce motion. Automated coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation remains pending.
+
+### EPUB continuous-scroll layout - 2026-07-22
+
+Options > Reading now offers an EPUB Paginated/Continuous selector per library, with no EPUB gap slider; PDF and Comics controls remain separate. The EPUB reader maps the choice to Readium pagination or continuous scroll, preserving per-library profile behavior. Automated coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation remains pending for mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation.

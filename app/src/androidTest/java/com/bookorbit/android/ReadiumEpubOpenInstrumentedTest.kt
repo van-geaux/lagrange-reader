@@ -72,6 +72,14 @@ class ReadiumEpubOpenInstrumentedTest {
         assertEquals(0.0, requireNotNull(preferences.pageMargins), 0.0001)
         assertEquals(ColumnCount.ONE, preferences.columnCount)
         assertEquals(false, preferences.scroll)
+        assertEquals(
+            true,
+            readiumPreferences(
+                EpubReaderTheme.Dark,
+                fontScale = 1.2f,
+                layoutMode = ReaderLayoutMode.CONTINUOUS
+            ).scroll
+        )
         assertEquals(EpubReaderTheme.Dark.backgroundColor, preferences.backgroundColor?.int)
     }
 

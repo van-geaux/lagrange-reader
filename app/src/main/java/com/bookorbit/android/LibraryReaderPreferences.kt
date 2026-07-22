@@ -20,6 +20,7 @@ data class LibraryReaderPreferences(
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
     val fontScale: Float = 1f,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
+    val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
     val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
     val comicLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -80,6 +81,7 @@ internal fun libraryReaderPreferencesStorageValue(
             put("bottom", value.padding.bottom.toDouble())
             put("left", value.padding.left.toDouble())
             put("right", value.padding.right.toDouble())
+            put("epubLayout", readerLayoutModeStorageValue(value.epubLayoutMode))
             put("pdfLayout", readerLayoutModeStorageValue(value.pdfLayoutMode))
             put("pdfPageGapDp", value.pdfPageGapDp.toDouble())
             put("comicLayout", readerLayoutModeStorageValue(value.comicLayoutMode))
@@ -107,6 +109,10 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             bottom = item.optDouble("bottom", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
                             left = item.optDouble("left", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
                             right = item.optDouble("right", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat()
+                        ),
+                        epubLayoutMode = readerLayoutModeFromStorage(
+                            item.optString("epubLayout"),
+                            ReaderLayoutMode.PAGINATED
                         ),
                         pdfLayoutMode = readerLayoutModeFromStorage(
                             item.optString("pdfLayout"),

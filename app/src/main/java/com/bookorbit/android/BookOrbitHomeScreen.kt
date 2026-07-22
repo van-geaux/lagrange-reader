@@ -2411,6 +2411,18 @@ private fun LibraryReaderConfiguration(
                     }
                 ) { Text("A+") }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ReaderLayoutModeSettings(
+                formatLabel = "EPUB",
+                layoutMode = value.epubLayoutMode,
+                testTagPrefix = "options-reading-epub",
+                onLayoutModeChange = { layoutMode ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(epubLayoutMode = layoutMode)
+                    )
+                }
+            )
             Text("Page margins", style = MaterialTheme.typography.titleMedium)
             listOf(
                 "Top" to value.padding.top,
@@ -2491,22 +2503,12 @@ private fun ReaderFormatLayoutSettings(
     onLayoutModeChange: (ReaderLayoutMode) -> Unit,
     onPageGapChange: (Float) -> Unit
 ) {
-    Text("$formatLabel layout", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ReaderLayoutMode.values().forEach { mode ->
-            FilterChip(
-                selected = layoutMode == mode,
-                onClick = { onLayoutModeChange(mode) },
-                label = { Text(mode.displayName) },
-                modifier = Modifier.testTag(
-                    "$testTagPrefix-layout-${mode.name.lowercase()}"
-                )
-            )
-        }
-    }
+    ReaderLayoutModeSettings(
+        formatLabel = formatLabel,
+        layoutMode = layoutMode,
+        testTagPrefix = testTagPrefix,
+        onLayoutModeChange = onLayoutModeChange
+    )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             "Continuous page gap ${pageGapDp.toInt()} dp",
@@ -2525,6 +2527,31 @@ private fun ReaderFormatLayoutSettings(
             steps = 11,
             modifier = Modifier.testTag("$testTagPrefix-page-gap")
         )
+    }
+}
+
+@Composable
+private fun ReaderLayoutModeSettings(
+    formatLabel: String,
+    layoutMode: ReaderLayoutMode,
+    testTagPrefix: String,
+    onLayoutModeChange: (ReaderLayoutMode) -> Unit
+) {
+    Text("$formatLabel layout", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ReaderLayoutMode.values().forEach { mode ->
+            FilterChip(
+                selected = layoutMode == mode,
+                onClick = { onLayoutModeChange(mode) },
+                label = { Text(mode.displayName) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-layout-${mode.name.lowercase()}"
+                )
+            )
+        }
     }
 }
 

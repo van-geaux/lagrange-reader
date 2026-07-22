@@ -571,3 +571,10 @@ UI/UX discussion and design-system work can start now:
 4. [x] Bound continuous comics with visible/nearby page loading, viewport downsampling, a 64 MB source-page cap, a 16-million-pixel decoded-bitmap bound, retry state, resume/progress, LTR/RTL logical edge taps, menu tap, page-slider navigation, and Reduce motion behavior.
 5. [x] The full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
    - [ ] Validate PDF/comic mode switching, page gaps, local/remote continuous loading and retry, memory behavior, resume/progress, LTR/RTL gestures, slider navigation, and Reduce motion on a physical device.
+
+### EPUB continuous-scroll layout - 2026-07-22
+
+1. [x] Persist per-library `epubLayoutMode` (`Paginated`/`Continuous`) in `LibraryReaderPreferences`, defaulting to Paginated for backward compatibility. Add the EPUB layout selector under Options > Reading without a gap slider; PDF and Comics controls remain unchanged.
+2. [x] Map the selected EPUB mode into Readium `EpubPreferences` (`scroll=false` for Paginated, `scroll=true` for Continuous).
+3. [x] Focused coverage and the full gate pass 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+   - [ ] Validate EPUB mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation on a physical device.

@@ -14,6 +14,7 @@ class LibraryReaderPreferencesTest {
             theme = EpubReaderTheme.Light,
             fontScale = 1.2f,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
+            epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 4f,
             comicLayoutMode = ReaderLayoutMode.CONTINUOUS,

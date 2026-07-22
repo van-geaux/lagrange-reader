@@ -1579,6 +1579,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("options-reading-library").performScrollTo().performClick()
         composeRule.onNodeWithText("Manga").performClick()
         composeRule.onNodeWithTag("options-reading-direction-right_to_left").performClick()
+        composeRule.onNodeWithTag("options-reading-epub-layout-continuous")
+            .performScrollTo()
+            .performClick()
         composeRule.onNodeWithTag("options-reading-pdf-layout-paginated")
             .performScrollTo()
             .performClick()
@@ -1588,12 +1591,20 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.runOnIdle {
             assertEquals(
+                ReaderLayoutMode.CONTINUOUS,
+                preferences.value.readerPreferencesFor("manga").epubLayoutMode
+            )
+            assertEquals(
                 LibraryReadingDirection.RIGHT_TO_LEFT,
                 preferences.value.readerPreferencesFor("manga").readingDirection
             )
             assertEquals(
                 LibraryReadingDirection.LEFT_TO_RIGHT,
                 preferences.value.readerPreferencesFor("novels").readingDirection
+            )
+            assertEquals(
+                ReaderLayoutMode.PAGINATED,
+                preferences.value.readerPreferencesFor("novels").epubLayoutMode
             )
             assertEquals(
                 ReaderLayoutMode.PAGINATED,
@@ -1609,6 +1620,7 @@ class BookOrbitAppInstrumentedTest {
             )
         }
         composeRule.onNodeWithTag("options-reading-direction-right_to_left").assertIsSelected()
+        composeRule.onNodeWithTag("options-reading-epub-layout-continuous").assertIsSelected()
         composeRule.onNodeWithText("Typography").assertIsDisplayed()
         composeRule.onNodeWithText("Page margins").assertIsDisplayed()
         composeRule.onNodeWithTag("options-reading-pdf-page-gap").assertIsNotEnabled()
