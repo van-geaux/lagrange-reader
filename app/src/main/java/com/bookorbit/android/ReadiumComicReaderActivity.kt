@@ -34,6 +34,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,8 +56,11 @@ import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.shared.util.http.HttpClient
 import org.readium.r2.shared.util.http.HttpContainer
 import org.readium.r2.shared.util.mediatype.MediaType
+import org.readium.r2.shared.util.resource.Resource
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
+
+private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
 
 internal sealed interface ReadiumComicOpenResult {
     data class Opened(val publication: Publication) : ReadiumComicOpenResult
@@ -154,6 +158,16 @@ internal data class ReadiumComicProgressResult(
     val percent: Float?
 )
 
+internal suspend fun readContinuousComicPageBytes(resource: Resource): ByteArray? {
+    val declaredLength = resource.length().getOrNull()
+    if (declaredLength != null && declaredLength !in 1..MAX_CONTINUOUS_COMIC_PAGE_BYTES) {
+        return null
+    }
+    val requestedLength = declaredLength ?: (MAX_CONTINUOUS_COMIC_PAGE_BYTES + 1L)
+    return resource.read(0L until requestedLength).getOrNull()
+        ?.takeIf { bytes -> bytes.isNotEmpty() && bytes.size.toLong() <= MAX_CONTINUOUS_COMIC_PAGE_BYTES }
+}
+
 class ReadiumComicReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
     private var navigator: ImageNavigatorFragment? = null
@@ -171,10 +185,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
-    private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
-    private var readerPreferences = LibraryReaderPreferences()
+    private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
+    private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
     private var continuousListState: LazyListState? = null
     private var continuousComicView: ComposeView? = null
+    private var navigatorLocationJob: Job? = null
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var tapZoneTutorialHasShown = false
@@ -324,8 +339,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                             title = if (isPreview) "Preview · $displayTitle" else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
+                            preferences = readerPreferences,
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
+                            onPreferencesChange = ::applyReaderPreferences,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -378,7 +395,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         )
     }
 
-    private fun showPublication(openedPublication: Publication) {
+    private fun showPublication(
+        openedPublication: Publication,
+        requestedLocator: Locator? = null,
+        showTutorial: Boolean = true
+    ) {
         if (isFinishing || isDestroyed) {
             openedPublication.close()
             return
@@ -390,11 +411,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         }
         publication = openedPublication
         currentPageCount = openedPublication.readingOrder.size.coerceAtLeast(1)
-        val initialLocator = initialLocator(openedPublication)
+        val initialLocator = requestedLocator ?: initialLocator(openedPublication)
         if (readerPreferences.comicLayoutMode == ReaderLayoutMode.CONTINUOUS) {
             showContinuousPublication(openedPublication, initialLocator)
             progressView?.visibility = View.GONE
-            showTapZoneTutorial()
+            if (showTutorial) showTapZoneTutorial()
             return
         }
         val fragmentFactory = ImageNavigatorFragment.createFactory(
@@ -415,7 +436,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         fragment.addInputListener(
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
-                readingDirection = readingDirection,
+                readingDirection = { readingDirection },
                 horizontalEdgeThresholdPercent = 0.25f
             )
         )
@@ -428,13 +449,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             }
         )
         navigator = fragment
-        lifecycleScope.launch {
+        navigatorLocationJob?.cancel()
+        navigatorLocationJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect(::updateLocation)
             }
         }
         progressView?.visibility = View.GONE
-        showTapZoneTutorial()
+        if (showTutorial) showTapZoneTutorial()
     }
 
     private fun showContinuousPublication(
@@ -487,10 +509,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             ?: return@withContext null
         val resource = openedPublication.get(link) ?: return@withContext null
         try {
-            val length = resource.length().getOrNull()
-                ?.takeIf { it in 1..MAX_CONTINUOUS_COMIC_PAGE_BYTES }
-                ?: return@withContext null
-            val bytes = resource.read(0L until length).getOrNull()
+            val bytes = readContinuousComicPageBytes(resource)
                 ?: return@withContext null
             decodeContinuousComicPage(bytes, targetWidthPx)
         } finally {
@@ -558,6 +577,39 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             index.coerceIn(0, currentPageCount - 1)
         ) ?: return
         navigator?.go(link)
+    }
+
+    private fun applyReaderPreferences(next: LibraryReaderPreferences) {
+        val normalized = next.normalized()
+        val layoutChanged = normalized.comicLayoutMode != readerPreferences.comicLayoutMode
+        readerPreferences = normalized
+        readingDirection = normalized.readingDirection
+        val store = AppPreferencesStore(this)
+        store.save(store.read().withReaderPreferences(libraryId, normalized))
+        if (layoutChanged) {
+            rebuildPublication()
+        } else {
+            navigator?.publicationView?.layoutDirection = if (
+                normalized.readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+            ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        }
+    }
+
+    private fun rebuildPublication() {
+        val openedPublication = publication ?: return
+        val locator = openedPublication.readingOrder.getOrNull(currentPage)
+            ?.let(openedPublication::locatorFromLink)
+            ?: return
+        supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG)?.let { fragment ->
+            supportFragmentManager.beginTransaction().remove(fragment).commitNow()
+        }
+        navigatorLocationJob?.cancel()
+        navigatorLocationJob = null
+        navigator = null
+        continuousComicView?.let(readerContainer::removeView)
+        continuousComicView = null
+        continuousListState = null
+        showPublication(openedPublication, requestedLocator = locator, showTutorial = false)
     }
 
     private fun toggleChrome() {
@@ -673,6 +725,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         super.onDestroy()
         publication?.close()
         publication = null
+        navigatorLocationJob?.cancel()
+        navigatorLocationJob = null
         navigator = null
         continuousListState = null
         continuousComicView = null
@@ -692,7 +746,6 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_comic_result_page_count"
         private const val EXTRA_RESULT_PERCENT = "readium_comic_result_percent"
         private const val NAVIGATOR_TAG = "readium_comic_navigator"
-        private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
 
         fun createIntent(
             context: Context,

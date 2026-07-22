@@ -2472,7 +2472,7 @@ private fun LibraryReaderConfiguration(
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ReaderFormatLayoutSettings(
-                formatLabel = "Comics",
+                formatLabel = "CBR/CBZ",
                 layoutMode = value.comicLayoutMode,
                 pageGapDp = value.comicPageGapDp,
                 testTagPrefix = "options-reading-comic",
@@ -2553,6 +2553,116 @@ private fun ReaderLayoutModeSettings(
             )
         }
     }
+}
+
+@Composable
+internal fun ReaderConfigurationControls(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String = "reader-options-reading"
+) {
+    Text("Reading direction", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        LibraryReadingDirection.values().forEach { direction ->
+            FilterChip(
+                selected = value.readingDirection == direction,
+                onClick = { onPreferencesChange(value.copy(readingDirection = direction)) },
+                label = { Text(direction.displayName) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-direction-${direction.name.lowercase()}"
+                )
+            )
+        }
+    }
+    Text("Typography", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        EPUB_THEME_OPTIONS.forEach { theme ->
+            FilterChip(
+                selected = value.theme == theme,
+                onClick = { onPreferencesChange(value.copy(theme = theme)) },
+                label = { Text(theme.label) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-theme-${theme.name.lowercase()}"
+                )
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale - 0.1f)) },
+            modifier = Modifier.testTag("$testTagPrefix-font-decrease")
+        ) { Text("A-") }
+        Text(
+            "Text size ${formatEpubFontScale(value.fontScale)}",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        OutlinedButton(
+            onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale + 0.1f)) },
+            modifier = Modifier.testTag("$testTagPrefix-font-increase")
+        ) { Text("A+") }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    ReaderLayoutModeSettings(
+        formatLabel = "EPUB",
+        layoutMode = value.epubLayoutMode,
+        testTagPrefix = "$testTagPrefix-epub",
+        onLayoutModeChange = { onPreferencesChange(value.copy(epubLayoutMode = it)) }
+    )
+    Text("Page margins", style = MaterialTheme.typography.titleMedium)
+    listOf(
+        "Top" to value.padding.top,
+        "Bottom" to value.padding.bottom,
+        "Left" to value.padding.left,
+        "Right" to value.padding.right
+    ).forEach { (label, margin) ->
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = margin,
+                onValueChange = { next ->
+                    val padding = when (label) {
+                        "Top" -> value.padding.copy(top = next)
+                        "Bottom" -> value.padding.copy(bottom = next)
+                        "Left" -> value.padding.copy(left = next)
+                        else -> value.padding.copy(right = next)
+                    }
+                    onPreferencesChange(value.copy(padding = padding))
+                },
+                valueRange = 0f..100f,
+                steps = 19,
+                modifier = Modifier.testTag("$testTagPrefix-margin-${label.lowercase()}")
+            )
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    ReaderFormatLayoutSettings(
+        formatLabel = "PDF",
+        layoutMode = value.pdfLayoutMode,
+        pageGapDp = value.pdfPageGapDp,
+        testTagPrefix = "$testTagPrefix-pdf",
+        onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
+        onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) }
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    ReaderFormatLayoutSettings(
+        formatLabel = "CBR/CBZ",
+        layoutMode = value.comicLayoutMode,
+        pageGapDp = value.comicPageGapDp,
+        testTagPrefix = "$testTagPrefix-comic",
+        onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
+        onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
+    )
 }
 
 @Composable

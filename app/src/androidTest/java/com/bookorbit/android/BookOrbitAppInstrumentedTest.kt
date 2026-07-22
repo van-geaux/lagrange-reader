@@ -1624,6 +1624,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Typography").assertIsDisplayed()
         composeRule.onNodeWithText("Page margins").assertIsDisplayed()
         composeRule.onNodeWithTag("options-reading-pdf-page-gap").assertIsNotEnabled()
+        composeRule.onNodeWithText("CBR/CBZ layout").assertIsDisplayed()
         composeRule.onNodeWithTag("options-reading-comic-page-gap").assertIsEnabled()
     }
 }

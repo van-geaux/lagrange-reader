@@ -175,8 +175,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
     private var padding by mutableStateOf(EpubPaddingPercentages())
     private var fontScale by mutableStateOf(1f)
-    private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
-    private var epubLayoutMode = ReaderLayoutMode.PAGINATED
+    private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
+    private var epubLayoutMode by mutableStateOf(ReaderLayoutMode.PAGINATED)
+    private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
     private var chapterTitles by mutableStateOf(emptyList<String>())
     private var currentChapter by mutableStateOf(0)
     private var currentPage by mutableStateOf(0)
@@ -214,7 +215,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         val appPreferences = appPreferencesStore.read()
-        val readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
+        readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
             ?: LibraryReaderPreferences(
                 theme = themeStore.read(),
                 padding = paddingStore.read(readerKey)
@@ -350,16 +351,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             title = if (isPreview) "Preview · $displayTitle" else displayTitle,
                             status = "Chapter ${currentChapter + 1}/${chapterTitles.size.coerceAtLeast(1)} · " +
                                 "Page ${currentPage + 1}/${currentPageCount.coerceAtLeast(1)}",
-                            theme = selectedTheme,
-                            padding = padding,
-                            fontScale = fontScale,
+                            preferences = readerPreferences,
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
-                            onThemeSelected = ::applyTheme,
-                            onPaddingChange = ::applyPadding,
-                            onPaddingChangeFinished = { saveLibraryReaderPreferences() },
-                            onDecreaseFont = { applyFontScale(fontScale - 0.1f) },
-                            onIncreaseFont = { applyFontScale(fontScale + 0.1f) },
+                            onPreferencesChange = ::applyReaderPreferences,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -458,7 +453,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         fragment.addInputListener(
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
-                readingDirection = readingDirection,
+                readingDirection = { readingDirection },
                 horizontalEdgeThresholdPercent = 0.25f
             )
         )
@@ -564,45 +559,32 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
     }
 
-    private fun applyTheme(theme: EpubReaderTheme) {
-        selectedTheme = theme
-        themeStore.save(theme)
-        rootView.setBackgroundColor(theme.backgroundColor)
-        readerViewport.setBackgroundColor(theme.backgroundColor)
-        readerContainer.setBackgroundColor(theme.backgroundColor)
-        navigator?.submitPreferences(
-            readiumPreferences(theme, fontScale, readingDirection, epubLayoutMode)
-        )
-        saveLibraryReaderPreferences()
-        configureSystemBars()
-    }
-
-    private fun applyFontScale(scale: Float) {
-        fontScale = scale.coerceIn(0.9f, 1.5f)
-        navigator?.submitPreferences(
-            readiumPreferences(selectedTheme, fontScale, readingDirection, epubLayoutMode)
-        )
-        saveLibraryReaderPreferences()
-    }
-
-    private fun applyPadding(next: EpubPaddingPercentages) {
-        padding = next
+    private fun applyReaderPreferences(next: LibraryReaderPreferences) {
+        val normalized = next.normalized()
+        readerPreferences = normalized
+        selectedTheme = normalized.theme
+        padding = normalized.padding
+        fontScale = normalized.fontScale
+        readingDirection = normalized.readingDirection
+        epubLayoutMode = normalized.epubLayoutMode
+        themeStore.save(normalized.theme)
+        rootView.setBackgroundColor(normalized.theme.backgroundColor)
+        readerViewport.setBackgroundColor(normalized.theme.backgroundColor)
+        readerContainer.setBackgroundColor(normalized.theme.backgroundColor)
         applyReaderPadding()
-    }
-
-    private fun saveLibraryReaderPreferences() {
-        val current = appPreferencesStore.read()
-        appPreferencesStore.save(
-            current.withReaderPreferences(
-                libraryId,
-                LibraryReaderPreferences(
-                    readingDirection = readingDirection,
-                    theme = selectedTheme,
-                    fontScale = fontScale,
-                    padding = padding
-                )
+        navigator?.submitPreferences(
+            readiumPreferences(
+                normalized.theme,
+                normalized.fontScale,
+                normalized.readingDirection,
+                normalized.epubLayoutMode
             )
         )
+        val current = appPreferencesStore.read()
+        appPreferencesStore.save(
+            current.withReaderPreferences(libraryId, normalized)
+        )
+        configureSystemBars()
     }
 
     private fun applyReaderPadding() {

@@ -130,8 +130,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
-    private var readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
-    private var readerPreferences = LibraryReaderPreferences()
+    private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
+    private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var pageLocators: List<Locator> = emptyList()
@@ -270,8 +270,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                             title = if (isPreview) "Preview \u00b7 $displayTitle" else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
+                            preferences = readerPreferences,
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
+                            onPreferencesChange = ::applyReaderPreferences,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -359,7 +361,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         fragment.addInputListener(
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
-                readingDirection = readingDirection,
+                readingDirection = { readingDirection },
                 horizontalEdgeThresholdPercent = 0.25f
             )
         )
@@ -409,6 +411,18 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun goToPage(index: Int) {
         val locator = pageLocators.getOrNull(index.coerceIn(0, currentPageCount - 1)) ?: return
         navigator?.go(locator)
+    }
+
+    private fun applyReaderPreferences(next: LibraryReaderPreferences) {
+        val normalized = next.normalized()
+        readerPreferences = normalized
+        readingDirection = normalized.readingDirection
+        navigator?.publicationView?.layoutDirection = if (
+            normalized.readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+        ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        navigator?.submitPreferences(pdfiumPreferencesFor(normalized))
+        val store = AppPreferencesStore(this)
+        store.save(store.read().withReaderPreferences(libraryId, normalized))
     }
 
     private fun toggleChrome() {

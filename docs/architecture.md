@@ -252,3 +252,9 @@ Paginated comics remain on Readium `ImageNavigator`. Continuous comics use a cus
 ### EPUB continuous-scroll layout - 2026-07-22
 
 `LibraryReaderPreferences.epubLayoutMode` is a per-library `Paginated`/`Continuous` value with a Paginated compatibility default. Options exposes only the EPUB mode selector (no gap control), leaving PDF and Comics layout profiles independent. `ReadiumEpubReaderActivity` maps the profile to Readium `EpubPreferences.scroll=false` for Paginated and `scroll=true` for Continuous. The 291-test/50-suite gate, lint, and both APK assemblies pass; physical-device validation remains pending for long-document behavior, resume/progress, direction, accessibility, large text/theme/margins, and rotation.
+
+### Complete profile writes and in-reader configuration - 2026-07-22
+
+Reader preference updates are whole-profile writes keyed by the owning library. EPUB no longer persists only its fields and accidentally reconstructs defaults for PDF/CBR-CBZ layouts or gaps. EPUB, PDF, and CBR/CBZ activities receive the library context and render the full current-library Reading configuration without a selector. EPUB/PDF map and persist changes live; CBR/CBZ rebuilds the chosen paginated/continuous surface while restoring its current page. UI terminology uses `CBR/CBZ layout`.
+
+Continuous remote CBZ Preview accepts known, chunked, and unknown `Content-Length` page responses. Unknown-length bodies are consumed through a bounded read with a hard 64 MB cap before decoding, preserving the continuous reader's memory boundary. Regression coverage compiles and the 291-test/50-suite gate, lint, and both APK assemblies pass; physical-device validation remains pending.

@@ -578,3 +578,12 @@ UI/UX discussion and design-system work can start now:
 2. [x] Map the selected EPUB mode into Readium `EpubPreferences` (`scroll=false` for Paginated, `scroll=true` for Continuous).
 3. [x] Focused coverage and the full gate pass 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
    - [ ] Validate EPUB mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation on a physical device.
+
+### Reader profile persistence and in-reader configuration - 2026-07-22
+
+1. [x] Fix EPUB partial saves so in-reader changes persist the complete owning-library profile instead of resetting other format layouts or page gaps.
+2. [x] Expose the current book library's complete Reading configuration in EPUB, PDF, and CBR/CBZ option sheets without a library selector. Apply and persist changes live in EPUB/PDF; rebuild CBR/CBZ layout while retaining the current page.
+3. [x] Rename the visible `Comics layout` label to `CBR/CBZ layout`.
+4. [x] Allow continuous remote CBZ Preview to read chunked or unknown-`Content-Length` pages through a bounded response capped at 64 MB.
+5. [x] Regression coverage is added/compiled, and the full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+   - [ ] On a physical device, validate chunked/unknown-length CBZ Preview pages; confirm profiles do not reset across book opens; verify each reader options sheet is scoped to the current book's library; confirm EPUB/PDF live changes and CBR/CBZ retained-page rebuilds; and verify the `CBR/CBZ layout` label.

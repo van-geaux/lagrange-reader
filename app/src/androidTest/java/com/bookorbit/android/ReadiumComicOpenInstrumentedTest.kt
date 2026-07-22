@@ -125,6 +125,37 @@ class ReadiumComicOpenInstrumentedTest {
     }
 
     @Test
+    fun continuousRemotePageAllowsChunkedResponsesWithoutContentLength() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val page = pageBytes(Color.CYAN)
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = MockResponse()
+                .setHeader("Content-Type", "image/jpeg")
+                .setChunkedBody(Buffer().write(page), 32)
+        }
+        server.start()
+        try {
+            val result = openReadiumRemoteComic(
+                context = context,
+                title = "Chunked preview",
+                pagesUrl = server.url("/pages").toString().trimEnd('/'),
+                pageCount = 1,
+                pageMediaType = MediaType.JPEG,
+                httpClient = DefaultHttpClient()
+            ) as ReadiumComicOpenResult.Opened
+            try {
+                val resource = requireNotNull(result.publication.get(result.publication.readingOrder.first()))
+                assertArrayEquals(page, readContinuousComicPageBytes(resource))
+            } finally {
+                result.publication.close()
+            }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun centerTapOpensComicChrome() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val cbz = File(context.cacheDir, "readium-comic-center-tap.cbz")

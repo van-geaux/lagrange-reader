@@ -9,7 +9,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 /** Maps physical edge taps to the owning library's logical reading order. */
 internal class LibraryDirectionalNavigationAdapter(
     private val navigator: OverflowableNavigator,
-    private val readingDirection: LibraryReadingDirection,
+    private val readingDirection: () -> LibraryReadingDirection,
     private val horizontalEdgeThresholdPercent: Float = 0.25f,
     private val animatedTransition: Boolean = true
 ) : InputListener {
@@ -20,7 +20,7 @@ internal class LibraryDirectionalNavigationAdapter(
         val isRightEdge = event.point.x >= width - threshold
         if (!isLeftEdge && !isRightEdge) return false
 
-        val isForward = when (readingDirection) {
+        val isForward = when (readingDirection()) {
             LibraryReadingDirection.LEFT_TO_RIGHT -> isRightEdge
             LibraryReadingDirection.RIGHT_TO_LEFT -> isLeftEdge
         }

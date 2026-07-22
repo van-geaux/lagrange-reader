@@ -1876,23 +1876,17 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
 internal fun EpubReaderOptionsBottomSheet(
     title: String,
     status: String,
-    theme: EpubReaderTheme,
-    padding: EpubPaddingPercentages,
-    fontScale: Float,
+    preferences: LibraryReaderPreferences,
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
-    onThemeSelected: (EpubReaderTheme) -> Unit,
-    onPaddingChange: (EpubPaddingPercentages) -> Unit,
-    onPaddingChangeFinished: () -> Unit,
-    onDecreaseFont: () -> Unit,
-    onIncreaseFont: () -> Unit,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val parentTypography = MaterialTheme.typography
     val parentShapes = MaterialTheme.shapes
-    val colors = remember(theme) {
-        val palette = theme.readerOptionsPalette()
-        if (theme == EpubReaderTheme.Dark) {
+    val colors = remember(preferences.theme) {
+        val palette = preferences.theme.readerOptionsPalette()
+        if (preferences.theme == EpubReaderTheme.Dark) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -1992,90 +1986,13 @@ internal fun EpubReaderOptionsBottomSheet(
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        EPUB_THEME_OPTIONS.forEach { option ->
-                            FilterChip(
-                                selected = option == theme,
-                                onClick = { onThemeSelected(option) },
-                                label = { Text(option.label) }
-                            )
-                        }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(onClick = onDecreaseFont) { Text("A-") }
-                        Text(
-                            "Text size ${formatEpubFontScale(fontScale)}",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        OutlinedButton(onClick = onIncreaseFont) { Text("A+") }
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Page margins", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Each 100% setting equals 25% of that screen edge.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    EpubPaddingSlider(
-                        label = "Top",
-                        value = padding.top,
-                        onValueChange = { value -> onPaddingChange(padding.copy(top = value)) },
-                        onValueChangeFinished = onPaddingChangeFinished
-                    )
-                    EpubPaddingSlider(
-                        label = "Bottom",
-                        value = padding.bottom,
-                        onValueChange = { value -> onPaddingChange(padding.copy(bottom = value)) },
-                        onValueChangeFinished = onPaddingChangeFinished
-                    )
-                    EpubPaddingSlider(
-                        label = "Left",
-                        value = padding.left,
-                        onValueChange = { value -> onPaddingChange(padding.copy(left = value)) },
-                        onValueChangeFinished = onPaddingChangeFinished
-                    )
-                    EpubPaddingSlider(
-                        label = "Right",
-                        value = padding.right,
-                        onValueChange = { value -> onPaddingChange(padding.copy(right = value)) },
-                        onValueChangeFinished = onPaddingChangeFinished
-                    )
-                }
+                Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
+                ReaderConfigurationControls(
+                    value = preferences,
+                    onPreferencesChange = onPreferencesChange
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun EpubPaddingSlider(
-    label: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            "$label ${value.roundToInt()}%",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-            valueRange = 0f..100f,
-            steps = 99,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
@@ -2157,8 +2074,10 @@ internal fun ComicReaderOptionsBottomSheet(
     title: String,
     currentPage: Int,
     pageCount: Int,
+    preferences: LibraryReaderPreferences,
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val parentTypography = MaterialTheme.typography
@@ -2189,12 +2108,15 @@ internal fun ComicReaderOptionsBottomSheet(
             shadowElevation = 12.dp
         ) {
             Column(
-                modifier = Modifier.padding(
-                    start = 20.dp,
-                    top = 10.dp,
-                    end = 20.dp,
-                    bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
-                ),
+                modifier = Modifier
+                    .heightIn(max = 620.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = 20.dp,
+                        top = 10.dp,
+                        end = 20.dp,
+                        bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                    ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -2236,6 +2158,12 @@ internal fun ComicReaderOptionsBottomSheet(
                         Text("Close book")
                     }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
+                ReaderConfigurationControls(
+                    value = preferences,
+                    onPreferencesChange = onPreferencesChange
+                )
             }
         }
     }

@@ -335,3 +335,7 @@ Options > Reading now gives each library separate PDF and Comics `Paginated`/`Co
 ### EPUB continuous-scroll layout - 2026-07-22
 
 Options > Reading now offers an EPUB Paginated/Continuous selector per library, with no EPUB gap slider; PDF and Comics controls remain separate. The EPUB reader maps the choice to Readium pagination or continuous scroll, preserving per-library profile behavior. Automated coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; physical-device validation remains pending for mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation.
+
+### Reader profile persistence and in-reader configuration - 2026-07-22
+
+EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complete Reading configuration without a library selector. EPUB/PDF changes apply live; CBR/CBZ layout changes rebuild the reader while keeping the current page. Complete-profile persistence prevents one reader from resetting another format's mode or gap. The visible format label is `CBR/CBZ layout`. Continuous remote CBZ Preview also accepts chunked/unknown-length pages through the bounded 64 MB response path. Automated regression coverage and the full 291-JVM-test gate (50 suites, zero failures/errors/skips, lint, debug APK, Android-test APK) pass; focused physical-device validation remains pending.
