@@ -29,6 +29,31 @@ enum class BookReadStatus(val wireValue: String) {
     }
 }
 
+internal val BOOK_READ_STATUS_OPTIONS: List<BookReadStatus> = listOf(
+    BookReadStatus.UNREAD,
+    BookReadStatus.WANT_TO_READ,
+    BookReadStatus.READING,
+    BookReadStatus.REREADING,
+    BookReadStatus.ON_HOLD,
+    BookReadStatus.ABANDONED,
+    BookReadStatus.READ,
+    BookReadStatus.SKIMMED
+)
+
+internal fun BookReadStatus.displayLabel(): String = when (this) {
+    BookReadStatus.UNREAD -> "Unread"
+    BookReadStatus.WANT_TO_READ -> "Want to read"
+    BookReadStatus.READING -> "Reading"
+    BookReadStatus.REREADING -> "Rereading"
+    BookReadStatus.ON_HOLD -> "On hold"
+    BookReadStatus.ABANDONED -> "Abandoned"
+    BookReadStatus.READ -> "Read"
+    BookReadStatus.SKIMMED -> "Skimmed"
+}
+
+internal fun BookReadStatus.isCompletedStatus(): Boolean = this == BookReadStatus.READ ||
+    this == BookReadStatus.SKIMMED
+
 enum class CoverAspectRatio(val wireValue: String, val widthToHeight: Float) {
     PORTRAIT("2/3", 2f / 3f),
     SQUARE("1/1", 1f);

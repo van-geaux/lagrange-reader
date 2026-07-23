@@ -918,6 +918,50 @@ class AppCoordinator(
         )
     }
 
+    fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) {
+        when (status) {
+            BookReadStatus.READ -> markBookAsRead(book)
+            BookReadStatus.UNREAD -> markBookAsUnread(book)
+            else -> scope.launch {
+                try {
+                    repository.setBookReadingStatus(book, status)
+                    latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                    queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
+                    val current = lastBrowserState ?: return@launch
+                    val completedAtMillis = if (status.isCompletedStatus()) {
+                        System.currentTimeMillis()
+                    } else {
+                        null
+                    }
+                    val updatedBook = { currentBook: BookSummary ->
+                        if (currentBook.id == book.id) {
+                            currentBook.copy(
+                                readStatus = status,
+                                isRead = status.isCompletedStatus(),
+                                lastReadAtMillis = completedAtMillis
+                            )
+                        } else {
+                            currentBook
+                        }
+                    }
+                    showBrowser(
+                        current.copy(
+                            books = current.books.map(updatedBook),
+                            homeBooks = current.homeBooks.map(updatedBook),
+                            debugPendingProgressCount = repository.pendingProgressCount(),
+                            message = "Marked ${book.title} as ${status.displayLabel()}."
+                        )
+                    )
+                } catch (_: AuthenticationRequiredException) {
+                    recoverExpiredSession()
+                } catch (error: Throwable) {
+                    showBrowserMessage(
+                        userMessage(error, "Unable to update ${book.title}'s reading status.")
+                    )
+                }
+            }
+        }
+    }
     fun markBookAsRead(book: BookSummary) {
         scope.launch {
             try {

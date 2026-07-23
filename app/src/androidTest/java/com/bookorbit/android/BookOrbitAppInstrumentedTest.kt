@@ -388,10 +388,18 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Read").assertIsDisplayed()
         composeRule.onNodeWithText("Preview").assertIsDisplayed()
         composeRule.onAllNodesWithText("Download").assertCountEquals(0)
-        composeRule.onNodeWithContentDescription("Mark as read").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription("Mark as...").assertIsDisplayed().performClick()
+        listOf("unread", "want_to_read", "reading", "rereading", "on_hold", "abandoned", "read", "skimmed")
+            .forEach { status -> composeRule.onNodeWithTag("book-detail-status-$status").assertIsDisplayed() }
+        composeRule.onNodeWithTag("book-detail-status-on_hold").performClick()
+        composeRule.waitUntil { dataSource.readingStatusUpdates.any { it.second == BookReadStatus.ON_HOLD } }
+        composeRule.onNodeWithText("Reading \u00B7 42.5%").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Mark as...").performClick()
+        composeRule.onNodeWithTag("book-detail-status-read").performClick()
         composeRule.waitUntil { dataSource.markedReadBooks.any { it.id == book.id } }
         composeRule.onNodeWithText("Read \u00B7 42.5%").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Mark as unread").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription("Mark as...").performClick()
+        composeRule.onNodeWithTag("book-detail-status-unread").performClick()
         composeRule.waitUntil { dataSource.resetReadingStateBooks.any { it.id == book.id } }
         composeRule.onAllNodesWithTag("book-detail-reading-progress").assertCountEquals(0)
         composeRule.onNodeWithText("Genres").assertIsDisplayed()
@@ -1649,6 +1657,7 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     var loadLibrariesCalls = 0
     val savedServerUrls = mutableListOf<String>()
     val markedReadBooks = mutableListOf<BookSummary>()
+    val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
@@ -1737,6 +1746,9 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
     override suspend fun clearActiveReader() = Unit
     override suspend fun markBookAsRead(book: BookSummary) {
         markedReadBooks += book
+    }
+    override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) {
+        readingStatusUpdates += book to status
     }
     override suspend fun resetBookReadingState(book: BookSummary) {
         resetReadingStateBooks += book

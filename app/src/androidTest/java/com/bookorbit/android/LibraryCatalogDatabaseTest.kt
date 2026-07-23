@@ -114,6 +114,38 @@ class LibraryCatalogDatabaseTest {
     }
 
     @Test
+    fun intermediate_status_updates_cached_status_without_discarding_progress() = runBlocking {
+        dao.insertBooks(
+            listOf(
+                book("a", 0, "Alpha").copy(
+                    progressLabel = "42%",
+                    progressPercent = 42f,
+                    progressPositionMs = 10_000L,
+                    readStatus = BookReadStatus.READING.wireValue,
+                    isRead = false,
+                    lastReadAtMillis = 100L
+                )
+            )
+        )
+
+        dao.setBookReadingStatus(
+            serverUrl = SERVER,
+            bookId = "a",
+            status = BookReadStatus.ON_HOLD.wireValue,
+            isRead = false,
+            lastReadAtMillis = null
+        )
+
+        val updated = dao.readBooks(SERVER, LIBRARY).single()
+        assertEquals(BookReadStatus.ON_HOLD.wireValue, updated.readStatus)
+        assertFalse(updated.isRead)
+        assertNull(updated.lastReadAtMillis)
+        assertEquals("42%", updated.progressLabel)
+        assertEquals(42f, updated.progressPercent)
+        assertEquals(10_000L, updated.progressPositionMs)
+    }
+
+    @Test
     fun local_path_updates_without_waiting_for_catalog_reconciliation() = runBlocking {
         dao.insertBooks(listOf(book("a", 0, "Alpha")))
 

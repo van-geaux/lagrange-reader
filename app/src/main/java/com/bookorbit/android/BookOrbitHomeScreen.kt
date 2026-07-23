@@ -447,6 +447,7 @@ internal fun NativeLibraryBrowserScreen(
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
+    onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
@@ -998,6 +999,7 @@ internal fun NativeLibraryBrowserScreen(
                     onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
+                    onMarkAsStatus = onMarkAsStatus,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
@@ -4160,6 +4162,7 @@ private fun BookDetails(
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
+    onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
@@ -4389,13 +4392,7 @@ private fun BookDetails(
             )
             val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
             var showActionMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
-            val performStatusAction = {
-                if (statusActionLabel == "Mark as unread") {
-                    onMarkAsUnread(displayBook)
-                } else {
-                    onMarkAsRead(displayBook)
-                }
-            }
+            var showStatusMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
             val textMeasurer = rememberTextMeasurer()
             val density = LocalDensity.current
             val labelStyle = MaterialTheme.typography.labelLarge
@@ -4492,22 +4489,29 @@ private fun BookDetails(
                             )
                         }
                         if (layout.showInlineStatusAction) {
-                            DetailActionTile(
-                                label = statusActionLabel,
-                                icon = if (statusActionLabel == "Mark as unread") {
-                                    Icons.AutoMirrored.Filled.Undo
-                                } else {
-                                    Icons.Default.CheckCircle
-                                },
-                                showLabel = true,
-                                enabled = !state.isOfflineSnapshot,
-                                modifier = Modifier
-                                    .width(markWidth.dp)
-                                    .height(46.dp)
-                                    .testTag("book-detail-status-inline"),
-                                applyDefaultSize = false,
-                                onClick = performStatusAction
-                            )
+                            Box {
+                                DetailActionTile(
+                                    label = statusActionLabel,
+                                    icon = Icons.Default.CheckCircle,
+                                    showLabel = true,
+                                    enabled = !state.isOfflineSnapshot,
+                                    modifier = Modifier
+                                        .width(markWidth.dp)
+                                        .height(46.dp)
+                                        .testTag("book-detail-status-inline"),
+                                    applyDefaultSize = false,
+                                    onClick = { showStatusMenu = true }
+                                )
+                                BookDetailReadingStatusMenu(
+                                    expanded = showStatusMenu,
+                                    currentStatus = displayBook.readStatus,
+                                    onDismissRequest = { showStatusMenu = false },
+                                    onStatusSelected = { status ->
+                                        showStatusMenu = false
+                                        onMarkAsStatus(displayBook, status)
+                                    }
+                                )
+                            }
                         }
                         if (layout.showMore) {
                             if (layout.pinMoreToEnd) {
@@ -4558,22 +4562,26 @@ private fun BookDetails(
                                         DropdownMenuItem(
                                             text = { Text(statusActionLabel) },
                                             leadingIcon = {
-                                                Icon(
-                                                    if (statusActionLabel == "Mark as unread") {
-                                                        Icons.AutoMirrored.Filled.Undo
-                                                    } else {
-                                                        Icons.Default.CheckCircle
-                                                    },
-                                                    contentDescription = null
-                                                )
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null)
                                             },
                                             enabled = !state.isOfflineSnapshot,
                                             onClick = {
                                                 showActionMenu = false
-                                                performStatusAction()
+                                                showStatusMenu = true
                                             }
                                         )
                                     }
+                                }
+                                if (!layout.showInlineStatusAction) {
+                                    BookDetailReadingStatusMenu(
+                                        expanded = showStatusMenu,
+                                        currentStatus = displayBook.readStatus,
+                                        onDismissRequest = { showStatusMenu = false },
+                                        onStatusSelected = { status ->
+                                            showStatusMenu = false
+                                            onMarkAsStatus(displayBook, status)
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -4873,10 +4881,35 @@ private fun SeriesNeighborButton(
     }
 }
 
-internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String {
-    val completed = book.isRead || book.progressPercent?.let { it >= 99.5f } == true
-    return if (completed) "Mark as unread" else "Mark as read"
+@Composable
+private fun BookDetailReadingStatusMenu(
+    expanded: Boolean,
+    currentStatus: BookReadStatus?,
+    onDismissRequest: () -> Unit,
+    onStatusSelected: (BookReadStatus) -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.testTag("book-detail-status-menu")
+    ) {
+        BOOK_READ_STATUS_OPTIONS.forEach { status ->
+            DropdownMenuItem(
+                text = { Text(status.displayLabel()) },
+                leadingIcon = {
+                    RadioButton(
+                        selected = status == currentStatus,
+                        onClick = null
+                    )
+                },
+                modifier = Modifier.testTag("book-detail-status-${status.wireValue}"),
+                onClick = { onStatusSelected(status) }
+            )
+        }
+    }
 }
+
+internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String = "Mark as..."
 
 internal fun bookDetailPrimaryActionLabel(book: BookSummary): String =
     if (book.mediaKind == MediaKind.AUDIO) "Play" else "Read"

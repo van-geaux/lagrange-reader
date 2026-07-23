@@ -226,6 +226,7 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
+    suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = Unit
     suspend fun setBookUserRating(
         book: BookSummary,
         rating: Int?
@@ -999,6 +1000,40 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         )
     }
 
+    override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = withContext(Dispatchers.IO) {
+        if (status == BookReadStatus.UNREAD) {
+            resetBookReadingState(book)
+            return@withContext
+        }
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+
+        progressSyncMutex.withLock {
+            request(
+                "/api/v1/books/${book.id}/status",
+                "PATCH",
+                buildBookReadingStatusPayload(status).toString().toRequestBody(JSON)
+            )
+            queueStore.removeForBook(serverUrl, book.id)
+        }
+
+        val completedAtMillis = if (status.isCompletedStatus()) System.currentTimeMillis() else null
+        bookDetailCacheStore.remove(serverUrl, book.id, book.fileId)
+        libraryCatalogStore.setBookReadingStatus(
+            serverUrl = serverUrl,
+            bookId = book.id,
+            status = status,
+            isRead = status.isCompletedStatus(),
+            lastReadAtMillis = completedAtMillis
+        )
+        browserSnapshotStore.setBookReadingStatus(
+            serverUrl = serverUrl,
+            bookId = book.id,
+            status = status,
+            isRead = status.isCompletedStatus(),
+            lastReadAtMillis = completedAtMillis
+        )
+    }
     override suspend fun markBookAsRead(book: BookSummary) = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
@@ -3073,6 +3108,9 @@ internal fun buildUnreadStatusPayload(): JSONObject = JSONObject().apply {
     put("finishedAt", JSONObject.NULL)
 }
 
+internal fun buildBookReadingStatusPayload(status: BookReadStatus): JSONObject = JSONObject().apply {
+    put("status", status.wireValue)
+}
 internal fun buildMarkedReadStatusPayload(): JSONObject = JSONObject().apply {
     put("status", "read")
 }

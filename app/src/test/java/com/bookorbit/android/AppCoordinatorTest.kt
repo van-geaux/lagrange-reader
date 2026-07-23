@@ -1202,6 +1202,41 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `selecting an intermediate status updates repository and browser without clearing progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            readStatus = BookReadStatus.READING
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.setBookReadingStatus(current, BookReadStatus.ON_HOLD)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current to BookReadStatus.ON_HOLD), repository.readingStatusUpdates)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val updated = browser.browserState.books.single()
+        assertEquals(BookReadStatus.ON_HOLD, updated.readStatus)
+        assertFalse(updated.isRead)
+        assertEquals("42%", updated.progressLabel)
+        assertEquals(42f, updated.progressPercent)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("On hold"))
+    }
+
+    @Test
     fun `mark as unread resets repository and browser progress`() = runTest {
         val completed = book.copy(
             progressLabel = "100%",
@@ -1375,6 +1410,7 @@ private class FakeBookOrbitDataSource(
     val queuedProgress = mutableListOf<BookSummary>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
+    val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
     val userRatingUpdates = mutableListOf<Pair<BookSummary, Int?>>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
     var clearSessionCalls = 0
@@ -1494,6 +1530,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun markBookAsRead(book: BookSummary) {
         markedReadBooks += book
+    }
+
+    override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) {
+        readingStatusUpdates += book to status
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) {

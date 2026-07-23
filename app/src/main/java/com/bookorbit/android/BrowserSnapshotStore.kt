@@ -63,6 +63,32 @@ class BrowserSnapshotStore(context: Context) {
         )
     }
 
+    suspend fun setBookReadingStatus(
+        serverUrl: String,
+        bookId: String,
+        status: BookReadStatus,
+        isRead: Boolean,
+        lastReadAtMillis: Long?
+    ) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl } ?: return@withLock
+        writeUnlocked(
+            current.copy(
+                booksByLibraryId = current.booksByLibraryId.mapValues { (_, books) ->
+                    books.map { book ->
+                        if (book.id == bookId) {
+                            book.copy(
+                                readStatus = status,
+                                isRead = isRead,
+                                lastReadAtMillis = lastReadAtMillis
+                            )
+                        } else {
+                            book
+                        }
+                    }
+                }
+            )
+        )
+    }
     suspend fun markBookAsRead(serverUrl: String, bookId: String, markedAtMillis: Long) = mutex.withLock {
         val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl } ?: return@withLock
         writeUnlocked(

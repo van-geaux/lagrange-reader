@@ -276,6 +276,7 @@ private fun BookOrbitDestination(
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
             onMarkAsRead = coordinator::markBookAsRead,
             onMarkAsUnread = coordinator::markBookAsUnread,
+            onMarkAsStatus = coordinator::setBookReadingStatus,
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
             storageUsageLoader = coordinator::loadStorageUsage,

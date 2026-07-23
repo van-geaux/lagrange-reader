@@ -158,6 +158,23 @@ internal interface LibraryCatalogDao {
     @Query(
         """
         UPDATE library_catalog_books
+        SET readStatus = :status,
+            isRead = :isRead,
+            lastReadAtMillis = :lastReadAtMillis
+        WHERE serverUrl = :serverUrl AND bookId = :bookId
+        """
+    )
+    suspend fun setBookReadingStatus(
+        serverUrl: String,
+        bookId: String,
+        status: String,
+        isRead: Boolean,
+        lastReadAtMillis: Long?
+    )
+
+    @Query(
+        """
+        UPDATE library_catalog_books
         SET readStatus = 'read',
             isRead = 1,
             lastReadAtMillis = :markedAtMillis
@@ -248,6 +265,21 @@ internal class LibraryCatalogStore(context: Context) {
         dao.resetBookReadingState(serverUrl, bookId)
     }
 
+    suspend fun setBookReadingStatus(
+        serverUrl: String,
+        bookId: String,
+        status: BookReadStatus,
+        isRead: Boolean,
+        lastReadAtMillis: Long?
+    ) = reconcileMutex.withLock {
+        dao.setBookReadingStatus(
+            serverUrl = serverUrl,
+            bookId = bookId,
+            status = status.wireValue,
+            isRead = isRead,
+            lastReadAtMillis = lastReadAtMillis
+        )
+    }
     suspend fun markBookAsRead(serverUrl: String, bookId: String, markedAtMillis: Long) = reconcileMutex.withLock {
         dao.markBookAsRead(serverUrl, bookId, markedAtMillis)
     }

@@ -5,46 +5,43 @@ import org.junit.Test
 
 class BookDetailReadingStatusActionTest {
     @Test
-    fun `unfinished book offers mark as read`() {
+    fun `book detail status action opens the complete ordered status list`() {
         assertEquals(
-            "Mark as read",
+            "Mark as...",
             bookDetailReadingStatusActionLabel(
                 BookSummary(
                     libraryId = "library",
                     id = "book",
                     fileId = "book-file",
-                    title = "Book",
-                    progressPercent = 42f
-                )
-            )
-        )
-    }
-
-    @Test
-    fun `read or completed book offers mark as unread`() {
-        assertEquals(
-            "Mark as unread",
-            bookDetailReadingStatusActionLabel(
-                BookSummary(
-                    libraryId = "library",
-                    id = "read",
-                    fileId = "read-file",
-                    title = "Read",
-                    isRead = true
+                    title = "Book"
                 )
             )
         )
         assertEquals(
-            "Mark as unread",
-            bookDetailReadingStatusActionLabel(
-                BookSummary(
-                    libraryId = "library",
-                    id = "complete",
-                    fileId = "complete-file",
-                    title = "Complete",
-                    progressPercent = 100f
-                )
-            )
+            listOf(
+                BookReadStatus.UNREAD,
+                BookReadStatus.WANT_TO_READ,
+                BookReadStatus.READING,
+                BookReadStatus.REREADING,
+                BookReadStatus.ON_HOLD,
+                BookReadStatus.ABANDONED,
+                BookReadStatus.READ,
+                BookReadStatus.SKIMMED
+            ),
+            BOOK_READ_STATUS_OPTIONS
+        )
+        assertEquals(
+            listOf(
+                "Unread",
+                "Want to read",
+                "Reading",
+                "Rereading",
+                "On hold",
+                "Abandoned",
+                "Read",
+                "Skimmed"
+            ),
+            BOOK_READ_STATUS_OPTIONS.map(BookReadStatus::displayLabel)
         )
     }
 }

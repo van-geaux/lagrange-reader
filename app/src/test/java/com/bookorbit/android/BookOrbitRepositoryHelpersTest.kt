@@ -9,6 +9,15 @@ import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
     @Test
+    fun `reading status payload uses each server wire value`() {
+        BookReadStatus.entries.forEach { status ->
+            assertEquals(
+                status.wireValue,
+                buildBookReadingStatusPayload(status).getString("status")
+            )
+        }
+    }
+    @Test
     fun `server url comparison ignores normalization-only differences`() {
         assertTrue(serverUrlsMatch("https://books.example.test/", "BOOKS.EXAMPLE.TEST"))
         assertFalse(serverUrlsMatch("https://books.example.test", "https://other.example.test"))
