@@ -41,16 +41,24 @@ class AudiobookMediaNotificationInstrumentedTest {
 
         assertEquals(
             listOf(
-                Player.COMMAND_SEEK_BACK,
-                Player.COMMAND_PLAY_PAUSE,
-                Player.COMMAND_SEEK_FORWARD
+                audiobookSeekBackSessionCommand,
+                null,
+                audiobookSeekForwardSessionCommand
             ),
-            buttons.map(CommandButton::playerCommand)
+            buttons.map(CommandButton::sessionCommand)
         )
         assertEquals(listOf(0, 1, 2), buttons.map { button ->
             button.extras.getInt(
                 DefaultMediaNotificationProvider.COMMAND_KEY_COMPACT_VIEW_INDEX
             )
         })
+    }
+
+    @Test
+    fun sessionAuthorizesTimedSeekCommands() {
+        val commands = audiobookAvailableSessionCommands()
+
+        assertTrue(commands.contains(audiobookSeekBackSessionCommand))
+        assertTrue(commands.contains(audiobookSeekForwardSessionCommand))
     }
 }

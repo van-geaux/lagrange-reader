@@ -22,7 +22,12 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionCommands
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -63,8 +68,19 @@ import kotlin.coroutines.resume
 internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancelled."
 internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 10_000L
 internal const val AUDIO_SEEK_FORWARD_INCREMENT_MS = 30_000L
+internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.bookorbit.android.AUDIO_SEEK_BACK_10"
+internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.bookorbit.android.AUDIO_SEEK_FORWARD_30"
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
+
+internal val audiobookSeekBackSessionCommand = SessionCommand(
+    AUDIO_SEEK_BACK_SESSION_ACTION,
+    Bundle()
+)
+internal val audiobookSeekForwardSessionCommand = SessionCommand(
+    AUDIO_SEEK_FORWARD_SESSION_ACTION,
+    Bundle()
+)
 
 internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuration =
     ExoPlayerEngine.Configuration(
@@ -75,14 +91,21 @@ internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuratio
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
     CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
-        .setPlayerCommand(Player.COMMAND_SEEK_BACK)
+        .setSessionCommand(audiobookSeekBackSessionCommand)
         .setDisplayName("Replay 10 seconds")
         .build(),
     CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
-        .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+        .setSessionCommand(audiobookSeekForwardSessionCommand)
         .setDisplayName("Forward 30 seconds")
         .build()
 )
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun audiobookAvailableSessionCommands(): SessionCommands =
+    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+        .add(audiobookSeekBackSessionCommand)
+        .add(audiobookSeekForwardSessionCommand)
+        .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
 private fun audiobookCompactViewExtras(index: Int): Bundle = Bundle().apply {
@@ -121,12 +144,17 @@ internal fun audiobookNotificationMediaButtons(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 private fun CommandButton.withCompactViewIndex(index: Int): CommandButton =
-    CommandButton.Builder(icon)
-        .setPlayerCommand(playerCommand)
-        .setDisplayName(displayName)
-        .setEnabled(isEnabled)
-        .setExtras(audiobookCompactViewExtras(index))
-        .build()
+    CommandButton.Builder(icon).apply {
+        val command = sessionCommand
+        if (command != null) {
+            setSessionCommand(command)
+        } else {
+            setPlayerCommand(playerCommand)
+        }
+        setDisplayName(displayName)
+        setEnabled(isEnabled)
+        setExtras(audiobookCompactViewExtras(index))
+    }.build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
 private class AudiobookMediaNotificationProvider(context: Context) :
@@ -146,7 +174,40 @@ private class AudiobookMediaNotificationProvider(context: Context) :
         )
     )
 }
+@androidx.annotation.OptIn(UnstableApi::class)
+internal class AudiobookMediaSessionCallback : MediaSession.Callback {
+    override fun onConnect(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo
+    ): MediaSession.ConnectionResult = MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+        .setAvailableSessionCommands(audiobookAvailableSessionCommands())
+        .setAvailablePlayerCommands(
+            audiobookExternalPlayerCommands(
+                session.player.availableCommands
+            )
+        )
+        .setCustomLayout(audiobookMediaButtonPreferences())
+        .build()
 
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle
+    ): ListenableFuture<SessionResult> = when (customCommand) {
+        audiobookSeekBackSessionCommand -> {
+            session.player.seekBack()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
+        audiobookSeekForwardSessionCommand -> {
+            session.player.seekForward()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
+        else -> super.onCustomCommand(session, controller, customCommand, args)
+    }
+}
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
@@ -486,20 +547,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             get() = engine.player
     }
 
-    private val mediaSessionCallback = object : MediaSession.Callback {
-        override fun onConnect(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo
-        ): MediaSession.ConnectionResult = MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-            .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
-            .setAvailablePlayerCommands(
-                audiobookExternalPlayerCommands(
-                    session.player.availableCommands
-                )
-            )
-            .setCustomLayout(audiobookMediaButtonPreferences())
-            .build()
-    }
+    private val mediaSessionCallback = AudiobookMediaSessionCallback()
 
     internal inner class Binder : android.os.Binder() {
         private val mutableSession = MutableStateFlow<Session?>(null)

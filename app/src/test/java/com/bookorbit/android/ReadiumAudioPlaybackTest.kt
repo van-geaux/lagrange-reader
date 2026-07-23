@@ -1,7 +1,6 @@
 package com.bookorbit.android
 
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
 import androidx.media3.session.CommandButton
 import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
@@ -53,9 +52,9 @@ class ReadiumAudioPlaybackTest {
 
         assertEquals(2, preferences.size)
         assertEquals(CommandButton.ICON_SKIP_BACK_10, preferences[0].icon)
-        assertEquals(Player.COMMAND_SEEK_BACK, preferences[0].playerCommand)
+        assertEquals(AUDIO_SEEK_BACK_SESSION_ACTION, preferences[0].sessionCommand?.customAction)
         assertEquals(CommandButton.ICON_SKIP_FORWARD_30, preferences[1].icon)
-        assertEquals(Player.COMMAND_SEEK_FORWARD, preferences[1].playerCommand)
+        assertEquals(AUDIO_SEEK_FORWARD_SESSION_ACTION, preferences[1].sessionCommand?.customAction)
         assertEquals(10_000L, AUDIO_SEEK_BACK_INCREMENT_MS)
         assertEquals(30_000L, AUDIO_SEEK_FORWARD_INCREMENT_MS)
     }

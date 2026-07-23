@@ -344,7 +344,7 @@ EPUB, PDF, and CBR/CBZ option sheets now show the current book library's complet
 
 ### Audiobook system seek controls - 2026-07-22
 
-System controls must show Back 10 / Play-Pause / Forward 30; chapter selection remains in-app. Physical feedback confirmed that Media3 1.4.1's custom layout alone did not change the pulled-down player. The service now orders those three notification actions and removes previous/next from external commands. The current 300-test/50-suite gate, lint, and both APK assemblies pass. Physical system-control validation remains pending.
+System controls must show Back 10 / Play-Pause / Forward 30; chapter selection remains in-app. Physical feedback confirmed that Media3 1.4.1's custom layout alone did not change the pulled-down player. The service now uses stable custom session commands for API 33+ platform controls, reuses the same buttons in the pre-33 notification provider, and removes previous/next from external commands. The current 300-test/50-suite gate, lint, and both APK assemblies pass. Physical platform-session and system-control validation remains pending.
 
 Both local Readium and direct streaming now seek by the displayed 10/30-second increments; local Readium previously rewound 15 seconds by default. Validate the elapsed position as well as the icons on notification and lock-screen surfaces.
 
