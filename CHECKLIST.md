@@ -543,6 +543,8 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
   - Alternatives rejected for this repair: another notification-provider-only change cannot affect API 33+ SystemUI; upgrading Media3 without a coordinated Readium upgrade repeats the proven preparation incompatibility; repurposing previous/next as timed seeks gives external controllers incorrect transport semantics.
 - [x] Add an editable five-star personal rating below the Book Detail cover, backed by BookOrbit's authenticated per-user rating. Tap 1-5 to set and tap the selected star to clear; authoritative re-fetch, offline/cache fallback, rollback behavior, and the full 299-test/50-suite automated gate pass, with physical target-device validation pending
 - [ ] Change the reading-status action to `Mark as...` and expose all server statuses: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed
+- [ ] Move the Book Detail reading-status and reading-percentage display below the cover and above the star rating
+- [ ] When the author is tapped in Book Detail, open the author screen for that author
 - [ ] Replace About placeholder text with complete app description, BookOrbit disclaimer/relationship, version/build details, acknowledgements, and links
 - [ ] Add device-only audiobook Session history below detail actions, recording play/pause time and playback timepoint, seeking on tap, surviving app updates, clearing on server change, and being removed with app uninstall
 - [ ] Add one global Library card-size setting in Options: Small (current size), Medium, and Large, applied consistently across libraries and card types
