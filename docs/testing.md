@@ -18,6 +18,8 @@ Reader regression result on July 13, 2026: the restored visible-overflow page st
 
 You can begin manual testing once these conditions are true:
 
+- Run `assembleDebug` and use the timestamped APK reported by the build, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`.
+
 - `.\gradlew.bat assembleDebug` passes
 - `.\gradlew.bat testDebugUnitTest` passes
 - `.\gradlew.bat assembleDebugAndroidTest` passes if you plan to run instrumentation tests
@@ -315,7 +317,7 @@ System controls must use 10-second backward and 30-second forward seek actions; 
 
 Direct streaming retains 10/30-second increments, and local Readium is explicitly changed from its 15-second rewind default to the same 10/30 behavior. Recheck the actual elapsed position after each notification action for both engines, not only the displayed icons.
 
-Install `app/build/outputs/apk/debug/app-debug.apk`. Open one downloaded/local audiobook and one non-downloaded streamed audiobook; each must leave Preparing and become playable within the bounded preparation window. On API 33+, obtain the active platform `MediaSession` token and inspect `PlaybackState.customActions`: assert ordered Back-10 and Forward-30 actions with the expected icons, invoke each action, and verify exact bounded -10/+30 position changes. Swipe down to the Android media player and verify Replay 10 / Play-Pause / Forward 30 operate there, with chapter navigation remaining in-app. Repeat from the lock screen, paused/background/task-relaunch states, and headset/Bluetooth controls where available; spot-check the API 26-32 compact provider. Physical validation remains pending.
+Install the timestamped APK reported by the build (`app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`). Open one downloaded/local audiobook and one non-downloaded streamed audiobook; each must leave Preparing and become playable within the bounded preparation window. On API 33+, obtain the active platform `MediaSession` token and inspect `PlaybackState.customActions`: assert ordered Back-10 and Forward-30 actions with the expected icons, invoke each action, and verify exact bounded -10/+30 position changes. Swipe down to the Android media player and verify Replay 10 / Play-Pause / Forward 30 operate there, with chapter navigation remaining in-app. Repeat from the lock screen, paused/background/task-relaunch states, and headset/Bluetooth controls where available; spot-check the API 26-32 compact provider. Physical validation remains pending.
 
 ### Audiobook speed and Browser-first session restoration
 

@@ -17,11 +17,19 @@ From the project root:
 .\gradlew.bat assembleDebug
 ```
 
-The generated debug APK is written to:
+The standard Gradle debug APK is written to:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+`assembleDebug` also copies that same binary to a timestamped testing handoff file using the actual build datetime:
+
+```text
+app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk
+```
+
+This is one build and one binary with two filenames. Use the timestamped filename reported by the build when installing for testing.
 
 ## Local SDK configuration
 

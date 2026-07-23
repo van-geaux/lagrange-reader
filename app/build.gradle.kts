@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 plugins {
@@ -71,6 +74,24 @@ android {
         }
     }
 
+}
+
+val copyDebugApkWithTimestamp by tasks.registering {
+    dependsOn("packageDebug")
+
+    doLast {
+        val sourceApk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
+        check(sourceApk.isFile) { "Expected debug APK was not produced: ${sourceApk.absolutePath}" }
+
+        val timestamp = SimpleDateFormat("yyyyMMddHHmm", Locale.ROOT).format(Date())
+        val timestampedApk = sourceApk.parentFile.resolve("Lagrange-debug-$timestamp.apk")
+        sourceApk.copyTo(timestampedApk, overwrite = true)
+        logger.lifecycle("Timestamped debug APK: ${timestampedApk.absolutePath}")
+    }
+}
+
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+    finalizedBy(copyDebugApkWithTimestamp)
 }
 
 dependencies {
