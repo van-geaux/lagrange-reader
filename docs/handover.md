@@ -4,11 +4,13 @@ Last updated: 2026-07-23
 
 ## Current outcome
 
-BookOrbit Android/Lagrange 1.1.0 is published at `origin/main` commit `1556ea5` and tagged `v1.1.0`. Before this handover-only commit, local `main` is seven commits ahead; the latest implementation HEAD is `e452d24`.
+BookOrbit Android/Lagrange 1.1.0 is published at `origin/main` commit `1556ea5` and tagged `v1.1.0`. Before this planning/handover commit, local `main` is eight commits ahead; including it, the branch will be nine commits ahead. The latest implementation HEAD remains `e452d24`.
 
-Two feedback items remain implemented locally, and the audiobook playback regression reported during their validation has been repaired:
+The Book Detail rating and audiobook preparation repairs remain implemented locally. Android system audiobook controls are reopened as the current highest-priority defect after target-device feedback confirmed that the pull-down player still shows only Play/Pause:
 
-- Android system audiobook controls are now implemented through the Media3 notification provider as compact Back 10, Play/Pause, and Forward 30 actions instead of chapter-skip actions. Chapter navigation remains available inside the compact app player. This notification-specific repair is built and automated-test verified but still needs physical-device confirmation.
+- The notification-provider repair in `e452d24` affects Android 12 and below, but cannot define Android 13+ SystemUI controls. The API 33+ player is populated from the media session's platform `PlaybackState`.
+- Media3 1.4.1 converts custom-layout buttons into platform custom actions only when they use custom `SessionCommand`s. Lagrange currently uses `Player.COMMAND_SEEK_BACK/FORWARD`; those buttons are omitted, and filtering previous/next leaves only Play/Pause.
+- The highest-priority work order keeps the compatible Readium 3.0.2/Media3 1.4.1 dependency line and bridges Back 10 / Forward 30 through custom session commands, then verifies the real platform session and physical notification/lock-screen behavior.
 - Book Detail now shows an editable whole 1-5-star authenticated personal rating below the cover. Tapping the selected star clears it. Writes use BookOrbit's bulk user-rating endpoint, then re-fetch authoritative detail; offline cache fallback and optimistic rollback are implemented.
 - The perpetual `Preparing audiobook` regression for both local and streamed books was traced to an explicit Media3 1.9.0/Readium 3.0.2 incompatibility. Media3 is restored to 1.4.1, and playback preparation now has bounded waits plus failure-safe cleanup.
 
@@ -20,12 +22,13 @@ The remaining feedback work is queued and documented. No project terminal, Gradl
 - Branch: `main`
 - Remote: `origin` via SSH
 - Published release: `1556ea5 release: package Lagrange 1.1.0`, tagged `v1.1.0`
-- Latest implementation HEAD before this handover-only commit: `e452d24 fix: expose audiobook notification seeking`
-- Before this handover refresh, the local branch is seven commits ahead of `origin/main`; including the handover commit it will be eight commits ahead.
+- Latest implementation HEAD before this planning/handover commit: `e452d24 fix: expose audiobook notification seeking`
+- Before this refresh, the local branch is eight commits ahead of `origin/main`; including this planning/handover commit it will be nine commits ahead.
 - Push only when explicitly requested.
 
-Implementation and work-order commits since `origin/main`, excluding this handover-only commit, newest first:
+Implementation and work-order commits since `origin/main`, excluding this planning/handover commit, newest first:
 
+- `b4a9097 docs: update audiobook handover`
 - `e452d24 fix: expose audiobook notification seeking`
 - `62521e9 fix: restore audiobook preparation`
 - `179ccad docs: refresh current handover`
@@ -34,7 +37,7 @@ Implementation and work-order commits since `origin/main`, excluding this handov
 - `bc4fedf docs: define card sizing and audiobook history`
 - `fcdcf52 docs: queue new user feedback work order`
 
-## Newly completed work
+## Completed work and reopened priority defect
 
 ### Audiobook preparation regression repair
 
@@ -42,15 +45,21 @@ Both local and streamed audiobooks became stuck indefinitely on `Preparing audio
 
 Preparation now has a 10-second service-bind timeout and a 30-second engine-ready timeout. Cancellation and failure clear the preparing state non-cancellably, close partially created publications/engines/sessions, recheck Media3 ready/error state after listener registration, and log restore failures. Its full gate passed 299 JVM tests across 50 suites, lint with zero errors, and both APK assemblies.
 
-### Android system audiobook notification controls
+### Android system audiobook notification controls — reopened highest-priority defect
 
-Commit `e452d24` supplies the Android media notification buttons through a `DefaultMediaNotificationProvider` override instead of relying on Media3 1.4.1's ignored player-command custom layout. Compact slots 0/1/2 are Back 10, Play/Pause, and Forward 30. Previous/next commands are removed from external surfaces, while available external commands are derived from the actual player. In-app chapter navigation remains unchanged.
+Commit `e452d24` supplies Back 10 / Play-Pause / Forward 30 through a `DefaultMediaNotificationProvider`, filters previous/next from external player commands, and keeps chapter navigation inside the app. Direct Media3 streaming and local Readium playback both have the correct 10/30-second increments. Target-device feedback nevertheless confirms that the Android pull-down player still exposes only Play/Pause.
 
-Direct Media3 streaming retains 10/30-second seek increments. Local Readium playback is now explicitly configured to the same values instead of its former 15-second rewind default.
+The problem is now identified. The app targets SDK 35, so Android 13+ builds its media controls from the platform `PlaybackState` rather than the notification provider. In bundled Media3 1.4.1, `PlayerWrapper.createPlaybackStateCompat()` adds custom-layout entries only when `button.sessionCommand` is non-null. Lagrange's timed-seek buttons instead use `Player.COMMAND_SEEK_BACK/FORWARD`, so neither becomes a platform custom action. Because previous/next are deliberately removed, the backward and forward system slots are empty.
 
-The latest full gate passed 300 JVM tests across 50 suites with zero failures, errors, or skips; lint reported zero errors and 39 warnings; and `assembleDebug` plus `assembleDebugAndroidTest` passed. The notification instrumentation test compiles but was not executed because no device was connected.
+The earlier 300-JVM-test/50-suite gate, lint, and both APK assemblies verified the attempted repair but did not prove this outcome. `AudiobookMediaNotificationInstrumentedTest` constructs synthetic helper/provider inputs; it does not query a real media session's platform token or inspect `PlaybackState.customActions`. That missing OS-facing assertion allowed the defect to pass automated coverage.
 
-Physical validation remains pending. Test one downloaded/local audiobook and one non-downloaded streamed audiobook. Each must leave Preparing, and the pull-down notification and lock screen must show Back 10 / Play-Pause / Forward 30. Verify actual elapsed position changes by exactly -10/+30 seconds, then check headset/Bluetooth behavior where available.
+The implementation work order is:
+
+1. Retain Readium 3.0.2 and Media3 1.4.1. Define stable Back-10 and Forward-30 custom `SessionCommand`s and session-command `CommandButton`s; authorize them in `onConnect`; handle them in `onCustomCommand` through the active player's bounded `seekBack()`/`seekForward()`; keep standard seek commands and previous/next filtering; and reuse the buttons in the provider for API 26-32.
+2. Add focused unit coverage and real-session instrumentation. On API 33+, query the actual platform token, assert ordered Back-10/Forward-30 `PlaybackState` custom actions and icons, invoke them, and verify exact bounded -10/+30 position changes. Retain compact/provider coverage for API 26-32 and exercise local Readium plus streamed Media3 command sets.
+3. Compile affected source sets, run focused tests and the complete unit/lint/APK gate, and build a fresh debug APK. Do not close the item until a physical API 33+ device shows and operates all three pull-down and lock-screen controls for local and streamed audiobooks, including boundaries, paused/background/task-relaunch states, and headset/Bluetooth where available; spot-check API 26-32.
+
+A notification-provider-only change cannot repair API 33+. A Media3 upgrade is a broader coordinated Readium migration because Media3 1.9.0 already broke preparation with Readium 3.0.2. Reusing previous/next for timed seeking is not acceptable because it exposes incorrect transport semantics to external controllers.
 
 ### Book Detail personal rating
 
@@ -75,12 +84,13 @@ Android-test APK:
 
 ## Highest-priority next work
 
-1. Physically validate the repaired audiobook opening path and Android notification controls before marking them complete. Cover local and streamed books, pull-down and lock-screen controls, exact -10/+30 elapsed changes, and headset/Bluetooth where available.
-2. Physically validate the implemented Book Detail personal rating before marking its device checks complete.
-3. Change the reading-status action to `Mark as...` and expose every BookOrbit status: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed. Persist the selected value to the server and local caches.
-4. Replace the About destination's placeholder text with the real app description, BookOrbit relationship/disclaimer, version/build information, acknowledgements, and relevant links.
-5. Add audiobook-only Session history below the Book Detail actions. The accepted design uses an app-private Room table keyed by canonical server origin plus BookOrbit book/file ID. Record explicit play/pause wall-clock time and exact playback timepoint with duplicate-callback protection, bounded recent per-book retention, and a clear-history action; tapping a timepoint seeks there. Records are never sent to BookOrbit, survive app updates, clear when the configured server changes, and disappear with Android app-data removal on uninstall.
-6. Add one global Library card-size option: Small (the current size), Medium, and Large. It must apply across libraries and content types rather than being stored per library or type.
+1. Implement the API 33+ custom-session-command bridge and OS-facing regression above, run the complete gate, build the debug APK, and physically validate local/streamed pull-down and lock-screen Back 10 / Play-Pause / Forward 30 before marking the system-control item complete.
+2. Revalidate the repaired local and streamed audiobook opening path during the same physical pass, including exact -10/+30 boundaries and headset/Bluetooth behavior where available.
+3. Physically validate the implemented Book Detail personal rating before marking its device checks complete.
+4. Change the reading-status action to `Mark as...` and expose every BookOrbit status: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed. Persist the selected value to the server and local caches.
+5. Replace the About destination's placeholder text with the real app description, BookOrbit relationship/disclaimer, version/build information, acknowledgements, and relevant links.
+6. Add audiobook-only Session history below the Book Detail actions. The accepted design uses an app-private Room table keyed by canonical server origin plus BookOrbit book/file ID. Record explicit play/pause wall-clock time and exact playback timepoint with duplicate-callback protection, bounded recent per-book retention, and a clear-history action; tapping a timepoint seeks there. Records are never sent to BookOrbit, survive app updates, clear when the configured server changes, and disappear with Android app-data removal on uninstall.
+7. Add one global Library card-size option: Small (the current size), Medium, and Large. It must apply across libraries and content types rather than being stored per library or type.
 
 Before asking the user to test another build, assemble the debug APK and report the exact path above. Use `docs/testing.md` for the applicable procedure.
 
@@ -106,7 +116,7 @@ Before asking the user to test another build, assemble the debug APK and report 
 
 The user previously confirmed the main reader, library, media, responsive, accessibility, and profile/detail groups, including orientation lock, local batch deletion, Authors jump rail, destination icons, exact reading-state shelves, series-derived On Deck, remote audiobook playback, EPUB/PDF/comic behavior, Other versions, reader tutorials, themes, and compact-player placement.
 
-Those earlier confirmations remain valid. They do not cover the repaired post-regression audiobook preparation path, the new Android system notification controls, or the Book Detail personal-rating interaction.
+Those earlier confirmations remain valid. They do not cover the repaired post-regression audiobook preparation path or the Book Detail personal-rating interaction, and the latest feedback explicitly confirms that the Android system timed-seek controls remain broken on API 33+.
 
 ## Local agent workflow configuration
 
@@ -165,7 +175,7 @@ The following user-owned changes remain unrelated and must not be staged or comm
 ## Environment notes
 
 - JDK 17 and the Android SDK are installed and working.
-- No Android physical-device validation was performed for the preparation repair, notification-button repair, or personal-rating interaction.
+- Latest target-device feedback confirms the notification-button repair remains incomplete: the pull-down player still shows only Play/Pause. No completed physical-device validation exists yet for the preparation repair, fixed notification controls, or personal-rating interaction.
 - No project, Gradle, ADB, watcher, or emulator process started during this work remains running.
 - Git SSH authentication is configured through `origin`.
 
