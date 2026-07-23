@@ -4,9 +4,9 @@ Last updated: 2026-07-23
 
 ## Current outcome
 
-BookOrbit Android/Lagrange 1.1.0 is published at `origin/main` commit `1556ea5` and tagged `v1.1.0`. Local `main` is 10 commits ahead of `origin/main`. The current implementation HEAD is `77695b1`.
+BookOrbit Android/Lagrange 1.1.0 is published at `origin/main` commit `1556ea5` and tagged `v1.1.0`. Local `main` is 13 commits ahead of `origin/main`. The current implementation HEAD, excluding this handover update, is `b6bee4c`.
 
-The Book Detail rating and audiobook preparation repairs remain implemented. The Android system audiobook control defect is fixed: the user confirms that Back 10 / Play-Pause / Forward 30 now work in the audiobook player. The remaining feedback work is queued and documented. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+The Book Detail rating and audiobook preparation repairs remain implemented. The Android system audiobook control defect is fixed: the user confirms that Back 10 / Play-Pause / Forward 30 now work in the audiobook player. The release-channel migration is implemented in the repository; future tagged releases publish APKs through GitHub Releases instead of storing binaries in Git. The next feedback work is queued and documented. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
 ## Repository and publishing state
 
@@ -14,12 +14,19 @@ The Book Detail rating and audiobook preparation repairs remain implemented. The
 - Branch: `main`
 - Remote: `origin` via SSH
 - Published release: `1556ea5 release: package Lagrange 1.1.0`, tagged `v1.1.0`
-- Current HEAD: `77695b1 fix: expose audiobook platform seek controls`
-- Local `main` is 10 commits ahead of `origin/main`.
+- Current implementation HEAD, excluding this handover update: `b6bee4c docs: queue GitHub release update notifications`
+- Local `main` is 13 commits ahead of `origin/main`.
+- Release migration: `fa3481e build: publish release APKs through GitHub Releases`
+- The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
+- `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets.
+- The historical `v1.1.0` APK still needs manual upload to the `v1.1.0` GitHub Release; the workflow has not run remotely and no release asset was published by this session.
 - Push only when explicitly requested.
 
 Implementation and work-order commits since `origin/main`, excluding this planning/handover commit, newest first:
 
+- `b6bee4c docs: queue GitHub release update notifications`
+- `fa3481e build: publish release APKs through GitHub Releases`
+- `434a142 docs: record audiobook fix and pc agent audit`
 - `77695b1 fix: expose audiobook platform seek controls`
 - `b4a9097 docs: update audiobook handover`
 - `e452d24 fix: expose audiobook notification seeking`
@@ -81,15 +88,20 @@ Android-test APK:
 
 ## Highest-priority next work
 
-1. If needed, finish any remaining physical audiobook matrix checks not covered by the user's confirmation; the reported API 33+ system-control defect is closed.
-2. Physically validate the repaired local and streamed audiobook opening path, including exact -10/+30 boundaries and headset/Bluetooth behavior where available.
-3. Physically validate the implemented Book Detail personal rating before marking its device checks complete.
-4. Change the reading-status action to Mark as... and expose every BookOrbit status: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed. Persist the selected value to the server and local caches.
-5. Replace the About destination's placeholder text with the real app description, BookOrbit relationship/disclaimer, version/build information, acknowledgements, and relevant links.
-6. Add audiobook-only Session history below the Book Detail actions. The accepted design uses an app-private Room table keyed by canonical server origin plus BookOrbit book/file ID. Record explicit play/pause wall-clock time and exact playback timepoint with duplicate-callback protection, bounded recent per-book retention, and a clear-history action; tapping a timepoint seeks there. Records are never sent to BookOrbit, survive app updates, clear when the configured server changes, and disappear with Android app-data removal on uninstall.
-7. Add one global Library card-size option: Small (the current size), Medium, and Large. It must apply across libraries and content types rather than being stored per library or type.
+1. Investigate whether the app can detect a newer GitHub release tag. If supported, on app open/reopen show an overlay with the release notes and Acknowledge (open the GitHub release link) and Ignore actions.
+2. Fix the Book Detail opening path so the Android bottom system/navigation bar remains visible.
+3. Name every debug APK `Lagrange-debug-yyyymmddhhmm.apk` using the actual build datetime.
+4. If needed, finish any remaining physical audiobook matrix checks not covered by the user's confirmation; the reported API 33+ system-control defect is closed.
+5. Physically validate the repaired local and streamed audiobook opening path, including exact -10/+30 boundaries and headset/Bluetooth behavior where available.
+6. Physically validate the implemented Book Detail personal rating before marking its device checks complete.
+7. Change the reading-status action to Mark as... and expose every BookOrbit status: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed. Persist the selected value to the server and local caches.
+8. Replace the About destination's placeholder text with the real app description, BookOrbit relationship/disclaimer, version/build information, acknowledgements, and relevant links.
+9. Add audiobook-only Session history below the Book Detail actions. The accepted design uses an app-private Room table keyed by canonical server origin plus BookOrbit book/file ID. Record explicit play/pause wall-clock time and exact playback timepoint with duplicate-callback protection, bounded recent per-book retention, and a clear-history action; tapping a timepoint seeks there. Records are never sent to BookOrbit, survive app updates, clear when the configured server changes, and disappear with Android app-data removal on uninstall.
+10. Add one global Library card-size option: Small (the current size), Medium, and Large. It must apply across libraries and content types rather than being stored per library or type.
 
-Before asking the user to test another build, assemble the debug APK and report the exact path above. Use docs/testing.md for the applicable procedure.
+The tracked release-artifact cleanup is complete. The historical `v1.1.0` APK still needs manual upload to the GitHub Release, and the release-workflow secrets must be configured before a future tag can publish automatically.
+
+Before asking the user to test another build, assemble the debug APK and report the exact path: `app/build/outputs/apk/debug/app-debug.apk`. Use docs/testing.md for the applicable procedure.
 
 ## Current architecture guardrails
 
@@ -161,10 +173,12 @@ JDK 17, the Android SDK, the Gradle wrapper, and the project build remain functi
 
 The following user-owned changes remain unrelated and must not be staged or committed:
 
+- Modified `CHECKLIST.md`
 - Modified `README.md`
 - Modified `app/src/main/res/drawable/ic_launcher_foreground.xml`
 - Modified `app/src/main/res/drawable/ic_launcher_monochrome.xml`
 - Modified `docs/README.md`
+- Modified `docs/roadmap.md`
 - Untracked `sample/`
 
 ## Important files for the next session
@@ -175,6 +189,9 @@ The following user-owned changes remain unrelated and must not be staged or comm
 - `docs/architecture.md`
 - `docs/ui-ux.md`
 - `docs/bookorbit-api.md`
+- `docs/release.md`
+- `.github/workflows/android-release.yml`
+- `app/build.gradle.kts`
 - `app/src/main/java/com/bookorbit/android/AppCoordinator.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitApp.kt`
 - `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
@@ -187,8 +204,9 @@ The following user-owned changes remain unrelated and must not be staged or comm
 ## Environment notes
 
 - JDK 17, the Android SDK, the Gradle wrapper, and the project build are installed and working.
-- The user confirms that the repaired audiobook player controls work. The final automated gate had no enumerated ADB target, so instrumentation was compile-checked rather than device-executed.
-- Fresh debug artifacts are available at app/build/outputs/apk/debug/app-debug.apk and app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk.
+- Release migration verification passed `git diff --check`, `:app:compileDebugKotlin`, and `:app:assembleRelease`; the fresh local release APK is at `app/build/outputs/apk/release/app-release.apk` (61,713,842 bytes, generated 2026-07-23 12:14:25).
+- The Gradle task-list check still intermittently hits the known `%USERPROFILE%\.gradle\wrapper\dists\gradle-8.7-bin\...\gradle-8.7-bin.zip.lck` permission issue. This did not block release assembly.
+- The historical release APK is absent from the working tree and active release-artifact/package-task references are absent. It remains in Git history until any separate history rewrite is approved.
 - No project, Gradle, ADB, watcher, emulator, or project daemon process started during this work remains running.
 - Git SSH authentication is configured through origin.
 
