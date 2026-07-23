@@ -920,6 +920,7 @@ internal fun NativeLibraryBrowserScreen(
                         onHome = {
                             destination = BrowserDestination.HOME
                             query = ""
+                            selectedBook = null
                             selectedAuthor = null
                             selectedSeriesKey = null
                         },
@@ -928,10 +929,14 @@ internal fun NativeLibraryBrowserScreen(
                             showLibraryPicker = state.selectedLibraryId == null
                             libraryTab = LibraryTab.RECOMMENDED
                             query = ""
+                            selectedBook = null
                             selectedAuthor = null
                             selectedSeriesKey = null
                         },
-                        onMore = { showMoreMenu = true }
+                        onMore = {
+                            selectedBook = null
+                            showMoreMenu = true
+                        }
                     )
                 }
             }
