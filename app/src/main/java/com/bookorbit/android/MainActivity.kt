@@ -1,7 +1,9 @@
 package com.bookorbit.android
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -44,12 +46,16 @@ internal fun preferencesForOrientationLockChange(
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesStore: AppPreferencesStore
+    private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
 
     override fun onResume() {
         super.onResume()
         if (::preferencesStore.isInitialized) {
             appPreferencesState.value = preferencesStore.read()
+        }
+        if (::appCoordinator.isInitialized) {
+            appCoordinator.checkForAppUpdate()
         }
     }
 
@@ -58,6 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val graph = AppGraph(this)
+        appCoordinator = graph.coordinator
         val preferencesStore = AppPreferencesStore(this)
         val initialPreferences = preferencesStore.read()
         requestedOrientation = requestedOrientationForLock(
@@ -118,6 +125,11 @@ class MainActivity : ComponentActivity() {
                             if (refreshPolicyChanged) {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }
+                        },
+                        onAcknowledgeReleaseUpdate = { update ->
+                            startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(update.htmlUrl))
+                            )
                         }
                     )
                 }

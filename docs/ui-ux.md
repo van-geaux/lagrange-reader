@@ -361,3 +361,7 @@ Cache smoothing keeps fitted books fully decoded when possible and otherwise evi
 ### Book Detail personal rating - 2026-07-22
 
 Book Detail places five editable whole stars directly below the cover. They represent the signed-in user's BookOrbit rating, not decimal or aggregate metadata. Tapping 1-5 sets that rating; tapping the currently selected star clears it. The stars update optimistically, are disabled for offline snapshots and while a write is in progress, roll back on failure, and reconcile to BookOrbit's authoritative response. Accessibility semantics identify each set action and the selected star's clear action. The full 299-JVM-test/50-suite gate passes with no failures/errors/skips, lint has 0 errors, and both APKs assemble; physical layout, interaction, accessibility, and offline/rejection validation remains pending.
+
+### GitHub release update notice - 2026-07-23
+
+On app bootstrap and Activity resume, the app may show a scrollable release-notes dialog when a strictly newer GitHub release is available than the installed version. The dialog identifies the release and provides the published notes with two actions: Acknowledge dismisses the notice and opens the GitHub release page; Ignore dismisses it without opening the page. Either action suppresses that tag for the current app activity/coordinator session. Network or parsing failures remain silent and non-blocking. Physical-device confirmation of the dialog's presentation, scrolling, links, and resume behavior remains needed.

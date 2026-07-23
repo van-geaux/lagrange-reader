@@ -4,7 +4,10 @@ import android.content.Context
 
 class AppGraph(context: Context) {
     private val repository = BookOrbitRepository(context.applicationContext)
-    val coordinator = AppCoordinator(repository)
+    val coordinator = AppCoordinator(
+        repository,
+        releaseChecker = GitHubReleaseChecker()::check
+    )
 
     fun configureAudioPlayback(controller: ReadiumAudioPlaybackController) {
         controller.setStreamingAuthentication(

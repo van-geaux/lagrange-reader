@@ -23,7 +23,8 @@ private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
-    dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
+    dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val releaseChecker: suspend (String) -> ReleaseUpdate? = { null }
 ) {
     suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.searchBooks(query)
@@ -115,6 +116,8 @@ class AppCoordinator(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
+    private val _releaseUpdate = MutableStateFlow<ReleaseUpdate?>(null)
+    val releaseUpdate: StateFlow<ReleaseUpdate?> = _releaseUpdate.asStateFlow()
     private var lastBrowserState: BrowserState? = null
     private var loginRefreshInFlight = false
     private var loginSubmitInFlight = false
@@ -125,12 +128,39 @@ class AppCoordinator(
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
+    private var releaseCheckInFlight = false
+    private var dismissedReleaseTag: String? = null
 
     fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
         audioPlaybackOpener = opener
     }
 
+    fun checkForAppUpdate() {
+        if (releaseCheckInFlight) return
+        releaseCheckInFlight = true
+        scope.launch {
+            try {
+                val update = releaseChecker(BuildConfig.VERSION_NAME)
+                if (update != null && update.tagName != dismissedReleaseTag) {
+                    _releaseUpdate.value = update
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                // Release checks are optional and must not interrupt app startup.
+            } finally {
+                releaseCheckInFlight = false
+            }
+        }
+    }
+
+    fun dismissReleaseUpdate() {
+        _releaseUpdate.value?.let { update -> dismissedReleaseTag = update.tagName }
+        _releaseUpdate.value = null
+    }
+
     fun bootstrap() {
+        checkForAppUpdate()
         scope.launch {
             _screen.value = AppScreen.Loading
             val serverUrl = repository.getServerUrl()

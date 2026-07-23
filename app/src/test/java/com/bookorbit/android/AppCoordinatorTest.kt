@@ -39,6 +39,34 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `checkForAppUpdate exposes and dismisses the release notification`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertEquals(update, coordinator.releaseUpdate.value)
+        coordinator.dismissReleaseUpdate()
+        assertNull(coordinator.releaseUpdate.value)
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertNull(coordinator.releaseUpdate.value)
+    }
+
+    @Test
     fun `bootstrap prefers local only active reader restore before session checks`() = runTest {
         val readerState = ReaderState(book = book, localFile = File("offline.epub"))
         val repository = FakeBookOrbitDataSource(

@@ -1,5 +1,6 @@
 package com.bookorbit.android
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -349,5 +350,29 @@ class BookOrbitRepositoryHelpersTest {
 
         assertEquals(10, restored.pageIndex)
         assertEquals(55f, restored.progressPercent)
+    }
+
+    @Test
+    fun `parses newer GitHub releases and ignores current versions`() {
+        val update = parseGitHubReleaseUpdate(
+            JSONObject()
+                .put("tag_name", "v1.2.0")
+                .put("name", "Lagrange 1.2")
+                .put("body", "New reader improvements")
+                .put("html_url", "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0")
+                .toString(),
+            "1.1.0"
+        )
+
+        requireNotNull(update)
+        assertEquals("1.2.0", update.versionName)
+        assertEquals("v1.2.0", update.tagName)
+        assertEquals("New reader improvements", update.notes)
+        assertNull(parseGitHubReleaseUpdate(
+            JSONObject().put("tag_name", "v1.1.0").toString(),
+            "1.1.0"
+        ))
+        assertTrue(isNewerReleaseVersion("1.1.0", "v1.1.1"))
+        assertFalse(isNewerReleaseVersion("1.1.0", "v1.1.0-beta"))
     }
 }

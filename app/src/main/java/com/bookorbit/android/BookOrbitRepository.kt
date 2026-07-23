@@ -69,6 +69,95 @@ private const val LIBRARY_PARALLEL_PAGE_THRESHOLD = 4
 private const val COMPLETED_PROGRESS_PERCENT = 99.5f
 private val progressSyncMutex = Mutex()
 
+internal const val LAGRANGE_GITHUB_RELEASES_API_URL =
+    "https://api.github.com/repos/van-geaux/lagrange-reader/releases/latest"
+
+private const val LAGRANGE_GITHUB_RELEASES_PAGE_URL =
+    "https://github.com/van-geaux/lagrange-reader/releases/tag/"
+
+data class ReleaseUpdate(
+    val versionName: String,
+    val tagName: String,
+    val title: String,
+    val notes: String,
+    val htmlUrl: String
+)
+
+internal fun parseGitHubReleaseUpdate(
+    payload: String,
+    currentVersion: String
+): ReleaseUpdate? {
+    val release = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+    val tagName = release.optString("tag_name").trim().takeIf { it.isNotBlank() }
+        ?: return null
+    val remoteVersion = releaseVersionParts(tagName) ?: return null
+    val localVersion = releaseVersionParts(currentVersion) ?: return null
+    if (remoteVersion <= localVersion) return null
+
+    val htmlUrl = release.optString("html_url").trim()
+        .takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        ?: LAGRANGE_GITHUB_RELEASES_PAGE_URL + tagName
+    return ReleaseUpdate(
+        versionName = remoteVersion.toDisplayString(),
+        tagName = tagName,
+        title = release.optString("name").trim().ifBlank { "Lagrange " + remoteVersion.toDisplayString() },
+        notes = release.optString("body").trim().take(8_000),
+        htmlUrl = htmlUrl
+    )
+}
+
+internal fun isNewerReleaseVersion(currentVersion: String, candidateTag: String): Boolean {
+    val current = releaseVersionParts(currentVersion) ?: return false
+    val candidate = releaseVersionParts(candidateTag) ?: return false
+    return candidate > current
+}
+
+private fun releaseVersionParts(value: String): ReleaseVersion? {
+    val match = Regex("^[vV]?(\\d+)\\.(\\d+)\\.(\\d+)$").matchEntire(value.trim())
+        ?: return null
+    return ReleaseVersion(
+        major = match.groupValues[1].toIntOrNull() ?: return null,
+        minor = match.groupValues[2].toIntOrNull() ?: return null,
+        patch = match.groupValues[3].toIntOrNull() ?: return null
+    )
+}
+
+private data class ReleaseVersion(
+    val major: Int,
+    val minor: Int,
+    val patch: Int
+) : Comparable<ReleaseVersion> {
+    override fun compareTo(other: ReleaseVersion): Int =
+        compareValuesBy(this, other, ReleaseVersion::major, ReleaseVersion::minor, ReleaseVersion::patch)
+
+    fun toDisplayString(): String = "$major.$minor.$patch"
+}
+
+internal class GitHubReleaseChecker(
+    private val client: OkHttpClient = OkHttpClient()
+) {
+    suspend fun check(currentVersion: String): ReleaseUpdate? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url(LAGRANGE_GITHUB_RELEASES_API_URL)
+                .get()
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    null
+                } else {
+                    parseGitHubReleaseUpdate(
+                        payload = response.body?.string().orEmpty(),
+                        currentVersion = currentVersion
+                    )
+                }
+            }
+        }.getOrNull()
+    }
+}
+
 private enum class ProgressPostResult {
     ACCEPTED,
     ALREADY_SYNCED,

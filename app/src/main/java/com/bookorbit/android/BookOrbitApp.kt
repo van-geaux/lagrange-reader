@@ -78,6 +78,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -152,8 +153,10 @@ fun BookOrbitApp(
     coordinator: AppCoordinator,
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
-    onAppPreferencesChange: (AppPreferences) -> Unit = {}
+    onAppPreferencesChange: (AppPreferences) -> Unit = {},
+    onAcknowledgeReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
+    val releaseUpdate by coordinator.releaseUpdate.collectAsState()
     Box(modifier = Modifier.fillMaxSize()) {
         BookOrbitDestination(
             screen = screen,
@@ -172,7 +175,54 @@ fun BookOrbitApp(
                     .navigationBarsPadding()
             )
         }
+        releaseUpdate?.let { update ->
+            ReleaseUpdateDialog(
+                update = update,
+                onAcknowledge = {
+                    coordinator.dismissReleaseUpdate()
+                    onAcknowledgeReleaseUpdate(update)
+                },
+                onIgnore = coordinator::dismissReleaseUpdate
+            )
+        }
     }
+}
+
+@Composable
+private fun ReleaseUpdateDialog(
+    update: ReleaseUpdate,
+    onAcknowledge: () -> Unit,
+    onIgnore: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onIgnore,
+        title = { Text(update.title + " is available") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .testTag("release-update-dialog")
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Version " + update.versionName + " is ready to download.")
+                if (update.notes.isNotBlank()) {
+                    Text(update.notes)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onAcknowledge,
+                modifier = Modifier.testTag("release-update-acknowledge")
+            ) { Text("Acknowledge") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onIgnore,
+                modifier = Modifier.testTag("release-update-ignore")
+            ) { Text("Ignore") }
+        }
+    )
 }
 
 @Composable
