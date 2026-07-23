@@ -546,6 +546,7 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 - [ ] Replace About placeholder text with complete app description, BookOrbit disclaimer/relationship, version/build details, acknowledgements, and links
 - [ ] Add device-only audiobook Session history below detail actions, recording play/pause time and playback timepoint, seeking on tap, surviving app updates, clearing on server change, and being removed with app uninstall
 - [ ] Add one global Library card-size setting in Options: Small (current size), Medium, and Large, applied consistently across libraries and card types
+- [ ] Investigate whether the app can detect a newer GitHub release tag, and if supported implement update notification behavior: on app open/reopen, when a newer release is detected, show an overlay containing the release notes and provide buttons for Acknowledge that opens the GitHub release link and Ignore that dismisses it
 
 Session history uses durable app-private Room storage keyed by canonical server origin plus BookOrbit book/file ID. A server switch purges the old namespace; duplicate-callback protection, bounded per-book retention, and clear-history support are required; events are never sent to BookOrbit.
 
