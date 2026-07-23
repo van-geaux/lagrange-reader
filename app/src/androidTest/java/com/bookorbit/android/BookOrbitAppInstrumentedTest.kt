@@ -372,6 +372,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onAllNodesWithText("Book details").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("Orbit Rising").performClick()
         composeRule.onNodeWithText("More").performClick()
+        composeRule.onAllNodesWithText("Book details").assertCountEquals(1)
         composeRule.onNodeWithText("Local books").performClick()
         composeRule.onAllNodesWithText("Book details").assertCountEquals(0)
         composeRule.onNodeWithText("Local books").assertIsDisplayed()

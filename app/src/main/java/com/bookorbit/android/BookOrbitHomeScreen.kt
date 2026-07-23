@@ -597,6 +597,7 @@ internal fun NativeLibraryBrowserScreen(
             MoreMenu(
                 onSeries = {
                     showMoreMenu = false
+                    selectedBook = null
                     destination = BrowserDestination.SERIES
                     query = ""
                     selectedAuthor = null
@@ -604,6 +605,7 @@ internal fun NativeLibraryBrowserScreen(
                 },
                 onAuthors = {
                     showMoreMenu = false
+                    selectedBook = null
                     destination = BrowserDestination.AUTHORS
                     query = ""
                     selectedAuthor = null
@@ -611,6 +613,7 @@ internal fun NativeLibraryBrowserScreen(
                 },
                 onLocalBooks = {
                     showMoreMenu = false
+                    selectedBook = null
                     localBooksLibraryId = null
                     destination = BrowserDestination.LOCAL_BOOKS
                     query = ""
@@ -933,10 +936,7 @@ internal fun NativeLibraryBrowserScreen(
                             selectedAuthor = null
                             selectedSeriesKey = null
                         },
-                        onMore = {
-                            selectedBook = null
-                            showMoreMenu = true
-                        }
+                        onMore = { showMoreMenu = true }
                     )
                 }
             }
