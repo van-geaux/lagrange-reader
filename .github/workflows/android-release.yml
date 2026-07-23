@@ -1,0 +1,67 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Configure release signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          test -n "$RELEASE_KEYSTORE_BASE64" || { echo 'Missing RELEASE_KEYSTORE_BASE64 secret.' >&2; exit 1; }
+          test -n "$RELEASE_STORE_PASSWORD" || { echo 'Missing RELEASE_STORE_PASSWORD secret.' >&2; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo 'Missing RELEASE_KEY_ALIAS secret.' >&2; exit 1; }
+          test -n "$RELEASE_KEY_PASSWORD" || { echo 'Missing RELEASE_KEY_PASSWORD secret.' >&2; exit 1; }
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release-key.jks
+          {
+            printf 'storeFile=release-key.jks\n'
+            printf 'storePassword=%s\n' "$RELEASE_STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$RELEASE_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$RELEASE_KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease --no-daemon --console=plain
+
+      - name: Prepare release asset
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          release_apk="app/build/release-assets/Lagrange-${release_version}.apk"
+          mkdir -p "$(dirname "$release_apk")"
+          cp app/build/outputs/apk/release/app-release.apk "$release_apk"
+          echo "RELEASE_APK=$release_apk" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$RELEASE_APK" --verify-tag --generate-notes --title "Lagrange ${GITHUB_REF_NAME#v}"

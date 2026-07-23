@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-blue)](app/build/release-artifacts/Lagrange-1.1.0.apk)
+[![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.1.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -109,10 +109,10 @@ Clone the repository, open it in Android Studio, and let it use the included Gra
 The generated APK is:
 
 ```text
-app/build/release-artifacts/Lagrange-1.1.0.apk
+app/build/outputs/apk/release/app-release.apk
 ```
 
-The signed APK is generated at `app/build/release-artifacts/Lagrange-1.1.0.apk`. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
+For local builds, the signed APK is generated at `app/build/outputs/apk/release/app-release.apk`. Distributed APKs are published as GitHub Release assets. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
 
 Useful verification commands are:
 

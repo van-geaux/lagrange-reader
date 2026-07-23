@@ -45,12 +45,15 @@ If a rename is required later:
 - release signing keys must not be committed to the repository
 - release keystore paths, aliases, and passwords must come from local machine configuration or CI secrets
 - keep signing material outside the repo and outside shared documentation that is meant to be committed
-- if CI later produces signed artifacts, use GitHub Actions secrets or an equivalent secret store rather than checked-in files
+- the tag-triggered GitHub Actions release workflow uses GitHub secrets or an equivalent secret store rather than checked-in signing material
 
 ## Current state
 
-- debug and release compilation both pass locally
-- 1.1.0 release APK is packaged as `app/build/release-artifacts/Lagrange-1.1.0.apk`
-- no release keystore is committed in this repository
-- the tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses
-- there is not yet a production signing config wired into Gradle
+- Debug and release compilation both pass locally.
+- Release APKs are published as GitHub Release assets rather than committed to the repository.
+- The v1.1.0 APK from the historical release commit must be uploaded to the v1.1.0 GitHub Release separately; this repository migration does not publish it automatically.
+- Future `v*` tag pushes use `.github/workflows/android-release.yml` to build a signed APK and create a GitHub Release asset.
+- Configure these repository secrets before using the workflow: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
+- No release keystore is committed in this repository.
+- The tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses.
+- The repository no longer stores release APK binaries after this migration.

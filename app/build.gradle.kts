@@ -1,5 +1,4 @@
 import java.util.Properties
-import org.gradle.api.tasks.Copy
 
 plugins {
     id("com.android.application")
@@ -123,11 +122,4 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-}
-
-tasks.register<Copy>("packageReleaseApk") {
-    dependsOn("assembleRelease")
-    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
-    into(layout.buildDirectory.dir("release-artifacts"))
-    rename { "Lagrange-1.1.0.apk" }
 }
