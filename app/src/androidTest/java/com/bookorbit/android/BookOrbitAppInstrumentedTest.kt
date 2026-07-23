@@ -362,6 +362,9 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithContentDescription("Orbit Rising").performClick()
+        composeRule.onNodeWithText("Home").assertIsDisplayed()
+        composeRule.onNodeWithText("Libraries").assertIsDisplayed()
+        composeRule.onNodeWithText("More").assertIsDisplayed()
         composeRule.onNodeWithTag("book-detail-user-rating").assertIsDisplayed()
         (1..5).forEach { rating ->
             composeRule.onNodeWithTag("book-detail-user-rating-$rating").assertIsDisplayed()

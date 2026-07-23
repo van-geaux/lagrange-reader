@@ -748,7 +748,6 @@ internal fun NativeLibraryBrowserScreen(
         !isSearchOpen &&
             activeBookGenre == null &&
             activeSeriesGenre == null &&
-            selectedBook == null &&
             selectedSeriesKey == null &&
             selectedAuthor == null
 
