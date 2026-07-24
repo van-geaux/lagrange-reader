@@ -64,4 +64,8 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "$RELEASE_APK" --verify-tag --generate-notes --title "Lagrange ${GITHUB_REF_NAME#v}"
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          release_notes="docs/release-notes/v${release_version}.md"
+          test -f "$release_notes" || { echo "Missing release notes: $release_notes" >&2; exit 1; }
+          gh release create "$GITHUB_REF_NAME" "$RELEASE_APK" --verify-tag --notes-file "$release_notes" --title "Lagrange ${release_version}"
