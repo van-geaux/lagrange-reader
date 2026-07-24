@@ -392,6 +392,12 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Reading \u00B7 42.5%").assertIsDisplayed()
         val progressBounds = composeRule.onNodeWithTag("book-detail-reading-progress")
             .fetchSemanticsNode().boundsInRoot
+        val coverBounds = composeRule.onNodeWithContentDescription("Open full-screen cover for Orbit Rising")
+            .fetchSemanticsNode().boundsInRoot
+        val ratingBounds = composeRule.onNodeWithTag("book-detail-user-rating")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(coverBounds.bottom <= progressBounds.top)
+        assertTrue(progressBounds.bottom <= ratingBounds.top)
         val actionBounds = composeRule.onNodeWithTag("book-detail-actions")
             .fetchSemanticsNode().boundsInRoot
         assertTrue(progressBounds.bottom <= actionBounds.top)
@@ -962,6 +968,51 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun bookDetailAuthorOpensAuthorDestination() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-author",
+            fileId = "file-author",
+            title = "Author's Book",
+            author = "Test Author",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+            authorCatalogPages[0] = AuthorCatalogPage(
+                items = listOf(AuthorSummary(id = "author-test", name = "Test Author")),
+                total = 1,
+                page = 0,
+                size = 1
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Author's Book").performClick()
+        composeRule.onNodeWithContentDescription("Open author Test Author").performClick()
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Author").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Test Author").assertIsDisplayed()
+        composeRule.onNodeWithText("1 books").assertIsDisplayed()
+    }
+
+    @Test
     fun homeSearchProfileAndMoreActionsOpenNativeLayers() {
         composeRule.setContent {
             BookOrbitTheme {
@@ -1004,8 +1055,16 @@ class BookOrbitAppInstrumentedTest {
         assertTrue(dividerBounds.bottom <= changeServerBounds.top)
         assertTrue(changeServerBounds.top < logoutBounds.top)
         composeRule.onNodeWithText("About").performClick()
-        composeRule.onNodeWithText("About details and acknowledgements will be expanded here.")
+        composeRule.onNodeWithText("Lagrange Reader").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "An independent Android app for reading and listening to books hosted on BookOrbit."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             .assertIsDisplayed()
+        composeRule.onNodeWithText("Not an official BookOrbit application")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Acknowledgements").assertIsDisplayed()
+        composeRule.onNodeWithText("Project links").assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription("Libraries icon").assertIsDisplayed()
         composeRule.onNodeWithText("More").performClick()
@@ -1051,6 +1110,12 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithTag("options-reduce-motion").performScrollTo().performClick()
         composeRule.runOnIdle { assertTrue(preferences.value.reduceMotion) }
+
+        composeRule.onNodeWithTag("options-library-card-size").performScrollTo().performClick()
+        composeRule.onNodeWithText("Medium").performClick()
+        composeRule.runOnIdle {
+            assertEquals(LibraryCardSize.MEDIUM, preferences.value.libraryCardSize)
+        }
     }
 
     @Test

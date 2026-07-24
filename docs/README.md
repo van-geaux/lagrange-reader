@@ -18,7 +18,7 @@ This folder contains the working engineering documentation for `Lagrange Reader`
 
 The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, explicit authenticated-session bootstrap through `/api/v1/auth/me`, sign-out/session reset, authentication-expired return-to-intended-screen recovery, library browsing, downloads, server-scoped local persistence, server-scoped authenticated reader cache copies, offline-local-only reader reopen from cached browser snapshots, progress sync, PDF reading with zoom and pan controls, audio playback, EPUB reading with chapter/theme/font controls, CBZ comic reading from local downloads or authenticated cache copies, active-reader restoration after recreation or restart, corrupted local reader file pruning, improved accessibility semantics for reader controls and status surfaces, normalized stored progress percentages across media types, and earlier user-facing failures when a reader cannot be prepared from local or cached content.
 
-The app manifest now uses a project-owned adaptive launcher icon instead of the Android system placeholder.
+The app manifest uses the production "Bold Lagrange" adaptive launcher icon, including a themed monochrome layer. Reusable vector masters live in [`artwork/`](../artwork/).
 
 Session clearing now waits for WebView cookie removal before returning to login, and explicit sign-out suppresses cached-browser fallback so the app stays on login until a fresh authenticated session exists. Reader reopen can fall back to last-synced local progress after the pending queue drains, and the EPUB WebView is configured to allow local file-backed image resources from extracted books.
 

@@ -130,6 +130,10 @@ Lagrange Reader's interface and interaction ideas were informed by the clarity a
 
 I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first, roughly another two to three weeks of real world use, before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
+## About destination
+
+The in-app About destination presents the same project description: Lagrange Reader is an independent Android app for reading and listening to books hosted on BookOrbit, and a standalone native client rather than a wrapper around the BookOrbit web interface. It also shows the installed version and build information, identifies Lagrange as an independent community project that is not affiliated with, endorsed by, or sponsored by the BookOrbit maintainers, and includes acknowledgements and links to the Lagrange Reader project, BookOrbit, Readium, and the license and notices.
+
 ## Project status
 
 Version **1.0.0** is considered feature-complete and worthy of release for personal and community testing. The remaining work is mostly wider device and format validation, not a claim that every BookOrbit server configuration or file is covered.

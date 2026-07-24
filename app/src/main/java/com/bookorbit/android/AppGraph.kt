@@ -4,10 +4,11 @@ import android.content.Context
 
 class AppGraph(context: Context) {
     private val repository = BookOrbitRepository(context.applicationContext)
+    private val sessionHistoryStore = AudiobookSessionHistoryStore(context.applicationContext)
     val coordinator = AppCoordinator(
         repository,
         releaseChecker = GitHubReleaseChecker()::check
-    )
+    ).also { it.setSessionHistoryStore(sessionHistoryStore) }
 
     fun configureAudioPlayback(controller: ReadiumAudioPlaybackController) {
         controller.setStreamingAuthentication(
@@ -16,8 +17,13 @@ class AppGraph(context: Context) {
             },
             recoverAuthentication = repository::recoverStreamingAuthentication
         )
+        controller.setSessionHistoryStore(
+            store = sessionHistoryStore,
+            serverUrlProvider = repository::getServerUrl
+        )
         coordinator.setAudioPlaybackOpener { state, playWhenReady ->
             controller.restorePersistedSession(state, playWhenReady)
         }
+        coordinator.setAudioSessionHistoryOpener(controller::openFromSessionHistory)
     }
 }

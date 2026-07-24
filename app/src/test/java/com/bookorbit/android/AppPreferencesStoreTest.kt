@@ -130,6 +130,16 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `stored library card sizes round trip and default to small`() {
+        LibraryCardSize.values().forEach { value ->
+            assertEquals(value, libraryCardSizeFromStorage(libraryCardSizeStorageValue(value)))
+        }
+        assertEquals(LibraryCardSize.MEDIUM, libraryCardSizeFromStorage(" MEDIUM "))
+        assertEquals(LibraryCardSize.SMALL, libraryCardSizeFromStorage("unknown"))
+        assertEquals(LibraryCardSize.SMALL, libraryCardSizeFromStorage(null))
+    }
+
+    @Test
     fun `cellular policy decides whether to start ask or block`() {
         assertEquals(
             CellularDownloadDecision.START,

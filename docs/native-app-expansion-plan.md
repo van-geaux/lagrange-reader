@@ -1,5 +1,7 @@
 # Native App Expansion and Plex/Audiobookshelf UI Plan
 
+> Historical planning document: the implemented current shell supersedes this plan's drawer-based navigation and placeholder Options destination.
+
 ## Goal
 
 Implement a native credential login, non-syncing book Preview mode, global Series and Authors catalogs, Plex-style card layouts, reliable complete-series pagination, an Audiobookshelf/Plex-inspired visual refresh, an Android splash screen, and an empty Options destination in the main drawer.

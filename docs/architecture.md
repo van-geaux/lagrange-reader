@@ -48,7 +48,8 @@ The current app flow is:
 - Offline-first active-reader restore uses the same local-only reader stream suppression. Persisted AUDIO active-reader metadata is retained for resume bookkeeping but is not restored as a Reader destination.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
 - Native username/password is the current authentication flow. Embedded server/OIDC sign-in is intentionally deferred until its provider and redirect contract are defined.
-- Preview reader launches start at the beginning and do not write active-reader or progress state.
+- Preview reader launches start at the beginning and do not write active-reader or progress state. Preview audiobook playback is likewise excluded from local session history.
+- Book Detail loads audiobook-only local session history below the actions. Each retained play/pause transition includes the canonical server/book/file identity, wall-clock timestamp, and exact playback position; selecting an entry reopens or seeks normal playback at that position, and Clear removes the history for that book.
 - `shouldUseReadiumEpubReader` routes every `MediaKind.EPUB` launch to the dedicated activity; non-EPUB formats keep their established readers.
 
 ### Data and API layer
@@ -108,6 +109,7 @@ The current app flow is:
 - `BrowserSnapshotStore` persists the last successful library list and can read legacy first-page book snapshots as a migration/failure fallback; it is no longer the active Browse book store. Download and Delete local operations still update its matching book `localPath` immediately so fallback/offline state cannot retain stale availability.
 - `LibraryCatalogStore` uses Room tables scoped by server URL and library id for ordered book metadata, catalog totals, refresh timestamps, and validated jump buckets. Reconciliation compares rows, deletes missing ids in bounded batches, upserts only changed rows, and commits metadata/buckets in one transaction. Download and Delete local also update the matching Room `localPath` under the reconciliation mutex without waiting for a full catalog refresh.
 - `ProgressQueueStore` stores pending progress updates that still need to be synced.
+- `AudiobookSessionHistoryStore` uses a dedicated app-private Room database (`audiobook-session-history.db`) for play/pause transition events. Rows are keyed by server URL, BookOrbit book ID, and file ID, retain the event timestamp and nonnegative exact position, and are bounded to the newest 20 events per book/file. The store clears all rows for the old server during server changes and clears one book/file from Book Detail; it is local-only and has no BookOrbit API contract.
 - Debug builds show the current pending progress queue count directly in the browser screen.
 - `CatalogSnapshotStore` stores versioned raw Series, Authors, and author-book pages keyed by server URL for offline catalog fallback without mixing servers.
 - `CoverCacheStore` persists versioned BookOrbit thumbnail bytes per server/book. Per-file locks let foreground and worker repositories read different thumbnails concurrently.
@@ -275,7 +277,10 @@ The continuous surface prefetches two pages before and after the visible range. 
 
 Cache hits are read synchronously before asynchronous loading, preventing placeholder flashes. Aspect ratios are stored separately from bitmaps to preserve layout height after eviction, and per-key mutexes deduplicate simultaneous visible/prefetch loads. `LruCache` retains the whole decoded book when it fits and otherwise evicts least-recently-used pages. Android memory callbacks trim or clear decoded pages; reader close clears bitmaps, aspect metadata, and load locks. The ±2 prefetch window and continuous tutorial contract are unchanged. Physical long-book smoothness and memory stability remain pending.
 
-### Book Detail personal-rating architecture - 2026-07-22
+### Global Library card-size preference - 2026-07-24
+
+Library card sizing is one persisted app-global `AppPreferences` value exposed under Options, not a per-library or per-content-type setting. The three choices are Small (88 dp grid cards / 84 dp shelf cards), Medium (110 dp / 105 dp), and Large (132 dp / 126 dp). The selected size is applied consistently across Library card grids and shelves for every library and supported card type. Focused tests, compilation, lint, and APK assembly pass; the user-confirmed physical-device validation is complete.
+
 
 `BookDetailInfo.userRating` represents only BookOrbit's authenticated per-user whole-star value (`1..5` or null), not decimal or aggregate metadata. Online detail loads are network-first so this user-specific value remains current; a version-matching `BookDetailCacheStore` entry is used when the request fails offline. The cache writes `userRating` and migrates only legacy `rating` values that are exact whole numbers from 1 through 5.
 
@@ -283,9 +288,11 @@ Rating changes post the requested integer or null through the repository, then f
 
 ### Book Detail reading-status implementation - 2026-07-23
 
-Book Detail exposes the complete BookOrbit status contract through its `Mark as...` menu: `Unread`, `Want to read`, `Reading`, `Rereading`, `On hold`, `Abandoned`, `Read`, and `Skimmed`. Selecting a non-`Unread` value sends `PATCH /api/v1/books/{bookId}/status` with the selected wire value, removes queued progress for that book, and reconciles the Room library catalog and browser snapshot caches. The coordinator updates the visible browser state from the same selection.
+Book Detail exposes the complete BookOrbit status contract through its `Mark as...` menu: `Unread`, `Want to read`, `Reading`, `Rereading`, `On hold`, `Abandoned`, `Read`, and `Skimmed`. Selecting a non-`Unread` value sends `PATCH /api/v1/books/{bookId}/status` with the selected wire value, removes queued progress for that book, and reconciles the Room library catalog and browser snapshot caches. The coordinator updates the visible browser state from the same selection. User-confirmed physical validation passes for the complete menu and server/local-cache reconciliation.
 
 `Unread` continues through the existing reset operation, preserving its progress-clearing and lifecycle-date reset behavior. Intermediate statuses preserve the existing progress fields. `Read` and `Skimmed` are treated as completed local state (`isRead = true` with a local completion timestamp); other selected statuses remain incomplete. The status write also invalidates the cached rich detail so a later detail load cannot retain stale status metadata.
+
+Current physical validation also covers the remaining reader/media/layout/accessibility/responsive/theme/resume/Preview/offline/edge-state matrix. Release-overlay presentation and Book Detail app-navigation physical validation remain intentionally deferred; direct OIDC/SSO and optional offline RAR/7z extraction remain deferred. The historical `v1.1.0` GitHub APK upload is complete; release-secret configuration remains pending.
 ### GitHub release update checking - 2026-07-23
 
-`AppGraph` wires the release checker into `AppCoordinator`. During bootstrap and Activity resume, it queries GitHub's public latest-release API and compares the returned semantic-version tag strictly against `BuildConfig.VERSION_NAME`; equal, older, malformed, or unavailable releases do not produce UI. Failures are caught as silent, non-blocking background conditions. A newer release is exposed to the coordinator with its tag, release notes, and GitHub release URL. The coordinator suppresses the same tag for the current activity/coordinator session after either user action, while a fresh session may check again. Parser/checker and coordinator coverage is included in the completed verification; physical confirmation of the startup/resume presentation remains pending.
+`AppGraph` wires the release checker into `AppCoordinator`. During bootstrap and Activity resume, it queries GitHub's public latest-release API and compares the returned semantic-version tag strictly against `BuildConfig.VERSION_NAME`; equal, older, malformed, or unavailable releases do not produce UI. Failures are caught as silent, non-blocking background conditions. A newer release is exposed to the coordinator with its tag, release notes, and GitHub release URL. The coordinator suppresses the same tag for the current activity/coordinator session after either user action, while a fresh session may check again. Parser/checker and coordinator coverage is included in the completed verification; physical confirmation of the startup/resume presentation remains intentionally deferred.

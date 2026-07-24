@@ -696,6 +696,10 @@ class ReadiumAudioPlaybackController internal constructor(
     private var openGeneration = 0L
     private var progressJob: Job? = null
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
+    private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
+    private var serverUrlProvider: (suspend () -> String?)? = null
+    private var playbackStateListener: Player.Listener? = null
+    private var lastRecordedIsPlaying: Boolean? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
     private var streamingHeadersProvider: suspend (AbsoluteUrl) -> Map<String, String> = {
         emptyMap()
@@ -710,6 +714,14 @@ class ReadiumAudioPlaybackController internal constructor(
         listener: (BookSummary, Long, Float?, ReaderLaunchMode) -> Unit
     ) {
         progressListener = listener
+    }
+
+    internal fun setSessionHistoryStore(
+        store: AudiobookSessionHistoryStore,
+        serverUrlProvider: suspend () -> String?
+    ) {
+        sessionHistoryStore = store
+        this.serverUrlProvider = serverUrlProvider
     }
 
     fun setCoverLoader(loader: suspend (BookSummary) -> ByteArray?) {
@@ -780,7 +792,7 @@ class ReadiumAudioPlaybackController internal constructor(
                 withContext(Dispatchers.Main.immediate) {
                     applyPersistedAudioPlaybackSpeed(matchingSession.player)
                     if (playWhenReady) matchingSession.player.play()
-                    startProgressUpdates(matchingSession)
+                    startProgressUpdates(matchingSession, recordInitialPlay = playWhenReady)
                     mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
                     mutablePreparingSession.value = null
                 }
@@ -849,7 +861,7 @@ class ReadiumAudioPlaybackController internal constructor(
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
                             val session = serviceBinder.openSession(book, launchMode, opened.engine)
                             if (playWhenReady) opened.engine.player.play()
-                            startProgressUpdates(session)
+                            startProgressUpdates(session, recordInitialPlay = playWhenReady)
                             mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
                             mutablePreparingSession.value = null
                             ReadiumAudioOpenResult.Opened(opened.engine)
@@ -900,6 +912,32 @@ class ReadiumAudioPlaybackController internal constructor(
         }
     }
 
+    internal fun openFromSessionHistory(book: BookSummary, positionMs: Long) {
+        scope.launch {
+            val active = binder().session.value
+            if (
+                active != null &&
+                active.book.id == book.id &&
+                active.book.fileId == book.fileId &&
+                active.launchMode == ReaderLaunchMode.NORMAL
+            ) {
+                withContext(Dispatchers.Main.immediate) {
+                    active.player.seekTo(positionMs.coerceAtLeast(0L))
+                    active.player.play()
+                }
+                return@launch
+            }
+            open(
+                book = book,
+                file = book.localPath?.let(::File)?.takeIf { it.isFile },
+                streamUrl = book.streamUrl,
+                initialPositionMs = positionMs,
+                launchMode = ReaderLaunchMode.NORMAL,
+                playWhenReady = true
+            )
+        }
+    }
+
     internal fun setPlaybackSpeed(player: Player, speed: Float) {
         val normalized = normalizeAudioPlaybackSpeed(speed)
         player.setPlaybackSpeed(normalized)
@@ -941,12 +979,57 @@ class ReadiumAudioPlaybackController internal constructor(
             serviceBinder.session.value?.let(::publishProgress)
             progressJob?.cancel()
             progressJob = null
+            playbackStateListener?.let { listener ->
+                serviceBinder.session.value?.player?.removeListener(listener)
+            }
+            playbackStateListener = null
+            lastRecordedIsPlaying = null
             serviceBinder.stop()
         }
     }
 
-    private fun startProgressUpdates(session: ReadiumAudioPlaybackService.Session) {
+    private fun recordSessionEvent(
+        session: ReadiumAudioPlaybackService.Session,
+        isPlaying: Boolean
+    ) {
+        if (session.launchMode == ReaderLaunchMode.PREVIEW) return
+        val store = sessionHistoryStore ?: return
+        val serverUrlProvider = serverUrlProvider ?: return
+        val positionMs = session.player.currentPosition.coerceAtLeast(0L)
+        scope.launch(Dispatchers.IO) {
+            val serverUrl = serverUrlProvider()?.takeIf { it.isNotBlank() } ?: return@launch
+            runCatching {
+                store.record(
+                    serverUrl = serverUrl,
+                    book = session.book,
+                    type = if (isPlaying) {
+                        AudiobookSessionEventType.PLAY
+                    } else {
+                        AudiobookSessionEventType.PAUSE
+                    },
+                    positionMs = positionMs
+                )
+            }
+        }
+    }
+
+    private fun startProgressUpdates(
+        session: ReadiumAudioPlaybackService.Session,
+        recordInitialPlay: Boolean
+    ) {
         progressJob?.cancel()
+        playbackStateListener?.let { listener -> session.player.removeListener(listener) }
+        lastRecordedIsPlaying = session.player.isPlaying
+        playbackStateListener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (lastRecordedIsPlaying == isPlaying) return
+                lastRecordedIsPlaying = isPlaying
+                recordSessionEvent(session, isPlaying)
+            }
+        }.also(session.player::addListener)
+        if (recordInitialPlay && session.player.isPlaying) {
+            recordSessionEvent(session, isPlaying = true)
+        }
         progressJob = scope.launch {
             while (isActive) {
                 publishProgress(session)

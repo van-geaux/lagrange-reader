@@ -5,18 +5,19 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="@color/launcher_foreground"
-        android:pathData="M28,28h24c6.6,0 12,5.4 12,12v32c-2.4,-2 -5.4,-3 -8.6,-3H28z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M18,61C18,40 34,25 54,23C72,22 87,31 91,46C95,62 85,78 67,85C47,92 27,84 19,69C17,66 17,63 18,61"
+        android:strokeColor="@color/launcher_orbit_accent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="5.5" />
     <path
         android:fillColor="@color/launcher_foreground"
-        android:pathData="M80,28H56c-6.6,0 -12,5.4 -12,12v32c2.4,-2 5.4,-3 8.6,-3H80z" />
+        android:pathData="M25,39C36,37 46,39 53,45L53,78C45,73 36,71 25,73Z" />
     <path
-        android:fillColor="@color/launcher_background"
-        android:pathData="M52,36h4v34h-4z" />
-    <path
-        android:fillColor="@color/launcher_orbit_accent"
-        android:pathData="M76,26m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0" />
+        android:fillColor="@color/launcher_foreground"
+        android:pathData="M55,45C62,39 72,37 83,39L83,73C72,71 63,73 55,78Z" />
     <path
         android:fillColor="@color/launcher_orbit_accent"
-        android:pathData="M70,24c-9,-8 -22,-11 -33,-7c-7.8,2.9 -14.4,9 -18.1,16.6l4.1,2c3.3,-6.5 8.9,-11.7 15.7,-14.3c9.4,-3.5 20.5,-0.9 28.2,5.8z" />
+        android:pathData="M82,54m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0" />
 </vector>

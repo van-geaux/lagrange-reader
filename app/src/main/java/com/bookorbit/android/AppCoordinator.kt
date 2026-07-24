@@ -55,6 +55,18 @@ class AppCoordinator(
         repository.loadBookDetail(book)
     }
 
+    internal suspend fun loadAudiobookSessionHistory(book: BookSummary): List<AudiobookSessionEvent> {
+        val serverUrl = repository.getServerUrl().orEmpty()
+        return sessionHistoryStore?.read(serverUrl, book).orEmpty()
+    }
+
+    internal fun clearAudiobookSessionHistory(book: BookSummary) {
+        scope.launch {
+            val serverUrl = repository.getServerUrl().orEmpty()
+            sessionHistoryStore?.clearBook(serverUrl, book)
+        }
+    }
+
     suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo? {
         return try {
             repository.setBookUserRating(book, rating)
@@ -128,11 +140,25 @@ class AppCoordinator(
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
+    private var audioSessionHistoryOpener: ((BookSummary, Long) -> Unit)? = null
     private var releaseCheckInFlight = false
     private var dismissedReleaseTag: String? = null
+    private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
 
     fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
         audioPlaybackOpener = opener
+    }
+
+    internal fun setSessionHistoryStore(store: AudiobookSessionHistoryStore) {
+        sessionHistoryStore = store
+    }
+
+    fun setAudioSessionHistoryOpener(opener: (BookSummary, Long) -> Unit) {
+        audioSessionHistoryOpener = opener
+    }
+
+    fun openAudiobookSessionHistory(book: BookSummary, positionMs: Long) {
+        audioSessionHistoryOpener?.invoke(book, positionMs)
     }
 
     fun checkForAppUpdate() {
@@ -257,8 +283,10 @@ class AppCoordinator(
 
     fun changeServer(serverUrl: String) {
         scope.launch {
+            val oldServerUrl = repository.getServerUrl().orEmpty()
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
+            sessionHistoryStore?.clearServer(oldServerUrl)
             repository.clearServer()
             serverSetupFailure(serverUrl, repository.checkServer(serverUrl))?.let { failure ->
                 _screen.value = failure
@@ -274,7 +302,9 @@ class AppCoordinator(
 
     fun clearServer() {
         scope.launch {
+            val oldServerUrl = repository.getServerUrl().orEmpty()
             resetTransientState(clearBrowserState = true)
+            sessionHistoryStore?.clearServer(oldServerUrl)
             repository.clearServer()
             _screen.value = AppScreen.ServerSetup()
         }
@@ -707,18 +737,25 @@ class AppCoordinator(
                 _screen.value = AppScreen.ReaderLoading(book, launchMode)
             }
             runCatching {
+                val detailForOpen: BookDetailInfo? = when {
+                    launchMode == ReaderLaunchMode.NORMAL && lastBrowserState?.isOfflineSnapshot != true -> {
+                        repository.syncPendingProgress()
+                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    }
+                    book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty() -> {
+                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    }
+                    else -> null
+                }
                 val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
-                    runCatching { repository.loadBookDetail(book) }
-                        .getOrNull()
-                        ?.let { detail ->
-                            val chapters = detail.audioChapters.ifEmpty {
-                                detail.book.audioChapters
-                            }
-                            book.copy(audioChapters = chapters)
+                    detailForOpen?.let { detail ->
+                        val chapters = detail.audioChapters.ifEmpty {
+                            detail.book.audioChapters
                         }
-                        ?: book
+                        book.copy(audioChapters = chapters)
+                    } ?: book
                 } else {
-                    book
+                    detailForOpen?.book ?: book
                 }
                 val preparedState = repository.buildReaderState(
                     book = readerBook,

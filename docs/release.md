@@ -34,7 +34,7 @@ If a rename is required later:
 
 ### Current version marker
 
-- current release: `versionName 1.1.0`, `versionCode 11`
+- current release: `versionName 1.1.0`, `versionCode 11`; the `1.2.0` release note is currently a draft
 - update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
 - the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
 - use the `1.x` minor-release line for additive feature releases and increment `versionCode` for every distributed build
@@ -51,9 +51,9 @@ If a rename is required later:
 
 - Debug and release compilation both pass locally.
 - Release APKs are published as GitHub Release assets rather than committed to the repository.
-- The v1.1.0 APK from the historical release commit must be uploaded to the v1.1.0 GitHub Release separately; this repository migration does not publish it automatically.
+- The historical `v1.1.0` APK is already uploaded to the `v1.1.0` GitHub Release.
 - Future `v*` tag pushes use `.github/workflows/android-release.yml` to build a signed APK and create a GitHub Release asset.
-- Configure these repository secrets before using the workflow: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
+- The repository secrets required by the workflow are configured: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
 - No release keystore is committed in this repository.
 - The tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses.
 - The repository no longer stores release APK binaries after this migration.

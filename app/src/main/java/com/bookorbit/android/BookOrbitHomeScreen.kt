@@ -1,8 +1,10 @@
 package com.bookorbit.android
 
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.text.Html
 import android.util.LruCache
 import androidx.activity.compose.BackHandler
@@ -57,6 +59,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalLibrary
@@ -141,24 +144,46 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private enum class OptionsDialog {
     THEME,
     OPENING_SCREEN,
+    LIBRARY_CARD_SIZE,
     CELLULAR_DOWNLOADS,
     BACKGROUND_REFRESH,
     CLEAR_CACHE
 }
-private val BOOK_CARD_MIN_SIZE = 88.dp
 private val CATALOG_GRID_PADDING = 16.dp
 private val CATALOG_JUMP_RAIL_END_PADDING = 32.dp
+
+internal fun libraryCardGridMinSize(size: LibraryCardSize): androidx.compose.ui.unit.Dp = when (size) {
+        LibraryCardSize.SMALL -> 88.dp
+        LibraryCardSize.MEDIUM -> 110.dp
+        LibraryCardSize.LARGE -> 132.dp
+    }
+
+internal fun libraryShelfCardWidth(size: LibraryCardSize): androidx.compose.ui.unit.Dp = when (size) {
+        LibraryCardSize.SMALL -> 84.dp
+        LibraryCardSize.MEDIUM -> 105.dp
+        LibraryCardSize.LARGE -> 126.dp
+    }
+
+private val LibraryCardSize.gridMinSize: androidx.compose.ui.unit.Dp
+    get() = libraryCardGridMinSize(this)
+
+private val LibraryCardSize.shelfWidth: androidx.compose.ui.unit.Dp
+    get() = libraryShelfCardWidth(this)
 
 internal fun catalogGridEndPadding(hasJumpRail: Boolean) =
     if (hasJumpRail) CATALOG_JUMP_RAIL_END_PADDING else CATALOG_GRID_PADDING
 
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
+internal val LocalLibraryCardSize = staticCompositionLocalOf { LibraryCardSize.SMALL }
 
 private fun DefaultOpeningScreen.toBrowserDestination(): BrowserDestination = when (this) {
     DefaultOpeningScreen.HOME -> BrowserDestination.HOME
@@ -430,6 +455,9 @@ internal fun NativeLibraryBrowserScreen(
     libraryBooksPageLoader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
+    onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
+    onClearSessionHistory: (BookSummary) -> Unit = {},
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
@@ -482,6 +510,7 @@ internal fun NativeLibraryBrowserScreen(
     var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
     var changeServerError by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingServerChange by rememberSaveable { mutableStateOf<String?>(null) }
+    val browserScope = rememberCoroutineScope()
 
     LaunchedEffect(bookDetailRequest?.sequence) {
         val request = bookDetailRequest ?: return@LaunchedEffect
@@ -994,6 +1023,9 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
+                    sessionHistoryLoader = sessionHistoryLoader,
+                    onSessionHistoryEntryClick = onSessionHistoryEntryClick,
+                    onClearSessionHistory = onClearSessionHistory,
                     onBookUserRatingChange = onBookUserRatingChange,
                     seriesDetailLoader = seriesDetailLoader,
                     onRead = onBookOpen,
@@ -1007,6 +1039,18 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
+                    },
+                    onAuthorSelected = { authorName ->
+                        browserScope.launch {
+                            authorsCatalogLoader(authorName, 0).items
+                                .firstOrNull { it.name.trim().equals(authorName.trim(), ignoreCase = true) }
+                                ?.let { author ->
+                                    destination = BrowserDestination.AUTHORS
+                                    detailReturnDestination = BrowserDestination.AUTHORS
+                                    selectedBook = null
+                                    selectedAuthor = author
+                                }
+                        }
                     },
                     onBookSelected = { selectedBook = it },
                     onGenreSelected = { genre ->
@@ -1485,7 +1529,7 @@ private fun SeriesCatalogScreen(
         val hasJumpRail = jumpTargets.isNotEmpty()
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = CATALOG_GRID_PADDING,
@@ -1784,7 +1828,7 @@ private fun AuthorsCatalogScreen(
         val hasJumpRail = jumpTargets.isNotEmpty()
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = CATALOG_GRID_PADDING,
@@ -1870,7 +1914,7 @@ private fun AuthorDetails(
         value = booksLoader(author.id, 0)
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+        columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -2136,6 +2180,15 @@ internal fun OptionsScreen(
                 }
             )
         }
+        item(key = "library-card-size") {
+            AppPreferenceSelectionRow(
+                title = "Library card size",
+                value = preferences.libraryCardSize.displayName,
+                summary = "Apply one card size across libraries and content types",
+                testTag = "options-library-card-size",
+                onClick = { openDialog = OptionsDialog.LIBRARY_CARD_SIZE }
+            )
+        }
         item(key = "reading-configuration") {
             LibraryReaderConfiguration(
                 libraries = libraries,
@@ -2249,6 +2302,17 @@ internal fun OptionsScreen(
             label = DefaultOpeningScreen::displayName,
             onSelect = {
                 onPreferencesChange(preferences.copy(defaultOpeningScreen = it))
+                openDialog = null
+            },
+            onDismiss = { openDialog = null }
+        )
+        OptionsDialog.LIBRARY_CARD_SIZE -> AppPreferenceChoiceDialog(
+            title = "Library card size",
+            choices = LibraryCardSize.values().toList(),
+            selected = preferences.libraryCardSize,
+            label = LibraryCardSize::displayName,
+            onSelect = {
+                onPreferencesChange(preferences.copy(libraryCardSize = it))
                 openDialog = null
             },
             onDismiss = { openDialog = null }
@@ -2767,25 +2831,81 @@ private fun AboutScreen(
     state: BrowserState,
     modifier: Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+    val context = LocalContext.current
+    val openLink: (String) -> Unit = { url ->
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        OrbitEyebrow("About")
-        Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "A native Android reader for books hosted on BookOrbit.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
-        Text("Connected server", style = MaterialTheme.typography.labelMedium)
-        Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
-        Text(
-            "About details and acknowledgements will be expanded here.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall
-        )
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OrbitEyebrow("About")
+                Text("Lagrange Reader", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "An independent Android app for reading and listening to books hosted on BookOrbit.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. BookOrbit supplies the authenticated server and library data; Lagrange provides the Android interface, local state, reading, listening, and offline behavior."
+                )
+            }
+        }
+        item {
+            HorizontalDivider()
+            Column(
+                modifier = Modifier.padding(top = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("Build information", style = MaterialTheme.typography.titleMedium)
+                Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                Text("Connected server", style = MaterialTheme.typography.labelMedium)
+                Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("Not an official BookOrbit application", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Lagrange Reader is an independent community project. It is not affiliated with, endorsed by, or sponsored by the BookOrbit maintainers. BookOrbit remains the source of the server and library experience used by this app."
+                    )
+                }
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Acknowledgements", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Thanks to the BookOrbit maintainers and contributors, the Readium Foundation, the Android and Kotlin open-source communities, and everyone who tests Lagrange Reader and reports issues."
+                )
+                Text(
+                    "The app uses BookOrbit, Readium, AndroidX, Jetpack Compose, Kotlin, Media3, OkHttp, Room, and other open-source libraries. Their respective licenses and notices remain authoritative."
+                )
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Project links", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader") }) {
+                    Text("Lagrange Reader on GitHub")
+                }
+                TextButton(onClick = { openLink("https://github.com/BookOrbit") }) {
+                    Text("BookOrbit on GitHub")
+                }
+                TextButton(onClick = { openLink("https://readium.org/") }) {
+                    Text("Readium Foundation")
+                }
+                TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader/blob/main/LICENSE") }) {
+                    Text("License and notices")
+                }
+            }
+        }
     }
 }
 
@@ -3078,7 +3198,7 @@ private fun ShelfBookCard(
     val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null
     Column(
         modifier = Modifier
-            .width(84.dp)
+            .width(LocalLibraryCardSize.current.shelfWidth)
             .testTag("book_card_${book.id}")
             .then(modifier)
             .combinedClickable(
@@ -3682,7 +3802,7 @@ private fun LibraryBooks(
         ) {
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+            columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("library_books_grid"),
@@ -4157,6 +4277,9 @@ private fun BookDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent>,
+    onSessionHistoryEntryClick: (BookSummary, Long) -> Unit,
+    onClearSessionHistory: (BookSummary) -> Unit,
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onRead: (BookSummary) -> Unit,
@@ -4168,6 +4291,7 @@ private fun BookDetails(
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onAuthorSelected: (String) -> Unit,
     onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
@@ -4228,6 +4352,23 @@ private fun BookDetails(
         downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis,
         audioChapters = detail.audioChapters.ifEmpty { currentBook.audioChapters }
     )
+    val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
+    var showSessionHistory by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    var sessionHistory by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf<List<AudiobookSessionEvent>>(emptyList())
+    }
+    var showClearSessionHistory by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(state.serverUrl, displayBook.id, displayBook.fileId, displayBook.mediaKind) {
+        sessionHistory = if (displayBook.mediaKind == MediaKind.AUDIO) {
+            sessionHistoryLoader(displayBook)
+        } else {
+            emptyList()
+        }
+    }
     val fileId = displayBook.fileId
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
     val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
@@ -4278,6 +4419,7 @@ private fun BookDetails(
         if (detail.fileCount > 1) add("Files" to detail.fileCount.toString())
         if (displayBook.isDownloaded) add("Offline" to "Available")
     }
+    val readingProgressLabel = bookDetailReadingProgressLabel(displayBook)
 
     if (showCoverViewer) {
         FullScreenCoverViewer(
@@ -4307,6 +4449,17 @@ private fun BookDetails(
                             }
                     ) {
                         BookCover(displayBook, coverLoader)
+                    }
+                    readingProgressLabel?.let { label ->
+                        Text(
+                            text = label,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("book-detail-reading-progress"),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                     BookUserRatingStars(
                         rating = displayedUserRating,
@@ -4364,7 +4517,13 @@ private fun BookDetails(
                         Text(it, style = MaterialTheme.typography.titleMedium)
                     }
                     displayBook.author?.let {
-                        Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "by $it",
+                            modifier = Modifier
+                                .clickable { onAuthorSelected(it) }
+                                .semantics { contentDescription = "Open author $it" },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     detail.narrators.takeIf { it.isNotEmpty() }?.let {
                         Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
@@ -4386,7 +4545,6 @@ private fun BookDetails(
             }
         }
         item {
-            val readingProgressLabel = bookDetailReadingProgressLabel(displayBook)
             val actionState = bookDetailActionState(
                 isDownloaded = displayBook.isDownloaded,
                 isDownloading = isDownloading,
@@ -4402,27 +4560,16 @@ private fun BookDetails(
             val labelStyle = MaterialTheme.typography.labelLarge
             fun actionWidth(label: String, minimumDp: Float): Float = with(density) {
                 val textWidth = textMeasurer.measure(label, style = labelStyle, maxLines = 1).size.width.toDp()
-                maxOf(minimumDp.dp, 20.dp + 24.dp + 6.dp + textWidth).value
+                maxOf(minimumDp.dp, 8.dp + 24.dp + 2.dp + textWidth).value
             }
             val primaryActionLabel = bookDetailPrimaryActionLabel(displayBook)
-            val readWidth = actionWidth(primaryActionLabel, 82f)
-            val previewWidth = actionWidth("Preview", 94f)
-            val markWidth = actionWidth(statusActionLabel, 118f)
+            val readWidth = actionWidth(primaryActionLabel, 72f)
+            val previewWidth = actionWidth("Preview", 84f)
+            val markWidth = actionWidth(statusActionLabel, 100f)
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                readingProgressLabel?.let { label ->
-                    Text(
-                        text = label,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("book-detail-reading-progress"),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -4435,24 +4582,37 @@ private fun BookDetails(
                         previewWidth = previewWidth,
                         markWidth = markWidth,
                         hasInlineTransfer = actionState.inlineTransfer != null,
-                        hasFixedOverflow = actionState.hasFixedOverflow
+                        hasFixedOverflow = actionState.hasFixedOverflow,
+                        hasSessionHistory = showSessionHistoryButton,
+                        sessionHistoryWidth = 32f
                     )
+                    val transferOverflowLabel = actionState.overflowTransferLabel ?: actionState.inlineTransfer
+                        ?.contentDescription
+                        ?.takeIf { !layout.showInlineTransferAction }
                     Row(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val readModifier = if (layout.compactRequiredActions) {
-                            Modifier.weight(1f).height(46.dp)
-                        } else {
-                            Modifier.width(readWidth.dp).height(46.dp)
-                        }
-                        val previewModifier = if (layout.compactRequiredActions) {
-                            Modifier.weight(1f).height(46.dp)
-                        } else {
-                            Modifier.width(previewWidth.dp).height(46.dp)
-                        }
-                        DetailActionTile(
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (showSessionHistoryButton) {
+                                DetailActionTile(
+                                    label = "Open audiobook session history",
+                                    icon = Icons.Default.History,
+                                    modifier = Modifier
+                                        .width(32.dp)
+                                        .height(40.dp)
+                                        .testTag("book-detail-session-history"),
+                                    applyDefaultSize = false,
+                                    onClick = { showSessionHistory = true }
+                                )
+                            }
+                            val readModifier = Modifier.width(readWidth.dp).height(46.dp)
+                            val previewModifier = Modifier.width(previewWidth.dp).height(46.dp)
+                            DetailActionTile(
                             label = primaryActionLabel,
                             icon = Icons.Default.PlayArrow,
                             showLabel = true,
@@ -4461,8 +4621,8 @@ private fun BookDetails(
                             modifier = readModifier,
                             applyDefaultSize = false,
                             onClick = { onRead(displayBook) }
-                        )
-                        DetailActionTile(
+                            )
+                            DetailActionTile(
                             label = "Preview",
                             icon = Icons.Default.Visibility,
                             showLabel = true,
@@ -4470,9 +4630,11 @@ private fun BookDetails(
                             modifier = previewModifier,
                             applyDefaultSize = false,
                             onClick = { onPreview(displayBook) }
-                        )
-                        actionState.inlineTransfer?.let { transfer ->
-                            DetailActionTile(
+                            )
+                            actionState.inlineTransfer
+                                ?.takeIf { layout.showInlineTransferAction }
+                                ?.let { transfer ->
+                                DetailActionTile(
                                 label = transfer.contentDescription,
                                 icon = if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
                                     Icons.Default.Close
@@ -4490,11 +4652,11 @@ private fun BookDetails(
                                         onDownload(displayBook)
                                     }
                                 }
-                            )
-                        }
-                        if (layout.showInlineStatusAction) {
-                            Box {
-                                DetailActionTile(
+                                )
+                            }
+                            if (layout.showInlineStatusAction) {
+                                Box {
+                                    DetailActionTile(
                                     label = statusActionLabel,
                                     icon = Icons.Default.CheckCircle,
                                     showLabel = true,
@@ -4505,8 +4667,8 @@ private fun BookDetails(
                                         .testTag("book-detail-status-inline"),
                                     applyDefaultSize = false,
                                     onClick = { showStatusMenu = true }
-                                )
-                                BookDetailReadingStatusMenu(
+                                    )
+                                    BookDetailReadingStatusMenu(
                                     expanded = showStatusMenu,
                                     currentStatus = displayBook.readStatus,
                                     onDismissRequest = { showStatusMenu = false },
@@ -4514,18 +4676,17 @@ private fun BookDetails(
                                         showStatusMenu = false
                                         onMarkAsStatus(displayBook, status)
                                     }
-                                )
+                                    )
+                                }
                             }
                         }
                         if (layout.showMore) {
-                            if (layout.pinMoreToEnd) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                             Box {
                                 DetailActionTile(
                                     label = "More book actions",
                                     icon = Icons.Default.MoreVert,
-                                    modifier = Modifier.size(46.dp).testTag("book-detail-more"),
+                                    modifier = Modifier.size(40.dp).testTag("book-detail-more"),
                                     applyDefaultSize = false,
                                     onClick = { showActionMenu = true }
                                 )
@@ -4533,7 +4694,7 @@ private fun BookDetails(
                                     expanded = showActionMenu,
                                     onDismissRequest = { showActionMenu = false }
                                 ) {
-                                    actionState.overflowTransferLabel?.let { transferLabel ->
+                                    transferOverflowLabel?.let { transferLabel ->
                                         DropdownMenuItem(
                                             text = { Text(transferLabel) },
                                             leadingIcon = {
@@ -4692,7 +4853,120 @@ private fun BookDetails(
             }
         }
     }
+    if (showSessionHistory) {
+        Dialog(
+            onDismissRequest = { showSessionHistory = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 560.dp)
+                    .heightIn(max = 680.dp)
+            ) {
+                AudiobookSessionHistory(
+                    bookTitle = displayBook.title,
+                    events = sessionHistory,
+                    onEventClick = { event ->
+                        showSessionHistory = false
+                        onSessionHistoryEntryClick(displayBook, event.positionMs)
+                    },
+                    onClearClick = { showClearSessionHistory = true },
+                    onCloseClick = { showSessionHistory = false }
+                )
+            }
+        }
+    }
+    if (showClearSessionHistory) {
+        AlertDialog(
+            onDismissRequest = { showClearSessionHistory = false },
+            title = { Text("Clear session history?") },
+            text = { Text("This removes the local audiobook play and pause history for this book.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearSessionHistory = false
+                        sessionHistory = emptyList()
+                        onClearSessionHistory(displayBook)
+                    }
+                ) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearSessionHistory = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
+
+@Composable
+private fun AudiobookSessionHistory(
+    bookTitle: String,
+    events: List<AudiobookSessionEvent>,
+    onEventClick: (AudiobookSessionEvent) -> Unit,
+    onClearClick: () -> Unit,
+    onCloseClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+            .testTag("audiobook-session-history"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Session history", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    bookTitle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onClearClick) {
+                Text("Clear")
+            }
+            IconButton(
+                onClick = onCloseClick,
+                modifier = Modifier.testTag("audiobook-session-history-close")
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close session history")
+            }
+        }
+        events.forEachIndexed { index, event ->
+            Card(
+                onClick = { onEventClick(event) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("audiobook-session-history-event-$index")
+            ) {
+                ListItem(
+                    headlineContent = {
+                        Text(if (event.type == AudiobookSessionEventType.PLAY) "Played" else "Paused")
+                    },
+                    supportingContent = {
+                        Text(
+                            "${formatSessionHistoryTimestamp(event.occurredAtMillis)} · " +
+                                formatDetailDuration(event.positionMs / 1000L)
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun formatSessionHistoryTimestamp(timestampMillis: Long): String =
+    SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(Date(timestampMillis))
 
 @Composable
 private fun BookUserRatingStars(
@@ -4915,6 +5189,10 @@ private fun BookDetailReadingStatusMenu(
 
 internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String = "Mark as..."
 
+internal fun showAudiobookSessionHistoryButton(book: BookSummary): Boolean =
+    book.mediaKind == MediaKind.AUDIO &&
+        (book.readStatus == BookReadStatus.READING || book.readStatus == BookReadStatus.REREADING)
+
 internal fun bookDetailPrimaryActionLabel(book: BookSummary): String =
     if (book.mediaKind == MediaKind.AUDIO) "Play" else "Read"
 
@@ -4979,9 +5257,9 @@ internal fun bookDetailActionState(
 
 internal data class BookDetailActionRowLayout(
     val showInlineStatusAction: Boolean,
+    val showInlineTransferAction: Boolean,
     val showMore: Boolean,
-    val compactRequiredActions: Boolean,
-    val pinMoreToEnd: Boolean
+    val moreSlotWidth: Float
 )
 
 internal fun bookDetailActionRowLayout(
@@ -4991,40 +5269,46 @@ internal fun bookDetailActionRowLayout(
     markWidth: Float,
     hasInlineTransfer: Boolean,
     hasFixedOverflow: Boolean,
-    iconWidth: Float = 46f,
-    spacing: Float = 8f
+    hasSessionHistory: Boolean = false,
+    sessionHistoryWidth: Float = 32f,
+    iconWidth: Float = 40f,
+    spacing: Float = 2f
 ): BookDetailActionRowLayout {
-    val requiredWidths = buildList {
+    val baseRequiredWidths = buildList {
+        if (hasSessionHistory) add(sessionHistoryWidth)
         add(readWidth)
         add(previewWidth)
-        if (hasInlineTransfer) add(iconWidth)
     }
     fun occupied(widths: List<Float>): Float =
         widths.sum() + spacing * (widths.size - 1).coerceAtLeast(0)
 
     val withInlineStatus = buildList {
-        addAll(requiredWidths)
+        addAll(baseRequiredWidths)
+        if (hasInlineTransfer) add(iconWidth)
         add(markWidth)
         if (hasFixedOverflow) add(iconWidth)
     }
     val showInlineStatus = occupied(withInlineStatus) <= availableWidth
-    val showMore = hasFixedOverflow || !showInlineStatus
-    val visibleRequired = buildList {
-        addAll(requiredWidths)
-        if (showMore) add(iconWidth)
+    val showMoreAfterStatus = hasFixedOverflow || !showInlineStatus
+    val withInlineTransfer = buildList {
+        addAll(baseRequiredWidths)
+        if (hasInlineTransfer) add(iconWidth)
+        if (showMoreAfterStatus) add(iconWidth)
     }
+    val showInlineTransfer = !hasInlineTransfer || occupied(withInlineTransfer) <= availableWidth
+    val showMore = showMoreAfterStatus || (hasInlineTransfer && !showInlineTransfer)
     return BookDetailActionRowLayout(
         showInlineStatusAction = showInlineStatus,
+        showInlineTransferAction = showInlineTransfer,
         showMore = showMore,
-        compactRequiredActions = occupied(visibleRequired) > availableWidth,
-        pinMoreToEnd = showMore && occupied(visibleRequired) + spacing <= availableWidth
+        moreSlotWidth = if (showMore) iconWidth else 0f
     )
 }
 
 @Composable
 private fun DetailActionTile(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     onClick: () -> Unit,
     enabled: Boolean = true,
     emphasized: Boolean = false,
@@ -5052,11 +5336,16 @@ private fun DetailActionTile(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = if (showLabel) 10.dp else 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                .padding(horizontal = if (showLabel) 4.dp else 0.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(
+                if (showLabel) 2.dp else 0.dp,
+                Alignment.CenterHorizontally
+            ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+            icon?.let { imageVector ->
+                Icon(imageVector, contentDescription = label, modifier = Modifier.size(24.dp))
+            }
             if (showLabel) {
                 Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
             }
@@ -5380,7 +5669,7 @@ private fun SeriesDetails(
     val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = BOOK_CARD_MIN_SIZE),
+        columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

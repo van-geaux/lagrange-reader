@@ -247,7 +247,10 @@ private fun BookOrbitDestination(
             onChangeServer = coordinator::clearServer,
             onSubmit = coordinator::submitLogin
         )
-        is AppScreen.Browser -> NativeLibraryBrowserScreen(
+        is AppScreen.Browser -> CompositionLocalProvider(
+            LocalLibraryCardSize provides appPreferences.libraryCardSize
+        ) {
+            NativeLibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::loadBrowser,
             onSignIn = coordinator::beginSignIn,
@@ -259,6 +262,9 @@ private fun BookOrbitDestination(
             libraryBooksPageLoader = coordinator::loadLibraryBooksPage,
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
+            sessionHistoryLoader = coordinator::loadAudiobookSessionHistory,
+            onSessionHistoryEntryClick = coordinator::openAudiobookSessionHistory,
+            onClearSessionHistory = coordinator::clearAudiobookSessionHistory,
             onBookUserRatingChange = coordinator::setBookUserRating,
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
@@ -294,7 +300,8 @@ private fun BookOrbitDestination(
                     )
                 }
             }
-        )
+            )
+        }
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,
             launchMode = screen.launchMode,

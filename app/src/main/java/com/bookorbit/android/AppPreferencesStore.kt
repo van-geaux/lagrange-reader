@@ -34,6 +34,12 @@ enum class SeriesGroupingMode {
     FORMAT
 }
 
+enum class LibraryCardSize(val displayName: String) {
+    SMALL("Small"),
+    MEDIUM("Medium"),
+    LARGE("Large")
+}
+
 enum class LockedOrientation {
     PORTRAIT,
     LANDSCAPE
@@ -50,6 +56,7 @@ data class AppPreferences(
         BackgroundRefreshNetworkPolicy.WIFI_ONLY,
     val confirmDeleteLocalCopy: Boolean = true,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
+    val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
     val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap()
 )
 
@@ -78,6 +85,9 @@ internal class AppPreferencesStore(context: Context) {
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         seriesGroupingMode = seriesGroupingModeFromStorage(
             preferences.getString(SERIES_GROUPING_MODE_KEY, null)
+        ),
+        libraryCardSize = libraryCardSizeFromStorage(
+            preferences.getString(LIBRARY_CARD_SIZE_KEY, null)
         ),
         libraryReaderPreferences = libraryReaderPreferencesFromStorage(
             preferences.getString(LIBRARY_READER_PREFERENCES_KEY, null)
@@ -111,6 +121,10 @@ internal class AppPreferencesStore(context: Context) {
                 seriesGroupingModeStorageValue(value.seriesGroupingMode)
             )
             .putString(
+                LIBRARY_CARD_SIZE_KEY,
+                libraryCardSizeStorageValue(value.libraryCardSize)
+            )
+            .putString(
                 LIBRARY_READER_PREFERENCES_KEY,
                 libraryReaderPreferencesStorageValue(value.libraryReaderPreferences)
             )
@@ -137,6 +151,7 @@ internal class AppPreferencesStore(context: Context) {
         const val BACKGROUND_REFRESH_NETWORK_POLICY_KEY = "background_refresh_network_policy"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
+        const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
     }
@@ -211,4 +226,14 @@ internal fun seriesGroupingModeFromStorage(value: String?): SeriesGroupingMode =
     "none" -> SeriesGroupingMode.NONE
     "format" -> SeriesGroupingMode.FORMAT
     else -> SeriesGroupingMode.LIBRARY
+}
+
+internal fun libraryCardSizeStorageValue(value: LibraryCardSize): String = value.name.lowercase()
+
+internal fun libraryCardSizeFromStorage(value: String?): LibraryCardSize = when (
+    value?.trim()?.lowercase()
+) {
+    "medium" -> LibraryCardSize.MEDIUM
+    "large" -> LibraryCardSize.LARGE
+    else -> LibraryCardSize.SMALL
 }

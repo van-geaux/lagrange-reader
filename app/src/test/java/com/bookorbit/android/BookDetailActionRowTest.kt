@@ -58,7 +58,6 @@ class BookDetailActionRowTest {
 
         assertTrue(layout.showInlineStatusAction)
         assertFalse(layout.showMore)
-        assertFalse(layout.compactRequiredActions)
     }
 
     @Test
@@ -71,12 +70,11 @@ class BookDetailActionRowTest {
 
         assertFalse(layout.showInlineStatusAction)
         assertTrue(layout.showMore)
-        assertFalse(layout.compactRequiredActions)
-        assertTrue(layout.pinMoreToEnd)
+        assertTrue(layout.showInlineTransferAction)
     }
 
     @Test
-    fun extremelyNarrowRowCompactsOnlyRequiredVisibleActions() {
+    fun extremelyNarrowRowMovesOptionalTransferIntoMoreWithoutStretchingRequiredActions() {
         val layout = layout(
             availableWidth = 260f,
             hasInlineTransfer = true,
@@ -85,8 +83,7 @@ class BookDetailActionRowTest {
 
         assertFalse(layout.showInlineStatusAction)
         assertTrue(layout.showMore)
-        assertTrue(layout.compactRequiredActions)
-        assertFalse(layout.pinMoreToEnd)
+        assertFalse(layout.showInlineTransferAction)
     }
 
     @Test
@@ -102,7 +99,6 @@ class BookDetailActionRowTest {
 
         assertFalse(layout.showInlineStatusAction)
         assertTrue(layout.showMore)
-        assertFalse(layout.compactRequiredActions)
     }
 
     @Test
@@ -114,7 +110,7 @@ class BookDetailActionRowTest {
         )
         assertTrue(wide.showInlineStatusAction)
         assertTrue(wide.showMore)
-        assertTrue(wide.pinMoreToEnd)
+        assertEquals(40f, wide.moreSlotWidth, 0.01f)
 
         val narrow = layout(
             availableWidth = 260f,
@@ -123,6 +119,21 @@ class BookDetailActionRowTest {
         )
         assertFalse(narrow.showInlineStatusAction)
         assertTrue(narrow.showMore)
+    }
+
+    @Test
+    fun rowWithoutMoreDoesNotReserveTrailingSlot() {
+        val layout = bookDetailActionRowLayout(
+            availableWidth = 400f,
+            readWidth = 72f,
+            previewWidth = 84f,
+            markWidth = 100f,
+            hasInlineTransfer = false,
+            hasFixedOverflow = false
+        )
+
+        assertFalse(layout.showMore)
+        assertEquals(0f, layout.moreSlotWidth, 0.01f)
     }
 
     private fun state(

@@ -475,6 +475,84 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `normal open refreshes the book before building reader state`() = runTest {
+        val staleBook = book.copy(
+            progressPositionMs = 0L,
+            progressPageIndex = 0,
+            progressPercent = 0f
+        )
+        val authoritativeBook = staleBook.copy(
+            progressPositionMs = 90_000L,
+            progressPageIndex = 9,
+            progressPercent = 50f,
+            progressLabel = "50%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook),
+            buildReaderResult = ReaderState(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(staleBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(authoritativeBook), repository.buildReaderBooks)
+        assertEquals(authoritativeBook, (coordinator.screen.value as AppScreen.Reader).readerState.book)
+    }
+
+    @Test
+    fun `offline normal open keeps cached progress without server refresh`() = runTest {
+        val staleBook = book.copy(progressPositionMs = 12_000L, progressPageIndex = 2, progressPercent = 25f)
+        val authoritativeBook = staleBook.copy(progressPositionMs = 90_000L, progressPageIndex = 9, progressPercent = 50f)
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(staleBook),
+                isOfflineSnapshot = true
+            )
+        )
+
+        coordinator.openBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(listOf(staleBook), repository.buildReaderBooks)
+    }
+
+    @Test
+    fun `preview open does not refresh server progress`() = runTest {
+        val staleBook = book.copy(progressPositionMs = 12_000L, progressPageIndex = 2, progressPercent = 25f)
+        val authoritativeBook = staleBook.copy(progressPositionMs = 90_000L, progressPageIndex = 9, progressPercent = 50f)
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.previewBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(listOf(staleBook), repository.buildReaderBooks)
+        assertEquals(ReaderLaunchMode.PREVIEW, (coordinator.screen.value as AppScreen.Reader).readerState.launchMode)
+    }
+
+    @Test
     fun `audio reader is not persisted until Readium playback succeeds`() = runTest {
         val audiobook = book.copy(
             title = "Sample Audiobook",
