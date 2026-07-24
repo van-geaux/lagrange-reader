@@ -27,6 +27,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.publication.services.coverFitting
+import org.readium.r2.shared.publication.services.positions
 
 @RunWith(AndroidJUnit4::class)
 class ReadiumEpubOpenInstrumentedTest {
@@ -81,6 +82,33 @@ class ReadiumEpubOpenInstrumentedTest {
             ).scroll
         )
         assertEquals(EpubReaderTheme.Dark.backgroundColor, preferences.backgroundColor?.int)
+    }
+
+    @Test
+    fun selectsARealReadiumPositionForNonzeroServerPercentage() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-server-percentage.epub")
+        writeMultiResourceEpub(epub)
+
+        val result = openReadiumEpub(context, epub)
+        assertTrue(result is ReadiumEpubOpenResult.Opened)
+        val publication = (result as ReadiumEpubOpenResult.Opened).publication
+        try {
+            val positions = publication.positions()
+            assertTrue("EPUB did not expose generated positions", positions.size > 1)
+            val selectedIndex = requireNotNull(
+                selectReadiumPositionIndex(
+                    targetProgression = 0.635,
+                    totalProgressions = positions.map { it.locations.totalProgression }
+                )
+            )
+            val selected = positions[selectedIndex]
+            assertTrue((selected.locations.progression ?: 0.0) > 0.0)
+            assertTrue((selected.locations.totalProgression ?: 0.0) <= 0.635)
+        } finally {
+            publication.close()
+            epub.delete()
+        }
     }
 
     @Test
@@ -155,6 +183,59 @@ class ReadiumEpubOpenInstrumentedTest {
             assertEquals(false, optionsVisible)
         }
         epub.delete()
+    }
+
+    private fun writeMultiResourceEpub(target: File) {
+        ZipOutputStream(target.outputStream().buffered()).use { zip ->
+            zip.writeStored("mimetype", "application/epub+zip".toByteArray())
+            zip.writeDeflated(
+                "META-INF/container.xml",
+                """
+                <?xml version="1.0"?>
+                <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                  <rootfiles>
+                    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                  </rootfiles>
+                </container>
+                """.trimIndent().toByteArray()
+            )
+            zip.writeDeflated(
+                "OEBPS/content.opf",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+                  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier id="book-id">readium-server-percentage</dc:identifier>
+                    <dc:title>Readium Server Percentage</dc:title>
+                    <dc:language>en</dc:language>
+                    <meta property="dcterms:modified">2026-07-24T00:00:00Z</meta>
+                  </metadata>
+                  <manifest>
+                    <item id="chapter-1" href="Text/chapter-1.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="chapter-2" href="Text/chapter-2.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="chapter-3" href="Text/chapter-3.xhtml" media-type="application/xhtml+xml"/>
+                  </manifest>
+                  <spine>
+                    <itemref idref="chapter-1"/>
+                    <itemref idref="chapter-2"/>
+                    <itemref idref="chapter-3"/>
+                  </spine>
+                </package>
+                """.trimIndent().toByteArray()
+            )
+            repeat(3) { index ->
+                val repeatedText = "Chapter ${index + 1} reading content. ".repeat((index + 1) * 80)
+                zip.writeDeflated(
+                    "OEBPS/Text/chapter-${index + 1}.xhtml",
+                    """
+                    <html xmlns="http://www.w3.org/1999/xhtml">
+                      <head><title>Chapter ${index + 1}</title></head>
+                      <body><h1>Chapter ${index + 1}</h1><p>$repeatedText</p></body>
+                    </html>
+                    """.trimIndent().toByteArray()
+                )
+            }
+        }
     }
 
     private fun writeSvgCoverEpub(target: File) {

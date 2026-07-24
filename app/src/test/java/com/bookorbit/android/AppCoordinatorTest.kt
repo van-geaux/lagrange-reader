@@ -511,6 +511,124 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `fresh normal ebook open hydrates dedicated server progress before reader state`() = runTest {
+        val freshBook = book.copy(progressLabel = null)
+        val serverBook = freshBook.copy(
+            progressPositionMs = 90_000L,
+            progressPageIndex = 9,
+            progressPercent = 50f,
+            progressLabel = "50%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = freshBook),
+            readerProgressResult = serverBook,
+            buildReaderResult = ReaderState(book = serverBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(freshBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(freshBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(freshBook), repository.readerProgressBooks)
+        assertEquals(listOf(serverBook), repository.buildReaderBooks)
+        assertEquals(serverBook, (coordinator.screen.value as AppScreen.Reader).readerState.book)
+    }
+
+    @Test
+    fun `fresh normal audiobook open hydrates matching server position before playback`() = runTest {
+        val chapter = AudiobookChapter(title = "Opening", startMs = 0L)
+        val freshBook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO,
+            audioChapters = emptyList()
+        )
+        val serverBook = freshBook.copy(
+            audioChapters = listOf(chapter),
+            progressPositionMs = 91_375L,
+            progressPercent = 48.25f,
+            progressLabel = "48.25%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = freshBook, audioChapters = listOf(chapter)),
+            readerProgressResult = serverBook,
+            buildReaderResult = ReaderState(book = serverBook, lastKnownPosition = 91_375L)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(freshBook),
+                isOfflineSnapshot = false
+            )
+        )
+        var openedState: ReaderState? = null
+        coordinator.setAudioPlaybackOpener { state, playWhenReady ->
+            openedState = state
+            playWhenReady
+        }
+
+        coordinator.openBook(freshBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(freshBook.copy(audioChapters = listOf(chapter))), repository.readerProgressBooks)
+        assertEquals(listOf(serverBook), repository.buildReaderBooks)
+        assertEquals(listOf(serverBook), repository.savedActiveReaders)
+        assertEquals(91_375L, openedState?.lastKnownPosition)
+    }
+
+    @Test
+    fun `normal open preserves local progress when pending sync is transiently unavailable`() = runTest {
+        val localBook = book.copy(
+            progressPositionMs = 12_000L,
+            progressPageIndex = 2,
+            progressPercent = 25f,
+            progressLabel = "25%"
+        )
+        val staleServerBook = localBook.copy(
+            progressPositionMs = 4_000L,
+            progressPageIndex = 0,
+            progressPercent = 5f,
+            progressLabel = "5%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            syncPendingProgressResult = SyncAttemptResult.TransientFailure,
+            bookDetailResult = BookDetailInfo(book = localBook),
+            readerProgressResult = staleServerBook,
+            buildReaderResult = ReaderState(book = localBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(localBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(localBook)
+        advanceUntilIdle()
+
+        assertEquals(listOf(localBook), repository.buildReaderBooks)
+        assertTrue(repository.readerProgressBooks.isEmpty())
+    }
+
+    @Test
     fun `offline normal open keeps cached progress without server refresh`() = runTest {
         val staleBook = book.copy(progressPositionMs = 12_000L, progressPageIndex = 2, progressPercent = 25f)
         val authoritativeBook = staleBook.copy(progressPositionMs = 90_000L, progressPageIndex = 9, progressPercent = 50f)
@@ -1458,6 +1576,7 @@ private class FakeBookOrbitDataSource(
     ),
     var buildReaderError: Throwable? = null,
     var bookDetailResult: BookDetailInfo? = null,
+    var readerProgressResult: BookSummary? = null,
     var userRatingResult: BookDetailInfo? = null,
     var setBookUserRatingError: Throwable? = null,
     var downloadError: Throwable? = null,
@@ -1483,6 +1602,7 @@ private class FakeBookOrbitDataSource(
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
     val buildReaderBooks = mutableListOf<BookSummary>()
+    val readerProgressBooks = mutableListOf<BookSummary>()
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
     val queuedProgress = mutableListOf<BookSummary>()
@@ -1581,6 +1701,11 @@ private class FakeBookOrbitDataSource(
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+
+    override suspend fun loadReaderProgress(book: BookSummary): BookSummary {
+        readerProgressBooks += book
+        return readerProgressResult ?: book
+    }
 
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo {
         userRatingUpdates += book to rating

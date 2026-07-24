@@ -8,6 +8,20 @@ Lagrange 1.2.0 is released. The signed `Lagrange-1.2.0.apk` is published at the 
 
 The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
 
+Completed server-progress hydration:
+
+- Normal online book opens synchronize pending progress, load detail, then read ebook progress from `GET /api/v1/books/{bookId}/progress` or audiobook progress from `GET /api/v1/books/{bookId}/audio-progress` before reader-state construction.
+- Ebook hydration matches the selected file; EPUB resume uses the authoritative percentage with generated Readium positions, while one-based `pageNumber` conversion is limited to the legacy EPUB chapter/page fallback. Audio hydration applies `currentFileId`/`positionSeconds`/`percentage` only for the selected file; non-EPUB media preserves upstream zero-based `pageNumber`; incomplete responses preserve existing fields.
+- Transient pending-sync failures skip server hydration to preserve unsynced local progress. Offline normal opens and Preview remain isolated from these reads, and progress is not stored in the metadata detail cache.
+- Parser/coordinator JVM regressions and a real-repository MockWebServer Android-test regression are implemented; the Android-test source compiles, while connected execution remains pending.
+
+Completed EPUB resume-position correction:
+
+- Normal EPUB Read retains generated Readium publication positions and selects the floor position for the authoritative percentage after normalizing it to 0–1.
+- The equal-chapter fallback is used only when generated positions or percentage are unusable. Exact CFI interoperability remains deferred.
+- Non-EPUB media preserves BookOrbit's upstream zero-based `pageNumber`; one-based conversion remains limited to the legacy EPUB chapter/page fallback.
+- Focused parser/routing/coordinator tests and main/unit/Android-test Kotlin compilation pass. Target-device feedback confirms a newly installed app now resumes an EPUB away from the chapter start.
+
 Active deferred work:
 
 - Direct OIDC/SSO authentication after the provider and redirect contract are confirmed.

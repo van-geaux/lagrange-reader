@@ -262,11 +262,19 @@ Notes:
 
 ### Ebook progress
 
-Endpoint:
+Write endpoint:
 
 ```text
 POST /api/v1/books/files/{fileId}/progress
 ```
+
+Authoritative reader-hydration endpoint:
+
+```text
+GET /api/v1/books/{bookId}/progress
+```
+
+The response is a per-file progress collection. During a normal online book open, the client selects the entry whose `fileId` matches the selected file and reads its `percentage` and `pageNumber`. For EPUB, the legacy chapter/page fallback treats BookOrbit's `pageNumber` as one-based and stores the corresponding reader page index as zero-based. For non-EPUB media, the client preserves BookOrbit's upstream zero-based `pageNumber` semantics. BookOrbit may also return an exact EPUB `cfi`; Phase 1 does not consume or upload that field, so exact CFI interoperability remains deferred. An empty response or an entry with omitted fields leaves the existing local fields intact. Reader hydration is kept separate from the metadata detail cache.
 
 DTO shape:
 
@@ -293,11 +301,19 @@ If this non-audio progress endpoint returns 404 for a queued event, the client t
 
 ### Audiobook progress
 
-Endpoint:
+Write endpoint:
 
 ```text
 PATCH /api/v1/books/{id}/audio-progress
 ```
+
+Authoritative reader-hydration endpoint:
+
+```text
+GET /api/v1/books/{bookId}/audio-progress
+```
+
+The response supplies `currentFileId`, `positionSeconds`, and `percentage`. The client applies the audio progress only when `currentFileId` matches the selected file; otherwise it preserves the selected file's existing progress. Incomplete responses preserve fields that were already present locally. Fractional `positionSeconds` values are converted to the reader's millisecond position, and this volatile progress remains outside the metadata detail cache.
 
 DTO shape:
 

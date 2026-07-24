@@ -226,6 +226,7 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
+    suspend fun loadReaderProgress(book: BookSummary): BookSummary = book
     suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = Unit
     suspend fun setBookUserRating(
         book: BookSummary,
@@ -796,6 +797,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 )
             ) ?: throw error
         }
+    }
+
+    override suspend fun loadReaderProgress(book: BookSummary): BookSummary = withContext(Dispatchers.IO) {
+        if (book.fileId == null) return@withContext book
+        val path = if (book.mediaKind == MediaKind.AUDIO) {
+            "/api/v1/books/${book.id}/audio-progress"
+        } else {
+            "/api/v1/books/${book.id}/progress"
+        }
+        val payload = try {
+            request(path, "GET", null)
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) return@withContext book
+            throw error
+        }
+        BookOrbitPayloadParser.parseReaderProgress(book, payload)
     }
 
     private suspend fun fetchAuthoritativeBookDetail(book: BookSummary): BookDetailInfo {
@@ -2093,11 +2110,11 @@ internal object BookOrbitPayloadParser {
                     progressPercent
                         ?.takeIf { it > 0f }
                         ?.let { "${formatProgressValue(it)}%" }
-                        ?: readingProgress.progressLabel()
+                        ?: readingProgress.progressLabel(mediaKind)
                 }
                 val progressPositionMs = readingProgress.progressPositionMs()
                     .takeUnless { suppressUnreadReadingActivity }
-                val progressPageIndex = readingProgress.progressPageIndex()
+                val progressPageIndex = readingProgress.progressPageIndex(mediaKind)
                     .takeUnless { suppressUnreadReadingActivity }
                 val lastReadAtMillis = if (suppressUnreadReadingActivity) {
                     null
@@ -2147,6 +2164,29 @@ internal object BookOrbitPayloadParser {
                 )
             }
         }
+    }
+
+    fun parseReaderProgress(book: BookSummary, payload: String): BookSummary {
+        val progress = if (book.mediaKind == MediaKind.AUDIO) {
+            extractObject(payload, "load audiobook progress")
+        } else {
+            extractProgressArray(payload, "load ebook progress")
+                .let { entries ->
+                    (0 until entries.length())
+                        .asSequence()
+                        .mapNotNull { entries.optJSONObject(it) }
+                        .firstOrNull { entry ->
+                            entry.stringValue("fileId", "file_id") == book.fileId
+                        }
+                }
+                ?: return book
+        }
+
+        if (book.mediaKind == MediaKind.AUDIO) {
+            val currentFileId = progress.stringValue("currentFileId", "current_file_id")
+            if (currentFileId == null || currentFileId != book.fileId) return book
+        }
+        return book.mergeReaderProgress(progress)
     }
 
     fun parseLibraryBooksPage(
@@ -2446,10 +2486,44 @@ internal object BookOrbitPayloadParser {
             ?: JSONArray()
     }
 
-    private fun JSONObject?.progressLabel(): String? {
+    private fun extractProgressArray(payload: String, action: String): JSONArray {
+        return runCatching {
+            when (val root = JSONTokener(payload).nextValue()) {
+                is JSONArray -> root
+                is JSONObject -> root.optJSONArray("data")
+                    ?: root.optJSONArray("items")
+                    ?: root.optJSONArray("progress")
+                    ?: root.optJSONArray("results")
+                    ?: JSONArray()
+                else -> JSONArray()
+            }
+        }.getOrElse {
+            throw UserFacingException("The server returned malformed data while trying to $action.")
+        }
+    }
+
+    private fun BookSummary.mergeReaderProgress(progress: JSONObject): BookSummary {
+        val percentage = progress.progressPercent()?.let(::normalizeStoredProgressPercent)
+        val positionMs = progress.progressPositionMs()
+        val pageIndex = progress.progressPageIndex(mediaKind)
+        val label = when {
+            percentage != null -> "${formatProgressValue(percentage)}%"
+            pageIndex != null -> "Page ${pageIndex + 1}"
+            positionMs != null -> formatDurationLabel(positionMs)
+            else -> progressLabel
+        }
+        return copy(
+            progressLabel = label,
+            progressPercent = percentage ?: progressPercent,
+            progressPositionMs = positionMs ?: progressPositionMs,
+            progressPageIndex = pageIndex ?: progressPageIndex
+        )
+    }
+
+    private fun JSONObject?.progressLabel(mediaKind: MediaKind? = null): String? {
         this ?: return null
         progressPercent()?.let { return "${formatProgressValue(normalizeProgressValue(it))}%" }
-        progressPageIndex()?.let { return "Page ${it + 1}" }
+        progressPageIndex(mediaKind)?.let { return "Page ${it + 1}" }
         progressPositionMs()?.let { return formatDurationLabel(it) }
         opt("currentFileId")?.toString()?.takeIf { it.isNotBlank() }?.let { return "File $it" }
         return null
@@ -2477,14 +2551,18 @@ internal object BookOrbitPayloadParser {
         return (seconds * 1000.0).toLong().coerceAtLeast(0L)
     }
 
-    private fun JSONObject?.progressPageIndex(): Int? {
+    private fun JSONObject?.progressPageIndex(mediaKind: MediaKind? = null): Int? {
         this ?: return null
         val pageNumber = when (val value = opt("pageNumber")) {
             is Number -> value.toInt()
             is String -> value.toIntOrNull()
             else -> null
         } ?: return null
-        return (pageNumber - 1).coerceAtLeast(0)
+        return if (mediaKind == MediaKind.EPUB) {
+            (pageNumber - 1).coerceAtLeast(0)
+        } else {
+            pageNumber.coerceAtLeast(0)
+        }
     }
 
     private fun JSONObject.stringValue(vararg keys: String): String? {

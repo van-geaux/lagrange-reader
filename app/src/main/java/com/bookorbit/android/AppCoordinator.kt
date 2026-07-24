@@ -737,9 +737,14 @@ class AppCoordinator(
                 _screen.value = AppScreen.ReaderLoading(book, launchMode)
             }
             runCatching {
+                val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
+                val syncResult = if (launchMode == ReaderLaunchMode.NORMAL && !offlineOpen) {
+                    repository.syncPendingProgress()
+                } else {
+                    null
+                }
                 val detailForOpen: BookDetailInfo? = when {
-                    launchMode == ReaderLaunchMode.NORMAL && lastBrowserState?.isOfflineSnapshot != true -> {
-                        repository.syncPendingProgress()
+                    launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
                         runCatching { repository.loadBookDetail(book) }.getOrNull()
                     }
                     book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty() -> {
@@ -757,9 +762,18 @@ class AppCoordinator(
                 } else {
                     detailForOpen?.book ?: book
                 }
+                val progressBook = if (
+                    launchMode == ReaderLaunchMode.NORMAL &&
+                    !offlineOpen &&
+                    syncResult == SyncAttemptResult.Success
+                ) {
+                    repository.loadReaderProgress(readerBook)
+                } else {
+                    readerBook
+                }
                 val preparedState = repository.buildReaderState(
-                    book = readerBook,
-                    localOnly = lastBrowserState?.isOfflineSnapshot == true
+                    book = progressBook,
+                    localOnly = offlineOpen
                 )
                 val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {
                     preparedState.copy(

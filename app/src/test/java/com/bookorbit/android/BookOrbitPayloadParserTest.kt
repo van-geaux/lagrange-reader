@@ -261,7 +261,7 @@ class BookOrbitPayloadParserTest {
 
         assertEquals("0.38%", books[0].progressLabel)
         assertEquals(0.375f, books[0].progressPercent)
-        assertEquals("Page 9", books[1].progressLabel)
+        assertEquals("Page 10", books[1].progressLabel)
     }
 
     @Test
@@ -476,6 +476,80 @@ class BookOrbitPayloadParserTest {
         assertTrue(book.addedAtMillis != null)
         assertTrue(book.updatedAtMillis!! > book.addedAtMillis!!)
         assertTrue(book.lastReadAtMillis!! > book.updatedAtMillis!!)
+    }
+
+    @Test
+    fun `parseReaderProgress hydrates the matching ebook file`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "book-progress",
+            fileId = "file-primary",
+            title = "Progress EPUB",
+            mediaKind = MediaKind.EPUB
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """
+                [
+                  {"fileId":"file-secondary","percentage":12.0,"pageNumber":2},
+                  {"fileId":"file-primary","percentage":63.5,"pageNumber":17}
+                ]
+            """.trimIndent()
+        )
+
+        assertEquals(63.5f, hydrated.progressPercent)
+        assertEquals(16, hydrated.progressPageIndex)
+        assertEquals("63.5%", hydrated.progressLabel)
+    }
+
+    @Test
+    fun `parseReaderProgress hydrates matching audiobook position and preserves mismatched file`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "audio-progress",
+            fileId = "audio-file",
+            title = "Progress Audiobook",
+            mediaKind = MediaKind.AUDIO,
+            progressPercent = 4f,
+            progressPositionMs = 4_000L
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":48.25,"currentFileId":"audio-file","positionSeconds":91.375}"""
+        )
+        val mismatched = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":99,"currentFileId":"other-file","positionSeconds":999}"""
+        )
+
+        assertEquals(48.25f, hydrated.progressPercent)
+        assertEquals(91_375L, hydrated.progressPositionMs)
+        assertEquals("48.25%", hydrated.progressLabel)
+        assertEquals(book, mismatched)
+    }
+
+    @Test
+    fun `parseReaderProgress preserves local fields omitted by an incomplete server response`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "book-progress",
+            fileId = "file-primary",
+            title = "Progress EPUB",
+            mediaKind = MediaKind.EPUB,
+            progressPositionMs = 18_000L,
+            progressPageIndex = 4
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","percentage":22.5}]"""
+        )
+
+        assertEquals(22.5f, hydrated.progressPercent)
+        assertEquals(18_000L, hydrated.progressPositionMs)
+        assertEquals(4, hydrated.progressPageIndex)
     }
 
     @Test
@@ -747,6 +821,24 @@ class BookOrbitPayloadParserTest {
         )
 
         assertEquals(null, series.items.single().coverUrl)
+    }
+
+    @Test
+    fun `parseReaderProgress preserves upstream zero based pdf page numbers`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "pdf-progress",
+            fileId = "pdf-file",
+            title = "Progress PDF",
+            mediaKind = MediaKind.PDF
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"pdf-file","percentage":63.5,"pageNumber":9}]"""
+        )
+
+        assertEquals(9, hydrated.progressPageIndex)
     }
 
     @Test(expected = UserFacingException::class)

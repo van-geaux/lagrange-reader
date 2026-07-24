@@ -64,7 +64,7 @@ Detail refinement: book details mirror the reader-relevant BookOrbit metadata an
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Every activity entry first shows the Previous/Menu/Next tutorial for exactly 3,000 ms after rendering readiness, or until any consumed tutorial-region tap dismisses it; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, exact locator resume, progress, and Preview isolation remain.
+Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Normal EPUB resume restores an exact stored locator when available; otherwise authoritative percentage selects a floor locator from generated Readium publication positions, with equal-chapter fallback only when positions or percentage are unusable. Exact CFI interoperability is deferred. Every activity entry first shows the Previous/Menu/Next tutorial for exactly 3,000 ms after rendering readiness, or until any consumed tutorial-region tap dismisses it; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, progress, and Preview isolation remain.
 
 ### Device feedback workplan
 

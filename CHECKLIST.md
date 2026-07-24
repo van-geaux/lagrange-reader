@@ -2,6 +2,24 @@
 
 Use this as the working checklist for `Lagrange Reader`. Items already completed are checked.
 
+## Priority 0 — Server-progress hydration — 2026-07-24
+
+- [x] Synchronize pending progress before loading detail and authoritative reader progress on normal online book opens.
+- [x] Read ebook per-file `percentage`/`pageNumber` from `GET /api/v1/books/{bookId}/progress`; use percentage to select a generated Readium EPUB position, retaining one-based-to-zero-based conversion only for the legacy EPUB chapter/page fallback.
+- [x] Read audiobook `currentFileId`/`positionSeconds`/`percentage` from `GET /api/v1/books/{bookId}/audio-progress`, applying it only when the file matches the selected file.
+- [x] Preserve existing fields for incomplete responses and skip server hydration after a transient pending-sync failure so unsynced local progress is not replaced.
+- [x] Keep offline normal opens and Preview isolated from authoritative progress reads, and keep volatile progress out of the metadata detail cache.
+- [x] Add parser/coordinator JVM regressions and a MockWebServer Android-test regression; the Android-test source compiles.
+- [x] Execute the MockWebServer Android-test regression on a connected device or emulator.
+
+## Priority 0 — EPUB resume-position correction — 2026-07-24
+
+- [x] Retain generated Readium publication positions and select the floor position for the authoritative normalized EPUB percentage.
+- [x] Keep equal-chapter fallback only when generated positions or percentage are unusable; defer exact CFI interoperability.
+- [x] Preserve BookOrbit's upstream zero-based `pageNumber` for non-EPUB media; retain one-based chapter/page fallback semantics only for EPUB.
+- [x] Add routing/parser/coordinator coverage and compile the Android-test sources.
+- [x] Confirm on a physical device that a newly installed app resumes an EPUB away from the chapter start.
+
 ## 0. Repo And Build Baseline
 
 - [x] Create GitHub repository `lagrange-reader`

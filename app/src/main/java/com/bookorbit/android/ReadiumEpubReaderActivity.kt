@@ -32,6 +32,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -147,6 +148,22 @@ internal fun readiumOverallPercent(
     return (((safeChapterIndex + safeResourceProgression) / safeChapterCount) * 100.0).toFloat()
 }
 
+internal fun selectReadiumPositionIndex(
+    targetProgression: Double?,
+    totalProgressions: List<Double?>
+): Int? {
+    val target = targetProgression?.coerceIn(0.0, 1.0) ?: return null
+    val usable = totalProgressions.mapIndexedNotNull { index, progression ->
+        progression?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)?.let { index to it }
+    }
+    if (usable.isEmpty()) return null
+    return usable
+        .filter { (_, progression) -> progression <= target }
+        .maxByOrNull { (_, progression) -> progression }
+        ?.first
+        ?: usable.minByOrNull { (_, progression) -> abs(progression - target) }?.first
+}
+
 internal data class ReadiumEpubProgressResult(
     val chapterIndex: Int,
     val pageIndex: Int,
@@ -185,6 +202,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentPercent by mutableStateOf(0f)
     private var currentBookPage by mutableStateOf<Int?>(null)
     private var bookPositionCount by mutableStateOf<Int?>(null)
+    private var bookPositions: List<Locator> = emptyList()
     private var tapZoneTutorialHasShown = false
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
@@ -241,9 +259,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, file)) {
                 is ReadiumEpubOpenResult.Error -> showError(result.message)
                 is ReadiumEpubOpenResult.Opened -> {
-                    bookPositionCount = withContext(Dispatchers.IO) {
-                        result.publication.positions().size.takeIf { it > 0 }
-                    }
+                    bookPositions = withContext(Dispatchers.IO) { result.publication.positions() }
+                    bookPositionCount = bookPositions.size.takeIf { it > 0 }
                     showPublication(result.publication)
                 }
             }
@@ -502,6 +519,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             ?.div(100f)
             ?.coerceIn(0f, 1f)
             ?.toDouble()
+        if (!isPreview) {
+            val positionIndex = selectReadiumPositionIndex(
+                targetProgression = totalProgression,
+                totalProgressions = bookPositions.map { it.locations.totalProgression }
+            )
+            bookPositions.getOrNull(positionIndex ?: -1)?.let { return it }
+        }
         val resourceProgression = when {
             isPreview -> 0.0
             initialPageCount > 1 -> initialPage.toDouble() / (initialPageCount - 1).toDouble()

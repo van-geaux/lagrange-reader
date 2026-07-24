@@ -173,6 +173,56 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun dedicatedReaderProgressUsesBookAndAudioProgressGetRoutes() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """
+                [
+                  {"fileId":"file-other","percentage":12,"pageNumber":2},
+                  {"fileId":"file-ebook","percentage":63.5,"pageNumber":17}
+                ]
+                """.trimIndent()
+            )
+        )
+        server.enqueue(
+            jsonResponse(
+                """{"currentFileId":"file-audio","percentage":48.25,"positionSeconds":91.375}"""
+            )
+        )
+
+        val ebook = repository.loadReaderProgress(
+            BookSummary(
+                libraryId = "library-1",
+                id = "book-ebook",
+                fileId = "file-ebook",
+                title = "Fresh EPUB",
+                mediaKind = MediaKind.EPUB
+            )
+        )
+        val audiobook = repository.loadReaderProgress(
+            BookSummary(
+                libraryId = "library-1",
+                id = "book-audio",
+                fileId = "file-audio",
+                title = "Fresh Audiobook",
+                mediaKind = MediaKind.AUDIO
+            )
+        )
+
+        assertEquals(63.5f, ebook.progressPercent)
+        assertEquals(16, ebook.progressPageIndex)
+        assertEquals(48.25f, audiobook.progressPercent)
+        assertEquals(91_375L, audiobook.progressPositionMs)
+
+        val ebookRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", ebookRequest.method)
+        assertEquals("/api/v1/books/book-ebook/progress", ebookRequest.path)
+        val audioRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("GET", audioRequest.method)
+        assertEquals("/api/v1/books/book-audio/audio-progress", audioRequest.path)
+    }
+
+    @Test
     fun genreFilteredBooksUseTheOfficialRelationRuleContract() = runBlocking {
         server.enqueue(
             jsonResponse(
