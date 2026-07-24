@@ -4,49 +4,57 @@ Last updated: 2026-07-24
 
 ## Current outcome
 
-Lagrange 1.2.0 is published at the GitHub Release for tag `v1.2.0`. The `main` branch is synchronized with `origin/main`; use `git log -1` for the exact current HEAD.
+Lagrange 1.2.2 is published at the GitHub Release for tag `v1.2.2` with the signed `Lagrange-1.2.2.apk` asset attached; confirmed via `gh release view v1.2.2` after the tagged workflow run completed successfully. The `main` branch is synchronized with `origin/main`; use `git log -1` for the exact current HEAD.
 
-The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, and supported reader/media validation are implemented and user-confirmed as working. The Android audiobook controls work in the app player; optional API 33+ pull-down/lock-screen platform validation remains deferred. Release APK publication is automated through GitHub Releases, with the signed `Lagrange-1.2.0.apk` asset published. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+1.2.1 fixed resume position generally (EPUB, PDF, CBZ, CBR, CB7, audiobooks): normal online opens now refresh authoritative server progress before building reader state, EPUB resume selects a real generated Readium position instead of estimating from equal-sized chapters, and a page-index bug that mis-applied EPUB's one-based conversion to all media types is fixed. Confirmed on a physical device for EPUB. 1.2.2 reworked the release-update dialog: notes render as Markdown instead of plaintext, Acknowledge was replaced with Download (opens the GitHub release page), and Ignore now persists the ignored release tag to app preferences so it survives an app restart (Download's suppression remains session-only). Physical-device confirmation of the 1.2.2 dialog changes remains intentionally deferred.
+
+The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, and supported reader/media validation remain implemented and user-confirmed as working from earlier sessions. The Android audiobook controls work in the app player; optional API 33+ pull-down/lock-screen platform validation remains deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
 ## Repository and publishing state
 
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
-- Remote: `origin` via SSH
-- Published release: `Lagrange 1.2.0`, tagged `v1.2.0`, with `Lagrange-1.2.0.apk` attached
-- Current Git HEAD: see `git log -1`; `main` is synchronized with `origin/main`.
-- Release migration: `fa3481e build: publish release APKs through GitHub Releases`
+- Remote: `origin` — now **HTTPS**, not SSH. This machine's SSH key (`vangeaux@bookorbit-android-debian`) is not authorized on the GitHub account (`Permission denied (publickey)`), so `origin` was switched to `https://github.com/van-geaux/lagrange-reader.git` and `gh auth setup-git` was run so `git push`/`git tag` push use the `gh` CLI's stored token. That token was upgraded mid-session from a fine-grained PAT without repo-write access to one with `Contents: read and write` after hitting 403s trying to edit/delete a GitHub Release. The user pasted the raw token value directly into the assistant chat while re-authenticating (`gh auth login --with-token`) rather than only piping it through a `!`-prefixed shell command — that token value is present in this session's conversation history and should be rotated/revoked from GitHub token settings if that history is a concern.
+- Published release: `Lagrange 1.2.2`, tagged `v1.2.2`, with `Lagrange-1.2.2.apk` attached — confirmed via `gh release view v1.2.2`.
+- Current Git HEAD: `fe99408 release: prepare Lagrange 1.2.2`; see `git log -1` to confirm. `main` is synchronized with `origin/main`.
+- Prior releases: `v1.2.1` (EPUB/server-progress-hydration/page-index fixes) and `v1.2.0` both published successfully with signed APK assets attached.
+- The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
-- `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets.
+- `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets. It fails fast if `docs/release-notes/v<version>.md` is missing, and publishes that file verbatim as the release body via `--notes-file`.
 - The historical `v1.1.0` release already contains `Lagrange-1.1.0.apk`.
-- The release workflow publishes the matching `docs/release-notes/v<version>.md` file as the full GitHub Release body.
 - Push only when explicitly requested.
-- Development-machine migration completed to `vangeaux@192.168.1.5:/projects/bookorbit-android`. The project source, Git history, current worktree, untracked `sample/` media, `keystore.properties`, and `release-key.jks` were copied. `.gradle/`, all `build/` directories, `.idea/`, and Windows-specific `local.properties` were excluded. The Debian machine still needs its own JDK/Android SDK setup and Debian-specific `local.properties`.
+- Development-machine migration completed to `vangeaux@192.168.1.5:/projects/bookorbit-android` in an earlier session. The project source, Git history, current worktree, untracked `sample/` media, `keystore.properties`, and `release-key.jks` were copied. `.gradle/`, all `build/` directories, `.idea/`, and Windows-specific `local.properties` were excluded. JDK 17 and the Android SDK are confirmed installed and working on this Debian host (used throughout this session's builds).
 
-Implementation and work-order commits since `origin/main`, excluding this planning/handover commit, newest first:
+All commits from this session are pushed; `main` is synchronized with `origin/main` (nothing ahead). This session's commits, newest first:
 
-- `9d80341 fix: keep more sheet over book details`
-- `644f0df fix: dismiss Book Detail when app navigation changes destination`
-- `acae5a7 fix: keep app bottom navigation visible on Book Detail`
-- `aa251a6 docs: mark GitHub release update flow complete`
-- `fb14ca1 build: add timestamped debug APK handoff`
-- `e78f881 docs: add Book Detail backlog items`
-- `0c51ed8 feat: add complete book reading status menu`
-- `87d20dd feat: notify users about newer GitHub releases`
-- `b6bee4c docs: queue GitHub release update notifications`
-- `fa3481e build: publish release APKs through GitHub Releases`
-- `434a142 docs: record audiobook fix and pc agent audit`
-- `77695b1 fix: expose audiobook platform seek controls`
-- `b4a9097 docs: update audiobook handover`
-- `e452d24 fix: expose audiobook notification seeking`
-- `62521e9 fix: restore audiobook preparation`
-- `179ccad docs: refresh current handover`
-- `4621160 feat: add server-backed user ratings`
-- `eea3bb4 fix: expose audiobook seek controls`
-- `bc4fedf docs: define card sizing and audiobook history`
-- `fcdcf52 docs: queue new user feedback work order`
+- `fe99408 release: prepare Lagrange 1.2.2`
+- `1a0d51c docs: broaden 1.2.1 release notes beyond the EPUB fix`
+- `75c9cbd release: prepare Lagrange 1.2.1`
+
+(`5637ef3` and earlier predate this session.)
 
 ## Completed work and resolved priority defect
+
+### Release-update dialog: Markdown notes, Download action, persisted Ignore — 2026-07-24 (v1.2.2)
+
+The release-update dialog (`BookOrbitApp.kt`'s `ReleaseUpdateDialog`) previously rendered GitHub release notes as raw plaintext and offered Acknowledge (dismiss + open the release page, session-only) and Ignore (dismiss only, session-only — never actually survived an app restart despite being named "Ignore").
+
+- Release notes now render as formatted Markdown via `com.mikepenz:multiplatform-markdown-renderer-m3:0.24.0` (added to `app/build.gradle.kts`; verified compatible with this project's Kotlin 1.9.24 / Compose BOM 2024.06.00 / compiler-extension 1.5.14 stack and resolves from Maven Central with no new repository).
+- Acknowledge was replaced with Download (same open-the-release-page behavior, same session-only suppression via `AppCoordinator.dismissReleaseUpdate()`).
+- Ignore now calls new `AppCoordinator.ignoreReleaseUpdate()`, which persists the ignored tag through new `AppPreferencesStore.readIgnoredReleaseTag()`/`saveIgnoredReleaseTag()` (SharedPreferences-backed, same pattern as the existing audio-playback-speed setting) so a release stays suppressed after the app is fully closed and reopened, not just for the current process.
+- `AppCoordinator`'s constructor gained injectable `readIgnoredReleaseTag`/`saveIgnoredReleaseTag` hooks (defaulting to no-ops) wired to `AppPreferencesStore` in `AppGraph`, keeping `AppCoordinatorTest` construction unaffected for existing tests.
+- `AppCoordinatorTest` gained a regression proving a fresh `AppCoordinator` instance backed by the same persisted value does not resurface an ignored release, i.e. genuine cross-instance persistence, not just in-memory suppression.
+- Full JVM gate: 324 tests across 53 suites, zero failures/errors/skips. Lint: zero errors. `assembleDebug`, `assembleAndroidTest`, and `assembleRelease` all pass. Physical-device confirmation of the dialog's Markdown rendering, Download link launch, and real Ignore-survives-restart behavior remains intentionally deferred — this was implemented and automated-verified only in this session.
+
+### Resume-position fixes across ebook/audiobook/PDF/comic — 2026-07-24 (v1.2.1)
+
+Three related fixes, released together as v1.2.1:
+
+1. **Stale resume position on normal online opens.** `AppCoordinator.openBook` now calls a new `repository.loadReaderProgress(book)` (reading `GET /api/v1/books/{bookId}/progress` for ebooks, `GET /api/v1/books/{bookId}/audio-progress` for audiobooks) after `syncPendingProgress()`/`loadBookDetail()` and before `buildReaderState`, so normal online opens no longer resume from stale local/cached data. Skipped for offline snapshots, Preview, and when the pending-progress sync itself failed (to avoid clobbering unsynced local progress).
+2. **PDF/CBZ/CBR/CB7 off-by-one page resume.** `BookOrbitPayloadParser.progressPageIndex` previously applied an EPUB-only one-based-to-zero-based `pageNumber` conversion to every media type. It's now conditioned on `mediaKind == MediaKind.EPUB`; non-EPUB media preserves BookOrbit's upstream zero-based `pageNumber` directly.
+3. **EPUB resume opening at chapter start.** `ReadiumEpubReaderActivity` now retains `publication.positions()` (`bookPositions`) and a new pure `selectReadiumPositionIndex(targetProgression, totalProgressions)` picks the real generated Readium position at or immediately before the authoritative normalized percentage, replacing the old equal-sized-chapter estimate (`totalProgression * chapterCount - chapterIndex`) that clamped to chapter start for uneven resources. The equal-chapter fallback remains for when positions or percentage are unusable; exact CFI interoperability stays deferred.
+
+User confirmed on a physical device: a newly installed app now resumes an EPUB away from the chapter start at the expected position. The `v1.2.1` GitHub Release needed a manual notes correction after publishing (see "Repository and publishing state" above) — the underlying APK build and code were never affected, only the published release body text.
 
 ### Audiobook preparation regression repair
 
