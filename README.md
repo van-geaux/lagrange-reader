@@ -74,12 +74,13 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 ## Roadmap
 
-Planned follow-up work includes but not limited to:
+Remaining follow-up work includes but is not limited to:
 
-- More reading-direction options, including right-to-left and continuous scrolling with configurable page spacing for PDF and CBZ/CBR.
-- Moving a book to read status directly from Preview.
-- Support for additional book formats.
-- Bulk action of local books.
+- Support for additional book formats; MOBI, AZW, AZW3, and FB2 remain unsupported.
+- Optional client-side offline RAR/7z extraction for downloaded CBR/CB7; server-backed extraction remains the current behavior.
+- Direct OIDC/SSO authentication after a BookOrbit provider and redirect contract are confirmed.
+- Broader bulk actions for Local books beyond the implemented multi-select `Delete local` flow.
+- Optional physical validation of Android API 33+ pull-down and lock-screen audiobook Back 10 / Forward 30 controls.
 
 More details are in the [Roadmap](docs/roadmap.md)
 
@@ -94,7 +95,11 @@ More details are in the [Roadmap](docs/roadmap.md)
 
 Clone the repository, open it in Android Studio, and let it use the included Gradle wrapper. From a terminal at the repository root, the release build is:
 
-```powershell
+```text
+# macOS/Linux
+./gradlew assembleRelease
+
+# Windows PowerShell
 .\gradlew.bat assembleRelease
 ```
 
@@ -108,7 +113,11 @@ For local builds, the signed APK is generated at `app/build/outputs/apk/release/
 
 Useful verification commands are:
 
-```powershell
+```text
+# macOS/Linux
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+
+# Windows PowerShell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 

@@ -4,22 +4,22 @@ Last updated: 2026-07-24
 
 ## Current outcome
 
-BookOrbit Android/Lagrange 1.1.0 is published at `origin/main` commit `1556ea5` and tagged `v1.1.0`. Local `main` is 23 commits ahead of `origin/main`. The current Git HEAD is `c3914c4`; the working tree contains uncommitted implementation and documentation changes.
+Lagrange 1.2.0 is published at the GitHub Release for tag `v1.2.0`. The current Git HEAD is `fc0d9ed`, and `main` is synchronized with `origin/main`.
 
-The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, and About content are implemented and user-confirmed as working. The Currently reading server-first resume repair is complete, including physical update/reopen validation confirmed by the user. The global Library card-size setting is implemented with focused automated coverage and user-confirmed successful physical validation: Small (88 dp grid/84 dp shelf), Medium (110 dp/105 dp), and Large (132 dp/126 dp), persisted globally across libraries and card types. The Android system audiobook control defect is fixed: the user confirms that Back 10 / Play-Pause / Forward 30 now work in the audiobook player. The release-channel migration is implemented in the repository; future tagged releases publish APKs through GitHub Releases instead of storing binaries in Git. The next feedback work is queued and documented. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, and supported reader/media validation are implemented and user-confirmed as working. The Android audiobook controls work in the app player; optional API 33+ pull-down/lock-screen platform validation remains deferred. Release APK publication is automated through GitHub Releases, with the signed `Lagrange-1.2.0.apk` asset published. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
 ## Repository and publishing state
 
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
 - Remote: `origin` via SSH
-- Published release: `1556ea5 release: package Lagrange 1.1.0`, tagged `v1.1.0`
-- Current Git HEAD: `c3914c4 docs: update handover after more-sheet fix`; the current working-tree implementation/docs changes remain uncommitted.
-- Local `main` is 23 commits ahead of `origin/main`.
+- Published release: `Lagrange 1.2.0`, tagged `v1.2.0`, with `Lagrange-1.2.0.apk` attached
+- Current Git HEAD: `fc0d9ed fix: publish full release notes`; `main` is synchronized with `origin/main`.
 - Release migration: `fa3481e build: publish release APKs through GitHub Releases`
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
 - `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets.
-- The historical `v1.1.0` APK still needs manual upload to the `v1.1.0` GitHub Release; the workflow has not run remotely and no release asset was published by this session.
+- The historical `v1.1.0` release already contains `Lagrange-1.1.0.apk`.
+- The release workflow publishes the matching `docs/release-notes/v<version>.md` file as the full GitHub Release body.
 - Push only when explicitly requested.
 - Development-machine migration completed to `vangeaux@192.168.1.5:/projects/bookorbit-android`. The project source, Git history, current worktree, untracked `sample/` media, `keystore.properties`, and `release-key.jks` were copied. `.gradle/`, all `build/` directories, `.idea/`, and Windows-specific `local.properties` were excluded. The Debian machine still needs its own JDK/Android SDK setup and Debian-specific `local.properties`.
 
@@ -107,7 +107,7 @@ The exact artifact produced for the next manual test handoff is:
 
 Book Detail keeps the app Home/Libraries/More bar visible. Home and Libraries navigate away and dismiss Book Detail; More opens over the current Book Detail. Series, Authors, and Local books dismiss Book Detail only after the selected destination is chosen. Regression instrumentation assertions cover the navigation state and More-sheet destination behavior.
 
-The automated final gate passed 303 JVM tests across 50 suites with zero failures, errors, or skips; compilation passed; lint reports zero errors and 39 warnings; and debug assembly passed. The fresh handoff APK is `app/build/outputs/apk/debug/Lagrange-debug-202607231939.apk`, byte-identical to `app-debug.apk`. ADB/device instrumentation and physical UI validation remain pending.
+The earlier automated final gate passed 303 JVM tests across 50 suites with zero failures, errors, or skips; compilation passed; lint reported zero errors and 39 warnings; and debug assembly passed. That checkpoint's handoff APK was `app/build/outputs/apk/debug/Lagrange-debug-202607231939.apk`; later release validation and user-confirmed physical validation supersede its pending-status note.
 
 ### Book Detail reading-status and percentage placement - 2026-07-23
 
@@ -141,7 +141,7 @@ Verification passed full unit tests, lint, compilation, and `assembleDebug`; foc
 ## Highest-priority next work
 
 1. Physically/UI validate the completed release overlay and Book Detail app-navigation behavior later, as previously deferred. Validate overlay presentation/scrolling, Acknowledge link launch, Ignore/reopen/offline behavior, Home/Libraries dismissal, More staying over Book Detail, and Series/Authors/Local-books selection dismissal.
-2. The tracked release-artifact cleanup is complete. The historical `v1.1.0` APK still needs manual upload to the GitHub Release, and the release-workflow secrets must be configured before a future tag can publish automatically.
+2. The tracked release-artifact cleanup is complete. The historical `v1.1.0` APK is uploaded, the `v1.2.0` signed APK is published, and the release-workflow secrets are configured.
 
 Before asking the user to test another build, assemble the debug APK and report the exact generated timestamped path, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`. The standard `app-debug.apk` is the internal Gradle source for that same binary. Use docs/testing.md for the applicable procedure.
 
@@ -213,28 +213,11 @@ JDK 17, the Android SDK, the Gradle wrapper, and the project build remain functi
 
 ## Protected working-tree changes
 
-The following pre-existing user-owned changes remain unrelated and must not be staged or committed:
+The following local user-owned fixture remains intentionally untracked and must not be staged or committed:
 
-- Modified `CHECKLIST.md`
-- Modified `README.md`
-- Modified `app/src/main/res/drawable/ic_launcher_foreground.xml`
-- Modified `app/src/main/res/drawable/ic_launcher_monochrome.xml`
-- Modified `docs/README.md`
-- Modified `docs/roadmap.md`
 - Untracked `sample/`
 
-The current user-requested Book Detail implementation and handover changes are also uncommitted:
-
-- Modified `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
-- Modified `app/src/androidTest/java/com/bookorbit/android/BookOrbitAppInstrumentedTest.kt`
-- Modified `docs/testing.md`
-- Modified `docs/ui-ux.md`
-- Modified `docs/handover.md`
-
-The Currently reading server-first resume repair is also uncommitted:
-
-- Modified `app/src/main/java/com/bookorbit/android/AppCoordinator.kt`
-- Modified `app/src/test/java/com/bookorbit/android/AppCoordinatorTest.kt`
+All requested source, test, release, and documentation changes are committed and pushed.
 
 ## Important files for the next session
 
@@ -260,7 +243,7 @@ The Currently reading server-first resume repair is also uncommitted:
 ## Environment notes
 
 - JDK 17, the Android SDK, the Gradle wrapper, and the project build are installed and working.
-- Release migration verification passed `git diff --check`, `:app:compileDebugKotlin`, and `:app:assembleRelease`; the fresh local release APK is at `app/build/outputs/apk/release/app-release.apk` (61,713,842 bytes, generated 2026-07-23 12:14:25).
+- Release migration verification passed `git diff --check`, `:app:compileDebugKotlin`, `:app:assembleRelease`, and the signed 1.2.0 GitHub Actions release build; the local release APK is at `app/build/outputs/apk/release/app-release.apk` (61,746,610 bytes).
 - The Gradle task-list check still intermittently hits the known `%USERPROFILE%\.gradle\wrapper\dists\gradle-8.7-bin\...\gradle-8.7-bin.zip.lck` permission issue. This did not block release assembly.
 - The historical release APK is absent from the working tree and active release-artifact/package-task references are absent. It remains in Git history until any separate history rewrite is approved.
 - No project, Gradle, ADB, watcher, emulator, or project daemon process started during this work remains running.
@@ -273,7 +256,7 @@ The current project was transferred to Debian host `vangeaux@192.168.1.5:/projec
 - The destination was created as `vangeaux:vangeaux` and verified writable.
 - The copied tree includes source, `.git`, current uncommitted worktree changes, untracked `sample/` media, `keystore.properties`, and `release-key.jks`.
 - The transfer excluded `.gradle/`, all `build/` directories, `.idea/`, and Windows-specific `local.properties`.
-- Remote verification matched the local `c3914c4` HEAD, the `BookOrbitHomeScreen.kt` SHA-256, and a sample media file size. The temporary archive was removed on both machines.
+- Historical migration verification matched the transferred tree, the `BookOrbitHomeScreen.kt` SHA-256, and a sample media file size; the temporary archive was removed on both machines.
 - Next setup on Debian: install JDK 17 and the Android SDK, configure SDK paths in a new Debian-specific `local.properties`, then run the Gradle wrapper checks.
 
 ## Handover maintenance rule

@@ -2,6 +2,19 @@
 
 This roadmap summarizes the next practical engineering sequence for the project.
 
+## Current status — 2026-07-24
+
+Lagrange 1.2.0 is released. The signed `Lagrange-1.2.0.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0), the tagged-release workflow is active, and the four release-signing repository secrets are configured. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, and edge-state validation matrix is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
+
+The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
+
+Active deferred work:
+
+- Direct OIDC/SSO authentication after the provider and redirect contract are confirmed.
+- Optional client-side offline RAR/7z extraction for downloaded CBR/CB7.
+- Optional API 33+ pull-down/lock-screen physical validation of audiobook Back 10 / Forward 30 platform controls.
+- Any explicitly deferred release-overlay or Book Detail app-navigation physical validation.
+
 ## Completed foundation
 
 - Android project scaffold exists
@@ -88,7 +101,7 @@ Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedb
 - Complete accessibility, large-text, narrow-screen, rotation, and theme checks
 - Run unit, lint, debug, instrumentation-compile, and release build gates
 - Completed: audit the tracked tree and history for sensitive filenames, high-confidence key signatures, hardcoded credential assignments, and unexplained production/internal URLs
-- Create the first tagged release
+- Completed: publish the tagged 1.2.0 release and signed APK through GitHub Releases
 
 ## User feedback workplan â€” 2026-07-12
 
@@ -541,11 +554,11 @@ Cache smoothing now serves hits synchronously to avoid placeholder flashes, pres
 9. [x] Add and physically validate one global Library card-size setting in Options. Small is 88 dp in grids and 84 dp on shelves; Medium is 110 dp / 105 dp; Large is 132 dp / 126 dp. The persisted selection applies across all libraries and book/card types. Focused tests, compilation, lint, and APK assembly pass; user-confirmed physical validation is complete.
 10. [x] Keep the BookOrbit app bottom navigation (Home, Libraries, More) visible when opening Book Detail. Implementation and automated verification are complete; physical app-navigation validation is intentionally deferred.
 11. [x] Name every debug APK `Lagrange-debug-yyyymmddhhmm.apk` using the actual build datetime; `assembleDebug` retains the standard Gradle output and creates the timestamped handoff copy from the same binary.
-12. [ ] Decide whether to remove the tracked release APK from the repository and publish release binaries through release assets instead.
+12. [x] Remove the tracked release APK from the repository and publish release binaries through GitHub Release assets.
 13. [x] Investigate whether the app can detect a newer GitHub release tag, and if supported implement update notification behavior: on app open/reopen, when a newer release is detected, show an overlay containing the release notes and provide buttons for Acknowledge that opens the GitHub release link and Ignore that dismisses it. Automated implementation and focused verification are complete; physical release-overlay validation is intentionally deferred.
 
 ### Current physical-validation status - 2026-07-24
 
-User-confirmed physical validation now covers the remaining reader/media/layout/accessibility/responsive/theme/resume/Preview/offline/edge-state checks and the supported-media matrix. The complete Book Detail `Mark as...` status menu updates server and local/cache state, and tapping an author opens the author screen. Release-overlay presentation and Book Detail app-navigation physical validation are intentionally deferred. The historical `v1.1.0` GitHub APK upload is complete; release-secret configuration remains pending. Direct OIDC/SSO and optional offline RAR/7z extraction remain deferred.
+User-confirmed physical validation now covers the remaining reader/media/layout/accessibility/responsive/theme/resume/Preview/offline/edge-state checks and the supported-media matrix. The complete Book Detail `Mark as...` status menu updates server and local/cache state, and tapping an author opens the author screen. Lagrange 1.2.0 is published at GitHub Releases with a signed APK, and release-secret configuration is complete. Release-overlay and Book Detail app-navigation physical validation remain intentionally deferred. Direct OIDC/SSO, optional offline RAR/7z extraction, and optional API 33+ external audiobook-control validation remain deferred.
 
 Session-history design decision: use an app-private Room table keyed by canonical server origin and BookOrbit book/file ID. Namespace-by-server prevents history from leaking between servers; a server switch purges the old namespace. Record explicit play/pause transitions with duplicate-callback protection, retain a bounded recent history per book, and provide a clear-history action. These events are never sent to BookOrbit.
