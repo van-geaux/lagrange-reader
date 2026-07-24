@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.1.0)
+[![Version 1.2.0](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -17,8 +17,6 @@ An offline-first Android reader for BookOrbit.
 Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It started with a simple personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
 Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. BookOrbit supplies the authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
-
-Although `1.0.0` is the first release milestone, this is not a one-day prototype. The app has been developed iteratively through documented engineering work orders, automated test suites, emulator coverage, and repeated target-device validation of its online and offline flows.
 
 This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
@@ -85,12 +83,6 @@ Planned follow-up work includes but not limited to:
 
 More details are in the [Roadmap](docs/roadmap.md)
 
-## Limitations to know about
-
-Lagrange needs a reachable BookOrbit server for sign-in, online browsing, progress synchronization, and CBR/CB7 page extraction. Downloaded EPUB, PDF, CBZ, and supported audiobook files can be opened without a connection. HTTPS is strongly recommended when connecting to a remote server; explicit HTTP URLs are supported for trusted networks.
-
-The app currently uses the standard BookOrbit username/password login. Direct OIDC/SSO is deferred for now. A connected Android device or emulator is also needed for the full physical validation matrix. Automated JVM tests and APK builds are maintained in the repository.
-
 ## Building manually
 
 ### Requirements
@@ -129,14 +121,6 @@ Lagrange Reader's interface and interaction ideas were informed by the clarity a
 ## Relationship with BookOrbit
 
 I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first, roughly another two to three weeks of real world use, before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
-
-## About destination
-
-The in-app About destination presents the same project description: Lagrange Reader is an independent Android app for reading and listening to books hosted on BookOrbit, and a standalone native client rather than a wrapper around the BookOrbit web interface. It also shows the installed version and build information, identifies Lagrange as an independent community project that is not affiliated with, endorsed by, or sponsored by the BookOrbit maintainers, and includes acknowledgements and links to the Lagrange Reader project, BookOrbit, Readium, and the license and notices.
-
-## Project status
-
-Version **1.0.0** is considered feature-complete and worthy of release for personal and community testing. The remaining work is mostly wider device and format validation, not a claim that every BookOrbit server configuration or file is covered.
 
 ## License and acknowledgements
 
