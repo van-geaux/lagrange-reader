@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }
                         },
-                        onAcknowledgeReleaseUpdate = { update ->
+                        onDownloadReleaseUpdate = { update ->
                             startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse(update.htmlUrl))
                             )

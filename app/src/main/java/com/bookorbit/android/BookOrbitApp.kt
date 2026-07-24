@@ -134,6 +134,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
+import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -154,7 +155,7 @@ fun BookOrbitApp(
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
-    onAcknowledgeReleaseUpdate: (ReleaseUpdate) -> Unit = {}
+    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
     Box(modifier = Modifier.fillMaxSize()) {
@@ -178,11 +179,11 @@ fun BookOrbitApp(
         releaseUpdate?.let { update ->
             ReleaseUpdateDialog(
                 update = update,
-                onAcknowledge = {
+                onDownload = {
                     coordinator.dismissReleaseUpdate()
-                    onAcknowledgeReleaseUpdate(update)
+                    onDownloadReleaseUpdate(update)
                 },
-                onIgnore = coordinator::dismissReleaseUpdate
+                onIgnore = coordinator::ignoreReleaseUpdate
             )
         }
     }
@@ -191,7 +192,7 @@ fun BookOrbitApp(
 @Composable
 private fun ReleaseUpdateDialog(
     update: ReleaseUpdate,
-    onAcknowledge: () -> Unit,
+    onDownload: () -> Unit,
     onIgnore: () -> Unit
 ) {
     AlertDialog(
@@ -206,15 +207,15 @@ private fun ReleaseUpdateDialog(
             ) {
                 Text("Version " + update.versionName + " is ready to download.")
                 if (update.notes.isNotBlank()) {
-                    Text(update.notes)
+                    Markdown(update.notes)
                 }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = onAcknowledge,
-                modifier = Modifier.testTag("release-update-acknowledge")
-            ) { Text("Acknowledge") }
+                onClick = onDownload,
+                modifier = Modifier.testTag("release-update-download")
+            ) { Text("Download") }
         },
         dismissButton = {
             TextButton(

@@ -67,6 +67,46 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `ignoreReleaseUpdate persists the ignored tag across a fresh coordinator instance`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        var storedIgnoredTag: String? = null
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { storedIgnoredTag },
+            saveIgnoredReleaseTag = { storedIgnoredTag = it }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+        assertEquals(update, coordinator.releaseUpdate.value)
+
+        coordinator.ignoreReleaseUpdate()
+        assertNull(coordinator.releaseUpdate.value)
+        assertEquals("v1.2.0", storedIgnoredTag)
+
+        val freshCoordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { storedIgnoredTag },
+            saveIgnoredReleaseTag = { storedIgnoredTag = it }
+        )
+
+        freshCoordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertNull(freshCoordinator.releaseUpdate.value)
+    }
+
+    @Test
     fun `bootstrap prefers local only active reader restore before session checks`() = runTest {
         val readerState = ReaderState(book = book, localFile = File("offline.epub"))
         val repository = FakeBookOrbitDataSource(

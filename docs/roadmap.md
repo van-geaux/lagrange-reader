@@ -4,7 +4,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Current status — 2026-07-24
 
-Lagrange 1.2.0 is released. The signed `Lagrange-1.2.0.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0), the tagged-release workflow is active, and the four release-signing repository secrets are configured. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, and edge-state validation matrix is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
+Lagrange 1.2.2 is released. The signed `Lagrange-1.2.2.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.2), the tagged-release workflow is active, and the four release-signing repository secrets are configured. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, and edge-state validation matrix is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
 
 The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
 
@@ -21,6 +21,12 @@ Completed EPUB resume-position correction:
 - The equal-chapter fallback is used only when generated positions or percentage are unusable. Exact CFI interoperability remains deferred.
 - Non-EPUB media preserves BookOrbit's upstream zero-based `pageNumber`; one-based conversion remains limited to the legacy EPUB chapter/page fallback.
 - Focused parser/routing/coordinator tests and main/unit/Android-test Kotlin compilation pass. Target-device feedback confirms a newly installed app now resumes an EPUB away from the chapter start.
+
+Completed release-notification dialog update:
+
+- The GitHub release-update dialog now renders release notes as formatted Markdown via `com.mikepenz:multiplatform-markdown-renderer-m3` instead of plaintext.
+- The dialog's two actions are Download (opens the GitHub release page and dismisses for the current session) and Ignore (dismisses without opening the page and persists the ignored release tag to app preferences, so that release is suppressed even after the app is closed and reopened). The prior Acknowledge action is removed; Download is its successor.
+- `AppCoordinator` gained `ignoreReleaseUpdate()` plus injectable `readIgnoredReleaseTag`/`saveIgnoredReleaseTag` hooks, wired to `AppPreferencesStore` in `AppGraph`. Focused coordinator regressions cover cross-instance ignore persistence. Full JVM gate (324 tests/53 suites), lint, and both debug/release APK assemblies pass.
 
 Active deferred work:
 

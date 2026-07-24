@@ -20,6 +20,13 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add routing/parser/coordinator coverage and compile the Android-test sources.
 - [x] Confirm on a physical device that a newly installed app resumes an EPUB away from the chapter start.
 
+## Priority 0 — Release-notification dialog update — 2026-07-24
+
+- [x] Render release notes as formatted Markdown in the release-update dialog instead of plaintext, via `com.mikepenz:multiplatform-markdown-renderer-m3`.
+- [x] Replace the Acknowledge action with Download, which opens the GitHub release page and dismisses for the current session.
+- [x] Make Ignore persist the ignored release tag to app preferences so that release stays suppressed after the app is closed and reopened.
+- [x] Add coordinator regression coverage for cross-instance ignore persistence; full JVM gate, lint, and both debug/release APK assemblies pass.
+
 ## 0. Repo And Build Baseline
 
 - [x] Create GitHub repository `lagrange-reader`

@@ -140,6 +140,14 @@ internal class AppPreferencesStore(context: Context) {
             .apply()
     }
 
+    fun readIgnoredReleaseTag(): String? = preferences.getString(IGNORED_RELEASE_TAG_KEY, null)
+
+    fun saveIgnoredReleaseTag(value: String) {
+        preferences.edit()
+            .putString(IGNORED_RELEASE_TAG_KEY, value)
+            .apply()
+    }
+
     private companion object {
         const val APP_PREFERENCES_FILE = "app_preferences"
         const val LOCK_ORIENTATION_KEY = "lock_orientation"
@@ -154,6 +162,7 @@ internal class AppPreferencesStore(context: Context) {
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
+        const val IGNORED_RELEASE_TAG_KEY = "ignored_release_tag"
     }
 }
 

@@ -28,8 +28,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 13
-        versionName = "1.2.1"
+        versionCode = 14
+        versionName = "1.2.2"
     }
 
     signingConfigs {
@@ -108,6 +108,7 @@ dependencies {
 
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.compose.material3:material3")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.24.0")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")

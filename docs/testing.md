@@ -1,5 +1,9 @@
 # Testing
 
+### Release-notification dialog regression — 2026-07-24
+
+`AppCoordinatorTest` covers `ignoreReleaseUpdate()` persisting the ignored release tag through injected `readIgnoredReleaseTag`/`saveIgnoredReleaseTag` hooks and confirms a fresh `AppCoordinator` instance backed by the same persisted value does not resurface the ignored release, proving Ignore survives a simulated app restart while a plain `dismissReleaseUpdate()` (used by Download) remains session-only. The full JVM gate passes 324 tests across 53 suites with zero failures/errors/skips, lint reports zero errors, and debug, Android-test, and signed release APKs all assemble. Physical-device confirmation of the release-update dialog's Markdown rendering, Download link launch, and Ignore persistence across a real app restart remains intentionally deferred.
+
 ### Server-progress hydration regression — 2026-07-24
 
 Normal online book opens now synchronize pending progress before detail loading and format-specific server hydration. `BookOrbitPayloadParserTest` covers matching ebook per-file progress, EPUB legacy one-based `pageNumber` conversion, preservation of upstream zero-based non-EPUB page numbers, matching audiobook `currentFileId`/fractional `positionSeconds`, mismatched-file preservation, and incomplete-response field preservation. `AppCoordinatorTest` covers ebook and audiobook hydration ordering, transient pending-sync preservation, and offline normal-open/Preview isolation. `BookOrbitRepositoryIntegrationTest` adds a real-repository MockWebServer regression for `GET /api/v1/books/{bookId}/progress` and `GET /api/v1/books/{bookId}/audio-progress`; the Android-test source compiles, but execution requires a connected device or emulator and is not claimed here as physically validated.

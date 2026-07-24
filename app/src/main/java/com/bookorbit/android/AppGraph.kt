@@ -5,9 +5,12 @@ import android.content.Context
 class AppGraph(context: Context) {
     private val repository = BookOrbitRepository(context.applicationContext)
     private val sessionHistoryStore = AudiobookSessionHistoryStore(context.applicationContext)
+    private val preferencesStore = AppPreferencesStore(context.applicationContext)
     val coordinator = AppCoordinator(
         repository,
-        releaseChecker = GitHubReleaseChecker()::check
+        releaseChecker = GitHubReleaseChecker()::check,
+        readIgnoredReleaseTag = preferencesStore::readIgnoredReleaseTag,
+        saveIgnoredReleaseTag = preferencesStore::saveIgnoredReleaseTag
     ).also { it.setSessionHistoryStore(sessionHistoryStore) }
 
     fun configureAudioPlayback(controller: ReadiumAudioPlaybackController) {

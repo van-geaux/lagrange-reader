@@ -24,7 +24,9 @@ private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
-    private val releaseChecker: suspend (String) -> ReleaseUpdate? = { null }
+    private val releaseChecker: suspend (String) -> ReleaseUpdate? = { null },
+    private val readIgnoredReleaseTag: () -> String? = { null },
+    private val saveIgnoredReleaseTag: (String) -> Unit = {}
 ) {
     suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.searchBooks(query)
@@ -167,7 +169,12 @@ class AppCoordinator(
         scope.launch {
             try {
                 val update = releaseChecker(BuildConfig.VERSION_NAME)
-                if (update != null && update.tagName != dismissedReleaseTag) {
+                val ignoredTag = readIgnoredReleaseTag()
+                if (
+                    update != null &&
+                    update.tagName != dismissedReleaseTag &&
+                    update.tagName != ignoredTag
+                ) {
                     _releaseUpdate.value = update
                 }
             } catch (error: CancellationException) {
@@ -182,6 +189,14 @@ class AppCoordinator(
 
     fun dismissReleaseUpdate() {
         _releaseUpdate.value?.let { update -> dismissedReleaseTag = update.tagName }
+        _releaseUpdate.value = null
+    }
+
+    fun ignoreReleaseUpdate() {
+        _releaseUpdate.value?.let { update ->
+            dismissedReleaseTag = update.tagName
+            saveIgnoredReleaseTag(update.tagName)
+        }
         _releaseUpdate.value = null
     }
 

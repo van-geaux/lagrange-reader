@@ -365,7 +365,7 @@ Book Detail places five editable whole stars directly below the cover. They repr
 
 ### GitHub release update notice - 2026-07-23
 
-On app bootstrap and Activity resume, the app may show a scrollable release-notes dialog when a strictly newer GitHub release is available than the installed version. The dialog identifies the release and provides the published notes with two actions: Acknowledge dismisses the notice and opens the GitHub release page; Ignore dismisses it without opening the page. Either action suppresses that tag for the current app activity/coordinator session. Network or parsing failures remain silent and non-blocking. Physical-device confirmation of the dialog's presentation, scrolling, links, and resume behavior remains intentionally deferred.
+On app bootstrap and Activity resume, the app may show a scrollable release-notes dialog when a strictly newer GitHub release is available than the installed version. The published notes render as formatted Markdown (headers, bullet lists, inline code, bold) rather than plaintext. The dialog identifies the release and provides two actions: Download dismisses the notice and opens the GitHub release page; Ignore dismisses it without opening the page and persists the ignored release tag to app preferences, so that release is not shown again even after the app is closed and reopened. Download only suppresses the notice for the current app activity/coordinator session, so it can reappear on a later cold launch if the app has not actually been updated yet. Network or parsing failures remain silent and non-blocking. Physical-device confirmation of the dialog's presentation, scrolling, links, and resume behavior remains intentionally deferred.
 
 ### Current physical-validation status - 2026-07-24
 
