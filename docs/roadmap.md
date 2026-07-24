@@ -41,7 +41,7 @@ Active deferred work:
 - Offline startup and login-refresh paths now fall back to cached browser state when available
 - Cached offline browser views now disable live-only actions for books without a local copy
 
-## Next execution order
+## Historical work-order archive
 
 Version 0.2.7 includes the July 20 reader/detail follow-ups. Target-device feedback confirms the reader remains open during sync/refresh/download activity, Exit works, and the tutorial timing/dismissal and revised label readability behave correctly. Series details persist Library/Format/none grouping globally; target-device feedback confirms cross-library separation, persistence, and the inline section label/divider layout. The profile dropdown now places Achievements, Options, and About above a divider before session actions, and its ordering is device-validated. Readium PDF migration is implemented, and its generated three-page connected opening test passes. Square covers now bottom-align with portrait covers and card labels. The full gate passes 280 JVM tests across 48 suites plus lint and both APK assemblies. Target-device validation now confirms the eight latest reader/library/media groups; splash/loading is accepted because the app opens directly to content quickly. Book Detail Other versions is validated on device, including the row, labels, horizontal scrolling, in-detail selection, navigation, accessibility, and responsive/large-text behavior.
 

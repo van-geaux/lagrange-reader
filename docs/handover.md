@@ -4,7 +4,7 @@ Last updated: 2026-07-24
 
 ## Current outcome
 
-Lagrange 1.2.0 is published at the GitHub Release for tag `v1.2.0`. The current Git HEAD is `fc0d9ed`, and `main` is synchronized with `origin/main`.
+Lagrange 1.2.0 is published at the GitHub Release for tag `v1.2.0`. The current Git HEAD is `92ba1b9`, and `main` is synchronized with `origin/main`.
 
 The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, and supported reader/media validation are implemented and user-confirmed as working. The Android audiobook controls work in the app player; optional API 33+ pull-down/lock-screen platform validation remains deferred. Release APK publication is automated through GitHub Releases, with the signed `Lagrange-1.2.0.apk` asset published. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
@@ -14,7 +14,7 @@ The Book Detail rating, complete reading-status menu, reading-status/progress pl
 - Branch: `main`
 - Remote: `origin` via SSH
 - Published release: `Lagrange 1.2.0`, tagged `v1.2.0`, with `Lagrange-1.2.0.apk` attached
-- Current Git HEAD: `fc0d9ed fix: publish full release notes`; `main` is synchronized with `origin/main`.
+- Current Git HEAD: `92ba1b9 docs: clarify current roadmap and release state`; `main` is synchronized with `origin/main`.
 - Release migration: `fa3481e build: publish release APKs through GitHub Releases`
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
 - `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets.
