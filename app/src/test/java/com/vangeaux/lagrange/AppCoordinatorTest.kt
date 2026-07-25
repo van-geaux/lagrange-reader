@@ -1,0 +1,1838 @@
+package com.vangeaux.lagrange
+
+import java.io.File
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class AppCoordinatorTest {
+    private val serverUrl = "https://books.example.test"
+    private val library = LibrarySummary(id = "lib-1", name = "Main")
+    private val book = BookSummary(
+        libraryId = library.id,
+        id = "book-1",
+        fileId = "file-1",
+        title = "Sample Book",
+        mediaKind = MediaKind.EPUB
+    )
+
+    @Test
+    fun `bootstrap shows server setup when no server is saved`() = runTest {
+        val repository = FakeBookOrbitDataSource(serverUrl = null)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertEquals(AppScreen.ServerSetup(), coordinator.screen.value)
+    }
+
+    @Test
+    fun `checkForAppUpdate exposes and dismisses the release notification`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertEquals(update, coordinator.releaseUpdate.value)
+        coordinator.dismissReleaseUpdate()
+        assertNull(coordinator.releaseUpdate.value)
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertNull(coordinator.releaseUpdate.value)
+    }
+
+    @Test
+    fun `ignoreReleaseUpdate persists the ignored tag across a fresh coordinator instance`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        var storedIgnoredTag: String? = null
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { storedIgnoredTag },
+            saveIgnoredReleaseTag = { storedIgnoredTag = it }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+        assertEquals(update, coordinator.releaseUpdate.value)
+
+        coordinator.ignoreReleaseUpdate()
+        assertNull(coordinator.releaseUpdate.value)
+        assertEquals("v1.2.0", storedIgnoredTag)
+
+        val freshCoordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { storedIgnoredTag },
+            saveIgnoredReleaseTag = { storedIgnoredTag = it }
+        )
+
+        freshCoordinator.checkForAppUpdate()
+        advanceUntilIdle()
+
+        assertNull(freshCoordinator.releaseUpdate.value)
+    }
+
+    @Test
+    fun `bootstrap prefers local only active reader restore before session checks`() = runTest {
+        val readerState = ReaderState(book = book, localFile = File("offline.epub"))
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            restoreActiveReaderLocalOnlyResult = readerState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertEquals(AppScreen.Reader(readerState), coordinator.screen.value)
+        assertEquals(listOf(true), repository.restoreActiveReaderCalls)
+        assertFalse(repository.sessionStateRequested)
+    }
+
+    @Test
+    fun `bootstrap restores authenticated reader state after relaunch when offline only restore misses`() = runTest {
+        val readerState = ReaderState(book = book, streamUrl = "$serverUrl/stream")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated,
+            restoreActiveReaderResult = readerState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertEquals(AppScreen.Reader(readerState), coordinator.screen.value)
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+    }
+
+    @Test
+    fun `bootstrap skips persisted audiobook reader and reopens browser for compact playback`() = runTest {
+        val audiobook = book.copy(
+            id = "audio-1",
+            fileId = "audio-file-1",
+            title = "Sample Audiobook",
+            mediaKind = MediaKind.AUDIO,
+            progressPositionMs = 12_000L
+        )
+        val readerState = ReaderState(
+            book = audiobook,
+            localFile = File("sample.m4b"),
+            lastKnownPosition = 12_000L
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated,
+            restoreActiveReaderLocalOnlyResult = readerState,
+            restoreActiveReaderResult = readerState
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(audiobook)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        val autoplayRequests = mutableListOf<Boolean>()
+        coordinator.setAudioPlaybackOpener { _, playWhenReady ->
+            autoplayRequests += playWhenReady
+            true
+        }
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(listOf(false), autoplayRequests)
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+    }
+
+    @Test
+    fun `bootstrap loads browser for authenticated session when no reader state can be restored`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Authenticated
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(book)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(true, false), repository.restoreActiveReaderCalls)
+        assertEquals(listOf(library), screen.browserState.libraries)
+        assertEquals(library.id, screen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertEquals(listOf(listOf(book)), repository.refreshFirstPages.map { it?.items })
+    }
+
+    @Test
+    fun `home aggregates every server library while selected books stay scoped`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val mangaBook = book.copy(
+            libraryId = mangaLibrary.id,
+            id = "book-manga",
+            fileId = "file-manga",
+            title = "Reading Manga",
+            readStatus = BookReadStatus.READING,
+            progressPercent = 35f,
+            lastReadAtMillis = 500L
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary),
+            loadBooksResult = listOf(book),
+            refreshLibraryCatalogResults = mapOf(
+                library.id to LibraryBooksPage(items = listOf(book), total = 1, isComplete = true),
+                mangaLibrary.id to LibraryBooksPage(items = listOf(mangaBook), total = 1, isComplete = true)
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(book), state.books)
+        assertEquals(setOf(book.id, mangaBook.id), state.homeBooks.mapTo(mutableSetOf()) { it.id })
+        assertEquals(listOf(mangaBook), currentlyReadingBooks(state.homeBooks))
+        assertEquals(listOf(library.id, mangaLibrary.id), repository.refreshedLibraryIds)
+    }
+
+    @Test
+    fun `home keeps another library cached when only its refresh fails`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val cachedManga = book.copy(
+            libraryId = mangaLibrary.id,
+            id = "book-manga",
+            fileId = "file-manga",
+            title = "Cached Manga"
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary),
+            loadBooksResult = listOf(book),
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library, mangaLibrary),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book, cachedManga)
+            ),
+            refreshLibraryCatalogResults = mapOf(
+                library.id to LibraryBooksPage(items = listOf(book), total = 1, isComplete = true)
+            ),
+            refreshLibraryCatalogErrors = mapOf(
+                mangaLibrary.id to java.io.IOException("offline")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(setOf(book.id, cachedManga.id), state.homeBooks.mapTo(mutableSetOf()) { it.id })
+        assertTrue(state.message.orEmpty().contains(mangaLibrary.name))
+        assertFalse(state.isRefreshing)
+    }
+
+    @Test
+    fun `home refreshes nonselected libraries in bounded concurrent batches`() = runTest {
+        val additionalLibraries = (2..7).map { index ->
+            LibrarySummary(id = "lib-$index", name = "Library $index")
+        }
+        val allLibraries = listOf(library) + additionalLibraries
+        val gates = additionalLibraries.associate { it.id to CompletableDeferred<Unit>() }
+        val refreshedBooks = allLibraries.associate { currentLibrary ->
+            currentLibrary.id to LibraryBooksPage(
+                items = listOf(
+                    book.copy(
+                        libraryId = currentLibrary.id,
+                        id = "book-${currentLibrary.id}",
+                        fileId = "file-${currentLibrary.id}",
+                        title = "Book from ${currentLibrary.name}"
+                    )
+                ),
+                total = 1,
+                isComplete = true
+            )
+        }
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = allLibraries,
+            loadBooksResult = refreshedBooks.getValue(library.id).items,
+            refreshLibraryCatalogResults = refreshedBooks,
+            refreshLibraryCatalogGates = gates
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+
+        assertEquals(
+            listOf(library.id) + additionalLibraries.take(3).map { it.id },
+            repository.refreshedLibraryIds
+        )
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+        assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+
+        additionalLibraries.take(3).forEach { gates.getValue(it.id).complete(Unit) }
+        runCurrent()
+
+        assertEquals(
+            listOf(library.id) + additionalLibraries.take(6).map { it.id },
+            repository.refreshedLibraryIds
+        )
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+
+        additionalLibraries.drop(3).forEach { gates.getValue(it.id).complete(Unit) }
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(allLibraries.map { "book-${it.id}" }.toSet(), state.homeBooks.map { it.id }.toSet())
+        assertFalse(state.isRefreshing)
+        assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+    }
+
+    @Test
+    fun `load browser shows cached catalog before reconciling to the complete server result`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val refreshedBook = book.copy(title = "Server title")
+        val refreshGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogResult = LibraryBooksPage(
+                items = listOf(refreshedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogGate = refreshGate
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+
+        val cachedScreen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(cachedBook), cachedScreen.browserState.books)
+        assertTrue(cachedScreen.browserState.isCatalogComplete)
+        assertTrue(cachedScreen.browserState.isCatalogSyncing)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(refreshedBook), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertFalse(screen.browserState.isCatalogSyncing)
+        assertEquals(listOf(null), repository.refreshFirstPages)
+    }
+
+    @Test
+    fun `finishing refresh updates browser snapshot without replacing active reader`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val refreshedBook = book.copy(title = "Refreshed title")
+        val refreshGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                isComplete = true
+            ),
+            refreshLibraryCatalogResult = LibraryBooksPage(
+                items = listOf(refreshedBook),
+                total = 1,
+                isComplete = true
+            ),
+            refreshLibraryCatalogGate = refreshGate,
+            buildReaderResult = ReaderState(book = cachedBook, localFile = File("cached.epub"))
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        runCurrent()
+        coordinator.openBook(cachedBook)
+        runCurrent()
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+        coordinator.closeReader()
+        val restored = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(refreshedBook), restored.browserState.books)
+    }
+
+    @Test
+    fun `download state updates do not replace active reader`() = runTest {
+        val downloadGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = downloadGate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.downloadBook(book)
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+        runCurrent()
+
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+        downloadGate.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(coordinator.screen.value is AppScreen.Reader)
+    }
+
+    @Test
+    fun `failed reconciliation keeps the complete cached catalog usable`() = runTest {
+        val cachedBook = book.copy(title = "Cached title")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = LibraryBooksPage(
+                items = listOf(cachedBook),
+                total = 1,
+                page = 0,
+                size = 50,
+                isComplete = true
+            ),
+            refreshLibraryCatalogError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(cachedBook), screen.browserState.books)
+        assertTrue(screen.browserState.isCatalogComplete)
+        assertFalse(screen.browserState.isCatalogSyncing)
+        assertFalse(screen.browserState.isRefreshing)
+        assertTrue(screen.browserState.message.orEmpty().contains("network error"))
+    }
+
+    @Test
+    fun `bootstrap opens login instead of cached browser when server rejects saved session`() = runTest {
+        val cachedState = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book)
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            cachedBrowserState = cachedState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, screen.serverUrl)
+        assertTrue(screen.message.orEmpty().contains("no longer authenticated"))
+    }
+
+    @Test
+    fun `refresh login resumes opening the requested book after authentication recovers`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            buildReaderError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openBook(book)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("reopen ${book.title}"))
+
+        repository.buildReaderError = null
+        repository.buildReaderResult = ReaderState(book = book, streamUrl = "$serverUrl/stream")
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val readerScreen = coordinator.screen.value as AppScreen.Reader
+        assertEquals(book, readerScreen.readerState.book)
+        assertEquals(listOf(false, false), repository.buildReaderLocalOnlyCalls)
+        assertEquals(listOf(book), repository.savedActiveReaders)
+    }
+
+    @Test
+    fun `normal open refreshes the book before building reader state`() = runTest {
+        val staleBook = book.copy(
+            progressPositionMs = 0L,
+            progressPageIndex = 0,
+            progressPercent = 0f
+        )
+        val authoritativeBook = staleBook.copy(
+            progressPositionMs = 90_000L,
+            progressPageIndex = 9,
+            progressPercent = 50f,
+            progressLabel = "50%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook),
+            buildReaderResult = ReaderState(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(staleBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(authoritativeBook), repository.buildReaderBooks)
+        assertEquals(authoritativeBook, (coordinator.screen.value as AppScreen.Reader).readerState.book)
+    }
+
+    @Test
+    fun `fresh normal ebook open hydrates dedicated server progress before reader state`() = runTest {
+        val freshBook = book.copy(progressLabel = null)
+        val serverBook = freshBook.copy(
+            progressPositionMs = 90_000L,
+            progressPageIndex = 9,
+            progressPercent = 50f,
+            progressLabel = "50%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = freshBook),
+            readerProgressResult = serverBook,
+            buildReaderResult = ReaderState(book = serverBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(freshBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(freshBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(freshBook), repository.readerProgressBooks)
+        assertEquals(listOf(serverBook), repository.buildReaderBooks)
+        assertEquals(serverBook, (coordinator.screen.value as AppScreen.Reader).readerState.book)
+    }
+
+    @Test
+    fun `fresh normal audiobook open hydrates matching server position before playback`() = runTest {
+        val chapter = AudiobookChapter(title = "Opening", startMs = 0L)
+        val freshBook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO,
+            audioChapters = emptyList()
+        )
+        val serverBook = freshBook.copy(
+            audioChapters = listOf(chapter),
+            progressPositionMs = 91_375L,
+            progressPercent = 48.25f,
+            progressLabel = "48.25%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = freshBook, audioChapters = listOf(chapter)),
+            readerProgressResult = serverBook,
+            buildReaderResult = ReaderState(book = serverBook, lastKnownPosition = 91_375L)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(freshBook),
+                isOfflineSnapshot = false
+            )
+        )
+        var openedState: ReaderState? = null
+        coordinator.setAudioPlaybackOpener { state, playWhenReady ->
+            openedState = state
+            playWhenReady
+        }
+
+        coordinator.openBook(freshBook)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.syncPendingProgressCalls)
+        assertEquals(listOf(freshBook.copy(audioChapters = listOf(chapter))), repository.readerProgressBooks)
+        assertEquals(listOf(serverBook), repository.buildReaderBooks)
+        assertEquals(listOf(serverBook), repository.savedActiveReaders)
+        assertEquals(91_375L, openedState?.lastKnownPosition)
+    }
+
+    @Test
+    fun `normal open preserves local progress when pending sync is transiently unavailable`() = runTest {
+        val localBook = book.copy(
+            progressPositionMs = 12_000L,
+            progressPageIndex = 2,
+            progressPercent = 25f,
+            progressLabel = "25%"
+        )
+        val staleServerBook = localBook.copy(
+            progressPositionMs = 4_000L,
+            progressPageIndex = 0,
+            progressPercent = 5f,
+            progressLabel = "5%"
+        )
+        val repository = FakeBookOrbitDataSource(
+            syncPendingProgressResult = SyncAttemptResult.TransientFailure,
+            bookDetailResult = BookDetailInfo(book = localBook),
+            readerProgressResult = staleServerBook,
+            buildReaderResult = ReaderState(book = localBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(localBook),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.openBook(localBook)
+        advanceUntilIdle()
+
+        assertEquals(listOf(localBook), repository.buildReaderBooks)
+        assertTrue(repository.readerProgressBooks.isEmpty())
+    }
+
+    @Test
+    fun `offline normal open keeps cached progress without server refresh`() = runTest {
+        val staleBook = book.copy(progressPositionMs = 12_000L, progressPageIndex = 2, progressPercent = 25f)
+        val authoritativeBook = staleBook.copy(progressPositionMs = 90_000L, progressPageIndex = 9, progressPercent = 50f)
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(staleBook),
+                isOfflineSnapshot = true
+            )
+        )
+
+        coordinator.openBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(listOf(staleBook), repository.buildReaderBooks)
+    }
+
+    @Test
+    fun `preview open does not refresh server progress`() = runTest {
+        val staleBook = book.copy(progressPositionMs = 12_000L, progressPageIndex = 2, progressPercent = 25f)
+        val authoritativeBook = staleBook.copy(progressPositionMs = 90_000L, progressPageIndex = 9, progressPercent = 50f)
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = authoritativeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.previewBook(staleBook)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(listOf(staleBook), repository.buildReaderBooks)
+        assertEquals(ReaderLaunchMode.PREVIEW, (coordinator.screen.value as AppScreen.Reader).readerState.launchMode)
+    }
+
+    @Test
+    fun `audio reader is not persisted until Readium playback succeeds`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val repository = FakeBookOrbitDataSource(
+            buildReaderResult = ReaderState(
+                book = audiobook,
+                localFile = File("sample.m4b")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+        var requestedAutoPlay: Boolean? = null
+        coordinator.setAudioPlaybackOpener { _, playWhenReady ->
+            requestedAutoPlay = playWhenReady
+            false
+        }
+
+        coordinator.openBook(audiobook)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(true, requestedAutoPlay)
+        assertEquals(listOf(audiobook), repository.savedActiveReaders)
+        assertEquals(1, repository.clearActiveReaderCalls)
+    }
+
+    @Test
+    fun `audio reader loads chapter metadata before preparing playback`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val chapters = listOf(AudiobookChapter("Opening", 0L))
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(
+                book = audiobook.copy(
+                    fileId = "different-detail-file",
+                    format = "different-detail-format",
+                    localPath = "different-detail-path",
+                    audioChapters = chapters
+                ),
+                audioChapters = chapters
+            ),
+            buildReaderResult = ReaderState(
+                book = audiobook.copy(audioChapters = chapters),
+                localFile = File("sample.m4b")
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+
+        coordinator.openBook(audiobook)
+        advanceUntilIdle()
+
+        assertEquals(audiobook.copy(audioChapters = chapters), repository.buildReaderBooks.single())
+    }
+
+    @Test
+    fun `failed Readium audio launch clears active reader and returns to browser`() = runTest {
+        val audiobook = book.copy(
+            title = "Sample Audiobook",
+            format = "m4b",
+            mediaKind = MediaKind.AUDIO
+        )
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(audiobook)
+            )
+        )
+        coordinator.setScreenForTest(
+            AppScreen.Reader(
+                ReaderState(book = audiobook, localFile = File("sample.m4b"))
+            )
+        )
+
+        coordinator.onAudioPlaybackFailed(audiobook, "Audiobook preparation failed safely.")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearActiveReaderCalls)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertTrue(browser.browserState.message.orEmpty().contains("Unable to open Sample Audiobook"))
+    }
+
+    @Test
+    fun `load browser falls back to cached snapshot on network failure`() = runTest {
+        val cachedState = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book)
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            cachedBrowserState = cachedState,
+            loadLibrariesError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertTrue(screen.browserState.isOfflineSnapshot)
+        assertTrue(screen.browserState.message.orEmpty().contains("Showing the last cached library snapshot."))
+        assertTrue(screen.browserState.message.orEmpty().contains("network error"))
+    }
+
+    @Test
+    fun `background authenticated request sends the user to login when session expires`() = runTest {
+        val repository = FakeBookOrbitDataSource().apply {
+            searchBooksError = AuthenticationRequiredException()
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        assertTrue(coordinator.searchBooks("sample").isEmpty())
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, login.serverUrl)
+        assertTrue(login.message.orEmpty().contains("session expired"))
+    }
+
+    @Test
+    fun `load browser shows recoverable empty browser state when initial load fails without cache`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(serverUrl, screen.browserState.serverUrl)
+        assertTrue(screen.browserState.libraries.isEmpty())
+        assertTrue(screen.browserState.books.isEmpty())
+        assertFalse(screen.browserState.isOfflineSnapshot)
+        assertEquals("A network error interrupted the request.", screen.browserState.message)
+    }
+
+    @Test
+    fun `load browser can recover from empty error state on retry`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = java.io.IOException("offline")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        repository.loadLibrariesError = null
+        repository.loadLibrariesResult = listOf(library)
+        repository.loadBooksResult = listOf(book)
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(library), screen.browserState.libraries)
+        assertEquals(library.id, screen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), screen.browserState.books)
+        assertNull(screen.browserState.message)
+    }
+
+    @Test
+    fun `save server surfaces url validation failures without persisting the server`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            checkServerResult = ServerCheckResult.Redirected
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.saveServer("https://redirected.example.test")
+        advanceUntilIdle()
+
+        assertEquals(
+            AppScreen.ServerSetup(
+                serverUrl = "https://redirected.example.test",
+                message = "The server redirected this URL. Enter the final base URL directly."
+            ),
+            coordinator.screen.value
+        )
+        assertNull(repository.serverUrl)
+    }
+
+    @Test
+    fun `change server clears current state and opens login for the reachable replacement`() = runTest {
+        val replacement = "https://replacement.example.test"
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearServerCalls)
+        assertEquals(replacement, repository.serverUrl)
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals(replacement, login.serverUrl)
+        assertTrue(login.message.orEmpty().contains("Server changed"))
+    }
+
+    @Test
+    fun `change server leaves the replacement prefilled when its validation fails`() = runTest {
+        val replacement = "https://unreachable.example.test"
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            checkServerResult = ServerCheckResult.UnreachableHost
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.clearServerCalls)
+        assertNull(repository.serverUrl)
+        assertEquals(
+            AppScreen.ServerSetup(
+                serverUrl = replacement,
+                message = "The server host could not be resolved."
+            ),
+            coordinator.screen.value
+        )
+    }
+
+    @Test
+    fun `select library resumes after authentication recovers`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadBooksError = AuthenticationRequiredException()
+        ).apply {
+            loadLibrariesResult = listOf(library)
+            loadBooksResult = listOf(book)
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.selectLibrary(library.id)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("continue in this library"))
+
+        repository.loadBooksError = null
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val browserScreen = coordinator.screen.value as AppScreen.Browser
+        assertEquals(library.id, browserScreen.browserState.selectedLibraryId)
+        assertEquals(listOf(book), browserScreen.browserState.books)
+    }
+
+    @Test
+    fun `download resumes after authentication recovers`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            downloadError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.downloadBook(book)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("continue downloading ${book.title}"))
+
+        repository.downloadError = null
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        assertEquals(listOf(book, book), repository.downloadedBooks)
+    }
+
+    @Test
+    fun `active download exposes determinate progress in browser state`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = gate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.downloadBook(book)
+        runCurrent()
+
+        val downloading = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertTrue(book.fileId in downloading.downloadingFileIds)
+        assertEquals(0.5f, downloading.downloadProgressByFileId[book.fileId])
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `deleting a local copy updates open detail state without a catalog reload`() = runTest {
+        val downloadedBook = book.copy(localPath = "/downloads/sample.epub")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = emptyList()
+            )
+        )
+
+        coordinator.deleteLocalCopy(downloadedBook)
+        advanceUntilIdle()
+
+        val browser = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(downloadedBook), repository.deletedLocalBooks)
+        assertTrue(browser.localFilePathOverrides.containsKey(requireNotNull(book.fileId)))
+        assertEquals(null, browser.localFilePathOverrides[book.fileId])
+        assertEquals(1, browser.localBooksRevision)
+    }
+
+    @Test
+    fun `bulk local deletion reconciles successes and reports partial failures`() = runTest {
+        val first = book.copy(localPath = "/downloads/first.epub")
+        val second = book.copy(
+            id = "book-2",
+            fileId = "file-2",
+            title = "Second Book",
+            localPath = "/downloads/second.epub"
+        )
+        val repository = FakeBookOrbitDataSource(
+            deleteLocalErrorsByBookId = mapOf(second.id to IOException("File is locked."))
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(first, second)
+            )
+        )
+
+        coordinator.deleteLocalCopies(listOf(first, second))
+        advanceUntilIdle()
+
+        val browser = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf(first), repository.deletedLocalBooks)
+        assertEquals(null, browser.books.first { it.id == first.id }.localPath)
+        assertEquals(second.localPath, browser.books.first { it.id == second.id }.localPath)
+        assertTrue(browser.localFilePathOverrides.containsKey(requireNotNull(first.fileId)))
+        assertFalse(browser.localFilePathOverrides.containsKey(requireNotNull(second.fileId)))
+        assertEquals(1, browser.localBooksRevision)
+        assertEquals(
+            "Removed 1 of 2 local copies. 1 could not be removed.",
+            browser.message
+        )
+    }
+
+    @Test
+    fun `dismissing a browser message clears it immediately`() = runTest {
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                message = "Refresh failed."
+            )
+        )
+
+        coordinator.dismissBrowserMessage()
+
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertEquals(null, browser.browserState.message)
+    }
+
+    @Test
+    fun `load browser redirects to login when browsing session expires`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertEquals(serverUrl, loginScreen.serverUrl)
+        assertTrue(loginScreen.message.orEmpty().contains("continue browsing"))
+    }
+
+    @Test
+    fun `offline browser session action routes back to sign in instead of clearing the server`() = runTest {
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                isOfflineSnapshot = true
+            )
+        )
+
+        coordinator.onBrowserSessionAction()
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("Sign in again"))
+        assertEquals(0, repository.clearSessionCalls)
+    }
+
+    @Test
+    fun `explicit sign in from cached browser stays on login until authentication succeeds`() = runTest {
+        val cachedState = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book),
+            isOfflineSnapshot = true
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            cachedBrowserState = cachedState
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(cachedState)
+
+        coordinator.beginSignIn()
+        advanceUntilIdle()
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertTrue(login.message.orEmpty().contains("Waiting for an authenticated session"))
+        assertEquals(0, repository.clearSessionCalls)
+    }
+
+    @Test
+    fun `submit login verifies the session and resumes the browser`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.submitLogin("reader", "secret")
+        advanceUntilIdle()
+
+        assertEquals(listOf("reader" to "secret"), repository.loginCalls)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertEquals(listOf(library), browser.browserState.libraries)
+        assertEquals(listOf(book), browser.browserState.books)
+        assertTrue(repository.sessionStateRequested)
+    }
+
+    @Test
+    fun `submit login keeps credentials failure on login`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            loginError = InvalidCredentialsException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.submitLogin("reader", "wrong")
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertTrue(login.message.orEmpty().contains("username or password"))
+        assertFalse(login.isSubmitting)
+    }
+
+    @Test
+    fun `preview starts at the beginning and does not persist reader state or progress`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            buildReaderResult = ReaderState(
+                book = book,
+                lastKnownPosition = 84_000L,
+                pageIndex = 8,
+                progressPercent = 42f
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.previewBook(book)
+        advanceUntilIdle()
+
+        val preview = coordinator.screen.value as AppScreen.Reader
+        assertEquals(ReaderLaunchMode.PREVIEW, preview.readerState.launchMode)
+        assertEquals(0L, preview.readerState.lastKnownPosition)
+        assertEquals(0, preview.readerState.pageIndex)
+        assertNull(preview.readerState.progressPercent)
+        assertTrue(repository.savedActiveReaders.isEmpty())
+
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+        advanceUntilIdle()
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        assertTrue(repository.savedActiveReaders.isEmpty())
+        assertTrue(repository.queuedProgress.isEmpty())
+        assertEquals(0, repository.clearActiveReaderCalls)
+    }
+
+    @Test
+    fun `reader progress is captured before close and synced before browser refresh`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        assertEquals(listOf(book), repository.queuedProgress)
+        assertTrue(repository.syncPendingProgressCalls >= 1)
+        assertEquals(1, repository.clearActiveReaderCalls)
+    }
+
+    @Test
+    fun `close reader restores cached browser before background work runs`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+        coordinator.onProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+
+        coordinator.closeReader()
+
+        val restored = coordinator.screen.value as AppScreen.Browser
+        assertTrue(restored.browserState.isRefreshing)
+        assertEquals(50f, restored.browserState.books.single().progressPercent)
+        assertEquals(50f, restored.browserState.homeBooks.single().progressPercent)
+        assertTrue(repository.queuedProgress.isEmpty())
+        assertEquals(0, repository.syncPendingProgressCalls)
+        assertEquals(0, repository.clearActiveReaderCalls)
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(book), repository.queuedProgress)
+        assertTrue(repository.syncPendingProgressCalls >= 1)
+        assertEquals(1, repository.clearActiveReaderCalls)
+    }
+
+    @Test
+    fun `successful sync lets refreshed server progress replace the local overlay`() = runTest {
+        val serverBook = book.copy(progressPercent = 72f, progressLabel = "72%")
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(serverBook)
+        ).apply {
+            selectedLibraryId = library.id
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = book)))
+
+        coordinator.onProgress(book, position = 0L, pageIndex = 2, progressPercent = 25f)
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        val refreshed = coordinator.screen.value as AppScreen.Browser
+        assertEquals(72f, refreshed.browserState.books.single().progressPercent)
+        assertEquals("72%", refreshed.browserState.books.single().progressLabel)
+    }
+
+    @Test
+    fun `removing currently reading resets repository and browser progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            lastReadAtMillis = 200L,
+            readerPageIndex = 2,
+            readerPageCount = 8
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.removeFromCurrentlyReading(current)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current), repository.resetReadingStateBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val reset = browser.browserState.books.single()
+        assertNull(reset.progressLabel)
+        assertNull(reset.progressPercent)
+        assertNull(reset.progressPositionMs)
+        assertNull(reset.progressPageIndex)
+        assertNull(reset.lastReadAtMillis)
+        assertNull(reset.readerPageIndex)
+        assertNull(reset.readerPageCount)
+        assertFalse(reset.isRead)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("reset its progress"))
+    }
+
+    @Test
+    fun `mark as read updates repository and browser status without clearing progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            readStatus = BookReadStatus.READING
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.markBookAsRead(current)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current), repository.markedReadBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val marked = browser.browserState.books.single()
+        assertEquals(BookReadStatus.READ, marked.readStatus)
+        assertTrue(marked.isRead)
+        assertTrue((marked.lastReadAtMillis ?: 0L) > 0L)
+        assertEquals("42%", marked.progressLabel)
+        assertEquals(42f, marked.progressPercent)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("as read"))
+    }
+
+    @Test
+    fun `selecting an intermediate status updates repository and browser without clearing progress`() = runTest {
+        val current = book.copy(
+            progressLabel = "42%",
+            progressPercent = 42f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            readStatus = BookReadStatus.READING
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                debugPendingProgressCount = 1
+            )
+        )
+
+        coordinator.setBookReadingStatus(current, BookReadStatus.ON_HOLD)
+        advanceUntilIdle()
+
+        assertEquals(listOf(current to BookReadStatus.ON_HOLD), repository.readingStatusUpdates)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val updated = browser.browserState.books.single()
+        assertEquals(BookReadStatus.ON_HOLD, updated.readStatus)
+        assertFalse(updated.isRead)
+        assertEquals("42%", updated.progressLabel)
+        assertEquals(42f, updated.progressPercent)
+        assertEquals(0, browser.browserState.debugPendingProgressCount)
+        assertTrue(browser.browserState.message.orEmpty().contains("On hold"))
+    }
+
+    @Test
+    fun `mark as unread resets repository and browser progress`() = runTest {
+        val completed = book.copy(
+            progressLabel = "100%",
+            progressPercent = 100f,
+            readStatus = BookReadStatus.READ,
+            isRead = true,
+            lastReadAtMillis = 200L
+        )
+        val repository = FakeBookOrbitDataSource(pendingProgressCountResult = 0)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(completed)
+            )
+        )
+
+        coordinator.markBookAsUnread(completed)
+        advanceUntilIdle()
+
+        assertEquals(listOf(completed), repository.resetReadingStateBooks)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        val reset = browser.browserState.books.single()
+        assertEquals(BookReadStatus.UNREAD, reset.readStatus)
+        assertFalse(reset.isRead)
+        assertNull(reset.progressPercent)
+        assertNull(reset.progressLabel)
+        assertNull(reset.lastReadAtMillis)
+        assertTrue(browser.browserState.message.orEmpty().contains("as unread"))
+    }
+
+    @Test
+    fun `setting a personal rating returns authoritative detail and records request`() = runTest {
+        val authoritativeDetail = BookDetailInfo(book = book, userRating = 4)
+        val repository = FakeBookOrbitDataSource(userRatingResult = authoritativeDetail)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.setBookUserRating(book, 5)
+
+        assertEquals(authoritativeDetail, result)
+        assertEquals(listOf(book to 5), repository.userRatingUpdates)
+    }
+
+    @Test
+    fun `personal rating failure returns null and shows book specific message`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            setBookUserRatingError = IOException("rating write failed")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        val result = coordinator.setBookUserRating(book, 2)
+
+        assertNull(result)
+        assertEquals(listOf(book to 2), repository.userRatingUpdates)
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertTrue(
+            browser.browserState.message.orEmpty()
+                .contains("Unable to update the rating for Sample Book.")
+        )
+    }
+
+    @Test
+    fun `personal rating cancellation is rethrown`() = runTest {
+        val cancellation = CancellationException("rating cancelled")
+        val repository = FakeBookOrbitDataSource(setBookUserRatingError = cancellation)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        var thrown: Throwable? = null
+        try {
+            coordinator.setBookUserRating(book, null)
+        } catch (error: Throwable) {
+            thrown = error
+        }
+
+        assertEquals(cancellation, thrown)
+        assertEquals(listOf(book to null), repository.userRatingUpdates)
+    }
+
+    @Test
+    fun `live browser sign out clears session and returns to login`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated,
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                isOfflineSnapshot = false
+            )
+        )
+
+        coordinator.onBrowserSessionAction()
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("Signed out"))
+        assertEquals(1, repository.clearSessionCalls)
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        val refreshedLogin = coordinator.screen.value as AppScreen.Login
+        assertTrue(refreshedLogin.message.orEmpty().contains("Waiting for an authenticated session."))
+    }
+}
+
+private class FakeBookOrbitDataSource(
+    var serverUrl: String? = "https://books.example.test",
+    var sessionState: SessionState = SessionState.Authenticated,
+    var cachedBrowserState: BrowserState? = null,
+    var restoreActiveReaderLocalOnlyResult: ReaderState? = null,
+    var restoreActiveReaderResult: ReaderState? = null,
+    var buildReaderResult: ReaderState = ReaderState(
+        book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Sample Book"
+        )
+    ),
+    var buildReaderError: Throwable? = null,
+    var bookDetailResult: BookDetailInfo? = null,
+    var readerProgressResult: BookSummary? = null,
+    var userRatingResult: BookDetailInfo? = null,
+    var setBookUserRatingError: Throwable? = null,
+    var downloadError: Throwable? = null,
+    var downloadGate: CompletableDeferred<Unit>? = null,
+    var loadLibrariesResult: List<LibrarySummary> = emptyList(),
+    var loadBooksResult: List<BookSummary> = emptyList(),
+    var cachedLibraryCatalog: LibraryBooksPage? = null,
+    var refreshLibraryCatalogResult: LibraryBooksPage? = null,
+    var refreshLibraryCatalogResults: Map<String, LibraryBooksPage> = emptyMap(),
+    var refreshLibraryCatalogErrors: Map<String, Throwable> = emptyMap(),
+    var refreshLibraryCatalogError: Throwable? = null,
+    var refreshLibraryCatalogGate: CompletableDeferred<Unit>? = null,
+    var refreshLibraryCatalogGates: Map<String, CompletableDeferred<Unit>> = emptyMap(),
+    var loadLibrariesError: Throwable? = null,
+    var loadBooksError: Throwable? = null,
+    var searchBooksError: Throwable? = null,
+    var loginError: Throwable? = null,
+    var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
+    var pendingProgressCountResult: Int = 0,
+    var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success,
+    var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
+) : BookOrbitDataSource {
+    val restoreActiveReaderCalls = mutableListOf<Boolean>()
+    val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
+    val buildReaderBooks = mutableListOf<BookSummary>()
+    val readerProgressBooks = mutableListOf<BookSummary>()
+    val savedActiveReaders = mutableListOf<BookSummary>()
+    val downloadedBooks = mutableListOf<BookSummary>()
+    val queuedProgress = mutableListOf<BookSummary>()
+    val markedReadBooks = mutableListOf<BookSummary>()
+    val resetReadingStateBooks = mutableListOf<BookSummary>()
+    val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
+    val userRatingUpdates = mutableListOf<Pair<BookSummary, Int?>>()
+    val deletedLocalBooks = mutableListOf<BookSummary>()
+    var clearSessionCalls = 0
+    var clearServerCalls = 0
+    var clearActiveReaderCalls = 0
+    var syncPendingProgressCalls = 0
+    var sessionStateRequested = false
+    var selectedLibraryId: String? = null
+    val loginCalls = mutableListOf<Pair<String, String>>()
+    val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
+    val refreshedLibraryIds = mutableListOf<String>()
+    var activeLibraryRefreshes = 0
+    var maxConcurrentLibraryRefreshes = 0
+
+    override suspend fun getServerUrl(): String? = serverUrl
+
+    override suspend fun setServerUrl(serverUrl: String) {
+        this.serverUrl = serverUrl
+    }
+
+    override suspend fun clearServer() {
+        clearServerCalls += 1
+        serverUrl = null
+        selectedLibraryId = null
+    }
+
+    override suspend fun clearSession() {
+        clearSessionCalls += 1
+    }
+
+    override suspend fun getSelectedLibraryId(): String? = selectedLibraryId
+
+    override suspend fun setSelectedLibraryId(libraryId: String) {
+        selectedLibraryId = libraryId
+    }
+
+    override suspend fun getSessionState(): SessionState {
+        sessionStateRequested = true
+        return sessionState
+    }
+
+    override suspend fun login(username: String, password: String) {
+        loginCalls += username to password
+        loginError?.let { throw it }
+        sessionState = SessionState.Authenticated
+    }
+
+    override suspend fun loadLibraries(): List<LibrarySummary> {
+        loadLibrariesError?.let { throw it }
+        return loadLibrariesResult
+    }
+
+    override suspend fun loadBooks(libraryId: String): List<BookSummary> {
+        loadBooksError?.let { throw it }
+        return loadBooksResult
+    }
+
+    override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = cachedLibraryCatalog
+
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> = cachedBrowserState?.homeBooks.orEmpty()
+
+    override suspend fun refreshLibraryCatalog(
+        libraryId: String,
+        firstPage: LibraryBooksPage?
+    ): LibraryBooksPage {
+        refreshedLibraryIds += libraryId
+        refreshFirstPages += firstPage
+        activeLibraryRefreshes += 1
+        maxConcurrentLibraryRefreshes = maxOf(maxConcurrentLibraryRefreshes, activeLibraryRefreshes)
+        return try {
+            refreshLibraryCatalogGate?.await()
+            refreshLibraryCatalogGates[libraryId]?.await()
+            refreshLibraryCatalogErrors[libraryId]?.let { throw it }
+            refreshLibraryCatalogError?.let { throw it }
+            refreshLibraryCatalogResults[libraryId]
+                ?: refreshLibraryCatalogResult
+                ?: firstPage?.copy(isComplete = true)
+                ?: cachedLibraryCatalog?.copy(isComplete = true)
+                ?: LibraryBooksPage(isComplete = true)
+        } finally {
+            activeLibraryRefreshes -= 1
+        }
+    }
+
+    override suspend fun searchBooks(query: String): List<BookSummary> {
+        searchBooksError?.let { throw it }
+        return emptyList()
+    }
+
+    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
+
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+
+    override suspend fun loadReaderProgress(book: BookSummary): BookSummary {
+        readerProgressBooks += book
+        return readerProgressResult ?: book
+    }
+
+    override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo {
+        userRatingUpdates += book to rating
+        setBookUserRatingError?.let { throw it }
+        return userRatingResult ?: BookDetailInfo(book = book, userRating = rating)
+    }
+
+    override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
+        buildReaderBooks += book
+        buildReaderLocalOnlyCalls += localOnly
+        buildReaderError?.let { throw it }
+        return buildReaderResult
+    }
+
+    override suspend fun saveActiveReader(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode
+    ) {
+        savedActiveReaders += book
+    }
+
+    override suspend fun clearActiveReader() {
+        clearActiveReaderCalls += 1
+    }
+
+    override suspend fun markBookAsRead(book: BookSummary) {
+        markedReadBooks += book
+    }
+
+    override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) {
+        readingStatusUpdates += book to status
+    }
+
+    override suspend fun resetBookReadingState(book: BookSummary) {
+        resetReadingStateBooks += book
+    }
+
+    override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? {
+        restoreActiveReaderCalls += localOnly
+        return if (localOnly) restoreActiveReaderLocalOnlyResult else restoreActiveReaderResult
+    }
+
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+        downloadedBooks += book
+        onProgress(0.5f)
+        downloadGate?.await()
+        downloadError?.let { throw it }
+        return File("downloaded.bin")
+    }
+
+    override suspend fun deleteLocalCopy(book: BookSummary) {
+        deleteLocalErrorsByBookId[book.id]?.let { throw it }
+        deletedLocalBooks += book
+    }
+
+    override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        queuedProgress += book
+    }
+
+    override suspend fun pendingProgressCount(): Int = pendingProgressCountResult
+
+    override suspend fun syncPendingProgress(): SyncAttemptResult {
+        syncPendingProgressCalls += 1
+        return syncPendingProgressResult
+    }
+
+    override suspend fun canReachServer(serverUrl: String): Boolean = checkServerResult == ServerCheckResult.Reachable
+
+    override suspend fun checkServer(serverUrl: String): ServerCheckResult = checkServerResult
+}
+
+private fun AppCoordinator.setScreenForTest(screen: AppScreen) {
+    val field = AppCoordinator::class.java.getDeclaredField("_screen")
+    field.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val state = field.get(this) as kotlinx.coroutines.flow.MutableStateFlow<AppScreen>
+    state.value = screen
+}
+
+private fun AppCoordinator.bootstrapIntoBrowser(state: BrowserState) {
+    val field = AppCoordinator::class.java.getDeclaredField("lastBrowserState")
+    field.isAccessible = true
+    field.set(this, state)
+
+    val screenField = AppCoordinator::class.java.getDeclaredField("_screen")
+    screenField.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val screen = screenField.get(this) as kotlinx.coroutines.flow.MutableStateFlow<AppScreen>
+    screen.value = AppScreen.Browser(state)
+}

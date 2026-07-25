@@ -6,18 +6,20 @@ This document defines the current package naming, versioning, and signing expect
 
 - repository/project name: `lagrange-reader`
 - user-facing app name: `Lagrange`
-- current Android namespace: `com.bookorbit.android`
-- current Android application id: `com.bookorbit.android`
+- current Android namespace: `com.vangeaux.lagrange`
+- current Android application id: `com.vangeaux.lagrange`
+
+`com.bookorbit.android` was the original applicationId/namespace, left over from when this project was first developed under the name "bookorbit-android" before the "Lagrange" rebrand — not an intentional attempt to use the BookOrbit name. It was migrated to `com.vangeaux.lagrange` to remove any appearance of affiliation with, or ownership of, the third-party BookOrbit service this app is an independent client for.
 
 ### Short-term rule
 
 - keep `namespace` and `applicationId` aligned unless a product split requires otherwise
-- treat `com.bookorbit.android` as the current shipping id until a deliberate rename is planned and migrated
-- if the app is rebranded away from `BookOrbit`, update the repository docs, launcher label, namespace migration plan, and Play-distribution identifiers together rather than piecemeal
+- treat `com.vangeaux.lagrange` as the current shipping id
+- if the app is rebranded again, update the repository docs, launcher label, namespace migration plan, and Play-distribution identifiers together rather than piecemeal
 
 ### Rename guidance
 
-If a rename is required later:
+If a rename is required again in the future:
 
 - change the launcher label and branding assets in the same release window
 - migrate package names in source deliberately rather than mixing package and branding transitions across multiple partial commits

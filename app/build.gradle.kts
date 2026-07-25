@@ -19,17 +19,17 @@ val releaseKeystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.bookorbit.android"
+    namespace = "com.vangeaux.lagrange"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.bookorbit.android"
+        applicationId = "com.vangeaux.lagrange"
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 14
-        versionName = "1.2.2"
+        versionCode = 15
+        versionName = "1.2.3"
     }
 
     signingConfigs {

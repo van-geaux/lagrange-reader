@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "bookorbit-android"
+rootProject.name = "lagrange-reader"
 include(":app")
