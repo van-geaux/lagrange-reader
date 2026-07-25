@@ -1,10 +1,12 @@
 # Handover
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## Current outcome
 
-Lagrange 1.2.2 is published at the GitHub Release for tag `v1.2.2` with the signed `Lagrange-1.2.2.apk` asset attached; confirmed via `gh release view v1.2.2` after the tagged workflow run completed successfully. The `main` branch is synchronized with `origin/main`; use `git log -1` for the exact current HEAD.
+Lagrange 1.2.3 is published at the GitHub Release for tag `v1.2.3` with the signed `Lagrange-1.2.3.apk` asset attached; confirmed via `gh release view v1.2.3` after the tagged workflow run completed successfully. The `main` branch is synchronized with `origin/main`; use `git log -1` for the exact current HEAD.
+
+1.2.3 changed the Android `applicationId`/`namespace` from `com.bookorbit.android` to `com.vangeaux.lagrange`. `com.bookorbit.android` was leftover from early development under the working name "bookorbit-android" and was never updated when the app was rebranded to Lagrange; it was not an intentional use of the BookOrbit name, but shipping it was still a mistake the release notes apologize for. This is a breaking distribution change: prior `com.bookorbit.android` installs must be uninstalled before installing 1.2.3, and local app preferences do not carry over (the DataStore prefs file was also renamed, `bookorbit_prefs` -> `lagrange_prefs`, with no migration). Internal class names (`BookOrbitApplication`, `BookOrbitRepository`, `BookOrbitTheme`, `Theme.BookOrbit*` styles, etc.) were deliberately left unchanged in this pass.
 
 1.2.1 fixed resume position generally (EPUB, PDF, CBZ, CBR, CB7, audiobooks): normal online opens now refresh authoritative server progress before building reader state, EPUB resume selects a real generated Readium position instead of estimating from equal-sized chapters, and a page-index bug that mis-applied EPUB's one-based conversion to all media types is fixed. Confirmed on a physical device for EPUB. 1.2.2 reworked the release-update dialog: notes render as Markdown instead of plaintext, Acknowledge was replaced with Download (opens the GitHub release page), and Ignore now persists the ignored release tag to app preferences so it survives an app restart (Download's suppression remains session-only). Physical-device confirmation of the 1.2.2 dialog changes remains intentionally deferred.
 
@@ -15,9 +17,9 @@ The Book Detail rating, complete reading-status menu, reading-status/progress pl
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
 - Remote: `origin` — now **HTTPS**, not SSH. This machine's SSH key (`vangeaux@bookorbit-android-debian`) is not authorized on the GitHub account (`Permission denied (publickey)`), so `origin` was switched to `https://github.com/van-geaux/lagrange-reader.git` and `gh auth setup-git` was run so `git push`/`git tag` push use the `gh` CLI's stored token. That token was upgraded mid-session from a fine-grained PAT without repo-write access to one with `Contents: read and write` after hitting 403s trying to edit/delete a GitHub Release. The user pasted the raw token value directly into the assistant chat while re-authenticating (`gh auth login --with-token`) rather than only piping it through a `!`-prefixed shell command — that token value is present in this session's conversation history and should be rotated/revoked from GitHub token settings if that history is a concern.
-- Published release: `Lagrange 1.2.2`, tagged `v1.2.2`, with `Lagrange-1.2.2.apk` attached — confirmed via `gh release view v1.2.2`.
-- Current Git HEAD: `fe99408 release: prepare Lagrange 1.2.2`; see `git log -1` to confirm. `main` is synchronized with `origin/main`.
-- Prior releases: `v1.2.1` (EPUB/server-progress-hydration/page-index fixes) and `v1.2.0` both published successfully with signed APK assets attached.
+- Published release: `Lagrange 1.2.3`, tagged `v1.2.3`, with `Lagrange-1.2.3.apk` attached — confirmed via `gh release view v1.2.3`.
+- Current Git HEAD: `12376a7 release: prepare Lagrange 1.2.3`; see `git log -1` to confirm. `main` is synchronized with `origin/main`.
+- Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.
 - The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
 - `.github/workflows/android-release.yml` builds signed `Lagrange-<tag-version>.apk` assets for `v*` tag pushes and creates the GitHub Release using `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` repository secrets. It fails fast if `docs/release-notes/v<version>.md` is missing, and publishes that file verbatim as the release body via `--notes-file`.
@@ -27,13 +29,25 @@ The Book Detail rating, complete reading-status menu, reading-status/progress pl
 
 All commits from this session are pushed; `main` is synchronized with `origin/main` (nothing ahead). This session's commits, newest first:
 
-- `fe99408 release: prepare Lagrange 1.2.2`
-- `1a0d51c docs: broaden 1.2.1 release notes beyond the EPUB fix`
-- `75c9cbd release: prepare Lagrange 1.2.1`
+- `12376a7 release: prepare Lagrange 1.2.3`
 
-(`5637ef3` and earlier predate this session.)
+(`16e2a45` and earlier predate this session.)
 
 ## Completed work and resolved priority defect
+
+### applicationId/namespace rename off "com.bookorbit.android" — 2026-07-25 (v1.2.3)
+
+The Android `applicationId`/`namespace` was `com.bookorbit.android` even though the app had already been rebranded to display as "Lagrange" everywhere else (launcher label, README, GitHub repo `van-geaux/lagrange-reader`). That leftover identifier was a real ownership/trademark risk: this app is an independent, unofficial client for the third-party BookOrbit service, not affiliated with or endorsed by it, and shipping under a `com.bookorbit.*` id could look otherwise or collide if BookOrbit ever ships their own Android app.
+
+- `app/build.gradle.kts`: `namespace`/`applicationId` changed to `com.vangeaux.lagrange`; `versionCode`/`versionName` bumped to `15`/`"1.2.3"`.
+- `settings.gradle.kts`: `rootProject.name` changed from `bookorbit-android` to `lagrange-reader` to match the actual GitHub repo name (previously out of sync).
+- All ~121 Kotlin files under `app/src/main/java/com/bookorbit/android/`, `app/src/test/java/com/bookorbit/android/`, and `app/src/androidTest/java/com/bookorbit/android/` were moved to the equivalent `com/vangeaux/lagrange/` paths with updated `package` declarations, via `git mv` + `sed` so history is preserved as renames.
+- Two hardcoded custom action/interface strings in `ReadiumAudioPlayback.kt` (`AUDIO_SEEK_BACK_SESSION_ACTION`, `AUDIO_SEEK_FORWARD_SESSION_ACTION`, `SERVICE_INTERFACE`) were updated from `com.bookorbit.android.*` to `com.vangeaux.lagrange.*` to match.
+- The DataStore prefs file name changed from `"bookorbit_prefs"` to `"lagrange_prefs"` in `BookOrbitRepository.kt`, with no migration — accepted as part of the same breaking reinstall.
+- `docs/release.md`'s package-naming policy section was updated to record the new id and explain the "bookorbit-android" working-name origin.
+- Explicitly out of scope for this pass (user decision): internal Kotlin class names (`BookOrbitApplication`, `BookOrbitApp`, `BookOrbitRepository`, `BookOrbitTheme`, etc.) and the `Theme.BookOrbit*` style resources were left unchanged. All "BookOrbit" references describing the third-party backend service itself (`docs/bookorbit-api.md`, README prose, `docs/architecture.md`, `docs/ui-ux.md`, `docs/privacy.md`, `CHECKLIST.md`) were correctly left as-is.
+- Full JVM gate: 324 tests across 53 suites, zero failures/errors/skips. Debug, Android-test, and signed release APKs all assemble successfully under the new applicationId. Release notes (`docs/release-notes/v1.2.3.md`) explicitly call out the breaking-upgrade requirement (uninstall any prior `com.bookorbit.android` install first) and apologize for having shipped that id at all.
+- Physical-device confirmation that a fresh install under the new applicationId behaves normally (storage folder now `Android/data/com.vangeaux.lagrange/...`) remains intentionally deferred.
 
 ### Release-update dialog: Markdown notes, Download action, persisted Ignore — 2026-07-24 (v1.2.2)
 
@@ -238,15 +252,15 @@ All requested source, test, release, and documentation changes are committed and
 - `docs/release.md`
 - `.github/workflows/android-release.yml`
 - `app/build.gradle.kts`
-- `app/src/main/java/com/bookorbit/android/AppCoordinator.kt`
-- `app/src/test/java/com/bookorbit/android/AppCoordinatorTest.kt`
-- `app/src/main/java/com/bookorbit/android/BookOrbitApp.kt`
-- `app/src/main/java/com/bookorbit/android/BookOrbitHomeScreen.kt`
-- `app/src/main/java/com/bookorbit/android/BookOrbitRepository.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayback.kt`
-- `app/src/main/java/com/bookorbit/android/ReadiumAudioPlayerOverlay.kt`
-- `app/src/androidTest/java/com/bookorbit/android/AudiobookMediaNotificationInstrumentedTest.kt`
-- `app/src/androidTest/java/com/bookorbit/android/ReadiumAudioOpenInstrumentedTest.kt`
+- `app/src/main/java/com/vangeaux/lagrange/AppCoordinator.kt`
+- `app/src/test/java/com/vangeaux/lagrange/AppCoordinatorTest.kt`
+- `app/src/main/java/com/vangeaux/lagrange/BookOrbitApp.kt`
+- `app/src/main/java/com/vangeaux/lagrange/BookOrbitHomeScreen.kt`
+- `app/src/main/java/com/vangeaux/lagrange/BookOrbitRepository.kt`
+- `app/src/main/java/com/vangeaux/lagrange/ReadiumAudioPlayback.kt`
+- `app/src/main/java/com/vangeaux/lagrange/ReadiumAudioPlayerOverlay.kt`
+- `app/src/androidTest/java/com/vangeaux/lagrange/AudiobookMediaNotificationInstrumentedTest.kt`
+- `app/src/androidTest/java/com/vangeaux/lagrange/ReadiumAudioOpenInstrumentedTest.kt`
 
 ## Environment notes
 
