@@ -4,7 +4,7 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Current status — 2026-07-24
 
-Lagrange 1.3.0 is being prepared for release. The signed `Lagrange-1.3.0.apk` will be published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.3.0) by the tagged-release workflow. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, edge-state, History, Statistics, and Android external-audiobook-control validation is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
+Lagrange 1.3.0 is released. The signed `Lagrange-1.3.0.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.3.0) by the tagged-release workflow. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, edge-state, History, Statistics, and Android external-audiobook-control validation is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
 
 The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
 

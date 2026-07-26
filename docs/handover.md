@@ -4,7 +4,7 @@ Last updated: 2026-07-26
 
 ## Current outcome
 
-Lagrange 1.3.0 is prepared for release with the signed-release workflow, version code 16, the `docs/release-notes/v1.3.0.md` note, and the completed Statistics, server-history, telemetry/privacy, permission, and BookOrbit-comparison documentation. The `v1.3.0` tag and GitHub Release are the remaining publishing step for this handover update.
+Lagrange 1.3.0 is published at the GitHub Release for tag `v1.3.0` with the signed `Lagrange-1.3.0.apk` asset attached; confirmed via `gh release view v1.3.0` after the tagged workflow run completed successfully. The release note is `docs/release-notes/v1.3.0.md`, and the completed Statistics, server-history, telemetry/privacy, permission, and BookOrbit-comparison documentation is on `main`.
 
 1.2.3 changed the Android `applicationId`/`namespace` from `com.bookorbit.android` to `com.vangeaux.lagrange`. `com.bookorbit.android` was leftover from early development under the working name "bookorbit-android" and was never updated when the app was rebranded to Lagrange; it was not an intentional use of the BookOrbit name, but shipping it was still a mistake the release notes apologize for. This is a breaking distribution change: prior `com.bookorbit.android` installs must be uninstalled before installing 1.2.3, and local app preferences do not carry over (the DataStore prefs file was also renamed, `bookorbit_prefs` -> `lagrange_prefs`, with no migration). Internal class names (`BookOrbitApplication`, `BookOrbitRepository`, `BookOrbitTheme`, `Theme.BookOrbit*` styles, etc.) were deliberately left unchanged in this pass.
 
@@ -17,8 +17,8 @@ The Book Detail rating, complete reading-status menu, reading-status/progress pl
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
 - Remote: `origin` uses HTTPS through the authenticated GitHub CLI credential helper. Credential values are not recorded in project documentation.
-- Published release: `Lagrange 1.2.3`, tagged `v1.2.3`, with `Lagrange-1.2.3.apk` attached — confirmed via `gh release view v1.2.3`.
-- Current Git HEAD: `12376a7 release: prepare Lagrange 1.2.3`; see `git log -1` to confirm. `main` is synchronized with `origin/main`.
+- Published release: `Lagrange 1.3.0`, tagged `v1.3.0`, with `Lagrange-1.3.0.apk` attached — confirmed via `gh release view v1.3.0`.
+- Current Git HEAD: see `git log -1` to confirm; `main` is synchronized with `origin/main`.
 - Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.
 - The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
