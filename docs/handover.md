@@ -1,22 +1,22 @@
 # Handover
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
 ## Current outcome
 
-Lagrange 1.2.3 is published at the GitHub Release for tag `v1.2.3` with the signed `Lagrange-1.2.3.apk` asset attached; confirmed via `gh release view v1.2.3` after the tagged workflow run completed successfully. The `main` branch is synchronized with `origin/main`; use `git log -1` for the exact current HEAD.
+Lagrange 1.3.0 is prepared for release with the signed-release workflow, version code 16, the `docs/release-notes/v1.3.0.md` note, and the completed Statistics, server-history, telemetry/privacy, permission, and BookOrbit-comparison documentation. The `v1.3.0` tag and GitHub Release are the remaining publishing step for this handover update.
 
 1.2.3 changed the Android `applicationId`/`namespace` from `com.bookorbit.android` to `com.vangeaux.lagrange`. `com.bookorbit.android` was leftover from early development under the working name "bookorbit-android" and was never updated when the app was rebranded to Lagrange; it was not an intentional use of the BookOrbit name, but shipping it was still a mistake the release notes apologize for. This is a breaking distribution change: prior `com.bookorbit.android` installs must be uninstalled before installing 1.2.3, and local app preferences do not carry over (the DataStore prefs file was also renamed, `bookorbit_prefs` -> `lagrange_prefs`, with no migration). Internal class names (`BookOrbitApplication`, `BookOrbitRepository`, `BookOrbitTheme`, `Theme.BookOrbit*` styles, etc.) were deliberately left unchanged in this pass.
 
 1.2.1 fixed resume position generally (EPUB, PDF, CBZ, CBR, CB7, audiobooks): normal online opens now refresh authoritative server progress before building reader state, EPUB resume selects a real generated Readium position instead of estimating from equal-sized chapters, and a page-index bug that mis-applied EPUB's one-based conversion to all media types is fixed. Confirmed on a physical device for EPUB. 1.2.2 reworked the release-update dialog: notes render as Markdown instead of plaintext, Acknowledge was replaced with Download (opens the GitHub release page), and Ignore now persists the ignored release tag to app preferences so it survives an app restart (Download's suppression remains session-only). Physical-device confirmation of the 1.2.2 dialog changes remains intentionally deferred.
 
-The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, and supported reader/media validation remain implemented and user-confirmed as working from earlier sessions. The Android audiobook controls work in the app player; optional API 33+ pull-down/lock-screen platform validation remains deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, server reading-history supplement, Statistics screen, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, supported reader/media validation, and API 33+ audiobook controls are implemented and user-confirmed as working. OIDC/SSO and optional offline RAR/7z extraction remain deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
 ## Repository and publishing state
 
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
-- Remote: `origin` — now **HTTPS**, not SSH. This machine's SSH key (`vangeaux@bookorbit-android-debian`) is not authorized on the GitHub account (`Permission denied (publickey)`), so `origin` was switched to `https://github.com/van-geaux/lagrange-reader.git` and `gh auth setup-git` was run so `git push`/`git tag` push use the `gh` CLI's stored token. That token was upgraded mid-session from a fine-grained PAT without repo-write access to one with `Contents: read and write` after hitting 403s trying to edit/delete a GitHub Release. The user pasted the raw token value directly into the assistant chat while re-authenticating (`gh auth login --with-token`) rather than only piping it through a `!`-prefixed shell command — that token value is present in this session's conversation history and should be rotated/revoked from GitHub token settings if that history is a concern.
+- Remote: `origin` uses HTTPS through the authenticated GitHub CLI credential helper. Credential values are not recorded in project documentation.
 - Published release: `Lagrange 1.2.3`, tagged `v1.2.3`, with `Lagrange-1.2.3.apk` attached — confirmed via `gh release view v1.2.3`.
 - Current Git HEAD: `12376a7 release: prepare Lagrange 1.2.3`; see `git log -1` to confirm. `main` is synchronized with `origin/main`.
 - Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.

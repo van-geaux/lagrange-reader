@@ -124,6 +124,7 @@ private fun BookDetailInfo.toJson(): JSONObject = JSONObject().apply {
     putNullable("totalSizeBytes", totalSizeBytes)
     putNullable("durationSeconds", durationSeconds)
     put("audioChapters", audioChapters.toJson())
+    put("providerIds", providerIds.toProviderIdsJson())
 }
 
 private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
@@ -176,7 +177,8 @@ private fun JSONObject.toBookDetail(): BookDetailInfo? {
         fileCount = optInt("fileCount"),
         totalSizeBytes = optionalLong("totalSizeBytes"),
         durationSeconds = optionalLong("durationSeconds"),
-        audioChapters = audiobookChapters("audioChapters")
+        audioChapters = audiobookChapters("audioChapters"),
+        providerIds = providerIds("providerIds")
     )
 }
 
@@ -209,6 +211,26 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     readerPageCount = optionalInt("readerPageCount"),
     audioChapters = audiobookChapters("audioChapters")
 )
+
+private fun List<BookProviderId>.toProviderIdsJson(): JSONArray = JSONArray(
+    map { providerId ->
+        JSONObject()
+            .put("provider", providerId.provider)
+            .put("id", providerId.id)
+    }
+)
+
+private fun JSONObject.providerIds(key: String): List<BookProviderId> {
+    val array = optJSONArray(key) ?: return emptyList()
+    return buildList {
+        for (index in 0 until array.length()) {
+            val entry = array.optJSONObject(index) ?: continue
+            val provider = entry.optString("provider").takeIf { it.isNotBlank() } ?: continue
+            val id = entry.optString("id").takeIf { it.isNotBlank() } ?: continue
+            add(BookProviderId(provider, id))
+        }
+    }
+}
 
 private fun List<AudiobookChapter>.toJson(): JSONArray = JSONArray(
     map { chapter ->

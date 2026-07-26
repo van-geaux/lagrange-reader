@@ -78,7 +78,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Confirm session persistence after app restart
 - [x] Keep explicit Sign in on the login screen instead of bouncing to cached Home
 - [x] Confirm explicit sign-out and session-expiry recovery behavior on a physical device
-- [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server
+- [ ] Validate OIDC login flow on a real OIDC-enabled BookOrbit server (deferred by current product decision)
 - [x] Add explicit authenticated-user bootstrap check after login
 - [x] Add clean logout/reset session behavior
 - [x] Persist the login access token and attach it to authenticated API/media requests
@@ -125,7 +125,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Validate the general comic reading flow on the target device; comic books work correctly in current testing
 - [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
 - [x] Validate online and local/downloaded CBZ/CBR reading, page navigation, and progress on the target device/server; RAR-backed local CBR continues to use server-side extraction when required
-- [ ] Validate online and downloaded CB7 reading on a physical device/server
+- [x] Validate online and downloaded CB7 reading on a physical device/server; user-confirmed validation is complete
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
@@ -335,7 +335,7 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Add multi-book selection and bulk Mark as read/unread actions to library grids
 - [x] Navigate genre selections to filtered Books or Series results, using BookOrbit's current singular `genre`/`includesAny`/array book-filter contract and the analogous `author` relation contract; keep tags informational
 - [x] Validate genre-filter navigation against the target BookOrbit server's supported query contract and result scope
-- [ ] Add direct OIDC/SSO authentication after the provider/redirect contract is confirmed; native username/password remains current
+- [ ] Add direct OIDC/SSO authentication after the provider/redirect contract is confirmed; deferred by current product decision, native username/password remains current
 - [x] Validate the revised detail-action density, title expansion, multi-selection, and series-index implementation in code/tests
 - [ ] Validate the remaining revised detail density on a device; genre-filter result scope is validated
 - [x] Keep Read and Preview action labels visible beside clear icons while retaining compact spacing
@@ -418,15 +418,15 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 
 Implement and validate in this dependency order. The July 20 reader/detail feedback follow-up was released in version 0.2.7; the current release line is 1.1.0. The reported reader-ownership race, Exit, and tutorial timing/dismissal are target-device validated; broader format/responsive checks remain.
 
-1. [ ] Install the latest timestamped debug APK produced by `assembleDebug` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, right page rail/footer, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. Confirm downloaded CBR/CB7 clearly remains unavailable offline and succeeds after reconnecting. Spot-check EPUB, PDF, and audio. Do not claim the comic migration device-validated until this pass succeeds.
-2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. Samsung Galaxy S24 manual validation remains pending.
-3. [x] Implement the user-selected compact progress line directly above actions, covering canonical known/zero/completed values, unknown status-only labels, explicit unread-reset omission, identity de-duplication, and immediate stale-cache-safe removal after Mark as unread. Physical S24 validation remains pending.
+1. [x] Install the latest timestamped debug APK produced by `assembleDebug` on the Samsung Galaxy S24 and validate local/online CBZ plus connected CBR/CB7 through normal Read and Preview. Confirm the retained dark controls, right page rail/footer, leftmost labeled Exit/X with no visible Back action, surface/scrim dismissal, exact normal locator resume/progress, Preview page-1 isolation, orientation lock, keep-awake, and dark system bars. User-confirmed validation is complete; downloaded CBR/CB7 remains server-backed and offline-limited. Spot-check EPUB, PDF, and audio is complete.
+2. [x] Replace the wrapping actions with one fixed-height, non-wrapping, non-scrolling row. Preserve labeled Read/Preview; map the nonlocal inline transfer slot to Download/Retry/Cancel; keep local Delete and Update/Cancel update in More; measure Mark as read/unread against current typography/font scale; show More whenever anything is hidden; compact only weighted Read/Preview at extreme widths. User-confirmed Samsung Galaxy S24 validation is complete.
+3. [x] Implement the user-selected compact progress line directly above actions, covering canonical known/zero/completed values, unknown status-only labels, explicit unread-reset omission, identity de-duplication, and immediate stale-cache-safe removal after Mark as unread. User-confirmed Samsung Galaxy S24 validation is complete.
 4. [x] Implement shared theme-aware lightweight chrome for EPUB and comics with a status-bar-safe top bar, a right-side page rail occupying about 75% of screen height, bottom list/cog, and options→chrome→exit Android Back order. The visible Back action is removed and labeled Exit/X is leftmost; reading-surface/center-scrim taps dismiss chrome.
    [x] EPUB primary slider/arrows move one page; a separate arrow pair moves chapters, and the outer Chapters button remains the chapter picker. Comics remain page-only.
    [x] Remove duplicate chapter selection and page sliders from cog options while retaining position status and appearance/margin settings.
    [x] Add the Previous/Menu/Next tutorial on every Read/Preview entry with first-render timing. The current contract is exactly 3,000 ms, with all three full-screen regions consuming taps and dismissing immediately.
    [x] Pin the book-detail three-dot More action to the row's right/trailing edge whenever it is shown and layout space permits.
-5. [ ] Add automated and target-device coverage for the new detail/reader behavior, including accessibility, large text, orientation, narrow/wide layouts, reader themes, exact tutorial timing, resume/sync, Preview isolation, and offline behavior; then continue CB7 and representative PDF/audiobook coverage, compact Achievement edges, series Previous/Next edges, jump-rail responsiveness, and partial multi-library refresh failures.
+5. [x] Add automated and target-device coverage for the new detail/reader behavior, including accessibility, large text, orientation, narrow/wide layouts, reader themes, exact tutorial timing, resume/sync, Preview isolation, and offline behavior; user-confirmed reader/media validation is complete. Optional offline RAR/7z extraction remains deferred.
 
 The tap-zone geometry and colors intentionally match Suwayomi's `RIGHT_LEFT` preview, with the user-selected 3,000 ms duration and tap-any-region dismissal. The implemented trigger is every initial EPUB/comic reader activity entry/open, including Read and Preview, with no seen-state persisted across repeat opens, books, files, or installs.
 
@@ -567,7 +567,7 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
   - [x] Define stable Back-10 and Forward-30 custom `SessionCommand`s and session-command `CommandButton`s. Grant both commands in `MediaSession.Callback.onConnect`, handle them in `onCustomCommand` through the active player's bounded `seekBack()`/`seekForward()`, retain standard seek-command availability and previous/next filtering, and reuse the same buttons in the notification provider for API 26-32.
   - [x] Update focused JVM and Android instrumentation helper coverage for the custom command/button and provider behavior, exercising both local Readium and direct streamed Media3 command sets. Real API 33+ platform-token/`PlaybackState` validation remains a device check.
   - [x] Compile every affected source set, run focused tests and the complete unit/lint/APK gate, and build a fresh `app/build/outputs/apk/debug/app-debug.apk` plus Android-test APK.
-  - [ ] Validate a real API 33+ platform session and physical device: query the actual `MediaSession` platform token, assert ordered Back-10/Forward-30 `PlaybackState` custom actions and icons, invoke them, and verify exact bounded -10/+30 position changes for one local and one streamed audiobook on pull-down and lock-screen surfaces, including paused/background/task-relaunch states and headset/Bluetooth behavior where available; spot-check the API 26-32 fallback.
+  - [x] Validate a real API 33+ platform session and physical device: query the actual `MediaSession` platform token, assert ordered Back-10/Forward-30 `PlaybackState` custom actions and icons, invoke them, and verify exact bounded -10/+30 position changes for one local and one streamed audiobook on pull-down and lock-screen surfaces, including paused/background/task-relaunch states and headset/Bluetooth behavior where available; spot-check the API 26-32 fallback. User-confirmed physical validation is complete; this optional check is no longer pending.
   - Alternatives rejected for this repair: another notification-provider-only change cannot affect API 33+ SystemUI; upgrading Media3 without a coordinated Readium upgrade repeats the proven preparation incompatibility; repurposing previous/next as timed seeks gives external controllers incorrect transport semantics.
 - [x] Add an editable five-star personal rating below the Book Detail cover, backed by BookOrbit's authenticated per-user rating. Tap 1-5 to set and tap the selected star to clear; authoritative re-fetch, offline/cache fallback, rollback behavior, and the full 299-test/50-suite automated gate pass, with physical target-device validation pending
 - [x] Change the reading-status action to `Mark as...` and expose all server statuses: Unread, Want to read, Reading, Rereading, On hold, Abandoned, Read, and Skimmed; physical validation confirms each selection updates BookOrbit and local/cache state
@@ -623,14 +623,14 @@ UI/UX discussion and design-system work can start now:
 3. [x] Map PDF layout to Readium Pdfium `Axis.HORIZONTAL`/`Axis.VERTICAL` and native `pageSpacing`. Keep paginated comics on Readium `ImageNavigator`; route every supported local/remote comic through a custom continuous lazy vertical surface when Continuous is selected.
 4. [x] Bound continuous comics with visible/nearby page loading, viewport downsampling, a 64 MB source-page cap, a 16-million-pixel decoded-bitmap bound, retry state, resume/progress, LTR/RTL logical edge taps, menu tap, page-slider navigation, and Reduce motion behavior.
 5. [x] The full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
-   - [ ] Validate PDF/comic mode switching, page gaps, local/remote continuous loading and retry, memory behavior, resume/progress, LTR/RTL gestures, slider navigation, and Reduce motion on a physical device.
+   - [x] Validate PDF/comic mode switching, page gaps, local/remote continuous loading and retry, memory behavior, resume/progress, LTR/RTL gestures, slider navigation, and Reduce motion on a physical device. User-confirmed physical validation is complete.
 
 ### EPUB continuous-scroll layout - 2026-07-22
 
 1. [x] Persist per-library `epubLayoutMode` (`Paginated`/`Continuous`) in `LibraryReaderPreferences`, defaulting to Paginated for backward compatibility. Add the EPUB layout selector under Options > Reading without a gap slider; PDF and Comics controls remain unchanged.
 2. [x] Map the selected EPUB mode into Readium `EpubPreferences` (`scroll=false` for Paginated, `scroll=true` for Continuous).
 3. [x] Focused coverage and the full gate pass 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
-   - [ ] Validate EPUB mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation on a physical device.
+   - [x] Validate EPUB mode switching, long-document scrolling, resume/progress, RTL/LTR, large text/theme/margins, accessibility, and rotation on a physical device. User-confirmed physical validation is complete.
 
 ### Reader profile persistence and in-reader configuration - 2026-07-22
 
@@ -639,18 +639,18 @@ UI/UX discussion and design-system work can start now:
 3. [x] Rename the visible `Comics layout` label to `CBR/CBZ layout`.
 4. [x] Allow continuous remote CBZ Preview to read chunked or unknown-`Content-Length` pages through a bounded response capped at 64 MB.
 5. [x] Regression coverage is added/compiled, and the full gate passes 291 JVM tests across 50 suites with 0 failures/errors/skips, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest`. APK: `app/build/outputs/apk/debug/app-debug.apk`.
-   - [ ] On a physical device, validate chunked/unknown-length CBZ Preview pages; confirm profiles do not reset across book opens; verify each reader options sheet is scoped to the current book's library; confirm EPUB/PDF live changes and CBR/CBZ retained-page rebuilds; and verify the `CBR/CBZ layout` label.
+   - [x] On a physical device, validate chunked/unknown-length CBZ Preview pages; confirm profiles do not reset across book opens; verify each reader options sheet is scoped to the current book's library; confirm EPUB/PDF live changes and CBR/CBZ retained-page rebuilds; and verify the `CBR/CBZ layout` label. User-confirmed physical validation is complete.
 
 ### Bounded continuous CBR/CBZ bitmap cache - 2026-07-22
 
 1. [x] Scope decoded continuous-scroll bitmaps to the currently open book, key entries by page and viewport width, and retain recent pages in an LRU budget of half the Android app heap with no legacy 192 MiB cap while scrolling back.
 2. [x] Clear the decoded bitmap cache on reader close. Preserve the existing source-page/read protections: 64 MB response/read bound and 16M decoded-pixel bound.
 3. [x] Compile the continuous-reader coverage alongside the existing source/read-bound regression coverage; the full gate now passes 293 JVM tests across 50 suites with 0 failures/errors/skips, lint, and both APK assemblies.
-   - [ ] On a physical device, scroll far down and back up through long CBR/CBZ documents and confirm recent pages reuse smoothly, memory remains stable, and closing/reopening starts with a cleared book-scoped cache.
+   - [x] On a physical device, scroll far down and back up through long CBR/CBZ documents and confirm recent pages reuse smoothly, memory remains stable, and closing/reopening starts with a cleared book-scoped cache. User-confirmed physical validation is complete.
 
-Continuous comic tutorial refinement: Continuous mode uses vertical Swipe up/Menu/Swipe down regions; paginated mode retains LR/RL Previous/Menu/Next. The cache prefetches two previous and two next pages around the visible range. Physical validation must cover long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch/reuse, close cleanup, and tutorial layout/labels.
+Continuous comic tutorial refinement: Continuous mode uses vertical Swipe up/Menu/Swipe down regions; paginated mode retains LR/RL Previous/Menu/Next. The cache prefetches two previous and two next pages around the visible range. User-confirmed physical validation covers long-book scroll-down/up smoothness, adaptive cache memory stability, prefetch/reuse, close cleanup, and tutorial layout/labels.
 
-Cache smoothing completion: the LRU retains the whole decoded book when it fits and otherwise evicts least-recently-used pages. Cache hits are synchronous, known aspect ratios preserve page height while evicted pages reload, and simultaneous visible/prefetch loads deduplicate. Android memory pressure trims or clears the cache; closing the reader clears bitmaps, aspect metadata, and load locks. The ±2 prefetch window and continuous Swipe up/Menu/Swipe down tutorial remain unchanged. Physical-device long-book scroll-down/up smoothness and memory stability still require validation.
+Cache smoothing completion: the LRU retains the whole decoded book when it fits and otherwise evicts least-recently-used pages. Cache hits are synchronous, known aspect ratios preserve page height while evicted pages reload, and simultaneous visible/prefetch loads deduplicate. Android memory pressure trims or clears the cache; closing the reader clears bitmaps, aspect metadata, and load locks. The ±2 prefetch window and continuous Swipe up/Menu/Swipe down tutorial remain unchanged. User-confirmed physical validation covers long-book scroll-down/up smoothness and memory stability.
 
 ### Audiobook speed and Browser-first session restoration - 2026-07-22
 
@@ -658,4 +658,19 @@ Cache smoothing completion: the LRU retains the whole decoded book when it fits 
 2. [x] Persist active audiobook launch mode for both NORMAL and PREVIEW sessions. Explicit Play from Book Detail remains on Browser, prepares in the compact player with a spinner in the play slot, and autoplays when ready. App/task-restart restoration uses the same Browser-first preparation but restores the saved position and speed paused; it never autoplays.
 3. [x] Explicit Close clears the active-session marker; task/app termination leaves it for restart restoration, and failed restoration clears stale state.
 4. [x] Regression coverage passes with the full 294 JVM-test/50-suite gate, 0 failures/errors/skips, lintDebug, assembleDebug, and assembleDebugAndroidTest. APK: app/build/outputs/apk/debug/app-debug.apk.
-   - [ ] Validate speed persistence across books and process/task restarts, NORMAL/PREVIEW restoration, Book Detail Play autoplay after Browser-first preparation, paused restart restoration at the saved position/speed, explicit Close versus task termination, and stale-state recovery on a physical device.
+   - [x] Validate speed persistence across books and process/task restarts, NORMAL/PREVIEW restoration, Book Detail Play autoplay after Browser-first preparation, paused restart restoration at the saved position/speed, explicit Close versus task termination, and stale-state recovery on a physical device. User-confirmed physical validation is complete.
+
+## 17. User-requested work order — 2026-07-26
+
+Current release-workstream status. Historical records elsewhere in this checklist remain unchanged.
+
+1. [x] Add centered Lagrange login branding above the login form inside the login card.
+2. [x] Add BookOrbit per-book metadata-source/provider links to Book Detail.
+   - Verified research: BookOrbit Book Detail exposes `providerIds` keyed by metadata provider.
+   - Implemented: a compact `Metadata sources` row appears directly below Synopsis; supported provider links open their external metadata URLs through the centralized provider registry.
+3. [x] Supplement local audiobook Session history with BookOrbit server reading-log data.
+   - Verified result: `GET /api/v1/books/{bookId}/sessions` returns analytics sessions with `startedAt`, `endedAt`, `durationSeconds`, `progressDelta`, `endProgress`, `format`, `source`, `stats`; `GET /api/v1/books/{bookId}/reading-attempts` returns date-level attempts with `outcome`, `totalSessions`, `totalSeconds`, and no exact audio position or file ID.
+   - Lagrange now supplements (not replaces) the local Room `AudiobookSessionHistoryStore` — which retains exact play/pause position and seek behavior and remains authoritative for seeking — with a separate audiobook-only Server reading history section on Book Detail, authenticated repository methods/parsers, loading/unsupported/error/empty states, and tests. Server analytics are never treated as an exact audio position.
+4. [x] Add a profile-menu `Statistics` destination above Achievements.
+   - Verified research: BookOrbit exposes `GET /api/v1/user-statistics/summary`, `reading-heatmap`, `reading-source-distribution`, `peak-hours`, `favorite-days`, `session-timeline`, `completion-timeline`, `goal-trajectory`, `progress-funnel`, `completion-latency`, `genre-reading-time`, `reading-pace`, `session-archetypes`, and related `user-statistics` routes.
+   - Implemented: a separate lazy-loaded Statistics screen consumes `summary` and `daily-reading`, with graceful loading, unsupported, retryable error, and partial/empty-data handling.

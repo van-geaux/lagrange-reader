@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.2.2](https://img.shields.io/badge/version-1.2.2-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.2)
+[![Version 1.3.0](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.3.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -72,6 +72,48 @@ The following screenshots show the main reading and library experience. More scr
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
 
+## Privacy, telemetry, and data
+
+Lagrange does not include behavioral telemetry, advertising tracking, an analytics SDK, or a remote crash-reporting service. It does not collect usage events or device identifiers for the Lagrange project.
+
+The app does send functional requests to the BookOrbit server that you configure. Depending on the features you use, this includes authentication, library and book metadata, cover and media requests, reading/listening progress, reading-status changes, personal ratings, Statistics requests, and server reading-history requests. These requests are required for the app to browse, synchronize, read, listen, and recover progress.
+
+Lagrange stores app data locally in its private Android sandbox, including session cookies, cached catalog data, downloaded files, reader state, queued progress, preferences, and exact local audiobook session history. Exact local audiobook session-history events are not uploaded by Lagrange; the server-history view only reads analytics records already stored by BookOrbit.
+
+BookOrbit may retain or log normal server-side request information such as account activity, request timestamps, and network metadata. That server-side retention is controlled by the BookOrbit server and its administrator, not by Lagrange. Use HTTPS for the configured server; cleartext HTTP can expose credentials, session tokens, metadata, progress, and content on the network. See [`docs/privacy.md`](docs/privacy.md) for more details.
+
+## Android permissions
+
+Lagrange requests only the permissions needed for networking, media playback, and playback notifications:
+
+| Permission | Why it is requested |
+| --- | --- |
+| `INTERNET` | Connect to the configured BookOrbit server for authentication, catalog data, content, synchronization, and media playback. |
+| `ACCESS_NETWORK_STATE` | Detect whether a network is available and apply the app's online/offline and background-network behavior. |
+| `FOREGROUND_SERVICE` | Keep audiobook playback running in a foreground service when the app is backgrounded. |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Declare that the foreground service is used for media playback under current Android rules. |
+| `POST_NOTIFICATIONS` | Show audiobook playback controls and other user-visible notifications on Android versions that require notification permission. |
+
+The app does not request location, contacts, camera, microphone, phone, SMS, storage-wide, or advertising-ID permissions.
+
+## Lagrange and BookOrbit feature comparison
+
+BookOrbit is the server and web platform; Lagrange is an independent Android client. The table describes the current integration boundary rather than implying that the two projects share the same UI or implementation.
+
+| Capability | BookOrbit server/web platform | Lagrange Android client |
+| --- | --- | --- |
+| Authentication | Provides authenticated accounts and server sessions; the server also has an OIDC/SSO direction available for deployments that configure it. | Uses the current native username/password flow; direct OIDC/SSO is deferred. |
+| Library and catalog | Owns libraries, books, authors, series, metadata, scanning, and catalog APIs. | Browses BookOrbit libraries and caches catalog data for offline fallback. |
+| Reading and listening | Serves book files, reader data, progress APIs, and audiobook media. | Provides native EPUB, PDF, comic, and audiobook readers with resume, themes, navigation, and playback controls. |
+| Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline; CBR/CB7 files that require RAR/7z extraction remain server-backed. |
+| Progress and status | Stores reading/listening progress and book statuses. | Queues progress offline, synchronizes it, and exposes the server status controls in the Android UI. |
+| Ratings and metadata sources | Owns book metadata, provider IDs, and per-user book data. | Displays and updates supported per-user ratings and opens centralized links for known metadata providers. |
+| Audiobook sessions | Stores server reading sessions and reading attempts as analytics/history records. | Shows server history after local history; local exact-position audiobook sessions remain device-only and seekable. |
+| Statistics | Provides summary, daily reading, heatmap, source, peak-hour, timeline, goal, completion, pace, and related statistics APIs. | Currently consumes the summary and daily-reading endpoints in the lazy-loaded Statistics screen. |
+| Achievements | Owns achievement definitions and user progress. | Provides an Achievements destination that loads the user's server-backed achievements. |
+| Annotations, bookmarks, and notes | Provides server modules and APIs for these reading records. | Not currently exposed as a dedicated Lagrange feature. |
+| Integrations and administration | Includes integrations such as OPDS, KOReader, Kobo, Readwise, StoryGraph, notifications, and administrative/audit tools. | Focuses on the Android reading/listening experience and does not expose the server administration surface. |
+
 ## Roadmap
 
 Remaining follow-up work includes but is not limited to:
@@ -80,7 +122,7 @@ Remaining follow-up work includes but is not limited to:
 - Optional client-side offline RAR/7z extraction for downloaded CBR/CB7; server-backed extraction remains the current behavior.
 - Direct OIDC/SSO authentication after a BookOrbit provider and redirect contract are confirmed.
 - Broader bulk actions for Local books beyond the implemented multi-select `Delete local` flow.
-- Optional physical validation of Android API 33+ pull-down and lock-screen audiobook Back 10 / Forward 30 controls.
+- Android API 33+ pull-down and lock-screen audiobook Back 10 / Forward 30 controls are physically validated.
 
 More details are in the [Roadmap](docs/roadmap.md)
 

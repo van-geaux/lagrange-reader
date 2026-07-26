@@ -58,12 +58,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -148,7 +150,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, ACHIEVEMENTS, OPTIONS, ABOUT }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private enum class OptionsDialog {
     THEME,
@@ -458,12 +460,19 @@ internal fun NativeLibraryBrowserScreen(
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
     onClearSessionHistory: (BookSummary) -> Unit = {},
+    serverReadingSessionsLoader: suspend (String) -> BookReadingSessionsResult = {
+        BookReadingSessionsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
+    },
+    serverReadingAttemptsLoader: suspend (String) -> ReadingAttemptsResult = {
+        ReadingAttemptsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
+    },
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
     achievementsLoader: suspend () -> AchievementCatalogue,
+    statisticsLoader: suspend () -> UserStatistics,
     catalogImageLoader: suspend (String) -> ByteArray?,
     onBookOpen: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
@@ -556,6 +565,19 @@ internal fun NativeLibraryBrowserScreen(
         showProfileMenu = false
         showMoreMenu = false
         destination = BrowserDestination.OPTIONS
+        query = ""
+        selectedAuthor = null
+        selectedSeriesKey = null
+        activeBookGenre = null
+        activeSeriesGenre = null
+        genreSourceBook = null
+        genreSourceSeriesKey = null
+        selectedBook = null
+    }
+    val openStatistics = {
+        showProfileMenu = false
+        showMoreMenu = false
+        destination = BrowserDestination.STATISTICS
         query = ""
         selectedAuthor = null
         selectedSeriesKey = null
@@ -805,6 +827,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -825,6 +848,7 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -845,6 +869,7 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -862,6 +887,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -879,6 +905,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -896,6 +923,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -931,6 +959,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
+                    onStatistics = openStatistics,
                     onAchievements = openAchievements,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1026,6 +1055,8 @@ internal fun NativeLibraryBrowserScreen(
                     sessionHistoryLoader = sessionHistoryLoader,
                     onSessionHistoryEntryClick = onSessionHistoryEntryClick,
                     onClearSessionHistory = onClearSessionHistory,
+                    serverReadingSessionsLoader = serverReadingSessionsLoader,
+                    serverReadingAttemptsLoader = serverReadingAttemptsLoader,
                     onBookUserRatingChange = onBookUserRatingChange,
                     seriesDetailLoader = seriesDetailLoader,
                     onRead = onBookOpen,
@@ -1121,6 +1152,10 @@ internal fun NativeLibraryBrowserScreen(
                     onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
+                )
+                destination == BrowserDestination.STATISTICS -> StatisticsScreen(
+                    loader = statisticsLoader,
+                    modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.ACHIEVEMENTS -> AchievementsScreen(
                     loader = achievementsLoader,
@@ -1244,6 +1279,7 @@ private fun BrowserTopBar(
     onSessionAction: () -> Unit,
     sessionActionLabel: String,
     onOptions: () -> Unit = {},
+    onStatistics: () -> Unit = {},
     onAchievements: () -> Unit = {},
     onAbout: () -> Unit = {},
     onChangeServer: () -> Unit = {},
@@ -1270,6 +1306,14 @@ private fun BrowserTopBar(
                     expanded = profileExpanded,
                     onDismissRequest = onDismissProfile
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Statistics") },
+                        leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
+                        onClick = {
+                            onDismissProfile()
+                            onStatistics()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Achievements") },
                         leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
@@ -1341,6 +1385,7 @@ private fun BrowserBottomNavigation(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
                 destination == BrowserDestination.LOCAL_BOOKS ||
+                destination == BrowserDestination.STATISTICS ||
                 destination == BrowserDestination.ACHIEVEMENTS ||
                 destination == BrowserDestination.OPTIONS ||
                 destination == BrowserDestination.ABOUT,
@@ -4280,6 +4325,8 @@ private fun BookDetails(
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit,
     onClearSessionHistory: (BookSummary) -> Unit,
+    serverReadingSessionsLoader: suspend (String) -> BookReadingSessionsResult,
+    serverReadingAttemptsLoader: suspend (String) -> ReadingAttemptsResult,
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onRead: (BookSummary) -> Unit,
@@ -4367,6 +4414,27 @@ private fun BookDetails(
             sessionHistoryLoader(displayBook)
         } else {
             emptyList()
+        }
+    }
+    var serverReadingSessions by remember(displayBook.id) {
+        mutableStateOf<BookReadingSessionsResult?>(null)
+    }
+    var serverReadingAttempts by remember(displayBook.id) {
+        mutableStateOf<ReadingAttemptsResult?>(null)
+    }
+    var isLoadingServerReadingHistory by remember(displayBook.id) { mutableStateOf(false) }
+    LaunchedEffect(state.serverUrl, displayBook.id, displayBook.mediaKind, state.isOfflineSnapshot) {
+        if (displayBook.mediaKind == MediaKind.AUDIO && !state.isOfflineSnapshot) {
+            isLoadingServerReadingHistory = true
+            try {
+                serverReadingSessions = serverReadingSessionsLoader(displayBook.id)
+                serverReadingAttempts = serverReadingAttemptsLoader(displayBook.id)
+            } finally {
+                isLoadingServerReadingHistory = false
+            }
+        } else {
+            serverReadingSessions = null
+            serverReadingAttempts = null
         }
     }
     val fileId = displayBook.fileId
@@ -4804,6 +4872,9 @@ private fun BookDetails(
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
             item { ExpandableDescription("Synopsis", plainText(synopsis)) }
         }
+        if (detail.providerIds.isNotEmpty()) {
+            item { BookDetailProviderLinks(detail.providerIds) }
+        }
         if (otherVersions.isNotEmpty()) {
             item {
                 BookDetailOtherVersions(
@@ -4867,6 +4938,9 @@ private fun BookDetails(
                 AudiobookSessionHistory(
                     bookTitle = displayBook.title,
                     events = sessionHistory,
+                    isLoadingServerReadingHistory = isLoadingServerReadingHistory,
+                    serverReadingSessions = serverReadingSessions,
+                    serverReadingAttempts = serverReadingAttempts,
                     onEventClick = { event ->
                         showSessionHistory = false
                         onSessionHistoryEntryClick(displayBook, event.positionMs)
@@ -4906,6 +4980,9 @@ private fun BookDetails(
 private fun AudiobookSessionHistory(
     bookTitle: String,
     events: List<AudiobookSessionEvent>,
+    isLoadingServerReadingHistory: Boolean,
+    serverReadingSessions: BookReadingSessionsResult?,
+    serverReadingAttempts: ReadingAttemptsResult?,
     onEventClick: (AudiobookSessionEvent) -> Unit,
     onClearClick: () -> Unit,
     onCloseClick: () -> Unit
@@ -4962,7 +5039,103 @@ private fun AudiobookSessionHistory(
                 )
             }
         }
+        ServerReadingHistorySection(
+            isLoading = isLoadingServerReadingHistory,
+            sessions = serverReadingSessions,
+            attempts = serverReadingAttempts
+        )
     }
+}
+
+@Composable
+private fun ServerReadingHistorySection(
+    isLoading: Boolean,
+    sessions: BookReadingSessionsResult?,
+    attempts: ReadingAttemptsResult?
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("server-reading-history")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Server reading history", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Server history shows reading activity and analytics. It does not contain exact audio positions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            when {
+                isLoading -> Text("Loading server history…", style = MaterialTheme.typography.bodyMedium)
+                sessions?.status == ServerReadingHistoryStatus.UNSUPPORTED &&
+                    attempts?.status == ServerReadingHistoryStatus.UNSUPPORTED ->
+                    Text("This BookOrbit server does not provide reading history.", style = MaterialTheme.typography.bodyMedium)
+                sessions?.status == ServerReadingHistoryStatus.ERROR &&
+                    attempts?.status == ServerReadingHistoryStatus.ERROR ->
+                    Text("Server reading history could not be loaded.", style = MaterialTheme.typography.bodyMedium)
+                sessions?.items.isNullOrEmpty() && attempts?.items.isNullOrEmpty() ->
+                    Text("No server reading activity recorded.", style = MaterialTheme.typography.bodyMedium)
+                else -> {
+                    sessions?.items.orEmpty().forEach { session ->
+                        ListItem(
+                            headlineContent = {
+                                Text("Reading session · ${formatServerReadingDuration(session.durationSeconds)}")
+                            },
+                            supportingContent = {
+                                Text(
+                                    listOfNotNull(
+                                        formatServerDateRange(session.startedAt, session.endedAt),
+                                        session.progressDelta?.let { "Progress change ${formatServerProgress(it)}" },
+                                        session.endProgress?.let { "Ended at ${formatServerProgress(it)}" },
+                                        session.format,
+                                        session.source
+                                    ).joinToString(" · ")
+                                )
+                            }
+                        )
+                    }
+                    attempts?.items.orEmpty().forEach { attempt ->
+                        ListItem(
+                            headlineContent = {
+                                Text("Reading attempt · ${formatReadingAttemptOutcome(attempt.outcome)}")
+                            },
+                            supportingContent = {
+                                Text(
+                                    listOfNotNull(
+                                        formatServerDateRange(attempt.startedOn, attempt.endedOn),
+                                        attempt.totalSessions?.let { "$it sessions" },
+                                        attempt.totalSeconds?.let { formatServerReadingDuration(it) },
+                                        attempt.origin
+                                    ).joinToString(" · ")
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatServerReadingDuration(seconds: Long?): String =
+    seconds?.takeIf { it >= 0 }?.let(::formatDetailDuration) ?: "Duration unavailable"
+
+private fun formatServerProgress(progress: Double): String =
+    "${"%.1f".format(Locale.US, progress.coerceIn(0.0, 100.0))}%"
+
+private fun formatServerDateRange(start: String?, end: String?): String? =
+    listOfNotNull(start?.takeIf { it.isNotBlank() }, end?.takeIf { it.isNotBlank() })
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(" → ")
+
+private fun formatReadingAttemptOutcome(outcome: ReadingAttemptOutcome?): String = when (outcome) {
+    null -> "In progress"
+    ReadingAttemptOutcome.COMPLETED -> "Completed"
+    ReadingAttemptOutcome.SKIMMED -> "Skimmed"
+    ReadingAttemptOutcome.ABANDONED -> "Abandoned"
 }
 
 private fun formatSessionHistoryTimestamp(timestampMillis: Long): String =
@@ -5348,6 +5521,52 @@ private fun DetailActionTile(
             }
             if (showLabel) {
                 Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BookDetailProviderLinks(providerIds: List<BookProviderId>) {
+    val links = providerIds.mapNotNull { providerId ->
+        providerUrl(providerId)?.let { url -> providerId to url }
+    }
+    if (links.isEmpty()) return
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text("Metadata sources", style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            links.forEach { (providerId, url) ->
+                val name = providerDisplayName(providerId.provider)
+                Card(
+                    modifier = Modifier
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            runCatching { context.startActivity(intent) }
+                        }
+                        .semantics { contentDescription = "Open $name page for this book" },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    shape = MaterialTheme.shapes.extraSmall
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(text = name, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
     }

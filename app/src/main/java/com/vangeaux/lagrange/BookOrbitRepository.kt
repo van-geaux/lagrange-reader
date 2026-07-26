@@ -165,6 +165,18 @@ private enum class ProgressPostResult {
     DEFERRED
 }
 
+internal fun bookReadingSessionsPath(bookId: String, page: Int, pageSize: Int): String {
+    val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name())
+    return "/api/v1/books/$encodedBookId/sessions" +
+        "?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceAtLeast(1)}"
+}
+
+internal fun bookReadingAttemptsPath(bookId: String, page: Int, pageSize: Int): String {
+    val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name())
+    return "/api/v1/books/$encodedBookId/reading-attempts" +
+        "?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceAtLeast(1)}"
+}
+
 internal fun extractAccessToken(payload: String): String? {
     val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
 
@@ -222,6 +234,17 @@ interface BookOrbitDataSource {
     suspend fun loadAchievements(): AchievementCatalogue = AchievementCatalogue(
         status = AchievementCatalogueStatus.UNSUPPORTED
     )
+    suspend fun loadUserStatistics(): UserStatistics = UserStatistics(status = UserStatisticsStatus.UNSUPPORTED)
+    suspend fun loadBookReadingSessions(
+        bookId: String,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): BookReadingSessionsResult = BookReadingSessionsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
+    suspend fun loadBookReadingAttempts(
+        bookId: String,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): ReadingAttemptsResult = ReadingAttemptsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
     suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
@@ -374,6 +397,58 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 AchievementCatalogue(status = AchievementCatalogueStatus.UNSUPPORTED)
             } else {
                 throw error
+            }
+        }
+    }
+
+    override suspend fun loadUserStatistics(): UserStatistics = withContext(Dispatchers.IO) {
+        try {
+            UserStatistics(
+                summary = BookOrbitPayloadParser.parseUserStatisticsSummary(
+                    request("/api/v1/user-statistics/summary", "GET", null)
+                ),
+                dailyReading = BookOrbitPayloadParser.parseUserDailyReading(
+                    request("/api/v1/user-statistics/daily-reading?days=30", "GET", null)
+                )
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) UserStatistics(status = UserStatisticsStatus.UNSUPPORTED)
+            else UserStatistics(status = UserStatisticsStatus.ERROR)
+        }
+    }
+
+    override suspend fun loadBookReadingSessions(
+        bookId: String,
+        page: Int,
+        pageSize: Int
+    ): BookReadingSessionsResult = withContext(Dispatchers.IO) {
+        try {
+            BookOrbitPayloadParser.parseBookReadingSessions(
+                request(bookReadingSessionsPath(bookId, page, pageSize), "GET", null)
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) {
+                BookReadingSessionsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
+            } else {
+                BookReadingSessionsResult(status = ServerReadingHistoryStatus.ERROR)
+            }
+        }
+    }
+
+    override suspend fun loadBookReadingAttempts(
+        bookId: String,
+        page: Int,
+        pageSize: Int
+    ): ReadingAttemptsResult = withContext(Dispatchers.IO) {
+        try {
+            BookOrbitPayloadParser.parseReadingAttempts(
+                request(bookReadingAttemptsPath(bookId, page, pageSize), "GET", null)
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) {
+                ReadingAttemptsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
+            } else {
+                ReadingAttemptsResult(status = ServerReadingHistoryStatus.ERROR)
             }
         }
     }
@@ -1995,6 +2070,34 @@ internal object BookOrbitPayloadParser {
             ?.stringValue("id", "_id", "fileId")
     }
 
+    fun parseUserStatisticsSummary(payload: String): UserStatisticsSummary {
+        val root = extractObject(payload, "load user statistics summary")
+        return UserStatisticsSummary(
+            trackedBooks = root.numberValue("trackedBooks")?.toInt()?.coerceAtLeast(0) ?: 0,
+            startedBooks = root.numberValue("startedBooks")?.toInt()?.coerceAtLeast(0) ?: 0,
+            inProgressBooks = root.numberValue("inProgressBooks")?.toInt()?.coerceAtLeast(0) ?: 0,
+            completedBooks = root.numberValue("completedBooks")?.toInt()?.coerceAtLeast(0) ?: 0,
+            meanProgressPercent = root.numberValue("meanProgressPercent")?.coerceIn(0.0, 100.0) ?: 0.0
+        )
+    }
+
+    fun parseUserDailyReading(payload: String): List<UserDailyReadingStat> {
+        val array = extractArray(payload, "load user daily reading")
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                add(
+                    UserDailyReadingStat(
+                        day = item.stringValue("day") ?: continue,
+                        readingSeconds = item.numberValue("readingSeconds")?.toLong()?.coerceAtLeast(0L) ?: 0L,
+                        progressDelta = item.numberValue("progressDelta") ?: 0.0,
+                        eventsCount = item.numberValue("eventsCount")?.toInt()?.coerceAtLeast(0) ?: 0
+                    )
+                )
+            }
+        }
+    }
+
     fun parseAchievements(payload: String): AchievementCatalogue {
         val root = extractObject(payload, "load achievements")
         val categories = root.optJSONArray("categories") ?: JSONArray()
@@ -2288,8 +2391,20 @@ internal object BookOrbitPayloadParser {
             totalSizeBytes = files.sumLong("sizeBytes", "size"),
             durationSeconds = files.maxLong("durationSeconds", "duration")
                 ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong(),
-            audioChapters = audioChapters
+            audioChapters = audioChapters,
+            providerIds = obj.optJSONObject("providerIds").toProviderIds()
         )
+    }
+
+    private fun JSONObject?.toProviderIds(): List<BookProviderId> {
+        if (this == null) return emptyList()
+        return buildList {
+            for (key in keys()) {
+                val value = opt(key) as? String ?: continue
+                if (value.isBlank()) continue
+                add(BookProviderId(key, value))
+            }
+        }
     }
 
     fun parseSeriesDetail(
@@ -2445,6 +2560,86 @@ internal object BookOrbitPayloadParser {
             page = root.numberValue("page")?.toInt(),
             size = root.numberValue("size")?.toInt()
         )
+    }
+
+    fun parseBookReadingSessions(payload: String): BookReadingSessionsResult {
+        val root = extractObject(payload, "load reading sessions")
+        val array = root.catalogArray("items", "sessions", "results")
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.stringValue("id", "_id") ?: continue
+                add(
+                    BookReadingSession(
+                        id = id,
+                        startedAt = item.stringValue("startedAt"),
+                        endedAt = item.stringValue("endedAt"),
+                        durationSeconds = item.numberValue("durationSeconds")?.toLong(),
+                        progressDelta = item.numberValue("progressDelta"),
+                        endProgress = item.numberValue("endProgress"),
+                        format = item.stringValue("format"),
+                        source = item.stringValue("source")
+                    )
+                )
+            }
+        }
+        val statsObject = root.optJSONObject("stats")
+        val stats = statsObject?.let {
+            BookReadingSessionStats(
+                totalSessions = it.numberValue("totalSessions", "sessionCount", "count")?.toInt(),
+                totalDurationSeconds = it.numberValue("totalDurationSeconds", "totalSeconds")?.toLong(),
+                totalProgressDelta = it.numberValue("totalProgressDelta", "progressDelta")
+            )
+        }
+        return BookReadingSessionsResult(
+            items = items,
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            pageSize = root.numberValue("pageSize", "size")?.toInt(),
+            stats = stats
+        )
+    }
+
+    fun parseReadingAttempts(payload: String): ReadingAttemptsResult {
+        val root = extractObject(payload, "load reading attempts")
+        val array = root.catalogArray("items", "attempts", "results")
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.stringValue("id", "_id") ?: continue
+                add(
+                    ReadingAttempt(
+                        id = id,
+                        bookId = item.stringValue("bookId", "book_id"),
+                        startedOn = item.stringValue("startedOn"),
+                        endedOn = item.stringValue("endedOn"),
+                        outcome = parseReadingAttemptOutcome(item.stringValue("outcome")),
+                        origin = item.stringValue("origin"),
+                        externalProvider = item.stringValue("externalProvider"),
+                        externalId = item.stringValue("externalId"),
+                        totalSessions = item.numberValue("totalSessions")?.toInt(),
+                        totalSeconds = item.numberValue("totalSeconds")?.toLong(),
+                        createdAt = item.stringValue("createdAt"),
+                        updatedAt = item.stringValue("updatedAt")
+                    )
+                )
+            }
+        }
+        return ReadingAttemptsResult(
+            items = items,
+            total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
+            page = root.numberValue("page")?.toInt(),
+            pageSize = root.numberValue("pageSize", "size")?.toInt()
+        )
+    }
+
+    private fun parseReadingAttemptOutcome(value: String?): ReadingAttemptOutcome? {
+        return when (value?.trim()?.lowercase(Locale.US)) {
+            "completed" -> ReadingAttemptOutcome.COMPLETED
+            "skimmed" -> ReadingAttemptOutcome.SKIMMED
+            "abandoned" -> ReadingAttemptOutcome.ABANDONED
+            else -> null
+        }
     }
 
     fun inferMediaKind(format: String?, title: String?): MediaKind {

@@ -113,6 +113,24 @@ class AppCoordinator(
         repository.loadAchievements()
     }
 
+    suspend fun loadUserStatistics(): UserStatistics = loadWithSessionRecovery(
+        UserStatistics(status = UserStatisticsStatus.ERROR)
+    ) {
+        repository.loadUserStatistics()
+    }
+
+    suspend fun loadBookReadingSessions(bookId: String): BookReadingSessionsResult = loadWithSessionRecovery(
+        BookReadingSessionsResult(status = ServerReadingHistoryStatus.ERROR)
+    ) {
+        repository.loadBookReadingSessions(bookId)
+    }
+
+    suspend fun loadBookReadingAttempts(bookId: String): ReadingAttemptsResult = loadWithSessionRecovery(
+        ReadingAttemptsResult(status = ServerReadingHistoryStatus.ERROR)
+    ) {
+        repository.loadBookReadingAttempts(bookId)
+    }
+
     suspend fun loadCatalogImage(url: String): ByteArray? = loadWithSessionRecovery(null) {
         repository.loadCatalogImage(url)
     }

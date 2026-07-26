@@ -266,12 +266,15 @@ private fun BookOrbitDestination(
             sessionHistoryLoader = coordinator::loadAudiobookSessionHistory,
             onSessionHistoryEntryClick = coordinator::openAudiobookSessionHistory,
             onClearSessionHistory = coordinator::clearAudiobookSessionHistory,
+            serverReadingSessionsLoader = coordinator::loadBookReadingSessions,
+            serverReadingAttemptsLoader = coordinator::loadBookReadingAttempts,
             onBookUserRatingChange = coordinator::setBookUserRating,
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,
             authorBooksLoader = coordinator::loadAuthorBooks,
             achievementsLoader = coordinator::loadAchievements,
+            statisticsLoader = coordinator::loadUserStatistics,
             catalogImageLoader = coordinator::loadCatalogImage,
             onBookOpen = coordinator::openBook,
             onPreview = coordinator::previewBook,
@@ -519,6 +522,23 @@ private fun LoginScreen(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics(mergeDescendants = true) {},
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Lagrange",
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.semantics { heading() }
+                        )
+                        Text(
+                            text = "a BookOrbit reader",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                     OrbitEyebrow("BookOrbit server")
                     Text(serverUrl, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(

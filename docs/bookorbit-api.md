@@ -181,6 +181,8 @@ GET /api/v1/books/{id}
 
 The native detail screen maps the returned title, subtitle, authors, narrators, description, publisher, publication date/year, language, page count, ISBN-10, ISBN-13, genres, tags, library name, series identity/order, file metadata, and authenticated user's `rating`. This rating is a whole value from 1 through 5 or null; it is not decimal or aggregate metadata. Detail loading is network-first when available, with a version-matching detail-cache fallback so reader and offline actions remain usable. The cache stores `userRating` and accepts a legacy `rating` only when it is an exact whole value from 1 through 5.
 
+The Metadata sources row renders one link per `providerIds` entry. The Android client now links all 14 of BookOrbit's provider keys (`google`, `goodreads`, `amazon`, `hardcover`, `openLibrary`, `itunes`, `audible`, `librofm`, `kobo`, `lubimyczytac`, `ranobedb`, opening `https://ranobedb.org/book/{bookId}`; `audnexus`, opening `https://api.audnex.us/books/{bookId}`; `comicvine`, opening `https://comicvine.gamespot.com/issue/{bookId}/`; and `aladin`, opening `https://www.aladin.co.kr/shop/wproduct.aspx?ItemId={bookId}`). Audnexus opens a provider API endpoint rather than a human-facing page.
+
 ### Personal rating
 
 Authenticated endpoint:
@@ -325,7 +327,39 @@ DTO shape:
 }
 ```
 
+## Sessions and reading attempts (verified — 2026-07-26)
+
+```text
+GET /api/v1/books/{bookId}/sessions
+GET /api/v1/books/{bookId}/reading-attempts
+```
+
+`sessions` returns analytics sessions for the book with `startedAt`, `endedAt`, `durationSeconds`, `progressDelta`, `endProgress`, `format`, `source`, and `stats`. `reading-attempts` returns date-level attempts with `outcome`, `totalSessions`, and `totalSeconds`. Neither response carries an exact audio position or file ID; both endpoints are analytics-level summaries, not exact playback state. Lagrange's audiobook-only Server reading history section (Book Detail) is authenticated and consumes both endpoints with loading/unsupported/error/empty states. Server session/attempt data is never treated as an exact audio position; the local Room `AudiobookSessionHistoryStore` remains authoritative for seeking, as it retains exact play/pause position and seek behavior. See `docs/architecture.md` for the separation of concerns between the two history sources.
+
+## User statistics (integrated — 2026-07-26)
+
+Verified endpoint family under `/api/v1/user-statistics/`. Lagrange currently consumes the summary and daily-reading endpoints in the lazy-loaded profile-menu Statistics destination; the remaining metrics are available for future expansion:
+
+```text
+GET /api/v1/user-statistics/summary
+GET /api/v1/user-statistics/reading-heatmap
+GET /api/v1/user-statistics/reading-source-distribution
+GET /api/v1/user-statistics/peak-hours
+GET /api/v1/user-statistics/favorite-days
+GET /api/v1/user-statistics/session-timeline
+GET /api/v1/user-statistics/completion-timeline
+GET /api/v1/user-statistics/goal-trajectory
+GET /api/v1/user-statistics/progress-funnel
+GET /api/v1/user-statistics/completion-latency
+GET /api/v1/user-statistics/genre-reading-time
+GET /api/v1/user-statistics/reading-pace
+GET /api/v1/user-statistics/session-archetypes
+```
+
+The Android client parses `summary` fields `trackedBooks`, `startedBooks`, `inProgressBooks`, `completedBooks`, and `meanProgressPercent`, plus daily-reading fields `day`, `readingSeconds`, `progressDelta`, and `eventsCount`. A 404 is treated as an unsupported older server; other request failures produce a retryable error state. Missing or empty fields are tolerated and shown as partial/empty data rather than preventing the screen from loading.
+
 ## Open items
 
 - Confirm multi-file audiobook handling in the Android client
 - Confirm whether session cookies alone are sufficient in all OIDC flows
+- Expand the Statistics screen with additional validated metrics such as heatmap, source distribution, and peak-hours when their UI requirements are prioritized

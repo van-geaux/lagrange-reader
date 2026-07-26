@@ -33,7 +33,11 @@ class BookDetailCacheStoreTest {
                 fileCount = 1,
                 pageCount = 320,
                 userRating = 4,
-                audioChapters = listOf(AudiobookChapter("Opening", 0L))
+                audioChapters = listOf(AudiobookChapter("Opening", 0L)),
+                providerIds = listOf(
+                    BookProviderId("google", "abc123"),
+                    BookProviderId("openLibrary", "OL123M")
+                )
             )
             val first = BookDetailCacheStore(filesDir)
             first.save("https://example.test", "book-1", "file-1", detail)
@@ -48,6 +52,7 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.genres, restored?.genres)
             assertEquals(detail.pageCount, restored?.pageCount)
             assertEquals(detail.audioChapters, restored?.audioChapters)
+            assertEquals(detail.providerIds, restored?.providerIds)
             assertEquals(BookReadStatus.WANT_TO_READ, restored?.book?.readStatus)
             assertEquals(CoverAspectRatio.SQUARE, restored?.book?.coverAspectRatio)
             first.save("https://example.test", "book-1", "file-1", detail.copy(userRating = null))

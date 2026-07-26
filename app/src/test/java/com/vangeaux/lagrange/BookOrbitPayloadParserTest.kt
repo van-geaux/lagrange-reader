@@ -845,4 +845,161 @@ class BookOrbitPayloadParserTest {
     fun `parseLibraries rejects malformed payloads with a user facing error`() {
         BookOrbitPayloadParser.parseLibraries("{not-json")
     }
+
+    @Test
+    fun `parseBookDetail keeps string provider ids and ignores null, blank and non string values`() {
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = BookSummary(
+                libraryId = "lib-1",
+                id = "book-1",
+                fileId = "file-1",
+                title = "Fallback Title",
+                mediaKind = MediaKind.EPUB
+            ),
+            payload = """
+                {
+                  "id": "book-1",
+                  "title": "Detail Title",
+                  "providerIds": {
+                    "google": "abc123",
+                    "goodreads": "",
+                    "amazon": null,
+                    "openLibrary": "OL123M",
+                    "aladin": "12345",
+                    "hardcover": 9876
+                  }
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(
+            setOf(
+                BookProviderId("google", "abc123"),
+                BookProviderId("openLibrary", "OL123M"),
+                BookProviderId("aladin", "12345")
+            ),
+            detail.providerIds.toSet()
+        )
+    }
+
+    @Test
+    fun `parseBookDetail returns no provider ids when providerIds is absent`() {
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = BookSummary(
+                libraryId = "lib-1",
+                id = "book-1",
+                fileId = "file-1",
+                title = "Fallback Title",
+                mediaKind = MediaKind.EPUB
+            ),
+            payload = """{"id": "book-1", "title": "Detail Title"}""",
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertTrue(detail.providerIds.isEmpty())
+    }
+
+    @Test
+    fun `parseBookReadingSessions preserves analytics fields and skips invalid items`() {
+        val result = BookOrbitPayloadParser.parseBookReadingSessions(
+            """
+                {
+                  "items": [
+                    {
+                      "id": 7,
+                      "startedAt": "2026-07-26T10:00:00.000Z",
+                      "endedAt": "2026-07-26T10:42:00.000Z",
+                      "durationSeconds": 2520,
+                      "progressDelta": 4.5,
+                      "endProgress": 37.25,
+                      "format": "M4B",
+                      "source": "web"
+                    },
+                    {"title": "missing id"}
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 20,
+                  "stats": {"totalSessions": 12, "totalSeconds": 3600, "progressDelta": 25.5}
+                }
+            """.trimIndent()
+        )
+
+        assertEquals(1, result.items.size)
+        assertEquals("7", result.items.single().id)
+        assertEquals(2520L, result.items.single().durationSeconds)
+        assertEquals(37.25, result.items.single().endProgress)
+        assertEquals(12, result.stats?.totalSessions)
+        assertEquals(3600L, result.stats?.totalDurationSeconds)
+    }
+
+    @Test
+    fun `parseReadingAttempts preserves nullable outcomes and ignores unknown fields`() {
+        val result = BookOrbitPayloadParser.parseReadingAttempts(
+            """
+                {
+                  "items": [
+                    {
+                      "id": 4,
+                      "bookId": 9,
+                      "startedOn": "2026-07-01",
+                      "endedOn": null,
+                      "outcome": null,
+                      "origin": "bookorbit",
+                      "externalProvider": null,
+                      "externalId": null,
+                      "totalSessions": 3,
+                      "totalSeconds": 900,
+                      "createdAt": "2026-07-01T10:00:00Z",
+                      "updatedAt": "2026-07-02T10:00:00Z",
+                      "newServerField": "ignored"
+                    },
+                    {"id": 5, "outcome": "completed"}
+                  ],
+                  "total": 2,
+                  "page": 1,
+                  "pageSize": 20
+                }
+            """.trimIndent()
+        )
+
+        assertEquals(2, result.items.size)
+        assertEquals("4", result.items[0].id)
+        assertEquals(null, result.items[0].outcome)
+        assertEquals("9", result.items[0].bookId)
+        assertEquals(ReadingAttemptOutcome.COMPLETED, result.items[1].outcome)
+    }
+
+    @Test
+    fun `reading history paths clamp pagination and encode book id`() {
+        assertEquals(
+            "/api/v1/books/book%2F9/sessions?page=1&pageSize=1",
+            bookReadingSessionsPath("book/9", page = 0, pageSize = 0)
+        )
+        assertEquals(
+            "/api/v1/books/book%2F9/reading-attempts?page=2&pageSize=20",
+            bookReadingAttemptsPath("book/9", page = 2, pageSize = 20)
+        )
+    }
+
+    @Test
+    fun `parse user statistics summary and daily reading`() {
+        val summary = BookOrbitPayloadParser.parseUserStatisticsSummary(
+            """{"trackedBooks":12,"startedBooks":8,"inProgressBooks":3,"completedBooks":5,"meanProgressPercent":42.5}"""
+        )
+        val daily = BookOrbitPayloadParser.parseUserDailyReading(
+            """[{"day":"2026-07-26","readingSeconds":3661,"progressDelta":2.5,"eventsCount":4}]"""
+        )
+
+        assertEquals(12, summary.trackedBooks)
+        assertEquals(5, summary.completedBooks)
+        assertEquals(42.5, summary.meanProgressPercent, 0.001)
+        assertEquals(1, daily.size)
+        assertEquals("2026-07-26", daily[0].day)
+        assertEquals(3661L, daily[0].readingSeconds)
+        assertEquals(4, daily[0].eventsCount)
+    }
 }

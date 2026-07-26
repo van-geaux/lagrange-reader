@@ -124,6 +124,11 @@ internal fun BookSummary.withReadingStateReset(): BookSummary = copy(
     readerPageCount = null
 )
 
+data class BookProviderId(
+    val provider: String,
+    val id: String
+)
+
 data class BookDetailInfo(
     val book: BookSummary,
     val libraryName: String? = null,
@@ -142,7 +147,8 @@ data class BookDetailInfo(
     val fileCount: Int = 0,
     val totalSizeBytes: Long? = null,
     val durationSeconds: Long? = null,
-    val audioChapters: List<AudiobookChapter> = emptyList()
+    val audioChapters: List<AudiobookChapter> = emptyList(),
+    val providerIds: List<BookProviderId> = emptyList()
 )
 
 data class SeriesDetailInfo(
@@ -233,6 +239,33 @@ data class AchievementCatalogue(
     val status: AchievementCatalogueStatus = AchievementCatalogueStatus.AVAILABLE
 )
 
+enum class UserStatisticsStatus {
+    AVAILABLE,
+    UNSUPPORTED,
+    ERROR
+}
+
+data class UserStatisticsSummary(
+    val trackedBooks: Int = 0,
+    val startedBooks: Int = 0,
+    val inProgressBooks: Int = 0,
+    val completedBooks: Int = 0,
+    val meanProgressPercent: Double = 0.0
+)
+
+data class UserDailyReadingStat(
+    val day: String,
+    val readingSeconds: Long = 0L,
+    val progressDelta: Double = 0.0,
+    val eventsCount: Int = 0
+)
+
+data class UserStatistics(
+    val summary: UserStatisticsSummary? = null,
+    val dailyReading: List<UserDailyReadingStat> = emptyList(),
+    val status: UserStatisticsStatus = UserStatisticsStatus.AVAILABLE
+)
+
 data class LibraryJumpBucket(
     val key: String,
     val label: String,
@@ -304,6 +337,67 @@ data class ProgressUpdate(
     val pageIndex: Int,
     val progressPercent: Float?,
     val updatedAtMillis: Long
+)
+
+enum class ServerReadingHistoryStatus {
+    AVAILABLE,
+    UNSUPPORTED,
+    ERROR
+}
+
+data class BookReadingSession(
+    val id: String,
+    val startedAt: String? = null,
+    val endedAt: String? = null,
+    val durationSeconds: Long? = null,
+    val progressDelta: Double? = null,
+    val endProgress: Double? = null,
+    val format: String? = null,
+    val source: String? = null
+)
+
+data class BookReadingSessionStats(
+    val totalSessions: Int? = null,
+    val totalDurationSeconds: Long? = null,
+    val totalProgressDelta: Double? = null
+)
+
+data class BookReadingSessionsResult(
+    val items: List<BookReadingSession> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val pageSize: Int? = null,
+    val stats: BookReadingSessionStats? = null,
+    val status: ServerReadingHistoryStatus = ServerReadingHistoryStatus.AVAILABLE
+)
+
+enum class ReadingAttemptOutcome {
+    COMPLETED,
+    SKIMMED,
+    ABANDONED
+}
+
+data class ReadingAttempt(
+    val id: String,
+    val bookId: String? = null,
+    val startedOn: String? = null,
+    val endedOn: String? = null,
+    val outcome: ReadingAttemptOutcome? = null,
+    val origin: String? = null,
+    val externalProvider: String? = null,
+    val externalId: String? = null,
+    val totalSessions: Int? = null,
+    val totalSeconds: Long? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null
+)
+
+data class ReadingAttemptsResult(
+    val items: List<ReadingAttempt> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val pageSize: Int? = null,
+    val status: ServerReadingHistoryStatus = ServerReadingHistoryStatus.AVAILABLE
 )
 
 data class DownloadRecord(
