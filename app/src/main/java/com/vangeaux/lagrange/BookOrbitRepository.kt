@@ -1023,7 +1023,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        val localFile = resolveReadableFile(book, allowRemoteCache = !localOnly)
+        val localResolution = resolveReadableFile(book, allowRemoteCache = !localOnly)
+        val localFile = localResolution.file
         val streamUrl = buildReaderStreamUrl(
             fileId = book.fileId,
             serverBase = serverBase(),
@@ -1039,7 +1040,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = book,
             localFile = localFile,
             streamUrl = streamUrl,
-            comicPagesUrl = comicPagesUrl
+            comicPagesUrl = comicPagesUrl,
+            comicExtractionError = localResolution.comicExtractionError
         )
         val restoredProgress = resolveRestoredReaderProgress(
             book = book,
@@ -1187,7 +1189,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
         val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
         val savedBook = savedSession.book
-        val localFile = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
+        val localResolution = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
+        val localFile = localResolution.file
         if (localOnly && localFile == null) {
             return@withContext null
         }
@@ -1210,7 +1213,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 book = savedBook,
                 localFile = localFile,
                 streamUrl = streamUrl,
-                comicPagesUrl = comicPagesUrl
+                comicPagesUrl = comicPagesUrl,
+                comicExtractionError = localResolution.comicExtractionError
             )
         }.getOrElse {
             return@withContext null
@@ -1585,22 +1589,28 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         )
     }
 
-    private suspend fun resolveReadableFile(book: BookSummary, allowRemoteCache: Boolean = true): File? {
+    private data class LocalReaderResolution(
+        val file: File?,
+        val comicExtractionError: String? = null
+    )
+
+    private suspend fun resolveReadableFile(book: BookSummary, allowRemoteCache: Boolean = true): LocalReaderResolution {
+        val serverUrl = getServerUrl().orEmpty()
         val direct = book.localPath
             ?.let(::File)
             ?.takeIf(File::exists)
             ?.takeIf { it.isReadableLocalReaderFile(book) }
         if (direct != null) {
-            return direct
+            return resolveLocalComicArchive(book, direct, serverUrl)
         }
-        val fileId = book.fileId ?: return null
-        val downloaded = downloadStore.find(getServerUrl().orEmpty(), fileId)
+        val fileId = book.fileId ?: return LocalReaderResolution(null)
+        val downloaded = downloadStore.find(serverUrl, fileId)
             ?.localPath
             ?.let(::File)
             ?.takeIf(File::exists)
             ?.takeIf { it.isReadableLocalReaderFile(book) }
         if (downloaded != null) {
-            return downloaded
+            return resolveLocalComicArchive(book, downloaded, serverUrl)
         }
         if (
             allowRemoteCache &&
@@ -1619,18 +1629,49 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 appStorageManager.pruneLegacyFullMediaCaches()
             }
         }
-        return if (shouldCacheReadableCopy(book, allowRemoteCache)) {
-            cacheReadableCopy(book)
-        } else {
-            null
+        return LocalReaderResolution(
+            if (shouldCacheReadableCopy(book, allowRemoteCache)) cacheReadableCopy(book) else null
+        )
+    }
+
+    /**
+     * A downloaded CBR/CB7 is preserved as-is and is not directly renderable by Readium, so it is
+     * normalized into a cached CBZ (see [ComicArchiveCache]) before it is handed to the reader.
+     * Ordinary CBZ downloads and non-comic media pass through unchanged.
+     */
+    private fun resolveLocalComicArchive(
+        book: BookSummary,
+        rawLocal: File,
+        serverUrl: String
+    ): LocalReaderResolution {
+        if (!shouldAttemptComicArchiveExtraction(book.mediaKind, rawLocal)) {
+            return LocalReaderResolution(rawLocal)
         }
+        if (ComicArchiveExtractor.detectKind(rawLocal) == null) {
+            return LocalReaderResolution(null)
+        }
+        val identity = comicArchiveCacheIdentity(serverUrl, book)
+        val cacheDir = File(context.cacheDir, "comic-extraction-cache")
+        return when (val outcome = ComicArchiveCache.resolve(identity, rawLocal, cacheDir)) {
+            is ComicArchiveCache.Outcome.Ready -> LocalReaderResolution(outcome.file)
+            is ComicArchiveCache.Outcome.Failed -> LocalReaderResolution(null, outcome.message)
+        }
+    }
+
+    private fun shouldAttemptComicArchiveExtraction(mediaKind: MediaKind, rawLocal: File): Boolean {
+        return mediaKind == MediaKind.COMIC && ComicArchiveExtractor.detectKind(rawLocal) != null
+    }
+
+    private fun comicArchiveCacheIdentity(serverUrl: String, book: BookSummary): String {
+        return listOf(serverUrl, book.libraryId, book.id, book.fileId.orEmpty()).joinToString("|")
     }
 
     private fun ensureReaderCanOpen(
         book: BookSummary,
         localFile: File?,
         streamUrl: String?,
-        comicPagesUrl: String? = null
+        comicPagesUrl: String? = null,
+        comicExtractionError: String? = null
     ) {
         when (book.mediaKind) {
             MediaKind.AUDIO -> {
@@ -1649,6 +1690,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 }
             }
             MediaKind.COMIC -> {
+                if (comicExtractionError != null) {
+                    throw UserFacingException(comicExtractionError)
+                }
                 val localComicReady = localFile?.let(ReaderFileValidator::canRenderComicLocally) == true
                 if (!localComicReady && comicPagesUrl.isNullOrBlank()) {
                     throw UserFacingException("This comic could not be prepared for reading. Download it first or reconnect to the server.")

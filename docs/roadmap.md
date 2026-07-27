@@ -2,6 +2,10 @@
 
 This roadmap summarizes the next practical engineering sequence for the project.
 
+## Current status — 2026-07-27
+
+Physical validation is now complete for the release-update overlay (Markdown release notes render correctly, Download opens the GitHub release page, and Ignore persists the ignored tag across an app restart), Book Detail bottom-navigation behavior (Home/Libraries dismiss Book Detail, More opens over Book Detail while it remains visible underneath, and Series/Authors/Local books dismiss Book Detail after selection), the broader audiobook external-control/device matrix, and downloaded CBR/CB7 offline opening. Client-side offline RAR4/RAR5/7z extraction is implemented: `ComicArchiveExtractor` normalizes supported entries into a cached CBZ via `ComicArchiveCache`, enforcing entry/size/path safety and rejecting encrypted archives, and `BookOrbitRepository` integrates cached extraction for local comics and active-reader restoration. `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass; the user confirmed the offline reader behavior works.
+
 ## Current status — 2026-07-24
 
 Lagrange 1.3.0 is released. The signed `Lagrange-1.3.0.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.3.0) by the tagged-release workflow. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, edge-state, History, Statistics, and Android external-audiobook-control validation is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
@@ -31,8 +35,8 @@ Completed release-notification dialog update:
 Active deferred work:
 
 - Direct OIDC/SSO authentication after the provider and redirect contract are confirmed.
-- Optional client-side offline RAR/7z extraction for downloaded CBR/CB7.
-- Any explicitly deferred release-overlay or Book Detail app-navigation physical validation.
+
+Release-overlay and Book Detail app-navigation physical validation are complete as of 2026-07-27; see the current-status note above.
 
 ## Completed foundation
 

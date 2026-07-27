@@ -123,14 +123,14 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Support authenticated server-page reading for CBZ/CBR/CB7 and offline extraction for local ZIP comics, including mislabeled ZIP archives
 - [x] Give the comic reader the novel reader's fullscreen interaction model: left/right tap zones and horizontal swipes change pages, center tap opens reader options, exposed-content tap or Back dismisses options first, and Back exits only when options are closed; target-device validation passed
 - [x] Validate the general comic reading flow on the target device; comic books work correctly in current testing
-- [ ] Optionally add client-side offline RAR/7z extraction for downloaded CBR/CB7; current handling requires a server connection without deleting valid archives as corrupt
+- [x] Add and physically validate client-side offline RAR4/RAR5/7z extraction for downloaded CBR/CB7 so offline reading no longer requires a server connection; implementation, focused automated verification, and user-confirmed offline opening are complete
 - [x] Validate online and local/downloaded CBZ/CBR reading, page navigation, and progress on the target device/server; RAR-backed local CBR continues to use server-side extraction when required
 - [x] Validate online and downloaded CB7 reading on a physical device/server; user-confirmed validation is complete
 - [x] Add proper in-reader loading/error states
 - [x] Add resume-from-last-position when streaming
 - [x] Ensure nonlocal content uses the appropriate authenticated stream/page route, while EPUB/PDF prepares a temporary reader copy; comic-specific archive detection must not gate ebook/PDF preparation
 - [x] Route every EPUB launch through `ReadiumEpubReaderActivity` and every locally readable comic through `ReadiumComicReaderActivity` on Readium 3.0.2; PDF and audio were unchanged at this checkpoint and migrated in later work-order steps
-- [x] Build and reuse a cached CBZ from authenticated BookOrbit pages for connected CBR/CB7 before opening Readium; keep offline downloaded CBR/CB7 explicitly server-required
+- [x] Build and reuse a cached CBZ from authenticated BookOrbit pages for connected CBR/CB7 before opening Readium; downloaded CBR/CB7 now normalizes to a cached CBZ via client-side RAR4/RAR5/7z extraction instead of requiring the server offline
 
 ## 7. Download For Offline Use
 
@@ -576,10 +576,10 @@ Detailed gates and guardrails are in [docs/ui-ux.md](./docs/ui-ux.md).
 - [x] Replace About placeholder text with the complete app description, independent/non-official BookOrbit relationship disclaimer, version/build details, connected server, acknowledgements, and links
 - [x] Add device-only audiobook Session history below detail actions, recording play/pause time and playback timepoint, seeking on tap, surviving app updates, clearing on server change, and being removed with app uninstall
 - [x] Add and physically validate one global Library card-size setting in Options: Small (88 dp grid / 84 dp shelf), Medium (110 dp / 105 dp), and Large (132 dp / 126 dp), applied consistently across libraries and card types; focused tests, compilation, lint, and APK assembly pass
-- [x] Keep the BookOrbit app bottom navigation (Home, Libraries, More) visible when opening Book Detail. Implementation and automated verification are complete; physical app-navigation validation is intentionally deferred.
+- [x] Keep the BookOrbit app bottom navigation (Home, Libraries, More) visible when opening Book Detail. Implementation, automated verification, and physical validation are complete: tapping Home or Libraries dismisses Book Detail, tapping More opens the More sheet over Book Detail while Book Detail remains visible underneath, and selecting Series, Authors, or Local books from More dismisses Book Detail after the selection.
 - [x] Name every debug APK `Lagrange-debug-yyyymmddhhmm.apk` using the actual build datetime; `assembleDebug` retains the standard Gradle output and creates the timestamped handoff copy from the same binary
 - [ ] Decide whether to remove the tracked release APK from the repository and publish release binaries through release assets instead
-- [x] Investigate whether the app can detect a newer GitHub release tag, and if supported implement update notification behavior: on app open/reopen, when a newer release is detected, show an overlay containing the release notes and provide buttons for Acknowledge that opens the GitHub release link and Ignore that dismisses it. Automated implementation and focused verification are complete; physical release-overlay validation is intentionally deferred.
+- [x] Investigate whether the app can detect a newer GitHub release tag, and if supported implement update notification behavior: on app open/reopen, when a newer release is detected, show an overlay rendering the release notes as formatted Markdown, with Download opening the GitHub release page and Ignore dismissing and persisting the ignored tag. Automated implementation, focused verification, and physical validation are complete: Markdown release notes render correctly, Download opens the release page, and Ignore survives an app restart.
 
 Session history uses durable app-private Room storage keyed by canonical server origin plus BookOrbit book/file ID. A server switch purges the old namespace; duplicate-callback protection, bounded per-book retention, and clear-history support are required; events are never sent to BookOrbit.
 
@@ -674,3 +674,10 @@ Current release-workstream status. Historical records elsewhere in this checklis
 4. [x] Add a profile-menu `Statistics` destination above Achievements.
    - Verified research: BookOrbit exposes `GET /api/v1/user-statistics/summary`, `reading-heatmap`, `reading-source-distribution`, `peak-hours`, `favorite-days`, `session-timeline`, `completion-timeline`, `goal-trajectory`, `progress-funnel`, `completion-latency`, `genre-reading-time`, `reading-pace`, `session-archetypes`, and related `user-statistics` routes.
    - Implemented: a separate lazy-loaded Statistics screen consumes `summary` and `daily-reading`, with graceful loading, unsupported, retryable error, and partial/empty-data handling.
+
+## 18. Release-overlay, Book Detail navigation, and audiobook-control validation — 2026-07-27
+
+- [x] Physically validate the release-update overlay: Markdown release notes render correctly, Download opens the GitHub release page and dismisses for the current session, and Ignore persists the ignored release tag across an app restart.
+- [x] Physically validate Book Detail bottom-navigation behavior: tapping Home or Libraries dismisses Book Detail, tapping More opens the More sheet over Book Detail while Book Detail remains visible underneath, and selecting Series, Authors, or Local books from More dismisses Book Detail after the selection.
+- [x] Physically validate the broader audiobook external-control/device matrix, including pull-down and lock-screen Back 10 / Forward 30 controls.
+- [x] Implement and physically validate client-side offline RAR4/RAR5/7z extraction for downloaded CBR/CB7 so offline reading no longer requires a server connection: `ComicArchiveExtractor` normalizes supported RAR4/RAR5/7z entries into a cached CBZ via `ComicArchiveCache`, enforcing entry/size/path safety, rejecting encrypted archives, and cleaning failed output; `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass. User confirmed downloaded CBR/CB7 offline opening works.

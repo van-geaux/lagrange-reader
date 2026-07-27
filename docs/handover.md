@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 ## Current outcome
 
@@ -10,7 +10,9 @@ Lagrange 1.3.0 is published at the GitHub Release for tag `v1.3.0` with the sign
 
 1.2.1 fixed resume position generally (EPUB, PDF, CBZ, CBR, CB7, audiobooks): normal online opens now refresh authoritative server progress before building reader state, EPUB resume selects a real generated Readium position instead of estimating from equal-sized chapters, and a page-index bug that mis-applied EPUB's one-based conversion to all media types is fixed. Confirmed on a physical device for EPUB. 1.2.2 reworked the release-update dialog: notes render as Markdown instead of plaintext, Acknowledge was replaced with Download (opens the GitHub release page), and Ignore now persists the ignored release tag to app preferences so it survives an app restart (Download's suppression remains session-only). Physical-device confirmation of the 1.2.2 dialog changes remains intentionally deferred.
 
-The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, server reading-history supplement, Statistics screen, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, supported reader/media validation, and API 33+ audiobook controls are implemented and user-confirmed as working. OIDC/SSO and optional offline RAR/7z extraction remain deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, server reading-history supplement, Statistics screen, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, supported reader/media validation, API 33+ audiobook controls, and client-side offline CBR/CB7 extraction are implemented and user-confirmed as working. Offline CBR/CB7 extraction uses Junrar for RAR4/RAR5 and Commons Compress for 7z, normalizes supported images into a bounded cached CBZ, preserves the original download, rejects encrypted/unsafe/oversized archives, and cleans failed output. OIDC/SSO remains deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
+
+The client-side extraction work is tracked by GitHub issue #1: https://github.com/van-geaux/lagrange-reader/issues/1. The feature branch was locally merged into `main` after the documented verification gates passed; no remote push was performed.
 
 ## Repository and publishing state
 
@@ -162,8 +164,8 @@ Verification passed full unit tests, lint, compilation, and `assembleDebug`; foc
 
 ## Highest-priority next work
 
-1. Physically/UI validate the completed release overlay and Book Detail app-navigation behavior later, as previously deferred. Validate overlay presentation/scrolling, Acknowledge link launch, Ignore/reopen/offline behavior, Home/Libraries dismissal, More staying over Book Detail, and Series/Authors/Local-books selection dismissal.
-2. The tracked release-artifact cleanup is complete. The historical `v1.1.0` APK is uploaded, the `v1.2.0` signed APK is published, and the release-workflow secrets are configured.
+1. No implementation blocker remains for the approved CBR/CB7 extraction work. The user confirmed that downloaded CBR/CB7 opens offline successfully; issue #1 can be closed or linked to a future release when the user chooses.
+2. Future work remains user-directed: direct OIDC/SSO, additional unsupported book formats, and any separately deferred physical validation.
 
 Before asking the user to test another build, assemble the debug APK and report the exact generated timestamped path, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`. The standard `app-debug.apk` is the internal Gradle source for that same binary. Use docs/testing.md for the applicable procedure.
 
@@ -239,7 +241,7 @@ The following local user-owned fixture remains intentionally untracked and must 
 
 - Untracked `sample/`
 
-All requested source, test, release, and documentation changes are committed and pushed.
+The requested source, test, and documentation changes are committed locally and merged into `main`. The pre-existing `.gitignore`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted. Nothing was pushed.
 
 ## Important files for the next session
 
