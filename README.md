@@ -67,7 +67,7 @@ The following screenshots show the main reading and library experience. More scr
 | EPUB / KEPUB | Yes | Yes | Full paginated reader with themes, margins, chapters, and resume. |
 | PDF | Yes | Yes | Readium PDF reader with page navigation and resume. |
 | CBZ | Yes | Yes | Image-based comic reader. |
-| CBR / CB7 | Yes | Limited | Online page extraction is supported; offline reading requires the server and is not client-side RAR/7z extraction. |
+| CBR / CB7 | Yes | Yes | Online page extraction is supported; offline reading uses client-side RAR4/RAR5/7z extraction into a cached CBZ. User-confirmed offline opening works. |
 | Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. |
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
@@ -105,7 +105,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 | Authentication | Provides authenticated accounts and server sessions; the server also has an OIDC/SSO direction available for deployments that configure it. | Uses the current native username/password flow; direct OIDC/SSO is deferred. |
 | Library and catalog | Owns libraries, books, authors, series, metadata, scanning, and catalog APIs. | Browses BookOrbit libraries and caches catalog data for offline fallback. |
 | Reading and listening | Serves book files, reader data, progress APIs, and audiobook media. | Provides native EPUB, PDF, comic, and audiobook readers with resume, themes, navigation, and playback controls. |
-| Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline; CBR/CB7 files that require RAR/7z extraction remain server-backed. |
+| Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline, including CBR/CB7 files via client-side RAR4/RAR5/7z extraction into a cached CBZ. |
 | Progress and status | Stores reading/listening progress and book statuses. | Queues progress offline, synchronizes it, and exposes the server status controls in the Android UI. |
 | Ratings and metadata sources | Owns book metadata, provider IDs, and per-user book data. | Displays and updates supported per-user ratings and opens centralized links for known metadata providers. |
 | Audiobook sessions | Stores server reading sessions and reading attempts as analytics/history records. | Shows server history after local history; local exact-position audiobook sessions remain device-only and seekable. |
@@ -119,10 +119,8 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 Remaining follow-up work includes but is not limited to:
 
 - Support for additional book formats; MOBI, AZW, AZW3, and FB2 remain unsupported.
-- Optional client-side offline RAR/7z extraction for downloaded CBR/CB7; server-backed extraction remains the current behavior.
 - Direct OIDC/SSO authentication after a BookOrbit provider and redirect contract are confirmed.
 - Broader bulk actions for Local books beyond the implemented multi-select `Delete local` flow.
-- Android API 33+ pull-down and lock-screen audiobook Back 10 / Forward 30 controls are physically validated.
 
 More details are in the [Roadmap](docs/roadmap.md)
 

@@ -1,5 +1,9 @@
 # Testing
 
+### Release-overlay, Book Detail navigation, and audiobook-control physical validation — 2026-07-27
+
+Physical validation is now complete for four previously deferred checks. The release-update overlay renders release notes as formatted Markdown, Download opens the GitHub release page and dismisses for the session, and Ignore persists the ignored release tag across a real app restart. Book Detail bottom-navigation behavior is confirmed: tapping Home or Libraries dismisses Book Detail, tapping More opens the More sheet over Book Detail while Book Detail remains visible underneath, and selecting Series, Authors, or Local books from More dismisses Book Detail after the selection. The broader audiobook external-control/device matrix, including pull-down and lock-screen Back 10 / Forward 30 controls, is also confirmed working. Client-side offline RAR4/RAR5/7z extraction for downloaded CBR/CB7 is implemented, covered by automated verification, and user-confirmed working on the offline reader path.
+
 ### Release-notification dialog regression — 2026-07-24
 
 `AppCoordinatorTest` covers `ignoreReleaseUpdate()` persisting the ignored release tag through injected `readIgnoredReleaseTag`/`saveIgnoredReleaseTag` hooks and confirms a fresh `AppCoordinator` instance backed by the same persisted value does not resurface the ignored release, proving Ignore survives a simulated app restart while a plain `dismissReleaseUpdate()` (used by Download) remains session-only. The full JVM gate passes 324 tests across 53 suites with zero failures/errors/skips, lint reports zero errors, and debug, Android-test, and signed release APKs all assemble. Physical-device confirmation of the release-update dialog's Markdown rendering, Download link launch, and Ignore persistence across a real app restart remains intentionally deferred.
