@@ -12,6 +12,8 @@ Lagrange 1.3.0 is published at the GitHub Release for tag `v1.3.0` with the sign
 
 The Book Detail rating, complete reading-status menu, reading-status/progress placement repairs, audiobook Session history, server reading-history supplement, Statistics screen, Book Detail action-row redesign, About content, current-reading resume repair, global Library card-size setting, supported reader/media validation, API 33+ audiobook controls, and client-side offline CBR/CB7 extraction are implemented and user-confirmed as working. Offline CBR/CB7 extraction uses Junrar for RAR4/RAR5 and Commons Compress for 7z, normalizes supported images into a bounded cached CBZ, preserves the original download, rejects encrypted/unsafe/oversized archives, and cleans failed output. OIDC/SSO remains deferred. No project terminal, Gradle process, ADB server, watcher, emulator, or project daemon is running.
 
+The Series and Authors catalog fix (fixed count/Filter and count/header controls kept outside the lazy grids, jump-rail offsets corrected, fixed-bound instrumentation added) is merged into remote `main` via PR #6 (https://github.com/van-geaux/lagrange-reader/pull/6), merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`. That merge automatically closed GitHub issue #3 (https://github.com/van-geaux/lagrange-reader/issues/3), and the user has confirmed on-device that the fixed Series/Authors controls work. The automated gate for this change (compileDebugKotlin, compileDebugAndroidTestKotlin, testDebugUnitTest, lintDebug, assembleDebug, assembleDebugAndroidTest; 348 JVM tests across 55 XML suites, zero failures/errors/skips) passed, but no ADB device was connected in that environment, so instrumentation was compiled but not executed there; the physical-device confirmation above covers the actual on-device behavior. Handoff APK: `app/build/outputs/apk/debug/Lagrange-debug-202607271346.apk`.
+
 The client-side extraction work is tracked by GitHub issue #1: https://github.com/van-geaux/lagrange-reader/issues/1. The feature branch was locally merged into `main` after the documented verification gates passed; no remote push was performed.
 
 ## Repository and publishing state
@@ -20,7 +22,7 @@ The client-side extraction work is tracked by GitHub issue #1: https://github.co
 - Branch: `main`
 - Remote: `origin` uses HTTPS through the authenticated GitHub CLI credential helper. Credential values are not recorded in project documentation.
 - Published release: `Lagrange 1.3.0`, tagged `v1.3.0`, with `Lagrange-1.3.0.apk` attached — confirmed via `gh release view v1.3.0`.
-- Current Git HEAD: see `git log -1` to confirm; `main` is synchronized with `origin/main`.
+- Current Git HEAD: see `git log -1` to confirm. Remote `origin/main` contains PR #6 (merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`, closing issue #3); the local worktree additionally carries the three pre-existing uncommitted files noted under "Protected working-tree changes" below.
 - Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.
 - The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
@@ -29,7 +31,7 @@ The client-side extraction work is tracked by GitHub issue #1: https://github.co
 - Push only when explicitly requested.
 - Development-machine migration completed to `vangeaux@192.168.1.5:/projects/bookorbit-android` in an earlier session. The project source, Git history, current worktree, untracked `sample/` media, `keystore.properties`, and `release-key.jks` were copied. `.gradle/`, all `build/` directories, `.idea/`, and Windows-specific `local.properties` were excluded. JDK 17 and the Android SDK are confirmed installed and working on this Debian host (used throughout this session's builds).
 
-All commits from this session are pushed; `main` is synchronized with `origin/main` (nothing ahead). This session's commits, newest first:
+Remote `main` contains PR #6's merge commit. This local checkout also retains the local-only `8fc5799` agent-workflow commit and the three pre-existing uncommitted files described below; the historical session commit list follows:
 
 - `12376a7 release: prepare Lagrange 1.2.3`
 
@@ -164,8 +166,10 @@ Verification passed full unit tests, lint, compilation, and `assembleDebug`; foc
 
 ## Highest-priority next work
 
-1. No implementation blocker remains for the approved CBR/CB7 extraction work. The user confirmed that downloaded CBR/CB7 opens offline successfully; issue #1 can be closed or linked to a future release when the user chooses.
-2. Future work remains user-directed: direct OIDC/SSO, additional unsupported book formats, and any separately deferred physical validation.
+1. GitHub issue #5 (https://github.com/van-geaux/lagrange-reader/issues/5) is OPEN and is the first active feature: expose Delete local in every book context menu when a valid local copy exists.
+2. Direct OIDC/SSO remains an open, user-directed item.
+3. No implementation blocker remains for the approved CBR/CB7 extraction work. The user confirmed that downloaded CBR/CB7 opens offline successfully; issue #1 can be closed or linked to a future release when the user chooses.
+4. Future work remains user-directed: additional unsupported book formats and any separately deferred physical validation.
 
 Before asking the user to test another build, assemble the debug APK and report the exact generated timestamped path, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`. The standard `app-debug.apk` is the internal Gradle source for that same binary. Use docs/testing.md for the applicable procedure.
 
@@ -241,10 +245,12 @@ The following local user-owned fixture remains intentionally untracked and must 
 
 - Untracked `sample/`
 
-The requested source, test, and documentation changes are committed locally and merged into `main`. The pre-existing `.gitignore`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted. Nothing was pushed.
+The source, test, and documentation changes for issue #3 (PR #6, merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`) are merged into `main` on the remote. The pre-existing `.gitignore`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted.
 
 ## Important files for the next session
 
+- PR #6: https://github.com/van-geaux/lagrange-reader/pull/6 (merged, closed issue #3)
+- Issue #5 (open, next active work): https://github.com/van-geaux/lagrange-reader/issues/5
 - `CHECKLIST.md`
 - `docs/roadmap.md`
 - `docs/testing.md`
