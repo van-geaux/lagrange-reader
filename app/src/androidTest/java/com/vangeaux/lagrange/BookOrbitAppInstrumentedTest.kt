@@ -1520,6 +1520,97 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun seriesCatalogToolbarStaysFixedWhenCatalogScrolls() {
+        val series = (1..40).map { index ->
+            SeriesSummary(id = "series-${index.toString().padStart(2, '0')}", name = "Series ${index.toString().padStart(2, '0')}")
+        }
+        val dataSource = InstrumentedFakeDataSource().apply {
+            seriesCatalogPages[0] = SeriesCatalogPage(
+                items = series,
+                total = series.size,
+                page = 0,
+                size = 100
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Series").performClick()
+        val toolbarBefore = composeRule.onNodeWithTag("series_catalog_toolbar")
+            .fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithTag("series_card_series-40").performScrollTo().assertIsDisplayed()
+
+        val toolbarAfter = composeRule.onNodeWithTag("series_catalog_toolbar")
+            .assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(toolbarBefore.top, toolbarAfter.top, 0.5f)
+        assertEquals(toolbarBefore.bottom, toolbarAfter.bottom, 0.5f)
+        composeRule.onNodeWithText("40 series").assertIsDisplayed()
+        composeRule.onNodeWithText("Filter").assertIsDisplayed()
+    }
+
+    @Test
+    fun authorsCatalogToolbarStaysFixedWhenCatalogScrolls() {
+        val authors = (1..40).map { index ->
+            AuthorSummary(id = "author-${index.toString().padStart(2, '0')}", name = "Author ${index.toString().padStart(2, '0')}")
+        }
+        val dataSource = InstrumentedFakeDataSource().apply {
+            authorCatalogPages[0] = AuthorCatalogPage(
+                items = authors,
+                total = authors.size,
+                page = 0,
+                size = 100
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Authors").performClick()
+        val toolbarBefore = composeRule.onNodeWithTag("authors_catalog_toolbar")
+            .fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithTag("author_card_author-40").performScrollTo().assertIsDisplayed()
+
+        val toolbarAfter = composeRule.onNodeWithTag("authors_catalog_toolbar")
+            .assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(toolbarBefore.top, toolbarAfter.top, 0.5f)
+        assertEquals(toolbarBefore.bottom, toolbarAfter.bottom, 0.5f)
+        composeRule.onNodeWithText("40 authors").assertIsDisplayed()
+    }
+
+    @Test
     fun libraryBrowseCanLoadMorePages() {
         val first = BookSummary(
             libraryId = "lib-1",

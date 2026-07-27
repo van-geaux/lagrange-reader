@@ -32,9 +32,11 @@ Completed release-notification dialog update:
 - The dialog's two actions are Download (opens the GitHub release page and dismisses for the current session) and Ignore (dismisses without opening the page and persists the ignored release tag to app preferences, so that release is suppressed even after the app is closed and reopened). The prior Acknowledge action is removed; Download is its successor.
 - `AppCoordinator` gained `ignoreReleaseUpdate()` plus injectable `readIgnoredReleaseTag`/`saveIgnoredReleaseTag` hooks, wired to `AppPreferencesStore` in `AppGraph`. Focused coordinator regressions cover cross-instance ignore persistence. Full JVM gate (324 tests/53 suites), lint, and both debug/release APK assemblies pass.
 
-Active deferred work:
+Active tracked work:
 
-- Direct OIDC/SSO authentication after the provider and redirect contract are confirmed.
+- Implemented: Series and Authors catalog controls now remain fixed while their catalogs scroll, matching Library Browse. The Series count/Filter row and Authors count/header row sit outside their lazy grids, tagged for regression testing, and jump-rail indexes no longer include the removed header offset. New instrumentation regressions cover fixed bounds after scrolling to late Series and Authors cards; adb had no connected device, so instrumentation was compiled, not executed. Physical-device validation remains pending: https://github.com/van-geaux/lagrange-reader/issues/3
+- Direct OIDC/SSO authentication after the BookOrbit provider and redirect contract are confirmed: https://github.com/van-geaux/lagrange-reader/issues/4
+- Delete local in every book context menu when a valid local copy exists; not yet implemented: https://github.com/van-geaux/lagrange-reader/issues/5
 
 Release-overlay and Book Detail app-navigation physical validation are complete as of 2026-07-27; see the current-status note above.
 

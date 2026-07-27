@@ -14,6 +14,8 @@ Latest target-device validation confirms all eight latest reader/library/media g
 
 Latest implementation: Delete local immediately returns the still-open detail action to Download and refreshes Local books; incomplete Local books summaries recover thumbnails and related metadata from the latest cached rich detail; and Options now dismisses retained book-detail state before opening. These browser/local flows and server-wide Home/Currently Reading aggregation are target-device validated. Comic routing supports online CBZ/CBR/CB7 plus offline ZIP/CBZ and client-side RAR4/RAR5/7z normalization into a cached CBZ, while recording page progress. Fullscreen interactions, online/local comic reading, and user-confirmed offline downloaded CBR/CB7 opening work; encrypted archives remain intentionally unsupported. Direct OIDC/SSO remains deferred.
 
+Library, Series, and Authors catalog control/header rows (statistics, filter/collapse or selection actions, and the Authors header) all remain fixed outside their lazy grids while only the underlying grid scrolls; jump-rail indexes for Series and Authors account for those controls being outside the grid rather than adding a header-item offset.
+
 Profile-menu Statistics is now a lazy-loaded destination above Achievements. It presents BookOrbit summary and daily-reading data and handles loading, unsupported older servers, retryable errors, and partial/empty responses. Server audiobook history remains analytics-only; exact seekable play/pause positions continue to come from the local Room history store.
 
 Options backlog

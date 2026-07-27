@@ -1570,8 +1570,33 @@ private fun SeriesCatalogScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        val hasJumpRail = jumpTargets.isNotEmpty()
+    val hasJumpRail = jumpTargets.isNotEmpty()
+    Column(modifier = modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("series_catalog_toolbar")
+                .padding(
+                    start = CATALOG_GRID_PADDING,
+                    top = CATALOG_GRID_PADDING,
+                    end = CATALOG_GRID_PADDING
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (total > 0) "$total series" else "Browse every accessible series",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { showFilter = true }) {
+                Text(if (filter.isActive) "Filter · active" else "Filter")
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
@@ -1585,21 +1610,6 @@ private fun SeriesCatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (total > 0) "$total series" else "Browse every accessible series",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedButton(onClick = { showFilter = true }) {
-                    Text(if (filter.isActive) "Filter · active" else "Filter")
-                }
-            }
-        }
         if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading series...") }
         if (!isLoading && items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1647,13 +1657,14 @@ private fun SeriesCatalogScreen(
                 onJump = { index ->
                     scope.launch {
                         if (reduceMotion) {
-                            gridState.scrollToItem(index + 1)
+                            gridState.scrollToItem(index)
                         } else {
-                            gridState.animateScrollToItem(index + 1)
+                            gridState.animateScrollToItem(index)
                         }
                     }
                 }
             )
+        }
         }
     }
     if (showFilter) {
@@ -1869,8 +1880,25 @@ private fun AuthorsCatalogScreen(
         if (isLoading) emptyList() else buildAuthorJumpTargets(items)
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        val hasJumpRail = jumpTargets.isNotEmpty()
+    val hasJumpRail = jumpTargets.isNotEmpty()
+    Column(modifier = modifier.fillMaxSize()) {
+        Text(
+            if (total > 0) "$total authors" else "Browse every accessible author",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("authors_catalog_toolbar")
+                .padding(
+                    start = CATALOG_GRID_PADDING,
+                    top = CATALOG_GRID_PADDING,
+                    end = CATALOG_GRID_PADDING
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
@@ -1884,12 +1912,6 @@ private fun AuthorsCatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Text(
-                if (total > 0) "$total authors" else "Browse every accessible author",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
         if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading authors...") }
         if (!isLoading && items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1934,13 +1956,14 @@ private fun AuthorsCatalogScreen(
                 onJump = { index ->
                     scope.launch {
                         if (reduceMotion) {
-                            gridState.scrollToItem(index + 1)
+                            gridState.scrollToItem(index)
                         } else {
-                            gridState.animateScrollToItem(index + 1)
+                            gridState.animateScrollToItem(index)
                         }
                     }
                 }
             )
+        }
         }
     }
 }
