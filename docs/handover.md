@@ -2,6 +2,10 @@
 
 Last updated: 2026-07-28
 
+## Release handoff — Lagrange 1.4.0
+
+Version metadata is prepared as `versionName 1.4.0`, `versionCode 17`. The approved release note is `docs/release-notes/v1.4.0.md`. This release includes offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors controls, and the completed download lifecycle implementation. The local release gate passed 364 JVM tests across 55 suites with zero failures/errors/skips, `lintDebug`, debug and Android-test compilation/assembly, and signed release assembly. The local artifacts are `app/build/outputs/apk/debug/Lagrange-debug-202607281709.apk` (72,263,630 bytes) and `app/build/outputs/apk/release/app-release.apk` (63,279,548 bytes); the signed GitHub Release asset remains to be verified after the tag-triggered workflow completes.
+
 ## Current handoff — 2026-07-28
 
 Issue #4 (server-hosted OIDC/SSO sign-in compatibility) is implemented, user-confirmed working, and merged through PR #11. The delivered scope is Phase 1: BookOrbit's own `/login` page is opened in a transient WebView, shared cookies are synchronized with the API client, and a cancellable `/api/v1/auth/me` watcher detects the asynchronous JavaScript callback/session exchange. Authentication automatically destroys the WebView and resumes the pending app destination instead of returning to Login. Issue #4 remains open for the separate native AppAuth Phase 2 follow-up.

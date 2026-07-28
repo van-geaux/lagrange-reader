@@ -2,6 +2,10 @@
 
 This roadmap summarizes the next practical engineering sequence for the project.
 
+## Current status — 2026-07-28 — 1.4.0 release preparation
+
+Lagrange 1.4.0 is prepared for release with client-side offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors catalog controls, and the completed download lifecycle state handling. The release note is [docs/release-notes/v1.4.0.md](release-notes/v1.4.0.md). The local gate passed 364 JVM tests with zero failures/errors/skips, lint, debug and Android-test compilation/assembly, and signed release assembly. The signed APK and GitHub Release will be verified after the tag-triggered workflow completes.
+
 ## Current status — 2026-07-27
 
 Physical validation is now complete for the release-update overlay, Book Detail bottom-navigation behavior, the broader audiobook external-control/device matrix, and downloaded CBR/CB7 offline opening. Client-side offline RAR4/RAR5/7z extraction is implemented and user-confirmed working. `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass; the user confirmed the offline reader behavior works.

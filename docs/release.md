@@ -36,7 +36,7 @@ If a rename is required again in the future:
 
 ### Current version marker
 
-- current release: `versionName 1.3.0`, `versionCode 16`
+- current release: `versionName 1.4.0`, `versionCode 17`
 - update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
 - the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
 - use the `1.x` minor-release line for additive feature releases and increment `versionCode` for every distributed build
@@ -48,6 +48,11 @@ If a rename is required again in the future:
 - release keystore paths, aliases, and passwords must come from local machine configuration or CI secrets
 - keep signing material outside the repo and outside shared documentation that is meant to be committed
 - the tag-triggered GitHub Actions release workflow uses GitHub secrets or an equivalent secret store rather than checked-in signing material
+
+## Contribution policy
+
+- future features and fixes should begin with a GitHub issue or feature request describing the change
+- implement changes through a fork and pull request rather than direct commits, so work stays traceable to its originating issue
 
 ## Current state
 
