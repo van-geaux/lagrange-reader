@@ -4,7 +4,7 @@ Last updated: 2026-07-28
 
 ## Current handoff — 2026-07-28
 
-Issue #4 (server-hosted OIDC/SSO sign-in compatibility) is implemented, user-confirmed working, and ready to close after the implementation branch is merged. The delivered scope is Phase 1: BookOrbit's own `/login` page is opened in a transient WebView, shared cookies are synchronized with the API client, and a cancellable `/api/v1/auth/me` watcher detects the asynchronous JavaScript callback/session exchange. Authentication automatically destroys the WebView and resumes the pending app destination instead of returning to Login.
+Issue #4 (server-hosted OIDC/SSO sign-in compatibility) is implemented, user-confirmed working, and merged through PR #11. The delivered scope is Phase 1: BookOrbit's own `/login` page is opened in a transient WebView, shared cookies are synchronized with the API client, and a cancellable `/api/v1/auth/me` watcher detects the asynchronous JavaScript callback/session exchange. Authentication automatically destroys the WebView and resumes the pending app destination instead of returning to Login. Issue #4 remains open for the separate native AppAuth Phase 2 follow-up.
 
 Completed in this handoff:
 
