@@ -866,6 +866,82 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun localBooksShowsActiveAndFailedDownloadRows() {
+        val active = BookSummary(
+            libraryId = "lib-1",
+            id = "download-active",
+            fileId = "download-active",
+            title = "Active Download",
+            mediaKind = MediaKind.EPUB
+        )
+        val failed = BookSummary(
+            libraryId = "lib-1",
+            id = "download-failed",
+            fileId = "download-failed",
+            title = "Failed Download",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource()
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(active, failed),
+                            homeBooks = listOf(active, failed),
+                            downloadingFileIds = setOf("download-active"),
+                            downloadProgressByFileId = mapOf("download-active" to 0.5f),
+                            failedDownloadFileIds = setOf("download-failed")
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Local books").performClick()
+        composeRule.onNodeWithTag("local-downloads-section").assertIsDisplayed()
+        composeRule.onNodeWithText("Downloads").assertIsDisplayed()
+        composeRule.onNodeWithText("Active Download").assertIsDisplayed()
+        composeRule.onNodeWithText("Downloading · 50%").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").assertIsDisplayed()
+        composeRule.onNodeWithText("Failed Download").assertIsDisplayed()
+        composeRule.onNodeWithText("Download failed").assertIsDisplayed()
+        composeRule.onNodeWithText("Retry").assertIsDisplayed()
+        composeRule.onNodeWithText("Clear").assertIsDisplayed()
+        composeRule.onNodeWithText("Clear all").assertIsDisplayed()
+    }
+
+    @Test
+    fun localBooksHidesDownloadSectionWhenNoTransfersExist() {
+        val dataSource = InstrumentedFakeDataSource()
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList(),
+                            homeBooks = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithText("Local books").performClick()
+        composeRule.onAllNodesWithTag("local-downloads-section").assertCountEquals(0)
+    }
+
+    @Test
     fun localBooksMultiSelectConfirmsAndReconcilesPartialFailure() {
         val first = BookSummary(
             libraryId = "lib-1",
@@ -916,6 +992,11 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithText("More").performClick()
         composeRule.onNodeWithText("Local books").performClick()
+        composeRule.onNodeWithContentDescription("More options for Local Delete One").performClick()
+        composeRule.onNodeWithText("Delete local").assertIsDisplayed()
+        composeRule.onNodeWithText("Delete local").performClick()
+        composeRule.onNodeWithText("Delete local copy?").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
         composeRule.onNodeWithContentDescription("Local Delete One", substring = true)
             .performTouchInput { longClick() }
         composeRule.onNodeWithContentDescription("Local Delete Two", substring = true)
@@ -1242,6 +1323,7 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithText("Search Result Book").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("More options for Search Result Book").performClick()
+        composeRule.onAllNodesWithText("Delete local").assertCountEquals(0)
         composeRule.onNodeWithText("Mark as read").performClick()
         composeRule.waitUntil { dataSource.markedReadBooks == listOf(searchBook) }
 

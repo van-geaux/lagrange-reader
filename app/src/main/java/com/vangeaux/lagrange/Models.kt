@@ -303,6 +303,7 @@ data class BrowserState(
     val downloadingFileIds: Set<String> = emptySet(),
     val downloadProgressByFileId: Map<String, Float> = emptyMap(),
     val failedDownloadFileIds: Set<String> = emptySet(),
+    val downloadMetadataByFileId: Map<String, DownloadRecord> = emptyMap(),
     val localFilePathOverrides: Map<String, String?> = emptyMap(),
     val localBooksRevision: Int = 0,
     val debugPendingProgressCount: Int = 0,
@@ -409,5 +410,25 @@ data class DownloadRecord(
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
-    val downloadedAtMillis: Long = System.currentTimeMillis()
+    val downloadedAtMillis: Long = System.currentTimeMillis(),
+    val status: DownloadRecordStatus = DownloadRecordStatus.COMPLETE,
+    val hasExistingLocalCopy: Boolean = false
+)
+
+enum class DownloadRecordStatus {
+    COMPLETE,
+    INTERRUPTED
+}
+
+data class DownloadAttempt(
+    val serverUrl: String,
+    val fileId: String,
+    val bookId: String,
+    val title: String,
+    val targetPath: String,
+    val existingLocalPath: String? = null,
+    val mediaKind: MediaKind,
+    val mimeType: String? = null,
+    val sourceUpdatedAtMillis: Long? = null,
+    val startedAtMillis: Long = System.currentTimeMillis()
 )

@@ -1,6 +1,25 @@
 # Handover
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
+
+## Current handoff — 2026-07-28
+
+Issue #8 (download lifecycle and Local books transfer status) is implemented and user-confirmed working. The worktree contains the issue #8 implementation and related documentation changes, plus separate local-only changes that must remain unstaged.
+
+Completed in the current worktree:
+
+- Book-card context menus expose the approved lifecycle actions: `Download local`, `Cancel`, `Retry`, `Clear`, and `Delete local` where applicable.
+- Local books has a conditional Downloads section for active and failed transfers, with progress, `Cancel`, `Retry`, per-item `Clear`, and `Clear all`.
+- `AppCoordinator.clearFailedDownload(...)` and `clearAllFailedDownloads()` remove failed UI state without cancelling active work or deleting local records/files.
+- Interrupted download attempts are persisted separately from completed local-copy records. Failed first downloads stay out of the completed Local books list; failed updates retain the previous local copy and expose `Update local` and `Delete local`.
+- Focused persistence/coordinator/action-state tests, Android-test compilation, the full JVM/lint/APK gate, and ad-hoc targeted verification passed. The latest full gate reported 356 JVM tests across 55 suites with zero failures/errors/skips; lint reported 0 errors, 39 warnings, and 14 informational findings; no ADB target was connected.
+
+Still required:
+
+1. Commit and push the approved issue #8 implementation from a feature branch, open/process its pull request, and verify the remote merge and issue closure.
+2. Validate the full download lifecycle on a connected physical device or emulator; no ADB target is currently available.
+
+Delegation status: four Claude Code implementation attempts were started for the earlier fixes; each exited with `Error: Reached max turns` without a final report. The main agent completed and verified the issue #8 implementation after those bounded attempts. No subagent or background process is currently running.
 
 ## Current outcome
 
@@ -166,7 +185,7 @@ Verification passed full unit tests, lint, compilation, and `assembleDebug`; foc
 
 ## Highest-priority next work
 
-1. GitHub issue #5 (https://github.com/van-geaux/lagrange-reader/issues/5) is OPEN and is the first active feature: expose Delete local in every book context menu when a valid local copy exists.
+1. GitHub issue #8 (https://github.com/van-geaux/lagrange-reader/issues/8) is implemented; complete the requested PR/merge/issue-closure workflow and retain physical-device validation as the only remaining limitation.
 2. Direct OIDC/SSO remains an open, user-directed item.
 3. No implementation blocker remains for the approved CBR/CB7 extraction work. The user confirmed that downloaded CBR/CB7 opens offline successfully; issue #1 can be closed or linked to a future release when the user chooses.
 4. Future work remains user-directed: additional unsupported book formats and any separately deferred physical validation.
@@ -245,7 +264,7 @@ The following local user-owned fixture remains intentionally untracked and must 
 
 - Untracked `sample/`
 
-The source, test, and documentation changes for issue #3 (PR #6, merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`) are merged into `main` on the remote. The pre-existing `.gitignore`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted.
+The source, test, and documentation changes for issue #3 (PR #6, merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`) are merged into `main` on the remote. The pre-existing `.gitignore`, `AGENTS.md`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted and must not be included in the issue #8 push.
 
 ## Important files for the next session
 

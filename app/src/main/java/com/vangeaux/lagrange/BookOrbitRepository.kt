@@ -269,6 +269,8 @@ interface BookOrbitDataSource {
     suspend fun resetBookReadingState(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
     suspend fun deleteLocalCopy(book: BookSummary)
+    suspend fun loadInterruptedDownloads(): List<DownloadRecord> = emptyList()
+    suspend fun clearInterruptedDownload(fileId: String) = Unit
     suspend fun loadStorageUsage(): StorageUsage = StorageUsage()
     suspend fun clearAppCache() = Unit
     suspend fun reconfigureBackgroundRefresh() = Unit
@@ -638,6 +640,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 .orEmpty()
         }
         downloads
+            .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
             .sortedByDescending { it.downloadedAtMillis }
             .map { record ->
                 val snapshotBook = snapshotBooks.firstOrNull { book ->
@@ -1251,6 +1254,19 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             ?: downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
         val hadUsableExisting = existingRecord != null &&
             downloadedFilePassesIntegrity(book, target)
+        downloadStore.saveAttempt(
+            DownloadAttempt(
+                serverUrl = serverUrl,
+                fileId = fileId,
+                bookId = book.id,
+                title = book.title,
+                targetPath = target.absolutePath,
+                existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
+                mediaKind = book.mediaKind,
+                mimeType = book.format,
+                sourceUpdatedAtMillis = book.updatedAtMillis
+            )
+        )
         val canReuseExisting = existingRecord != null &&
             !downloadUpdateAvailable(book, existingRecord) &&
             hadUsableExisting
@@ -1322,6 +1338,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 if (staged.exists()) staged.delete()
             }
         }
+        downloadStore.removeAttempt(serverUrl, fileId)
         downloadStore.save(
             DownloadRecord(
                 serverUrl = getServerUrl().orEmpty(),
@@ -1334,7 +1351,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 sourceUpdatedAtMillis = listOfNotNull(
                     existingRecord?.sourceUpdatedAtMillis,
                     book.updatedAtMillis
-                ).maxOrNull()
+                ).maxOrNull(),
+                status = DownloadRecordStatus.COMPLETE
             )
         )
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
@@ -1356,6 +1374,29 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
         bookDetailCacheStore.remove(serverUrl, book.id, fileId)
+    }
+
+    override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = withContext(Dispatchers.IO) {
+        downloadStore.readAttempts(getServerUrl().orEmpty()).map { attempt ->
+            DownloadRecord(
+                serverUrl = attempt.serverUrl,
+                fileId = attempt.fileId,
+                bookId = attempt.bookId,
+                title = attempt.title,
+                localPath = attempt.targetPath,
+                mediaKind = attempt.mediaKind,
+                mimeType = attempt.mimeType,
+                sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
+                downloadedAtMillis = attempt.startedAtMillis,
+                status = DownloadRecordStatus.INTERRUPTED,
+                hasExistingLocalCopy = attempt.existingLocalPath?.let(::File)?.exists() == true
+            )
+        }
+    }
+
+    override suspend fun clearInterruptedDownload(fileId: String) = withContext(Dispatchers.IO) {
+        downloadStore.removeAttempt(getServerUrl().orEmpty(), fileId)
+        Unit
     }
 
     override suspend fun loadStorageUsage(): StorageUsage = appStorageManager.usage()
@@ -3232,7 +3273,7 @@ internal fun libraryCatalogPagesAreStable(
 private fun List<BookSummary>.withCurrentDownloads(
     downloads: Map<String, DownloadRecord>
 ): List<BookSummary> = map { book ->
-    val download = book.fileId?.let(downloads::get)
+    val download = book.fileId?.let(downloads::get)?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
     val localPath = download?.localPath
     if (
         localPath == book.localPath &&

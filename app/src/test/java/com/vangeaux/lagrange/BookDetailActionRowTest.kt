@@ -49,6 +49,15 @@ class BookDetailActionRowTest {
     }
 
     @Test
+    fun failedLocalUpdateOffersUpdateLocalAndKeepsDeleteLocal() {
+        val failedUpdate = state(isDownloaded = true, downloadFailed = true)
+
+        assertNull(failedUpdate.inlineTransfer)
+        assertEquals("Update local", failedUpdate.overflowTransferLabel)
+        assertTrue(failedUpdate.showDeleteLocal)
+    }
+
+    @Test
     fun wideNonlocalRowKeepsStatusInlineWithoutMore() {
         val layout = layout(
             availableWidth = 400f,

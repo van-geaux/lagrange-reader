@@ -2,6 +2,17 @@
 
 Use this as the working checklist for `Lagrange Reader`. Items already completed are checked.
 
+## Current tracked feature — download lifecycle and Local books status — 2026-07-28
+
+- [x] Add `Download local`, `Cancel`, `Retry`, `Clear`, and `Delete local` to applicable book-card context menus while retaining inline controls.
+- [x] Show active and failed transfers in a conditional Local books Downloads section with determinate/indeterminate progress, per-book actions, and failed-only `Clear all`.
+- [x] Preserve active transfer state and local files when clearing failed status; add coordinator, transfer-row, and Compose coverage.
+- [x] Persist active-download metadata before transfer so force-closed downloads restore as failed entries with Retry/Clear; reconcile interrupted state on success, cancellation, retry, clear, and local deletion.
+- [x] Keep the Local books list height-filled when the conditional Downloads section is absent.
+- [x] Keep failed first-download attempts out of Local books; preserve failed updates' completed local copy and expose `Update local` plus `Delete local`.
+- [x] Compile main, unit-test, and Android-test Kotlin sources and pass focused coordinator tests.
+- [ ] Validate the full download lifecycle on a connected physical device or emulator; no adb target is currently available.
+
 ## Priority 0 — Server-progress hydration — 2026-07-24
 
 - [x] Synchronize pending progress before loading detail and authoritative reader progress on normal online book opens.
@@ -684,6 +695,6 @@ Current release-workstream status. Historical records elsewhere in this checklis
 
 ## 19. Newly tracked active work items — 2026-07-27
 
-- [x] Fix Series and Authors catalog controls (statistics/filter/collapse or jump rail) so they remain fixed/functional while the catalog scrolls, matching the existing Library Browse fixed-controls behavior. The Series count/Filter row and the Authors count/header row now sit outside their lazy grids, and both jump-rail indexes no longer include the removed header offset. New instrumentation regressions scroll to late Series and Authors cards to prove fixed bounds after scrolling; adb had no connected device, so instrumentation was compiled, not executed. `:app:compileDebugKotlin` and `:app:compileDebugAndroidTestKotlin` pass, and the full gate (`:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest`) passes with 348 JVM tests across 55 suites and zero failures/errors/skips. Physical-device validation remains pending. Tracked in [GitHub issue #3](https://github.com/van-geaux/lagrange-reader/issues/3).
+- [x] Fix Series and Authors catalog controls (statistics/filter/collapse or jump rail) so they remain fixed/functional while the catalog scrolls, matching the existing Library Browse fixed-controls behavior. The Series count/Filter row and the Authors count/header row now sit outside their lazy grids, and both jump-rail indexes no longer include the removed header offset. New instrumentation regressions scroll to late Series and Authors cards to prove fixed bounds after scrolling; adb had no connected device, so instrumentation was compiled, not executed. `:app:compileDebugKotlin` and `:app:compileDebugAndroidTestKotlin` pass, and the full gate (`:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest`) passes with 348 JVM tests across 55 suites and zero failures/errors/skips. User confirmed physical-device validation is complete. Tracked in [GitHub issue #3](https://github.com/van-geaux/lagrange-reader/issues/3).
 - [ ] Add direct OIDC/SSO authentication after the BookOrbit provider/redirect contract is confirmed. Tracked in [GitHub issue #4](https://github.com/van-geaux/lagrange-reader/issues/4).
-- [ ] Expose Delete local in every book context menu whenever a valid local copy exists. Planned; not yet implemented. Tracked in [GitHub issue #5](https://github.com/van-geaux/lagrange-reader/issues/5).
+- [x] Expose Delete local in the More/context menu for downloaded books across Book Detail and book-card surfaces; omit it for nonlocal books and reuse the existing confirmation behavior. Automated verification is complete; physical-device validation remains pending. Tracked in [GitHub issue #5](https://github.com/van-geaux/lagrange-reader/issues/5).
