@@ -4,7 +4,7 @@ Last updated: 2026-07-28
 
 ## Release handoff — Lagrange 1.4.0
 
-Version metadata is prepared as `versionName 1.4.0`, `versionCode 17`. The approved release note is `docs/release-notes/v1.4.0.md`. This release includes offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors controls, and the completed download lifecycle implementation. The local release gate passed 364 JVM tests across 55 suites with zero failures/errors/skips, `lintDebug`, debug and Android-test compilation/assembly, and signed release assembly. The local artifacts are `app/build/outputs/apk/debug/Lagrange-debug-202607281709.apk` (72,263,630 bytes) and `app/build/outputs/apk/release/app-release.apk` (63,279,548 bytes); the signed GitHub Release asset remains to be verified after the tag-triggered workflow completes.
+Version `1.4.0` (`versionCode 17`) is published at https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.0. The approved release note is `docs/release-notes/v1.4.0.md`. This release includes offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors controls, and the completed download lifecycle implementation. The local release gate passed 364 JVM tests across 55 suites with zero failures/errors/skips, `lintDebug`, debug and Android-test compilation/assembly, and signed release assembly. The workflow run [30349747058](https://github.com/van-geaux/lagrange-reader/actions/runs/30349747058) passed and published `Lagrange-1.4.0.apk` (63,279,548 bytes) at https://github.com/van-geaux/lagrange-reader/releases/download/v1.4.0/Lagrange-1.4.0.apk. Published APK SHA-256: `60cc226643da2cccf6eeea32f544d5ef06fc5bb5ea6750c9235333a3ea74e2f2`.
 
 ## Current handoff — 2026-07-28
 
@@ -42,7 +42,7 @@ Delegation status: four Claude Code implementation attempts were started for the
 
 ## Current outcome
 
-Lagrange 1.3.0 is published at the GitHub Release for tag `v1.3.0` with the signed `Lagrange-1.3.0.apk` asset attached; confirmed via `gh release view v1.3.0` after the tagged workflow run completed successfully. The release note is `docs/release-notes/v1.3.0.md`, and the completed Statistics, server-history, telemetry/privacy, permission, and BookOrbit-comparison documentation is on `main`.
+Lagrange 1.4.0 is published at the GitHub Release for tag `v1.4.0` with the signed `Lagrange-1.4.0.apk` asset attached; confirmed via `gh release view v1.4.0` after workflow run 30349747058 completed successfully. The release note is `docs/release-notes/v1.4.0.md`; `v1.3.0` remains the previous published release.
 
 1.2.3 changed the Android `applicationId`/`namespace` from `com.bookorbit.android` to `com.vangeaux.lagrange`. `com.bookorbit.android` was leftover from early development under the working name "bookorbit-android" and was never updated when the app was rebranded to Lagrange; it was not an intentional use of the BookOrbit name, but shipping it was still a mistake the release notes apologize for. This is a breaking distribution change: prior `com.bookorbit.android` installs must be uninstalled before installing 1.2.3, and local app preferences do not carry over (the DataStore prefs file was also renamed, `bookorbit_prefs` -> `lagrange_prefs`, with no migration). Internal class names (`BookOrbitApplication`, `BookOrbitRepository`, `BookOrbitTheme`, `Theme.BookOrbit*` styles, etc.) were deliberately left unchanged in this pass.
 
@@ -59,7 +59,7 @@ The client-side extraction work is tracked by GitHub issue #1: https://github.co
 - Repository: `/projects/bookorbit-android`
 - Branch: `main`
 - Remote: `origin` uses HTTPS through the authenticated GitHub CLI credential helper. Credential values are not recorded in project documentation.
-- Published release: `Lagrange 1.3.0`, tagged `v1.3.0`, with `Lagrange-1.3.0.apk` attached — confirmed via `gh release view v1.3.0`.
+- Published release: `Lagrange 1.4.0`, tagged `v1.4.0`, with `Lagrange-1.4.0.apk` attached — confirmed via `gh release view v1.4.0`; the downloaded asset is 63,279,548 bytes with SHA-256 `60cc226643da2cccf6eeea32f544d5ef06fc5bb5ea6750c9235333a3ea74e2f2`.
 - Current Git HEAD: see `git log -1` to confirm. Remote `origin/main` contains PR #9 (merge commit `cc4f193eeff8e8033a18a5595caf07ecc30123c8`, closing issue #8) and PR #6 (merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`, closing issue #3); the local worktree additionally carries the three pre-existing uncommitted files noted under "Protected working-tree changes" below.
 - Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.
 - The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
@@ -283,7 +283,7 @@ The following local user-owned fixture remains intentionally untracked and must 
 
 - Untracked `sample/`
 
-The source, test, and documentation changes for issue #3 (PR #6, merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`) are merged into `main` on the remote. The pre-existing `.gitignore`, `AGENTS.md`, `docs/release.md`, and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted and must not be included in the issue #8 push.
+The source, test, and documentation changes for issue #3 (PR #6, merge commit `d2112110c85c5ce9c1fe50cd3ff3ec45520cf53e`) are merged into `main` on the remote. The pre-existing `.gitignore` and `docs/release-notes/v1.3.0.md` changes remain local and uncommitted and are intentionally excluded from the 1.4.0 release commit.
 
 ## Important files for the next session
 

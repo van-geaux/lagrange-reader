@@ -2,9 +2,9 @@
 
 This roadmap summarizes the next practical engineering sequence for the project.
 
-## Current status — 2026-07-28 — 1.4.0 release preparation
+## Current status — 2026-07-28 — 1.4.0 released
 
-Lagrange 1.4.0 is prepared for release with client-side offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors catalog controls, and the completed download lifecycle state handling. The release note is [docs/release-notes/v1.4.0.md](release-notes/v1.4.0.md). The local gate passed 364 JVM tests with zero failures/errors/skips, lint, debug and Android-test compilation/assembly, and signed release assembly. The signed APK and GitHub Release will be verified after the tag-triggered workflow completes.
+Lagrange 1.4.0 is released with client-side offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors catalog controls, and the completed download lifecycle state handling. The [release note](release-notes/v1.4.0.md) is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.0). The local gate passed 364 JVM tests with zero failures/errors/skips, lint, debug and Android-test compilation/assembly, and signed release assembly; workflow run [30349747058](https://github.com/van-geaux/lagrange-reader/actions/runs/30349747058) published the signed APK successfully.
 
 ## Current status — 2026-07-27
 
