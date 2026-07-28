@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -1720,11 +1721,85 @@ class AppCoordinatorTest {
         val refreshedLogin = coordinator.screen.value as AppScreen.Login
         assertTrue(refreshedLogin.message.orEmpty().contains("Waiting for an authenticated session."))
     }
+
+    @Test
+    fun `server sign-in can open and close without changing native login state`() = runTest {
+        val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.openServerSignIn()
+        runCurrent()
+
+        assertNotNull((coordinator.screen.value as AppScreen.Login).serverSignIn)
+
+        coordinator.closeServerSignIn()
+        runCurrent()
+
+        assertNull((coordinator.screen.value as AppScreen.Login).serverSignIn)
+    }
+
+    @Test
+    fun `authenticated server sign-in resumes the browser destination`() = runTest {
+        val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        repository.sessionState = SessionState.Authenticated
+
+        coordinator.openServerSignIn()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+    }
+
+    @Test
+    fun `server sign-in retries a transient unauthenticated session before resuming`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            sessionState = SessionState.Unauthenticated,
+            sessionStateSequence = listOf(
+                SessionState.Unauthenticated,
+                SessionState.Authenticated
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        repository.sessionState = SessionState.Authenticated
+        repository.sessionStateCalls = 0
+
+        coordinator.openServerSignIn()
+        advanceUntilIdle()
+
+        assertTrue("screen=${coordinator.screen.value}", coordinator.screen.value is AppScreen.Browser)
+        assertEquals(2, repository.sessionStateCalls)
+    }
+
+    @Test
+    fun `server sign-in keeps watching until asynchronous web authentication completes`() = runTest {
+        val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        repository.sessionStateSequence = List(6) { SessionState.Unauthenticated } + SessionState.Authenticated
+        repository.sessionStateCalls = 0
+
+        coordinator.openServerSignIn()
+        advanceUntilIdle()
+
+        assertTrue("screen=${coordinator.screen.value}", coordinator.screen.value is AppScreen.Browser)
+        assertEquals(7, repository.sessionStateCalls)
+    }
 }
 
 private class FakeBookOrbitDataSource(
     var serverUrl: String? = "https://books.example.test",
     var sessionState: SessionState = SessionState.Authenticated,
+    var sessionStateSequence: List<SessionState> = emptyList(),
     var cachedBrowserState: BrowserState? = null,
     var restoreActiveReaderLocalOnlyResult: ReaderState? = null,
     var restoreActiveReaderResult: ReaderState? = null,
@@ -1779,6 +1854,7 @@ private class FakeBookOrbitDataSource(
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
+    var sessionStateCalls = 0
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
     val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
@@ -1810,7 +1886,9 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun getSessionState(): SessionState {
         sessionStateRequested = true
-        return sessionState
+        val result = sessionStateSequence.getOrNull(sessionStateCalls) ?: sessionState
+        sessionStateCalls += 1
+        return result
     }
 
     override suspend fun login(username: String, password: String) {

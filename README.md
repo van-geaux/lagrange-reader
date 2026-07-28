@@ -102,7 +102,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 
 | Capability | BookOrbit server/web platform | Lagrange Android client |
 | --- | --- | --- |
-| Authentication | Provides authenticated accounts and server sessions; the server also has an OIDC/SSO direction available for deployments that configure it. | Uses the current native username/password flow; direct OIDC/SSO is deferred. |
+| Authentication | Provides authenticated accounts, server sessions, configured OIDC providers, and public state/callback APIs; current stock server releases accept only the web callback. | Uses native username/password plus the implemented interim Open server sign-in WebView. Native AppAuth remains deferred until mobile redirect support is deployed; see [OIDC / SSO Authentication](docs/oidc-authentication.md). |
 | Library and catalog | Owns libraries, books, authors, series, metadata, scanning, and catalog APIs. | Browses BookOrbit libraries and caches catalog data for offline fallback. |
 | Reading and listening | Serves book files, reader data, progress APIs, and audiobook media. | Provides native EPUB, PDF, comic, and audiobook readers with resume, themes, navigation, and playback controls. |
 | Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline, including CBR/CB7 files via client-side RAR4/RAR5/7z extraction into a cached CBZ. |
@@ -119,7 +119,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 Remaining follow-up work includes but is not limited to:
 
 - Support for additional book formats; MOBI, AZW, AZW3, and FB2 remain unsupported.
-- Direct OIDC/SSO authentication after a BookOrbit provider and redirect contract are confirmed.
+- Implemented and user-validated the interim Open server sign-in WebView. Native AppAuth follows after BookOrbit mobile-redirect support from upstream PR #554 or an equivalent server change is deployed; see [OIDC / SSO Authentication](docs/oidc-authentication.md).
 - Broader bulk actions for Local books beyond the implemented multi-select `Delete local` flow.
 
 More details are in the [Roadmap](docs/roadmap.md)

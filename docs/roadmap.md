@@ -12,7 +12,7 @@ Issue #5 is implemented and automated-verified. Delete local is available from t
 
 Issue #8 is implemented and source-verified. Download lifecycle labels are available in applicable book-card menus, Local books derives a conditional active/failed Downloads section from broader browser state, and the list fills the available height when that section is absent. Active-download metadata is persisted separately from completed local-copy records, so force-closed first downloads remain remote-only while failed updates preserve the old local copy and expose `Update local` plus `Delete local`. Success, cancellation, retry, clear, and local deletion reconcile interrupted attempts. Focused persistence/coordinator/action-state/transfer-row tests pass; main, unit-test, and Android-test Kotlin compilation pass. Physical-device validation remains pending because adb has no target. Follow-up issue: https://github.com/van-geaux/lagrange-reader/issues/8
 
-Issue #4 remains incomplete: direct OIDC/SSO authentication is deferred until the BookOrbit provider and redirect contract are confirmed.
+Issue #4 remains incomplete, but its contract is now confirmed and the low-cost interim **Open server sign-in** WebView is implemented and source-verified. Physical-device validation remains pending. Current BookOrbit exposes provider discovery, state, and callback APIs while stock server `main` accepts only `APP_URL/oauth2-callback`; AppAuth + Custom Tabs follows after upstream BookOrbit PR [#554](https://github.com/bookorbit/bookorbit/pull/554) or equivalent mobile-redirect support is deployed. See [OIDC / SSO Authentication](./oidc-authentication.md).
 
 The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
 
@@ -43,7 +43,7 @@ Completed release-notification dialog update:
 Active tracked work:
 
 - Implemented: Series and Authors catalog controls now remain fixed while their catalogs scroll, matching Library Browse. The Series count/Filter row and Authors count/header row sit outside their lazy grids, tagged for regression testing, and jump-rail indexes no longer include the removed header offset. New instrumentation regressions cover fixed bounds after scrolling to late Series and Authors cards; adb had no connected device, so instrumentation was compiled, not executed. User confirmed physical-device validation is complete: https://github.com/van-geaux/lagrange-reader/issues/3
-- Direct OIDC/SSO authentication after the BookOrbit provider and redirect contract are confirmed: https://github.com/van-geaux/lagrange-reader/issues/4
+- OIDC/SSO issue #4: contract confirmed; interim Open server sign-in WebView is implemented and source-verified, with physical-device validation pending. Replace its launcher with AppAuth after BookOrbit mobile-redirect support is deployed: https://github.com/van-geaux/lagrange-reader/issues/4
 - Implemented: Delete local is available in every applicable More/context menu when a valid local copy exists, including Book Detail and book-card surfaces; it is absent for nonlocal books and reuses the existing confirmation/reconciliation path. Automated verification passes; physical-device validation remains pending: https://github.com/van-geaux/lagrange-reader/issues/5
 
 Release-overlay and Book Detail app-navigation physical validation are complete as of 2026-07-27; see the current-status note above.

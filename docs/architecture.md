@@ -10,7 +10,7 @@ The current app flow is:
 
 1. User enters a BookOrbit server URL.
 2. The app presents native username/password credentials and submits them to the BookOrbit login API.
-3. The app verifies `GET /api/v1/auth/me` before resuming the pending browser, library, reader, or download destination. Direct OIDC/SSO authentication is deferred.
+3. The app verifies `GET /api/v1/auth/me` before resuming the pending browser, library, reader, or download destination. The Login screen retains native credentials and now also opens the server login in a transient WebView; that launcher can later be replaced with AppAuth after BookOrbit accepts a native redirect URI.
 4. After authentication, the app loads libraries and books.
 5. The user can stream content, download it, reopen local files offline, and queue progress updates for later sync.
 6. EPUB and PDF titles are opened from a local readable copy and may use an authenticated temporary reader cache. Online audiobooks instead open from the BookOrbit serve URL through authenticated Readium byte ranges; explicit downloads remain local and offline-capable.
@@ -47,7 +47,7 @@ The current app flow is:
 - Opening a title from a cached offline browser snapshot now forces a local-only reader build, so offline reopen does not fall back to authenticated cache fetches or stream URLs.
 - Offline-first active-reader restore uses the same local-only reader stream suppression. Persisted AUDIO active-reader metadata is retained for resume bookkeeping but is not restored as a Reader destination.
 - When authentication expires during browser, open-book, or download flows, the coordinator routes back through login and resumes the intended action after the session is restored.
-- Native username/password is the current authentication flow. Embedded server/OIDC sign-in is intentionally deferred until its provider and redirect contract are defined.
+- Native username/password remains the primary authentication flow. Implemented Open server sign-in shares the existing `CookieManager`-backed OkHttp cookies, continuously watches `/auth/me` while the WebView is open for BookOrbit's asynchronous callback exchange, and resumes the pending destination after authentication. The final AppAuth flow will reuse BookOrbit's provider/state/callback APIs after upstream mobile-redirect support is deployed; see [OIDC / SSO Authentication](./oidc-authentication.md).
 - Preview reader launches start at the beginning and do not write active-reader or progress state. Preview audiobook playback is likewise excluded from local session history.
 - Book Detail loads audiobook-only local session history below the actions. Each retained play/pause transition includes the canonical server/book/file identity, wall-clock timestamp, and exact playback position; selecting an entry reopens or seeks normal playback at that position, and Clear removes the history for that book.
 - `shouldUseReadiumEpubReader` routes every `MediaKind.EPUB` launch to the dedicated activity; non-EPUB formats keep their established readers.
