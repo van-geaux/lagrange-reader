@@ -4,6 +4,22 @@ Last updated: 2026-07-28
 
 ## Current handoff — 2026-07-28
 
+Issue #4 (server-hosted OIDC/SSO sign-in compatibility) is implemented, user-confirmed working, and ready to close after the implementation branch is merged. The delivered scope is Phase 1: BookOrbit's own `/login` page is opened in a transient WebView, shared cookies are synchronized with the API client, and a cancellable `/api/v1/auth/me` watcher detects the asynchronous JavaScript callback/session exchange. Authentication automatically destroys the WebView and resumes the pending app destination instead of returning to Login.
+
+Completed in this handoff:
+
+- Native username/password remains the primary Login action; **Open server sign-in** is the secondary action with its **Why?** explanation beside it at matching width.
+- The server page supports configured local and OIDC methods without exposing provider credentials or client secrets to Android.
+- WebView completion is protected by same-origin checks, TLS-error cancellation, no JavaScript bridge, shared cookie handling, and watcher cancellation on close/retry/reset.
+- Regression coverage proves authentication that becomes available only after multiple unauthenticated checks still closes the WebView and resumes Browser.
+- The final debug gate passed `:app:testDebugUnitTest`, `:app:lintDebug`, `:app:compileDebugAndroidTestKotlin`, `:app:assembleDebug`, and whitespace checks. The user confirmed the resulting login flow works on-device; no ADB device was connected to the build environment.
+- Fresh debug APK: `app/build/outputs/apk/debug/Lagrange-debug-202607281629.apk` (standard artifact: `app/build/outputs/apk/debug/app-debug.apk`).
+
+Remaining follow-up:
+
+1. Native AppAuth + Custom Tabs remains deferred until BookOrbit PR #554 or equivalent mobile redirect allow-list support is deployed and the exact native callback is registered with the identity provider.
+2. Some identity providers may reject embedded WebView authentication; those deployments should use the future external-browser/AppAuth path.
+
 Issue #8 (download lifecycle and Local books transfer status) is implemented and user-confirmed working. The worktree contains the issue #8 implementation and related documentation changes, plus separate local-only changes that must remain unstaged.
 
 Completed in the current worktree:

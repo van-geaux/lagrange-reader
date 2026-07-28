@@ -43,7 +43,21 @@ GET /api/v1/auth/me
 Used to confirm authenticated session state after login.
 The app also uses this endpoint during bootstrap and login polling instead of inferring auth state from library loading.
 
-The Android login screen currently uses native username/password credentials only. Direct OIDC/SSO provider discovery, redirects, and callback handling are deferred pending a confirmed target-server contract.
+The Android login screen retains native username/password credentials and now also uses the server's web login through the implemented interim WebView path. Native OIDC provider discovery and custom-scheme callback handling are not implemented; current stock server `main` only accepts its web callback. The interim WebView and final AppAuth contracts are recorded in [OIDC / SSO Authentication](./oidc-authentication.md).
+
+### OIDC / SSO discovery and callback
+
+Verified public endpoints:
+
+```text
+GET  /api/v1/app-settings/oidc/providers/public
+POST /api/v1/auth/oidc/{slug}/state
+POST /api/v1/auth/oidc/callback
+```
+
+The callback request contains `code`, `codeVerifier`, `redirectUri`, `nonce`, and `state`. A successful login returns the normal BookOrbit access-token/user response and sets the normal access and refresh cookies, so the client can reuse its existing authenticated-request, refresh, `/auth/me`, and pending-destination recovery paths.
+
+Current stock BookOrbit server `main` accepts only `APP_URL/oauth2-callback`. Native AppAuth therefore requires upstream PR [#554](https://github.com/bookorbit/bookorbit/pull/554) or equivalent server support plus registration of Lagrange's exact `com.vangeaux.lagrange:/oauth2-callback` URI with the deployed server and identity-provider client.
 
 ## Libraries
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -20,6 +21,7 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
+private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
 
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
@@ -154,6 +156,7 @@ class AppCoordinator(
     private var restoredInterruptedDownloads: Map<String, DownloadRecord> = emptyMap()
     private var loginRefreshInFlight = false
     private var loginSubmitInFlight = false
+    private var serverSignInVerificationJob: Job? = null
     private var catalogLoadJob: Job? = null
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -466,6 +469,69 @@ class AppCoordinator(
                 destination = PostLoginDestination.Browser
             )
         }
+    }
+
+    fun openServerSignIn() {
+        scope.launch {
+            val current = _screen.value as? AppScreen.Login ?: return@launch
+            _screen.value = current.copy(serverSignIn = ServerSignInState())
+            startServerSignInWatcher()
+        }
+    }
+
+    fun closeServerSignIn() {
+        scope.launch {
+            val current = _screen.value as? AppScreen.Login ?: return@launch
+            serverSignInVerificationJob?.cancel()
+            serverSignInVerificationJob = null
+            _screen.value = current.copy(serverSignIn = null)
+        }
+    }
+
+    fun retryServerSignIn() {
+        scope.launch {
+            val current = _screen.value as? AppScreen.Login ?: return@launch
+            if (current.serverSignIn == null) {
+                return@launch
+            }
+            serverSignInVerificationJob?.cancel()
+            serverSignInVerificationJob = null
+            _screen.value = current.copy(serverSignIn = ServerSignInState())
+            startServerSignInWatcher()
+        }
+    }
+
+    fun verifyServerSignIn() {
+        startServerSignInWatcher()
+    }
+
+    private fun startServerSignInWatcher() {
+        val current = _screen.value as? AppScreen.Login ?: return
+        if (current.serverSignIn == null || serverSignInVerificationJob?.isActive == true) {
+            return
+        }
+        val watcher = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                while (true) {
+                    val latest = _screen.value as? AppScreen.Login ?: break
+                    if (latest.serverSignIn == null) {
+                        break
+                    }
+                    if (repository.getSessionState() == SessionState.Authenticated) {
+                        allowCachedLoginFallback = true
+                        resumeAfterLogin()
+                        break
+                    }
+                    delay(SERVER_SIGN_IN_POLL_DELAY_MS)
+                }
+            } finally {
+                if (serverSignInVerificationJob === kotlinx.coroutines.currentCoroutineContext()[Job]) {
+                    serverSignInVerificationJob = null
+                }
+            }
+        }
+        serverSignInVerificationJob = watcher
+        watcher.start()
     }
 
     fun loadBrowser() {
@@ -1578,6 +1644,8 @@ class AppCoordinator(
         pendingPostLoginDestination = null
         loginRefreshInFlight = false
         loginSubmitInFlight = false
+        serverSignInVerificationJob?.cancel()
+        serverSignInVerificationJob = null
         allowCachedLoginFallback = true
         if (clearBrowserState) {
             lastBrowserState = null

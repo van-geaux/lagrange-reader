@@ -9,7 +9,8 @@ sealed interface AppScreen {
     data class Login(
         val serverUrl: String,
         val message: String? = null,
-        val isSubmitting: Boolean = false
+        val isSubmitting: Boolean = false,
+        val serverSignIn: ServerSignInState? = null
     ) : AppScreen
 
     data class Browser(
@@ -25,3 +26,8 @@ sealed interface AppScreen {
         val readerState: ReaderState
     ) : AppScreen
 }
+
+data class ServerSignInState(
+    val isVerifying: Boolean = false,
+    val error: String? = null
+)
