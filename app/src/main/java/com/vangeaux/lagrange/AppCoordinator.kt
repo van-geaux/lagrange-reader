@@ -151,6 +151,7 @@ class AppCoordinator(
     private val _releaseUpdate = MutableStateFlow<ReleaseUpdate?>(null)
     val releaseUpdate: StateFlow<ReleaseUpdate?> = _releaseUpdate.asStateFlow()
     private var lastBrowserState: BrowserState? = null
+    private var restoredInterruptedDownloads: Map<String, DownloadRecord> = emptyMap()
     private var loginRefreshInFlight = false
     private var loginSubmitInFlight = false
     private var catalogLoadJob: Job? = null
@@ -471,6 +472,9 @@ class AppCoordinator(
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
+            restoredInterruptedDownloads = runCatching {
+                repository.loadInterruptedDownloads().associateBy { it.fileId }
+            }.getOrDefault(emptyMap())
             var previous = lastBrowserState
             if (previous == null) {
                 repository.loadCachedBrowserState()?.let { cached ->
@@ -874,6 +878,7 @@ class AppCoordinator(
         if (activeDownloads.containsKey(fileId)) {
             return
         }
+        restoredInterruptedDownloads -= fileId
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
             updateDownloadState(
@@ -890,6 +895,7 @@ class AppCoordinator(
             activeDownloads.remove(fileId)
             result
                 .onSuccess { localFile ->
+                    restoredInterruptedDownloads -= fileId
                     updateDownloadState(
                         fileId = fileId,
                         isDownloading = false,
@@ -905,6 +911,8 @@ class AppCoordinator(
                 }
                 .onFailure { error ->
                     if (error is CancellationException) {
+                        restoredInterruptedDownloads -= fileId
+                        scope.launch { repository.clearInterruptedDownload(fileId) }
                         updateDownloadState(
                             fileId = fileId,
                             isDownloading = false,
@@ -939,12 +947,43 @@ class AppCoordinator(
     fun cancelDownload(book: BookSummary) {
         val fileId = book.fileId ?: return
         activeDownloads.remove(fileId)?.cancel()
+        restoredInterruptedDownloads -= fileId
+        scope.launch { repository.clearInterruptedDownload(fileId) }
         updateDownloadState(
             fileId = fileId,
             isDownloading = false,
             failed = false,
             message = "Download canceled."
         )
+    }
+
+    fun clearFailedDownload(book: BookSummary) {
+        book.fileId?.let(::clearFailedDownload)
+    }
+
+    fun clearFailedDownload(fileId: String) {
+        val current = lastBrowserState ?: return
+        if (fileId !in current.failedDownloadFileIds) return
+        restoredInterruptedDownloads -= fileId
+        scope.launch { repository.clearInterruptedDownload(fileId) }
+        showBrowser(current.copy(
+            failedDownloadFileIds = current.failedDownloadFileIds - fileId,
+            downloadMetadataByFileId = current.downloadMetadataByFileId - fileId
+        ))
+    }
+
+    fun clearAllFailedDownloads() {
+        val current = lastBrowserState ?: return
+        if (current.failedDownloadFileIds.isEmpty()) return
+        val failed = current.failedDownloadFileIds
+        restoredInterruptedDownloads -= failed
+        scope.launch {
+            failed.forEach { fileId -> repository.clearInterruptedDownload(fileId) }
+        }
+        showBrowser(current.copy(
+            failedDownloadFileIds = emptySet(),
+            downloadMetadataByFileId = current.downloadMetadataByFileId - failed
+        ))
     }
 
     fun dismissBrowserMessage() {
@@ -1155,6 +1194,7 @@ class AppCoordinator(
                 downloadingFileIds = downloading,
                 downloadProgressByFileId = progressByFile,
                 failedDownloadFileIds = failedDownloads,
+                downloadMetadataByFileId = current.downloadMetadataByFileId,
                 message = message
             )
         )
@@ -1392,6 +1432,8 @@ class AppCoordinator(
             downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
             downloadProgressByFileId = transient?.downloadProgressByFileId.orEmpty(),
             failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
+            downloadMetadataByFileId = transient?.downloadMetadataByFileId
+                ?: restoredInterruptedDownloads,
             localFilePathOverrides = transient?.localFilePathOverrides.orEmpty(),
             localBooksRevision = transient?.localBooksRevision ?: 0,
             debugPendingProgressCount = pendingProgressCount,
@@ -1400,11 +1442,16 @@ class AppCoordinator(
     }
 
     private fun showBrowser(state: BrowserState) {
-        lastBrowserState = state
+        val restored = restoredInterruptedDownloads
+        val next = if (restored.isEmpty()) state else state.copy(
+            failedDownloadFileIds = state.failedDownloadFileIds + restored.keys,
+            downloadMetadataByFileId = state.downloadMetadataByFileId + restored
+        )
+        lastBrowserState = next
         if (_screen.value is AppScreen.ReaderLoading || _screen.value is AppScreen.Reader) {
             return
         }
-        _screen.value = AppScreen.Browser(browserState = state)
+        _screen.value = AppScreen.Browser(browserState = next)
     }
 
     private fun navigateToBrowser(state: BrowserState) {

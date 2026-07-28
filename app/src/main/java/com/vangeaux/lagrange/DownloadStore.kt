@@ -9,18 +9,21 @@ import kotlinx.coroutines.sync.withLock
 
 class DownloadStore private constructor(
     private val file: File,
-    private val downloadDir: File
+    private val downloadDir: File,
+    private val attemptsFile: File
 ) {
     private val mutex = Mutex()
 
     constructor(context: Context) : this(
         file = File(context.filesDir, "downloads.json"),
-        downloadDir = File(context.filesDir, "downloads")
+        downloadDir = File(context.filesDir, "downloads"),
+        attemptsFile = File(context.filesDir, "download-attempts.json")
     )
 
     internal constructor(filesDir: File) : this(
         file = File(filesDir, "downloads.json"),
-        downloadDir = File(filesDir, "downloads")
+        downloadDir = File(filesDir, "downloads"),
+        attemptsFile = File(filesDir, "download-attempts.json")
     )
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
@@ -50,8 +53,38 @@ class DownloadStore private constructor(
         if (serverUrl == null) records else records.filter { it.serverUrl == serverUrl }
     }
 
+    suspend fun removeRecord(serverUrl: String, fileId: String): Boolean = mutex.withLock {
+        val records = readUnlocked()
+        val remaining = records.filterNot { it.serverUrl == serverUrl && it.fileId == fileId }
+        if (remaining.size == records.size) return@withLock false
+        writeUnlocked(remaining)
+        true
+    }
+
+    suspend fun saveAttempt(attempt: DownloadAttempt) = mutex.withLock {
+        val attempts = readAttemptsUnlocked()
+            .filterNot { it.serverUrl == attempt.serverUrl && it.fileId == attempt.fileId }
+            .toMutableList()
+        attempts += attempt
+        writeAttemptsUnlocked(attempts)
+    }
+
+    suspend fun readAttempts(serverUrl: String? = null): List<DownloadAttempt> = mutex.withLock {
+        val attempts = readAttemptsUnlocked()
+        if (serverUrl == null) attempts else attempts.filter { it.serverUrl == serverUrl }
+    }
+
+    suspend fun removeAttempt(serverUrl: String, fileId: String): Boolean = mutex.withLock {
+        val attempts = readAttemptsUnlocked()
+        val remaining = attempts.filterNot { it.serverUrl == serverUrl && it.fileId == fileId }
+        if (remaining.size == attempts.size) return@withLock false
+        writeAttemptsUnlocked(remaining)
+        true
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) file.delete()
+        if (attemptsFile.exists()) attemptsFile.delete()
     }
 
     fun downloadTarget(
@@ -87,7 +120,10 @@ class DownloadStore private constructor(
                         } else {
                             null
                         },
-                        downloadedAtMillis = obj.optLong("downloadedAtMillis")
+                        downloadedAtMillis = obj.optLong("downloadedAtMillis"),
+                        status = runCatching {
+                            DownloadRecordStatus.valueOf(obj.optString("status"))
+                        }.getOrDefault(DownloadRecordStatus.COMPLETE)
                     )
                 )
             }
@@ -96,7 +132,9 @@ class DownloadStore private constructor(
 
     private fun readSanitizedUnlocked(): List<DownloadRecord> {
         val records = readUnlocked()
-        val validRecords = records.filter { File(it.localPath).exists() }
+        val validRecords = records.filter {
+            it.status == DownloadRecordStatus.INTERRUPTED || File(it.localPath).exists()
+        }
         if (validRecords.size != records.size) {
             writeUnlocked(validRecords)
         }
@@ -117,11 +155,56 @@ class DownloadStore private constructor(
                     put("mimeType", record.mimeType)
                     put("sourceUpdatedAtMillis", record.sourceUpdatedAtMillis)
                     put("downloadedAtMillis", record.downloadedAtMillis)
+                    put("status", record.status.name)
                 }
             )
         }
         file.parentFile?.mkdirs()
         file.writeText(array.toString())
+    }
+
+    private fun readAttemptsUnlocked(): List<DownloadAttempt> {
+        if (!attemptsFile.exists()) return emptyList()
+        val array = JSONArray(attemptsFile.readText())
+        return buildList {
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                add(
+                    DownloadAttempt(
+                        serverUrl = obj.optString("serverUrl"),
+                        fileId = obj.optString("fileId"),
+                        bookId = obj.optString("bookId"),
+                        title = obj.optString("title"),
+                        targetPath = obj.optString("targetPath"),
+                        existingLocalPath = obj.optString("existingLocalPath").takeIf { it.isNotBlank() },
+                        mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
+                        mimeType = obj.optString("mimeType").takeIf { it.isNotBlank() },
+                        sourceUpdatedAtMillis = if (obj.has("sourceUpdatedAtMillis") && !obj.isNull("sourceUpdatedAtMillis")) obj.optLong("sourceUpdatedAtMillis") else null,
+                        startedAtMillis = obj.optLong("startedAtMillis")
+                    )
+                )
+            }
+        }
+    }
+
+    private fun writeAttemptsUnlocked(attempts: List<DownloadAttempt>) {
+        val array = JSONArray()
+        attempts.forEach { attempt ->
+            array.put(JSONObject().apply {
+                put("serverUrl", attempt.serverUrl)
+                put("fileId", attempt.fileId)
+                put("bookId", attempt.bookId)
+                put("title", attempt.title)
+                put("targetPath", attempt.targetPath)
+                put("existingLocalPath", attempt.existingLocalPath)
+                put("mediaKind", attempt.mediaKind.name)
+                put("mimeType", attempt.mimeType)
+                put("sourceUpdatedAtMillis", attempt.sourceUpdatedAtMillis)
+                put("startedAtMillis", attempt.startedAtMillis)
+            })
+        }
+        attemptsFile.parentFile?.mkdirs()
+        attemptsFile.writeText(array.toString())
     }
 
     private fun sanitize(value: String): String {

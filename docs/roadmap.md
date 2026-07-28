@@ -4,9 +4,17 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 ## Current status — 2026-07-27
 
-Physical validation is now complete for the release-update overlay (Markdown release notes render correctly, Download opens the GitHub release page, and Ignore persists the ignored tag across an app restart), Book Detail bottom-navigation behavior (Home/Libraries dismiss Book Detail, More opens over Book Detail while it remains visible underneath, and Series/Authors/Local books dismiss Book Detail after selection), the broader audiobook external-control/device matrix, and downloaded CBR/CB7 offline opening. Client-side offline RAR4/RAR5/7z extraction is implemented: `ComicArchiveExtractor` normalizes supported entries into a cached CBZ via `ComicArchiveCache`, enforcing entry/size/path safety and rejecting encrypted archives, and `BookOrbitRepository` integrates cached extraction for local comics and active-reader restoration. `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass; the user confirmed the offline reader behavior works.
+Physical validation is now complete for the release-update overlay, Book Detail bottom-navigation behavior, the broader audiobook external-control/device matrix, and downloaded CBR/CB7 offline opening. Client-side offline RAR4/RAR5/7z extraction is implemented and user-confirmed working. `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass; the user confirmed the offline reader behavior works.
 
-## Current status — 2026-07-24
+## Current status — 2026-07-28
+
+Issue #5 is implemented and automated-verified. Delete local is available from the More/context menu for downloaded books across Book Detail and book-card surfaces, absent for nonlocal books, and reuses the existing confirmation behavior. The focused implementation covers Home, Library Browse, Search, Local books, Series Details, Author Details, Genre, and related book-card paths. Physical-device validation of the new menus remains pending because adb had no target. The exact automated gate is `:app:compileDebugKotlin`, `:app:compileDebugUnitTestKotlin`, `:app:compileDebugAndroidTestKotlin`, focused `LibraryNavigationTest` 8/8, full `:app:testDebugUnitTest` with 348 JVM tests across 55 suites and 0 failures/errors/skips, `:app:lintDebug` with 0 errors/39 warnings/14 informational, and freshly generated debug and Android-test APKs.
+
+Issue #8 is implemented and source-verified. Download lifecycle labels are available in applicable book-card menus, Local books derives a conditional active/failed Downloads section from broader browser state, and the list fills the available height when that section is absent. Active-download metadata is persisted separately from completed local-copy records, so force-closed first downloads remain remote-only while failed updates preserve the old local copy and expose `Update local` plus `Delete local`. Success, cancellation, retry, clear, and local deletion reconcile interrupted attempts. Focused persistence/coordinator/action-state/transfer-row tests pass; main, unit-test, and Android-test Kotlin compilation pass. Physical-device validation remains pending because adb has no target. Follow-up issue: https://github.com/van-geaux/lagrange-reader/issues/8
+
+Issue #4 remains incomplete: direct OIDC/SSO authentication is deferred until the BookOrbit provider and redirect contract are confirmed.
+
+The dated work orders that follow are retained as historical engineering records. Their unchecked validation items describe the state at those checkpoints and do not override this current-status section; use the latest dated status and the README roadmap for active work.
 
 Lagrange 1.3.0 is released. The signed `Lagrange-1.3.0.apk` is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.3.0) by the tagged-release workflow. The supported reader/media, layout, accessibility, responsive, theme, resume, Preview, offline, edge-state, History, Statistics, and Android external-audiobook-control validation is user-confirmed complete. The remaining work is limited to explicitly deferred or optional items below.
 
@@ -34,9 +42,9 @@ Completed release-notification dialog update:
 
 Active tracked work:
 
-- Implemented: Series and Authors catalog controls now remain fixed while their catalogs scroll, matching Library Browse. The Series count/Filter row and Authors count/header row sit outside their lazy grids, tagged for regression testing, and jump-rail indexes no longer include the removed header offset. New instrumentation regressions cover fixed bounds after scrolling to late Series and Authors cards; adb had no connected device, so instrumentation was compiled, not executed. Physical-device validation remains pending: https://github.com/van-geaux/lagrange-reader/issues/3
+- Implemented: Series and Authors catalog controls now remain fixed while their catalogs scroll, matching Library Browse. The Series count/Filter row and Authors count/header row sit outside their lazy grids, tagged for regression testing, and jump-rail indexes no longer include the removed header offset. New instrumentation regressions cover fixed bounds after scrolling to late Series and Authors cards; adb had no connected device, so instrumentation was compiled, not executed. User confirmed physical-device validation is complete: https://github.com/van-geaux/lagrange-reader/issues/3
 - Direct OIDC/SSO authentication after the BookOrbit provider and redirect contract are confirmed: https://github.com/van-geaux/lagrange-reader/issues/4
-- Delete local in every book context menu when a valid local copy exists; not yet implemented: https://github.com/van-geaux/lagrange-reader/issues/5
+- Implemented: Delete local is available in every applicable More/context menu when a valid local copy exists, including Book Detail and book-card surfaces; it is absent for nonlocal books and reuses the existing confirmation/reconciliation path. Automated verification passes; physical-device validation remains pending: https://github.com/van-geaux/lagrange-reader/issues/5
 
 Release-overlay and Book Detail app-navigation physical validation are complete as of 2026-07-27; see the current-status note above.
 

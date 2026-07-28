@@ -148,4 +148,68 @@ class DownloadStoreTest {
 
         assertEquals(1234L, store.find("https://example.test", "file-versioned")?.sourceUpdatedAtMillis)
     }
+
+    @Test
+    fun `interrupted record survives reopen without a completed file`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-interrupted").toFile()
+        val store = DownloadStore(filesDir)
+        val target = File(filesDir, "downloads/interrupted.epub")
+
+        store.save(
+            DownloadRecord(
+                serverUrl = "https://example.test",
+                fileId = "file-interrupted",
+                bookId = "book-interrupted",
+                title = "Interrupted",
+                localPath = target.absolutePath,
+                mediaKind = MediaKind.EPUB,
+                status = DownloadRecordStatus.INTERRUPTED
+            )
+        )
+
+        val reopened = DownloadStore(filesDir)
+        val restored = reopened.find("https://example.test", "file-interrupted")
+        assertEquals(DownloadRecordStatus.INTERRUPTED, restored?.status)
+        assertEquals(target.absolutePath, restored?.localPath)
+
+        assertEquals(true, reopened.removeRecord("https://example.test", "file-interrupted"))
+        assertEquals(null, reopened.find("https://example.test", "file-interrupted"))
+    }
+
+    @Test
+    fun `download attempt preserves existing local copy separately from completed record`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-attempt").toFile()
+        val store = DownloadStore(filesDir)
+        val localFile = File(filesDir, "downloads/existing.epub").apply {
+            parentFile?.mkdirs()
+            writeText("old copy")
+        }
+
+        store.save(
+            DownloadRecord(
+                serverUrl = "https://example.test",
+                fileId = "file-update",
+                bookId = "book-update",
+                title = "Book update",
+                localPath = localFile.absolutePath,
+                mediaKind = MediaKind.EPUB
+            )
+        )
+        store.saveAttempt(
+            DownloadAttempt(
+                serverUrl = "https://example.test",
+                fileId = "file-update",
+                bookId = "book-update",
+                title = "Book update",
+                targetPath = localFile.absolutePath,
+                existingLocalPath = localFile.absolutePath,
+                mediaKind = MediaKind.EPUB
+            )
+        )
+
+        assertEquals(localFile.absolutePath, store.find("https://example.test", "file-update")?.localPath)
+        assertEquals(localFile.absolutePath, store.readAttempts("https://example.test").single().existingLocalPath)
+        assertEquals(true, store.removeAttempt("https://example.test", "file-update"))
+        assertEquals(emptyList<DownloadAttempt>(), store.readAttempts("https://example.test"))
+    }
 }

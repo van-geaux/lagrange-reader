@@ -280,6 +280,8 @@ private fun BookOrbitDestination(
             onPreview = coordinator::previewBook,
             onDownload = coordinator::downloadBook,
             onCancelDownload = coordinator::cancelDownload,
+            onClearFailedDownload = coordinator::clearFailedDownload,
+            onClearAllFailedDownloads = coordinator::clearAllFailedDownloads,
             onDeleteLocalCopy = coordinator::deleteLocalCopy,
             onDeleteLocalCopies = coordinator::deleteLocalCopies,
             onDismissMessage = coordinator::dismissBrowserMessage,

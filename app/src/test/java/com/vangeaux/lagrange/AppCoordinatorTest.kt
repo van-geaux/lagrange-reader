@@ -28,6 +28,128 @@ class AppCoordinatorTest {
     )
 
     @Test
+    fun `loadBrowser restores persisted interrupted download as failed metadata row`() = runTest {
+        val interrupted = DownloadRecord(
+            serverUrl = serverUrl,
+            fileId = "file-interrupted",
+            bookId = "book-interrupted",
+            title = "Interrupted Book",
+            localPath = "/tmp/interrupted.epub",
+            mediaKind = MediaKind.EPUB,
+            status = DownloadRecordStatus.INTERRUPTED
+        )
+        val repository = FakeBookOrbitDataSource(
+            interruptedDownloads = listOf(interrupted),
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertTrue("file-interrupted" in state.failedDownloadFileIds)
+        assertEquals("Interrupted Book", downloadTransferRows(state).single().book.title)
+        assertEquals(DownloadRecordStatus.INTERRUPTED, state.downloadMetadataByFileId["file-interrupted"]?.status)
+    }
+
+    @Test
+    fun `clearFailedDownload removes only the failed id and preserves active transfer state`() = runTest {
+        val activeBook = book.copy(id = "book-active", fileId = "file-active", title = "Active Book")
+        val repository = FakeBookOrbitDataSource(
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book, activeBook),
+                downloadingFileIds = setOf("file-active"),
+                downloadProgressByFileId = mapOf("file-active" to 0.4f),
+                failedDownloadFileIds = setOf("file-1")
+            ),
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book, activeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        coordinator.clearFailedDownload(book)
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(setOf("file-active"), state.downloadingFileIds)
+        assertEquals(mapOf("file-active" to 0.4f), state.downloadProgressByFileId)
+        assertTrue(state.failedDownloadFileIds.isEmpty())
+    }
+
+    @Test
+    fun `clearAllFailedDownloads removes failures without canceling active transfers`() = runTest {
+        val activeBook = book.copy(id = "book-active", fileId = "file-active", title = "Active Book")
+        val repository = FakeBookOrbitDataSource(
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book, activeBook),
+                downloadingFileIds = setOf("file-active"),
+                downloadProgressByFileId = mapOf("file-active" to 0.4f),
+                failedDownloadFileIds = setOf("file-1")
+            ),
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book, activeBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        coordinator.clearAllFailedDownloads()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(setOf("file-active"), state.downloadingFileIds)
+        assertEquals(mapOf("file-active" to 0.4f), state.downloadProgressByFileId)
+        assertTrue(state.failedDownloadFileIds.isEmpty())
+    }
+
+    @Test
+    fun `download transfer rows include active and failed ids from catalog state`() {
+        val activeBook = book.copy(id = "book-active", fileId = "file-active", title = "Active Book")
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(activeBook),
+            homeBooks = listOf(book),
+            downloadingFileIds = setOf("file-active"),
+            downloadProgressByFileId = mapOf("file-active" to 0.4f),
+            failedDownloadFileIds = setOf("file-1")
+        )
+
+        val rows = downloadTransferRows(state)
+
+        assertEquals(listOf("file-1", "file-active"), rows.map { it.fileId })
+        assertTrue(rows.first { it.fileId == "file-1" }.isFailed)
+        assertTrue(rows.first { it.fileId == "file-active" }.isActive)
+        assertEquals(0.4f, rows.first { it.fileId == "file-active" }.progress)
+    }
+
+    @Test
+    fun `download transfer rows provide fallback identity for unknown files`() {
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = emptyList(),
+            failedDownloadFileIds = setOf("unknown-file")
+        )
+
+        val rows = downloadTransferRows(state)
+
+        assertEquals(1, rows.size)
+        assertEquals("unknown-file", rows.single().fileId)
+        assertEquals("File unknown-file", rows.single().book.title)
+    }
+
+    @Test
     fun `bootstrap shows server setup when no server is saved`() = runTest {
         val repository = FakeBookOrbitDataSource(serverUrl = null)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -1630,6 +1752,7 @@ private class FakeBookOrbitDataSource(
     var refreshLibraryCatalogError: Throwable? = null,
     var refreshLibraryCatalogGate: CompletableDeferred<Unit>? = null,
     var refreshLibraryCatalogGates: Map<String, CompletableDeferred<Unit>> = emptyMap(),
+    var interruptedDownloads: List<DownloadRecord> = emptyList(),
     var loadLibrariesError: Throwable? = null,
     var loadBooksError: Throwable? = null,
     var searchBooksError: Throwable? = null,
@@ -1739,6 +1862,8 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
+
+    override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = interruptedDownloads
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
 

@@ -478,6 +478,8 @@ internal fun NativeLibraryBrowserScreen(
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
+    onClearAllFailedDownloads: () -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onDismissMessage: () -> Unit,
@@ -1029,6 +1031,10 @@ internal fun NativeLibraryBrowserScreen(
                     loader = libraryBooksPageLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { selectedBook = it; activeBookGenre = null; genreSourceBook = null },
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -1102,6 +1108,11 @@ internal fun NativeLibraryBrowserScreen(
                     coverLoader = coverLoader,
                     detailLoader = seriesDetailLoader,
                     onBookSelected = { selectedBook = it },
+                    onDeleteLocalCopy = requestLocalDelete,
+                    downloadState = state,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onGenreSelected = { genre ->
@@ -1116,6 +1127,11 @@ internal fun NativeLibraryBrowserScreen(
                     booksLoader = authorBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { selectedBook = it },
+                    downloadState = state,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -1148,6 +1164,11 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.LOCAL_BOOKS
                         selectedBook = book
                     },
+                    onDeleteLocalCopy = requestLocalDelete,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onClearAllFailedDownloads = onClearAllFailedDownloads,
                     confirmDeleteLocalCopy = appPreferences.confirmDeleteLocalCopy,
                     onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
@@ -1187,6 +1208,7 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
                     onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
@@ -1206,6 +1228,10 @@ internal fun NativeLibraryBrowserScreen(
                         selectedSeriesKey = seriesKey
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage,
@@ -1239,6 +1265,10 @@ internal fun NativeLibraryBrowserScreen(
                         selectedSeriesKey = seriesKey
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage,
@@ -1254,6 +1284,10 @@ internal fun NativeLibraryBrowserScreen(
                     onBookSelected = { book -> selectedBook = book },
                     onSeriesSelected = { seriesKey -> selectedSeriesKey = seriesKey },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage
@@ -1445,7 +1479,8 @@ private fun SearchLayerContent(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -1475,7 +1510,8 @@ private fun SearchLayerContent(
                 onCancelDownload = onCancelDownload,
                 onDeleteLocalCopy = onDeleteLocalCopy,
                 onMarkAsRead = onMarkAsRead,
-                onMarkAsUnread = onMarkAsUnread
+                onMarkAsUnread = onMarkAsUnread,
+                onClearFailedDownload = onClearFailedDownload
             )
         }
     }
@@ -1975,6 +2011,11 @@ private fun AuthorDetails(
     booksLoader: suspend (String, Int) -> AuthorBooksPage?,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
+    downloadState: BrowserState? = null,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
@@ -2009,6 +2050,11 @@ private fun AuthorDetails(
                 book = book,
                 coverLoader = coverLoader,
                 onClick = { onBookSelected(book) },
+                downloadState = downloadState,
+                onDownload = onDownload?.let { download -> { download(book) } },
+                onCancelDownload = onCancelDownload?.let { cancel -> { cancel(book) } },
+                onClearFailedDownload = onClearFailedDownload?.let { clear -> { clear(book) } },
+                onDeleteLocalCopy = { onDeleteLocalCopy(book) },
                 onMarkAsRead = { onMarkAsRead(book) },
                 onMarkAsUnread = { onMarkAsUnread(book) }
             )
@@ -2026,14 +2072,23 @@ private fun BookPosterCard(
     enabled: Boolean = true,
     displayTitle: String = book.title,
     supportingText: String? = null,
+    downloadState: BrowserState? = null,
+    onDownload: (() -> Unit)? = null,
+    onCancelDownload: (() -> Unit)? = null,
+    onClearFailedDownload: (() -> Unit)? = null,
     onMarkAsRead: (() -> Unit)? = null,
     onMarkAsUnread: (() -> Unit)? = null,
+    onDeleteLocalCopy: (() -> Unit)? = null,
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
     onToggleSelection: (() -> Unit)? = null
 ) {
     val isBookCard = supportingText == null && displayTitle == book.title
-    val hasActions = enabled && (onMarkAsRead != null || onMarkAsUnread != null)
+    val fileId = book.fileId
+    val isDownloading = fileId != null && fileId in (downloadState?.downloadingFileIds.orEmpty())
+    val downloadFailed = fileId != null && fileId in (downloadState?.failedDownloadFileIds.orEmpty())
+    val hasDownloadAction = fileId != null && onDownload != null
+    val hasActions = enabled && (onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || hasDownloadAction || isDownloading || downloadFailed)
     var showActions by remember(book.id) { mutableStateOf(false) }
     val status = when {
         !enabled -> "Unavailable offline"
@@ -2101,6 +2156,26 @@ private fun BookPosterCard(
                                     }
                                 )
                             }
+                            if (isDownloading) {
+                                onCancelDownload?.let { cancel ->
+                                    DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() })
+                                }
+                            } else if (downloadFailed) {
+                                onDownload?.let { retry ->
+                                    DropdownMenuItem(
+                                    text = { Text(if (book.isDownloaded) "Update local" else "Retry") },
+                                    onClick = { showActions = false; retry() }
+                                )
+                                }
+                                onClearFailedDownload?.let { clear ->
+                                    DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() })
+                                }
+                            } else if (!book.isDownloaded && downloadState?.isOfflineSnapshot != true) {
+                                onDownload?.let { download ->
+                                    DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() })
+                                }
+                            }
+                            if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; deleteLocal() }) }
                         }
                     }
                 }
@@ -3020,6 +3095,10 @@ private fun RefreshableHomeFeed(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onDismissMessage: () -> Unit,
@@ -3040,6 +3119,10 @@ private fun RefreshableHomeFeed(
             onBookSelected = onBookSelected,
             onSeriesSelected = onSeriesSelected,
             onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+            onDownload = onDownload,
+            onCancelDownload = onCancelDownload,
+            onClearFailedDownload = onClearFailedDownload,
+            onDeleteLocalCopy = onDeleteLocalCopy,
             onMarkAsRead = onMarkAsRead,
             onMarkAsUnread = onMarkAsUnread,
             onDismissMessage = onDismissMessage,
@@ -3057,6 +3140,10 @@ private fun HomeFeed(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onDismissMessage: (() -> Unit)? = null,
@@ -3120,6 +3207,11 @@ private fun HomeFeed(
                     books = currentlyReading,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
+                    state = state,
+                    onDownload = onDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = onDeleteLocalCopy,
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading.takeUnless {
                         state.isOfflineSnapshot
                     },
@@ -3129,18 +3221,18 @@ private fun HomeFeed(
             }
         }
         if (onDeck.isNotEmpty()) item {
-            BookShelf("On deck", onDeck, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+            BookShelf("On deck", onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
         if (wantToRead.isNotEmpty()) item {
-            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
-            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
         if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
         if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected) }
         if (recentlyRead.isNotEmpty()) item {
-            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
+            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread)
         }
         if (localBooks.isNotEmpty()) item {
             BookShelf(
@@ -3148,6 +3240,11 @@ private fun HomeFeed(
                 books = localBooks,
                 coverLoader = coverLoader,
                 onBookSelected = onBookSelected,
+                state = state,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onClearFailedDownload = onClearFailedDownload,
+                onDeleteLocalCopy = onDeleteLocalCopy,
                 onMarkAsRead = availableMarkAsRead,
                 onMarkAsUnread = availableMarkAsUnread,
                 onSeeAll = onLocalBooksSelected
@@ -3182,7 +3279,12 @@ private fun BookShelf(
     books: List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
+    state: BrowserState? = null,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onRemoveFromCurrentlyReading: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: ((BookSummary) -> Unit)? = null,
     onMarkAsRead: ((BookSummary) -> Unit)? = null,
     onMarkAsUnread: ((BookSummary) -> Unit)? = null,
     onSeeAll: (() -> Unit)? = null
@@ -3198,9 +3300,14 @@ private fun BookShelf(
                     book = book,
                     coverLoader = coverLoader,
                     onClick = { onBookSelected(book) },
+                    downloadState = state,
+                    onDownload = onDownload?.let { download -> { download(book) } },
+                    onCancelDownload = onCancelDownload?.let { cancel -> { cancel(book) } },
+                    onClearFailedDownload = onClearFailedDownload?.let { clear -> { clear(book) } },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading?.let { remove ->
                         { remove(book) }
                     },
+                    onDeleteLocalCopy = onDeleteLocalCopy?.let { delete -> { delete(book) } },
                     onMarkAsRead = onMarkAsRead?.let { mark -> { mark(book) } },
                     onMarkAsUnread = onMarkAsUnread?.let { mark -> { mark(book) } }
                 )
@@ -3255,15 +3362,23 @@ private fun ShelfBookCard(
     displayTitle: String = book.title,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onClick: () -> Unit,
+    downloadState: BrowserState? = null,
+    onDownload: (() -> Unit)? = null,
+    onCancelDownload: (() -> Unit)? = null,
+    onClearFailedDownload: (() -> Unit)? = null,
     onRemoveFromCurrentlyReading: (() -> Unit)? = null,
     onMarkAsRead: (() -> Unit)? = null,
     onMarkAsUnread: (() -> Unit)? = null,
+    onDeleteLocalCopy: (() -> Unit)? = null,
     supportingText: String? = null,
     modifier: Modifier = Modifier
 ) {
     val isBookCard = displayTitle == book.title
+    val fileId = book.fileId
+    val isDownloading = fileId != null && fileId in (downloadState?.downloadingFileIds.orEmpty())
+    val failed = fileId != null && fileId in (downloadState?.failedDownloadFileIds.orEmpty())
     var showActions by remember(book.id) { mutableStateOf(false) }
-    val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null
+    val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || onDownload != null || isDownloading || failed
     Column(
         modifier = Modifier
             .width(LocalLibraryCardSize.current.shelfWidth)
@@ -3318,6 +3433,12 @@ private fun ShelfBookCard(
                                 }
                             )
                         }
+                        if (isDownloading) onCancelDownload?.let { cancel -> DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() }) }
+                        else if (failed) {
+                            onDownload?.let { retry -> DropdownMenuItem(text = { Text("Retry") }, onClick = { showActions = false; retry() }) }
+                            onClearFailedDownload?.let { clear -> DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() }) }
+                        } else if (!book.isDownloaded && downloadState?.isOfflineSnapshot != true) onDownload?.let { download -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() }) }
+                        if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; deleteLocal() }) }
                     }
                 }
             }
@@ -3524,7 +3645,8 @@ private fun SearchResults(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit = {}
 ) {
     LibraryBookList(
         title = "Search results",
@@ -3538,7 +3660,8 @@ private fun SearchResults(
         onCancelDownload = onCancelDownload,
         onDeleteLocalCopy = onDeleteLocalCopy,
         onMarkAsRead = onMarkAsRead,
-        onMarkAsUnread = onMarkAsUnread
+        onMarkAsUnread = onMarkAsUnread,
+        onClearFailedDownload = onClearFailedDownload
     )
 }
 
@@ -3555,6 +3678,10 @@ private fun LibraryContentScreen(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onDismissMessage: () -> Unit,
@@ -3586,6 +3713,10 @@ private fun LibraryContentScreen(
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
+                    onDownload = onDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage,
@@ -3599,6 +3730,10 @@ private fun LibraryContentScreen(
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
+                    onDownload = onDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread
                 )
@@ -3638,6 +3773,10 @@ private fun LibraryBrowseScreen(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
@@ -3659,6 +3798,10 @@ private fun LibraryBrowseScreen(
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
         onSeriesSelected = onSeriesSelected,
+        onDownload = onDownload,
+        onCancelDownload = onCancelDownload,
+        onClearFailedDownload = onClearFailedDownload,
+        onDeleteLocalCopy = onDeleteLocalCopy,
         onMarkAsRead = onMarkAsRead,
         onMarkAsUnread = onMarkAsUnread,
         totalBooks = total,
@@ -3688,6 +3831,10 @@ private fun GenreBooksScreen(
     loader: suspend (String, Int, BookBrowseFilter) -> LibraryBooksPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
@@ -3724,6 +3871,10 @@ private fun GenreBooksScreen(
         modifier = modifier,
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
+        onDownload = onDownload,
+        onCancelDownload = onCancelDownload,
+        onClearFailedDownload = onClearFailedDownload,
+        onDeleteLocalCopy = onDeleteLocalCopy,
         titleOverride = genre,
         emptyMessage = "No books found in $genre.",
         allowSeriesCollapse = false,
@@ -3753,6 +3904,10 @@ private fun LibraryBooks(
     onFilterClick: (() -> Unit)? = null,
     onMarkAsRead: ((BookSummary) -> Unit)? = null,
     onMarkAsUnread: ((BookSummary) -> Unit)? = null,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
+    onDeleteLocalCopy: ((BookSummary) -> Unit)? = null,
     confirmDeleteLocalCopy: Boolean = true,
     onDeleteLocalCopies: ((List<BookSummary>) -> Unit)? = null
 ) {
@@ -3922,6 +4077,11 @@ private fun LibraryBooks(
                 onMarkAsUnread = if (seriesKey == null && !state.isOfflineSnapshot) {
                     onMarkAsUnread?.let { mark -> { mark(book) } }
                 } else null,
+                downloadState = state,
+                onDownload = onDownload?.let { download -> { download(book) } },
+                onCancelDownload = onCancelDownload?.let { cancel -> { cancel(book) } },
+                onClearFailedDownload = onClearFailedDownload?.let { clear -> { clear(book) } },
+                onDeleteLocalCopy = onDeleteLocalCopy?.let { delete -> { delete(book) } },
                 isSelected = book.id in selectedBookIds,
                 selectionMode = selectedBookIds.isNotEmpty(),
                 onToggleSelection = if (seriesKey == null && !state.isOfflineSnapshot) {
@@ -4131,6 +4291,118 @@ private fun LibraryJumpRail(
     }
 }
 
+internal data class DownloadTransferRow(
+    val book: BookSummary,
+    val fileId: String,
+    val isActive: Boolean,
+    val isFailed: Boolean,
+    val progress: Float?
+)
+
+internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow> {
+    val booksByFileId = (state.books + state.homeBooks)
+        .filter { it.fileId != null }
+        .associateBy { it.fileId!! }
+    val fileIds = (
+        state.downloadingFileIds +
+            state.failedDownloadFileIds +
+            state.downloadMetadataByFileId.keys
+        ).toList().sorted()
+    return fileIds.map { fileId ->
+        val metadata = state.downloadMetadataByFileId[fileId]
+        val book = booksByFileId[fileId] ?: BookSummary(
+            id = metadata?.bookId ?: "download-$fileId",
+            libraryId = "",
+            fileId = fileId,
+            title = metadata?.title ?: "File $fileId",
+            mediaKind = metadata?.mediaKind ?: MediaKind.UNKNOWN,
+            format = metadata?.mimeType
+        )
+        DownloadTransferRow(
+            book = book,
+            fileId = fileId,
+            isActive = fileId in state.downloadingFileIds,
+            isFailed = fileId in state.failedDownloadFileIds,
+            progress = state.downloadProgressByFileId[fileId]
+        )
+    }
+}
+
+@Composable
+private fun DownloadTransfersSection(
+    rows: List<DownloadTransferRow>,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
+    onClearAllFailedDownloads: () -> Unit
+) {
+    val failedRows = rows.filter { it.isFailed && !it.isActive }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("local-downloads-section"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Downloads", style = MaterialTheme.typography.titleLarge)
+            if (failedRows.isNotEmpty()) {
+                TextButton(onClick = onClearAllFailedDownloads) { Text("Clear all") }
+            }
+        }
+        rows.filter { it.isActive }.forEach { row ->
+            DownloadTransferRowItem(
+                row = row,
+                onAction = { onCancelDownload(row.book) },
+                actionLabel = "Cancel"
+            )
+        }
+        failedRows.forEach { row ->
+            DownloadTransferRowItem(
+                row = row,
+                onAction = { onDownload(row.book) },
+                actionLabel = "Retry",
+                onClear = { onClearFailedDownload(row.book) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadTransferRowItem(
+    row: DownloadTransferRow,
+    onAction: () -> Unit,
+    actionLabel: String,
+    onClear: (() -> Unit)? = null
+) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}")) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(row.book.title, style = MaterialTheme.typography.titleMedium)
+            if (row.isActive) {
+                row.progress?.let { progress ->
+                    Text("Downloading · ${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                } ?: run {
+                    Text("Downloading…", style = MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                Text("Download failed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onAction) { Text(actionLabel) }
+                onClear?.let { clear ->
+                    TextButton(onClick = clear) { Text("Clear") }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun LocalBooksScreen(
     state: BrowserState,
@@ -4139,6 +4411,11 @@ private fun LocalBooksScreen(
     libraryId: String?,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
+    onClearAllFailedDownloads: () -> Unit,
     confirmDeleteLocalCopy: Boolean,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
@@ -4155,28 +4432,55 @@ private fun LocalBooksScreen(
     val filteredBooks = remember(scopedBooks, filter) {
         filterAndSortLocalBooks(scopedBooks, filter)
     }
-    LibraryBooks(
-        state = state.copy(
-            books = filteredBooks,
-            isLoadingBooks = books == null,
-            isOfflineSnapshot = false
-        ),
-        modifier = modifier,
-        coverLoader = coverLoader,
-        onBookSelected = onBookSelected,
-        titleOverride = state.libraries.firstOrNull { it.id == libraryId }
-            ?.let { "Local books · ${it.name}" }
-            ?: "Local books",
-        emptyMessage = "No local books found.",
-        allowSeriesCollapse = false,
-        totalBooks = filteredBooks.size,
-        filter = filter,
-        onMarkAsRead = onMarkAsRead,
-        onMarkAsUnread = onMarkAsUnread,
-        confirmDeleteLocalCopy = confirmDeleteLocalCopy,
-        onDeleteLocalCopies = onDeleteLocalCopies,
-        onFilterClick = { showFilter = true }
-    )
+    val transferRows = remember(
+        state.downloadingFileIds,
+        state.failedDownloadFileIds,
+        state.downloadProgressByFileId,
+        state.downloadMetadataByFileId,
+        state.books,
+        state.homeBooks
+    ) {
+        downloadTransferRows(state)
+    }
+    Column(modifier = modifier.fillMaxSize()) {
+        if (transferRows.isNotEmpty()) {
+            DownloadTransfersSection(
+                rows = transferRows,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onClearFailedDownload = onClearFailedDownload,
+                onClearAllFailedDownloads = onClearAllFailedDownloads
+            )
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            LibraryBooks(
+                state = state.copy(
+                    books = filteredBooks,
+                    isLoadingBooks = books == null,
+                    isOfflineSnapshot = false
+                ),
+                modifier = Modifier,
+                coverLoader = coverLoader,
+                onBookSelected = onBookSelected,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onClearFailedDownload = onClearFailedDownload,
+                titleOverride = state.libraries.firstOrNull { it.id == libraryId }
+                    ?.let { "Local books · ${it.name}" }
+                    ?: "Local books",
+                emptyMessage = "No local books found.",
+                allowSeriesCollapse = false,
+                totalBooks = filteredBooks.size,
+                filter = filter,
+                onMarkAsRead = onMarkAsRead,
+                onMarkAsUnread = onMarkAsUnread,
+                onDeleteLocalCopy = onDeleteLocalCopy,
+                confirmDeleteLocalCopy = confirmDeleteLocalCopy,
+                onDeleteLocalCopies = onDeleteLocalCopies,
+                onFilterClick = { showFilter = true }
+            )
+        }
+    }
     if (showFilter) {
         BookFilterSheet(
             initial = filter,
@@ -4202,7 +4506,8 @@ private fun LibraryBookList(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit = {}
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -4230,6 +4535,7 @@ private fun LibraryBookList(
                 onBookSelected = onBookSelected,
                 onDownload = onDownload,
                 onCancelDownload = onCancelDownload,
+                onClearFailedDownload = onClearFailedDownload,
                 onDeleteLocalCopy = onDeleteLocalCopy,
                 onMarkAsRead = onMarkAsRead,
                 onMarkAsUnread = onMarkAsUnread
@@ -4247,6 +4553,7 @@ private fun LibraryBookCard(
     onBookSelected: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
@@ -4330,6 +4637,18 @@ private fun LibraryBookCard(
                                 onMarkAsUnread(book)
                             }
                         )
+                        when {
+                            isDownloading -> DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; onCancelDownload(book) })
+                            failed -> {
+                                DropdownMenuItem(
+                                    text = { Text(if (book.isDownloaded) "Update local" else "Retry") },
+                                    onClick = { showActions = false; onDownload(book) }
+                                )
+                                DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; onClearFailedDownload(book) })
+                            }
+                            book.isDownloaded -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; onDeleteLocalCopy(book) })
+                            fileId != null && !state.isOfflineSnapshot -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; onDownload(book) })
+                        }
                     }
                 }
             }
@@ -4904,7 +5223,8 @@ private fun BookDetails(
                     versions = otherVersions,
                     libraryNamesById = libraryNamesById,
                     coverLoader = coverLoader,
-                    onBookSelected = onBookSelected
+                    onBookSelected = onBookSelected,
+                    onDeleteLocalCopy = onDeleteLocalCopy
                 )
             }
         }
@@ -5218,7 +5538,8 @@ private fun BookDetailOtherVersions(
     versions: List<BookSummary>,
     libraryNamesById: Map<String, String>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onBookSelected: (BookSummary) -> Unit
+    onBookSelected: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -5247,6 +5568,7 @@ private fun BookDetailOtherVersions(
                     supportingText = supportingText,
                     coverLoader = coverLoader,
                     onClick = { onBookSelected(version) },
+                    onDeleteLocalCopy = { onDeleteLocalCopy(version) },
                     modifier = Modifier.testTag("book-detail-other-version-${version.id}")
                 )
             }
@@ -5444,7 +5766,7 @@ internal fun bookDetailActionState(
         inlineTransfer = null,
         overflowTransferLabel = when {
             isDownloading -> "Cancel update"
-            hasDownloadUpdate && !isOfflineSnapshot -> "Update local"
+            (hasDownloadUpdate || downloadFailed) && !isOfflineSnapshot -> "Update local"
             else -> null
         },
         showDeleteLocal = true
@@ -5890,6 +6212,11 @@ private fun SeriesDetails(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (String) -> SeriesDetailInfo?,
     onBookSelected: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    downloadState: BrowserState? = null,
+    onDownload: ((BookSummary) -> Unit)? = null,
+    onCancelDownload: ((BookSummary) -> Unit)? = null,
+    onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
@@ -6001,6 +6328,11 @@ private fun SeriesDetails(
                     book = book,
                     coverLoader = coverLoader,
                     onClick = { onBookSelected(book) },
+                    downloadState = downloadState,
+                    onDownload = onDownload?.let { download -> { download(book) } },
+                    onCancelDownload = onCancelDownload?.let { cancel -> { cancel(book) } },
+                    onClearFailedDownload = onClearFailedDownload?.let { clear -> { clear(book) } },
+                    onDeleteLocalCopy = { onDeleteLocalCopy(book) },
                     showSeriesIndex = true,
                     onMarkAsRead = { onMarkAsRead(book) },
                     onMarkAsUnread = { onMarkAsUnread(book) }
