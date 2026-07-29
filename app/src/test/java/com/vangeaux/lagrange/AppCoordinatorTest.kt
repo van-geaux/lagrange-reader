@@ -162,6 +162,19 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bootstrap leaves platform loading before waiting for session validation`() = runTest {
+        val sessionGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(sessionStateGate = sessionGate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        runCurrent()
+
+        assertFalse(coordinator.screen.value is AppScreen.Loading)
+        sessionGate.complete(Unit)
+    }
+
+    @Test
     fun `checkForAppUpdate exposes and dismisses the release notification`() = runTest {
         val update = ReleaseUpdate(
             versionName = "1.2.0",
@@ -1800,6 +1813,7 @@ private class FakeBookOrbitDataSource(
     var serverUrl: String? = "https://books.example.test",
     var sessionState: SessionState = SessionState.Authenticated,
     var sessionStateSequence: List<SessionState> = emptyList(),
+    var sessionStateGate: CompletableDeferred<Unit>? = null,
     var cachedBrowserState: BrowserState? = null,
     var restoreActiveReaderLocalOnlyResult: ReaderState? = null,
     var restoreActiveReaderResult: ReaderState? = null,
@@ -1886,6 +1900,7 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun getSessionState(): SessionState {
         sessionStateRequested = true
+        sessionStateGate?.await()
         val result = sessionStateSequence.getOrNull(sessionStateCalls) ?: sessionState
         sessionStateCalls += 1
         return result

@@ -252,8 +252,13 @@ class AppCoordinator(
                         message = null
                     )
                 )
+            } else {
+                _screen.value = AppScreen.Startup()
             }
 
+            if (startupCache == null) {
+                _screen.value = AppScreen.Startup("Connecting to BookOrbit…")
+            }
             val sessionState = repository.getSessionState()
             if (startupCache != null) {
                 val currentBrowser = (_screen.value as? AppScreen.Browser)?.browserState
@@ -538,6 +543,7 @@ class AppCoordinator(
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
+            showStartup("Loading libraries…")
             restoredInterruptedDownloads = runCatching {
                 repository.loadInterruptedDownloads().associateBy { it.fileId }
             }.getOrDefault(emptyMap())
@@ -567,6 +573,7 @@ class AppCoordinator(
                 // Flush queued reader progress before loading the first page. This makes
                 // the first Home render reflect progress that was created in an earlier
                 // session instead of showing Continue reading only after a second open.
+                showStartup("Syncing reading progress…")
                 val progressSyncResult = repository.syncPendingProgress()
                 val pendingProgressCount = repository.pendingProgressCount()
                 if (selectedLibrary == null) {
@@ -590,6 +597,7 @@ class AppCoordinator(
                 var homeBooks = repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
+                showStartup("Loading your library…")
                 val firstPage = cachedCatalog ?: repository.loadBooksPage(selectedLibrary, 0)
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
                 showBrowser(
@@ -1658,6 +1666,12 @@ class AppCoordinator(
             serverUrl = repository.getServerUrl().orEmpty(),
             message = message
         )
+    }
+
+    private fun showStartup(message: String) {
+        if (_screen.value is AppScreen.Startup) {
+            _screen.value = AppScreen.Startup(message)
+        }
     }
 
     private fun serverSetupFailure(

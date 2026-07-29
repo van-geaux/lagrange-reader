@@ -50,6 +50,7 @@ Active tracked work:
 - OIDC/SSO issue #4: contract confirmed; interim Open server sign-in WebView is implemented and source-verified, with physical-device validation pending. Replace its launcher with AppAuth after BookOrbit mobile-redirect support is deployed: https://github.com/van-geaux/lagrange-reader/issues/4
 - Implemented: Delete local is available in every applicable More/context menu when a valid local copy exists, including Book Detail and book-card surfaces; it is absent for nonlocal books and reuses the existing confirmation/reconciliation path. Automated verification passes; physical-device validation remains pending: https://github.com/van-geaux/lagrange-reader/issues/5
 
+- [x] Research and initial implementation for issue [#15](https://github.com/van-geaux/lagrange-reader/issues/15): app-open startup now leaves the platform splash after local bootstrap when no cached browser is available and shows a branded staged startup state with phase-specific connection, library, progress-sync, and catalog messages. Cached-first refresh keeps content visible without an automatic Home refresh indicator during startup reconciliation; user-initiated pull-to-refresh remains available. Authentication, offline fallback, and active-reader behavior remain preserved. Physical startup timing/UX validation and follow-up tuning remain open.
 Release-overlay and Book Detail app-navigation physical validation are complete as of 2026-07-27; see the current-status note above.
 
 ## Completed foundation

@@ -13,6 +13,11 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Compile main, unit-test, and Android-test Kotlin sources and pass focused coordinator tests.
 - [ ] Validate the full download lifecycle on a connected physical device or emulator; no adb target is currently available.
 
+- [x] Research and initial implementation — issue [#15](https://github.com/van-geaux/lagrange-reader/issues/15): make app-open loading faster and less intrusive.
+  - Trace and measure startup/bootstrap work that owns the loading spinner, including cached UI, authentication, progress sync, catalog loading, offline fallback, and active-reader restoration.
+  - Compare staged/progressive loading, cached-first presentation, skeleton/branded indicators, and other alternatives; the initial implementation uses a staged branded startup state with phase-specific messages, releases the platform splash before session validation when no cache is available, and hides the automatic Home refresh indicator during startup reconciliation while preserving user-initiated pull-to-refresh feedback.
+  - JVM coordinator coverage passes; physical startup timing/UX validation and any follow-up tuning remain open.
+
 ## Priority 0 — Server-progress hydration — 2026-07-24
 
 - [x] Synchronize pending progress before loading detail and authoritative reader progress on normal online book opens.

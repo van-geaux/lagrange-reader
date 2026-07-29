@@ -3752,7 +3752,7 @@ private fun PullToRefreshLayout(
 ) {
     val pullState = rememberPullToRefreshState(enabled = { !isRefreshing })
     LaunchedEffect(isRefreshing) {
-        if (isRefreshing) pullState.startRefresh() else pullState.endRefresh()
+        if (!isRefreshing) pullState.endRefresh()
     }
     LaunchedEffect(pullState.isRefreshing) {
         if (pullState.isRefreshing && !isRefreshing) onRefresh()

@@ -236,6 +236,7 @@ private fun BookOrbitDestination(
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
+        is AppScreen.Startup -> StartupScreen(screen.message)
         is AppScreen.ServerSetup -> ServerSetupScreen(
             initialServerUrl = screen.serverUrl,
             message = screen.message,
@@ -389,6 +390,32 @@ private fun LoadingScreen() {
             )
             Text(
                 "Loading your library…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun StartupScreen(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = "Lagrange logo",
+                modifier = Modifier.size(80.dp)
+            )
+            Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -689,14 +716,6 @@ private fun LibraryBrowserScreen(
             BookOrbitTopBar(
                 title = "Libraries",
                 actions = {
-                    if (state.isRefreshing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .padding(end = 8.dp)
-                                .size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
                     TextButton(
                         onClick = onRefresh,
                         enabled = !state.isRefreshing
