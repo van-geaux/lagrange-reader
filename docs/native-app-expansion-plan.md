@@ -1,5 +1,8 @@
 # Native App Expansion and Plex/Audiobookshelf UI Plan
 
+> Superseded historical planning document. Do not use this file as the current implementation plan. Current UI decisions are in [`ui-ux.md`](ui-ux.md), current authentication planning is in [`oidc-authentication.md`](oidc-authentication.md), and current priorities are in [`roadmap.md`](roadmap.md).
+
+
 > Historical planning document: the implemented current shell supersedes this plan's drawer-based navigation and placeholder Options destination.
 
 ## Goal

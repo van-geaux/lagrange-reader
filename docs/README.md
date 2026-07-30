@@ -1,55 +1,25 @@
 # Documentation
 
-This folder contains the working engineering documentation for `Lagrange Reader`.
+This folder contains focused public engineering documentation for Lagrange Reader. Active documents describe current behavior, contracts, procedures, and decisions; local operator handovers and historical implementation logs are intentionally excluded from the public documentation set.
 
-## Documents
+## Current documents
 
-- [Architecture](./architecture.md)
-- [Local Setup](./setup.md)
-- [Privacy Notes](./privacy.md)
-- [Release Policy](./release.md)
-- [BookOrbit API Contract](./bookorbit-api.md)
-- [Testing](./testing.md)
-- [UI/UX Workstream](./ui-ux.md)
-- [Roadmap](./roadmap.md)
-- [Handover](./handover.md)
+- [Architecture](./architecture.md) — current components, data flow, storage, synchronization, and guardrails.
+- [Local Setup](./setup.md) — machine prerequisites and local build setup.
+- [Privacy Notes](./privacy.md) — local storage, network behavior, and current privacy gaps.
+- [Release Policy](./release.md) — versioning, signing, naming, and publishing rules.
+- [BookOrbit API Contract](./bookorbit-api.md) — server endpoints and payload contracts used by the client.
+- [Testing](./testing.md) — current automated gate and manual validation procedures.
+- [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
+- [Roadmap](./roadmap.md) — current priorities and deferred work.
+- [OIDC / SSO Authentication](./oidc-authentication.md) — current interim flow and native AppAuth blocker.
+
+## Local operator documents
+
+The session handover and historical operator archives are intentionally kept local and ignored by Git. They are not part of the public documentation set. The superseded native-app expansion plan remains public as historical product context.
 
 ## Current status
 
-The Android project builds locally with `assembleDebug`, can connect to a BookOrbit server, and has working paths for login, explicit authenticated-session bootstrap through `/api/v1/auth/me`, sign-out/session reset, authentication-expired return-to-intended-screen recovery, library browsing, downloads, server-scoped local persistence, server-scoped authenticated reader cache copies, offline-local-only reader reopen from cached browser snapshots, progress sync, PDF reading with zoom and pan controls, audio playback, EPUB reading with chapter/theme/font controls, CBZ comic reading from local downloads or authenticated cache copies, active-reader restoration after recreation or restart, corrupted local reader file pruning, improved accessibility semantics for reader controls and status surfaces, normalized stored progress percentages across media types, and earlier user-facing failures when a reader cannot be prepared from local or cached content.
+Lagrange 1.4.1 is the latest published release. The current branch is `main`, aligned with `origin/main`. The application supports authenticated BookOrbit browsing, offline downloads, EPUB/PDF/comic reading, audiobook playback, progress synchronization, server-missing catalog state, pull-to-refresh, reader font selection, and the implemented interim server sign-in WebView.
 
-The app manifest uses the production "Bold Lagrange" adaptive launcher icon, including a themed monochrome layer. Reusable vector masters live in [`artwork/`](../artwork/).
-
-Session clearing now waits for WebView cookie removal before returning to login, and explicit sign-out suppresses cached-browser fallback so the app stays on login until a fresh authenticated session exists. Reader reopen can fall back to last-synced local progress after the pending queue drains, and the EPUB WebView is configured to allow local file-backed image resources from extracted books.
-
-Recent manual device validation confirmed:
-
-- offline downloads reopen correctly in airplane mode
-- queued progress sync reaches the live BookOrbit web app after reconnect
-- reader resume now restores the tested last position
-- downloaded EPUB local images now render correctly
-- physical-device launcher icon wiring is correct
-
-Focused JVM coverage now exists for repository payload parsing, nullable-field fallbacks, multiple-file selection, cover URL resolution, server URL normalization, media kind inference, normalized progress labels, sync conflict resolution, download record persistence, progress queue persistence, progress throttling policy behavior, and coordinator bootstrap/login/browser recovery flows.
-
-Initial live-browser load failures without a cached snapshot now fall back to an empty browser state with a user-facing retryable error instead of leaving the app stranded on a loading path.
-
-The audiobook reader now includes play and pause controls, skip back and forward actions, resume-at-position handling, and a small playback speed selector.
-
-Manual app testing can now start from [Testing](./testing.md), and the server setup flow distinguishes malformed URLs, unreachable hosts, TLS failures, redirect responses, timeouts, and generic HTTP/network failures with clearer user-facing messages while preserving the attempted URL for direct retry.
-
-The local release build also passes with `.\gradlew.bat assembleRelease`.
-
-The repository now includes a basic GitHub Actions workflow for debug CI that runs the JVM unit suite, Android lint, Android instrumentation-test compilation, and debug APK build on `main` pushes and pull requests.
-
-Network policy is now explicit: cleartext HTTP is blocked by default and only allowed for local development hosts such as `localhost`, `127.0.0.1`, `10.0.2.2`, and `10.0.3.2`.
-
-Compose instrumentation coverage now exists for server-setup validation, login recovery and server-change routing, populated and loading browser states, and cached-offline browser behavior. The `androidTest` target compiles locally.
-
-The functional baseline is now sufficient to begin UI/UX work. The discussion and implementation gates are defined in [UI/UX Workstream](./ui-ux.md); setup/login/browser and EPUB work can proceed, and a local M4B plus chapter metadata are now available for audiobook work.
-
-The main gaps are:
-
-- server-forced session-expiry recovery verification on a real server
-- audiobook validation with the local M4B/chapter-metadata fixture, plus PDF and CBZ device validation with representative content
-- broader integration and end-to-end test coverage
+Use `CHECKLIST.md` for active completion and validation items and `docs/roadmap.md` for the next user-directed work. Session-specific worktree state belongs in the local-only `docs/handover.md`; do not use historical archives as current status without re-verification.
