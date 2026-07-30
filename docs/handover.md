@@ -1,18 +1,104 @@
 # Handover
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
+
+## Release handoff — Lagrange 1.4.1 — 2026-07-30
+
+Lagrange 1.4.1 is published at https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.1 for tag `v1.4.1`. The approved release note is `docs/release-notes/v1.4.1.md`; the GitHub Release body was read back and matches that file exactly.
+
+Release publication completed successfully through Android Release workflow run [30532874440](https://github.com/van-geaux/lagrange-reader/actions/runs/30532874440). The signed asset is [`Lagrange-1.4.1.apk`](https://github.com/van-geaux/lagrange-reader/releases/download/v1.4.1/Lagrange-1.4.1.apk), 63,295,932 bytes, SHA-256 `d0883f30a5e50473d45268da5ac4789f431091bbaccd84215507836ba43a4387`. The asset was downloaded from the published release and its size and checksum were verified locally.
+
+The release preparation commit is [`8378a98`](https://github.com/van-geaux/lagrange-reader/commit/8378a98) (`release: prepare Lagrange 1.4.1`), following implementation commit [`05a7f9c`](https://github.com/van-geaux/lagrange-reader/commit/05a7f9c) and release-note attribution commit [`c9c5ec2`](https://github.com/van-geaux/lagrange-reader/commit/c9c5ec2). The local release gate passed `:app:testDebugUnitTest` with 375 tests across 56 suites and zero failures, errors, or skips; `:app:lintDebug` with zero errors, 41 warnings, and 17 informational findings; main/unit/Android-test Kotlin compilation; `assembleDebug`; `assembleDebugAndroidTest`; and signed `assembleRelease`. Android instrumentation was compiled but was not executed on a connected device or emulator during the automated gate. Fresh local release APK: `app/build/outputs/apk/release/app-release.apk` (63,295,932 bytes, SHA-256 `981b096fae2fd5e3125911513f492f8033207708a175f44774955f13066f5580`).
+
+The feature branch `fix/issue-15-staged-startup` is pushed through the release preparation commit; `origin/main` remains unchanged. The handover follow-up is the next documentation-only commit. Unrelated local changes in `.gitignore` and `docs/release-notes/v1.3.0.md` remain preserved and are excluded from the release scope.
+
+## Current handoff — 2026-07-30 — behavior-neutral maintenance cleanup
+
+The approved unused-code cleanup is complete and user-confirmed working. Removed code was limited to repository-proven unreachable helpers: the unused stream-URL builder, legacy EPUB system-bar composable, obsolete Readium audio position/seek calculations, the self-contained legacy EPUB parser/extractor graph, two unused private Book Detail callbacks, and an unused status-label argument. The active EPUB WebView asset session and chapter-base URL path remain intact, and Book Detail continues to route all status changes through `onMarkAsStatus` with the unchanged `Mark as...` label.
+
+The intentionally non-identical duration formatters and security-sensitive origin checks remain separate. Dependencies, resources, comments, public behavior, persistence, network contracts, reader behavior, and authentication were not changed.
+
+Verification completed:
+
+- Fresh source-boundary assertions and 40 focused JVM tests passed.
+- The complete JVM suite, `lintDebug`, main/unit/Android-test Kotlin compilation, and `assembleDebug` passed; Android instrumentation compiled but was not executed on a device/emulator.
+- The user confirmed the resulting app works fine.
+- Fresh debug handoff APK: `app/build/outputs/apk/debug/Lagrange-debug-202607301602.apk` (72,296,398 bytes), SHA-256 `e50d29c289aaf1873de0aac7aee6a6286823d5c86a3dd9d876f87fd639d66a6a`.
+- The temporary `/tmp/hermes-verify-*` script was removed. No commit or push was performed, and unrelated worktree changes remain preserved.
+
+Documentation synchronized in `CHECKLIST.md`, `docs/roadmap.md`, and `docs/testing.md`. No architecture, API, UI/UX, README, or release-note update is required because the cleanup is behavior-neutral.
+
+## Current handoff — 2026-07-30 — GitHub issue #13
+
+GitHub issue #13 (https://github.com/van-geaux/lagrange-reader/issues/13) is implemented and user-confirmed working on-device. Continuous EPUB mode keeps the right-side seek rail enabled even when Readium reports a single page/item, represents active-resource progression from 0–100%, and seeks directly by normalized progression. Whole-book progress is unchanged, and paginated EPUB, PDF, and comic page-index rails retain their existing behavior.
+
+Verification completed:
+
+- `:app:compileDebugKotlin`, `:app:compileDebugUnitTestKotlin`, and `:app:compileDebugAndroidTestKotlin` passed.
+- Full `:app:testDebugUnitTest` passed: 375 tests across 56 suites, with zero failures, errors, or skips.
+- `:app:lintDebug` passed with zero errors, 41 warnings, and 17 informational findings.
+- `:app:assembleDebug` and `:app:assembleDebugAndroidTest` passed.
+- Fresh debug handoff APK: `app/build/outputs/apk/debug/Lagrange-debug-202607301534.apk` (72,312,782 bytes).
+- Focused ad-hoc verification passed after the device confirmation; its temporary `/tmp/hermes-verify-*` script was removed.
+- No commit or push was performed; unrelated worktree changes remain preserved.
+
+Documentation synchronized in `CHECKLIST.md`, `docs/roadmap.md`, `docs/ui-ux.md`, and `docs/testing.md`.
+
+Issue #13 is being processed as completed after recording the implementation, automated verification, and user-confirmed device validation.
+
+## Current handoff — 2026-07-30 — GitHub issue #12
+
+GitHub issue #12 (https://github.com/van-geaux/lagrange-reader/issues/12) is implemented and user-confirmed working on-device. Book Detail, Series, Authors, Local books, Statistics, and Achievements support explicit pull-down refresh while preserving existing content. Automatic/background synchronization remains silent; an explicit swipe shows the indicator immediately and keeps it visible through success, failure, or cancellation. Duplicate manual requests are ignored, failed refreshes retain the last successful content where applicable, and Local books refresh does not interrupt active downloads or destructive actions.
+
+Series and Authors now place the shared `PullToRefreshLayout` around their complete content region, including the toolbar and catalog grid, matching Home and Library. This prevents the Material indicator background/shadow from drawing outside the refresh region into the catalog headers.
+
+Verification completed:
+
+- User confirmed the complete flow, including the Series and Authors visual correction, works on-device.
+- `:app:testDebugUnitTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug`, and `:app:assembleDebug` passed.
+- Fresh debug handoff APK: `app/build/outputs/apk/debug/Lagrange-debug-202607301413.apk`.
+- Fresh ad-hoc source/layout and Gradle verification passed with `AD_HOC_SERIES_AUTHORS_REFRESH_VERIFICATION_PASS`.
+- No commit or push was performed; unrelated worktree changes remain preserved.
+
+Issue #12 is closed as completed: https://github.com/van-geaux/lagrange-reader/issues/12. Completion evidence is recorded in the issue comment: https://github.com/van-geaux/lagrange-reader/issues/12#issuecomment-5127909255.
+
+## Current handoff — 2026-07-30 — GitHub issue #16
+
+GitHub issue #16 (https://github.com/van-geaux/lagrange-reader/issues/16) is implemented and user-confirmed working on-device. The server-missing catalog state is represented separately from reading status and local deletion, persisted through the Room catalog, browser snapshot, detail cache, and active-reader cache, and rendered with a yellow `Missing!` cover overlay. Server-backed catalog visibility remains authoritative after reconciliation; Local books remains device-authoritative and labels entries synthesized without library/catalog ownership as `Local only`.
+
+File-dependent actions for server-missing books are unavailable or hidden, while an existing transfer can still be cancelled and an existing local copy can still be deleted. Normal books and locally deleted books remain distinct.
+
+Verification completed:
+
+- Focused parser, action-state, and detail-cache JVM tests passed.
+- Full `:app:testDebugUnitTest`, `lintDebug`, `:app:compileDebugAndroidTestKotlin`, and `assembleDebug` passed.
+- The final debug handoff APK is `app/build/outputs/apk/debug/Lagrange-debug-202607300828.apk` (73,599,128 bytes), byte-identical to `app-debug.apk`.
+- The user subsequently confirmed the feature works fine on-device.
+- No commit or push was performed; unrelated issue #14 worktree changes remain preserved.
+
+Documentation synchronized in `CHECKLIST.md`, `docs/roadmap.md`, `docs/ui-ux.md`, `docs/architecture.md`, and `docs/bookorbit-api.md`. This handover entry records the issue #16 completion; no project terminal, Gradle daemon, watcher, emulator, or background process is running.
 
 ## Current handoff — 2026-07-29
 
-GitHub issue #15 (https://github.com/van-geaux/lagrange-reader/issues/15) is completed and closed. The implementation is pushed in commit [`3266b23`](https://github.com/van-geaux/lagrange-reader/commit/3266b23) on branch [`fix/issue-15-staged-startup`](https://github.com/van-geaux/lagrange-reader/tree/fix/issue-15-staged-startup).
+GitHub issue #15 (https://github.com/van-geaux/lagrange-reader/issues/15) remains completed and closed. Its implementation is recorded in commit [`3266b23`](https://github.com/van-geaux/lagrange-reader/commit/3266b23) on branch [`fix/issue-15-staged-startup`](https://github.com/van-geaux/lagrange-reader/tree/fix/issue-15-staged-startup). The current HEAD is the follow-up handover documentation commit `9d4b4c5`.
 
-The delivered startup behavior releases the platform splash after local bootstrap when no cache is available, presents staged connection/library/progress/catalog status, preserves cached Home content during background reconciliation, suppresses the automatic Home pull-to-refresh indicator during startup, and preserves user-initiated pull-to-refresh plus reader-specific loading indicators.
+Issue #14 is now implemented in the current worktree. EPUB reader options use a grouped font dropdown with Publisher default, System serif, System sans-serif, and System monospace under Normal fonts, plus AccessibleDFA and OpenDyslexic under Accessibility fonts. Users can import one active `.ttf`/`.otf` custom font, replace it, or remove it. Imported fonts are validated, copied to app-private storage, persisted per library, and applied only to a cache-keyed rewritten EPUB reader copy; the original EPUB is never modified. Publisher default leaves publication CSS authoritative. PDF and comics are unaffected.
 
-Verification passed `./gradlew :app:testDebugUnitTest :app:assembleDebug`, focused ad-hoc source/coordinator verification, and fresh debug APK generation. The final handoff APK is `app/build/outputs/apk/debug/Lagrange-debug-202607292147.apk`.
+Issue #14 verification completed successfully:
 
-The current worktree intentionally retains unrelated pre-existing local changes in `.gitignore`, `README.md`, `docs/bookorbit-api.md`, `docs/release-notes/v1.3.0.md`, and the uncommitted portions of `CHECKLIST.md`, `docs/architecture.md`, and `docs/roadmap.md`. They were excluded from the issue #15 commit.
+- 368 JVM tests across 56 suites passed with zero failures, errors, or skips.
+- Main, JVM-test, and Android-test Kotlin compilation passed.
+- `lintDebug` passed with zero errors, 41 warnings, and 15 informational findings.
+- `assembleDebug` and `assembleDebugAndroidTest` passed.
+- CRLF-aware `git diff --check` passed.
+- No ADB device was connected during the automated gate, so Android instrumentation was compiled but not executed there; the user subsequently confirmed the complete reader-font flow works on-device.
+- Fresh debug handoff APK: `app/build/outputs/apk/debug/Lagrange-debug-202607292309.apk` (73,597,416 bytes). Standard artifact: `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub issue #12 (https://github.com/van-geaux/lagrange-reader/issues/12) remains planned for pull-down/swipe-to-refresh coverage on Book Detail, Series, Authors, Local books, Statistics, and Achievements. GitHub issue #13 (https://github.com/van-geaux/lagrange-reader/issues/13) remains planned for continuous EPUB right-side seek-rail navigation. GitHub issue #14 (https://github.com/van-geaux/lagrange-reader/issues/14) remains planned for user-selectable reader fonts.
+The current worktree intentionally retains pre-existing unrelated changes in `.gitignore`, `docs/bookorbit-api.md`, `docs/release-notes/v1.3.0.md`, and other previously modified project-status files, plus the current issue #14 source/test/documentation changes and untracked `.hermes/` plan files. No commit or push was performed for issue #14. No project terminal, Gradle daemon, watcher, emulator, or background process is running.
+
+Delegation: Claude Code was selected for implementation, but its continuation stopped with an external content-filtering API error after creating only a partial custom-font store. The main agent reviewed that partial work, corrected it, completed the dropdown/custom-font reader-copy implementation, synchronized documentation, and ran the final verification. No subagent or background process is currently running.
+
+GitHub issue #12 (https://github.com/van-geaux/lagrange-reader/issues/12) remains planned for pull-down/swipe-to-refresh coverage on Book Detail, Series, Authors, Local books, Statistics, and Achievements. GitHub issue #13 (https://github.com/van-geaux/lagrange-reader/issues/13) is implemented and user-confirmed working; its current handoff is recorded at the top of this document.
 
 ## Release handoff — Lagrange 1.4.0
 
@@ -54,7 +140,7 @@ Delegation status: four Claude Code implementation attempts were started for the
 
 ## Current outcome
 
-Lagrange 1.4.0 is published at the GitHub Release for tag `v1.4.0` with the signed `Lagrange-1.4.0.apk` asset attached; confirmed via `gh release view v1.4.0` after workflow run 30349747058 completed successfully. The release note is `docs/release-notes/v1.4.0.md`; `v1.3.0` remains the previous published release.
+Lagrange 1.4.1 is now the latest published release at https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.1. Lagrange 1.4.0 remains the preceding release, with its historical release handoff retained below.
 
 1.2.3 changed the Android `applicationId`/`namespace` from `com.bookorbit.android` to `com.vangeaux.lagrange`. `com.bookorbit.android` was leftover from early development under the working name "bookorbit-android" and was never updated when the app was rebranded to Lagrange; it was not an intentional use of the BookOrbit name, but shipping it was still a mistake the release notes apologize for. This is a breaking distribution change: prior `com.bookorbit.android` installs must be uninstalled before installing 1.2.3, and local app preferences do not carry over (the DataStore prefs file was also renamed, `bookorbit_prefs` -> `lagrange_prefs`, with no migration). Internal class names (`BookOrbitApplication`, `BookOrbitRepository`, `BookOrbitTheme`, `Theme.BookOrbit*` styles, etc.) were deliberately left unchanged in this pass.
 
@@ -71,8 +157,8 @@ The client-side extraction work is tracked by GitHub issue #1: https://github.co
 - Repository: `/projects/bookorbit-android`
 - Branch: `fix/issue-15-staged-startup`, pushed to `origin/fix/issue-15-staged-startup`
 - Remote: `origin` uses HTTPS through the authenticated GitHub CLI credential helper. Credential values are not recorded in project documentation.
-- Published release: `Lagrange 1.4.0`, tagged `v1.4.0`, with `Lagrange-1.4.0.apk` attached — confirmed via `gh release view v1.4.0`; the downloaded asset is 63,279,548 bytes with SHA-256 `60cc226643da2cccf6eeea32f544d5ef06fc5bb5ea6750c9235333a3ea74e2f2`.
-- Current Git HEAD: issue #15 commit `3266b23` (`fix: hide automatic startup refresh indicator`) on the pushed feature branch. Remote `origin/main` remains unchanged; the local worktree additionally carries the unrelated uncommitted changes noted under "Protected working-tree changes" below.
+- Published release: `Lagrange 1.4.1`, tagged `v1.4.1`, with `Lagrange-1.4.1.apk` attached — confirmed via `gh release view v1.4.1`; the downloaded asset is 63,295,932 bytes with SHA-256 `d0883f30a5e50473d45268da5ac4789f431091bbaccd84215507836ba43a4387`.
+- Current Git HEAD before this handover follow-up: release preparation commit `8378a98` (`release: prepare Lagrange 1.4.1`) on the pushed feature branch. Remote `origin/main` remains unchanged; the local worktree additionally carries the unrelated uncommitted changes noted under "Protected working-tree changes" below.
 - Prior releases: `v1.2.2` (release-update dialog rework), `v1.2.1` (EPUB/server-progress-hydration/page-index fixes), and `v1.2.0` all published successfully with signed APK assets attached.
 - The `v1.2.1` GitHub Release required a manual fix: the tagged workflow run published notes that only emphasized the EPUB fix and omitted the broader server-progress-hydration and PDF/comic page-index fixes. The release-notes file was corrected and pushed to `main`, but the already-published Release body could not be edited via `gh release edit` (403, missing `contents:write` at the time) or re-published via delete+retag (same permission gap). The user manually pasted the corrected body into the GitHub Release editor for `v1.2.1`; that release's body is now correct even though its git history shows a follow-up "broaden 1.2.1 release notes" doc commit that was never reflected in a rebuilt/republished workflow run for that tag.
 - The tracked `app/build/release-artifacts/Lagrange-1.1.0.apk` and the custom `packageReleaseApk` task were removed. The local release output is `app/build/outputs/apk/release/app-release.apk`.
@@ -216,9 +302,9 @@ Verification passed full unit tests, lint, compilation, and `assembleDebug`; foc
 
 ## Highest-priority next work
 
-1. GitHub issue #12 (https://github.com/van-geaux/lagrange-reader/issues/12) is the newly tracked next feature: add pull-down/swipe-to-refresh to Book Detail, Series, Authors, Local books, Statistics, and Achievements.
-2. GitHub issue #13 (https://github.com/van-geaux/lagrange-reader/issues/13) is the planned continuous EPUB right-side seek rail work: keep the rail usable in continuous EPUB mode as a 0-100% normalized Readium progression slider for the active chapter/resource, while leaving whole-book progress and paginated EPUB/PDF/comic page-index behavior unchanged.
-3. GitHub issue #8 (https://github.com/van-geaux/lagrange-reader/issues/8) is implemented and closed by PR #9 (https://github.com/van-geaux/lagrange-reader/pull/9), merge commit `cc4f193eeff8e8033a18a5595caf07ecc30123c8`; retain physical-device validation as the only remaining limitation.
+1. GitHub issue #12 (https://github.com/van-geaux/lagrange-reader/issues/12) is implemented and closed; its pull-down/swipe-to-refresh completion is recorded in the current handoff above.
+2. GitHub issue #13 (https://github.com/van-geaux/lagrange-reader/issues/13) is implemented, user-confirmed working on-device, and closed; its continuous EPUB seek-rail completion is recorded in the current handoff above.
+3. GitHub issue #8 (https://github.com/van-geaux/lagrange-reader/issues/8) is implemented and closed by PR #9 (https://github.com/van-geaux/lagrange-reader/pull/9), merge commit `cc4f193eeff8e8033a18a5595caf07ecc30123c`; retain physical-device validation as the only remaining limitation.
 4. Direct OIDC/SSO remains an open, user-directed item.
 5. No implementation blocker remains for the approved CBR/CB7 extraction work. The user confirmed that downloaded CBR/CB7 opens offline successfully; issue #1 can be closed or linked to a future release when the user chooses.
 6. Future work remains user-directed: additional unsupported book formats and any separately deferred physical validation.
