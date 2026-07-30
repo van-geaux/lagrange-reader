@@ -1,6 +1,6 @@
 # UI/UX Workstream
 
-The current release line is `1.4.0`. The July 20 reader/detail follow-ups were initially recorded against version `0.2.7`: reader ownership is isolated from delayed browser updates, chrome has no visible Back action and places labeled Exit/X leftmost, and the tutorial is tap-dismissible with an exact three-second timeout. The automated gate passes; the later target-device validation context recorded below confirms the completed reader, library, media, detail, History, Statistics, and external-audiobook-control checks. Older dated checkpoints below are historical records.
+The current release line is `1.4.1`. The July 20 reader/detail follow-ups were initially recorded against version `0.2.7`: reader ownership is isolated from delayed browser updates, chrome has no visible Back action and places labeled Exit/X leftmost, and the tutorial is tap-dismissible with an exact three-second timeout. The automated gate passes; the later target-device validation context recorded below confirms the completed reader, library, media, detail, History, Statistics, and external-audiobook-control checks. Older dated checkpoints below are historical records.
 
 Latest detail feedback: keep compact action spacing while showing Read, Preview, Download, and Delete local labels beside clear icons; cap long book titles at five rows with expand/collapse; keep series name and index visible as separate rows; dismiss the full-screen cover viewer from any screen tap; and support multi-book selection with bulk read/unread actions. Genre chips navigate to paginated filtered Books or Series results, while tags remain informational. Authentication uses native username/password or the implemented server-hosted sign-in WebView; native AppAuth/Custom Tabs remains deferred.
 
@@ -17,6 +17,8 @@ Latest implementation: Delete local immediately returns the still-open detail ac
 Library, Series, and Authors catalog control/header rows (statistics, filter/collapse or selection actions, and the Authors header) all remain fixed outside their lazy grids while only the underlying grid scrolls; jump-rail indexes for Series and Authors account for those controls being outside the grid rather than adding a header-item offset.
 
 Profile-menu Statistics is now a lazy-loaded destination above Achievements. It presents BookOrbit summary and daily-reading data and handles loading, unsupported older servers, retryable errors, and partial/empty responses. Server audiobook history remains analytics-only; exact seekable play/pause positions continue to come from the local Room history store.
+
+Book Detail, Series, Authors, Local books, Statistics, and Achievements support the same non-blocking pull-down/swipe refresh interaction. Each destination owns its refresh lifecycle and ignores duplicate gestures while loading; the indicator completes on both success and failure. Local books keeps active download transfers and destructive actions independent from catalog refresh, while successful Statistics/Achievements content remains visible when a later refresh cannot replace it.
 
 Options backlog
 
@@ -66,13 +68,17 @@ Detail refinement: book details mirror the reader-relevant BookOrbit metadata an
 
 Book-card More/context menus expose the complete local-download lifecycle: remote idle books use `Download local`, active transfers use `Cancel`, failed transfers use `Retry` and `Clear`, and downloaded books use `Delete local`. Local books also shows a conditional Downloads section above completed local content whenever active or failed transfers exist. Active rows show determinate or indeterminate progress with `Cancel`; failed rows remain visible with `Retry` and `Clear`; the failed subsection header provides `Clear all`. Clear actions dismiss failed UI state only and never cancel active transfers or delete local books. The section is hidden only when both active and failed transfer sets are empty.
 
+### Server-missing catalog state — 2026-07-30
+
+Server-backed catalog surfaces keep books returned by the authoritative catalog visible when their registered file is marked `missing`. Their cover receives a yellow `Missing!` overlay, and file-dependent read/download actions are unavailable or hidden without conflating the state with a locally deleted copy; an existing transfer may still be cancelled and an existing local copy may still be deleted. The device-file Local books view remains device-authoritative; entries synthesized without library/catalog ownership are labeled `Local only`.
+
 ### Checkpoint 4: EPUB reader - Readium migration device-functional, broader validation pending
 
 - Refine reading chrome, chapter navigation, theme controls, typography controls, and distraction-free states.
 - Preserve the validated resume, local-image, offline, and progress behavior.
 - Test changes against the available EPUB files before merging.
 
-Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Normal EPUB resume restores an exact stored locator when available; otherwise authoritative percentage selects a floor locator from generated Readium publication positions, with equal-chapter fallback only when positions or percentage are unusable. Exact CFI interoperability is deferred. Every activity entry first shows the Previous/Menu/Next tutorial for exactly 3,000 ms after rendering readiness, or until any consumed tutorial-region tap dismisses it; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, progress, and Preview isolation remain.
+Implemented baseline: normal EPUB Read/Preview and comics use Readium with shared lightweight chrome layered over the navigators. Normal EPUB resume restores an exact stored locator when available; otherwise authoritative percentage selects a floor locator from generated Readium publication positions, with equal-chapter fallback only when positions or percentage are unusable. In continuous EPUB mode, the right-side rail switches from page indexes to a normalized 0–100% active-resource slider and seeks by the current locator's resource progression; paginated EPUB and non-EPUB page rails retain their existing behavior. Exact CFI interoperability is deferred. Every activity entry first shows the Previous/Menu/Next tutorial for exactly 3,000 ms after rendering readiness, or until any consumed tutorial-region tap dismisses it; once dismissed, outer 25% taps turn pages and center toggles chrome. Existing footer, system bars, orientation, keep-awake, progress, and Preview isolation remain.
 
 ### Device feedback workplan
 
@@ -109,7 +115,7 @@ Implemented baseline: normal EPUB Read/Preview and comics use Readium with share
 
 - [x] Reduce Library, Series, and Authors poster-card grids enough to create an additional compact phone column where possible.
 - [x] Add a downward-triangle affordance beside the tappable Library name selector.
-- [x] Replace the Library refresh action with swipe-down-to-refresh over Recommended and Browse content.
+- [x] Replace the Library refresh action with swipe-down-to-refresh over Recommended and Browse content. Automatic app-open/background synchronization remains silent; an explicit swipe shows the shared indicator immediately and keeps it visible until that user-requested refresh succeeds or fails. Home, Library, Series, Authors, Local books, Statistics, Achievements, and Book Detail share the same lifecycle; Series and Authors wrap their complete content region so the indicator background stays clipped to the screen content.
 - [x] Persist cover thumbnails locally and prefer the local cache for Local books.
 
 ### Follow-up browser polish — 2026-07-13
@@ -382,6 +388,10 @@ User-confirmed physical validation covers the remaining reader/media/layout/acce
 ### UI recommendations — 2026-07-26 (planned, not yet implemented)
 
 - Login logo placement: center the existing Lagrange app logo above the login form, inside the login card, so it reads as the card's header rather than a separate page element.
+
+### EPUB reader fonts — issue #14 implemented — 2026-07-29
+
+EPUB reader options use a grouped font dropdown with Publisher default, System serif, System sans-serif, and System monospace under Normal fonts, plus a separate Accessibility fonts section offering AccessibleDFA and OpenDyslexic. A Custom font section lets the user import one validated `.ttf`/`.otf` font, replace it, or remove it. The selected font persists per library alongside existing size, theme, margin, direction, and layout settings, and resume behavior is preserved. Publisher default preserves the book's own CSS as a fallback; built-in choices are mapped through Readium's typeface preferences, while custom fonts are applied only to a cached rewritten reader copy and never modify the original EPUB. PDF and comics are unaffected. Focused preference, mapping, custom-font validation, settings-preservation, and UI regression coverage is added; the user confirmed the complete reader-font flow works on-device.
 
 ### Book Detail Metadata sources row — implemented
 

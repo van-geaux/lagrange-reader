@@ -61,6 +61,7 @@ class ActiveReaderStore private constructor(
                 put("addedAtMillis", book.addedAtMillis)
                 put("updatedAtMillis", book.updatedAtMillis)
                 put("lastReadAtMillis", book.lastReadAtMillis)
+                put("isServerMissing", book.isServerMissing)
                 put("readerPageIndex", book.readerPageIndex)
                 put("readerPageCount", book.readerPageCount)
                 put("audioChapters", JSONArray(book.audioChapters.map { chapter ->
@@ -110,6 +111,7 @@ class ActiveReaderStore private constructor(
             addedAtMillis = if (book.has("addedAtMillis") && !book.isNull("addedAtMillis")) book.optLong("addedAtMillis") else null,
             updatedAtMillis = if (book.has("updatedAtMillis") && !book.isNull("updatedAtMillis")) book.optLong("updatedAtMillis") else null,
             lastReadAtMillis = if (book.has("lastReadAtMillis") && !book.isNull("lastReadAtMillis")) book.optLong("lastReadAtMillis") else null,
+            isServerMissing = book.optBoolean("isServerMissing"),
             readerPageIndex = if (book.has("readerPageIndex") && !book.isNull("readerPageIndex")) book.optInt("readerPageIndex") else null,
             readerPageCount = if (book.has("readerPageCount") && !book.isNull("readerPageCount")) book.optInt("readerPageCount") else null,
             audioChapters = book.optJSONArray("audioChapters")?.let { chapters ->

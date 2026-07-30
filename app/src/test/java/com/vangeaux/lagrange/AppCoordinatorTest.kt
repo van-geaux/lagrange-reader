@@ -162,6 +162,19 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bootstrap leaves platform loading before waiting for session validation`() = runTest {
+        val sessionGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(sessionStateGate = sessionGate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        runCurrent()
+
+        assertFalse(coordinator.screen.value is AppScreen.Loading)
+        sessionGate.complete(Unit)
+    }
+
+    @Test
     fun `checkForAppUpdate exposes and dismisses the release notification`() = runTest {
         val update = ReleaseUpdate(
             versionName = "1.2.0",
@@ -433,7 +446,7 @@ class AppCoordinatorTest {
             repository.refreshedLibraryIds
         )
         assertEquals(3, repository.maxConcurrentLibraryRefreshes)
-        assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+        assertFalse((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
 
         additionalLibraries.take(3).forEach { gates.getValue(it.id).complete(Unit) }
         runCurrent()
@@ -451,6 +464,111 @@ class AppCoordinatorTest {
         assertEquals(allLibraries.map { "book-${it.id}" }.toSet(), state.homeBooks.map { it.id }.toSet())
         assertFalse(state.isRefreshing)
         assertEquals(3, repository.maxConcurrentLibraryRefreshes)
+    }
+
+    @Test
+    fun `automatic browser load keeps the manual refresh indicator hidden`() = runTest {
+        val refreshGate = CompletableDeferred<Unit>()
+        val cachedPage = LibraryBooksPage(
+            items = listOf(book),
+            total = 1,
+            isComplete = true
+        )
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = cachedPage,
+            refreshLibraryCatalogResult = cachedPage,
+            refreshLibraryCatalogGate = refreshGate
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+
+        coordinator.loadBrowser()
+        runCurrent()
+
+        assertFalse((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `manual browser refresh stays active until catalog reconciliation completes`() = runTest {
+        val refreshGate = CompletableDeferred<Unit>()
+        val cachedPage = LibraryBooksPage(
+            items = listOf(book),
+            total = 1,
+            isComplete = true
+        )
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = cachedPage,
+            refreshLibraryCatalogResult = cachedPage,
+            refreshLibraryCatalogGate = refreshGate
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+
+        coordinator.refreshBrowser()
+        runCurrent()
+
+        assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse((coordinator.screen.value as AppScreen.Browser).browserState.isRefreshing)
+    }
+
+    @Test
+    fun `manual browser refresh ignores a duplicate request while active`() = runTest {
+        val refreshGate = CompletableDeferred<Unit>()
+        val cachedPage = LibraryBooksPage(
+            items = listOf(book),
+            total = 1,
+            isComplete = true
+        )
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            cachedLibraryCatalog = cachedPage,
+            refreshLibraryCatalogResult = cachedPage,
+            refreshLibraryCatalogGate = refreshGate
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+
+        coordinator.refreshBrowser()
+        runCurrent()
+        coordinator.refreshBrowser()
+        runCurrent()
+
+        assertEquals(listOf(library.id), repository.refreshedLibraryIds)
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
     }
 
     @Test
@@ -1800,6 +1918,7 @@ private class FakeBookOrbitDataSource(
     var serverUrl: String? = "https://books.example.test",
     var sessionState: SessionState = SessionState.Authenticated,
     var sessionStateSequence: List<SessionState> = emptyList(),
+    var sessionStateGate: CompletableDeferred<Unit>? = null,
     var cachedBrowserState: BrowserState? = null,
     var restoreActiveReaderLocalOnlyResult: ReaderState? = null,
     var restoreActiveReaderResult: ReaderState? = null,
@@ -1886,6 +2005,7 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun getSessionState(): SessionState {
         sessionStateRequested = true
+        sessionStateGate?.await()
         val result = sessionStateSequence.getOrNull(sessionStateCalls) ?: sessionState
         sessionStateCalls += 1
         return result

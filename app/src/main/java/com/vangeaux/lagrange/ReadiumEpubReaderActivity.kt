@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +15,7 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +47,7 @@ import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.ColumnCount
+import org.readium.r2.navigator.preferences.FontFamily as ReadiumFontFamily
 import org.readium.r2.navigator.preferences.Theme as ReadiumTheme
 import org.readium.r2.navigator.preferences.ReadingProgression as ReadiumReadingProgression
 import org.readium.r2.shared.ExperimentalReadiumApi
@@ -107,11 +110,23 @@ internal fun readiumReadingProgression(
 }
 
 @OptIn(ExperimentalReadiumApi::class)
+internal fun readiumFontFamily(fontFamily: EpubReaderFontFamily): ReadiumFontFamily? = when (fontFamily) {
+    EpubReaderFontFamily.PUBLISHER_DEFAULT -> null
+    EpubReaderFontFamily.SYSTEM_SERIF -> ReadiumFontFamily.SERIF
+    EpubReaderFontFamily.SYSTEM_SANS_SERIF -> ReadiumFontFamily.SANS_SERIF
+    EpubReaderFontFamily.SYSTEM_MONOSPACE -> ReadiumFontFamily.MONOSPACE
+    EpubReaderFontFamily.ACCESSIBLE_DFA -> ReadiumFontFamily.ACCESSIBLE_DFA
+    EpubReaderFontFamily.OPEN_DYSLEXIC -> ReadiumFontFamily.OPEN_DYSLEXIC
+    EpubReaderFontFamily.CUSTOM -> null
+}
+
+@OptIn(ExperimentalReadiumApi::class)
 internal fun readiumPreferences(
     theme: EpubReaderTheme,
     fontScale: Float,
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
-    layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED
+    layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
+    fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT
 ): EpubPreferences = EpubPreferences(
     backgroundColor = ReadiumColor(theme.backgroundColor),
     textColor = ReadiumColor(cssHexColorInt(theme.foregroundCss)),
@@ -121,6 +136,7 @@ internal fun readiumPreferences(
         EpubReaderTheme.Dark -> ReadiumTheme.DARK
     },
     fontSize = fontScale.coerceIn(0.9f, 1.5f).toDouble(),
+    fontFamily = readiumFontFamily(fontFamily),
     readingProgression = readiumReadingProgression(readingDirection),
     pageMargins = 0.0,
     columnCount = ColumnCount.ONE,
@@ -190,6 +206,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var displayTitle: String
     private var isPreview: Boolean = false
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
+    private var selectedFontFamily by mutableStateOf(EpubReaderFontFamily.PUBLISHER_DEFAULT)
     private var padding by mutableStateOf(EpubPaddingPercentages())
     private var fontScale by mutableStateOf(1f)
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
@@ -199,6 +216,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentChapter by mutableStateOf(0)
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
+    private var currentResourceProgression by mutableStateOf(0f)
     private var currentPercent by mutableStateOf(0f)
     private var currentBookPage by mutableStateOf<Int?>(null)
     private var bookPositionCount by mutableStateOf<Int?>(null)
@@ -209,6 +227,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
     private val appPreferencesStore by lazy { AppPreferencesStore(this) }
     private val locatorStore by lazy { ReadiumEpubLocatorStore(this) }
+    private val customFontStore by lazy { CustomFontStore(this) }
+    private val customFontPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        lifecycleScope.launch {
+            when (val result = customFontStore.import(uri, displayNameForUri(uri))) {
+                is CustomFontImportResult.Imported -> {
+                    customFontStore.remove(readerPreferences.customFont)
+                    val next = readerPreferences.copy(
+                        customFont = result.record,
+                        fontFamily = EpubReaderFontFamily.CUSTOM
+                    )
+                    appPreferencesStore.save(appPreferencesStore.read().withReaderPreferences(libraryId, next))
+                    recreate()
+                }
+                is CustomFontImportResult.Rejected -> showError(result.reason)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -239,6 +275,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 padding = paddingStore.read(readerKey)
             )
         selectedTheme = readerPreferences.theme
+        selectedFontFamily = readerPreferences.fontFamily
         padding = readerPreferences.padding
         fontScale = readerPreferences.fontScale
         readingDirection = readerPreferences.readingDirection
@@ -256,7 +293,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         lifecycleScope.launch {
-            when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, file)) {
+            val readerFile = withContext(Dispatchers.IO) {
+                val custom = readerPreferences.customFont
+                if (readerPreferences.fontFamily == EpubReaderFontFamily.CUSTOM && custom != null) {
+                    val fontFile = customFontStore.fontFile(custom)
+                    if (fontFile.isFile) prepareEpubWithCustomFont(this@ReadiumEpubReaderActivity, file, custom, fontFile) else file
+                } else file
+            }
+            when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, readerFile)) {
                 is ReadiumEpubOpenResult.Error -> showError(result.message)
                 is ReadiumEpubOpenResult.Opened -> {
                     bookPositions = withContext(Dispatchers.IO) { result.publication.positions() }
@@ -334,10 +378,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             "Page ${index + 1}"
                         },
                         currentPosition = currentPage,
+                        currentProgression = currentResourceProgression.takeIf {
+                            epubLayoutMode == ReaderLayoutMode.CONTINUOUS
+                        },
                         onBackToReading = ::hideChrome,
                         onCloseBook = ::finishReader,
                         onOpenSettings = ::showOptions,
                         onPositionSelected = ::goToPage,
+                        onProgressionSelected = ::goToProgression,
                         listPositionKind = "Chapter",
                         listPositionTitles = chapterTitles,
                         currentListPosition = currentChapter,
@@ -372,6 +420,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
+                            onCustomFontRequest = ::chooseCustomFont,
+                            onCustomFontRemove = ::removeCustomFont,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -454,7 +504,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 selectedTheme,
                 fontScale,
                 readingDirection,
-                epubLayoutMode
+                epubLayoutMode,
+                selectedFontFamily
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false)
@@ -551,6 +602,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             chapterIndex = currentChapter,
             chapterCount = openedPublication.readingOrder.size
         )
+        currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
         updateResult()
@@ -583,10 +635,45 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
     }
 
+    private fun goToProgression(progression: Float) {
+        val activeNavigator = navigator ?: return
+        activeNavigator.go(
+            activeNavigator.currentLocator.value.copyWithLocations(
+                progression = normalizedReaderProgression(progression).toDouble()
+            )
+        )
+    }
+
+    private fun chooseCustomFont() {
+        customFontPicker.launch(arrayOf("font/ttf", "font/otf", "application/octet-stream"))
+    }
+
+    private fun displayNameForUri(uri: android.net.Uri): String? = contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0) else null
+    } ?: uri.lastPathSegment?.substringAfterLast('/')
+
+    private fun removeCustomFont() {
+        val old = readerPreferences.customFont
+        val next = readerPreferences.copy(
+            customFont = null,
+            fontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT
+        )
+        customFontStore.remove(old)
+        applyReaderPreferences(next)
+        recreate()
+    }
+
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
         readerPreferences = normalized
         selectedTheme = normalized.theme
+        selectedFontFamily = normalized.fontFamily
         padding = normalized.padding
         fontScale = normalized.fontScale
         readingDirection = normalized.readingDirection
@@ -601,7 +688,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.theme,
                 normalized.fontScale,
                 normalized.readingDirection,
-                normalized.epubLayoutMode
+                normalized.epubLayoutMode,
+                normalized.fontFamily
             )
         )
         val current = appPreferencesStore.read()

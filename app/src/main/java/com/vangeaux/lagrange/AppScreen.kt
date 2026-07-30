@@ -2,6 +2,9 @@ package com.vangeaux.lagrange
 
 sealed interface AppScreen {
     data object Loading : AppScreen
+    data class Startup(
+        val message: String = "Connecting to BookOrbit…"
+    ) : AppScreen
     data class ServerSetup(
         val serverUrl: String = "",
         val message: String? = null

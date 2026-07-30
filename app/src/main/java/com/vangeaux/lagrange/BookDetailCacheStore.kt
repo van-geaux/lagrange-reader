@@ -152,6 +152,7 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     putNullable("addedAtMillis", addedAtMillis)
     putNullable("updatedAtMillis", updatedAtMillis)
     putNullable("lastReadAtMillis", lastReadAtMillis)
+    put("isServerMissing", isServerMissing)
     putNullable("readerPageIndex", readerPageIndex)
     putNullable("readerPageCount", readerPageCount)
     put("audioChapters", audioChapters.toJson())
@@ -209,7 +210,8 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     lastReadAtMillis = optionalLong("lastReadAtMillis"),
     readerPageIndex = optionalInt("readerPageIndex"),
     readerPageCount = optionalInt("readerPageCount"),
-    audioChapters = audiobookChapters("audioChapters")
+    audioChapters = audiobookChapters("audioChapters"),
+    isServerMissing = optBoolean("isServerMissing")
 )
 
 private fun List<BookProviderId>.toProviderIdsJson(): JSONArray = JSONArray(

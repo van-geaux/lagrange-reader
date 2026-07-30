@@ -87,6 +87,50 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onNodeWithTag("reader-options-reading-comic-layout-continuous")
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onAllNodesWithText("Fonts").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Accessibility fonts").assertCountEquals(0)
+    }
+
+    @Test
+    fun epubFontChoicesAreSeparatedAndPreserveOtherReaderSettings() {
+        val profile = mutableStateOf(
+            LibraryReaderPreferences(
+                theme = EpubReaderTheme.Dark,
+                fontScale = 1.3f,
+                readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+                epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
+                padding = EpubPaddingPercentages(11f, 22f, 33f, 44f)
+            )
+        )
+        composeRule.setContent {
+            EpubReaderOptionsBottomSheet(
+                title = "Font test",
+                status = "Chapter 1/1 · Page 1/1",
+                preferences = profile.value,
+                onContinueReading = {},
+                onCloseBook = {},
+                onPreferencesChange = { profile.value = it }
+            )
+        }
+
+        composeRule.onNodeWithText("Fonts").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-reading-font-family-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText("Normal fonts").assertIsDisplayed()
+        composeRule.onNodeWithText("Accessibility fonts").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-reading-font-family-system_sans_serif")
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, profile.value.fontFamily)
+            assertEquals(EpubReaderTheme.Dark, profile.value.theme)
+            assertEquals(1.3f, profile.value.fontScale)
+            assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
+            assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
+            assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
+        }
     }
 
     @Test

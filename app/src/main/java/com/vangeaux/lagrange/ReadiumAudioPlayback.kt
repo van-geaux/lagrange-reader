@@ -211,16 +211,6 @@ internal class AudiobookMediaSessionCallback : MediaSession.Callback {
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
-@OptIn(ExperimentalReadiumApi::class)
-internal fun audioPlaybackPositionMs(navigator: BookOrbitAudioNavigator): Long {
-    val playback = navigator.playback.value
-    val preceding = navigator.readingOrder.items
-        .take(playback.index)
-        .mapNotNull { it.duration }
-        .sumOf { it.inWholeMilliseconds }
-    return preceding + playback.offset.inWholeMilliseconds
-}
-
 @UnstableApi
 internal suspend fun openDirectMedia3Audio(
     application: Application,
@@ -335,35 +325,6 @@ private suspend fun awaitMedia3Ready(player: Player): PlaybackException? {
             player.removeListener(listener)
         }
     }
-}
-
-@OptIn(ExperimentalReadiumApi::class)
-internal fun audioPlaybackPercent(navigator: BookOrbitAudioNavigator): Float? {
-    val duration = navigator.readingOrder.duration?.inWholeMilliseconds?.takeIf { it > 0L }
-        ?: return null
-    return ((audioPlaybackPositionMs(navigator).toDouble() / duration.toDouble()) * 100.0)
-        .coerceIn(0.0, 100.0)
-        .toFloat()
-}
-
-@OptIn(ExperimentalReadiumApi::class)
-internal fun seekAudioTo(navigator: BookOrbitAudioNavigator, absolutePositionMs: Long) {
-    val readingOrder = navigator.readingOrder.items
-    if (readingOrder.isEmpty()) return
-
-    val totalDurationMs = navigator.readingOrder.duration?.inWholeMilliseconds
-    val targetMs = absolutePositionMs
-        .coerceAtLeast(0L)
-        .let { position -> totalDurationMs?.let { position.coerceAtMost(it) } ?: position }
-    var precedingMs = 0L
-    var targetIndex = 0
-    while (targetIndex < readingOrder.lastIndex) {
-        val itemDurationMs = readingOrder[targetIndex].duration?.inWholeMilliseconds ?: 0L
-        if (targetMs < precedingMs + itemDurationMs) break
-        precedingMs += itemDurationMs
-        targetIndex += 1
-    }
-    navigator.skipTo(targetIndex, (targetMs - precedingMs).coerceAtLeast(0L).milliseconds)
 }
 
 internal data class AudioBookDetailRequest(

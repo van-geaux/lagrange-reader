@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Windows machine
+- Windows, macOS, or Linux machine
 - JDK 17
 - Android SDK command-line tools
 - Android SDK Platform 35
@@ -13,7 +13,11 @@
 
 From the project root:
 
-```powershell
+```text
+# macOS/Linux
+./gradlew assembleDebug
+
+# Windows PowerShell
 .\gradlew.bat assembleDebug
 ```
 

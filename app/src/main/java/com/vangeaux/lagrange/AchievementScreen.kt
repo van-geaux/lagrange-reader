@@ -56,6 +56,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
@@ -70,39 +72,70 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun AchievementsScreen(
     loader: suspend () -> AchievementCatalogue,
     modifier: Modifier = Modifier
 ) {
     var reloadKey by remember { mutableIntStateOf(0) }
-    val catalogue by produceState<AchievementCatalogue?>(initialValue = null, reloadKey) {
-        value = loader()
+    var isRefreshing by remember { mutableStateOf(false) }
+    var lastSuccessful by remember { mutableStateOf<AchievementCatalogue?>(null) }
+    val catalogue by produceState<AchievementCatalogue?>(initialValue = lastSuccessful, reloadKey) {
+        val previous = value
+        try {
+            val result = loader()
+            if (result.status == AchievementCatalogueStatus.AVAILABLE) lastSuccessful = result
+            value = if (result.status != AchievementCatalogueStatus.AVAILABLE &&
+                previous?.status == AchievementCatalogueStatus.AVAILABLE
+            ) {
+                previous
+            } else {
+                result
+            }
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing) {
+            isRefreshing = true
+            reloadKey += 1
+        }
     }
 
-    when (val loaded = catalogue) {
-        null -> AchievementCenteredState(modifier = modifier) {
-            CircularProgressIndicator()
-            Text("Loading achievements…")
-        }
-        else -> when (loaded.status) {
-            AchievementCatalogueStatus.UNSUPPORTED -> AchievementCenteredState(modifier = modifier) {
-                Icon(Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(48.dp))
-                Text("Achievements aren't available on this server version.")
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("achievements_pull_to_refresh")
+    ) {
+        when (val loaded = catalogue) {
+            null -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
+                CircularProgressIndicator()
+                Text("Loading achievements…")
             }
-            AchievementCatalogueStatus.ERROR -> AchievementCenteredState(modifier = modifier) {
-                Text("Achievements couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { reloadKey += 1 }) { Text("Try again") }
+            else -> when (loaded.status) {
+                AchievementCatalogueStatus.UNSUPPORTED -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
+                    Icon(Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(48.dp))
+                    Text("Achievements aren't available on this server version.")
+                }
+                AchievementCatalogueStatus.ERROR -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
+                    Text("Achievements couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = onRefresh) { Text("Try again") }
+                }
+                AchievementCatalogueStatus.AVAILABLE -> AchievementCatalogueGrid(
+                    catalogue = loaded,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
-            AchievementCatalogueStatus.AVAILABLE -> AchievementCatalogueGrid(
-                catalogue = loaded,
-                modifier = modifier
-            )
         }
     }
 }

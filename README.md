@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.4.0](https://img.shields.io/badge/version-1.4.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.0)
+[![Version 1.4.1](https://img.shields.io/badge/version-1.4.1-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.1)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -53,7 +53,7 @@ The following screenshots show the main reading and library experience. More scr
 
 - **Offline-first library:** browse cached books and reopen downloaded EPUB, PDF, CBZ, and supported audiobook files without a connection.
 - **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
-- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, and keep-awake mode.
+- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, and per-library font selection through grouped normal/accessibility menus, plus one imported custom `.ttf`/`.otf` font.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
 - **Audiobook playback:** compact player with seeking, chapter selection, playback speed, resume, and read-along support.
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.
@@ -71,6 +71,19 @@ The following screenshots show the main reading and library experience. More scr
 | Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. |
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
+
+## Sync accuracy by format
+
+| Format | What syncs | Accuracy notes |
+| --- | --- | --- |
+| EPUB / KEPUB | Overall `percentage`, plus a one-based chapter/page fallback | Server `percentage` is generally an accurate overall-progress signal, but the exact in-chapter/on-screen location is approximate since exact Readium `Locator`/CFI is not uploaded. Same-device resume from the local Readium `Locator` is usually exact. |
+| PDF | Page-index progress | Synchronizes the current page index; subject to queue/throttle and network delay, so it does not guarantee pixel- or viewport-exact cross-device resume. |
+| CBZ | Page-index progress | Same page-index synchronization and delay characteristics as PDF. |
+| CBR / CB7 | Page-index progress | Same page-index synchronization and delay characteristics as PDF; offline reading uses client-side extraction into a cached CBZ. |
+| Audiobooks | Periodic position/percentage snapshots | Position is sampled locally and queued/throttled before upload, so server-side progress reflects a periodic snapshot rather than an exact wall-clock playback timestamp. |
+| Unsupported formats (MOBI, AZW, AZW3, FB2) | Nothing | No reader or progress sync is available for these formats. |
+
+Progress uploads are queued and throttled rather than sent immediately, and can be delayed by connectivity; a clean reader/player close attempts a best-effort flush of the pending queue but is not guaranteed to complete before the app fully closes offline.
 
 ## Privacy, telemetry, and data
 
@@ -169,7 +182,7 @@ Lagrange Reader's interface and interaction ideas were informed by the clarity a
 
 ## Relationship with BookOrbit
 
-I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first, roughly another two to three weeks of real world use, before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
+I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to distribute or promote this client, and have not received a response yet. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
 ## License and acknowledgements
 

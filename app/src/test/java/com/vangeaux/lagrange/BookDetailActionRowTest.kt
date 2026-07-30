@@ -58,6 +58,19 @@ class BookDetailActionRowTest {
     }
 
     @Test
+    fun serverMissingBookHasNoFileActionsButCanCancelAnExistingTransfer() {
+        val missing = state(isDownloaded = false, isServerMissing = true)
+        assertNull(missing.inlineTransfer)
+        assertNull(missing.overflowTransferLabel)
+        assertFalse(missing.showDeleteLocal)
+
+        val active = state(isDownloaded = true, isDownloading = true, isServerMissing = true)
+        assertEquals(BookDetailInlineTransfer.CANCEL_DOWNLOAD, active.inlineTransfer)
+        assertNull(active.overflowTransferLabel)
+        assertTrue(active.showDeleteLocal)
+    }
+
+    @Test
     fun wideNonlocalRowKeepsStatusInlineWithoutMore() {
         val layout = layout(
             availableWidth = 400f,
@@ -150,13 +163,15 @@ class BookDetailActionRowTest {
         isDownloading: Boolean = false,
         downloadFailed: Boolean = false,
         hasDownloadUpdate: Boolean = false,
-        isOfflineSnapshot: Boolean = false
+        isOfflineSnapshot: Boolean = false,
+        isServerMissing: Boolean = false
     ) = bookDetailActionState(
         isDownloaded = isDownloaded,
         isDownloading = isDownloading,
         downloadFailed = downloadFailed,
         hasDownloadUpdate = hasDownloadUpdate,
-        isOfflineSnapshot = isOfflineSnapshot
+        isOfflineSnapshot = isOfflineSnapshot,
+        isServerMissing = isServerMissing
     )
 
     private fun layout(

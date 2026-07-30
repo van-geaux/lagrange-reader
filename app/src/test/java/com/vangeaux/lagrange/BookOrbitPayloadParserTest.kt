@@ -144,6 +144,40 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks preserves server missing resource state separately from reading status`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "library-missing",
+            payload = """
+                {
+                  "items": [
+                    {
+                      "id": "book-file-missing",
+                      "title": "Unavailable file",
+                      "files": [{"id":"file-missing","format":"epub","role":"primary","status":"missing"}]
+                    },
+                    {
+                      "id": "book-book-missing",
+                      "title": "Unavailable book",
+                      "files": [{"id":"file-book-missing","format":"epub","role":"primary"}],
+                      "state": "missing"
+                    },
+                    {
+                      "id": "book-normal",
+                      "title": "Available book",
+                      "files": [{"id":"file-normal","format":"epub","role":"primary","status":"ready"}]
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(listOf(true, true, false), books.map { it.isServerMissing })
+        assertEquals(null, books[0].readStatus)
+    }
+
+    @Test
     fun `parseBooks routes bare BookOrbit comic file formats`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-manga",

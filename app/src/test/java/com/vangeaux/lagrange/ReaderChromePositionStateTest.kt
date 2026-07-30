@@ -7,6 +7,22 @@ import org.junit.Test
 
 class ReaderChromePositionStateTest {
     @Test
+    fun `continuous progression is clamped to normalized resource range`() {
+        assertEquals(0f, normalizedReaderProgression(null))
+        assertEquals(0f, normalizedReaderProgression(-0.2f))
+        assertEquals(0.42f, normalizedReaderProgression(0.42f))
+        assertEquals(1f, normalizedReaderProgression(1.4f))
+        assertEquals(0f, normalizedReaderProgression(Float.NaN))
+    }
+
+    @Test
+    fun `continuous rail stays enabled with a single reported item`() {
+        assertTrue(readerChromeProgressionState(0f, hasSelectionCallback = true).enabled)
+        assertFalse(readerChromeProgressionState(null, hasSelectionCallback = true).enabled)
+        assertFalse(readerChromeProgressionState(0.5f, hasSelectionCallback = false).enabled)
+    }
+
+    @Test
     fun `position rail targets three quarters of the reader height`() {
         assertEquals(0.75f, READER_POSITION_CONTROL_HEIGHT_FRACTION)
     }

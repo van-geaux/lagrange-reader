@@ -1,5 +1,17 @@
 # Testing
 
+### Behavior-neutral maintenance cleanup — 2026-07-30
+
+Repository-wide source assertions confirm that `buildStreamUrl`, `EpubReaderSystemBars`, `audioPlaybackPositionMs`, `audioPlaybackPercent`, `seekAudioTo`, and the legacy `loadEpubBook` parser/extractor graph are absent. The same assertions confirm that `EpubWebViewAssetSession`, `epubChapterBaseUrl`, and Book Detail's `onMarkAsStatus` route remain, and that the status action still displays `Mark as...`.
+
+Fresh ad-hoc verification forced recompilation and ran 40 focused JVM tests across six suites with zero failures, errors, or skips. The complete JVM gate also passed 375 tests across 56 suites with zero failures, errors, or skips. `lintDebug` passed with zero errors, 41 warnings, and 17 informational findings; main, unit-test, and Android-test Kotlin compilation and debug APK assembly passed. Android instrumentation was compiled but not executed because no device/emulator run was part of the automated gate. The temporary `/tmp/hermes-verify-*` script was removed after use. The user subsequently confirmed the resulting app works fine.
+
+### Issue #12 pull-to-refresh validation
+
+Coordinator regressions use gated catalog work to verify that automatic synchronization keeps the manual indicator flag false, a swipe-triggered refresh keeps it true until reconciliation completes, and a duplicate manual request is ignored. The Compose regression `pullToRefreshIndicatorRemainsVisibleUntilRefreshCompletes` directly holds the shared refresh lifecycle active and checks `pull_to_refresh_indicator` before and after completion. The user confirmed the complete pull-to-refresh flow works on-device, including the corrected Series and Authors outer refresh layers. The refresh surfaces are tagged `book_detail_pull_to_refresh`, `series_catalog_pull_to_refresh`, `authors_catalog_pull_to_refresh`, `local_books_pull_to_refresh`, `statistics_pull_to_refresh`, and `achievements_pull_to_refresh` for UI inspection.
+
+On a connected device, sign in and open each destination. Pull down from the top of the content and verify the indicator appears, the current content remains usable while loading, and the indicator completes after the loader returns. Repeat the gesture while a refresh is active and verify only one request is made. For Book Detail, Series, Authors, and Local books, verify refreshed metadata/catalog/list content replaces stale content when available and remains visible when the server is offline. In Local books, start a download before refreshing and verify the transfer continues; verify refresh does not trigger delete, retry, cancel, or other destructive actions. In Statistics and Achievements, refresh once successfully, then repeat offline and verify the last successful content remains visible. Automated device execution was unavailable in this environment because no adb target was connected, but the user confirmed the complete flow on-device.
+
 ### Current issue #5 gate and manual validation — 2026-07-28
 
 Issue #5 is automated-verified; physical-device validation remains pending because adb had no target. Exact results: `:app:compileDebugKotlin`, `:app:compileDebugUnitTestKotlin`, and `:app:compileDebugAndroidTestKotlin` passed; focused `LibraryNavigationTest` passed 8/8; the full gate passed 348 JVM tests across 55 suites with 0 failures/errors/skips; lint reported 0 errors, 39 warnings, and 14 informational findings; and fresh APKs were generated at `app/build/outputs/apk/debug/Lagrange-debug-202607280819.apk` and `app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`.
@@ -30,6 +42,10 @@ Normal online book opens now synchronize pending progress before detail loading 
 
 `ReadiumEpubReaderRoutingTest` covers floor selection from generated Readium publication positions using normalized total progression, plus the equal-chapter fallback when positions or percentage are unusable. `ReadiumEpubOpenInstrumentedTest` covers the real publication's generated positions and percentage routing. Target-device feedback confirms a newly installed app now resumes an EPUB away from the chapter start at the expected position. Exact CFI interoperability is deferred.
 
+### Continuous EPUB seek-rail regression
+
+`ReaderChromePositionStateTest` covers clamping continuous resource progression to the normalized 0–1 range, including null, NaN, and out-of-range values, plus enablement when continuous mode reports a single item but supplies a progression callback. The affected main and JVM-test Kotlin sources compile, and the focused JVM test passes. On a connected device, open an EPUB, select Continuous layout, open reader chrome, and verify the right-side rail remains enabled, displays a 0–100% resource position, and seeks within the active chapter/resource when dragged. Verify whole-book progress is unchanged, then spot-check paginated EPUB, PDF, and comic rails for their existing page-index behavior. The user confirmed the complete flow works on-device.
+
 Exact BookOrbit reading-state shelves and On Deck correction (July 21): parser coverage retains all eight official wire values and rejects unknown/missing values. `HomeShelfTest` proves Currently reading uses Reading/Rereading, Want to read uses Want to Read, and Recently read uses Read/Skimmed. On Deck is series progression rather than On Hold: a series must contain a Read volume, then contributes its first non-Read volume unless that candidate is Reading/Rereading; standalone and unstarted series are excluded. Active-reader and detail-cache round trips plus Room/coordinator assertions cover persistence and optimistic Mark read/unread behavior. Target-device feedback confirms the restored On Deck works correctly; selected-library, transition, and offline/cold-cache cases remain.
 
 Direct BookOrbit audiobook streaming correction (July 21): BookOrbit's WebUI sends `/api/v1/books/files/{fileId}/serve` directly to an HTML5/Howler audio element; it does not open the remote file as a Readium publication. Lagrange now follows the native equivalent by using the URL as a direct Media3 item with an authenticated HTTP data source. Instrumented MockWebServer coverage verifies an exact requested Range carries Bearer and Cookie headers and that one 401 renews authentication before a single retry. Explicit downloads retain local Readium playback, while the foreground service, compact controls, chapters, speed, resume, progress, Preview isolation, and Close use the common Media3 Player boundary. The full gate passes 280 JVM tests across 48 suites with zero failures/errors/skips plus `lintDebug`, debug APK assembly, and Android-test APK assembly. Target-device feedback confirms ordinary remote audiobook streaming now opens and plays correctly. Seeking, chapters, background/relaunch, Preview isolation, token renewal during playback, and explicit-download offline reopening remain in the extended matrix.
@@ -54,6 +70,12 @@ You can begin manual testing once these conditions are true:
 
 - Run `assembleDebug` and use the timestamped APK reported by the build, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`.
 
+macOS/Linux:
+- `./gradlew assembleDebug` passes
+- `./gradlew testDebugUnitTest` passes
+- `./gradlew assembleDebugAndroidTest` passes if you plan to run instrumentation tests
+
+Windows PowerShell:
 - `.\gradlew.bat assembleDebug` passes
 - `.\gradlew.bat testDebugUnitTest` passes
 - `.\gradlew.bat assembleDebugAndroidTest` passes if you plan to run instrumentation tests
