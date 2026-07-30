@@ -22,3 +22,7 @@ Thumbs.db
 # Local release signing credentials
 release-key.jks
 keystore.properties
+
+# Local agent/session handovers and historical operator archives
+docs/handover.md
+docs/*-archive.md
