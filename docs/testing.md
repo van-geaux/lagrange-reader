@@ -70,6 +70,12 @@ You can begin manual testing once these conditions are true:
 
 - Run `assembleDebug` and use the timestamped APK reported by the build, `app/build/outputs/apk/debug/Lagrange-debug-yyyymmddhhmm.apk`.
 
+macOS/Linux:
+- `./gradlew assembleDebug` passes
+- `./gradlew testDebugUnitTest` passes
+- `./gradlew assembleDebugAndroidTest` passes if you plan to run instrumentation tests
+
+Windows PowerShell:
 - `.\gradlew.bat assembleDebug` passes
 - `.\gradlew.bat testDebugUnitTest` passes
 - `.\gradlew.bat assembleDebugAndroidTest` passes if you plan to run instrumentation tests

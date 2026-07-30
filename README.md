@@ -182,7 +182,7 @@ Lagrange Reader's interface and interaction ideas were informed by the clarity a
 
 ## Relationship with BookOrbit
 
-I have not yet asked the BookOrbit maintainers for permission to distribute or promote this client. I want to test it further first, roughly another two to three weeks of real world use, before starting that conversation. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
+I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to distribute or promote this client, and have not received a response yet. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
 ## License and acknowledgements
 
