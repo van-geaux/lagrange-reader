@@ -6,6 +6,10 @@ This roadmap summarizes the next practical engineering sequence for the project.
 
 The approved maintenance cleanup is complete and user-confirmed working. It removes only repository-proven unreachable URL, system-bar, audio, and legacy EPUB parser/extractor code plus unused private Book Detail parameters. Active EPUB asset loading, reading-status routing, playback, authentication-origin checks, duration formatting semantics, dependencies, resources, and public behavior remain unchanged. Automated compilation, focused and full JVM tests, lint, Android-test source compilation, and debug assembly pass; no further cleanup is planned without a new evidence-based review.
 
+## Current status — 2026-07-30 — 1.4.1 release preparation
+
+Lagrange 1.4.1 is prepared for publication from the current feature branch. The release note is [docs/release-notes/v1.4.1.md](release-notes/v1.4.1.md); the signed GitHub Release and APK remain pending the `v1.4.1` tag workflow. This release contains pull-to-refresh coverage, continuous EPUB active-resource seeking, EPUB font selection including custom fonts, staged startup refinements, server-missing catalog state, and repository-proven unreachable-code cleanup. Local verification passed the main/unit/Android-test Kotlin compilation, full JVM tests, `lintDebug`, debug APK assembly, and Android-test APK assembly.
+
 ## Current status — 2026-07-28 — 1.4.0 released
 
 Lagrange 1.4.0 is released with client-side offline CBR/CB7 extraction, server-hosted sign-in, fixed Series and Authors catalog controls, and the completed download lifecycle state handling. The [release note](release-notes/v1.4.0.md) is published at the [GitHub Release](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.0). The local gate passed 364 JVM tests with zero failures/errors/skips, lint, debug and Android-test compilation/assembly, and signed release assembly; workflow run [30349747058](https://github.com/van-geaux/lagrange-reader/actions/runs/30349747058) published the signed APK successfully.
