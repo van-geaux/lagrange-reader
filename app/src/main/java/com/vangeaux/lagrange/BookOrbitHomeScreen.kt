@@ -108,6 +108,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -1070,8 +1071,6 @@ internal fun NativeLibraryBrowserScreen(
                     onDownload = requestDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
-                    onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
@@ -1580,6 +1579,8 @@ private fun SeriesCatalogScreen(
     var items by remember(query, initialFilter) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
     var total by remember(query, initialFilter) { mutableStateOf(0) }
     var isLoading by remember(query, initialFilter) { mutableStateOf(false) }
+    var isRefreshing by remember(query, initialFilter) { mutableStateOf(false) }
+    var reloadKey by remember(query, initialFilter) { mutableIntStateOf(0) }
     var filter by remember(query, initialFilter) {
         mutableStateOf(initialFilter.copy(query = query.takeIf { it.isNotBlank() }))
     }
@@ -1598,6 +1599,25 @@ private fun SeriesCatalogScreen(
         total = catalog.total ?: catalog.items.size
         isLoading = false
     }
+    LaunchedEffect(reloadKey) {
+        if (reloadKey == 0) return@LaunchedEffect
+        try {
+            val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
+            val catalog = loadCompleteSeriesCatalog { page -> loader(activeFilter, page) }
+            if (catalog.items.isNotEmpty() || items.isEmpty()) {
+                items = catalog.items
+                total = catalog.total ?: catalog.items.size
+            }
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing && !isLoading) {
+            isRefreshing = true
+            reloadKey += 1
+        }
+    }
     val jumpTargets = remember(items, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
             buildSeriesJumpTargets(items, filter.direction)
@@ -1607,7 +1627,14 @@ private fun SeriesCatalogScreen(
     }
 
     val hasJumpRail = jumpTargets.isNotEmpty()
-    Column(modifier = modifier.fillMaxSize()) {
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("series_catalog_pull_to_refresh")
+    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1684,9 +1711,9 @@ private fun SeriesCatalogScreen(
         }
         }
         if (hasJumpRail) {
-            LibraryJumpRail(
-                targets = jumpTargets,
-                direction = filter.direction,
+        LibraryJumpRail(
+            targets = jumpTargets,
+            direction = filter.direction,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -1700,6 +1727,7 @@ private fun SeriesCatalogScreen(
                     }
                 }
             )
+        }
         }
         }
     }
@@ -1895,6 +1923,8 @@ private fun AuthorsCatalogScreen(
     var items by remember(query) { mutableStateOf<List<AuthorSummary>>(emptyList()) }
     var total by remember(query) { mutableStateOf(0) }
     var isLoading by remember(query) { mutableStateOf(false) }
+    var isRefreshing by remember(query) { mutableStateOf(false) }
+    var reloadKey by remember(query) { mutableIntStateOf(0) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val reduceMotion = LocalReduceMotion.current
@@ -1912,12 +1942,41 @@ private fun AuthorsCatalogScreen(
         total = catalog.total ?: catalog.items.size
         isLoading = false
     }
+    LaunchedEffect(reloadKey) {
+        if (reloadKey == 0) return@LaunchedEffect
+        try {
+            val catalog = loadCompleteAuthorCatalog { page ->
+                loader(query.takeIf { it.isNotBlank() }, page)
+            }
+            if (catalog.items.isNotEmpty() || items.isEmpty()) {
+                items = catalog.items.sortedWith(
+                    compareBy<AuthorSummary> { it.name.trim().lowercase() }.thenBy { it.id }
+                )
+                total = catalog.total ?: catalog.items.size
+            }
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing && !isLoading) {
+            isRefreshing = true
+            reloadKey += 1
+        }
+    }
     val jumpTargets = remember(items, isLoading) {
         if (isLoading) emptyList() else buildAuthorJumpTargets(items)
     }
 
     val hasJumpRail = jumpTargets.isNotEmpty()
-    Column(modifier = modifier.fillMaxSize()) {
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("authors_catalog_pull_to_refresh")
+    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Text(
             if (total > 0) "$total authors" else "Browse every accessible author",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1983,9 +2042,9 @@ private fun AuthorsCatalogScreen(
         }
         }
         if (hasJumpRail) {
-            LibraryJumpRail(
-                targets = jumpTargets,
-                direction = SortDirection.ASCENDING,
+        LibraryJumpRail(
+            targets = jumpTargets,
+            direction = SortDirection.ASCENDING,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -1999,6 +2058,7 @@ private fun AuthorsCatalogScreen(
                     }
                 }
             )
+        }
         }
         }
     }
@@ -2087,10 +2147,12 @@ private fun BookPosterCard(
     val fileId = book.fileId
     val isDownloading = fileId != null && fileId in (downloadState?.downloadingFileIds.orEmpty())
     val downloadFailed = fileId != null && fileId in (downloadState?.failedDownloadFileIds.orEmpty())
-    val hasDownloadAction = fileId != null && onDownload != null
+    val hasDownloadAction = fileId != null && onDownload != null && !book.isServerMissing
     val hasActions = enabled && (onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || hasDownloadAction || isDownloading || downloadFailed)
     var showActions by remember(book.id) { mutableStateOf(false) }
     val status = when {
+        book.isLocalOnly -> "Local only"
+        book.isServerMissing -> "Missing on server"
         !enabled -> "Unavailable offline"
         book.isRead && book.isDownloaded -> "Read · Offline"
         book.isRead -> "Read"
@@ -2161,7 +2223,7 @@ private fun BookPosterCard(
                                     DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() })
                                 }
                             } else if (downloadFailed) {
-                                onDownload?.let { retry ->
+                                if (!book.isServerMissing) onDownload?.let { retry ->
                                     DropdownMenuItem(
                                     text = { Text(if (book.isDownloaded) "Update local" else "Retry") },
                                     onClick = { showActions = false; retry() }
@@ -2170,7 +2232,7 @@ private fun BookPosterCard(
                                 onClearFailedDownload?.let { clear ->
                                     DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() })
                                 }
-                            } else if (!book.isDownloaded && downloadState?.isOfflineSnapshot != true) {
+                            } else if (!book.isDownloaded && !book.isServerMissing && downloadState?.isOfflineSnapshot != true) {
                                 onDownload?.let { download ->
                                     DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() })
                                 }
@@ -2776,7 +2838,10 @@ private fun ReaderLayoutModeSettings(
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
-    testTagPrefix: String = "reader-options-reading"
+    testTagPrefix: String = "reader-options-reading",
+    isEpub: Boolean = true,
+    onCustomFontRequest: () -> Unit = {},
+    onCustomFontRemove: () -> Unit = {}
 ) {
     Text("Reading direction", style = MaterialTheme.typography.titleMedium)
     Row(
@@ -2808,6 +2873,90 @@ internal fun ReaderConfigurationControls(
                     "$testTagPrefix-theme-${theme.name.lowercase()}"
                 )
             )
+        }
+    }
+    if (isEpub) {
+        var fontMenuExpanded by remember { mutableStateOf(false) }
+        val selectedFontLabel = value.customFont
+            ?.takeIf { value.fontFamily == EpubReaderFontFamily.CUSTOM }
+            ?.displayName
+            ?: value.fontFamily.displayName
+        Text("Fonts", style = MaterialTheme.typography.titleMedium)
+        Box {
+            OutlinedButton(
+                onClick = { fontMenuExpanded = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTagPrefix-font-family-dropdown")
+            ) {
+                Text(selectedFontLabel, modifier = Modifier.weight(1f))
+                Text("▾")
+            }
+            DropdownMenu(
+                expanded = fontMenuExpanded,
+                onDismissRequest = { fontMenuExpanded = false }
+            ) {
+                Text(
+                    "Normal fonts",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                EPUB_NORMAL_FONT_FAMILY_OPTIONS.forEach { fontFamily ->
+                    DropdownMenuItem(
+                        text = { Text(fontFamily.displayName) },
+                        onClick = {
+                            fontMenuExpanded = false
+                            onPreferencesChange(value.copy(fontFamily = fontFamily))
+                        },
+                        modifier = Modifier.testTag(
+                            "$testTagPrefix-font-family-${fontFamily.name.lowercase()}"
+                        )
+                    )
+                }
+                Text(
+                    "Accessibility fonts",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS.forEach { fontFamily ->
+                    DropdownMenuItem(
+                        text = { Text(fontFamily.displayName) },
+                        onClick = {
+                            fontMenuExpanded = false
+                            onPreferencesChange(value.copy(fontFamily = fontFamily))
+                        },
+                        modifier = Modifier.testTag(
+                            "$testTagPrefix-font-family-${fontFamily.name.lowercase()}"
+                        )
+                    )
+                }
+                Text(
+                    "Custom font",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DropdownMenuItem(
+                    text = { Text("Choose custom font…") },
+                    onClick = {
+                        fontMenuExpanded = false
+                        onCustomFontRequest()
+                    },
+                    modifier = Modifier.testTag("$testTagPrefix-font-family-custom-choose")
+                )
+                if (value.customFont != null) {
+                    DropdownMenuItem(
+                        text = { Text("Remove ${value.customFont.displayName}") },
+                        onClick = {
+                            fontMenuExpanded = false
+                            onCustomFontRemove()
+                        },
+                        modifier = Modifier.testTag("$testTagPrefix-font-family-custom-remove")
+                    )
+                }
+            }
         }
     }
     Row(
@@ -3378,7 +3527,7 @@ private fun ShelfBookCard(
     val isDownloading = fileId != null && fileId in (downloadState?.downloadingFileIds.orEmpty())
     val failed = fileId != null && fileId in (downloadState?.failedDownloadFileIds.orEmpty())
     var showActions by remember(book.id) { mutableStateOf(false) }
-    val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || onDownload != null || isDownloading || failed
+    val hasActions = onRemoveFromCurrentlyReading != null || onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || (onDownload != null && !book.isServerMissing) || isDownloading || failed
     Column(
         modifier = Modifier
             .width(LocalLibraryCardSize.current.shelfWidth)
@@ -3435,9 +3584,9 @@ private fun ShelfBookCard(
                         }
                         if (isDownloading) onCancelDownload?.let { cancel -> DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() }) }
                         else if (failed) {
-                            onDownload?.let { retry -> DropdownMenuItem(text = { Text("Retry") }, onClick = { showActions = false; retry() }) }
+                            if (!book.isServerMissing) onDownload?.let { retry -> DropdownMenuItem(text = { Text("Retry") }, onClick = { showActions = false; retry() }) }
                             onClearFailedDownload?.let { clear -> DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() }) }
-                        } else if (!book.isDownloaded && downloadState?.isOfflineSnapshot != true) onDownload?.let { download -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() }) }
+                        } else if (!book.isDownloaded && !book.isServerMissing && downloadState?.isOfflineSnapshot != true) onDownload?.let { download -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() }) }
                         if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; deleteLocal() }) }
                     }
                 }
@@ -3555,6 +3704,24 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
                     .height(5.dp)
                     .background(MaterialTheme.colorScheme.secondary)
             )
+        }
+        if (book.isServerMissing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xCCFFC107))
+                    .semantics {
+                        contentDescription = "Missing! ${book.title} is missing on the server"
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Missing!",
+                    color = Color(0xFF3E2723),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -3744,7 +3911,7 @@ private fun LibraryContentScreen(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun PullToRefreshLayout(
+internal fun PullToRefreshLayout(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier,
@@ -3752,7 +3919,11 @@ private fun PullToRefreshLayout(
 ) {
     val pullState = rememberPullToRefreshState(enabled = { !isRefreshing })
     LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) pullState.endRefresh()
+        if (isRefreshing) {
+            pullState.startRefresh()
+        } else {
+            pullState.endRefresh()
+        }
     }
     LaunchedEffect(pullState.isRefreshing) {
         if (pullState.isRefreshing && !isRefreshing) onRefresh()
@@ -3761,7 +3932,9 @@ private fun PullToRefreshLayout(
         content()
         PullToRefreshContainer(
             state = pullState,
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .testTag("pull_to_refresh_indicator")
         )
     }
 }
@@ -4421,8 +4594,20 @@ private fun LocalBooksScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit
 ) {
-    val books by produceState<List<BookSummary>?>(initialValue = null, state.localBooksRevision) {
-        value = loader()
+    var isRefreshing by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+    val books by produceState<List<BookSummary>?>(initialValue = null, state.localBooksRevision, reloadKey) {
+        try {
+            value = loader()
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing) {
+            isRefreshing = true
+            reloadKey += 1
+        }
     }
     var filter by remember { mutableStateOf(BookBrowseFilter()) }
     var showFilter by rememberSaveable { mutableStateOf(false) }
@@ -4442,7 +4627,14 @@ private fun LocalBooksScreen(
     ) {
         downloadTransferRows(state)
     }
-    Column(modifier = modifier.fillMaxSize()) {
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("local_books_pull_to_refresh")
+    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         if (transferRows.isNotEmpty()) {
             DownloadTransfersSection(
                 rows = transferRows,
@@ -4480,6 +4672,7 @@ private fun LocalBooksScreen(
                 onFilterClick = { showFilter = true }
             )
         }
+    }
     }
     if (showFilter) {
         BookFilterSheet(
@@ -4605,7 +4798,7 @@ private fun LibraryBookCard(
                             enabled = !isDownloading
                         ) { Text("Delete local") }
                         isDownloading -> OutlinedButton(onClick = { onCancelDownload(book) }) { Text("Cancel") }
-                        fileId != null && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
+                        fileId != null && !book.isServerMissing && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
                             Text(if (failed) "Retry" else "Download")
                         }
                     }
@@ -4647,7 +4840,7 @@ private fun LibraryBookCard(
                                 DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; onClearFailedDownload(book) })
                             }
                             book.isDownloaded -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; onDeleteLocalCopy(book) })
-                            fileId != null && !state.isOfflineSnapshot -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; onDownload(book) })
+                            fileId != null && !book.isServerMissing && !state.isOfflineSnapshot -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; onDownload(book) })
                         }
                     }
                 }
@@ -4676,8 +4869,6 @@ private fun BookDetails(
     onDownload: (BookSummary) -> Unit,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
-    onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onAuthorSelected: (String) -> Unit,
@@ -4696,28 +4887,41 @@ private fun BookDetails(
     } ?: stateBook
     val currentFileId = currentBook.fileId
     val isDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
+    var isRefreshing by remember(currentBook.id) { mutableStateOf(false) }
+    var reloadKey by remember(currentBook.id) { mutableIntStateOf(0) }
     val detail by produceState(
         initialValue = BookDetailInfo(currentBook),
         currentBook.id,
         currentBook.updatedAtMillis,
         currentBook.localPath,
-        isDownloading
+        isDownloading,
+        reloadKey
     ) {
-        value = value.copy(
-            book = value.book.copy(
-                localPath = currentBook.localPath,
-                progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
-                progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
-                progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
-                progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
-                lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
-                readStatus = currentBook.readStatus ?: value.book.readStatus,
-                isRead = currentBook.isRead,
-                updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
-                downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+        try {
+            value = value.copy(
+                book = value.book.copy(
+                    localPath = currentBook.localPath,
+                    progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
+                    progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
+                    progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
+                    progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
+                    lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
+                    readStatus = currentBook.readStatus ?: value.book.readStatus,
+                    isRead = currentBook.isRead,
+                    updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
+                    downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+                )
             )
-        )
-        value = detailLoader(currentBook) ?: value
+            value = detailLoader(currentBook) ?: value
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing && !isDownloading) {
+            isRefreshing = true
+            reloadKey += 1
+        }
     }
     var showCoverViewer by rememberSaveable(book.id) { mutableStateOf(false) }
     var displayedUserRating by remember(book.id) { mutableStateOf<Int?>(null) }
@@ -4839,8 +5043,15 @@ private fun BookDetails(
         )
     }
 
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("book_detail_pull_to_refresh")
+    ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -4960,9 +5171,10 @@ private fun BookDetails(
                 isDownloading = isDownloading,
                 downloadFailed = downloadFailed,
                 hasDownloadUpdate = displayBook.hasDownloadUpdate,
-                isOfflineSnapshot = state.isOfflineSnapshot
+                isOfflineSnapshot = state.isOfflineSnapshot,
+                isServerMissing = displayBook.isServerMissing
             )
-            val statusActionLabel = bookDetailReadingStatusActionLabel(displayBook)
+            val statusActionLabel = bookDetailReadingStatusActionLabel()
             var showActionMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
             var showStatusMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
             val textMeasurer = rememberTextMeasurer()
@@ -5027,7 +5239,7 @@ private fun BookDetails(
                             icon = Icons.Default.PlayArrow,
                             showLabel = true,
                             emphasized = true,
-                            enabled = !isDownloading && !unavailableOffline,
+                            enabled = !isDownloading && !unavailableOffline && !displayBook.isServerMissing,
                             modifier = readModifier,
                             applyDefaultSize = false,
                             onClick = { onRead(displayBook) }
@@ -5036,7 +5248,7 @@ private fun BookDetails(
                             label = "Preview",
                             icon = Icons.Default.Visibility,
                             showLabel = true,
-                            enabled = !isDownloading && !unavailableOffline,
+                            enabled = !isDownloading && !unavailableOffline && !displayBook.isServerMissing,
                             modifier = previewModifier,
                             applyDefaultSize = false,
                             onClick = { onPreview(displayBook) }
@@ -5266,6 +5478,7 @@ private fun BookDetails(
                 }
             }
         }
+    }
     }
     if (showSessionHistory) {
         Dialog(
@@ -5705,7 +5918,7 @@ private fun BookDetailReadingStatusMenu(
     }
 }
 
-internal fun bookDetailReadingStatusActionLabel(book: BookSummary): String = "Mark as..."
+internal fun bookDetailReadingStatusActionLabel(): String = "Mark as..."
 
 internal fun showAudiobookSessionHistoryButton(book: BookSummary): Boolean =
     book.mediaKind == MediaKind.AUDIO &&
@@ -5750,8 +5963,15 @@ internal fun bookDetailActionState(
     isDownloading: Boolean,
     downloadFailed: Boolean,
     hasDownloadUpdate: Boolean,
-    isOfflineSnapshot: Boolean
-): BookDetailActionState = if (!isDownloaded) {
+    isOfflineSnapshot: Boolean,
+    isServerMissing: Boolean = false
+): BookDetailActionState = if (isServerMissing) {
+    BookDetailActionState(
+        inlineTransfer = if (isDownloading) BookDetailInlineTransfer.CANCEL_DOWNLOAD else null,
+        overflowTransferLabel = null,
+        showDeleteLocal = isDownloaded
+    )
+} else if (!isDownloaded) {
     BookDetailActionState(
         inlineTransfer = when {
             isDownloading -> BookDetailInlineTransfer.CANCEL_DOWNLOAD

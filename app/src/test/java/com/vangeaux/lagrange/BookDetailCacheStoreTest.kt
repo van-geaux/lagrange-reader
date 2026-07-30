@@ -24,7 +24,8 @@ class BookDetailCacheStoreTest {
                     mediaKind = MediaKind.EPUB,
                     localPath = File(filesDir, "cached.epub").absolutePath,
                     readStatus = BookReadStatus.WANT_TO_READ,
-                    coverAspectRatio = CoverAspectRatio.SQUARE
+                    coverAspectRatio = CoverAspectRatio.SQUARE,
+                    isServerMissing = true
                 ),
                 synopsis = "Cached synopsis",
                 genres = listOf("Fiction"),
@@ -55,6 +56,7 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.providerIds, restored?.providerIds)
             assertEquals(BookReadStatus.WANT_TO_READ, restored?.book?.readStatus)
             assertEquals(CoverAspectRatio.SQUARE, restored?.book?.coverAspectRatio)
+            assertTrue(restored?.book?.isServerMissing == true)
             first.save("https://example.test", "book-1", "file-1", detail.copy(userRating = null))
             assertNull(BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
             val cacheFile = File(filesDir, "book_detail_cache.json")

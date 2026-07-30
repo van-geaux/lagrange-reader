@@ -152,6 +152,7 @@ Important notes:
 - `authors` is an array, not a scalar string.
 - `readingProgress` is the progress object for ebook progress display.
 - The Android client also tolerantly maps optional series identity/order, read state, and created/updated/last-read timestamps when present. These fields drive native Home shelves but are not assumed to exist on every server payload.
+- A registered file or book may expose availability as `missing` through a boolean or one of the status/state/availability fields. The Android client treats that as server availability metadata, keeps the server-returned book visible, and does not treat it as a reading status.
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
 - Library responses may include `seriesCount` (or an equivalent `totalSeries`/`seriesTotal` field); the Android client uses it for the full Browse header while book pages are loaded incrementally.
 
@@ -313,6 +314,8 @@ Optional fields currently relevant to the client:
 - `pageNumber`
 - `positionSeconds`
 
+For EPUB specifically, `percentage` is the strongest signal BookOrbit exposes: it is format-independent and does not depend on any client-side pagination assumptions. Server `pageNumber` is only a one-based chapter/page fallback derived from BookOrbit's own reading-position bookkeeping, not an exact in-book location. The exact Readium `Locator`/CFI and the client's rendered-page state (margins, font scale, theme, continuous vs. paginated layout) are never uploaded to BookOrbit, so the server cannot reconstruct the precise on-screen position a device last showed. Practically, this means same-device local Readium `Locator` resume (see [Reader implementations](./architecture.md)) is usually more precise than a fresh-install or cross-device hydration from server `percentage`/`pageNumber`, which can only approximate the original position. Progress uploads are also queued and throttled rather than sent immediately, and the best-effort flush on reader close is not guaranteed to reach the server before the app is fully closed offline; see [Background sync](./architecture.md#background-sync) for the queueing/throttle/close-flush behavior.
+
 If this non-audio progress endpoint returns 404 for a queued event, the client treats the recorded file ID as potentially stale. It fetches `GET /api/v1/books/{bookId}`, resolves the current primary file, and retries progress once only when the replacement ID differs. After a successful remapped write it patches the normal `reading`/`read` status. A missing book/current file, unchanged ID, or second 404 is terminal `INVALID`; the event is acknowledged rather than retried forever. Authentication and other transient failures keep their existing retry behavior.
 
 ### Audiobook progress
@@ -340,6 +343,12 @@ DTO shape:
   "positionSeconds": 120.5
 }
 ```
+
+Position sampling and network delivery are decoupled: the player samples the current playback position every 1.5 seconds locally, but that does not mean a write reaches the server every 1.5 seconds. Audio-progress writes are throttled by `ProgressQueuePolicy` so a new value is only queued for sync once roughly 15 seconds of elapsed time or 15 seconds of position movement has passed (or the percentage moves by at least 1 point), plus the usual debounce/backoff and connectivity-gated retry behavior of the sync worker. Active server-side audio progress should therefore be read as an approximate periodic snapshot, not an exact wall-clock timestamp of playback.
+
+On a clean reader close, the app immediately publishes the final known position and attempts one flush of the pending queue in addition to durably persisting it locally, but that flush is best-effort: while offline or on request failure, delivery at close time is not guaranteed and instead relies on the existing connectivity-gated retry queue to deliver it once the device is back online.
+
+When a book is reopened, the client compares its own queued-or-last-synced local progress against the server-hydrated progress and keeps whichever position is further ahead (by page/chapter index, then position, then percentage), rather than unconditionally preferring one source.
 
 ## Sessions and reading attempts (verified — 2026-07-26)
 

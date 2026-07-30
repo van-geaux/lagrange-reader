@@ -19,42 +19,75 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun StatisticsScreen(
     loader: suspend () -> UserStatistics,
     modifier: Modifier = Modifier
 ) {
     var reloadKey by remember { mutableIntStateOf(0) }
-    val statistics by produceState<UserStatistics?>(initialValue = null, reloadKey) {
-        value = loader()
+    var isRefreshing by remember { mutableStateOf(false) }
+    var lastSuccessful by remember { mutableStateOf<UserStatistics?>(null) }
+    val statistics by produceState<UserStatistics?>(initialValue = lastSuccessful, reloadKey) {
+        val previous = value
+        try {
+            val result = loader()
+            if (result.status == UserStatisticsStatus.AVAILABLE) lastSuccessful = result
+            value = if (result.status != UserStatisticsStatus.AVAILABLE &&
+                previous?.status == UserStatisticsStatus.AVAILABLE
+            ) {
+                previous
+            } else {
+                result
+            }
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing) {
+            isRefreshing = true
+            reloadKey += 1
+        }
     }
 
-    when (val loaded = statistics) {
-        null -> StatisticsCenteredState(modifier) {
-            CircularProgressIndicator()
-            Text("Loading statistics…")
-        }
-        else -> when (loaded.status) {
-            UserStatisticsStatus.UNSUPPORTED -> StatisticsCenteredState(modifier) {
-                Icon(Icons.Default.Insights, contentDescription = null)
-                Text("Statistics aren't available on this server version.")
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("statistics_pull_to_refresh")
+    ) {
+        when (val loaded = statistics) {
+            null -> StatisticsCenteredState(Modifier.fillMaxSize()) {
+                CircularProgressIndicator()
+                Text("Loading statistics…")
             }
-            UserStatisticsStatus.ERROR -> StatisticsCenteredState(modifier) {
-                Text("Statistics couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { reloadKey += 1 }) { Text("Try again") }
+            else -> when (loaded.status) {
+                UserStatisticsStatus.UNSUPPORTED -> StatisticsCenteredState(Modifier.fillMaxSize()) {
+                    Icon(Icons.Default.Insights, contentDescription = null)
+                    Text("Statistics aren't available on this server version.")
+                }
+                UserStatisticsStatus.ERROR -> StatisticsCenteredState(Modifier.fillMaxSize()) {
+                    Text("Statistics couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = onRefresh) { Text("Try again") }
+                }
+                UserStatisticsStatus.AVAILABLE -> StatisticsContent(loaded, Modifier.fillMaxSize())
             }
-            UserStatisticsStatus.AVAILABLE -> StatisticsContent(loaded, modifier)
         }
     }
 }

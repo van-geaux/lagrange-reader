@@ -128,9 +128,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
@@ -265,7 +262,7 @@ private fun BookOrbitDestination(
         ) {
             NativeLibraryBrowserScreen(
             state = screen.browserState,
-            onRefresh = coordinator::loadBrowser,
+            onRefresh = coordinator::refreshBrowser,
             onSignIn = coordinator::beginSignIn,
             onSignOut = coordinator::signOut,
             onChangeServer = coordinator::changeServer,
@@ -1114,42 +1111,6 @@ internal fun EpubReaderProgressStatus.accessibilityText(): String =
             "whole-book pages are calculating"
         }
 
-@Suppress("DEPRECATION")
-@Composable
-internal fun EpubReaderSystemBars(theme: EpubReaderTheme) {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = (view.context as? Activity)?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        if (EPUB_READER_SYSTEM_BARS_POLICY.showStatusBar) {
-            controller?.show(WindowInsetsCompat.Type.statusBars())
-        } else {
-            controller?.hide(WindowInsetsCompat.Type.statusBars())
-        }
-        if (EPUB_READER_SYSTEM_BARS_POLICY.showNavigationBar) {
-            controller?.show(WindowInsetsCompat.Type.navigationBars())
-        } else {
-            controller?.hide(WindowInsetsCompat.Type.navigationBars())
-        }
-        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
-    DisposableEffect(view, theme) {
-        val window = (view.context as? Activity)?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        val previousStatusBarColor = window?.statusBarColor
-        val previousLightStatusBars = controller?.isAppearanceLightStatusBars
-        window?.statusBarColor = theme.backgroundColor
-        controller?.isAppearanceLightStatusBars = theme.usesDarkStatusBarIcons()
-        onDispose {
-            previousStatusBarColor?.let { window.statusBarColor = it }
-            previousLightStatusBars?.let { controller.isAppearanceLightStatusBars = it }
-        }
-    }
-}
-
 @Composable
 private fun AudioReader(
     state: ReaderState,
@@ -1666,6 +1627,22 @@ internal fun readerChromePositionState(currentIndex: Int, itemCount: Int): Reade
     )
 }
 
+internal fun normalizedReaderProgression(value: Float?): Float =
+    value?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+
+internal data class ReaderChromeProgressionState(
+    val value: Float,
+    val enabled: Boolean
+)
+
+internal fun readerChromeProgressionState(
+    currentProgression: Float?,
+    hasSelectionCallback: Boolean
+): ReaderChromeProgressionState = ReaderChromeProgressionState(
+    value = normalizedReaderProgression(currentProgression),
+    enabled = currentProgression != null && hasSelectionCallback
+)
+
 internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 3_000L
 internal const val READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP = 28
 internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
@@ -1781,10 +1758,12 @@ internal fun ReaderLightweightChrome(
     positionKind: String,
     positionTitles: List<String>,
     currentPosition: Int,
+    currentProgression: Float? = null,
     onBackToReading: () -> Unit,
     onCloseBook: () -> Unit,
     onOpenSettings: () -> Unit,
     onPositionSelected: (Int) -> Unit,
+    onProgressionSelected: ((Float) -> Unit)? = null,
     listPositionKind: String = positionKind,
     listPositionTitles: List<String> = positionTitles,
     currentListPosition: Int = currentPosition,
@@ -1803,6 +1782,14 @@ internal fun ReaderLightweightChrome(
         readerChromePositionState(secondaryCurrentPosition, secondaryPositionCount)
     }
     var sliderPosition by remember(position.currentIndex) { mutableStateOf(position.currentIndex.toFloat()) }
+    val progressionState = readerChromeProgressionState(
+        currentProgression = currentProgression,
+        hasSelectionCallback = onProgressionSelected != null
+    )
+    var sliderProgression by remember(currentProgression) {
+        mutableStateOf(progressionState.value)
+    }
+    val hasContinuousProgression = progressionState.enabled
     var showPositionList by remember { mutableStateOf(false) }
     val palette = theme.readerOptionsPalette()
     val parentTypography = MaterialTheme.typography
@@ -1897,52 +1884,78 @@ internal fun ReaderLightweightChrome(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(
-                        enabled = position.canGoPrevious,
-                        onClick = { onPositionSelected(position.currentIndex - 1) }
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Previous ${positionKind.lowercase()}"
-                        )
+                    if (!hasContinuousProgression) {
+                        IconButton(
+                            enabled = position.canGoPrevious,
+                            onClick = { onPositionSelected(position.currentIndex - 1) }
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Previous ${positionKind.lowercase()}"
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier.width(64.dp).weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         BoxWithConstraints(contentAlignment = Alignment.Center) {
-                            Slider(
-                                value = sliderPosition,
-                                onValueChange = { sliderPosition = it },
-                                onValueChangeFinished = {
-                                    onPositionSelected(sliderPosition.roundToInt().coerceIn(0, position.itemCount - 1))
-                                },
-                                valueRange = 0f..(position.itemCount - 1).coerceAtLeast(1).toFloat(),
-                                steps = (position.itemCount - 2).coerceAtLeast(0),
-                                enabled = position.itemCount > 1,
-                                modifier = Modifier
-                                    .requiredWidth(maxHeight)
-                                    .rotate(90f)
-                                    .semantics {
-                                        contentDescription = "$positionKind jump bar"
-                                        stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
-                                    }
-                            )
+                            if (hasContinuousProgression) {
+                                Slider(
+                                    value = sliderProgression,
+                                    onValueChange = { sliderProgression = normalizedReaderProgression(it) },
+                                    onValueChangeFinished = {
+                                        onProgressionSelected?.invoke(normalizedReaderProgression(sliderProgression))
+                                    },
+                                    valueRange = 0f..1f,
+                                    modifier = Modifier
+                                        .requiredWidth(maxHeight)
+                                        .rotate(90f)
+                                        .semantics {
+                                            contentDescription = "$positionKind progression jump bar"
+                                            stateDescription = "${(sliderProgression * 100).roundToInt()}%"
+                                        }
+                                )
+                            } else {
+                                Slider(
+                                    value = sliderPosition,
+                                    onValueChange = { sliderPosition = it },
+                                    onValueChangeFinished = {
+                                        onPositionSelected(sliderPosition.roundToInt().coerceIn(0, position.itemCount - 1))
+                                    },
+                                    valueRange = 0f..(position.itemCount - 1).coerceAtLeast(1).toFloat(),
+                                    steps = (position.itemCount - 2).coerceAtLeast(0),
+                                    enabled = position.itemCount > 1,
+                                    modifier = Modifier
+                                        .requiredWidth(maxHeight)
+                                        .rotate(90f)
+                                        .semantics {
+                                            contentDescription = "$positionKind jump bar"
+                                            stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
+                                        }
+                                )
+                            }
                         }
                     }
                     Text(
-                        "${position.currentIndex + 1}/${position.itemCount}",
+                        if (hasContinuousProgression) {
+                            "${(sliderProgression * 100).roundToInt()}%"
+                        } else {
+                            "${position.currentIndex + 1}/${position.itemCount}"
+                        },
                         maxLines = 1,
                         style = MaterialTheme.typography.labelSmall
                     )
-                    IconButton(
-                        enabled = position.canGoNext,
-                        onClick = { onPositionSelected(position.currentIndex + 1) }
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Next ${positionKind.lowercase()}"
-                        )
+                    if (!hasContinuousProgression) {
+                        IconButton(
+                            enabled = position.canGoNext,
+                            onClick = { onPositionSelected(position.currentIndex + 1) }
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Next ${positionKind.lowercase()}"
+                            )
+                        }
                     }
                     if (
                         secondaryPositionKind != null &&
@@ -2139,6 +2152,8 @@ internal fun EpubReaderOptionsBottomSheet(
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    onCustomFontRequest: () -> Unit = {},
+    onCustomFontRemove: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val parentTypography = MaterialTheme.typography
@@ -2248,7 +2263,10 @@ internal fun EpubReaderOptionsBottomSheet(
                 Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
                 ReaderConfigurationControls(
                     value = preferences,
-                    onPreferencesChange = onPreferencesChange
+                    onPreferencesChange = onPreferencesChange,
+                    isEpub = true,
+                    onCustomFontRequest = onCustomFontRequest,
+                    onCustomFontRemove = onCustomFontRemove
                 )
             }
         }
@@ -2421,7 +2439,8 @@ internal fun ComicReaderOptionsBottomSheet(
                 Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
                 ReaderConfigurationControls(
                     value = preferences,
-                    onPreferencesChange = onPreferencesChange
+                    onPreferencesChange = onPreferencesChange,
+                    isEpub = false
                 )
             }
         }

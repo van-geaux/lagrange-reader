@@ -12,12 +12,36 @@ enum class ReaderLayoutMode(val displayName: String) {
     CONTINUOUS("Continuous")
 }
 
+enum class EpubReaderFontFamily(val displayName: String) {
+    PUBLISHER_DEFAULT("Publisher default"),
+    SYSTEM_SERIF("System serif"),
+    SYSTEM_SANS_SERIF("System sans-serif"),
+    SYSTEM_MONOSPACE("System monospace"),
+    ACCESSIBLE_DFA("AccessibleDFA"),
+    OPEN_DYSLEXIC("OpenDyslexic"),
+    CUSTOM("Custom font")
+}
+
+internal val EPUB_NORMAL_FONT_FAMILY_OPTIONS = listOf(
+    EpubReaderFontFamily.PUBLISHER_DEFAULT,
+    EpubReaderFontFamily.SYSTEM_SERIF,
+    EpubReaderFontFamily.SYSTEM_SANS_SERIF,
+    EpubReaderFontFamily.SYSTEM_MONOSPACE
+)
+
+internal val EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS = listOf(
+    EpubReaderFontFamily.ACCESSIBLE_DFA,
+    EpubReaderFontFamily.OPEN_DYSLEXIC
+)
+
 internal const val DEFAULT_READER_PAGE_GAP_DP = 16f
 internal const val MAX_READER_PAGE_GAP_DP = 48f
 
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
+    val fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
+    val customFont: CustomFontRecord? = null,
     val fontScale: Float = 1f,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -67,6 +91,20 @@ internal fun readerLayoutModeFromStorage(
     else -> default
 }
 
+internal fun epubReaderFontFamilyStorageValue(value: EpubReaderFontFamily): String =
+    value.name.lowercase()
+
+internal fun epubReaderFontFamilyFromStorage(value: String?): EpubReaderFontFamily =
+    when (value?.trim()?.lowercase()) {
+        "system_serif" -> EpubReaderFontFamily.SYSTEM_SERIF
+        "system_sans_serif" -> EpubReaderFontFamily.SYSTEM_SANS_SERIF
+        "system_monospace" -> EpubReaderFontFamily.SYSTEM_MONOSPACE
+        "accessible_dfa" -> EpubReaderFontFamily.ACCESSIBLE_DFA
+        "open_dyslexic" -> EpubReaderFontFamily.OPEN_DYSLEXIC
+        "custom" -> EpubReaderFontFamily.CUSTOM
+        else -> EpubReaderFontFamily.PUBLISHER_DEFAULT
+    }
+
 internal fun libraryReaderPreferencesStorageValue(
     values: Map<String, LibraryReaderPreferences>
 ): String = JSONObject().apply {
@@ -76,6 +114,8 @@ internal fun libraryReaderPreferencesStorageValue(
         put(libraryId, JSONObject().apply {
             put("readingDirection", libraryReadingDirectionStorageValue(value.readingDirection))
             put("theme", epubReaderThemeStorageValue(value.theme))
+            put("fontFamily", epubReaderFontFamilyStorageValue(value.fontFamily))
+            value.customFont?.let { put("customFont", customFontStorageValue(it)) }
             put("fontScale", value.fontScale.toDouble())
             put("top", value.padding.top.toDouble())
             put("bottom", value.padding.bottom.toDouble())
@@ -103,6 +143,8 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         theme = epubReaderThemeFromStorage(item.optString("theme")),
+                        fontFamily = epubReaderFontFamilyFromStorage(item.optString("fontFamily")),
+                        customFont = customFontFromStorage(item.optString("customFont")),
                         fontScale = item.optDouble("fontScale", 1.0).toFloat(),
                         padding = EpubPaddingPercentages(
                             top = item.optDouble("top", EPUB_DEFAULT_TOP_PADDING_PERCENT.toDouble()).toFloat(),

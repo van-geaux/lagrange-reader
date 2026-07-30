@@ -158,6 +158,7 @@ class AppCoordinator(
     private var loginSubmitInFlight = false
     private var serverSignInVerificationJob: Job? = null
     private var catalogLoadJob: Job? = null
+    private var manualBrowserRefreshInFlight = false
     private val activeDownloads = mutableMapOf<String, Job>()
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -244,7 +245,7 @@ class AppCoordinator(
             if (startupCache != null) {
                 showBrowser(
                     startupCache.copy(
-                        isRefreshing = true,
+                        isRefreshing = false,
                         isLoadingLibraries = false,
                         isLoadingBooks = false,
                         isCatalogSyncing = false,
@@ -540,6 +541,16 @@ class AppCoordinator(
     }
 
     fun loadBrowser() {
+        loadBrowser(userInitiated = false)
+    }
+
+    fun refreshBrowser() {
+        if (manualBrowserRefreshInFlight) return
+        manualBrowserRefreshInFlight = true
+        loadBrowser(userInitiated = true)
+    }
+
+    private fun loadBrowser(userInitiated: Boolean) {
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
@@ -556,7 +567,7 @@ class AppCoordinator(
             previous?.let { previousState ->
                 showBrowser(
                     previousState.copy(
-                        isRefreshing = true,
+                        isRefreshing = userInitiated,
                         isLoadingLibraries = true,
                         isLoadingBooks = true,
                         isOfflineSnapshot = false,
@@ -608,7 +619,7 @@ class AppCoordinator(
                         page = firstPage,
                         homeBooks = homeBooks,
                         pendingProgressCount = pendingProgressCount,
-                        isRefreshing = true,
+                        isRefreshing = userInitiated,
                         isCatalogSyncing = true
                     )
                 )
@@ -632,7 +643,7 @@ class AppCoordinator(
                         page = refreshedCatalog,
                         homeBooks = homeBooks,
                         pendingProgressCount = pendingProgressCount,
-                        isRefreshing = libraries.size > 1,
+                        isRefreshing = userInitiated && libraries.size > 1,
                         isCatalogSyncing = false
                     )
                 )
@@ -733,6 +744,11 @@ class AppCoordinator(
                         )
                     )
                 }
+            }
+        }
+        if (userInitiated) {
+            catalogLoadJob?.invokeOnCompletion {
+                manualBrowserRefreshInFlight = false
             }
         }
     }

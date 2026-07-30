@@ -8,14 +8,7 @@ class BookDetailReadingStatusActionTest {
     fun `book detail status action opens the complete ordered status list`() {
         assertEquals(
             "Mark as...",
-            bookDetailReadingStatusActionLabel(
-                BookSummary(
-                    libraryId = "library",
-                    id = "book",
-                    fileId = "book-file",
-                    title = "Book"
-                )
-            )
+            bookDetailReadingStatusActionLabel()
         )
         assertEquals(
             listOf(

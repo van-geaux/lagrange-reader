@@ -2,9 +2,15 @@ package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
@@ -809,6 +815,37 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("home_pull_to_refresh").performTouchInput { swipeDown() }
 
         composeRule.waitUntil { dataSource.loadLibrariesCalls == 1 }
+    }
+
+    @Test
+    fun pullToRefreshIndicatorRemainsVisibleUntilRefreshCompletes() {
+        val isRefreshing = mutableStateOf(false)
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                PullToRefreshLayout(
+                    isRefreshing = isRefreshing.value,
+                    onRefresh = { isRefreshing.value = true },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("test_pull_to_refresh")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {}
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("test_pull_to_refresh").performTouchInput { swipeDown() }
+
+        composeRule.waitUntil { isRefreshing.value }
+        composeRule.onNodeWithTag("pull_to_refresh_indicator").assertIsDisplayed()
+
+        composeRule.runOnIdle { isRefreshing.value = false }
+        composeRule.onNodeWithTag("pull_to_refresh_indicator").assertIsNotDisplayed()
     }
 
     @Test

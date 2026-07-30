@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -22,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.preferences.ColumnCount
+import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Publication
@@ -82,6 +84,50 @@ class ReadiumEpubOpenInstrumentedTest {
             ).scroll
         )
         assertEquals(EpubReaderTheme.Dark.backgroundColor, preferences.backgroundColor?.int)
+        assertEquals(null, preferences.fontFamily)
+        assertEquals(
+            FontFamily.SANS_SERIF,
+            readiumPreferences(
+                EpubReaderTheme.Dark,
+                fontScale = 1.2f,
+                fontFamily = EpubReaderFontFamily.SYSTEM_SANS_SERIF
+            ).fontFamily
+        )
+        assertEquals(
+            FontFamily.OPEN_DYSLEXIC,
+            readiumPreferences(
+                EpubReaderTheme.Dark,
+                fontScale = 1.2f,
+                fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC
+            ).fontFamily
+        )
+    }
+
+    @Test
+    fun injectsCustomFontIntoAReaderCopyWithoutChangingTheSource() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val source = File(context.cacheDir, "custom-font-source.epub")
+        val font = File(context.cacheDir, "custom-font-source.ttf")
+        writeMinimalCustomFontEpub(source)
+        font.writeBytes(byteArrayOf(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        val record = CustomFontRecord("custom-font-source.ttf", "Test font", "bookorbit-custom-test")
+
+        try {
+            val prepared = prepareEpubWithCustomFont(context, source, record, font)
+            assertTrue(prepared.isFile)
+            assertTrue(source.readBytes().isNotEmpty())
+            ZipFile(prepared).use { zip ->
+                assertTrue(zip.getEntry("bookorbit-fonts/${record.fileName}") != null)
+                val chapter = zip.getInputStream(zip.getEntry("OEBPS/Text/chapter.xhtml")).bufferedReader().readText()
+                assertTrue(chapter.contains("bookorbit-custom-font"))
+                assertTrue(chapter.contains("../../bookorbit-fonts/${record.fileName}"))
+                val packageXml = zip.getInputStream(zip.getEntry("OEBPS/content.opf")).bufferedReader().readText()
+                assertTrue(packageXml.contains("bookorbit-custom-font"))
+            }
+        } finally {
+            source.delete()
+            font.delete()
+        }
     }
 
     @Test
@@ -316,5 +362,24 @@ class ReadiumEpubOpenInstrumentedTest {
         putNextEntry(ZipEntry(name))
         write(bytes)
         closeEntry()
+    }
+
+    private fun writeMinimalCustomFontEpub(file: File) {
+        ZipOutputStream(file.outputStream()).use { zip ->
+            zip.writeStored("mimetype", "application/epub+zip".toByteArray())
+            zip.writeDeflated("META-INF/container.xml", """
+                <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                  <rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>
+                </container>
+            """.trimIndent().toByteArray())
+            zip.writeDeflated("OEBPS/content.opf", """
+                <package xmlns="http://www.idpf.org/2007/opf"><manifest>
+                  <item id="chapter" href="Text/chapter.xhtml" media-type="application/xhtml+xml"/>
+                </manifest><spine><itemref idref="chapter"/></spine></package>
+            """.trimIndent().toByteArray())
+            zip.writeDeflated("OEBPS/Text/chapter.xhtml", """
+                <html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>Test</body></html>
+            """.trimIndent().toByteArray())
+        }
     }
 }

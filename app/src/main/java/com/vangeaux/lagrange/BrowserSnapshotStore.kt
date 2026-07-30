@@ -195,6 +195,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("addedAtMillis", book.addedAtMillis)
                                     put("updatedAtMillis", book.updatedAtMillis)
                                     put("lastReadAtMillis", book.lastReadAtMillis)
+                                    put("isServerMissing", book.isServerMissing)
                                 }
                             )
                         }
@@ -255,7 +256,8 @@ class BrowserSnapshotStore(context: Context) {
                         isRead = item.optBoolean("isRead"),
                         addedAtMillis = item.optLongOrNull("addedAtMillis"),
                         updatedAtMillis = item.optLongOrNull("updatedAtMillis"),
-                        lastReadAtMillis = item.optLongOrNull("lastReadAtMillis")
+                        lastReadAtMillis = item.optLongOrNull("lastReadAtMillis"),
+                        isServerMissing = item.optBoolean("isServerMissing")
                     )
                 )
             }

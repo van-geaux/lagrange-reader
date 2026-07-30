@@ -1,10 +1,12 @@
 package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.readium.r2.navigator.preferences.Axis
 import org.readium.r2.navigator.preferences.ReadingProgression
+import java.io.File
 
 class LibraryReaderPreferencesTest {
     @Test
@@ -12,6 +14,7 @@ class LibraryReaderPreferencesTest {
         val novels = LibraryReaderPreferences(
             readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
             theme = EpubReaderTheme.Light,
+            fontFamily = EpubReaderFontFamily.SYSTEM_SANS_SERIF,
             fontScale = 1.2f,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
@@ -70,6 +73,47 @@ class LibraryReaderPreferencesTest {
         assertEquals(ReaderLayoutMode.PAGINATED, decoded.comicLayoutMode)
         assertEquals(DEFAULT_READER_PAGE_GAP_DP, decoded.pdfPageGapDp)
         assertEquals(DEFAULT_READER_PAGE_GAP_DP, decoded.comicPageGapDp)
+        assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
+    }
+
+    @Test
+    fun `invalid font family storage falls back to publisher default`() {
+        val decoded = libraryReaderPreferencesFromStorage(
+            """{"library":{"fontFamily":"not-a-font"}}"""
+        ).getValue("library")
+
+        assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
+    }
+
+    @Test
+    fun `custom font metadata is stored per library`() {
+        val custom = CustomFontRecord("custom-font.ttf", "Atkinson.ttf", "bookorbit-custom-atkinson")
+        val decoded = libraryReaderPreferencesFromStorage(
+            libraryReaderPreferencesStorageValue(
+                mapOf("library" to LibraryReaderPreferences(
+                    fontFamily = EpubReaderFontFamily.CUSTOM,
+                    customFont = custom
+                ))
+            )
+        ).getValue("library")
+
+        assertEquals(EpubReaderFontFamily.CUSTOM, decoded.fontFamily)
+        assertEquals(custom, decoded.customFont)
+    }
+
+    @Test
+    fun `custom font validation accepts font signatures and rejects arbitrary files`() {
+        val font = File.createTempFile("font", ".ttf")
+        val invalid = File.createTempFile("font", ".ttf")
+        try {
+            font.writeBytes(byteArrayOf(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+            invalid.writeText("not a font")
+            assertTrue(isValidFontFile(font))
+            assertFalse(isValidFontFile(invalid))
+        } finally {
+            font.delete()
+            invalid.delete()
+        }
     }
 
     @Test

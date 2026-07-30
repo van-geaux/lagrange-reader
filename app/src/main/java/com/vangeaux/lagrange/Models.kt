@@ -104,9 +104,11 @@ data class BookSummary(
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
     val audioChapters: List<AudiobookChapter> = emptyList(),
-    val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT
+    val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT,
+    val isServerMissing: Boolean = false
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
+    val isLocalOnly: Boolean get() = libraryId.isBlank()
     val hasDownloadUpdate: Boolean
         get() = isDownloaded && updatedAtMillis != null &&
             (downloadedSourceUpdatedAtMillis == null || updatedAtMillis > downloadedSourceUpdatedAtMillis)

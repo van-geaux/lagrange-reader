@@ -2,6 +2,14 @@
 
 Use this as the working checklist for `Lagrange Reader`. Items already completed are checked.
 
+## Behavior-neutral maintenance cleanup — 2026-07-30
+
+- [x] Remove repository-proven unreachable helpers for the unused stream URL, legacy EPUB system-bar composable, and obsolete Readium audio position/seek calculations.
+- [x] Remove only the unused legacy EPUB parser/extractor graph while preserving the active `EpubWebViewAssetSession` and `epubChapterBaseUrl` reader-resource path.
+- [x] Remove unused private Book Detail callback parameters and the unused status-label argument without changing the `onMarkAsStatus` route or the visible `Mark as...` contract.
+- [x] Keep the non-identical duration formatters, authentication-origin checks, dependencies, resources, and explanatory comments unchanged to avoid behavioral or security drift.
+- [x] Pass fresh focused and full automated gates, compile Android-test sources, assemble a debug APK, and receive user confirmation that the resulting app works fine.
+
 ## Current tracked feature — download lifecycle and Local books status — 2026-07-28
 
 - [x] Add `Download local`, `Cancel`, `Retry`, `Clear`, and `Delete local` to applicable book-card context menus while retaining inline controls.
@@ -13,12 +21,38 @@ Use this as the working checklist for `Lagrange Reader`. Items already completed
 - [x] Compile main, unit-test, and Android-test Kotlin sources and pass focused coordinator tests.
 - [ ] Validate the full download lifecycle on a connected physical device or emulator; no adb target is currently available.
 
+- [x] Implemented and user-confirmed on-device — issue [#12](https://github.com/van-geaux/lagrange-reader/issues/12): add pull-down/swipe-to-refresh to Book Detail, Series, Authors, Local books, Statistics, and Achievements. Main/unit/Android-test compilation, unit tests, lint, and APK assembly pass.
+  - Book Detail: pull down to refresh the current book metadata and user-facing detail state.
+  - Series: pull down to refresh the series catalog and its visible book data.
+  - Authors: pull down to refresh the authors catalog and its visible book data.
+  - Local books: pull down to refresh the local-book listing and download-derived state.
+  - Statistics: pull down to refresh the statistics data shown on the screen.
+  - Achievements: pull down to refresh the user's achievements data.
+  - Shared behavior: automatic/background synchronization remains silent; an explicit swipe shows the indicator for the complete refresh lifecycle, prevents duplicate gestures, preserves cached data when refresh fails or the device is offline, and does not interrupt active downloads or destructive actions. Series and Authors use the same outer refresh layer as Home and Library so the indicator background cannot overflow into their headers.
+
+- [x] Implemented — issue [#13](https://github.com/van-geaux/lagrange-reader/issues/13): keep the continuous EPUB right-side seek rail usable for active-chapter percentage navigation.
+  - Drive the rail from the active chapter/resource's normalized Readium progression (0–100%) instead of disabling it when continuous mode reports a single page/item, and seek directly by that normalized progression.
+  - Whole-book progress remains unchanged; paginated EPUB, PDF, and comics retain current page-index rail behavior.
+  - Continuous EPUB uses a normalized 0–100% active-resource slider and seeks by the current Readium locator's resource progression; whole-book progress and non-continuous page-index rails are unchanged.
+  - Regression coverage verifies normalized progression clamping and continuous-rail enablement; focused compilation and JVM tests pass. The user confirmed the complete flow works on-device.
+
+- [x] Implemented — issue [#14](https://github.com/van-geaux/lagrange-reader/issues/14): add user-selectable reader fonts.
+  - EPUB-only font controls use a grouped dropdown with Publisher default, System serif, System sans-serif, and System monospace, plus a separate Accessibility fonts section with AccessibleDFA and OpenDyslexic.
+  - The selected font persists per library, alongside existing size, theme, margin, direction, layout, and resume behavior; users can import one active `.ttf`/`.otf` custom font with Replace and Remove actions.
+  - Publisher default preserves the book's own CSS as a fallback; explicit built-in choices are mapped through Readium's typeface preferences, while custom fonts are applied only to a cached rewritten reader copy. Focused preference, mapping, custom-font validation, settings-preservation, and UI regression coverage is added; the user confirmed the complete reader-font flow works on-device.
+
 - [x] Research and initial implementation — issue [#15](https://github.com/van-geaux/lagrange-reader/issues/15): make app-open loading faster and less intrusive.
   - Trace and measure startup/bootstrap work that owns the loading spinner, including cached UI, authentication, progress sync, catalog loading, offline fallback, and active-reader restoration.
   - Compare staged/progressive loading, cached-first presentation, skeleton/branded indicators, and other alternatives; the initial implementation uses a staged branded startup state with phase-specific messages, releases the platform splash before session validation when no cache is available, and hides the automatic Home refresh indicator during startup reconciliation while preserving user-initiated pull-to-refresh feedback.
   - JVM coordinator coverage passes; physical startup timing/UX validation and any follow-up tuning remain open.
 
-## Priority 0 — Server-progress hydration — 2026-07-24
+- [x] Implemented — issue [#16](https://github.com/van-geaux/lagrange-reader/issues/16): show server-missing books with a yellow `Missing!` cover overlay.
+  - Treat the current BookOrbit server catalog as authoritative after reconciliation: show only books returned by the server, while cache-first content may remain visible transiently during reconciliation.
+  - Keep server-returned books tagged/state `missing` visible, with a yellow cover overlay and `Missing!` label.
+  - Keep normal covers unchanged and distinguish the server-missing state from a locally deleted download.
+  - Focused regression coverage covers server-missing parsing, persistence, and action-state behavior; actions requiring an available file must not appear usable for server-missing books.
+
+## Priority 0 — Server-progress hydration — 2026
 
 - [x] Synchronize pending progress before loading detail and authoritative reader progress on normal online book opens.
 - [x] Read ebook per-file `percentage`/`pageNumber` from `GET /api/v1/books/{bookId}/progress`; use percentage to select a generated Readium EPUB position, retaining one-based-to-zero-based conversion only for the legacy EPUB chapter/page fallback.

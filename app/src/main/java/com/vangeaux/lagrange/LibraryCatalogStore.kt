@@ -51,7 +51,9 @@ internal data class LibraryCatalogBookEntity(
     val readerPageIndex: Int?,
     val readerPageCount: Int?,
     @ColumnInfo(defaultValue = "'2/3'")
-    val coverAspectRatio: String = CoverAspectRatio.PORTRAIT.wireValue
+    val coverAspectRatio: String = CoverAspectRatio.PORTRAIT.wireValue,
+    @ColumnInfo(defaultValue = "0")
+    val isServerMissing: Boolean = false
 )
 
 @Entity(
@@ -218,7 +220,7 @@ internal interface LibraryCatalogDao {
         LibraryCatalogMetadataEntity::class,
         LibraryCatalogJumpBucketEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 internal abstract class LibraryCatalogDatabase : RoomDatabase() {
@@ -342,7 +344,7 @@ internal class LibraryCatalogStore(context: Context) {
                 context.applicationContext,
                 LibraryCatalogDatabase::class.java,
                 "library-catalog.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -357,6 +359,12 @@ internal class LibraryCatalogStore(context: Context) {
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE library_catalog_books ADD COLUMN readStatus TEXT")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE library_catalog_books ADD COLUMN isServerMissing INTEGER NOT NULL DEFAULT 0")
             }
         }
     }
@@ -394,7 +402,8 @@ private fun BookSummary.toCatalogEntity(
     lastReadAtMillis = lastReadAtMillis,
     readerPageIndex = readerPageIndex,
     readerPageCount = readerPageCount,
-    coverAspectRatio = coverAspectRatio.wireValue
+    coverAspectRatio = coverAspectRatio.wireValue,
+    isServerMissing = isServerMissing
 )
 
 private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
@@ -423,5 +432,6 @@ private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
     lastReadAtMillis = lastReadAtMillis,
     readerPageIndex = readerPageIndex,
     readerPageCount = readerPageCount,
-    coverAspectRatio = CoverAspectRatio.fromWireValue(coverAspectRatio)
+    coverAspectRatio = CoverAspectRatio.fromWireValue(coverAspectRatio),
+    isServerMissing = isServerMissing
 )

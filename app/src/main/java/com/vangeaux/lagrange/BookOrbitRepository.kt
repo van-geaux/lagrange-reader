@@ -1794,8 +1794,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
-    private fun buildStreamUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/serve"
-
     private fun buildDownloadUrl(fileId: String): String = "${serverBase()}/api/v1/books/files/$fileId/download"
 
     private suspend fun latestKnownProgress(
@@ -2257,6 +2255,7 @@ internal object BookOrbitPayloadParser {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
                 val primaryFile = obj.optJSONArray("files").selectPrimaryFile()
+                val isServerMissing = primaryFile.isMissingResource() || obj.optJSONObject("file").isMissingResource() || obj.isMissingResource()
                 val fileId = primaryFile?.stringValue("id", "_id", "fileId")
                     ?: obj.stringValue("fileId", "file_id")
                     ?: obj.optJSONObject("file")?.stringValue("id", "_id")
@@ -2345,6 +2344,7 @@ internal object BookOrbitPayloadParser {
                             readStatusValue == "read" ||
                             readStatusValue == "skimmed" ||
                             obj.booleanValue("isRead", "read"),
+                        isServerMissing = isServerMissing,
                         addedAtMillis = obj.timestampValue("createdAt", "addedAt", "dateAdded"),
                         updatedAtMillis = obj.timestampValue("updatedAt", "modifiedAt", "dateModified"),
                         lastReadAtMillis = lastReadAtMillis
@@ -2447,7 +2447,8 @@ internal object BookOrbitPayloadParser {
             seriesName = parsedBook.seriesName ?: fallback.seriesName,
             seriesIndex = parsedBook.seriesIndex ?: fallback.seriesIndex,
             readStatus = parsedBook.readStatus ?: fallback.readStatus,
-            isRead = parsedBook.isRead || fallback.isRead
+            isRead = parsedBook.isRead || fallback.isRead,
+            isServerMissing = parsedBook.isServerMissing || fallback.isServerMissing
         ) ?: fallback
         val files = obj.optJSONArray("files")
         val publishedDate = obj.stringValue("publishedDate", "publicationDate")
@@ -2876,6 +2877,14 @@ internal object BookOrbitPayloadParser {
             }
         }
         return false
+    }
+
+    private fun JSONObject?.isMissingResource(): Boolean {
+        this ?: return false
+        if (booleanValue("missing", "isMissing")) return true
+        return stringValue("status", "state", "availability", "resourceStatus", "fileStatus")
+            ?.trim()
+            ?.equals("missing", ignoreCase = true) == true
     }
 
     private fun JSONObject.numberValue(vararg keys: String): Double? {
