@@ -16,6 +16,7 @@ This document contains the current project direction only. Historical work order
 3. Keep native AppAuth/Custom Tabs deferred until BookOrbit provides deployed mobile-redirect allow-list support and the identity-provider callback is registered. The interim server-hosted sign-in WebView is implemented.
 4. Consider additional format support only through a new user-approved work item; MOBI, AZW, AZW3, and FB2 remain unsupported.
 5. Treat broader offline RAR/7z extraction and other optional validation as user-directed follow-up, not an implementation blocker for the current release.
+6. [x] [#19](https://github.com/van-geaux/lagrange-reader/issues/19): preserve current-package reader appearance preferences through a versioned, tolerant per-library store; legacy flat profiles remain readable, and old-package migration remains intentionally out of scope.
 
 ## Decision and documentation rules
 

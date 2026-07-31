@@ -47,7 +47,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 
 - Keep foreground audiobook playback service-owned and compact-only unless a user-approved product decision changes that boundary.
 - Preserve exact BookOrbit statuses independently from legacy completion flags.
-- Preserve per-library reader profiles, cover ownership/aspect ratios, and reader-direction behavior.
+- Preserve per-library reader profiles, cover ownership/aspect ratios, and reader-direction behavior. Reader profiles use a versioned, per-library JSON envelope; legacy flat profiles remain readable, and malformed profiles do not invalidate other libraries.
 - Bound source responses, decoded image sizes, cache scope, and reader preparation; clean incomplete temporary outputs.
 - Keep authentication-origin, TLS, cookie, token, and redirect checks separate from general URL helpers.
 - Do not route connected standalone audio through Readium publication retrieval.

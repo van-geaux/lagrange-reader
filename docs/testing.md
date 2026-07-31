@@ -62,7 +62,9 @@ When the affected scope requires it, verify:
 - EPUB resume and continuous-mode active-resource seeking;
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
-- reader settings persistence per library;
+- reader settings persistence per library; issue #19 current-package APK-upgrade persistence was user-confirmed working on the supplied debug build;
+- same-application-ID APK upgrade preserves EPUB theme/font/size/margins and the applicable PDF/comic direction, layout, and page-gap settings for more than one library;
+- the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;
 - server-missing versus locally deleted state;
 - large text, accessibility, orientation, offline, and narrow-width behavior.
 

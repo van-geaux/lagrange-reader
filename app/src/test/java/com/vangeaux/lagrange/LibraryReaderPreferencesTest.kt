@@ -4,11 +4,54 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 import org.readium.r2.navigator.preferences.Axis
 import org.readium.r2.navigator.preferences.ReadingProgression
 import java.io.File
 
 class LibraryReaderPreferencesTest {
+    @Test
+    fun `reader profile storage uses a versioned envelope`() {
+        val profile = LibraryReaderPreferences(
+            readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+            theme = EpubReaderTheme.Dark,
+            fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
+            fontScale = 1.3f,
+            padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
+            epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
+            pdfLayoutMode = ReaderLayoutMode.PAGINATED,
+            pdfPageGapDp = 8f,
+            comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
+            comicPageGapDp = 24f
+        )
+
+        val storage = JSONObject(libraryReaderPreferencesStorageValue(mapOf("library" to profile)))
+
+        assertTrue(storage.has("version"))
+        assertTrue(storage.has("profiles"))
+        assertEquals(profile, libraryReaderPreferencesFromStorage(storage.toString())["library"])
+    }
+
+    @Test
+    fun `malformed profile does not erase valid profiles`() {
+        val storage = JSONObject().apply {
+            put("version", 1)
+            put("profiles", JSONObject().apply {
+                put("valid", JSONObject().apply {
+                    put("theme", "dark")
+                    put("fontFamily", "system_sans_serif")
+                })
+                put("malformed", "not-an-object")
+            })
+        }
+
+        val decoded = libraryReaderPreferencesFromStorage(storage.toString())
+
+        assertEquals(EpubReaderTheme.Dark, decoded.getValue("valid").theme)
+        assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, decoded.getValue("valid").fontFamily)
+        assertFalse(decoded.containsKey("malformed"))
+    }
+
     @Test
     fun `library reader profiles round trip independently`() {
         val novels = LibraryReaderPreferences(
