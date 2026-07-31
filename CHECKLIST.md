@@ -30,6 +30,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [ ] Keep MOBI, AZW, AZW3, and FB2 explicitly unsupported unless the user approves a conversion/support plan.
 - [ ] Treat broader offline RAR/7z extraction and optional device matrices as separately scoped follow-up.
 - [x] [#19](https://github.com/van-geaux/lagrange-reader/issues/19): preserve current-package reader appearance preferences through a versioned, tolerant per-library store; legacy flat profiles remain readable, and old-package migration remains intentionally out of scope.
+- [x] [#20](https://github.com/van-geaux/lagrange-reader/issues/20): keep Previous/Next book navigation in the current library and format family first; fall back to the same family by user library order, then use the defined fallback format-family order within the first library containing the indexed target. JVM coverage includes second/third library regressions, audiobook-family variants, duplicate indexes, and unavailable boundaries. User confirmed the rebuilt debug APK works on-device.
 
 ## Verification handoff
 

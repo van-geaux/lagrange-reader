@@ -17,6 +17,7 @@ This document contains the current project direction only. Historical work order
 4. Consider additional format support only through a new user-approved work item; MOBI, AZW, AZW3, and FB2 remain unsupported.
 5. Treat broader offline RAR/7z extraction and other optional validation as user-directed follow-up, not an implementation blocker for the current release.
 6. [x] [#19](https://github.com/van-geaux/lagrange-reader/issues/19): preserve current-package reader appearance preferences through a versioned, tolerant per-library store; legacy flat profiles remain readable, and old-package migration remains intentionally out of scope.
+7. [x] [#20](https://github.com/van-geaux/lagrange-reader/issues/20): keep Previous/Next book navigation in the current library and format family first; fall back to the same family by user library order, then use the defined fallback format-family order within the first library containing the indexed target. JVM coverage and user-confirmed on-device validation are complete.
 
 ## Decision and documentation rules
 

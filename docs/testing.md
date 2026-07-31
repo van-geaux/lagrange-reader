@@ -63,6 +63,7 @@ When the affected scope requires it, verify:
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
 - reader settings persistence per library; issue #19 current-package APK-upgrade persistence was user-confirmed working on the supplied debug build;
+- Book Detail Previous/Next navigation from second and third libraries, including current-library/current-format-family preference, same-family fallback by library order, fallback format-family selection, audiobook extensions such as M4A/M4B/MP3, duplicate indexes, and unavailable boundaries. User-confirmed on the rebuilt debug APK.
 - same-application-ID APK upgrade preserves EPUB theme/font/size/margins and the applicable PDF/comic direction, layout, and page-gap settings for more than one library;
 - the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;
 - server-missing versus locally deleted state;

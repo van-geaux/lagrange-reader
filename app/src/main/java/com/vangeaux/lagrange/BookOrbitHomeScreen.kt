@@ -379,9 +379,70 @@ internal fun bookDetailOtherVersions(
         .toList()
 }
 
+private val EPUB_FAMILY_FORMATS = setOf("epub", "kepub")
+private val PDF_FAMILY_FORMATS = setOf("pdf")
+private val COMIC_FAMILY_FORMATS = setOf("cbz", "cbr", "cb7")
+private val AUDIO_FAMILY_FORMATS = setOf(
+    "mp3", "mpeg", "m4a", "m4b", "mp4", "x-m4b", "aac", "aif", "aiff", "flac", "ogg", "oga", "opus", "wav", "webm"
+)
+
+private fun formatFamilyKey(book: BookSummary): Int? {
+    if (book.mediaKind != MediaKind.UNKNOWN) {
+        return when (book.mediaKind) {
+            MediaKind.EPUB -> 0
+            MediaKind.PDF -> 1
+            MediaKind.COMIC -> 2
+            MediaKind.AUDIO -> 3
+            MediaKind.UNKNOWN -> null
+        }
+    }
+    val format = book.format?.lowercase()
+    return when {
+        format in EPUB_FAMILY_FORMATS || book.mediaKind == MediaKind.EPUB -> 0
+        format in PDF_FAMILY_FORMATS || book.mediaKind == MediaKind.PDF -> 1
+        format in COMIC_FAMILY_FORMATS || book.mediaKind == MediaKind.COMIC -> 2
+        format in AUDIO_FAMILY_FORMATS || book.mediaKind == MediaKind.AUDIO -> 3
+        else -> null
+    }
+}
+
+private fun formatFamilyRank(book: BookSummary): Int = formatFamilyKey(book) ?: 4
+
+private fun bestSeriesTarget(
+    current: BookSummary,
+    targets: List<BookSummary>,
+    libraryOrder: List<String>
+): BookSummary? {
+    if (targets.size <= 1) return targets.firstOrNull()
+    val tieBreak = compareBy<BookSummary> { it.title.lowercase() }.thenBy { it.id }
+    val libraryRank = libraryOrder.withIndex().associate { (rank, id) -> id to rank }
+    val currentFamily = formatFamilyKey(current)
+
+    if (currentFamily != null) {
+        targets
+            .filter { it.libraryId == current.libraryId && formatFamilyKey(it) == currentFamily }
+            .minWithOrNull(tieBreak)
+            ?.let { return it }
+
+        targets
+            .filter { formatFamilyKey(it) == currentFamily }
+            .minWithOrNull(
+                compareBy<BookSummary> { libraryRank[it.libraryId] ?: Int.MAX_VALUE }.thenComparing(tieBreak)
+            )
+            ?.let { return it }
+    }
+
+    return targets.minWithOrNull(
+        compareBy<BookSummary> { libraryRank[it.libraryId] ?: Int.MAX_VALUE }
+            .thenBy { formatFamilyRank(it) }
+            .thenComparing(tieBreak)
+    )
+}
+
 internal fun seriesBookNeighbors(
     current: BookSummary,
-    candidates: List<BookSummary>
+    candidates: List<BookSummary>,
+    libraryOrder: List<String> = emptyList()
 ): SeriesBookNeighbors {
     val seriesId = current.seriesId?.takeIf { it.isNotBlank() }
     val seriesName = current.seriesName?.takeIf { it.isNotBlank() }
@@ -391,32 +452,26 @@ internal fun seriesBookNeighbors(
     val sameSeries = (candidates + current)
         .filter { candidate -> booksShareSeries(current, candidate) }
         .distinctBy { it.id }
-        .sortedWith(
-            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
-                .thenBy { it.title.lowercase() }
-                .thenBy { it.id }
+    val slots = (
+        sameSeries.filter { it.seriesIndex != null }.groupBy { it.seriesIndex }.values +
+            sameSeries.filter { it.seriesIndex == null }.map { listOf(it) }
         )
-    val positions = buildList<BookSummary> {
-        sameSeries.forEach { candidate ->
-            val index = candidate.seriesIndex
-            if (index == null) {
-                add(candidate)
-            } else if (none { it.seriesIndex == index }) {
-                add(if (current.seriesIndex == index) current else candidate)
-            }
-        }
-    }
-    val currentIndex = positions.indexOfFirst { candidate ->
+        .sortedWith(
+            compareBy<List<BookSummary>> { it.first().seriesIndex ?: Double.MAX_VALUE }
+                .thenBy { it.first().title.lowercase() }
+                .thenBy { it.first().id }
+        )
+    val currentSlotIndex = slots.indexOfFirst { slot ->
         if (current.seriesIndex != null) {
-            candidate.seriesIndex == current.seriesIndex
+            slot.first().seriesIndex == current.seriesIndex
         } else {
-            candidate.id == current.id
+            slot.any { it.id == current.id }
         }
     }
     return SeriesBookNeighbors(
-        previous = positions.getOrNull(currentIndex - 1),
-        next = positions.getOrNull(currentIndex + 1),
-        total = positions.size
+        previous = slots.getOrNull(currentSlotIndex - 1)?.let { bestSeriesTarget(current, it, libraryOrder) },
+        next = slots.getOrNull(currentSlotIndex + 1)?.let { bestSeriesTarget(current, it, libraryOrder) },
+        total = slots.size
     )
 }
 
@@ -5002,8 +5057,8 @@ private fun BookDetails(
     val seriesBooks = remember(localSeriesBooks, loadedSeriesBooks) {
         (localSeriesBooks + loadedSeriesBooks.orEmpty()).distinctBy { it.id }
     }
-    val seriesNeighbors = remember(displayBook, seriesBooks) {
-        seriesBookNeighbors(displayBook, seriesBooks)
+    val seriesNeighbors = remember(displayBook, seriesBooks, state.libraries) {
+        seriesBookNeighbors(displayBook, seriesBooks, state.libraries.map { it.id })
     }
     val otherVersions = remember(displayBook, seriesBooks) {
         bookDetailOtherVersions(displayBook, seriesBooks)
