@@ -37,6 +37,9 @@ internal val EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS = listOf(
 internal const val DEFAULT_READER_PAGE_GAP_DP = 16f
 internal const val MAX_READER_PAGE_GAP_DP = 48f
 
+private const val READER_PREFERENCES_STORAGE_VERSION = 1
+private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
+
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
@@ -108,38 +111,46 @@ internal fun epubReaderFontFamilyFromStorage(value: String?): EpubReaderFontFami
 internal fun libraryReaderPreferencesStorageValue(
     values: Map<String, LibraryReaderPreferences>
 ): String = JSONObject().apply {
-    values.toSortedMap().forEach { (libraryId, rawValue) ->
-        if (libraryId.isBlank()) return@forEach
-        val value = rawValue.normalized()
-        put(libraryId, JSONObject().apply {
-            put("readingDirection", libraryReadingDirectionStorageValue(value.readingDirection))
-            put("theme", epubReaderThemeStorageValue(value.theme))
-            put("fontFamily", epubReaderFontFamilyStorageValue(value.fontFamily))
-            value.customFont?.let { put("customFont", customFontStorageValue(it)) }
-            put("fontScale", value.fontScale.toDouble())
-            put("top", value.padding.top.toDouble())
-            put("bottom", value.padding.bottom.toDouble())
-            put("left", value.padding.left.toDouble())
-            put("right", value.padding.right.toDouble())
-            put("epubLayout", readerLayoutModeStorageValue(value.epubLayoutMode))
-            put("pdfLayout", readerLayoutModeStorageValue(value.pdfLayoutMode))
-            put("pdfPageGapDp", value.pdfPageGapDp.toDouble())
-            put("comicLayout", readerLayoutModeStorageValue(value.comicLayoutMode))
-            put("comicPageGapDp", value.comicPageGapDp.toDouble())
-        })
-    }
+    put("version", READER_PREFERENCES_STORAGE_VERSION)
+    put(READER_PREFERENCES_PROFILES_KEY, JSONObject().apply {
+        values.toSortedMap().forEach { (libraryId, rawValue) ->
+            if (libraryId.isBlank()) return@forEach
+            val value = rawValue.normalized()
+            put(libraryId, libraryReaderPreferenceStorageValue(value))
+        }
+    })
 }.toString()
+
+private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences): JSONObject =
+    value.normalized().let { normalized ->
+        JSONObject().apply {
+            put("readingDirection", libraryReadingDirectionStorageValue(normalized.readingDirection))
+            put("theme", epubReaderThemeStorageValue(normalized.theme))
+            put("fontFamily", epubReaderFontFamilyStorageValue(normalized.fontFamily))
+            normalized.customFont?.let { put("customFont", customFontStorageValue(it)) }
+            put("fontScale", normalized.fontScale.toDouble())
+            put("top", normalized.padding.top.toDouble())
+            put("bottom", normalized.padding.bottom.toDouble())
+            put("left", normalized.padding.left.toDouble())
+            put("right", normalized.padding.right.toDouble())
+            put("epubLayout", readerLayoutModeStorageValue(normalized.epubLayoutMode))
+            put("pdfLayout", readerLayoutModeStorageValue(normalized.pdfLayoutMode))
+            put("pdfPageGapDp", normalized.pdfPageGapDp.toDouble())
+            put("comicLayout", readerLayoutModeStorageValue(normalized.comicLayoutMode))
+            put("comicPageGapDp", normalized.comicPageGapDp.toDouble())
+        }
+    }
 
 internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, LibraryReaderPreferences> {
     if (value.isNullOrBlank()) return emptyMap()
     return runCatching {
         val root = JSONObject(value)
+        val profiles = root.optJSONObject(READER_PREFERENCES_PROFILES_KEY) ?: root
         buildMap {
-            root.keys().forEach { libraryId ->
+            profiles.keys().forEach { libraryId ->
                 if (libraryId.isBlank()) return@forEach
-                val item = root.optJSONObject(libraryId) ?: return@forEach
-                put(
-                    libraryId,
+                val item = profiles.optJSONObject(libraryId) ?: return@forEach
+                runCatching {
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         theme = epubReaderThemeFromStorage(item.optString("theme")),
@@ -173,7 +184,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             DEFAULT_READER_PAGE_GAP_DP.toDouble()
                         ).toFloat()
                     ).normalized()
-                )
+                }.getOrNull()?.let { decoded -> put(libraryId, decoded) }
             }
         }
     }.getOrDefault(emptyMap())
