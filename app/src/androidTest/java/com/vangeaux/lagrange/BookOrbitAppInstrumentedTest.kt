@@ -1890,6 +1890,12 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("options-reading-library").performScrollTo().performClick()
         composeRule.onNodeWithText("Manga").performClick()
         composeRule.onNodeWithTag("options-reading-direction-right_to_left").performClick()
+        composeRule.onNodeWithTag("options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("options-reading-tap-zone-invert-both")
+            .performScrollTo()
+            .performClick()
         composeRule.onNodeWithTag("options-reading-epub-layout-continuous")
             .performScrollTo()
             .performClick()
@@ -1908,6 +1914,18 @@ class BookOrbitAppInstrumentedTest {
             assertEquals(
                 LibraryReadingDirection.RIGHT_TO_LEFT,
                 preferences.value.readerPreferencesFor("manga").readingDirection
+            )
+            assertEquals(
+                ReaderTapZoneLayout.KINDLE,
+                preferences.value.readerPreferencesFor("manga").tapZoneLayout
+            )
+            assertEquals(
+                ReaderTapZoneInvertMode.BOTH,
+                preferences.value.readerPreferencesFor("manga").tapZoneInvertMode
+            )
+            assertEquals(
+                ReaderTapZoneLayout.CURRENT_EDGES,
+                preferences.value.readerPreferencesFor("novels").tapZoneLayout
             )
             assertEquals(
                 LibraryReadingDirection.LEFT_TO_RIGHT,

@@ -15,9 +15,20 @@ class ReaderTapZoneTutorialTest {
     }
 
     @Test
-    fun `tutorial uses three equally sized regions in reading order`() {
-        assertEquals(listOf("Previous", "Menu", "Next"), READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.label })
-        assertEquals(listOf(1f, 1f, 1f), READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.widthWeight })
+    fun `tutorial regions use the runtime current-edge model`() {
+        val runtimeRegions = readerTapZoneRegions(
+            layout = ReaderTapZoneLayout.CURRENT_EDGES,
+            readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+            invertMode = ReaderTapZoneInvertMode.NONE
+        )
+        assertEquals(
+            runtimeRegions.map { it.action.displayName },
+            READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.label }
+        )
+        assertEquals(
+            runtimeRegions.map { it.rect },
+            READER_TAP_ZONE_TUTORIAL_REGIONS.map { it.rect }
+        )
     }
 
     @Test
@@ -41,19 +52,52 @@ class ReaderTapZoneTutorialTest {
             readerTapZoneTutorialRegions(LibraryReadingDirection.LEFT_TO_RIGHT).map { it.label }
         )
         assertEquals(
-            listOf("Next", "Menu", "Previous"),
+            listOf("Previous", "Menu", "Next"),
             readerTapZoneTutorialRegions(LibraryReadingDirection.RIGHT_TO_LEFT).map { it.label }
         )
+        val rtlXCoordinates = readerTapZoneTutorialRegions(
+            LibraryReadingDirection.RIGHT_TO_LEFT
+        ).map { it.rect.x }
+        listOf(2f / 3f, 1f / 3f, 0f).zip(rtlXCoordinates).forEach { (expected, actual) ->
+            assertEquals(expected, actual, 0.0001f)
+        }
     }
 
     @Test
-    fun `continuous tutorial teaches vertical swipes instead of page turns`() {
+    fun `continuous tutorial uses the same tap regions as paginated readers`() {
+        val runtimeRegions = readerTapZoneRegions(
+            layout = ReaderTapZoneLayout.CURRENT_EDGES,
+            readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+            invertMode = ReaderTapZoneInvertMode.NONE
+        )
         assertEquals(
-            listOf("Swipe up", "Menu", "Swipe down"),
+            runtimeRegions.map { it.action.displayName },
             readerTapZoneTutorialRegions(
                 LibraryReadingDirection.RIGHT_TO_LEFT,
                 continuous = true
             ).map { it.label }
+        )
+    }
+
+    @Test
+    fun `vertical thirds tutorial uses the same regions as runtime`() {
+        val runtimeRegions = readerTapZoneRegions(
+            layout = ReaderTapZoneLayout.VERTICAL_THIRDS,
+            readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+            invertMode = ReaderTapZoneInvertMode.NONE
+        )
+        val tutorialRegions = readerTapZoneTutorialRegions(
+            readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+            layout = ReaderTapZoneLayout.VERTICAL_THIRDS
+        )
+
+        assertEquals(
+            runtimeRegions.map { it.action.displayName },
+            tutorialRegions.map { it.label }
+        )
+        assertEquals(
+            runtimeRegions.map { it.rect },
+            tutorialRegions.map { it.rect }
         )
     }
 }

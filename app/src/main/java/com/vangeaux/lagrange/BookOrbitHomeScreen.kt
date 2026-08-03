@@ -2648,6 +2648,13 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             }
+            ReaderTapZoneSettings(
+                value = value,
+                onPreferencesChange = { next ->
+                    onPreferencesChange(selectedLibrary.id, next)
+                },
+                testTagPrefix = "options-reading-tap-zone"
+            )
             Text("Typography", style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -2835,6 +2842,46 @@ private fun ReaderLayoutModeSettings(
 }
 
 @Composable
+private fun ReaderTapZoneSettings(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String
+) {
+    Text("Tap zones", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ReaderTapZoneLayout.values().forEach { layout ->
+            FilterChip(
+                selected = value.tapZoneLayout == layout,
+                onClick = { onPreferencesChange(value.copy(tapZoneLayout = layout)) },
+                label = { Text(layout.displayName) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-layout-${layout.name.lowercase()}"
+                )
+            )
+        }
+    }
+    Text("Tap-zone inversion", style = MaterialTheme.typography.titleMedium)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ReaderTapZoneInvertMode.values().forEach { invertMode ->
+            FilterChip(
+                selected = value.tapZoneInvertMode == invertMode,
+                onClick = { onPreferencesChange(value.copy(tapZoneInvertMode = invertMode)) },
+                label = { Text(invertMode.displayName) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-invert-${invertMode.name.lowercase()}"
+                )
+            )
+        }
+    }
+}
+
+@Composable
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
@@ -2859,6 +2906,11 @@ internal fun ReaderConfigurationControls(
             )
         }
     }
+    ReaderTapZoneSettings(
+        value = value,
+        onPreferencesChange = onPreferencesChange,
+        testTagPrefix = "$testTagPrefix-tap-zone"
+    )
     Text("Typography", style = MaterialTheme.typography.titleMedium)
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
