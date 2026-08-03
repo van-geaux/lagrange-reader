@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
@@ -1649,63 +1650,92 @@ internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 3_000L
 internal const val READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP = 28
 internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
 internal const val READER_OPTIONS_DEFAULT_HEIGHT_FRACTION = 2f / 3f
-internal const val READER_OPTIONS_MIN_HEIGHT_FRACTION = 0.45f
 internal const val READER_OPTIONS_MAX_HEIGHT_FRACTION = 0.92f
 internal const val READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP = 48
 
 internal fun readerOptionsHeightFractionAfterDrag(
     currentFraction: Float,
     dragAmountPx: Float,
-    containerHeightPx: Float
+    containerHeightPx: Float,
+    minimumHeightFraction: Float
 ): Float {
     if (!containerHeightPx.isFinite() || containerHeightPx <= 0f) return currentFraction
+    val minimumFraction = minimumHeightFraction.coerceIn(0f, READER_OPTIONS_MAX_HEIGHT_FRACTION)
     return (currentFraction - dragAmountPx / containerHeightPx)
-        .coerceIn(READER_OPTIONS_MIN_HEIGHT_FRACTION, READER_OPTIONS_MAX_HEIGHT_FRACTION)
+        .coerceIn(minimumFraction, READER_OPTIONS_MAX_HEIGHT_FRACTION)
 }
 
 internal data class ReaderTapZoneTutorialRegion(
     val label: String,
+    val rect: ReaderTapZoneRect,
     val red: Int,
     val green: Int,
     val blue: Int,
-    val alpha: Float,
-    val widthWeight: Float = 1f
+    val alpha: Float
 )
 
-internal val READER_TAP_ZONE_TUTORIAL_REGIONS = listOf(
-    ReaderTapZoneTutorialRegion("Previous", red = 255, green = 114, blue = 118, alpha = 0.5f),
-    ReaderTapZoneTutorialRegion("Menu", red = 0, green = 0, blue = 0, alpha = 0.5f),
-    ReaderTapZoneTutorialRegion("Next", red = 144, green = 238, blue = 144, alpha = 0.5f)
-)
+private fun readerTapZoneTutorialRegion(region: ReaderTapZoneRegion): ReaderTapZoneTutorialRegion {
+    val (red, green, blue) = when (region.action) {
+        ReaderTapZoneAction.PREVIOUS -> Triple(255, 114, 118)
+        ReaderTapZoneAction.MENU -> Triple(0, 0, 0)
+        ReaderTapZoneAction.NEXT -> Triple(144, 238, 144)
+    }
+    return ReaderTapZoneTutorialRegion(
+        label = region.action.displayName,
+        rect = region.rect,
+        red = red,
+        green = green,
+        blue = blue,
+        alpha = 0.5f
+    )
+}
 
-internal val CONTINUOUS_SCROLL_TUTORIAL_REGIONS = listOf(
-    ReaderTapZoneTutorialRegion("Swipe up", red = 144, green = 238, blue = 144, alpha = 0.5f),
-    ReaderTapZoneTutorialRegion("Menu", red = 0, green = 0, blue = 0, alpha = 0.5f),
-    ReaderTapZoneTutorialRegion("Swipe down", red = 255, green = 114, blue = 118, alpha = 0.5f)
-)
-
+@Suppress("UNUSED_PARAMETER")
 internal fun readerTapZoneTutorialRegions(
     readingDirection: LibraryReadingDirection,
-    continuous: Boolean = false
-): List<ReaderTapZoneTutorialRegion> = if (continuous) {
-    CONTINUOUS_SCROLL_TUTORIAL_REGIONS
-} else if (readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT) {
-    READER_TAP_ZONE_TUTORIAL_REGIONS.reversed()
-} else {
-    READER_TAP_ZONE_TUTORIAL_REGIONS
-}
+    continuous: Boolean = false,
+    layout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+    invertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE
+): List<ReaderTapZoneTutorialRegion> = readerTapZoneRegions(
+    layout = layout,
+    readingDirection = readingDirection,
+    invertMode = invertMode
+).map(::readerTapZoneTutorialRegion)
+
+internal val READER_TAP_ZONE_TUTORIAL_REGIONS = readerTapZoneTutorialRegions(
+    readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
+)
+
+internal val CONTINUOUS_SCROLL_TUTORIAL_REGIONS = READER_TAP_ZONE_TUTORIAL_REGIONS
 
 @Composable
 internal fun ReaderTapZoneTutorial(
     onDismiss: () -> Unit,
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     continuous: Boolean = false,
+    tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+    tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
     modifier: Modifier = Modifier
 ) {
-    val regions = remember(readingDirection, continuous) {
-        readerTapZoneTutorialRegions(readingDirection, continuous)
+    val regions = remember(
+        readingDirection,
+        continuous,
+        tapZoneLayout,
+        tapZoneInvertMode
+    ) {
+        readerTapZoneTutorialRegions(
+            readingDirection = readingDirection,
+            continuous = continuous,
+            layout = tapZoneLayout,
+            invertMode = tapZoneInvertMode
+        )
     }
-    val interactionSources = remember(readingDirection, continuous) {
+    val interactionSources = remember(
+        readingDirection,
+        continuous,
+        tapZoneLayout,
+        tapZoneInvertMode
+    ) {
         List(regions.size) { MutableInteractionSource() }
     }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -1713,27 +1743,38 @@ internal fun ReaderTapZoneTutorial(
             .fillMaxSize()
             .testTag("reader-tap-zone-tutorial")
             .semantics { contentDescription = "Reader tap regions tutorial" }
-        if (continuous) {
-            Column(modifier = containerModifier) {
-                regions.forEachIndexed { index, region ->
-                    ReaderTapZoneTutorialRegion(
-                        region = region,
-                        interactionSource = interactionSources[index],
-                        modifier = Modifier.weight(region.widthWeight).fillMaxWidth(),
-                        onDismiss = onDismiss
-                    )
-                }
+        BoxWithConstraints(modifier = containerModifier) {
+            regions.forEachIndexed { index, region ->
+                val rect = region.rect
+                ReaderTapZoneTutorialRegion(
+                    region = region,
+                    interactionSource = interactionSources[index],
+                    modifier = Modifier
+                        .offset(
+                            x = maxWidth * rect.x,
+                            y = maxHeight * rect.y
+                        )
+                        .width(maxWidth * rect.width)
+                        .height(maxHeight * rect.height),
+                    onDismiss = onDismiss
+                )
             }
-        } else {
-            Row(modifier = containerModifier) {
-                regions.forEachIndexed { index, region ->
-                    ReaderTapZoneTutorialRegion(
-                        region = region,
-                        interactionSource = interactionSources[index],
-                        modifier = Modifier.weight(region.widthWeight).fillMaxHeight(),
-                        onDismiss = onDismiss
-                    )
-                }
+            if (continuous) {
+                Text(
+                    text = "Swipe vertically to scroll",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.7f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable(onClick = onDismiss)
+                        .testTag("reader-tap-zone-continuous-swipe-hint")
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
         }
     }
@@ -2210,6 +2251,12 @@ internal fun EpubReaderOptionsBottomSheet(
         var sheetHeightFraction by remember { mutableStateOf(READER_OPTIONS_DEFAULT_HEIGHT_FRACTION) }
         val density = LocalDensity.current
         val containerHeightPx = with(density) { maxHeight.toPx() }
+        val minimumSheetHeightFraction = if (containerHeightPx > 0f) {
+            with(density) { READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP.dp.toPx() } /
+                containerHeightPx
+        } else {
+            0f
+        }
         val sheetHeight = maxHeight * sheetHeightFraction
         MaterialTheme(
             colorScheme = colors,
@@ -2239,7 +2286,8 @@ internal fun EpubReaderOptionsBottomSheet(
                                     sheetHeightFraction = readerOptionsHeightFractionAfterDrag(
                                         currentFraction = sheetHeightFraction,
                                         dragAmountPx = dragAmount,
-                                        containerHeightPx = containerHeightPx
+                                        containerHeightPx = containerHeightPx,
+                                        minimumHeightFraction = minimumSheetHeightFraction
                                     )
                                 }
                             }

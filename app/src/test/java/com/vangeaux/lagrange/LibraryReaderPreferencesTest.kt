@@ -211,12 +211,14 @@ class LibraryReaderPreferencesTest {
 
     @Test
     fun `reader options height defaults and clamps within drag bounds`() {
+        val collapsedHeightFraction = READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP / 600f
         assertEquals(
             READER_OPTIONS_DEFAULT_HEIGHT_FRACTION,
             readerOptionsHeightFractionAfterDrag(
                 currentFraction = READER_OPTIONS_DEFAULT_HEIGHT_FRACTION,
                 dragAmountPx = 0f,
-                containerHeightPx = 600f
+                containerHeightPx = 600f,
+                minimumHeightFraction = collapsedHeightFraction
             ),
             0f
         )
@@ -225,16 +227,18 @@ class LibraryReaderPreferencesTest {
             readerOptionsHeightFractionAfterDrag(
                 currentFraction = READER_OPTIONS_DEFAULT_HEIGHT_FRACTION,
                 dragAmountPx = -600f,
-                containerHeightPx = 600f
+                containerHeightPx = 600f,
+                minimumHeightFraction = collapsedHeightFraction
             ),
             0f
         )
         assertEquals(
-            READER_OPTIONS_MIN_HEIGHT_FRACTION,
+            collapsedHeightFraction,
             readerOptionsHeightFractionAfterDrag(
                 currentFraction = READER_OPTIONS_DEFAULT_HEIGHT_FRACTION,
                 dragAmountPx = 600f,
-                containerHeightPx = 600f
+                containerHeightPx = 600f,
+                minimumHeightFraction = collapsedHeightFraction
             ),
             0f
         )

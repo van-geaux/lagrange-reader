@@ -41,11 +41,13 @@ internal const val MAX_EPUB_LINE_SPACING = 2f
 internal const val DEFAULT_EPUB_WORD_SPACING = 0f
 internal const val MAX_EPUB_WORD_SPACING = 1f
 
-private const val READER_PREFERENCES_STORAGE_VERSION = 1
+private const val READER_PREFERENCES_STORAGE_VERSION = 2
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+    val tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+    val tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
     val fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
     val customFont: CustomFontRecord? = null,
@@ -133,6 +135,8 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
     value.normalized().let { normalized ->
         JSONObject().apply {
             put("readingDirection", libraryReadingDirectionStorageValue(normalized.readingDirection))
+            put("tapZoneLayout", readerTapZoneLayoutStorageValue(normalized.tapZoneLayout))
+            put("tapZoneInvertMode", readerTapZoneInvertModeStorageValue(normalized.tapZoneInvertMode))
             put("theme", epubReaderThemeStorageValue(normalized.theme))
             put("fontFamily", epubReaderFontFamilyStorageValue(normalized.fontFamily))
             normalized.customFont?.let { put("customFont", customFontStorageValue(it)) }
@@ -163,6 +167,8 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                 runCatching {
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
+                        tapZoneLayout = readerTapZoneLayoutFromStorage(item.optString("tapZoneLayout")),
+                        tapZoneInvertMode = readerTapZoneInvertModeFromStorage(item.optString("tapZoneInvertMode")),
                         theme = epubReaderThemeFromStorage(item.optString("theme")),
                         fontFamily = epubReaderFontFamilyFromStorage(item.optString("fontFamily")),
                         customFont = customFontFromStorage(item.optString("customFont")),

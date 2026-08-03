@@ -226,6 +226,12 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onNodeWithTag("reader-options-reading-theme-dark")
             .performScrollTo()
             .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-invert-both")
+            .performScrollTo()
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderTheme.Dark, profile.value.theme)
@@ -234,6 +240,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(8f, profile.value.pdfPageGapDp)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.comicLayoutMode)
             assertEquals(24f, profile.value.comicPageGapDp)
+            assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
+            assertEquals(ReaderTapZoneInvertMode.BOTH, profile.value.tapZoneInvertMode)
         }
     }
 }

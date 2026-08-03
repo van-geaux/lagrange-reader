@@ -41,6 +41,34 @@ class ContinuousComicReaderTest {
     }
 
     @Test
+    fun `continuous taps share vertical layouts and inversion with other readers`() {
+        assertEquals(
+            ContinuousComicTapAction.MENU,
+            continuousComicTapAction(
+                x = 50f,
+                y = 10f,
+                width = 100f,
+                height = 100f,
+                readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+                layout = ReaderTapZoneLayout.KINDLE,
+                invertMode = ReaderTapZoneInvertMode.NONE
+            )
+        )
+        assertEquals(
+            ContinuousComicTapAction.PREVIOUS,
+            continuousComicTapAction(
+                x = 10f,
+                y = 10f,
+                width = 100f,
+                height = 100f,
+                readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+                layout = ReaderTapZoneLayout.KINDLE,
+                invertMode = ReaderTapZoneInvertMode.VERTICAL
+            )
+        )
+    }
+
+    @Test
     fun `continuous page sampling honors width and decoded pixel bounds`() {
         assertEquals(4, continuousComicSampleSize(4000, 6000, 1000))
         assertEquals(2, continuousComicSampleSize(1000, 40000, 1000))

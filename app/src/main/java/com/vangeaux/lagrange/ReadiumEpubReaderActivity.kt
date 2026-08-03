@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -36,6 +35,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -238,6 +238,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var bookPositionCount by mutableStateOf<Int?>(null)
     private var bookPositions: List<Locator> = emptyList()
     private var tapZoneTutorialHasShown = false
+    private var tapZoneTutorialHideJob: Job? = null
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
@@ -459,6 +460,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
                         readingDirection = readingDirection,
+                        tapZoneLayout = readerPreferences.tapZoneLayout,
+                        tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -471,6 +474,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
@@ -540,16 +544,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
                 readingDirection = { readingDirection },
-                horizontalEdgeThresholdPercent = 0.25f
+                tapZoneLayout = { readerPreferences.tapZoneLayout },
+                tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
+                onMenu = ::toggleChrome
             )
-        )
-        fragment.addInputListener(
-            object : InputListener {
-                override fun onTap(event: TapEvent): Boolean {
-                    toggleChrome()
-                    return true
-                }
-            }
         )
         navigator = fragment
         lifecycleScope.launch {
@@ -689,6 +687,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
+        val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         selectedTheme = normalized.theme
         selectedFontFamily = normalized.fontFamily
@@ -717,6 +716,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             current.withReaderPreferences(libraryId, normalized)
         )
         configureSystemBars()
+        if (tapZoneChanged) showTapZoneTutorial()
     }
 
     private fun applyReaderPadding() {
@@ -758,15 +758,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showTapZoneTutorial() {
         tapZoneTutorialHasShown = true
         tapZoneTutorialView.visibility = View.VISIBLE
-        tapZoneTutorialView.doOnPreDraw {
-            lifecycleScope.launch {
-                delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
-                hideTapZoneTutorial()
-            }
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = lifecycleScope.launch {
+            delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
+            hideTapZoneTutorial()
         }
     }
 
     private fun hideTapZoneTutorial() {
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = null
         tapZoneTutorialView.visibility = View.GONE
     }
 
