@@ -36,6 +36,8 @@ internal val EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS = listOf(
 
 internal const val DEFAULT_READER_PAGE_GAP_DP = 16f
 internal const val MAX_READER_PAGE_GAP_DP = 48f
+internal const val DEFAULT_EPUB_LINE_SPACING = 1f
+internal const val MAX_EPUB_LINE_SPACING = 2f
 
 private const val READER_PREFERENCES_STORAGE_VERSION = 1
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
@@ -46,6 +48,7 @@ data class LibraryReaderPreferences(
     val fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
     val customFont: CustomFontRecord? = null,
     val fontScale: Float = 1f,
+    val lineSpacing: Float = DEFAULT_EPUB_LINE_SPACING,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
@@ -55,6 +58,7 @@ data class LibraryReaderPreferences(
 ) {
     fun normalized(): LibraryReaderPreferences = copy(
         fontScale = fontScale.coerceIn(0.9f, 1.5f),
+        lineSpacing = lineSpacing.coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING),
         padding = padding.normalizedReaderPadding(),
         pdfPageGapDp = pdfPageGapDp.coerceIn(0f, MAX_READER_PAGE_GAP_DP),
         comicPageGapDp = comicPageGapDp.coerceIn(0f, MAX_READER_PAGE_GAP_DP)
@@ -129,6 +133,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("fontFamily", epubReaderFontFamilyStorageValue(normalized.fontFamily))
             normalized.customFont?.let { put("customFont", customFontStorageValue(it)) }
             put("fontScale", normalized.fontScale.toDouble())
+            put("lineSpacing", normalized.lineSpacing.toDouble())
             put("top", normalized.padding.top.toDouble())
             put("bottom", normalized.padding.bottom.toDouble())
             put("left", normalized.padding.left.toDouble())
@@ -157,6 +162,10 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         fontFamily = epubReaderFontFamilyFromStorage(item.optString("fontFamily")),
                         customFont = customFontFromStorage(item.optString("customFont")),
                         fontScale = item.optDouble("fontScale", 1.0).toFloat(),
+                        lineSpacing = item.optDouble(
+                            "lineSpacing",
+                            DEFAULT_EPUB_LINE_SPACING.toDouble()
+                        ).toFloat(),
                         padding = EpubPaddingPercentages(
                             top = item.optDouble("top", EPUB_DEFAULT_TOP_PADDING_PERCENT.toDouble()).toFloat(),
                             bottom = item.optDouble("bottom", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
