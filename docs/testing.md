@@ -64,7 +64,7 @@ When the affected scope requires it, verify:
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
 - reader settings persistence per library; issue #19 current-package APK-upgrade persistence was user-confirmed working on the supplied debug build;
-- EPUB reader options open at approximately two-thirds of the reader surface, the top handle exposes a minimum 48 dp touch target and expands/contracts the sheet without losing the live reader preview, and the EPUB line-spacing slider updates the preview and persists after reopening the options. User-confirmed on the rebuilt debug APK;
+- EPUB reader options open at approximately two-thirds of the reader surface, the top handle exposes a minimum 48 dp touch target and expands/contracts the sheet without losing the live reader preview, and the EPUB line-spacing and 0.0–1.0 rem word-spacing sliders update the preview and persist after reopening the options;
 - changing line spacing or the options-sheet height preserves the other reader settings, including theme, font, direction, margins, and layout;
 - same-application-ID APK upgrade preserves EPUB theme/font/size/margins and the applicable PDF/comic direction, layout, and page-gap settings for more than one library;
 - the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;

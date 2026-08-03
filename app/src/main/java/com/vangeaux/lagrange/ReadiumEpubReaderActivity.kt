@@ -125,6 +125,10 @@ internal fun readiumEpubLineHeight(lineSpacing: Float): Double = lineSpacing
     .coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING)
     .toDouble()
 
+internal fun readiumEpubWordSpacing(wordSpacing: Float): Double = wordSpacing
+    .coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING)
+    .toDouble()
+
 @OptIn(ExperimentalReadiumApi::class)
 internal fun readiumPreferences(
     theme: EpubReaderTheme,
@@ -132,7 +136,8 @@ internal fun readiumPreferences(
     lineSpacing: Float = DEFAULT_EPUB_LINE_SPACING,
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
-    fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT
+    fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
+    wordSpacing: Float = DEFAULT_EPUB_WORD_SPACING
 ): EpubPreferences = EpubPreferences(
     backgroundColor = ReadiumColor(theme.backgroundColor),
     textColor = ReadiumColor(cssHexColorInt(theme.foregroundCss)),
@@ -143,6 +148,7 @@ internal fun readiumPreferences(
     },
     fontSize = fontScale.coerceIn(0.9f, 1.5f).toDouble(),
     lineHeight = readiumEpubLineHeight(lineSpacing),
+    wordSpacing = readiumEpubWordSpacing(wordSpacing),
     fontFamily = readiumFontFamily(fontFamily),
     readingProgression = readiumEpubReadingProgression(readingDirection),
     pageMargins = 0.0,
@@ -516,7 +522,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readerPreferences.lineSpacing,
                 readingDirection,
                 epubLayoutMode,
-                selectedFontFamily
+                selectedFontFamily,
+                readerPreferences.wordSpacing
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false)
@@ -701,7 +708,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.lineSpacing,
                 normalized.readingDirection,
                 normalized.epubLayoutMode,
-                normalized.fontFamily
+                normalized.fontFamily,
+                normalized.wordSpacing
             )
         )
         val current = appPreferencesStore.read()

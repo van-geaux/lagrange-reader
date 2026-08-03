@@ -37,10 +37,12 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         val preferences = readiumPreferences(
             theme = EpubReaderTheme.Light,
             fontScale = 1.0f,
-            lineSpacing = 1.4f
+            lineSpacing = 1.4f,
+            wordSpacing = 0.4f
         )
 
         assertEquals(1.4, preferences.lineHeight)
+        assertEquals(0.4, preferences.wordSpacing)
         assertFalse(preferences.publisherStyles == true)
     }
 
@@ -151,6 +153,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                 theme = EpubReaderTheme.Dark,
                 fontScale = 1.3f,
                 lineSpacing = 1.2f,
+                wordSpacing = 0.2f,
                 readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
                 epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
                 padding = EpubPaddingPercentages(11f, 22f, 33f, 44f)
@@ -180,12 +183,17 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .onNodeWithTag("reader-options-reading-line-spacing")
             .performScrollTo()
             .performTouchInput { swipeRight() }
+        composeRule
+            .onNodeWithTag("reader-options-reading-word-spacing")
+            .performScrollTo()
+            .performTouchInput { swipeRight() }
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, profile.value.fontFamily)
             assertEquals(EpubReaderTheme.Dark, profile.value.theme)
             assertEquals(1.3f, profile.value.fontScale)
             assertTrue(profile.value.lineSpacing > 1.2f)
+            assertTrue(profile.value.wordSpacing > 0.2f)
             assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
             assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
