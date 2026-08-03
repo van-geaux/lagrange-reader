@@ -45,6 +45,7 @@ import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.pdf.PdfNavigatorFragment
 import org.readium.r2.navigator.preferences.Axis
+import org.readium.r2.navigator.preferences.ReadingProgression as ReadiumReadingProgression
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -100,6 +101,16 @@ internal data class ReadiumPdfProgressResult(
     val pageCount: Int,
     val percent: Float?
 )
+
+internal fun readiumReadingProgression(
+    readingDirection: LibraryReadingDirection
+): ReadiumReadingProgression = if (
+    readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+) {
+    ReadiumReadingProgression.RTL
+} else {
+    ReadiumReadingProgression.LTR
+}
 
 internal fun pdfiumPreferencesFor(
     preferences: LibraryReaderPreferences

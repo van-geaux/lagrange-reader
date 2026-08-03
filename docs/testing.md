@@ -60,6 +60,7 @@ When the affected scope requires it, verify:
 
 - normal and Preview launch isolation;
 - EPUB resume and continuous-mode active-resource seeking;
+- EPUB reading-direction changes preserve text alignment, punctuation, and other typography/layout settings while only reversing left/right edge tap navigation; verify both directions in paginated and continuous modes. User-confirmed on the rebuilt debug APK;
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
 - reader settings persistence per library; issue #19 current-package APK-upgrade persistence was user-confirmed working on the supplied debug build;

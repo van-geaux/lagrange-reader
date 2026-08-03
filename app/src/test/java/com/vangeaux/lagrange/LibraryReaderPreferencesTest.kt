@@ -160,14 +160,14 @@ class LibraryReaderPreferencesTest {
     }
 
     @Test
-    fun `EPUB preferences apply the library reading progression`() {
+    fun `EPUB preferences keep layout progression left to right for both tap directions`() {
         assertEquals(
             ReadingProgression.LTR,
-            readiumReadingProgression(LibraryReadingDirection.LEFT_TO_RIGHT)
+            readiumEpubReadingProgression(LibraryReadingDirection.LEFT_TO_RIGHT)
         )
         assertEquals(
-            ReadingProgression.RTL,
-            readiumReadingProgression(LibraryReadingDirection.RIGHT_TO_LEFT)
+            ReadingProgression.LTR,
+            readiumEpubReadingProgression(LibraryReadingDirection.RIGHT_TO_LEFT)
         )
     }
 
