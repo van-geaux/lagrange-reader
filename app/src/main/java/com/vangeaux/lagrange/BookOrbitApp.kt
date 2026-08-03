@@ -2963,6 +2963,10 @@ internal fun formatEpubLineSpacing(lineSpacing: Float): String {
     return String.format(Locale.US, "%.1f×", lineSpacing)
 }
 
+internal fun formatEpubWordSpacing(wordSpacing: Float): String {
+    return String.format(Locale.US, "%.1frem", wordSpacing)
+}
+
 private fun formatEpubCssPercent(value: Float): String {
     return String.format(Locale.US, "%.2f", value)
 }

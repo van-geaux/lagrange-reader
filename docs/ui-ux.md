@@ -19,7 +19,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - Pull-to-refresh is user-initiated, non-blocking, duplicate-safe, and independent from background synchronization and destructive download actions.
 - Server-missing catalog records remain visible with a yellow `Missing!` overlay; this is distinct from a locally deleted copy.
 - EPUB-only reader font controls include Publisher default, built-in normal/accessibility choices, and one imported custom font slot.
-- EPUB reader options open at approximately two-thirds of the available reader surface. The top handle is fixed outside the scrollable settings, exposes a minimum 48 dp touch target, and resizes the session-only sheet within bounded limits. EPUB line spacing is a persisted 1.0×–2.0× live-preview option and is applied through Readium’s user CSS preferences.
+- EPUB reader options open at approximately two-thirds of the available reader surface. The top handle is fixed outside the scrollable settings, exposes a minimum 48 dp touch target, and resizes the session-only sheet within bounded limits. EPUB line spacing is a persisted 1.0×–2.0× live-preview option, and default word spacing is a persisted 0.0–1.0 rem live-preview option; both are applied through Readium’s user CSS preferences.
 - Audiobook session history is local and exact-position; server reading history is analytics context and is not used as a seek position.
 
 ## Current visual rules
