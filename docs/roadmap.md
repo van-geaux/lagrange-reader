@@ -4,7 +4,7 @@ This document contains the current project direction only. Historical work order
 
 ## Current status
 
-- Release: Lagrange 1.4.1 is published. See [`docs/release-notes/v1.4.1.md`](release-notes/v1.4.1.md).
+- Release: Lagrange 1.4.1 is published; the approved 1.4.2 release candidate is being prepared. See [`docs/release-notes/v1.4.2.md`](release-notes/v1.4.2.md).
 - Branch: `main`, aligned with `origin/main`.
 - Recent completed work: behavior-neutral cleanup, release integration, pull-to-refresh, continuous EPUB seeking, reader fonts including one imported custom font, staged startup, server-missing catalog state, and download lifecycle implementation.
 - Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, and server reading sessions are implemented and user-confirmed working. New implementation work is deferred; BOOX issue #25 remains pending physical-device access.

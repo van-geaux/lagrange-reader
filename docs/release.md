@@ -36,7 +36,7 @@ If a rename is required again in the future:
 
 ### Current version marker
 
-- current release: `versionName 1.4.1`, `versionCode 18`
+- current release: `versionName 1.4.2`, `versionCode 19`
 - update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
 - the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
 - use the `1.x` minor-release line for additive feature releases and increment `versionCode` for every distributed build

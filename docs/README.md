@@ -20,6 +20,6 @@ The session handover and historical operator archives are intentionally kept loc
 
 ## Current status
 
-Lagrange 1.4.1 is the latest published release. The current branch is `main`, aligned with `origin/main`. The application supports authenticated BookOrbit browsing, offline downloads, EPUB/PDF/comic reading, audiobook playback, progress synchronization, server-missing catalog state, pull-to-refresh, reader font selection, and the implemented interim server sign-in WebView.
+Lagrange 1.4.1 is the latest published release; 1.4.2 is the approved release candidate. The current branch is `main`, aligned with `origin/main`. The application supports authenticated BookOrbit browsing, offline downloads, EPUB/PDF/comic reading, audiobook playback, progress synchronization, server-missing catalog state, pull-to-refresh, reader font selection, server reading sessions, indexed book navigation, and the implemented interim server sign-in WebView.
 
 Use `CHECKLIST.md` for active completion and validation items and `docs/roadmap.md` for the next user-directed work. Session-specific worktree state belongs in the local-only `docs/handover.md`; do not use historical archives as current status without re-verification.
