@@ -85,6 +85,19 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 Progress uploads are queued and throttled rather than sent immediately, and can be delayed by connectivity; a clean reader/player close attempts a best-effort flush of the pending queue but is not guaranteed to complete before the app fully closes offline.
 
+## Server reading sessions
+
+Lagrange separately records active reading/listening intervals through BookOrbit's file-scoped `POST /api/v1/books/files/{fileId}/sessions` endpoint. Sessions are authenticated, stored in a durable offline queue, retried in the background, and deduplicated with a stable session ID. The server source is `web`, which BookOrbit reports in its native `BookOrbit` source bucket.
+
+| Format | Session starts | Pause/close behavior | Progress and timing |
+| --- | --- | --- | --- |
+| EPUB / KEPUB | When usable publication content opens | Lifecycle pause finalizes the active interval; resume starts a new interval; reader close finalizes it | Percentage/chapter fallback; active foreground time only |
+| PDF | When usable pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; active foreground time only |
+| CBZ / CBR / CB7 | When usable comic pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; CBR/CB7 may be normalized to a cached CBZ locally, while the original BookOrbit file ID is retained |
+| Audiobooks | When actual playback begins | Tapping pause finalizes the active listening interval; play starts a new interval; player close also finalizes it | Wall-clock active listening duration and periodic position/percentage; playback speed does not multiply session duration |
+
+Preview sessions are excluded. Sessions shorter than 10 seconds are discarded by the client. Paused, background, and idle time is not counted. Server sessions support analytics and reading history; exact local audiobook seeking remains backed by Lagrange's local session history.
+
 ## Privacy, telemetry, and data
 
 Lagrange does not include behavioral telemetry, advertising tracking, an analytics SDK, or a remote crash-reporting service. It does not collect usage events or device identifiers for the Lagrange project.

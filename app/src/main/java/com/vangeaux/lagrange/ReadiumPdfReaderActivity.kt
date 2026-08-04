@@ -140,6 +140,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var readerKey: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
+    private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
@@ -177,6 +178,11 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         readerPreferences = AppPreferencesStore(this).read().readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
+        readingSessionReporter = ReadingSessionReporter(
+            context = this,
+            fileId = intent.getStringExtra(EXTRA_FILE_ID),
+            enabled = !isPreview
+        )
         configureSystemBars()
         createReaderViews()
         installBackHandler()
@@ -352,6 +358,9 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             return
         }
         publication = openedPublication
+        readingSessionReporter.start(
+            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+        )
         pageLocators = withContext(Dispatchers.IO) { openedPublication.positions() }
         currentPageCount = pageLocators.size.coerceAtLeast(1)
         val initialLocator = initialLocator(openedPublication)
@@ -414,7 +423,14 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val index = (locator.locations.position ?: 1) - 1
         currentPage = index.coerceIn(0, currentPageCount - 1)
         if (!isPreview) locatorStore.save(readerKey, locator)
+        readingSessionReporter.activity(currentProgressPercent())
         updateResult()
+    }
+
+    private fun currentProgressPercent(): Float = if (currentPageCount <= 1) {
+        100f
+    } else {
+        currentPage.toFloat() / (currentPageCount - 1).toFloat() * 100f
     }
 
     private fun goToPage(index: Int) {
@@ -505,6 +521,9 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     private fun finishReader() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentProgressPercent())
+        }
         updateResult()
         finish()
     }
@@ -543,7 +562,24 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    override fun onPause() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.pause(currentProgressPercent())
+        }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::readingSessionReporter.isInitialized && publication != null && !isFinishing) {
+            readingSessionReporter.resume(currentProgressPercent())
+        }
+    }
+
     override fun onDestroy() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentProgressPercent())
+        }
         super.onDestroy()
         publication?.close()
         publication = null
@@ -555,8 +591,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         private const val EXTRA_TITLE = "readium_pdf_title"
         private const val EXTRA_READER_KEY = "readium_pdf_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_pdf_library_id"
+        private const val EXTRA_FILE_ID = "readium_pdf_file_id"
         private const val EXTRA_IS_PREVIEW = "readium_pdf_is_preview"
         private const val EXTRA_INITIAL_PAGE = "readium_pdf_initial_page"
+        private const val EXTRA_INITIAL_PERCENT = "readium_pdf_initial_percent"
         private const val EXTRA_RESULT_PAGE = "readium_pdf_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_pdf_result_page_count"
         private const val EXTRA_RESULT_PERCENT = "readium_pdf_result_percent"
@@ -565,6 +603,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         fun createIntent(
             context: Context,
             file: File,
+            fileId: String? = null,
             title: String,
             readerKey: String,
             libraryId: String = "",
@@ -572,6 +611,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             initialPage: Int
         ): Intent = Intent(context, ReadiumPdfReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_LIBRARY_ID, libraryId)

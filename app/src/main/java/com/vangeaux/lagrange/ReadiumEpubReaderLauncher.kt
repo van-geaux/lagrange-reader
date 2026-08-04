@@ -23,6 +23,7 @@ internal fun shouldUseReadiumEpubReader(mediaKind: MediaKind): Boolean =
 @Composable
 internal fun ReadiumEpubReaderLauncher(
     file: File,
+    fileId: String? = null,
     title: String,
     readerKey: String,
     libraryId: String,
@@ -58,6 +59,7 @@ internal fun ReadiumEpubReaderLauncher(
                 ReadiumEpubReaderActivity.createIntent(
                     context = context,
                     file = file,
+                    fileId = fileId,
                     title = title,
                     readerKey = readerKey,
                     libraryId = libraryId,

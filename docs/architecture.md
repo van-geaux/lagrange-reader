@@ -30,6 +30,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Completed local-copy records are separate from active/failed download attempts. Failed first downloads remain remote-only; failed updates preserve the prior completed copy.
 - Local exact-position audiobook history remains authoritative for seeking. Server sessions/reading attempts supplement it as analytics context.
 - Pending progress replay is outbound protection. It does not replace authoritative inbound progress hydration on normal online opens.
+- Completed reader sessions are a separate durable outbound queue from exact progress. `ReadingSessionTracker` measures active time and progress deltas; `ReadingSessionQueueStore` persists file-scoped POSTs and `ReadingSessionSyncWorker` retries them independently.
 - Normal online opens hydrate format-specific server progress before reader-state construction; offline and Preview flows remain isolated from those reads.
 - Cached browser content may be shown while reconciliation is in progress, but the reconciled server catalog is authoritative for server-backed visibility.
 - Server-missing catalog records remain visible with an explicit unavailable state; stale server-absent records are not resurrected after reconciliation.
@@ -42,6 +43,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - `ReaderTapZones` is the shared pure region model for Readium and continuous-comic tap handling and tutorial rendering. It stores normalized action rectangles, applies reading-direction and axis-inversion transforms, and keeps Menu handling separate from format-specific navigator progression.
 - Connected standalone audio uses authenticated direct Media3 streaming. Explicit downloaded/local audio remains on the local Readium/media path.
 - Audiobook restoration keeps Browser visible while the compact player prepares; explicit Book Detail Play may autoplay after preparation, while task/app restoration remains paused.
+- EPUB, PDF, and comic sessions begin after usable publication open and follow reader lifecycle/page activity. Audiobook sessions follow Media3 `isPlaying` transitions and remain separate from local exact-position audiobook history. Five minutes without active interaction/playback rolls a session over; Preview never queues a server session.
 - Preview never writes normal progress, active-reader state, or local session history.
 
 ## UI, cache, and security guardrails
@@ -57,4 +59,4 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 
 ## Current validation status
 
-The current release and recent cleanup gates are recorded in [`docs/testing.md`](testing.md) and [`docs/handover.md`](handover.md). The primary open device-validation item is the complete interrupted-download and failed-update lifecycle. Historical test counts and dated device results are in [`docs/architecture-archive.md`](architecture-archive.md).
+The current release and recent cleanup gates are recorded in [`docs/testing.md`](testing.md) and [`docs/handover.md`](handover.md). BOOX/Android e-ink physical validation remains deferred pending access to the device; the download, reader, media, navigation, and server-session validation described in the current testing matrix has been user-confirmed. Historical test counts and dated device results are in [`docs/architecture-archive.md`](architecture-archive.md).

@@ -9,6 +9,29 @@ import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
     @Test
+    fun `reading session payload matches the BookOrbit file session contract`() {
+        val payload = ReadingSessionPayload(
+            sessionId = "session-1",
+            fileId = "file/1",
+            startedAtMillis = 0L,
+            endedAtMillis = 10_000L,
+            durationSeconds = 10L,
+            progressDelta = 2.5,
+            endProgress = 42.5
+        )
+
+        val request = buildReadingSessionPayload(payload)
+
+        assertEquals("/api/v1/books/files/file%2F1/sessions", readingSessionPath(payload.fileId))
+        assertEquals("session-1", request.getString("sessionId"))
+        assertEquals("1970-01-01T00:00:00Z", request.getString("startedAt"))
+        assertEquals("1970-01-01T00:00:10Z", request.getString("endedAt"))
+        assertEquals(10L, request.getLong("durationSeconds"))
+        assertEquals(2.5, request.getDouble("progressDelta"), 0.001)
+        assertEquals(42.5, request.getDouble("endProgress"), 0.001)
+    }
+
+    @Test
     fun `reading status payload uses each server wire value`() {
         BookReadStatus.entries.forEach { status ->
             assertEquals(

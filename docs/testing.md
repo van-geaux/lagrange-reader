@@ -41,7 +41,7 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - a failed first download stays out of Local books;
 - a failed update preserves the previous local copy and exposes `Update local` plus `Delete local`.
 
-This is the primary outstanding device-validation item.
+The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
 
 ### Refresh lifecycle
 
@@ -65,14 +65,22 @@ When the affected scope requires it, verify:
 - tutorial geometry and labels match the transformed runtime tap regions for LTR, RTL, and selected inversion;
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
+- server session registration for EPUB, PDF, CBZ/CBR/CB7, and audiobooks;
+- explicit audiobook pause finalizes and uploads the active listening interval; resumed playback starts a new interval;
+- no session POST for Preview, paused/background time, or audiobook screen-open without playback;
+- offline session queue replay after connectivity returns, including stable session IDs and no duplicate delivery;
+- five-minute idle rollover and final-session delivery on reader/player close;
 - reader settings persistence per library; issue #19 current-package APK-upgrade persistence was user-confirmed working on the supplied debug build;
 - EPUB reader options open at approximately two-thirds of the reader surface, the top handle exposes a minimum 48 dp touch target, contracts the sheet down to a handle-only strip without dismissing it, and expands it again without losing the live reader preview; the EPUB line-spacing and 0.0–1.0 rem word-spacing sliders update the preview and persist after reopening the options;
-- reader-option choice groups wrap onto additional rows on narrow screens, including reading direction, typography, tap-zone layout/inversion, and format layout choices; verify that the complete set is usable without horizontal swiping.
+- reader-option choice groups wrap onto additional rows on narrow screens, including reading direction, typography, tap-zone layout/inversion, and format layout choices; verify that the complete set is usable without horizontal swiping;
 - changing line spacing or the options-sheet height preserves the other reader settings, including theme, font, direction, margins, and layout;
+- Book Detail Previous/Next navigation from second and third libraries, including current-library/current-format-family preference, same-family fallback by library order, fallback format-family selection, audiobook extensions such as M4A, M4B, and MP3, duplicate indexes, and unavailable boundaries. User-confirmed on the rebuilt debug APK.
 - same-application-ID APK upgrade preserves EPUB theme/font/size/margins and the applicable PDF/comic direction, layout, and page-gap settings for more than one library;
 - the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;
 - server-missing versus locally deleted state;
 - large text, accessibility, orientation, offline, and narrow-width behavior.
+
+The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 
 ### Authentication and OIDC
 
