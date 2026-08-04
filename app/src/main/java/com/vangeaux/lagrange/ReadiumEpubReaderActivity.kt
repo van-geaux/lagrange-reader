@@ -99,14 +99,15 @@ internal suspend fun openReadiumEpub(
     ReadiumEpubOpenResult.Opened(publication)
 }
 
-internal fun readiumReadingProgression(
+internal fun readiumEpubReadingProgression(
     readingDirection: LibraryReadingDirection
-): ReadiumReadingProgression = if (
-    readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
-) {
-    ReadiumReadingProgression.RTL
-} else {
-    ReadiumReadingProgression.LTR
+): ReadiumReadingProgression {
+    // LibraryReadingDirection controls physical tap navigation only. Keep EPUB
+    // content/layout direction unchanged so Readium does not alter typography.
+    return when (readingDirection) {
+        LibraryReadingDirection.LEFT_TO_RIGHT,
+        LibraryReadingDirection.RIGHT_TO_LEFT -> ReadiumReadingProgression.LTR
+    }
 }
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -137,7 +138,7 @@ internal fun readiumPreferences(
     },
     fontSize = fontScale.coerceIn(0.9f, 1.5f).toDouble(),
     fontFamily = readiumFontFamily(fontFamily),
-    readingProgression = readiumReadingProgression(readingDirection),
+    readingProgression = readiumEpubReadingProgression(readingDirection),
     pageMargins = 0.0,
     columnCount = ColumnCount.ONE,
     scroll = layoutMode == ReaderLayoutMode.CONTINUOUS
