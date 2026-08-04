@@ -25,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -109,6 +110,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -1646,6 +1648,20 @@ internal fun readerChromeProgressionState(
 internal const val READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS = 3_000L
 internal const val READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP = 28
 internal const val READER_POSITION_CONTROL_HEIGHT_FRACTION = 0.75f
+internal const val READER_OPTIONS_DEFAULT_HEIGHT_FRACTION = 2f / 3f
+internal const val READER_OPTIONS_MIN_HEIGHT_FRACTION = 0.45f
+internal const val READER_OPTIONS_MAX_HEIGHT_FRACTION = 0.92f
+internal const val READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP = 48
+
+internal fun readerOptionsHeightFractionAfterDrag(
+    currentFraction: Float,
+    dragAmountPx: Float,
+    containerHeightPx: Float
+): Float {
+    if (!containerHeightPx.isFinite() || containerHeightPx <= 0f) return currentFraction
+    return (currentFraction - dragAmountPx / containerHeightPx)
+        .coerceIn(READER_OPTIONS_MIN_HEIGHT_FRACTION, READER_OPTIONS_MAX_HEIGHT_FRACTION)
+}
 
 internal data class ReaderTapZoneTutorialRegion(
     val label: String,
@@ -2190,84 +2206,112 @@ internal fun EpubReaderOptionsBottomSheet(
             )
         }
     }
-    MaterialTheme(
-        colorScheme = colors,
-        typography = parentTypography,
-        shapes = parentShapes
-    ) {
-        Surface(
-            modifier = modifier,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            shadowElevation = 12.dp
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        var sheetHeightFraction by remember { mutableStateOf(READER_OPTIONS_DEFAULT_HEIGHT_FRACTION) }
+        val density = LocalDensity.current
+        val containerHeightPx = with(density) { maxHeight.toPx() }
+        val sheetHeight = maxHeight * sheetHeightFraction
+        MaterialTheme(
+            colorScheme = colors,
+            typography = parentTypography,
+            shapes = parentShapes
         ) {
-            Column(
+            Surface(
                 modifier = Modifier
-                    .heightIn(max = 620.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = 20.dp,
-                        top = 10.dp,
-                        end = 20.dp,
-                        bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
-                    ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxWidth()
+                    .height(sheetHeight)
+                    .testTag("reader-options-sheet"),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 12.dp
             ) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxHeight()
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(width = 42.dp, height = 4.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
-                                shape = RoundedCornerShape(2.dp)
+                            .fillMaxWidth()
+                            .heightIn(min = READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP.dp)
+                            .padding(horizontal = 20.dp)
+                            .pointerInput(containerHeightPx) {
+                                detectVerticalDragGestures { _, dragAmount ->
+                                    sheetHeightFraction = readerOptionsHeightFractionAfterDrag(
+                                        currentFraction = sheetHeightFraction,
+                                        dragAmountPx = dragAmount,
+                                        containerHeightPx = containerHeightPx
+                                    )
+                                }
+                            }
+                            .testTag("reader-options-resize-handle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 42.dp, height = 4.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                start = 20.dp,
+                                end = 20.dp,
+                                bottom = 18.dp + EPUB_READER_PROGRESS_FOOTER_HEIGHT
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "Reader options",
+                                modifier = Modifier.semantics { heading() },
+                                style = MaterialTheme.typography.titleLarge
                             )
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "Reader options",
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(
-                        title,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        status,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = onContinueReading,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Continue reading")
+                            Text(
+                                title,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                status,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = onContinueReading,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Continue reading")
+                            }
+                            OutlinedButton(
+                                onClick = onCloseBook,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Close book")
+                            }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                        Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
+                        ReaderConfigurationControls(
+                            value = preferences,
+                            onPreferencesChange = onPreferencesChange,
+                            isEpub = true,
+                            onCustomFontRequest = onCustomFontRequest,
+                            onCustomFontRemove = onCustomFontRemove
+                        )
                     }
-                    OutlinedButton(
-                        onClick = onCloseBook,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Close book")
-                    }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
-                ReaderConfigurationControls(
-                    value = preferences,
-                    onPreferencesChange = onPreferencesChange,
-                    isEpub = true,
-                    onCustomFontRequest = onCustomFontRequest,
-                    onCustomFontRemove = onCustomFontRemove
-                )
             }
         }
     }
@@ -2913,6 +2957,10 @@ internal fun epubPageJumpJavascript(pageIndex: Int): String {
 
 internal fun formatEpubFontScale(fontScale: Float): String {
     return String.format(Locale.US, "%.0f%%", fontScale * 100f)
+}
+
+internal fun formatEpubLineSpacing(lineSpacing: Float): String {
+    return String.format(Locale.US, "%.1f×", lineSpacing)
 }
 
 private fun formatEpubCssPercent(value: Float): String {

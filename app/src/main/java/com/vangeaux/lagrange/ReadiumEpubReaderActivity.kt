@@ -121,10 +121,15 @@ internal fun readiumFontFamily(fontFamily: EpubReaderFontFamily): ReadiumFontFam
     EpubReaderFontFamily.CUSTOM -> null
 }
 
+internal fun readiumEpubLineHeight(lineSpacing: Float): Double = lineSpacing
+    .coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING)
+    .toDouble()
+
 @OptIn(ExperimentalReadiumApi::class)
 internal fun readiumPreferences(
     theme: EpubReaderTheme,
     fontScale: Float,
+    lineSpacing: Float = DEFAULT_EPUB_LINE_SPACING,
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT
@@ -137,11 +142,15 @@ internal fun readiumPreferences(
         EpubReaderTheme.Dark -> ReadiumTheme.DARK
     },
     fontSize = fontScale.coerceIn(0.9f, 1.5f).toDouble(),
+    lineHeight = readiumEpubLineHeight(lineSpacing),
     fontFamily = readiumFontFamily(fontFamily),
     readingProgression = readiumEpubReadingProgression(readingDirection),
     pageMargins = 0.0,
     columnCount = ColumnCount.ONE,
-    scroll = layoutMode == ReaderLayoutMode.CONTINUOUS
+    scroll = layoutMode == ReaderLayoutMode.CONTINUOUS,
+    // Readium only applies lineHeight and the other user CSS overrides when
+    // publisher styles are disabled.
+    publisherStyles = false
 )
 
 internal fun cssHexColorInt(value: String): Int {
@@ -504,6 +513,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             initialPreferences = readiumPreferences(
                 selectedTheme,
                 fontScale,
+                readerPreferences.lineSpacing,
                 readingDirection,
                 epubLayoutMode,
                 selectedFontFamily
@@ -688,6 +698,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             readiumPreferences(
                 normalized.theme,
                 normalized.fontScale,
+                normalized.lineSpacing,
                 normalized.readingDirection,
                 normalized.epubLayoutMode,
                 normalized.fontFamily

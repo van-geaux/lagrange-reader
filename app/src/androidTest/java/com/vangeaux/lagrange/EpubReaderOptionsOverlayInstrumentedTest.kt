@@ -2,10 +2,13 @@ package com.vangeaux.lagrange
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -15,13 +18,63 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class EpubReaderOptionsOverlayInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun readiumPreferencesEnableUserCssOverridesForLineSpacing() {
+        val preferences = readiumPreferences(
+            theme = EpubReaderTheme.Light,
+            fontScale = 1.0f,
+            lineSpacing = 1.4f
+        )
+
+        assertEquals(1.4, preferences.lineHeight)
+        assertFalse(preferences.publisherStyles == true)
+    }
+
+    @Test
+    fun readerOptionsSheetDefaultsToTwoThirdsAndCanExpand() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(width = 360.dp, height = 600.dp)) {
+                EpubReaderOptionsBottomSheet(
+                    title = "Resize test",
+                    status = "Chapter 1/1 · Page 1/1",
+                    preferences = LibraryReaderPreferences(),
+                    onContinueReading = {},
+                    onCloseBook = {},
+                    onPreferencesChange = {},
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("reader-options-sheet").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Reading configuration")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-resize-handle")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(READER_OPTIONS_RESIZE_HANDLE_MIN_HEIGHT_DP.dp)
+
+        composeRule
+            .onNodeWithTag("reader-options-resize-handle")
+            .performTouchInput { swipeUp() }
+
+        composeRule.onNodeWithTag("reader-options-sheet").assertIsDisplayed()
+    }
 
     @Test
     fun bottomSheetSeparatesContinueReadingFromClosingTheBook() {
@@ -97,6 +150,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             LibraryReaderPreferences(
                 theme = EpubReaderTheme.Dark,
                 fontScale = 1.3f,
+                lineSpacing = 1.2f,
                 readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
                 epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
                 padding = EpubPaddingPercentages(11f, 22f, 33f, 44f)
@@ -122,11 +176,16 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onNodeWithTag("reader-options-reading-font-family-system_sans_serif")
             .performScrollTo()
             .performClick()
+        composeRule
+            .onNodeWithTag("reader-options-reading-line-spacing")
+            .performScrollTo()
+            .performTouchInput { swipeRight() }
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, profile.value.fontFamily)
             assertEquals(EpubReaderTheme.Dark, profile.value.theme)
             assertEquals(1.3f, profile.value.fontScale)
+            assertTrue(profile.value.lineSpacing > 1.2f)
             assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
             assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)

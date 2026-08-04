@@ -2958,6 +2958,19 @@ internal fun ReaderConfigurationControls(
                 }
             }
         }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Line spacing ${formatEpubLineSpacing(value.lineSpacing)}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Slider(
+                value = value.lineSpacing,
+                onValueChange = { onPreferencesChange(value.copy(lineSpacing = it)) },
+                valueRange = DEFAULT_EPUB_LINE_SPACING..MAX_EPUB_LINE_SPACING,
+                steps = 9,
+                modifier = Modifier.testTag("$testTagPrefix-line-spacing")
+            )
+        }
     }
     Row(
         modifier = Modifier.fillMaxWidth(),

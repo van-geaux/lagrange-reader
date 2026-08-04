@@ -7,7 +7,7 @@ This document contains the current project direction only. Historical work order
 - Release: Lagrange 1.4.1 is published. See [`docs/release-notes/v1.4.1.md`](release-notes/v1.4.1.md).
 - Branch: `main`, aligned with `origin/main`.
 - Recent completed work: behavior-neutral cleanup, release integration, pull-to-refresh, continuous EPUB seeking, reader fonts including one imported custom font, staged startup, server-missing catalog state, and download lifecycle implementation.
-- Current implementation state: no new implementation task has been selected. Choose the next item with the user before editing.
+- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing are implemented and user-confirmed on-device; complete device validation for the unrelated download/session follow-ups before release handoff.
 
 ## Active validation and follow-up
 
@@ -18,6 +18,7 @@ This document contains the current project direction only. Historical work order
 5. Treat broader offline RAR/7z extraction and other optional validation as user-directed follow-up, not an implementation blocker for the current release.
 6. [x] [#19](https://github.com/van-geaux/lagrange-reader/issues/19): preserve current-package reader appearance preferences through a versioned, tolerant per-library store; legacy flat profiles remain readable, and old-package migration remains intentionally out of scope.
 7. [x] [#24](https://github.com/van-geaux/lagrange-reader/issues/24): keep EPUB reading-direction changes limited to switching the left-to-right/right-to-left tap region; preserve text alignment, punctuation placement, and all other typography/layout settings. Automated coverage and user-confirmed on-device validation are complete.
+11. [x] [#23](https://github.com/van-geaux/lagrange-reader/issues/23): make the reading-options window adjustable for live preview, with a default height of approximately two-thirds of the screen so the reader remains visible while settings are changed; include the already requested persisted EPUB line-spacing option. Automated coverage and user-confirmed on-device validation are complete.
 
 ## Decision and documentation rules
 
