@@ -2575,6 +2575,7 @@ internal fun OptionsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LibraryReaderConfiguration(
     libraries: List<LibrarySummary>,
@@ -2628,9 +2629,9 @@ private fun LibraryReaderConfiguration(
         }
         if (selectedLibrary != null) {
             Text("Reading direction", style = MaterialTheme.typography.titleMedium)
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 LibraryReadingDirection.values().forEach { direction ->
                     FilterChip(
@@ -2656,9 +2657,9 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading-tap-zone"
             )
             Text("Typography", style = MaterialTheme.typography.titleMedium)
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 EPUB_THEME_OPTIONS.forEach { theme ->
                     FilterChip(
@@ -2816,6 +2817,7 @@ private fun ReaderFormatLayoutSettings(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReaderLayoutModeSettings(
     formatLabel: String,
@@ -2824,9 +2826,9 @@ private fun ReaderLayoutModeSettings(
     onLayoutModeChange: (ReaderLayoutMode) -> Unit
 ) {
     Text("$formatLabel layout", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ReaderLayoutMode.values().forEach { mode ->
             FilterChip(
@@ -2841,6 +2843,7 @@ private fun ReaderLayoutModeSettings(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReaderTapZoneSettings(
     value: LibraryReaderPreferences,
@@ -2848,9 +2851,9 @@ private fun ReaderTapZoneSettings(
     testTagPrefix: String
 ) {
     Text("Tap zones", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ReaderTapZoneLayout.values().forEach { layout ->
             FilterChip(
@@ -2864,9 +2867,9 @@ private fun ReaderTapZoneSettings(
         }
     }
     Text("Tap-zone inversion", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ReaderTapZoneInvertMode.values().forEach { invertMode ->
             FilterChip(
@@ -2881,6 +2884,7 @@ private fun ReaderTapZoneSettings(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
@@ -2891,9 +2895,9 @@ internal fun ReaderConfigurationControls(
     onCustomFontRemove: () -> Unit = {}
 ) {
     Text("Reading direction", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         LibraryReadingDirection.values().forEach { direction ->
             FilterChip(
@@ -2912,9 +2916,9 @@ internal fun ReaderConfigurationControls(
         testTagPrefix = "$testTagPrefix-tap-zone"
     )
     Text("Typography", style = MaterialTheme.typography.titleMedium)
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         EPUB_THEME_OPTIONS.forEach { theme ->
             FilterChip(

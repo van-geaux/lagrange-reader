@@ -79,6 +79,30 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     }
 
     @Test
+    fun readerOptionChoicesWrapWhenTheAvailableWidthIsNarrow() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(width = 180.dp, height = 1200.dp)) {
+                ReaderConfigurationControls(
+                    value = LibraryReaderPreferences(),
+                    onPreferencesChange = {},
+                    isEpub = true
+                )
+            }
+        }
+
+        val lightBounds = composeRule
+            .onNodeWithTag("reader-options-reading-theme-light")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        val darkBounds = composeRule
+            .onNodeWithTag("reader-options-reading-theme-dark")
+            .fetchSemanticsNode()
+            .boundsInRoot
+
+        assertTrue("Theme choices should wrap onto another row", darkBounds.top > lightBounds.top)
+    }
+
+    @Test
     fun bottomSheetSeparatesContinueReadingFromClosingTheBook() {
         val dismissCount = mutableIntStateOf(0)
         val continueCount = mutableIntStateOf(0)
