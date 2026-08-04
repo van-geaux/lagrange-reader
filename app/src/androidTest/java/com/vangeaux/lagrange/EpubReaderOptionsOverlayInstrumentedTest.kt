@@ -79,6 +79,30 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     }
 
     @Test
+    fun readerOptionChoicesWrapWhenTheAvailableWidthIsNarrow() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(width = 180.dp, height = 1200.dp)) {
+                ReaderConfigurationControls(
+                    value = LibraryReaderPreferences(),
+                    onPreferencesChange = {},
+                    isEpub = true
+                )
+            }
+        }
+
+        val lightBounds = composeRule
+            .onNodeWithTag("reader-options-reading-theme-light")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        val darkBounds = composeRule
+            .onNodeWithTag("reader-options-reading-theme-dark")
+            .fetchSemanticsNode()
+            .boundsInRoot
+
+        assertTrue("Theme choices should wrap onto another row", darkBounds.top > lightBounds.top)
+    }
+
+    @Test
     fun bottomSheetSeparatesContinueReadingFromClosingTheBook() {
         val dismissCount = mutableIntStateOf(0)
         val continueCount = mutableIntStateOf(0)
@@ -226,6 +250,12 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onNodeWithTag("reader-options-reading-theme-dark")
             .performScrollTo()
             .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-invert-both")
+            .performScrollTo()
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderTheme.Dark, profile.value.theme)
@@ -234,6 +264,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(8f, profile.value.pdfPageGapDp)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.comicLayoutMode)
             assertEquals(24f, profile.value.comicPageGapDp)
+            assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
+            assertEquals(ReaderTapZoneInvertMode.BOTH, profile.value.tapZoneInvertMode)
         }
     }
 }

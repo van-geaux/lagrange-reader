@@ -26,13 +26,13 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -147,6 +147,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private var currentPageCount by mutableStateOf(1)
     private var pageLocators: List<Locator> = emptyList()
     private var tapZoneTutorialHasShown = false
+    private var tapZoneTutorialHideJob: Job? = null
 
     private val locatorStore by lazy { ReadiumPdfLocatorStore(this) }
 
@@ -306,6 +307,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
                         readingDirection = readingDirection,
+                        tapZoneLayout = readerPreferences.tapZoneLayout,
+                        tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -318,6 +321,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
     }
@@ -373,16 +377,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
                 readingDirection = { readingDirection },
-                horizontalEdgeThresholdPercent = 0.25f
+                tapZoneLayout = { readerPreferences.tapZoneLayout },
+                tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
+                onMenu = ::toggleChrome
             )
-        )
-        fragment.addInputListener(
-            object : InputListener {
-                override fun onTap(event: TapEvent): Boolean {
-                    toggleChrome()
-                    return true
-                }
-            }
         )
         navigator = fragment
         lifecycleScope.launch {
@@ -426,6 +424,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
+        val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         readingDirection = normalized.readingDirection
         navigator?.publicationView?.layoutDirection = if (
@@ -434,6 +433,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         navigator?.submitPreferences(pdfiumPreferencesFor(normalized))
         val store = AppPreferencesStore(this)
         store.save(store.read().withReaderPreferences(libraryId, normalized))
+        if (tapZoneChanged) showTapZoneTutorial()
     }
 
     private fun toggleChrome() {
@@ -461,15 +461,16 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun showTapZoneTutorial() {
         tapZoneTutorialHasShown = true
         tapZoneTutorialView.visibility = View.VISIBLE
-        tapZoneTutorialView.doOnPreDraw {
-            lifecycleScope.launch {
-                delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
-                hideTapZoneTutorial()
-            }
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = lifecycleScope.launch {
+            delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
+            hideTapZoneTutorial()
         }
     }
 
     private fun hideTapZoneTutorial() {
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = null
         tapZoneTutorialView.visibility = View.GONE
     }
 

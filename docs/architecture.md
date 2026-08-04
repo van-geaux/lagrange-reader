@@ -39,6 +39,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - EPUB uses generated Readium positions for percentage-based resume, with an equal-chapter fallback only when positions or percentage are unusable. Exact cross-client CFI interoperability remains deferred.
 - Continuous EPUB uses active-resource progression for its right-side rail; paginated EPUB, PDF, and comics retain format-appropriate page navigation.
 - PDF uses Readium PDFium. Paginated comics use Readium image navigation; continuous comics use a bounded book-scoped lazy surface with page/read limits and decoded-bitmap limits.
+- `ReaderTapZones` is the shared pure region model for Readium and continuous-comic tap handling and tutorial rendering. It stores normalized action rectangles, applies reading-direction and axis-inversion transforms, and keeps Menu handling separate from format-specific navigator progression.
 - Connected standalone audio uses authenticated direct Media3 streaming. Explicit downloaded/local audio remains on the local Readium/media path.
 - Audiobook restoration keeps Browser visible while the compact player prepares; explicit Book Detail Play may autoplay after preparation, while task/app restoration remains paused.
 - Preview never writes normal progress, active-reader state, or local session history.
@@ -47,7 +48,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 
 - Keep foreground audiobook playback service-owned and compact-only unless a user-approved product decision changes that boundary.
 - Preserve exact BookOrbit statuses independently from legacy completion flags.
-- Preserve per-library reader profiles, cover ownership/aspect ratios, and reader-direction behavior. Reader profiles use a versioned, per-library JSON envelope; legacy flat profiles remain readable, and malformed profiles do not invalidate other libraries.
+- Preserve per-library reader profiles, cover ownership/aspect ratios, reader-direction behavior, and tap-zone layout/inversion. Reader profiles use a versioned, per-library JSON envelope; legacy flat profiles remain readable, and malformed profiles do not invalidate other libraries.
 - Bound source responses, decoded image sizes, cache scope, and reader preparation; clean incomplete temporary outputs.
 - Keep authentication-origin, TLS, cookie, token, and redirect checks separate from general URL helpers.
 - Do not route connected standalone audio through Readium publication retrieval.

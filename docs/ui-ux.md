@@ -20,6 +20,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - Server-missing catalog records remain visible with a yellow `Missing!` overlay; this is distinct from a locally deleted copy.
 - EPUB-only reader font controls include Publisher default, built-in normal/accessibility choices, and one imported custom font slot.
 - EPUB reader options open at approximately two-thirds of the available reader surface. The top handle is fixed outside the scrollable settings, exposes a minimum 48 dp touch target, and resizes the session-only sheet within bounded limits. EPUB line spacing is a persisted 1.0×–2.0× live-preview option, and default word spacing is a persisted 0.0–1.0 rem live-preview option; both are applied through Readium’s user CSS preferences.
+- Reader tap zones are persisted per library. The default uses equal-width Previous / Menu / Next thirds; Vertical thirds provides full-width top / middle / bottom Previous / Menu / Next regions; Kindle, L-shape, Edge, and Menu-only layouts are also available, with independent None, Horizontal, Vertical, and Both inversion modes. Reading direction changes the horizontal action mapping without changing EPUB typography. Changing the tap-zone layout or inversion from reader options re-shows the tutorial over the reading surface while keeping the options sheet above it.
 - Audiobook session history is local and exact-position; server reading history is analytics context and is not used as a seek position.
 
 ## Current visual rules
@@ -27,6 +28,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - Preserve meaningful touch targets and TalkBack semantics even when compacting visual layout.
 - Prefer reusable Compose components and theme tokens over screen-local spacing and styling.
 - Keep action rows stable at narrow widths; move optional actions into More rather than wrapping required actions.
+- Wrap reader-option choice groups onto additional rows when the available width is insufficient; do not require horizontal swiping to discover the complete set of choices.
 - Preserve current cover aspect ratios and bottom alignment for portrait and square covers.
 - Keep reader controls, tutorial regions, orientation behavior, keep-awake behavior, and Preview isolation consistent across supported formats.
 - Treat unavailable media as an explicit state rather than a generic empty or local-download failure.

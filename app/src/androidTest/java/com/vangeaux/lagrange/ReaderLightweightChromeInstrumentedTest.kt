@@ -120,7 +120,7 @@ class ReaderLightweightChromeInstrumentedTest {
     }
 
     @Test
-    fun tapZoneTutorialShowsThreeEqualLabeledRegions() {
+    fun tapZoneTutorialShowsEqualThirdLabeledRegions() {
         val dismissCount = mutableIntStateOf(0)
         composeRule.setContent {
             ReaderTapZoneTutorial(onDismiss = { dismissCount.intValue++ })

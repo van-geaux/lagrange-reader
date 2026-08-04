@@ -55,18 +55,27 @@ internal const val CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT = 2
 internal fun continuousComicTapAction(
     x: Float,
     width: Float,
-    readingDirection: LibraryReadingDirection
+    readingDirection: LibraryReadingDirection,
+    y: Float = 0f,
+    height: Float = 1f,
+    layout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+    invertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE
 ): ContinuousComicTapAction {
-    if (width <= 0f) return ContinuousComicTapAction.MENU
-    val edge = width * 0.25f
-    val isLeftEdge = x <= edge
-    val isRightEdge = x >= width - edge
-    if (!isLeftEdge && !isRightEdge) return ContinuousComicTapAction.MENU
-    val isForward = when (readingDirection) {
-        LibraryReadingDirection.LEFT_TO_RIGHT -> isRightEdge
-        LibraryReadingDirection.RIGHT_TO_LEFT -> isLeftEdge
+    return when (
+        readerTapZoneAction(
+            x = x,
+            y = y,
+            width = width,
+            height = height,
+            layout = layout,
+            readingDirection = readingDirection,
+            invertMode = invertMode
+        )
+    ) {
+        ReaderTapZoneAction.PREVIOUS -> ContinuousComicTapAction.PREVIOUS
+        ReaderTapZoneAction.NEXT -> ContinuousComicTapAction.NEXT
+        ReaderTapZoneAction.MENU -> ContinuousComicTapAction.MENU
     }
-    return if (isForward) ContinuousComicTapAction.NEXT else ContinuousComicTapAction.PREVIOUS
 }
 
 internal fun decodeContinuousComicPage(bytes: ByteArray, targetWidthPx: Int): Bitmap? {
@@ -121,6 +130,8 @@ internal fun ContinuousComicReader(
     initialPage: Int,
     pageGapDp: Float,
     readingDirection: LibraryReadingDirection,
+    tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+    tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
     cachedPage: (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     cachedPageAspectRatio: (pageIndex: Int, targetWidthPx: Int) -> Float?,
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
@@ -162,7 +173,12 @@ internal fun ContinuousComicReader(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(readingDirection, pageIndexes.size) {
+                .pointerInput(
+                    readingDirection,
+                    tapZoneLayout,
+                    tapZoneInvertMode,
+                    pageIndexes.size
+                ) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         val up = waitForUpOrCancellation()
@@ -170,8 +186,12 @@ internal fun ContinuousComicReader(
                             onTap(
                                 continuousComicTapAction(
                                     x = up.position.x,
+                                    y = up.position.y,
                                     width = size.width.toFloat(),
-                                    readingDirection = readingDirection
+                                    height = size.height.toFloat(),
+                                    readingDirection = readingDirection,
+                                    layout = tapZoneLayout,
+                                    invertMode = tapZoneInvertMode
                                 )
                             )
                         }

@@ -30,7 +30,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -213,6 +212,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var tapZoneTutorialHasShown = false
+    private var tapZoneTutorialHideJob: Job? = null
 
     private val locatorStore by lazy { ReadiumComicLocatorStore(this) }
 
@@ -384,6 +384,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
                         readingDirection = readingDirection,
+                        tapZoneLayout = readerPreferences.tapZoneLayout,
+                        tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -396,6 +398,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
     }
@@ -457,16 +460,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             LibraryDirectionalNavigationAdapter(
                 navigator = fragment,
                 readingDirection = { readingDirection },
-                horizontalEdgeThresholdPercent = 0.25f
+                tapZoneLayout = { readerPreferences.tapZoneLayout },
+                tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
+                onMenu = ::toggleChrome
             )
-        )
-        fragment.addInputListener(
-            object : InputListener {
-                override fun onTap(event: TapEvent): Boolean {
-                    toggleChrome()
-                    return true
-                }
-            }
         )
         navigator = fragment
         navigatorLocationJob?.cancel()
@@ -495,6 +492,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         initialPage = initialPage,
                         pageGapDp = readerPreferences.comicPageGapDp,
                         readingDirection = readingDirection,
+                        tapZoneLayout = readerPreferences.tapZoneLayout,
+                        tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                         cachedPage = ::cachedContinuousComicPage,
                         cachedPageAspectRatio = ::cachedContinuousComicPageAspectRatio,
                         loadPage = { pageIndex, targetWidthPx ->
@@ -642,6 +641,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
         val layoutChanged = normalized.comicLayoutMode != readerPreferences.comicLayoutMode
+        val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         readingDirection = normalized.readingDirection
         val store = AppPreferencesStore(this)
@@ -652,6 +652,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             navigator?.publicationView?.layoutDirection = if (
                 normalized.readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
             ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        }
+        if (tapZoneChanged) {
+            showTapZoneTutorial(continuous = normalized.comicLayoutMode == ReaderLayoutMode.CONTINUOUS)
         }
     }
 
@@ -703,19 +706,22 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                     onDismiss = ::hideTapZoneTutorial,
                     readingDirection = readingDirection,
                     continuous = continuous,
+                    tapZoneLayout = readerPreferences.tapZoneLayout,
+                    tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                     modifier = Modifier.fillMaxSize()
                 )
             }
         }
-        tapZoneTutorialView.doOnPreDraw {
-            lifecycleScope.launch {
-                delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
-                hideTapZoneTutorial()
-            }
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = lifecycleScope.launch {
+            delay(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS)
+            hideTapZoneTutorial()
         }
     }
 
     private fun hideTapZoneTutorial() {
+        tapZoneTutorialHideJob?.cancel()
+        tapZoneTutorialHideJob = null
         tapZoneTutorialView.visibility = View.GONE
     }
 
