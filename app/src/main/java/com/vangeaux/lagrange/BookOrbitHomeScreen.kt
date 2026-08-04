@@ -2971,6 +2971,19 @@ internal fun ReaderConfigurationControls(
                 modifier = Modifier.testTag("$testTagPrefix-line-spacing")
             )
         }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Word spacing ${formatEpubWordSpacing(value.wordSpacing)}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Slider(
+                value = value.wordSpacing,
+                onValueChange = { onPreferencesChange(value.copy(wordSpacing = it)) },
+                valueRange = DEFAULT_EPUB_WORD_SPACING..MAX_EPUB_WORD_SPACING,
+                steps = 9,
+                modifier = Modifier.testTag("$testTagPrefix-word-spacing")
+            )
+        }
     }
     Row(
         modifier = Modifier.fillMaxWidth(),

@@ -18,6 +18,7 @@ class LibraryReaderPreferencesTest {
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
             lineSpacing = 1.4f,
+            wordSpacing = 0.4f,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -61,6 +62,7 @@ class LibraryReaderPreferencesTest {
             fontFamily = EpubReaderFontFamily.SYSTEM_SANS_SERIF,
             fontScale = 1.2f,
             lineSpacing = 1.3f,
+            wordSpacing = 0.2f,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -94,6 +96,7 @@ class LibraryReaderPreferencesTest {
                 readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
                 fontScale = 2f,
                 lineSpacing = 3f,
+                wordSpacing = 2f,
                 padding = EpubPaddingPercentages(-1f, 101f, 25f, 50f),
                 pdfPageGapDp = -10f,
                 comicPageGapDp = 100f
@@ -103,6 +106,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, initial.readerPreferencesFor("manga").readingDirection)
         assertEquals(1.5f, initial.readerPreferencesFor("manga").fontScale)
         assertEquals(MAX_EPUB_LINE_SPACING, initial.readerPreferencesFor("manga").lineSpacing)
+        assertEquals(MAX_EPUB_WORD_SPACING, initial.readerPreferencesFor("manga").wordSpacing)
         assertEquals(EpubPaddingPercentages(0f, 100f, 25f, 50f), initial.readerPreferencesFor("manga").padding)
         assertEquals(0f, initial.readerPreferencesFor("manga").pdfPageGapDp)
         assertEquals(MAX_READER_PAGE_GAP_DP, initial.readerPreferencesFor("manga").comicPageGapDp)
@@ -122,6 +126,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(DEFAULT_READER_PAGE_GAP_DP, decoded.comicPageGapDp)
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
+        assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
     }
 
     @Test
@@ -186,6 +191,20 @@ class LibraryReaderPreferencesTest {
         assertEquals(
             MAX_EPUB_LINE_SPACING.toDouble(),
             readiumEpubLineHeight(3f),
+            0.0001
+        )
+    }
+
+    @Test
+    fun `EPUB word spacing maps to Readium word spacing and clamps`() {
+        assertEquals(
+            0.4,
+            readiumEpubWordSpacing(0.4f),
+            0.0001
+        )
+        assertEquals(
+            MAX_EPUB_WORD_SPACING.toDouble(),
+            readiumEpubWordSpacing(2f),
             0.0001
         )
     }
