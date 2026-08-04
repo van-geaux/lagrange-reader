@@ -68,6 +68,7 @@ private const val LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS = 4
 private const val LIBRARY_PARALLEL_PAGE_THRESHOLD = 4
 private const val COMPLETED_PROGRESS_PERCENT = 99.5f
 private val progressSyncMutex = Mutex()
+private val readingSessionSyncMutex = Mutex()
 
 internal const val LAGRANGE_GITHUB_RELEASES_API_URL =
     "https://api.github.com/repos/van-geaux/lagrange-reader/releases/latest"
@@ -165,6 +166,12 @@ private enum class ProgressPostResult {
     DEFERRED
 }
 
+private enum class ReadingSessionPostResult {
+    ACCEPTED,
+    INVALID,
+    DEFERRED
+}
+
 internal fun bookReadingSessionsPath(bookId: String, page: Int, pageSize: Int): String {
     val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name())
     return "/api/v1/books/$encodedBookId/sessions" +
@@ -176,6 +183,21 @@ internal fun bookReadingAttemptsPath(bookId: String, page: Int, pageSize: Int): 
     return "/api/v1/books/$encodedBookId/reading-attempts" +
         "?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceAtLeast(1)}"
 }
+
+internal fun readingSessionPath(fileId: String): String {
+    val encodedFileId = java.net.URLEncoder.encode(fileId, Charsets.UTF_8.name())
+    return "/api/v1/books/files/$encodedFileId/sessions"
+}
+
+internal fun buildReadingSessionPayload(item: ReadingSessionPayload): JSONObject = JSONObject()
+    .put("sessionId", item.sessionId)
+    .put("startedAt", Instant.ofEpochMilli(item.startedAtMillis).toString())
+    .put("endedAt", Instant.ofEpochMilli(item.endedAtMillis).toString())
+    .put("durationSeconds", item.durationSeconds)
+    .apply {
+        item.progressDelta?.let { put("progressDelta", it) }
+        item.endProgress?.let { put("endProgress", it) }
+    }
 
 internal fun extractAccessToken(payload: String): String? {
     val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
@@ -277,12 +299,16 @@ interface BookOrbitDataSource {
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
     suspend fun pendingProgressCount(): Int
     suspend fun syncPendingProgress(): SyncAttemptResult
+    suspend fun queueReadingSession(payload: ReadingSessionPayload) = Unit
+    suspend fun pendingReadingSessionCount(): Int = 0
+    suspend fun syncPendingReadingSessions(): SyncAttemptResult = SyncAttemptResult.Success
     suspend fun canReachServer(serverUrl: String): Boolean
     suspend fun checkServer(serverUrl: String): ServerCheckResult
 }
 
 class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
+    private val readingSessionQueueStore = ReadingSessionQueueStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val libraryCatalogStore = LibraryCatalogStore(context)
@@ -1495,6 +1521,56 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    override suspend fun queueReadingSession(payload: ReadingSessionPayload) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank() || payload.fileId.isBlank()) return@withContext
+        readingSessionQueueStore.enqueue(
+            payload.copy(
+                serverUrl = payload.serverUrl.ifBlank { serverUrl },
+                updatedAtMillis = payload.updatedAtMillis.takeIf { it > 0L } ?: System.currentTimeMillis()
+            )
+        )
+        enqueueReadingSessionWorker()
+    }
+
+    override suspend fun pendingReadingSessionCount(): Int = withContext(Dispatchers.IO) {
+        readingSessionQueueStore.countFor(getServerUrl().orEmpty())
+    }
+
+    override suspend fun syncPendingReadingSessions(): SyncAttemptResult = withContext(Dispatchers.IO) {
+        readingSessionSyncMutex.withLock {
+            val pending = readingSessionQueueStore.readAll()
+            if (pending.isEmpty()) return@withLock SyncAttemptResult.Success
+
+            val currentServerUrl = getServerUrl().orEmpty()
+            val acknowledgedIds = mutableSetOf<String>()
+            var authBlocked = false
+            var transientFailure = false
+            pending.sortedBy { it.updatedAtMillis }.forEach { item ->
+                if (authBlocked || item.serverUrl != currentServerUrl) return@forEach
+                runCatching { postReadingSession(item) }
+                    .onSuccess { result ->
+                        if (result != ReadingSessionPostResult.DEFERRED) {
+                            acknowledgedIds += item.sessionId
+                        }
+                    }
+                    .onFailure { error ->
+                        when (error) {
+                            is AuthenticationRequiredException -> authBlocked = true
+                            else -> transientFailure = true
+                        }
+                    }
+                    .getOrNull()
+            }
+            readingSessionQueueStore.acknowledge(acknowledgedIds)
+            when {
+                authBlocked -> SyncAttemptResult.AuthenticationBlocked
+                transientFailure -> SyncAttemptResult.TransientFailure
+                else -> SyncAttemptResult.Success
+            }
+        }
+    }
+
     override suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
         checkServer(serverUrl) == ServerCheckResult.Reachable
     }
@@ -1608,6 +1684,27 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    private suspend fun postReadingSession(item: ReadingSessionPayload): ReadingSessionPostResult =
+        withContext(Dispatchers.IO) {
+            if (item.serverUrl.isBlank() || item.serverUrl != getServerUrl().orEmpty()) {
+                return@withContext ReadingSessionPostResult.DEFERRED
+            }
+            try {
+                request(
+                    path = readingSessionPath(item.fileId),
+                    method = "POST",
+                    body = buildReadingSessionPayload(item).toString().toRequestBody(JSON)
+                )
+                ReadingSessionPostResult.ACCEPTED
+            } catch (error: HttpRequestException) {
+                if (error.code in 400..499) {
+                    ReadingSessionPostResult.INVALID
+                } else {
+                    throw error
+                }
+            }
+        }
+
     private fun enqueueSyncWorker() {
         val request = OneTimeWorkRequestBuilder<ProgressSyncWorker>()
             .setConstraints(
@@ -1626,6 +1723,27 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         WorkManager.getInstance(context).enqueueUniqueWork(
             "bookorbit-progress-sync",
             ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    private fun enqueueReadingSessionWorker() {
+        val request = OneTimeWorkRequestBuilder<ReadingSessionSyncWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                15,
+                TimeUnit.SECONDS
+            )
+            .setInitialDelay(2, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "bookorbit-reading-session-sync",
+            ExistingWorkPolicy.KEEP,
             request
         )
     }

@@ -196,6 +196,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private lateinit var readerKey: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
+    private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
@@ -240,6 +241,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         readerPreferences = AppPreferencesStore(this).read().readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
+        readingSessionReporter = ReadingSessionReporter(
+            context = this,
+            fileId = intent.getStringExtra(EXTRA_FILE_ID),
+            enabled = !isPreview
+        )
         configureSystemBars()
         createReaderViews()
         installBackHandler()
@@ -433,6 +439,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             return
         }
         publication = openedPublication
+        readingSessionReporter.start(
+            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+        )
         currentPageCount = openedPublication.readingOrder.size.coerceAtLeast(1)
         val initialLocator = requestedLocator ?: initialLocator(openedPublication)
         if (readerPreferences.comicLayoutMode == ReaderLayoutMode.CONTINUOUS) {
@@ -617,7 +626,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         }.takeIf { it >= 0 } ?: currentPage
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)
         if (!isPreview) locatorStore.save(readerKey, locator)
+        readingSessionReporter.activity(currentProgressPercent())
         updateResult()
+    }
+
+    private fun currentProgressPercent(): Float = if (currentPageCount <= 1) {
+        100f
+    } else {
+        currentPage.toFloat() / (currentPageCount - 1).toFloat() * 100f
     }
 
     private fun goToPage(index: Int) {
@@ -759,6 +775,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     }
 
     private fun finishReader() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentProgressPercent())
+        }
         updateResult()
         finish()
     }
@@ -797,6 +816,20 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    override fun onPause() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.pause(currentProgressPercent())
+        }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::readingSessionReporter.isInitialized && publication != null && !isFinishing) {
+            readingSessionReporter.resume(currentProgressPercent())
+        }
+    }
+
     @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
@@ -820,6 +853,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentProgressPercent())
+        }
         super.onDestroy()
         publication?.close()
         publication = null
@@ -843,8 +879,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         private const val EXTRA_TITLE = "readium_comic_title"
         private const val EXTRA_READER_KEY = "readium_comic_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_comic_library_id"
+        private const val EXTRA_FILE_ID = "readium_comic_file_id"
         private const val EXTRA_IS_PREVIEW = "readium_comic_is_preview"
         private const val EXTRA_INITIAL_PAGE = "readium_comic_initial_page"
+        private const val EXTRA_INITIAL_PERCENT = "readium_comic_initial_percent"
         private const val EXTRA_RESULT_PAGE = "readium_comic_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_comic_result_page_count"
         private const val EXTRA_RESULT_PERCENT = "readium_comic_result_percent"
@@ -853,6 +891,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         fun createIntent(
             context: Context,
             file: File,
+            fileId: String? = null,
             title: String,
             readerKey: String,
             libraryId: String = "",
@@ -860,6 +899,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             initialPage: Int
         ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_LIBRARY_ID, libraryId)
@@ -869,6 +909,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         fun createRemoteIntent(
             context: Context,
             pagesUrl: String,
+            fileId: String? = null,
             pageCount: Int,
             pageMediaType: MediaType,
             title: String,
@@ -878,6 +919,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             initialPage: Int
         ): Intent = Intent(context, ReadiumComicReaderActivity::class.java)
             .putExtra(EXTRA_PAGES_URL, pagesUrl)
+            .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_PAGE_COUNT, pageCount)
             .putExtra(EXTRA_PAGE_MEDIA_TYPE, pageMediaType.toString())
             .putExtra(EXTRA_TITLE, title)

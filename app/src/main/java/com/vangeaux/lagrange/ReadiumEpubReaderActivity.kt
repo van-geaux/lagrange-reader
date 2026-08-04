@@ -220,6 +220,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var readerKey: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
+    private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
     private var selectedFontFamily by mutableStateOf(EpubReaderFontFamily.PUBLISHER_DEFAULT)
@@ -285,6 +286,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
+        readingSessionReporter = ReadingSessionReporter(
+            context = this,
+            fileId = intent.getStringExtra(EXTRA_FILE_ID),
+            enabled = !isPreview
+        )
         val appPreferences = appPreferencesStore.read()
         readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
             ?: LibraryReaderPreferences(
@@ -506,6 +512,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         publication = openedPublication
+        readingSessionReporter.start(
+            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+        )
         chapterTitles = openedPublication.readingOrder.mapIndexed { index, link ->
             chapterTitle(openedPublication.tableOfContents, link) ?: link.title ?: "Chapter ${index + 1}"
         }
@@ -621,6 +630,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
+        readingSessionReporter.activity(currentPercent)
         updateResult()
     }
 
@@ -798,6 +808,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun finishReader() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentPercent)
+        }
         updateResult()
         finish()
     }
@@ -847,7 +860,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    override fun onPause() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.pause(currentPercent)
+        }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::readingSessionReporter.isInitialized && publication != null && !isFinishing) {
+            readingSessionReporter.resume(currentPercent)
+        }
+    }
+
     override fun onDestroy() {
+        if (::readingSessionReporter.isInitialized) {
+            readingSessionReporter.end(currentPercent)
+        }
         super.onDestroy()
         publication?.close()
         publication = null
@@ -859,6 +889,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_TITLE = "readium_epub_title"
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_epub_library_id"
+        private const val EXTRA_FILE_ID = "readium_epub_file_id"
         private const val EXTRA_IS_PREVIEW = "readium_epub_is_preview"
         private const val EXTRA_INITIAL_CHAPTER = "readium_epub_initial_chapter"
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
@@ -873,6 +904,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         fun createIntent(
             context: Context,
             file: File,
+            fileId: String? = null,
             title: String,
             readerKey: String,
             libraryId: String = "",
@@ -883,6 +915,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             initialPercent: Float?
         ): Intent = Intent(context, ReadiumEpubReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_LIBRARY_ID, libraryId)

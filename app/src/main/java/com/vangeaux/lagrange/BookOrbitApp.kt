@@ -919,6 +919,7 @@ private fun ReaderScreen(
         } else {
             ReadiumEpubReaderLauncher(
                 file = readerFile,
+                fileId = state.book.fileId,
                 title = state.book.title,
                 readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
                 libraryId = state.book.libraryId,
@@ -970,6 +971,7 @@ private fun ReaderScreen(
     if (shouldUseReadiumPdfReader(state.book.mediaKind, state.localFile)) {
         ReadiumPdfReaderLauncher(
             file = requireNotNull(state.localFile),
+            fileId = state.book.fileId,
             title = state.book.title,
             readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
             libraryId = state.book.libraryId,

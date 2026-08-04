@@ -659,6 +659,8 @@ class ReadiumAudioPlaybackController internal constructor(
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
     private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
     private var serverUrlProvider: (suspend () -> String?)? = null
+    private var readingSessionReporter: ReadingSessionReporter? = null
+    private var readingSessionFileId: String? = null
     private var playbackStateListener: Player.Listener? = null
     private var lastRecordedIsPlaying: Boolean? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
@@ -820,6 +822,7 @@ class ReadiumAudioPlaybackController internal constructor(
                             ReadiumAudioOpenResult.Error(AUDIO_OPEN_CANCELLED_MESSAGE)
                         } else {
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
+                            endReadingSession(serviceBinder.session.value)
                             val session = serviceBinder.openSession(book, launchMode, opened.engine)
                             if (playWhenReady) opened.engine.player.play()
                             startProgressUpdates(session, recordInitialPlay = playWhenReady)
@@ -937,6 +940,7 @@ class ReadiumAudioPlaybackController internal constructor(
             openGeneration += 1L
             mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
             mutablePreparingSession.value = null
+            endReadingSession(serviceBinder.session.value)
             serviceBinder.session.value?.let(::publishProgress)
             progressJob?.cancel()
             progressJob = null
@@ -986,18 +990,60 @@ class ReadiumAudioPlaybackController internal constructor(
                 if (lastRecordedIsPlaying == isPlaying) return
                 lastRecordedIsPlaying = isPlaying
                 recordSessionEvent(session, isPlaying)
+                if (isPlaying) {
+                    readingSessionReporter(session)?.resume(progressPercent(session))
+                } else {
+                    readingSessionReporter(session)?.pause(progressPercent(session))
+                }
             }
         }.also(session.player::addListener)
         if (recordInitialPlay && session.player.isPlaying) {
             recordSessionEvent(session, isPlaying = true)
+            readingSessionReporter(session)?.resume(progressPercent(session))
         }
         progressJob = scope.launch {
             while (isActive) {
+                if (session.player.isPlaying) {
+                    readingSessionReporter(session)?.activity(progressPercent(session))
+                }
                 publishProgress(session)
                 delay(1_500L)
             }
         }
     }
+
+    private fun readingSessionReporter(
+        session: ReadiumAudioPlaybackService.Session
+    ): ReadingSessionReporter? {
+        if (session.launchMode == ReaderLaunchMode.PREVIEW || session.book.fileId.isNullOrBlank()) {
+            return null
+        }
+        if (readingSessionReporter == null || readingSessionFileId != session.book.fileId) {
+            endReadingSession(null)
+            readingSessionFileId = session.book.fileId
+            readingSessionReporter = ReadingSessionReporter(
+                context = application,
+                fileId = session.book.fileId,
+                enabled = true
+            )
+        }
+        return readingSessionReporter
+    }
+
+    private fun endReadingSession(session: ReadiumAudioPlaybackService.Session?) {
+        readingSessionReporter?.end(session?.let(::progressPercent))
+        readingSessionReporter = null
+        readingSessionFileId = null
+    }
+
+    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? =
+        session.player.duration
+            .takeIf { it > 0L }
+            ?.let { duration ->
+                ((session.player.currentPosition.toDouble() / duration.toDouble()) * 100.0)
+                    .coerceIn(0.0, 100.0)
+                    .toFloat()
+            }
 
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
         progressListener?.invoke(

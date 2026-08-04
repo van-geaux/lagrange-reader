@@ -23,6 +23,7 @@ internal fun shouldUseReadiumPdfReader(mediaKind: MediaKind, file: File?): Boole
 @Composable
 internal fun ReadiumPdfReaderLauncher(
     file: File,
+    fileId: String? = null,
     title: String,
     readerKey: String,
     libraryId: String,
@@ -50,6 +51,7 @@ internal fun ReadiumPdfReaderLauncher(
                 ReadiumPdfReaderActivity.createIntent(
                     context = context,
                     file = file,
+                    fileId = fileId,
                     title = title,
                     readerKey = readerKey,
                     libraryId = libraryId,
