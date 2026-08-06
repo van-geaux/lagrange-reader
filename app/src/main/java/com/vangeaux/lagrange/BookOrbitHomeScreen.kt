@@ -4986,7 +4986,7 @@ private fun LibraryBookCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun BookDetails(
     book: BookSummary,
@@ -5012,8 +5012,11 @@ private fun BookDetails(
     onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
-    val canonicalStateBook = state.books.firstOrNull { it.id == book.id }
-        ?: state.homeBooks.firstOrNull { it.id == book.id }
+    val canonicalStateBook = state.books.firstOrNull {
+        it.id == book.id && (book.fileId == null || it.fileId == book.fileId)
+    } ?: state.homeBooks.firstOrNull {
+        it.id == book.id && (book.fileId == null || it.fileId == book.fileId)
+    }
     val stateBook = canonicalStateBook ?: book
     val currentBook = stateBook.fileId?.let { fileId ->
         if (state.localFilePathOverrides.containsKey(fileId)) {
@@ -5023,15 +5026,16 @@ private fun BookDetails(
         }
     } ?: stateBook
     val currentFileId = currentBook.fileId
-    val isDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
-    var isRefreshing by remember(currentBook.id) { mutableStateOf(false) }
-    var reloadKey by remember(currentBook.id) { mutableIntStateOf(0) }
+    val currentBookIsDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
+    var isRefreshing by remember(currentBook.id, currentBook.fileId) { mutableStateOf(false) }
+    var reloadKey by remember(currentBook.id, currentBook.fileId) { mutableIntStateOf(0) }
     val detail by produceState(
         initialValue = BookDetailInfo(currentBook),
         currentBook.id,
+        currentBook.fileId,
         currentBook.updatedAtMillis,
         currentBook.localPath,
-        isDownloading,
+        currentBookIsDownloading,
         reloadKey
     ) {
         try {
@@ -5055,7 +5059,7 @@ private fun BookDetails(
         }
     }
     val onRefresh: () -> Unit = {
-        if (!isRefreshing && !isDownloading) {
+        if (!isRefreshing && !currentBookIsDownloading) {
             isRefreshing = true
             reloadKey += 1
         }
@@ -5069,19 +5073,26 @@ private fun BookDetails(
             displayedUserRating = detail.userRating
         }
     }
-    val displayBook = detail.book.copy(
-        localPath = currentBook.localPath,
-        progressLabel = if (canonicalStateBook != null) currentBook.progressLabel else currentBook.progressLabel ?: detail.book.progressLabel,
-        progressPercent = if (canonicalStateBook != null) currentBook.progressPercent else currentBook.progressPercent ?: detail.book.progressPercent,
-        progressPositionMs = if (canonicalStateBook != null) currentBook.progressPositionMs else currentBook.progressPositionMs ?: detail.book.progressPositionMs,
-        progressPageIndex = if (canonicalStateBook != null) currentBook.progressPageIndex else currentBook.progressPageIndex ?: detail.book.progressPageIndex,
-        lastReadAtMillis = if (canonicalStateBook != null) currentBook.lastReadAtMillis else currentBook.lastReadAtMillis ?: detail.book.lastReadAtMillis,
-        readStatus = if (canonicalStateBook != null) currentBook.readStatus else currentBook.readStatus ?: detail.book.readStatus,
-        isRead = currentBook.isRead,
-        updatedAtMillis = currentBook.updatedAtMillis ?: detail.book.updatedAtMillis,
-        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis,
-        audioChapters = detail.audioChapters.ifEmpty { currentBook.audioChapters }
+    var selectedFileId by remember(book.id, currentBook.fileId) { mutableStateOf(currentBook.fileId) }
+    val selectedFile = detail.availableFiles.firstOrNull { it.fileId == selectedFileId }
+    val selectedBaseBook = selectedFile?.book ?: detail.book
+    val selectedStateBook = if (selectedBaseBook.fileId == currentBook.fileId) currentBook else selectedBaseBook
+    val selectedLocalPath = selectedBaseBook.fileId?.let { state.localFilePathOverrides[it] }
+        ?: selectedStateBook.localPath
+    val displayBook = selectedBaseBook.copy(
+        localPath = selectedLocalPath,
+        progressLabel = selectedStateBook.progressLabel ?: selectedBaseBook.progressLabel,
+        progressPercent = selectedStateBook.progressPercent ?: selectedBaseBook.progressPercent,
+        progressPositionMs = selectedStateBook.progressPositionMs ?: selectedBaseBook.progressPositionMs,
+        progressPageIndex = selectedStateBook.progressPageIndex ?: selectedBaseBook.progressPageIndex,
+        lastReadAtMillis = selectedStateBook.lastReadAtMillis ?: selectedBaseBook.lastReadAtMillis,
+        readStatus = selectedStateBook.readStatus ?: selectedBaseBook.readStatus,
+        isRead = selectedStateBook.isRead,
+        updatedAtMillis = selectedStateBook.updatedAtMillis ?: selectedBaseBook.updatedAtMillis,
+        downloadedSourceUpdatedAtMillis = selectedStateBook.downloadedSourceUpdatedAtMillis,
+        audioChapters = selectedBaseBook.audioChapters.ifEmpty { detail.audioChapters }
     )
+    val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId) {
         mutableStateOf(false)
@@ -5513,6 +5524,7 @@ private fun BookDetails(
                 }
             }
         }
+
         if (isDownloading) {
             item {
                 Column(
@@ -5565,6 +5577,15 @@ private fun BookDetails(
         }
         if (detail.providerIds.isNotEmpty()) {
             item { BookDetailProviderLinks(detail.providerIds) }
+        }
+        if (detail.availableFiles.size > 1) {
+            item {
+                BookDetailAvailableFilePicker(
+                    options = detail.availableFiles,
+                    selectedFileId = selectedFileId,
+                    onFileSelected = { selectedFileId = it }
+                )
+            }
         }
         if (otherVersions.isNotEmpty()) {
             item {
@@ -5878,6 +5899,95 @@ private fun BookUserRatingStars(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookDetailAvailableFilePicker(
+    options: List<BookFileOption>,
+    selectedFileId: String?,
+    onFileSelected: (String?) -> Unit
+) {
+    var sheetVisible by remember(selectedFileId) { mutableStateOf(false) }
+    val labels = availableFileDisplayLabels(options)
+    val selectedLabel = selectedFileId?.let(labels::get)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { sheetVisible = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("book-detail-available-file")
+        ) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text("Available file", style = MaterialTheme.typography.labelMedium)
+                Text(selectedLabel?.title ?: "Unknown file", style = MaterialTheme.typography.bodyMedium)
+                selectedLabel?.metadata?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose available file")
+        }
+        if (sheetVisible) {
+            ModalBottomSheet(
+                onDismissRequest = { sheetVisible = false },
+                modifier = Modifier.testTag("book-detail-available-file-sheet")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Text(
+                        "Available files",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
+                    HorizontalDivider()
+                    options.forEachIndexed { index, option ->
+                        val label = option.fileId?.let(labels::get)
+                        ListItem(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onFileSelected(option.fileId)
+                                    sheetVisible = false
+                                }
+                                .testTag("book-detail-available-file-option-${option.fileId}"),
+                            leadingContent = {
+                                Text(
+                                    label?.title?.substringBefore(" · ") ?: "FILE",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            headlineContent = {
+                                Text(label?.title ?: "Unknown file")
+                            },
+                            supportingContent = {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    label?.metadata?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    option.localPath?.let {
+                                        Text("Available offline", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            },
+                            trailingContent = if (option.fileId == selectedFileId) {
+                                { Icon(Icons.Default.CheckCircle, contentDescription = "Selected") }
+                            } else {
+                                null
+                            }
+                        )
+                        if (index < options.lastIndex) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+                        }
+                    }
+                }
             }
         }
     }

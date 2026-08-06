@@ -13,6 +13,7 @@ This document contains current interaction contracts, design rules, and unresolv
 ## Current navigation and action contracts
 
 - Book Detail keeps Read/Preview visible and exposes download/update/delete actions according to file state.
+- Book Detail shows an `Available file` control when a book has multiple supported files. Tapping it opens a bottom-sheet picker with separated rows; each option shows a format badge, filename, size, and `Primary`/`Alternate` role, while an identical visible option receives a short stable file-ID suffix. The selected EPUB/PDF/comic or audio file supplies the existing Read/Preview/Play and download actions; unknown attachments such as JSON are not selectable media versions. The selector is keyed by file ID, while `Other versions` remains reserved for separate same-series, same-index records.
 - Book Detail Previous/Next series navigation resolves each adjacent series index by preferring the current library and format family, then the same family across libraries in the user-visible library order. If that family is unavailable everywhere, it uses the first library with a target and the fallback families EPUB/KEPUB, PDF, CBZ/CBR/CB7, then audiobook; audiobook extensions such as M4A, M4B, and MP3 are one family.
 - `Mark as...` exposes the complete BookOrbit status contract.
 - Local books uses the completed-copy state, not an in-progress attempt, to decide whether `Delete local` is available.
