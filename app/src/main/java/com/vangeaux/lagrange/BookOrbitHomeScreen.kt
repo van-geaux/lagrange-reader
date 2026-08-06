@@ -801,13 +801,6 @@ internal fun NativeLibraryBrowserScreen(
         )
     }
 
-    val showBrowserBottomNavigation =
-        !isSearchOpen &&
-            activeBookGenre == null &&
-            activeSeriesGenre == null &&
-            selectedSeriesKey == null &&
-            selectedAuthor == null
-
     Scaffold(
         topBar = {
             when {
@@ -971,35 +964,39 @@ internal fun NativeLibraryBrowserScreen(
         },
         bottomBar = {
             Column(
-                modifier = if (showBrowserBottomNavigation) {
-                    Modifier
-                } else {
-                    Modifier.navigationBarsPadding()
-                }
+                modifier = Modifier
             ) {
                 bottomOverlay?.invoke()
-                if (showBrowserBottomNavigation) {
-                    BrowserBottomNavigation(
-                        destination = destination,
-                        onHome = {
-                            destination = BrowserDestination.HOME
-                            query = ""
-                            selectedBook = null
-                            selectedAuthor = null
-                            selectedSeriesKey = null
-                        },
-                        onLibraries = {
-                            destination = BrowserDestination.LIBRARY
-                            showLibraryPicker = state.selectedLibraryId == null
-                            libraryTab = LibraryTab.RECOMMENDED
-                            query = ""
-                            selectedBook = null
-                            selectedAuthor = null
-                            selectedSeriesKey = null
-                        },
-                        onMore = { showMoreMenu = true }
-                    )
-                }
+                BrowserBottomNavigation(
+                    destination = destination,
+                    onHome = {
+                        destination = BrowserDestination.HOME
+                        isSearchOpen = false
+                        query = ""
+                        selectedBook = null
+                        selectedAuthor = null
+                        selectedSeriesKey = null
+                        activeBookGenre = null
+                        activeSeriesGenre = null
+                        genreSourceBook = null
+                        genreSourceSeriesKey = null
+                    },
+                    onLibraries = {
+                        destination = BrowserDestination.LIBRARY
+                        isSearchOpen = false
+                        showLibraryPicker = state.selectedLibraryId == null
+                        libraryTab = LibraryTab.RECOMMENDED
+                        query = ""
+                        selectedBook = null
+                        selectedAuthor = null
+                        selectedSeriesKey = null
+                        activeBookGenre = null
+                        activeSeriesGenre = null
+                        genreSourceBook = null
+                        genreSourceSeriesKey = null
+                    },
+                    onMore = { showMoreMenu = true }
+                )
             }
         },
         containerColor = MaterialTheme.colorScheme.background

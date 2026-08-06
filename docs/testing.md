@@ -26,6 +26,9 @@ When asking the user to perform manual testing:
 4. Use the standard `app-debug.apk` only as the Gradle source artifact.
 
 ## Current validation priorities
+### Browser navigation bar
+
+On a connected device or emulator, open Search, Series catalog, an individual Series, Authors, Book Detail, a genre view, and Local books. Verify Home, Libraries, and More remain visible and usable on each browser-owned screen. Tap Home or Libraries from a detail/search state and verify the active browser state closes and the selected destination opens. Open each EPUB, PDF, comic, and audiobook reader/player surface and verify the browser bottom bar is not shown there.
 
 ### Download lifecycle
 

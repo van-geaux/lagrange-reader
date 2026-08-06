@@ -445,6 +445,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Open series Orbit Saga").performClick()
         composeRule.onNodeWithText("Orbit Saga").assertIsDisplayed()
         composeRule.onNodeWithText("Orbit Rising").assertIsDisplayed()
+        composeRule.onNodeWithText("Home").assertIsDisplayed()
+        composeRule.onNodeWithText("Libraries").assertIsDisplayed()
+        composeRule.onNodeWithText("More").assertIsDisplayed()
     }
 
     @Test
@@ -1150,6 +1153,9 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("Search").performClick()
         composeRule.onNodeWithText("Search your library").assertIsDisplayed()
+        composeRule.onNodeWithText("Home").assertIsDisplayed()
+        composeRule.onNodeWithText("Libraries").assertIsDisplayed()
+        composeRule.onNodeWithText("More").assertIsDisplayed()
         composeRule.onNodeWithText("Back").performClick()
         composeRule.onAllNodesWithText("a BookOrbit reader").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("User profile").performClick()

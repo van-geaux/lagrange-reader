@@ -5,6 +5,8 @@ This document contains current interaction contracts, design rules, and unresolv
 ## Current product direction
 
 - Lagrange uses a native Android shell with Home, Libraries, and More as primary destinations.
+- The browser Home/Libraries/More bar remains visible on every browser-owned screen, including Search, catalog/detail/genre screens, and Book Detail; dedicated EPUB, PDF, comic, and audiobook reader/player surfaces use their own chrome instead.
+- Home and Libraries actions clear active browser search, detail, and genre state before changing destinations.
 - Home aggregates server-wide reading shelves; selected-library scope belongs to Libraries.
 - The interface uses compact, touch-safe cards and controls with accessibility semantics, large-text support, and clear offline/error states.
 - Startup should show usable cached content as soon as possible and avoid blocking/global progress indicators when content is already available.
