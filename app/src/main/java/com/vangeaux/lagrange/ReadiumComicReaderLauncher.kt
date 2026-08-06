@@ -128,11 +128,13 @@ internal fun ReadiumComicReaderLauncher(
     launchMode: ReaderLaunchMode,
     initialPage: Int,
     onProgress: (pageIndex: Int, pageCount: Int, percent: Float?) -> Unit,
+    onFailure: (message: String) -> Unit,
     onFinished: () -> Unit
 ) {
     val context = LocalContext.current
     val latestOnFinished by rememberUpdatedState(onFinished)
     val latestOnProgress by rememberUpdatedState(onProgress)
+    val latestOnFailure by rememberUpdatedState(onFailure)
     var launched by remember(file, pagesUrl, launchMode) { mutableStateOf(false) }
     var preparation by remember(file, pagesUrl) {
         mutableStateOf<ReadiumComicPreparationResult?>(null)
@@ -154,6 +156,10 @@ internal fun ReadiumComicReaderLauncher(
         )
     }
     LaunchedEffect(preparation, title, readerKey, launchMode) {
+        if (preparation is ReadiumComicPreparationResult.Error) {
+            latestOnFailure((preparation as ReadiumComicPreparationResult.Error).message)
+            return@LaunchedEffect
+        }
         if (launched) return@LaunchedEffect
         val intent = when (val ready = preparation) {
             is ReadiumComicPreparationResult.Local ->

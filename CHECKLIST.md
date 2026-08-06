@@ -47,3 +47,4 @@ Before asking for manual testing:
 3. Use the applicable procedure in [`docs/testing.md`](docs/testing.md).
 4. Distinguish compiled Android instrumentation from instrumentation executed on a connected device.
 5. Preserve unrelated worktree changes and review the complete diff.
+- [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.

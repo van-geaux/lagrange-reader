@@ -1195,6 +1195,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val localResolution = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
         if (localOnly && localFile == null) {
+            activeReaderStore.clearIfMatches(serverUrl, savedBook.id)
             return@withContext null
         }
         val streamUrl = buildReaderStreamUrl(
@@ -1209,6 +1210,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             mediaKind = savedBook.mediaKind
         )
         if (localOnly && savedBook.mediaKind == MediaKind.COMIC && localFile?.let(ReaderFileValidator::canRenderComicLocally) != true) {
+            activeReaderStore.clearIfMatches(serverUrl, savedBook.id)
             return@withContext null
         }
         runCatching {
@@ -1220,6 +1222,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 comicExtractionError = localResolution.comicExtractionError
             )
         }.getOrElse {
+            activeReaderStore.clearIfMatches(serverUrl, savedBook.id)
             return@withContext null
         }
         val restoredProgress = resolveRestoredReaderProgress(

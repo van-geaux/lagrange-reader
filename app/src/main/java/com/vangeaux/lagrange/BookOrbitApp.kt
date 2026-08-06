@@ -332,7 +332,7 @@ private fun BookOrbitDestination(
             comicPageLoader = coordinator::loadCatalogImage,
             audioPlaybackController = audioPlaybackController,
             onAudioReady = coordinator::minimizeAudioReader,
-            onAudioFailure = coordinator::onAudioPlaybackFailed
+            onReaderFailure = coordinator::onAudioPlaybackFailed
         )
     }
 }
@@ -901,7 +901,7 @@ private fun ReaderScreen(
     comicPageLoader: suspend (String) -> ByteArray?,
     audioPlaybackController: ReadiumAudioPlaybackController?,
     onAudioReady: () -> Unit,
-    onAudioFailure: (BookSummary, String) -> Unit
+    onReaderFailure: (BookSummary, String) -> Unit
 ) {
     if (readerKeepsScreenAwake(state.book.mediaKind)) {
         KeepReaderScreenAwake()
@@ -915,7 +915,7 @@ private fun ReaderScreen(
     if (shouldUseReadiumEpubReader(state.book.mediaKind)) {
         val readerFile = state.localFile
         if (readerFile == null || !readerFile.exists()) {
-            ReaderMessage("Unable to prepare this EPUB.")
+            ReaderFailureEffect(state.book, "Unable to prepare this EPUB.", onReaderFailure)
         } else {
             ReadiumEpubReaderLauncher(
                 file = readerFile,
@@ -956,14 +956,17 @@ private fun ReaderScreen(
             onProgress = { pageIndex, _, percent ->
                 readerProgress(state.book, 0L, pageIndex, percent)
             },
+            onFailure = { message -> onReaderFailure(state.book, message) },
             onFinished = onBack
         )
         return
     }
     if (state.book.mediaKind == MediaKind.COMIC) {
-        ReaderMessage(
-            "This comic container must be converted to CBZ before Readium can open it. " +
-                "Reconnect to BookOrbit to prepare it."
+        ReaderFailureEffect(
+            book = state.book,
+            message = "This comic container must be converted to CBZ before Readium can open it. " +
+                "Reconnect to BookOrbit to prepare it.",
+            onFailure = onReaderFailure
         )
         return
     }
@@ -1002,21 +1005,35 @@ private fun ReaderScreen(
                     state = state,
                     controller = audioPlaybackController,
                     onReady = onAudioReady,
-                    onFailure = onAudioFailure
+                    onFailure = onReaderFailure
                 )
-                MediaKind.PDF -> UnsupportedReaderView(
-                    title = state.book.title,
-                    message = "Unable to prepare this PDF for Readium."
+                MediaKind.PDF -> ReaderFailureEffect(
+                    book = state.book,
+                    message = "Unable to prepare this PDF for Readium.",
+                    onFailure = onReaderFailure
                 )
                 MediaKind.EPUB -> Unit
                 MediaKind.COMIC -> Unit
-                MediaKind.UNKNOWN -> UnsupportedReaderView(
-                    title = state.book.title,
-                    message = "This file format is not supported."
+                MediaKind.UNKNOWN -> ReaderFailureEffect(
+                    book = state.book,
+                    message = "This file format is not supported.",
+                    onFailure = onReaderFailure
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ReaderFailureEffect(
+    book: BookSummary,
+    message: String,
+    onFailure: (BookSummary, String) -> Unit
+) {
+    LaunchedEffect(book.id, book.fileId, message) {
+        onFailure(book, message)
+    }
+    ReaderMessage(message)
 }
 
 internal fun readerKeepsScreenAwake(mediaKind: MediaKind): Boolean = when (mediaKind) {

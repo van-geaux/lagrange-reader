@@ -32,3 +32,4 @@ This document contains the current project direction only. Historical work order
 - Use [`docs/architecture.md`](architecture.md), [`docs/bookorbit-api.md`](bookorbit-api.md), and [`docs/ui-ux.md`](ui-ux.md) for current contracts and guardrails.
 - Record historical implementation detail in [`docs/roadmap-archive.md`](roadmap-archive.md), not in this active roadmap.
 - Before changing roadmap priorities, confirm the product decision and update only the current sections.
+17. [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.

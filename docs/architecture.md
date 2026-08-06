@@ -58,3 +58,6 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 ## Current validation status
 
 The current release and recent cleanup gates are recorded in [`docs/testing.md`](testing.md) and [`docs/handover.md`](handover.md). The primary open device-validation item is the complete interrupted-download and failed-update lifecycle. Historical test counts and dated device results are in [`docs/architecture-archive.md`](architecture-archive.md).
+### Reader failure recovery
+
+The active-reader record is cleared when normal reader preparation or opening fails. The coordinator returns to the cached browser state with the failure message, and startup restoration removes saved reader entries that cannot be prepared. This prevents a failed EPUB, PDF, comic, audiobook, or unsupported-format open from trapping the user in a restart loop.

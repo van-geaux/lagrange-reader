@@ -756,6 +756,32 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `failed non-audio reader open clears active reader and returns to browser`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            buildReaderError = UserFacingException("Reader preparation failed.")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.openBook(book)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertEquals(1, repository.clearActiveReaderCalls)
+        assertTrue(
+            (coordinator.screen.value as AppScreen.Browser).browserState.message.orEmpty()
+                .contains("Reader preparation failed.")
+        )
+    }
+
+    @Test
     fun `normal open refreshes the book before building reader state`() = runTest {
         val staleBook = book.copy(
             progressPositionMs = 0L,

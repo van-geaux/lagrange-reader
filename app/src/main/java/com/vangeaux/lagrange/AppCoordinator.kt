@@ -937,6 +937,7 @@ class AppCoordinator(
                     )
                     return@onFailure
                 }
+                scope.launch { repository.clearActiveReader() }
                 val fallback = lastBrowserState
                 if (fallback != null) {
                     navigateToBrowser(
