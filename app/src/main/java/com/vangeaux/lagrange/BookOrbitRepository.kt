@@ -2366,13 +2366,14 @@ internal object BookOrbitPayloadParser {
         libraryId: String,
         payload: String,
         downloads: Map<String, DownloadRecord>,
-        serverBase: String
+        serverBase: String,
+        preferredFileId: String? = null
     ): List<BookSummary> {
         val array = extractArray(payload, "load books")
         return buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
-                val primaryFile = obj.optJSONArray("files").selectPrimaryFile()
+                val primaryFile = obj.optJSONArray("files").selectPrimaryFile(preferredFileId)
                 val isServerMissing = primaryFile.isMissingResource() || obj.optJSONObject("file").isMissingResource() || obj.isMissingResource()
                 val fileId = primaryFile?.stringValue("id", "_id", "fileId")
                     ?: obj.stringValue("fileId", "file_id")
@@ -2545,7 +2546,8 @@ internal object BookOrbitPayloadParser {
             libraryId = fallback.libraryId,
             payload = JSONObject().put("items", JSONArray().put(obj)).toString(),
             downloads = downloads,
-            serverBase = serverBase
+            serverBase = serverBase,
+            preferredFileId = fallback.fileId
         ).singleOrNull()
         val book = parsedBook?.copy(
             fileId = parsedBook.fileId ?: fallback.fileId,
@@ -2573,6 +2575,42 @@ internal object BookOrbitPayloadParser {
             ?: obj.numberValue("publishedYear", "publicationYear")?.toInt()?.toString()
         val audioMetadata = obj.optJSONObject("audioMetadata")
         val audioChapters = audioMetadata.audioChapters()
+        val availableFiles = buildList {
+            if (files != null) {
+                for (index in 0 until files.length()) {
+                    val file = files.optJSONObject(index) ?: continue
+                    val fileId = file.stringValue("id", "_id", "fileId")
+                        ?: continue
+                    val fileBook = parseBooks(
+                        libraryId = fallback.libraryId,
+                        payload = JSONObject().put("items", JSONArray().put(obj)).toString(),
+                        downloads = downloads,
+                        serverBase = serverBase,
+                        preferredFileId = fileId
+                    ).singleOrNull() ?: continue
+                    if (fileBook.mediaKind != MediaKind.UNKNOWN) {
+                        add(
+                            BookFileOption(
+                                book = fileBook.copy(
+                                    coverAspectRatio = book.coverAspectRatio,
+                                    audioChapters = if (fileBook.mediaKind == MediaKind.AUDIO) {
+                                        audioChapters
+                                    } else {
+                                        emptyList()
+                                    }
+                                ),
+                                filename = file.stringValue("filename", "fileName", "name", "path"),
+                                sizeBytes = file.numberValue("sizeBytes", "size")?.toLong(),
+                                role = file.stringValue("role"),
+                                updatedAtMillis = file.timestampValue(
+                                    "updatedAt", "modifiedAt", "lastModifiedAt"
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
         return BookDetailInfo(
             book = book.copy(audioChapters = audioChapters),
             libraryName = obj.stringValue("libraryName"),
@@ -2592,6 +2630,7 @@ internal object BookOrbitPayloadParser {
                 ?.takeIf { it in 1..5 },
             narrators = obj.stringList("narrators"),
             fileCount = files?.length() ?: 0,
+            availableFiles = availableFiles,
             totalSizeBytes = files.sumLong("sizeBytes", "size"),
             durationSeconds = files.maxLong("durationSeconds", "duration")
                 ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong(),
@@ -3170,8 +3209,14 @@ internal object BookOrbitPayloadParser {
         return if (hasImageMetadata && !fallbackPath.isNullOrBlank()) "$serverBase$fallbackPath" else null
     }
 
-    private fun JSONArray?.selectPrimaryFile(): JSONObject? {
+    private fun JSONArray?.selectPrimaryFile(preferredFileId: String? = null): JSONObject? {
         this ?: return null
+        preferredFileId?.takeIf { it.isNotBlank() }?.let { requestedId ->
+            for (index in 0 until length()) {
+                val candidate = optJSONObject(index) ?: continue
+                if (candidate.stringValue("id", "_id", "fileId") == requestedId) return candidate
+            }
+        }
         for (index in 0 until length()) {
             val candidate = optJSONObject(index) ?: continue
             if (candidate.optString("role").equals("primary", ignoreCase = true)) {
