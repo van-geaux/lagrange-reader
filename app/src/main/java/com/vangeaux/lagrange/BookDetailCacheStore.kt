@@ -121,10 +121,19 @@ private fun BookDetailInfo.toJson(): JSONObject = JSONObject().apply {
     putNullable("userRating", userRating)
     put("narrators", JSONArray(narrators))
     put("fileCount", fileCount)
+    put("availableFiles", JSONArray(availableFiles.map { it.toJson() }))
     putNullable("totalSizeBytes", totalSizeBytes)
     putNullable("durationSeconds", durationSeconds)
     put("audioChapters", audioChapters.toJson())
     put("providerIds", providerIds.toProviderIdsJson())
+}
+
+private fun BookFileOption.toJson(): JSONObject = JSONObject().apply {
+    put("book", book.toJson())
+    putNullable("filename", filename)
+    putNullable("sizeBytes", sizeBytes)
+    putNullable("role", role)
+    putNullable("updatedAtMillis", updatedAtMillis)
 }
 
 private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
@@ -176,6 +185,7 @@ private fun JSONObject.toBookDetail(): BookDetailInfo? {
         userRating = optionalUserRating(),
         narrators = stringList("narrators"),
         fileCount = optInt("fileCount"),
+        availableFiles = optJSONArray("availableFiles").toBookFileOptions(),
         totalSizeBytes = optionalLong("totalSizeBytes"),
         durationSeconds = optionalLong("durationSeconds"),
         audioChapters = audiobookChapters("audioChapters"),
@@ -213,6 +223,34 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     audioChapters = audiobookChapters("audioChapters"),
     isServerMissing = optBoolean("isServerMissing")
 )
+
+private fun JSONArray?.toBookSummaries(): List<BookSummary> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            optJSONObject(index)?.let { add(it.toBookSummary()) }
+        }
+    }
+}
+
+private fun JSONArray?.toBookFileOptions(): List<BookFileOption> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            val item = optJSONObject(index) ?: continue
+            val book = item.optJSONObject("book")?.toBookSummary() ?: continue
+            add(
+                BookFileOption(
+                    book = book,
+                    filename = item.optionalString("filename"),
+                    sizeBytes = item.optionalLong("sizeBytes"),
+                    role = item.optionalString("role"),
+                    updatedAtMillis = item.optionalLong("updatedAtMillis")
+                )
+            )
+        }
+    }
+}
 
 private fun List<BookProviderId>.toProviderIdsJson(): JSONArray = JSONArray(
     map { providerId ->

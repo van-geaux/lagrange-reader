@@ -131,6 +131,49 @@ data class BookProviderId(
     val id: String
 )
 
+data class BookFileOption(
+    val book: BookSummary,
+    val filename: String? = null,
+    val sizeBytes: Long? = null,
+    val role: String? = null,
+    val updatedAtMillis: Long? = null
+) {
+    val fileId: String? get() = book.fileId
+    val format: String? get() = book.format
+    val mediaKind: MediaKind get() = book.mediaKind
+    val localPath: String? get() = book.localPath
+}
+
+data class AvailableFileLabel(
+    val title: String,
+    val metadata: String
+)
+
+internal fun availableFileDisplayLabels(options: List<BookFileOption>): Map<String, AvailableFileLabel> {
+    val baseLabels = options.associateWith { option ->
+        val format = option.format
+            ?.substringAfterLast('/')
+            ?.uppercase(Locale.US)
+            ?: "Unknown"
+        val filename = option.filename?.takeIf { it.isNotBlank() } ?: "Unnamed file"
+        val title = "$format · $filename"
+        val role = if (option.role.equals("primary", ignoreCase = true)) "Primary" else "Alternate"
+        val size = option.sizeBytes?.let(::formatByteSize) ?: "Size unavailable"
+        AvailableFileLabel(title = title, metadata = "$role · $size")
+    }
+    val duplicateKeys = baseLabels.values.groupingBy { it }.eachCount()
+    return options.mapNotNull { option ->
+        val fileId = option.fileId ?: return@mapNotNull null
+        val label = baseLabels.getValue(option)
+        val title = if (duplicateKeys[label] == 1) {
+            label.title
+        } else {
+            "${label.title} · file ${fileId.takeLast(6)}"
+        }
+        fileId to label.copy(title = title)
+    }.toMap()
+}
+
 data class BookDetailInfo(
     val book: BookSummary,
     val libraryName: String? = null,
@@ -147,6 +190,7 @@ data class BookDetailInfo(
     val userRating: Int? = null,
     val narrators: List<String> = emptyList(),
     val fileCount: Int = 0,
+    val availableFiles: List<BookFileOption> = emptyList(),
     val totalSizeBytes: Long? = null,
     val durationSeconds: Long? = null,
     val audioChapters: List<AudiobookChapter> = emptyList(),

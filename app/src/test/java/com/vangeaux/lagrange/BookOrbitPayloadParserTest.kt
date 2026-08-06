@@ -656,6 +656,111 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBookDetail exposes compatible available files and excludes JSON attachments`() {
+        val fallback = BookSummary(
+            libraryId = "lib-1",
+            id = "book-25525",
+            fileId = "file-epub",
+            title = "Example book",
+            coverAspectRatio = CoverAspectRatio.SQUARE
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-25525",
+                  "title": "Example book",
+                  "files": [
+                    {"id":"file-epub","format":"epub","role":"primary","filename":"book.epub","sizeBytes":100},
+                    {"id":"file-m4b","format":"m4b","filename":"book.m4b","sizeBytes":200},
+                    {"id":"file-json","format":"json","filename":"book.json","sizeBytes":30}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(3, detail.fileCount)
+        assertEquals(listOf("file-epub", "file-m4b"), detail.availableFiles.map { it.fileId })
+        assertEquals(listOf(MediaKind.EPUB, MediaKind.AUDIO), detail.availableFiles.map { it.mediaKind })
+        assertEquals(CoverAspectRatio.SQUARE, detail.book.coverAspectRatio)
+        assertEquals(
+            listOf(CoverAspectRatio.SQUARE, CoverAspectRatio.SQUARE),
+            detail.availableFiles.map { it.book.coverAspectRatio }
+        )
+    }
+
+    @Test
+    fun `parseBookDetail retains duplicate format metadata and disambiguates identical labels`() {
+        val fallback = BookSummary(
+            libraryId = "lib-1",
+            id = "book-1",
+            fileId = "epub-123456",
+            title = "Example book"
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-1",
+                  "title": "Example book",
+                  "files": [
+                    {"id":"epub-123456","format":"epub","role":"alternate","filename":"book.epub","sizeBytes":100},
+                    {"id":"epub-654321","format":"epub","role":"alternate","filename":"book.epub","sizeBytes":100},
+                    {"id":"epub-revised","format":"epub","role":"alternate","filename":"book-revised.epub","sizeBytes":200}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(listOf("book.epub", "book.epub", "book-revised.epub"), detail.availableFiles.map { it.filename })
+        assertEquals(listOf(100L, 100L, 200L), detail.availableFiles.map { it.sizeBytes })
+        assertEquals(listOf("alternate", "alternate", "alternate"), detail.availableFiles.map { it.role })
+
+        val labels = availableFileDisplayLabels(detail.availableFiles)
+        assertEquals("EPUB · book.epub · file 123456", labels.getValue("epub-123456").title)
+        assertEquals("Alternate · 100 B", labels.getValue("epub-123456").metadata)
+        assertEquals("EPUB · book-revised.epub", labels.getValue("epub-revised").title)
+        assertEquals("Alternate · 200 B", labels.getValue("epub-revised").metadata)
+    }
+
+    @Test
+    fun `parseBookDetail preserves a non-primary preferred file`() {
+        val fallback = BookSummary(
+            libraryId = "lib-1",
+            id = "book-25525",
+            fileId = "file-m4b",
+            title = "Example book",
+            mediaKind = MediaKind.AUDIO
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-25525",
+                  "title": "Example book",
+                  "files": [
+                    {"id":"file-epub","format":"epub","role":"primary"},
+                    {"id":"file-m4b","format":"m4b"}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("file-m4b", detail.book.fileId)
+        assertEquals("m4b", detail.book.format)
+        assertEquals(MediaKind.AUDIO, detail.book.mediaKind)
+    }
+
+    @Test
     fun `parseBookDetail accepts only integer ratings from one through five`() {
         val fallback = BookSummary(libraryId = "lib", id = "book", fileId = null, title = "Book")
         listOf("4" to 4, "0" to null, "6" to null, "3.5" to null, "null" to null).forEach { (rating, expected) ->

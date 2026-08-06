@@ -156,6 +156,12 @@ Important notes:
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
 - Library responses may include `seriesCount` (or an equivalent `totalSeries`/`seriesTotal` field); the Android client uses it for the full Browse header while book pages are loaded incrementally.
 
+### Book detail files
+
+`GET /api/v1/books/{bookId}` returns every attached file in `files[]`, not only the server-primary file. Each entry may include `id`, `format`, `role`, `filename`, `sizeBytes`, `durationSeconds`, and update metadata. The Android client retains the primary file as the normal `BookSummary` and exposes supported alternate media through the Book Detail `Available file` control and bottom-sheet picker. Each option retains its file metadata and file-specific `fileId`; the selected file ID is preferred during detail hydration so selecting an audiobook such as M4B does not fall back to the primary EPUB.
+
+The picker includes supported EPUB/KEPUB, PDF, comic, and audio formats. Labels show format, filename, size, and `Primary`/`Alternate` role. If those visible fields are identical, a short suffix of the stable file ID is appended for differentiation. Unknown attachments such as JSON remain outside the selectable reader/media options. Existing `Other versions` navigation continues to refer only to separate same-series, same-index book records.
+
 ### Global book search
 
 Endpoint:
