@@ -14,6 +14,7 @@ This document contains current interaction contracts, design rules, and unresolv
 
 - Book Detail keeps Read/Preview visible and exposes download/update/delete actions according to file state.
 - Book Detail Previous/Next series navigation resolves each adjacent series index by preferring the current library and format family, then the same family across libraries in the user-visible library order. If that family is unavailable everywhere, it uses the first library with a target and the fallback families EPUB/KEPUB, PDF, CBZ/CBR/CB7, then audiobook; audiobook extensions such as M4A, M4B, and MP3 are one family.
+- Offline Previous/Next must replace the visible Book Detail state using the selected target book/file identity without waiting for an online detail response. Cached series screens combine cached books from all available libraries rather than only the currently selected library.
 - `Mark as...` exposes the complete BookOrbit status contract.
 - Local books uses the completed-copy state, not an in-progress attempt, to decide whether `Delete local` is available.
 - Active and failed download rows are conditional and remain separate from completed local content.

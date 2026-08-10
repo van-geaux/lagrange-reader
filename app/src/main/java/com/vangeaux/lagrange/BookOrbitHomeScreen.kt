@@ -108,6 +108,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1152,7 +1153,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 selectedSeriesKey != null -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
-                    books = state.books,
+                    books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
                     groupingMode = appPreferences.seriesGroupingMode,
                     onGroupingModeChange = { mode ->
@@ -5026,32 +5027,33 @@ private fun BookDetails(
     val isDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
     var isRefreshing by remember(currentBook.id) { mutableStateOf(false) }
     var reloadKey by remember(currentBook.id) { mutableIntStateOf(0) }
-    val detail by produceState(
-        initialValue = BookDetailInfo(currentBook),
-        currentBook.id,
-        currentBook.updatedAtMillis,
-        currentBook.localPath,
-        isDownloading,
-        reloadKey
-    ) {
-        try {
-            value = value.copy(
-                book = value.book.copy(
-                    localPath = currentBook.localPath,
-                    progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
-                    progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
-                    progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
-                    progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
-                    lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
-                    readStatus = currentBook.readStatus ?: value.book.readStatus,
-                    isRead = currentBook.isRead,
-                    updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
-                    downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+    val detail by key(currentBook.id, currentBook.fileId) {
+        produceState(
+            initialValue = BookDetailInfo(currentBook),
+            currentBook.updatedAtMillis,
+            currentBook.localPath,
+            isDownloading,
+            reloadKey
+        ) {
+            try {
+                value = value.copy(
+                    book = value.book.copy(
+                        localPath = currentBook.localPath,
+                        progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
+                        progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
+                        progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
+                        progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
+                        lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
+                        readStatus = currentBook.readStatus ?: value.book.readStatus,
+                        isRead = currentBook.isRead,
+                        updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
+                        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+                    )
                 )
-            )
-            value = detailLoader(currentBook) ?: value
-        } finally {
-            isRefreshing = false
+                value = detailLoader(currentBook) ?: value
+            } finally {
+                isRefreshing = false
+            }
         }
     }
     val onRefresh: () -> Unit = {
