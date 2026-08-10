@@ -7,7 +7,7 @@ This document contains the current project direction only. Historical work order
 - Release: Lagrange 1.4.2 is published. See [`docs/release-notes/v1.4.2.md`](release-notes/v1.4.2.md).
 - Branch: `main`, aligned with `origin/main`.
 - Recent completed work: behavior-neutral cleanup, release integration, pull-to-refresh, continuous EPUB seeking, reader fonts including one imported custom font, staged startup, server-missing catalog state, and download lifecycle implementation.
-- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, and server reading sessions are implemented and user-confirmed working. New implementation work is deferred; BOOX issue #25 remains pending physical-device access.
+- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, server reading sessions, and issue #36 streamed split-MP3 playback are implemented and user-confirmed working. Issue #36 is planned for inclusion in a release this week; BOOX issue #25 remains pending physical-device access.
 
 ## Active validation and follow-up
 
@@ -26,6 +26,7 @@ This document contains the current project direction only. Historical work order
 13. [x] [#26](https://github.com/van-geaux/lagrange-reader/issues/26) (related to [#23](https://github.com/van-geaux/lagrange-reader/issues/23)): add a persisted EPUB option for default word spacing without changing reading direction, alignment, or unrelated typography settings. Implemented with a 0.0–1.0 rem live Readium user-CSS control; automated and user-confirmed device validation are complete.
 14. [x] [#27](https://github.com/van-geaux/lagrange-reader/issues/27): research and implement configurable tap-zone layouts plus None/Horizontal/Vertical/Both inversion for EPUB, PDF, paginated comics, and continuous comic mode; use equal horizontal thirds for the default Previous/Menu/Next layout and equal vertical thirds for the Vertical thirds layout, keep reading direction separate from typography, and verify mode-specific adapters. Changing tap-zone layout or inversion from reader options re-shows the tutorial over the reading surface while keeping the options sheet above it. Automated and user-confirmed device validation are complete.
 15. [x] [#37](https://github.com/van-geaux/lagrange-reader/issues/37): expose compatible same-book files through a separated Book Detail Available file bottom-sheet picker, preserve selected file IDs and metadata through detail hydration/cache, keep unknown attachments such as JSON out of reader/media selection, and preserve the configured square audiobook cover ratio. Automated verification and user-confirmed manual validation are complete.
+16. [x] [#36](https://github.com/van-geaux/lagrange-reader/issues/36): preserve every ordered streamed MP3 file, play the set as one Media3 playlist, use a book-level timeline for chapters/seeks/time, and persist overall plus active-file progress. Automated verification and user-confirmed live validation are complete; the fix is planned for inclusion in a release this week. Multi-file offline storage remains out of scope.
 
 ## Decision and documentation rules
 

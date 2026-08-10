@@ -1205,12 +1205,13 @@ private data class AudioPlayerSnapshot(
     val speed: Float
 )
 
-private fun audioPlayerSnapshot(player: Player): AudioPlayerSnapshot = AudioPlayerSnapshot(
-    playWhenReady = player.playWhenReady,
-    positionMs = player.currentPosition.coerceAtLeast(0L),
-    durationMs = player.duration.takeIf { it > 0L },
-    speed = player.playbackParameters.speed
-)
+private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): AudioPlayerSnapshot =
+    AudioPlayerSnapshot(
+        playWhenReady = session.player.playWhenReady,
+        positionMs = session.absolutePositionMs(),
+        durationMs = session.totalDurationMs().takeIf { it > 0L },
+        speed = session.player.playbackParameters.speed
+    )
 
 @Composable
 internal fun ReadiumCompactAudioPlayer(
@@ -1294,16 +1295,16 @@ internal fun ReadiumCompactAudioPlayer(
         return
     }
     val current = requireNotNull(currentSession)
-    val playback by produceState(audioPlayerSnapshot(current.player), current.player) {
+    val playback by produceState(audioPlayerSnapshot(current), current.player) {
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                value = audioPlayerSnapshot(player)
+                value = audioPlayerSnapshot(current)
             }
         }
         current.player.addListener(listener)
         try {
             while (isActive) {
-                value = audioPlayerSnapshot(current.player)
+                value = audioPlayerSnapshot(current)
                 delay(500L)
             }
         } finally {
@@ -1400,7 +1401,7 @@ internal fun ReadiumCompactAudioPlayer(
                             seekPositionMs = it
                         },
                         onValueChangeFinished = {
-                            current.player.seekTo(seekPositionMs.toLong())
+                            current.seekToAbsolutePosition(seekPositionMs.toLong())
                             isSeeking = false
                         },
                         valueRange = 0f..(durationMs ?: 1L).toFloat(),
@@ -1455,7 +1456,7 @@ internal fun ReadiumCompactAudioPlayer(
                                     },
                                     onClick = {
                                         chapterMenuExpanded = false
-                                        current.player.seekTo(chapter.startMs)
+                                        current.seekToAbsolutePosition(chapter.startMs)
                                     }
                                 )
                             }
@@ -1463,7 +1464,9 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                     IconButton(
                         onClick = {
-                            current.player.seekTo((current.player.currentPosition - 10_000L).coerceAtLeast(0L))
+                            current.seekToAbsolutePosition(
+                                (current.absolutePositionMs() - 10_000L).coerceAtLeast(0L)
+                            )
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1482,8 +1485,10 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                     IconButton(
                         onClick = {
-                            val target = current.player.currentPosition + 30_000L
-                            current.player.seekTo(playback.durationMs?.let(target::coerceAtMost) ?: target)
+                            val target = current.absolutePositionMs() + 30_000L
+                            current.seekToAbsolutePosition(
+                                playback.durationMs?.let(target::coerceAtMost) ?: target
+                            )
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
