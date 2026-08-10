@@ -54,6 +54,12 @@ On Book Detail, Series, Authors, Local books, Statistics, and Achievements:
 - Local books refresh does not interrupt active downloads or destructive actions;
 - automatic/background synchronization remains silent.
 
+### Offline library cache
+
+In Options, select multiple libraries and verify Book details and Cover thumbnails can be enabled independently. Start Download/update now and verify progress can be cancelled, a later run resumes idempotently, unavailable covers are reported without discarding successful entries, and downloaded books are unchanged. After a successful run, enable airplane mode and verify selected-library catalogs, book descriptions/detail metadata, and downloaded thumbnails remain usable. Enable automatic refresh and verify WorkManager schedules unique approximately daily work constrained to an unmetered network; metered connectivity must not start that automatic work. Sign out or change server during an update and verify work stops without exposing another server's cache. Clear offline cache and verify detail/cover entries are removed while readable downloaded books remain.
+
+The user confirmed the implemented offline library cache works on-device. Keep the procedure above for regression testing, including network-policy and cancellation edge cases.
+
 ### Reader and media regression checks
 
 When the affected scope requires it, verify:

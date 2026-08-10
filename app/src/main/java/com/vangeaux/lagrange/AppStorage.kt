@@ -26,7 +26,10 @@ internal class AppStorageManager private constructor(
     suspend fun usage(): StorageUsage = withContext(Dispatchers.IO) {
         StorageUsage(
             downloadedBytes = fileTreeSize(File(filesDir, "downloads")),
-            cacheBytes = fileTreeSize(File(filesDir, "cover_cache")) + fileTreeSize(cacheDir)
+            cacheBytes = fileTreeSize(File(filesDir, "cover_cache")) +
+                fileTreeSize(File(filesDir, "book_detail_cache")) +
+                fileTreeSize(File(filesDir, "book_detail_cache.json")) +
+                fileTreeSize(cacheDir)
         )
     }
 

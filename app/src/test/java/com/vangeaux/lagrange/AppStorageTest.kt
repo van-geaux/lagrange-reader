@@ -8,7 +8,7 @@ import org.junit.Test
 
 class AppStorageTest {
     @Test
-    fun `storage usage separates downloads from disposable cache`() = runTest {
+    fun `storage usage includes offline detail metadata without deleting downloads`() = runTest {
         val filesDir = Files.createTempDirectory("app-storage-files").toFile()
         val cacheDir = Files.createTempDirectory("app-storage-cache").toFile()
         val downloaded = filesDir.resolve("downloads/book.epub").apply {
@@ -19,18 +19,22 @@ class AppStorageTest {
             requireNotNull(parentFile).mkdirs()
             writeBytes(ByteArray(25))
         }
+        filesDir.resolve("book_detail_cache/detail.json").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(50))
+        }
         cacheDir.resolve("reader-cache/chapter.html").apply {
             requireNotNull(parentFile).mkdirs()
             writeBytes(ByteArray(75))
         }
         val manager = AppStorageManager(filesDir, cacheDir)
 
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 100), manager.usage())
+        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 150), manager.usage())
 
         manager.clearDisposableCache()
 
         assertTrue(downloaded.isFile)
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 0), manager.usage())
+        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 50), manager.usage())
     }
 
     @Test

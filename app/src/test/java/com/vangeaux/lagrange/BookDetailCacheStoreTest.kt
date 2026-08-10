@@ -59,9 +59,9 @@ class BookDetailCacheStoreTest {
             assertTrue(restored?.book?.isServerMissing == true)
             first.save("https://example.test", "book-1", "file-1", detail.copy(userRating = null))
             assertNull(BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
-            val cacheFile = File(filesDir, "book_detail_cache.json")
+            val cacheFile = File(filesDir, "book_detail_cache").listFiles().orEmpty().single()
             val root = JSONObject(cacheFile.readText())
-            val serializedDetail = root.getJSONObject(root.keys().next()).getJSONObject("detail")
+            val serializedDetail = root.getJSONObject("detail")
             serializedDetail.remove("userRating")
             serializedDetail.put("rating", 4)
             cacheFile.writeText(root.toString())
@@ -69,6 +69,33 @@ class BookDetailCacheStoreTest {
             serializedDetail.put("rating", 4.25)
             cacheFile.writeText(root.toString())
             assertNull(BookDetailCacheStore(filesDir).read("https://example.test", "book-1", "file-1")?.userRating)
+            filesDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `legacy monolithic entries remain readable and new saves use atomic entry files`() {
+        runBlocking {
+            val filesDir = Files.createTempDirectory("book-detail-legacy-test").toFile()
+            val store = BookDetailCacheStore(filesDir)
+            val detail = BookDetailInfo(
+                book = BookSummary("library", "book", "file", "Legacy"),
+                synopsis = "Still readable"
+            )
+            store.save("https://example.test", "book", "file", detail, 10L)
+            val entryFile = File(filesDir, "book_detail_cache").listFiles().orEmpty().single()
+            val entry = JSONObject(entryFile.readText())
+            val legacyRoot = JSONObject().put(entryFile.nameWithoutExtension, entry)
+            File(filesDir, "book_detail_cache").deleteRecursively()
+            File(filesDir, "book_detail_cache.json").writeText(legacyRoot.toString())
+
+            assertEquals(
+                "Still readable",
+                BookDetailCacheStore(filesDir).read("https://example.test", "book", "file", 10L)?.synopsis
+            )
+
+            BookDetailCacheStore(filesDir).save("https://example.test", "book", "file", detail, 10L)
+            assertTrue(File(filesDir, "book_detail_cache").listFiles().orEmpty().single().isFile)
             filesDir.deleteRecursively()
         }
     }

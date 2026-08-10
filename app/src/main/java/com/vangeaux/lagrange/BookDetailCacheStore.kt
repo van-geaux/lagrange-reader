@@ -12,14 +12,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class BookDetailCacheStore private constructor(
-    private val file: File
+    private val directory: File,
+    private val legacyFile: File
 ) {
-    private val mutex = Mutex()
-
-    constructor(context: Context) : this(File(context.filesDir, "book_detail_cache.json"))
+    constructor(context: Context) : this(
+        File(context.filesDir, "book_detail_cache"),
+        File(context.filesDir, "book_detail_cache.json")
+    )
 
     @Suppress("UNUSED_PARAMETER")
-    internal constructor(filesDir: File, marker: Unit = Unit) : this(File(filesDir, "book_detail_cache.json"))
+    internal constructor(filesDir: File, marker: Unit = Unit) : this(
+        File(filesDir, "book_detail_cache"),
+        File(filesDir, "book_detail_cache.json")
+    )
 
     suspend fun read(
         serverUrl: String,
@@ -27,10 +32,10 @@ class BookDetailCacheStore private constructor(
         fileId: String?,
         sourceUpdatedAtMillis: Long? = null
     ): BookDetailInfo? = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            if (!file.isFile) return@withLock null
-            val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock null
-            val entry = root.optJSONObject(cacheKey(serverUrl, bookId, fileId)) ?: return@withLock null
+        val key = cacheKey(serverUrl, bookId, fileId)
+        val target = entryFile(key)
+        lockFor(target).withLock {
+            val entry = readEntry(target, key) ?: return@withLock null
             if (!entry.has("detail")) {
                 val legacy = entry.toBookDetail() ?: return@withLock null
                 return@withLock legacy.takeIf {
@@ -49,10 +54,10 @@ class BookDetailCacheStore private constructor(
         bookId: String,
         fileId: String?
     ): BookDetailInfo? = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            if (!file.isFile) return@withLock null
-            val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock null
-            val entry = root.optJSONObject(cacheKey(serverUrl, bookId, fileId)) ?: return@withLock null
+        val key = cacheKey(serverUrl, bookId, fileId)
+        val target = entryFile(key)
+        lockFor(target).withLock {
+            val entry = readEntry(target, key) ?: return@withLock null
             if (!entry.has("detail")) entry.toBookDetail() else entry.optJSONObject("detail")?.toBookDetail()
         }
     }
@@ -64,44 +69,85 @@ class BookDetailCacheStore private constructor(
         detail: BookDetailInfo,
         sourceUpdatedAtMillis: Long? = detail.book.updatedAtMillis
     ) = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            val root = if (file.isFile) {
-                runCatching { JSONObject(file.readText()) }.getOrElse { JSONObject() }
-            } else {
-                JSONObject()
-            }
-            root.put(
-                cacheKey(serverUrl, bookId, fileId),
+        val target = entryFile(cacheKey(serverUrl, bookId, fileId))
+        lockFor(target).withLock {
+            directory.mkdirs()
+            val temporary = File(directory, "${target.name}.tmp")
+            temporary.writeText(
                 JSONObject().apply {
                     putNullable("sourceUpdatedAtMillis", sourceUpdatedAtMillis)
                     put("detail", detail.toJson())
-                }
+                }.toString()
             )
-            file.parentFile?.mkdirs()
-            file.writeText(root.toString())
+            runCatching {
+                java.nio.file.Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            }.getOrElse {
+                if (target.exists()) target.delete()
+                if (!temporary.renameTo(target)) {
+                    target.writeText(temporary.readText())
+                    temporary.delete()
+                }
+            }
         }
     }
 
     suspend fun remove(serverUrl: String, bookId: String, fileId: String?) = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            if (!file.isFile) return@withLock
-            val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return@withLock
-            root.remove(cacheKey(serverUrl, bookId, fileId))
-            file.writeText(root.toString())
+        val key = cacheKey(serverUrl, bookId, fileId)
+        val target = entryFile(key)
+        lockFor(target).withLock {
+            if (target.exists()) target.delete()
+        }
+        legacyMutex.withLock {
+            if (!legacyFile.isFile) return@withLock
+            val root = runCatching { JSONObject(legacyFile.readText()) }.getOrNull() ?: return@withLock
+            root.remove(key)
+            legacyFile.writeText(root.toString())
         }
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            if (file.exists()) file.delete()
+        clearMutex.withLock {
+            if (directory.exists()) directory.deleteRecursively()
+            legacyMutex.withLock {
+                if (legacyFile.exists()) legacyFile.delete()
+            }
         }
     }
+
+    suspend fun sizeBytes(): Long = withContext(Dispatchers.IO) {
+        directory.listFiles()?.filter(File::isFile)?.sumOf(File::length).orEmptyBytes() +
+            legacyFile.takeIf(File::isFile)?.length().orEmptyBytes()
+    }
+
+    private fun readEntry(target: File, key: String): JSONObject? {
+        if (target.isFile) return runCatching { JSONObject(target.readText()) }.getOrNull()
+        return runCatching { JSONObject(legacyFile.readText()) }
+            .getOrNull()
+            ?.optJSONObject(key)
+    }
+
+    private fun entryFile(key: String): File = File(directory, "$key.json")
+
+    private fun lockFor(file: File): Mutex = entryLocks.getOrPut(file.absolutePath) { Mutex() }
 
     private fun cacheKey(serverUrl: String, bookId: String, fileId: String?): String {
         val token = "$serverUrl\u0000$bookId\u0000${fileId.orEmpty()}"
         return MessageDigest.getInstance("SHA-256")
             .digest(token.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun Long?.orEmptyBytes(): Long = this ?: 0L
+
+    private companion object {
+        val entryLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+        val legacyMutex = Mutex()
+        val clearMutex = Mutex()
     }
 }
 
