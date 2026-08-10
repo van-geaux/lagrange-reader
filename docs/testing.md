@@ -43,6 +43,14 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 
 The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
 
+### Series and selected-library bulk download
+
+After the selected library has finished loading its complete catalog, verify the Browse tab places `Download library` below the filter/count row and opens file-level selection grouped by library/format. Confirm `Select all`, clear it, select individual files, and verify the summary updates. Confirm the first library warning and verify a second warning appears without starting a transfer; dismiss the second warning and verify no bulk transfer starts. Repeat and confirm both warnings, then verify aggregate progress appears while the frozen eligible files use the existing per-file download state. On a metered connection, verify one cellular-data warning describes the whole selected library and does not repeat per book.
+
+Open a Series detail, choose `Download series`, verify the same selection behavior, and confirm transfers start in ascending series-index order with aggregate progress. When every file is current, verify the corresponding bulk-download button is absent; an available update keeps it visible. In both screens, verify `Delete local books` appears only when local copies exist, is disabled during scoped transfers, requires a count-aware confirmation, removes all scoped device copies, and leaves BookOrbit records intact. After deleting all local series copies, verify `Download series` reappears immediately without leaving the screen. Books without downloadable file IDs are skipped. Shelves bulk download remains deferred.
+
+Automated verification covers candidate filtering, frozen selection, deterministic ordering, eligibility restoration after deletion, aggregate progress, and local-copy deduplication. Physical-device validation of the cellular warning flow remains a manual requirement.
+
 ### Refresh lifecycle
 
 On Book Detail, Series, Authors, Local books, Statistics, and Achievements:
