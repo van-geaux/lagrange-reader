@@ -25,6 +25,9 @@ This document contains the current project direction only. Historical work order
 15. [x] [#37](https://github.com/van-geaux/lagrange-reader/issues/37): expose compatible same-book files through a separated Book Detail Available file bottom-sheet picker, preserve selected file IDs and metadata through detail hydration/cache, keep unknown attachments such as JSON out of reader/media selection, and preserve the configured square audiobook cover ratio. Automated verification and user-confirmed manual validation are complete.
 16. [x] [#40](https://github.com/van-geaux/lagrange-reader/issues/40): keep Home/Libraries/More visible across every browser-owned screen, including Search and catalog/detail/genre views, while leaving dedicated reader/player surfaces unchanged. Focused instrumentation coverage and main/Android-test compilation passed; device execution remains pending because no ADB target is connected.
 
+17. [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.
+18. [x] [#43](https://github.com/van-geaux/lagrange-reader/issues/43): explicit user-selected offline library caching for lightweight details and cover thumbnails now uses a shared bounded manual/approximately daily unmetered refresh engine, cancellation, partial-failure retention, storage reporting, and safe clearing that never removes downloaded books. Automated verification passes and the user confirmed the feature works on-device.
+
 ## Decision and documentation rules
 
 - Use [`CHECKLIST.md`](../CHECKLIST.md) for active completion and validation status.
@@ -32,4 +35,3 @@ This document contains the current project direction only. Historical work order
 - Use [`docs/architecture.md`](architecture.md), [`docs/bookorbit-api.md`](bookorbit-api.md), and [`docs/ui-ux.md`](ui-ux.md) for current contracts and guardrails.
 - Record historical implementation detail in [`docs/roadmap-archive.md`](roadmap-archive.md), not in this active roadmap.
 - Before changing roadmap priorities, confirm the product decision and update only the current sections.
-17. [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.

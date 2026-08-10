@@ -33,6 +33,8 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Normal online opens hydrate format-specific server progress before reader-state construction; offline and Preview flows remain isolated from those reads.
 - Cached browser content may be shown while reconciliation is in progress, but the reconciled server catalog is authoritative for server-backed visibility.
 - Server-missing catalog records remain visible with an explicit unavailable state; stale server-absent records are not resurrected after reconciliation.
+- Offline library caching is explicit and library-scoped: selected libraries may cache complete lightweight book details and/or browsing-size cover thumbnails without downloading readable book files. Manual and approximately daily unmetered refresh share one bounded, resumable WorkManager pipeline; automatic refresh is disabled by default.
+- Detail cache entries are atomic, server-scoped files with legacy monolithic-cache read compatibility. Cover thumbnails use versioned identities and a 256 MB least-recently-used disk limit. Successful entries survive partial refresh failures and are removed only by an explicit offline-cache clear or server removal.
 
 ## Reader and media architecture
 

@@ -273,6 +273,10 @@ interface BookOrbitDataSource {
     suspend fun clearInterruptedDownload(fileId: String) = Unit
     suspend fun loadStorageUsage(): StorageUsage = StorageUsage()
     suspend fun clearAppCache() = Unit
+    suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = OfflineCacheStatus()
+    suspend fun startOfflineCacheUpdate(): Boolean = false
+    suspend fun cancelOfflineCacheUpdate() = Unit
+    suspend fun clearOfflineCache() = Unit
     suspend fun reconfigureBackgroundRefresh() = Unit
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
     suspend fun pendingProgressCount(): Int
@@ -337,6 +341,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun clearServer() {
+        OfflineCacheScheduler.cancelAll(context)
         CoverCacheWarmWorker.cancelAll(context)
         libraryCoverAspectRatios = emptyMap()
         context.dataStore.edit { prefs ->
@@ -349,6 +354,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun clearSession() {
+        OfflineCacheSyncWorker.cancel(context)
         context.dataStore.edit { prefs ->
             prefs.remove(Keys.ACCESS_TOKEN)
         }
@@ -569,7 +575,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             jumpBuckets = jumpBuckets,
             refreshedAtMillis = refreshedAtMillis
         )
-        CoverCacheWarmWorker.enqueue(context, serverUrl, libraryId)
         LibraryBooksPage(
             items = books,
             total = total,
@@ -842,6 +847,88 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             index += 1
         }
         index.takeIf { it < books.size }
+    }
+
+    internal suspend fun warmOfflineCacheBatch(
+        expectedServerUrl: String,
+        libraryId: String,
+        startIndex: Int,
+        maxItems: Int,
+        includeDetails: Boolean,
+        includeCovers: Boolean
+    ): OfflineCacheBatchResult? = withContext(Dispatchers.IO) {
+        if (getServerUrl().orEmpty() != expectedServerUrl) return@withContext null
+        val books = libraryCatalogStore.read(expectedServerUrl, libraryId)?.books
+            ?: return@withContext null
+        var index = startIndex.coerceIn(0, books.size)
+        var processed = 0
+        var downloaded = 0
+        var skipped = 0
+        var unavailable = 0
+        var failed = 0
+        while (index < books.size && processed < maxItems.coerceAtLeast(1)) {
+            if (getServerUrl().orEmpty() != expectedServerUrl) return@withContext null
+            val book = books[index]
+            if (includeDetails) {
+                if (bookDetailCacheStore.read(
+                        expectedServerUrl,
+                        book.id,
+                        book.fileId,
+                        book.updatedAtMillis
+                    ) != null
+                ) {
+                    skipped += 1
+                } else {
+                    try {
+                        fetchAuthoritativeBookDetail(book)
+                        downloaded += 1
+                    } catch (error: HttpRequestException) {
+                        when {
+                            error.code == 404 -> unavailable += 1
+                            isRetryableOfflineCacheError(error) -> throw error
+                            else -> failed += 1
+                        }
+                    }
+                }
+            }
+            if (includeCovers) {
+                val url = book.coverUrl?.let(::coverThumbnailUrl)
+                if (url == null) {
+                    unavailable += 1
+                } else {
+                    val identity = coverCacheIdentity(url, book.updatedAtMillis)
+                    if (coverCacheStore.contains(expectedServerUrl, book.id, identity)) {
+                        skipped += 1
+                    } else {
+                        try {
+                            val bytes = requestBytes(url)
+                            if (bytes.isEmpty()) {
+                                unavailable += 1
+                            } else {
+                                coverCacheStore.save(expectedServerUrl, book.id, identity, bytes)
+                                downloaded += 1
+                            }
+                        } catch (error: HttpRequestException) {
+                            when {
+                                error.code == 404 -> unavailable += 1
+                                isRetryableOfflineCacheError(error) -> throw error
+                                else -> failed += 1
+                            }
+                        }
+                    }
+                }
+            }
+            processed += 1
+            index += 1
+        }
+        OfflineCacheBatchResult(
+            nextIndex = index.takeIf { it < books.size },
+            processed = processed,
+            downloaded = downloaded,
+            skipped = skipped,
+            unavailable = unavailable,
+            failed = failed
+        )
     }
 
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
@@ -1410,13 +1497,31 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         appStorageManager.clearDisposableCache()
     }
 
+    override suspend fun loadOfflineCacheStatus(): OfflineCacheStatus =
+        OfflineCacheStatusStore(context).read()
+
+    override suspend fun startOfflineCacheUpdate(): Boolean =
+        OfflineCacheSyncWorker.enqueueManual(
+            context,
+            getServerUrl().orEmpty(),
+            AppPreferencesStore(context).read()
+        )
+
+    override suspend fun cancelOfflineCacheUpdate() {
+        OfflineCacheSyncWorker.cancel(context)
+    }
+
+    override suspend fun clearOfflineCache() = withContext(Dispatchers.IO) {
+        OfflineCacheSyncWorker.cancel(context)
+        synchronized(coverCache) { coverCache.clear() }
+        coverCacheStore.clear()
+        bookDetailCacheStore.clear()
+        OfflineCacheStatusStore(context).write(OfflineCacheStatus())
+    }
+
     override suspend fun reconfigureBackgroundRefresh() {
         CoverCacheWarmWorker.cancelAll(context)
-        val serverUrl = getServerUrl().orEmpty()
-        val libraryId = getSelectedLibraryId().orEmpty()
-        if (serverUrl.isNotBlank() && libraryId.isNotBlank()) {
-            CoverCacheWarmWorker.enqueue(context, serverUrl, libraryId)
-        }
+        OfflineCacheScheduler.reconfigure(context)
     }
 
     override suspend fun queueProgress(

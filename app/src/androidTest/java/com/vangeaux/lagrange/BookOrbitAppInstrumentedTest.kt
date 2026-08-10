@@ -1246,15 +1246,23 @@ class BookOrbitAppInstrumentedTest {
     fun optionsExposeDataPoliciesAndSafeCacheClearing() {
         val preferences = mutableStateOf(AppPreferences())
         var clearCount = 0
+        var offlineUpdateCount = 0
+        var offlineClearCount = 0
         composeRule.setContent {
             BookOrbitTheme {
                 OptionsScreen(
                     preferences = preferences.value,
+                    libraries = listOf(LibrarySummary("library-1", "Primary")),
                     onPreferencesChange = { preferences.value = it },
                     storageUsageLoader = {
                         StorageUsage(downloadedBytes = 10L * 1024L, cacheBytes = 2L * 1024L)
                     },
-                    onClearCache = { clearCount += 1 }
+                    onClearCache = { clearCount += 1 },
+                    onStartOfflineCacheUpdate = {
+                        offlineUpdateCount += 1
+                        true
+                    },
+                    onClearOfflineCache = { offlineClearCount += 1 }
                 )
             }
         }
@@ -1272,14 +1280,20 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("confirm-clear-cache").performClick()
         composeRule.waitUntil { clearCount == 1 }
 
-        composeRule.onNodeWithTag("options-background-refresh").performScrollTo().performClick()
-        composeRule.onNodeWithText("Disabled").performClick()
+        composeRule.onNodeWithTag("options-offline-cache").performScrollTo()
+        composeRule.onNodeWithTag("offline-cache-library-library-1").performClick()
+        composeRule.onNodeWithTag("offline-cache-covers").performClick()
+        composeRule.onNodeWithTag("offline-cache-auto-refresh").performClick()
         composeRule.runOnIdle {
-            assertEquals(
-                BackgroundRefreshNetworkPolicy.DISABLED,
-                preferences.value.backgroundRefreshNetworkPolicy
-            )
+            assertEquals(setOf("library-1"), preferences.value.offlineCacheLibraryIds)
+            assertTrue(preferences.value.offlineCacheDetailsEnabled)
+            assertTrue(preferences.value.offlineCacheCoversEnabled)
+            assertTrue(preferences.value.offlineCacheAutoRefreshEnabled)
         }
+        composeRule.onNodeWithTag("offline-cache-update").performClick()
+        composeRule.waitUntil { offlineUpdateCount == 1 }
+        composeRule.onNodeWithTag("offline-cache-clear").performClick()
+        composeRule.waitUntil { offlineClearCount == 1 }
 
         composeRule.onNodeWithTag("options-confirm-local-delete").performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(false, preferences.value.confirmDeleteLocalCopy) }

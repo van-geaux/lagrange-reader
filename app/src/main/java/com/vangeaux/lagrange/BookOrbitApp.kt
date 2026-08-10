@@ -305,6 +305,10 @@ private fun BookOrbitDestination(
             onAppPreferencesChange = onAppPreferencesChange,
             storageUsageLoader = coordinator::loadStorageUsage,
             onClearCache = coordinator::clearAppCache,
+            offlineCacheStatusLoader = coordinator::loadOfflineCacheStatus,
+            onStartOfflineCacheUpdate = coordinator::startOfflineCacheUpdate,
+            onCancelOfflineCacheUpdate = coordinator::cancelOfflineCacheUpdate,
+            onClearOfflineCache = coordinator::clearOfflineCache,
             bookDetailRequest = audioPlaybackController?.bookDetailRequest?.collectAsState()?.value,
             onBookDetailRequestConsumed = { sequence ->
                 audioPlaybackController?.consumeBookDetailRequest(sequence)

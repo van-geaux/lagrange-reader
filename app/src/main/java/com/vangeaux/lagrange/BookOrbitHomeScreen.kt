@@ -492,6 +492,10 @@ internal fun NativeLibraryBrowserScreen(
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
+    offlineCacheStatusLoader: suspend () -> OfflineCacheStatus = { OfflineCacheStatus() },
+    onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
+    onCancelOfflineCacheUpdate: suspend () -> Unit = {},
+    onClearOfflineCache: suspend () -> Unit = {},
     bookDetailRequest: AudioBookDetailRequest? = null,
     onBookDetailRequestConsumed: (Long) -> Unit = {},
     bottomOverlay: (@Composable () -> Unit)? = null
@@ -1185,6 +1189,10 @@ internal fun NativeLibraryBrowserScreen(
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
+                    offlineCacheStatusLoader = offlineCacheStatusLoader,
+                    onStartOfflineCacheUpdate = onStartOfflineCacheUpdate,
+                    onCancelOfflineCacheUpdate = onCancelOfflineCacheUpdate,
+                    onClearOfflineCache = onClearOfflineCache,
                     modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
@@ -2305,12 +2313,17 @@ internal fun OptionsScreen(
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
+    offlineCacheStatusLoader: suspend () -> OfflineCacheStatus = { OfflineCacheStatus() },
+    onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
+    onCancelOfflineCacheUpdate: suspend () -> Unit = {},
+    onClearOfflineCache: suspend () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
     var storageRefreshKey by rememberSaveable { mutableStateOf(0) }
     var isClearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
+    var offlineCacheRefreshKey by rememberSaveable { mutableIntStateOf(0) }
     var readingLibraryId by rememberSaveable {
         mutableStateOf(selectedLibraryId ?: libraries.firstOrNull()?.id)
     }
@@ -2323,6 +2336,15 @@ internal fun OptionsScreen(
     val scope = rememberCoroutineScope()
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
         value = runCatching { storageUsageLoader() }.getOrNull()
+    }
+    val offlineCacheStatus by produceState(
+        initialValue = OfflineCacheStatus(),
+        offlineCacheRefreshKey
+    ) {
+        do {
+            value = runCatching { offlineCacheStatusLoader() }.getOrDefault(value)
+            if (value.state == OfflineCacheRunState.RUNNING) delay(750) else break
+        } while (true)
     }
 
     LazyColumn(
@@ -2463,13 +2485,33 @@ internal fun OptionsScreen(
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-        item(key = "background-refresh") {
-            AppPreferenceSelectionRow(
-                title = "Background metadata and covers",
-                value = preferences.backgroundRefreshNetworkPolicy.displayName,
-                summary = "Manual refresh remains available on any network",
-                testTag = "options-background-refresh",
-                onClick = { openDialog = OptionsDialog.BACKGROUND_REFRESH }
+        item(key = "offline-library-cache") {
+            OfflineLibraryCacheConfiguration(
+                preferences = preferences,
+                libraries = libraries,
+                status = offlineCacheStatus,
+                onPreferencesChange = onPreferencesChange,
+                onStart = {
+                    scope.launch {
+                        if (!onStartOfflineCacheUpdate()) {
+                            storageMessage = "Select a library and at least one cache type"
+                        }
+                        offlineCacheRefreshKey += 1
+                    }
+                },
+                onCancel = {
+                    scope.launch {
+                        onCancelOfflineCacheUpdate()
+                        offlineCacheRefreshKey += 1
+                    }
+                },
+                onClear = {
+                    scope.launch {
+                        onClearOfflineCache()
+                        storageRefreshKey += 1
+                        offlineCacheRefreshKey += 1
+                    }
+                }
             )
         }
         item(key = "confirm-local-delete") {
@@ -2569,6 +2611,142 @@ internal fun OptionsScreen(
             }
         )
         null -> Unit
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OfflineLibraryCacheConfiguration(
+    preferences: AppPreferences,
+    libraries: List<LibrarySummary>,
+    status: OfflineCacheStatus,
+    onPreferencesChange: (AppPreferences) -> Unit,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onClear: () -> Unit
+) {
+    val selectedIds = preferences.offlineCacheLibraryIds
+    val hasContentType = preferences.offlineCacheDetailsEnabled || preferences.offlineCacheCoversEnabled
+    val isRunning = status.state == OfflineCacheRunState.RUNNING
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .testTag("options-offline-cache"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Offline library cache", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Keep selected library metadata and thumbnails available offline. This never downloads readable book files.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text("Libraries", style = MaterialTheme.typography.titleMedium)
+            if (libraries.isEmpty()) {
+                Text("No libraries available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    libraries.forEach { library ->
+                        FilterChip(
+                            selected = library.id in selectedIds,
+                            onClick = {
+                                val updated = if (library.id in selectedIds) {
+                                    selectedIds - library.id
+                                } else {
+                                    selectedIds + library.id
+                                }
+                                onPreferencesChange(preferences.copy(offlineCacheLibraryIds = updated))
+                            },
+                            label = { Text(library.name) },
+                            modifier = Modifier.testTag("offline-cache-library-${library.id}")
+                        )
+                    }
+                }
+            }
+            AppPreferenceSwitchRow(
+                title = "Book details",
+                summary = "Synopsis, authors, genres, tags, series, and file metadata",
+                checked = preferences.offlineCacheDetailsEnabled,
+                testTag = "offline-cache-details",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(offlineCacheDetailsEnabled = it))
+                }
+            )
+            AppPreferenceSwitchRow(
+                title = "Cover thumbnails",
+                summary = "Browsing-size images with a 256 MB device cache limit",
+                checked = preferences.offlineCacheCoversEnabled,
+                testTag = "offline-cache-covers",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(offlineCacheCoversEnabled = it))
+                }
+            )
+            AppPreferenceSwitchRow(
+                title = "Automatically refresh",
+                summary = "Approximately daily on unmetered networks",
+                checked = preferences.offlineCacheAutoRefreshEnabled,
+                testTag = "offline-cache-auto-refresh",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(offlineCacheAutoRefreshEnabled = it))
+                }
+            )
+            if (isRunning) {
+                if (status.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { (status.processed.toFloat() / status.total).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().testTag("offline-cache-progress")
+                    )
+                    Text("${status.processed} of ${status.total} books checked")
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text("Refreshing selected library catalogs…")
+                }
+            } else if (status.state != OfflineCacheRunState.IDLE) {
+                Text(
+                    status.message ?: "${status.processed} books checked",
+                    color = if (status.state == OfflineCacheRunState.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                if (status.unavailable > 0 || status.failed > 0) {
+                    Text(
+                        "Unavailable ${status.unavailable} · Failed ${status.failed}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onStart,
+                    enabled = !isRunning && selectedIds.isNotEmpty() && hasContentType,
+                    modifier = Modifier.testTag("offline-cache-update")
+                ) { Text("Download/update now") }
+                if (isRunning) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        modifier = Modifier.testTag("offline-cache-cancel")
+                    ) { Text("Cancel") }
+                }
+                TextButton(
+                    onClick = onClear,
+                    enabled = !isRunning,
+                    modifier = Modifier.testTag("offline-cache-clear")
+                ) { Text("Clear offline cache") }
+            }
+        }
     }
 }
 
