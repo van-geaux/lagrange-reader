@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeShelfTest {
@@ -121,6 +123,153 @@ class HomeShelfTest {
         )
         assertEquals(listOf("alpha"), localBooksShelf(listOf(beta, alpha), libraryId = "lib-1").map { it.id })
         assertEquals(listOf("alpha"), localBooksShelf(listOf(beta, alpha), limit = 1).map { it.id })
+    }
+
+    @Test
+    fun `library download candidates are scoped to the selected library and skip missing file ids`() {
+        val withFile = seriesBook("alpha", index = 1.0)
+        val withoutFile = seriesBook("beta", index = 2.0).copy(fileId = null)
+        val otherLibrary = seriesBook("gamma", index = 3.0).copy(libraryId = "lib-2")
+
+        assertEquals(
+            listOf("alpha"),
+            booksDownloadableForLibrary(listOf(withFile, withoutFile, otherLibrary), "lib-1").map { it.id }
+        )
+        assertEquals(emptyList<BookSummary>(), booksDownloadableForLibrary(listOf(withFile), null))
+    }
+
+    @Test
+    fun `series download candidates skip books without file ids`() {
+        val withFile = seriesBook("alpha", index = 1.0)
+        val withoutFile = seriesBook("beta", index = 2.0).copy(fileId = null)
+
+        assertEquals(
+            listOf("alpha"),
+            booksDownloadableForSeries(listOf(withFile, withoutFile)).map { it.id }
+        )
+    }
+
+    @Test
+    fun `bulk selection deduplicates file ids and excludes completed files by default`() {
+        val available = seriesBook("available", index = 1.0)
+        val duplicate = available.copy(id = "duplicate", title = "Duplicate")
+        val downloaded = seriesBook("downloaded", index = 2.0).copy(localPath = "/local/downloaded.epub")
+
+        assertEquals(
+            listOf("file-available"),
+            defaultSeriesFileSelection(listOf(available, duplicate, downloaded)).toList()
+        )
+        assertEquals(
+            listOf("available"),
+            selectedSeriesFiles(
+                listOf(available, duplicate, downloaded),
+                setOf("file-available", "file-downloaded")
+            ).map { it.id }
+        )
+    }
+
+    @Test
+    fun `bulk selection groups by library and format`() {
+        val epub = seriesBook("epub", index = 1.0).copy(format = "epub")
+        val pdf = seriesBook("pdf", index = 2.0).copy(format = "pdf")
+        val otherLibrary = pdf.copy(id = "other", fileId = "file-other", libraryId = "lib-2")
+
+        assertEquals(
+            listOf("Main · epub", "Main · pdf", "Secondary · pdf"),
+            bulkDownloadGroupKeys(
+                listOf(epub, pdf, otherLibrary),
+                listOf(
+                    LibrarySummary("lib-1", "Main"),
+                    LibrarySummary("lib-2", "Secondary")
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `series bulk downloads dispatch in ascending index order`() {
+        val third = seriesBook("third", index = 3.0)
+        val secondB = seriesBook("second-b", index = 2.0).copy(title = "Beta")
+        val missing = seriesBook("missing", index = 4.0).copy(title = "Epilogue", seriesIndex = null)
+        val first = seriesBook("first", index = 1.0)
+        val secondA = seriesBook("second-a", index = 2.0).copy(title = "Alpha")
+
+        assertEquals(
+            listOf("first", "second-a", "second-b", "third", "missing"),
+            seriesDownloadDispatchOrder(listOf(third, secondB, missing, first, secondA)).map { it.id }
+        )
+    }
+
+    @Test
+    fun `bulk download action hides when every file is current`() {
+        val downloaded = seriesBook("downloaded", index = 1.0)
+            .copy(localPath = "/local/downloaded.epub")
+        val update = downloaded.copy(
+            id = "update",
+            fileId = "file-update",
+            downloadedSourceUpdatedAtMillis = 100L,
+            updatedAtMillis = 200L
+        )
+
+        assertFalse(hasSelectableBulkDownloads(listOf(downloaded)))
+        assertTrue(hasSelectableBulkDownloads(listOf(update)))
+    }
+
+    @Test
+    fun `series download action returns after local copies are deleted`() {
+        val downloaded = seriesBook("downloaded", index = 1.0)
+            .copy(localPath = "/local/downloaded.epub")
+
+        val afterDelete = booksWithLocalFilePathOverrides(
+            books = listOf(downloaded),
+            localFilePathOverrides = mapOf("file-downloaded" to null)
+        )
+
+        assertTrue(hasSelectableBulkDownloads(afterDelete))
+    }
+
+    @Test
+    fun `bulk local delete candidates use current overrides and deduplicate files`() {
+        val stale = seriesBook("stale", index = 1.0)
+        val duplicate = stale.copy(id = "duplicate")
+        val alreadyLocal = seriesBook("local", index = 2.0)
+            .copy(localPath = "/local/book.epub")
+        val remoteOnly = seriesBook("remote", index = 3.0)
+
+        assertEquals(
+            listOf("file-stale", "file-local"),
+            localCopiesForBulkAction(
+                books = listOf(stale, duplicate, alreadyLocal, remoteOnly),
+                localFilePathOverrides = mapOf("file-stale" to "/local/stale.epub")
+            ).mapNotNull { it.fileId }
+        )
+    }
+
+    @Test
+    fun `collection download progress includes completed and active files`() {
+        val progress = collectionDownloadProgress(
+            fileIds = listOf("completed", "active"),
+            downloadingFileIds = setOf("active"),
+            progressByFileId = mapOf("active" to 0.5f),
+            completedFileIds = setOf("completed")
+        )
+
+        assertEquals(1, progress?.activeCount)
+        assertEquals(2, progress?.totalCount)
+        assertEquals(0.75f, progress?.progress ?: 0f, 0.001f)
+    }
+
+    @Test
+    fun `collection download progress is hidden without active files`() {
+        assertEquals(
+            null,
+            collectionDownloadProgress(
+                fileIds = listOf("completed"),
+                downloadingFileIds = emptySet(),
+                progressByFileId = emptyMap(),
+                completedFileIds = setOf("completed")
+            )
+        )
     }
 
     private fun seriesBook(

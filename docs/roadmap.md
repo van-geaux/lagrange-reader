@@ -7,7 +7,7 @@ This document contains the current project direction only. Historical work order
 - Release: Lagrange 1.4.2 is published. See [`docs/release-notes/v1.4.2.md`](release-notes/v1.4.2.md).
 - Branch: `main`, aligned with `origin/main`.
 - Recent completed work: behavior-neutral cleanup, release integration, pull-to-refresh, continuous EPUB seeking, reader fonts including one imported custom font, staged startup, server-missing catalog state, and download lifecycle implementation.
-- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, server reading sessions, issue #36 streamed split-MP3 playback, and issue #47 orientation/fold restoration are implemented and user-confirmed working. Issue #47 uses atomic browser-route restoration and recreation-safe EPUB/PDF/comic reopen with idempotent parent launch state; local tests, compilation, lint, and manifest processing pass. BOOX issue #25 remains pending physical-device access.
+- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, server reading sessions, issue #36 streamed split-MP3 playback, issue #38 bulk downloads, and issue #47 orientation/fold restoration are implemented and user-confirmed working. Issue #47 uses atomic browser-route restoration and recreation-safe EPUB/PDF/comic reopen with idempotent parent launch state; local tests, compilation, lint, and manifest processing pass. BOOX issue #25 remains pending physical-device access.
 
 ## Active validation and follow-up
 
@@ -31,6 +31,7 @@ This document contains the current project direction only. Historical work order
 
 18. [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.
 19. [x] [#43](https://github.com/van-geaux/lagrange-reader/issues/43): explicit user-selected offline library caching for lightweight details and cover thumbnails now uses a shared bounded manual/approximately daily unmetered refresh engine, cancellation, partial-failure retention, storage reporting, and safe clearing that never removes downloaded books. Automated verification passes and the user confirmed the feature works on-device.
+20. [x] [#38](https://github.com/van-geaux/lagrange-reader/issues/38): whole-series and selected-library bulk download now provides file-level selection, collection-scoped confirmations and cellular warnings, deterministic ascending series dispatch, aggregate progress, eligibility-aware action visibility, and confirmed local-copy mass deletion. The user confirmed the post-delete `Download series` restoration on-device. Shelves remain deferred because the current API/model path does not expose usable Shelf content.
 
 ## Decision and documentation rules
 
