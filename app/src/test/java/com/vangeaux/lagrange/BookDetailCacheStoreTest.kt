@@ -32,6 +32,22 @@ class BookDetailCacheStoreTest {
                 tags = listOf("Local"),
                 narrators = listOf("Narrator"),
                 fileCount = 1,
+                availableFiles = listOf(
+                    BookFileOption(
+                        book = BookSummary(
+                            libraryId = "library-1",
+                            id = "book-1",
+                            fileId = "file-2",
+                            title = "Cached Book",
+                            format = "epub",
+                            mediaKind = MediaKind.EPUB
+                        ),
+                        filename = "alternate.epub",
+                        sizeBytes = 1234L,
+                        role = "alternate",
+                        updatedAtMillis = 200L
+                    )
+                ),
                 pageCount = 320,
                 userRating = 4,
                 audioChapters = listOf(AudiobookChapter("Opening", 0L)),
@@ -54,6 +70,7 @@ class BookDetailCacheStoreTest {
             assertEquals(detail.pageCount, restored?.pageCount)
             assertEquals(detail.audioChapters, restored?.audioChapters)
             assertEquals(detail.providerIds, restored?.providerIds)
+            assertEquals(detail.availableFiles, restored?.availableFiles)
             assertEquals(BookReadStatus.WANT_TO_READ, restored?.book?.readStatus)
             assertEquals(CoverAspectRatio.SQUARE, restored?.book?.coverAspectRatio)
             assertTrue(restored?.book?.isServerMissing == true)
