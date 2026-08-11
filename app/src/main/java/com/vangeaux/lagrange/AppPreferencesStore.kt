@@ -54,6 +54,10 @@ data class AppPreferences(
     val cellularDownloadPolicy: CellularDownloadPolicy = CellularDownloadPolicy.ASK_FOR_CONFIRMATION,
     val backgroundRefreshNetworkPolicy: BackgroundRefreshNetworkPolicy =
         BackgroundRefreshNetworkPolicy.WIFI_ONLY,
+    val offlineCacheLibraryIds: Set<String> = emptySet(),
+    val offlineCacheDetailsEnabled: Boolean = true,
+    val offlineCacheCoversEnabled: Boolean = false,
+    val offlineCacheAutoRefreshEnabled: Boolean = false,
     val confirmDeleteLocalCopy: Boolean = true,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
@@ -82,6 +86,12 @@ internal class AppPreferencesStore(context: Context) {
         backgroundRefreshNetworkPolicy = backgroundRefreshNetworkPolicyFromStorage(
             preferences.getString(BACKGROUND_REFRESH_NETWORK_POLICY_KEY, null)
         ),
+        offlineCacheLibraryIds = offlineCacheLibraryIdsFromStorage(
+            preferences.getString(OFFLINE_CACHE_LIBRARY_IDS_KEY, null)
+        ),
+        offlineCacheDetailsEnabled = preferences.getBoolean(OFFLINE_CACHE_DETAILS_KEY, true),
+        offlineCacheCoversEnabled = preferences.getBoolean(OFFLINE_CACHE_COVERS_KEY, false),
+        offlineCacheAutoRefreshEnabled = preferences.getBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, false),
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         seriesGroupingMode = seriesGroupingModeFromStorage(
             preferences.getString(SERIES_GROUPING_MODE_KEY, null)
@@ -115,6 +125,13 @@ internal class AppPreferencesStore(context: Context) {
                 BACKGROUND_REFRESH_NETWORK_POLICY_KEY,
                 backgroundRefreshNetworkPolicyStorageValue(value.backgroundRefreshNetworkPolicy)
             )
+            .putString(
+                OFFLINE_CACHE_LIBRARY_IDS_KEY,
+                offlineCacheLibraryIdsStorageValue(value.offlineCacheLibraryIds)
+            )
+            .putBoolean(OFFLINE_CACHE_DETAILS_KEY, value.offlineCacheDetailsEnabled)
+            .putBoolean(OFFLINE_CACHE_COVERS_KEY, value.offlineCacheCoversEnabled)
+            .putBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, value.offlineCacheAutoRefreshEnabled)
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
             .putString(
                 SERIES_GROUPING_MODE_KEY,
@@ -157,6 +174,10 @@ internal class AppPreferencesStore(context: Context) {
         const val REDUCE_MOTION_KEY = "reduce_motion"
         const val CELLULAR_DOWNLOAD_POLICY_KEY = "cellular_download_policy"
         const val BACKGROUND_REFRESH_NETWORK_POLICY_KEY = "background_refresh_network_policy"
+        const val OFFLINE_CACHE_LIBRARY_IDS_KEY = "offline_cache_library_ids"
+        const val OFFLINE_CACHE_DETAILS_KEY = "offline_cache_details"
+        const val OFFLINE_CACHE_COVERS_KEY = "offline_cache_covers"
+        const val OFFLINE_CACHE_AUTO_REFRESH_KEY = "offline_cache_auto_refresh"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
@@ -165,6 +186,20 @@ internal class AppPreferencesStore(context: Context) {
         const val IGNORED_RELEASE_TAG_KEY = "ignored_release_tag"
     }
 }
+
+internal fun offlineCacheLibraryIdsStorageValue(values: Set<String>): String = values
+    .map(String::trim)
+    .filter(String::isNotBlank)
+    .distinct()
+    .sorted()
+    .joinToString("\n")
+
+internal fun offlineCacheLibraryIdsFromStorage(value: String?): Set<String> = value
+    .orEmpty()
+    .lineSequence()
+    .map(String::trim)
+    .filter(String::isNotBlank)
+    .toSet()
 
 internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
     AUDIO_PLAYBACK_SPEED_OPTIONS

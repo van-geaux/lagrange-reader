@@ -28,6 +28,9 @@ This document contains the current project direction only. Historical work order
 15. [x] [#47](https://github.com/van-geaux/lagrange-reader/issues/47): preserve browser drill-down and EPUB/PDF/comic reader state through repeated orientation/fold recreation, including the exact locator, one navigator/launch, controls, Back/Close, and session continuity. The user confirmed the integrated build works on-device. Assistant-side Activity instrumentation compiled successfully but did not execute because no ADB target was attached.
 16. [x] [#37](https://github.com/van-geaux/lagrange-reader/issues/37): expose compatible same-book files through a separated Book Detail Available file bottom-sheet picker, preserve selected file IDs and metadata through detail hydration/cache, keep unknown attachments such as JSON out of reader/media selection, and preserve the configured square audiobook cover ratio. Automated verification and user-confirmed manual validation are complete.
 
+17. [x] [#41](https://github.com/van-geaux/lagrange-reader/issues/41): clear persisted active-reader state when reader preparation/opening fails, return to the browser with an error message, and prevent failed readers from being restored after restart. Automated verification passed; the user confirmed the fix works on-device.
+18. [x] [#43](https://github.com/van-geaux/lagrange-reader/issues/43): explicit user-selected offline library caching for lightweight details and cover thumbnails now uses a shared bounded manual/approximately daily unmetered refresh engine, cancellation, partial-failure retention, storage reporting, and safe clearing that never removes downloaded books. Automated verification passes and the user confirmed the feature works on-device.
+
 ## Decision and documentation rules
 
 - Use [`CHECKLIST.md`](../CHECKLIST.md) for active completion and validation status.
