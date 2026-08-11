@@ -4,9 +4,9 @@ This is the active completion and validation checklist. Historical completed wor
 
 ## Current release
 
-- [x] Lagrange 1.4.2 released and integrated into `main`.
-- [x] Release notes, signed asset, release workflow, merge state, and current branch state verified.
-- [x] Current debug/unit/Android-test compilation and release-related verification recorded in the handover and testing documents.
+- [x] Lagrange 1.4.3 release scope is integrated into `main`; publication is in progress.
+- [x] Release notes, merged feature state, release workflow, and current branch state verified.
+- [ ] Signed 1.4.3 asset, GitHub Release, tag, and post-publication state remain to be verified.
 
 ## Current implementation status
 
@@ -39,6 +39,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] [#37](https://github.com/van-geaux/lagrange-reader/issues/37): expose compatible same-book files through a separated Book Detail Available file bottom-sheet picker, preserve selected file IDs and metadata through detail hydration/cache, keep unknown attachments such as JSON out of reader/media selection, and preserve the configured square audiobook cover ratio. Automated verification and user-confirmed manual validation are complete.
 - [x] [#36](https://github.com/van-geaux/lagrange-reader/issues/36): play ordered split-MP3 streams as one audiobook with automatic file transitions, book-level chapter/seek/time behavior, and file-aware progress/resume. Automated verification and user-confirmed live validation are complete; multi-file offline storage remains separate follow-up scope.
 - [x] [#43](https://github.com/van-geaux/lagrange-reader/issues/43): user-selected offline library caching now provides independent detail/thumbnail categories, manual progress/cancellation/clearing, a 256 MB thumbnail cap, and optional daily unmetered automatic refresh. JVM tests, lint, Android-test compilation, and debug assemblies pass; the user confirmed the feature works on-device.
+- [x] [#42](https://github.com/van-geaux/lagrange-reader/issues/42): cached-series Previous/Next navigation works offline or in airplane mode when the target is available in the local cache. Automated verification and user-confirmed on-device validation are complete; delivered through merged PR #45.
 - [x] [#19](https://github.com/van-geaux/lagrange-reader/issues/19): preserve current-package reader appearance preferences through a versioned, tolerant per-library store; legacy flat profiles remain readable, and old-package migration remains intentionally out of scope.
 - [x] [#20](https://github.com/van-geaux/lagrange-reader/issues/20): keep Previous/Next book navigation in the current library and format family first; fall back to the same family by user library order, then use the defined fallback format-family order within the first library containing the indexed target. JVM coverage includes second/third library regressions, audiobook-family variants, duplicate indexes, and unavailable boundaries. User confirmed the rebuilt debug APK works on-device.
 - [x] [#21](https://github.com/van-geaux/lagrange-reader/issues/21): research and implement server-registered reading sessions/attempts across EPUB/KEPUB, PDF, CBZ/CBR/CB7, and audiobooks, while preserving local exact-position audiobook history as separate seek authority. Automated and user-confirmed device/server validation are complete.
