@@ -45,6 +45,9 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Audiobook restoration keeps Browser visible while the compact player prepares; explicit Book Detail Play may autoplay after preparation, while task/app restoration remains paused.
 - EPUB, PDF, and comic sessions begin after usable publication open and follow reader lifecycle/page activity. Audiobook sessions follow Media3 `isPlaying` transitions and remain separate from local exact-position audiobook history. Five minutes without active interaction/playback rolls a session over; Preview never queues a server session.
 - Preview never writes normal progress, active-reader state, or local session history.
+- Browser drill-down state is one saveable route snapshot containing the selected identity and return path; restored identities resolve against current catalog/search data with bounded fallback metadata.
+- Reader launchers persist a stable launch token across `MainActivity` recreation and accept only an explicit user-close result as permission to clear coordinator active-reader state.
+- EPUB/PDF/comic activities use normal saved-instance recreation. A stable fragment container ID is created before replacing any dummy-restored navigator; the publication is reopened at the Bundle locator, and exactly one real navigator is installed. The reading-session reporter is retained through configuration recreation and is paused only for a real background stop.
 
 ## UI, cache, and security guardrails
 
@@ -59,4 +62,4 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 
 ## Current validation status
 
-The current release and recent cleanup gates are recorded in [`docs/testing.md`](testing.md) and [`docs/handover.md`](handover.md). BOOX/Android e-ink physical validation remains deferred pending access to the device; the download, reader, media, navigation, and server-session validation described in the current testing matrix has been user-confirmed. Historical test counts and dated device results are in [`docs/architecture-archive.md`](architecture-archive.md).
+The current release and recent cleanup gates are recorded in [`docs/testing.md`](testing.md) and the local ignored `docs/handover.md`. BOOX/Android e-ink physical validation remains deferred pending access to the device; the download, reader, media, navigation, server-session, and issue #47 repeated orientation/fold behavior described in the current testing matrix have been user-confirmed. Historical test counts and dated device results are in [`docs/architecture-archive.md`](architecture-archive.md).

@@ -13,6 +13,7 @@ This document contains current interaction contracts, design rules, and unresolv
 ## Current navigation and action contracts
 
 - Book Detail keeps Read/Preview visible and exposes download/update/delete actions according to file state.
+- Book Detail, Series, Author, and nested genre return state survive saved-instance-state recreation.
 - Book Detail Previous/Next series navigation resolves each adjacent series index by preferring the current library and format family, then the same family across libraries in the user-visible library order. If that family is unavailable everywhere, it uses the first library with a target and the fallback families EPUB/KEPUB, PDF, CBZ/CBR/CB7, then audiobook; audiobook extensions such as M4A, M4B, and MP3 are one family.
 - `Mark as...` exposes the complete BookOrbit status contract.
 - Local books uses the completed-copy state, not an in-progress attempt, to decide whether `Delete local` is available.
@@ -23,6 +24,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - EPUB reader options open at approximately two-thirds of the available reader surface. The top handle is fixed outside the scrollable settings, exposes a minimum 48 dp touch target, and resizes the session-only sheet within bounded limits. EPUB line spacing is a persisted 1.0×–2.0× live-preview option, and default word spacing is a persisted 0.0–1.0 rem live-preview option; both are applied through Readium’s user CSS preferences.
 - Reader tap zones are persisted per library. The default uses equal-width Previous / Menu / Next thirds; Vertical thirds provides full-width top / middle / bottom Previous / Menu / Next regions; Kindle, L-shape, Edge, and Menu-only layouts are also available, with independent None, Horizontal, Vertical, and Both inversion modes. Reading direction changes the horizontal action mapping without changing EPUB typography. Changing the tap-zone layout or inversion from reader options re-shows the tutorial over the reading surface while keeping the options sheet above it.
 - Audiobook session history is local and exact-position; server reading history is analytics context and is not used as a seek position.
+- EPUB/PDF/comic readers may recreate for orientation, screen-size, and fold changes, but must remain visible by reopening one navigator at the exact saved locator. Configuration recreation must not look like user closure, duplicate the reader, or clear active-reader state; process recovery is validated separately.
 
 ## Current visual rules
 
@@ -36,7 +38,7 @@ This document contains current interaction contracts, design rules, and unresolv
 
 ## Current validation priorities
 
-- Physical validation of the complete interrupted-download and failed-update lifecycle remains the primary open device-validation item.
+- Repeated orientation/fold recreation for issue #47 and the download lifecycle are user-confirmed on-device; retain both in the regression matrix.
 - Reconcile any additional device checks against [`docs/testing.md`](testing.md) before requesting a new APK.
 - Confirm any material new layout, accessibility, or interaction decision with the user before implementation.
 

@@ -7,7 +7,7 @@ This document contains the current project direction only. Historical work order
 - Release: Lagrange 1.4.2 is published. See [`docs/release-notes/v1.4.2.md`](release-notes/v1.4.2.md).
 - Branch: `main`, aligned with `origin/main`.
 - Recent completed work: behavior-neutral cleanup, release integration, pull-to-refresh, continuous EPUB seeking, reader fonts including one imported custom font, staged startup, server-missing catalog state, and download lifecycle implementation.
-- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, and server reading sessions are implemented and user-confirmed working. New implementation work is deferred; BOOX issue #25 remains pending physical-device access.
+- Current implementation state: issue #23 reader-options resizing and persisted EPUB line spacing, the download lifecycle, indexed navigation, server reading sessions, and issue #47 orientation/fold restoration are implemented and user-confirmed working. Issue #47 uses atomic browser-route restoration and recreation-safe EPUB/PDF/comic reopen with idempotent parent launch state; local tests, compilation, lint, and manifest processing pass. BOOX issue #25 remains pending physical-device access.
 
 ## Active validation and follow-up
 
@@ -25,6 +25,7 @@ This document contains the current project direction only. Historical work order
 12. [x] [#23](https://github.com/van-geaux/lagrange-reader/issues/23): make the reading-options window adjustable for live preview, with a default height of approximately two-thirds of the screen so the reader remains visible while settings are changed; include the already requested persisted EPUB line-spacing option. Automated coverage and user-confirmed on-device validation are complete.
 13. [x] [#26](https://github.com/van-geaux/lagrange-reader/issues/26) (related to [#23](https://github.com/van-geaux/lagrange-reader/issues/23)): add a persisted EPUB option for default word spacing without changing reading direction, alignment, or unrelated typography settings. Implemented with a 0.0–1.0 rem live Readium user-CSS control; automated and user-confirmed device validation are complete.
 14. [x] [#27](https://github.com/van-geaux/lagrange-reader/issues/27): research and implement configurable tap-zone layouts plus None/Horizontal/Vertical/Both inversion for EPUB, PDF, paginated comics, and continuous comic mode; use equal horizontal thirds for the default Previous/Menu/Next layout and equal vertical thirds for the Vertical thirds layout, keep reading direction separate from typography, and verify mode-specific adapters. Changing tap-zone layout or inversion from reader options re-shows the tutorial over the reading surface while keeping the options sheet above it. Automated and user-confirmed device validation are complete.
+15. [x] [#47](https://github.com/van-geaux/lagrange-reader/issues/47): preserve browser drill-down and EPUB/PDF/comic reader state through repeated orientation/fold recreation, including the exact locator, one navigator/launch, controls, Back/Close, and session continuity. The user confirmed the integrated build works on-device. Assistant-side Activity instrumentation compiled successfully but did not execute because no ADB target was attached.
 
 ## Decision and documentation rules
 

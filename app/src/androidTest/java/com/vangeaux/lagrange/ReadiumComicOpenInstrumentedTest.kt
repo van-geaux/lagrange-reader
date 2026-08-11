@@ -156,6 +156,43 @@ class ReadiumComicOpenInstrumentedTest {
     }
 
     @Test
+    fun recreatesComicReaderTwiceAtTheSameLocator() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val cbz = File(context.cacheDir, "readium-comic-recreate.cbz")
+        val readerKey = "instrumented-comic-recreate-${System.nanoTime()}"
+        writeCbz(cbz, pageBytes(Color.RED), pageBytes(Color.BLUE))
+
+        ActivityScenario.launch<ReadiumComicReaderActivity>(
+            ReadiumComicReaderActivity.createIntent(
+                context = context,
+                file = cbz,
+                title = "Comic recreation",
+                readerKey = readerKey,
+                launchMode = ReaderLaunchMode.NORMAL,
+                initialPage = 0
+            )
+        ).use { scenario ->
+            val expected = awaitComicLocator(scenario, context, readerKey)
+            repeat(2) {
+                scenario.recreate()
+                val restored = awaitComicLocator(scenario, context, readerKey)
+                assertEquals(expected.href, restored.href)
+                assertEquals(expected.locations.position, restored.locations.position)
+                scenario.onActivity { activity ->
+                    assertEquals(
+                        1,
+                        activity.supportFragmentManager.fragments.count { fragment ->
+                            fragment.tag == "readium_comic_navigator"
+                        }
+                    )
+                    assertEquals(false, activity.isFinishing)
+                }
+            }
+        }
+        cbz.delete()
+    }
+
+    @Test
     fun centerTapOpensComicChrome() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val cbz = File(context.cacheDir, "readium-comic-center-tap.cbz")
@@ -225,6 +262,24 @@ class ReadiumComicOpenInstrumentedTest {
             assertEquals(false, optionsVisible)
         }
         cbz.delete()
+    }
+
+    private fun awaitComicLocator(
+        scenario: ActivityScenario<ReadiumComicReaderActivity>,
+        context: android.content.Context,
+        readerKey: String
+    ): org.readium.r2.shared.publication.Locator {
+        repeat(40) {
+            var ready = false
+            scenario.onActivity { activity ->
+                ready = activity.supportFragmentManager
+                    .findFragmentByTag("readium_comic_navigator") is ImageNavigatorFragment
+            }
+            val locator = ReadiumComicLocatorStore(context).read(readerKey)
+            if (ready && locator != null) return locator
+            SystemClock.sleep(250)
+        }
+        error("Comic navigator and locator did not become ready")
     }
 
     @Test

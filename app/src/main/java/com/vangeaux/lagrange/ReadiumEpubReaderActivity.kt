@@ -30,6 +30,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
@@ -208,7 +209,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
     private var navigator: EpubNavigatorFragment? = null
     private var progressView: ProgressBar? = null
-    private var readerContainerId: Int = View.NO_ID
+    private val readerContainerId: Int = R.id.readium_reader_container
     private lateinit var rootView: FrameLayout
     private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
@@ -240,6 +241,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var bookPositions: List<Locator> = emptyList()
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
+    private var restoredLocator: Locator? = null
+    private var readingSessionEnded = false
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
@@ -270,10 +273,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             supportFragmentManager.fragmentFactory = EpubNavigatorFragment.createDummyFactory()
         }
         super.onCreate(savedInstanceState)
-        if (savedInstanceState != null) {
-            finish()
-            return
-        }
+        restoredLocator = savedInstanceState?.readReaderLocator()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         AppPreferencesStore(this).read().let { preferences ->
             requestedOrientation = requestedOrientationForLock(
@@ -286,7 +286,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
-        readingSessionReporter = ReadingSessionReporter(
+        readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
             context = this,
             fileId = intent.getStringExtra(EXTRA_FILE_ID),
             enabled = !isPreview
@@ -308,6 +308,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         configureSystemBars()
         createReaderViews()
+        restoreReaderUi(savedInstanceState)
+        discardRestoredNavigatorIfNeeded(savedInstanceState)
         installBackHandler()
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
@@ -328,7 +330,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 is ReadiumEpubOpenResult.Opened -> {
                     bookPositions = withContext(Dispatchers.IO) { result.publication.positions() }
                     bookPositionCount = bookPositions.size.takeIf { it > 0 }
-                    showPublication(result.publication)
+                    showPublication(result.publication, restoredLocator)
                 }
             }
         }
@@ -348,7 +350,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        readerContainerId = View.generateViewId()
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
             setBackgroundColor(selectedTheme.backgroundColor)
@@ -486,6 +487,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
     }
 
+    private fun restoreReaderUi(savedInstanceState: Bundle?) {
+        savedInstanceState ?: return
+        tapZoneTutorialHasShown = savedInstanceState.getBoolean(STATE_READER_TUTORIAL_SHOWN)
+        chromeView.visibility = if (
+            savedInstanceState.getBoolean(STATE_READER_CHROME_VISIBLE)
+        ) View.VISIBLE else View.GONE
+        optionsView.visibility = if (
+            savedInstanceState.getBoolean(STATE_READER_OPTIONS_VISIBLE)
+        ) View.VISIBLE else View.GONE
+    }
+
+    private fun discardRestoredNavigatorIfNeeded(savedInstanceState: Bundle?) {
+        if (readerRestoreAction(savedInstanceState != null) != ReaderRestoreAction.REOPEN) return
+        supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG)?.let { restored ->
+            supportFragmentManager.beginTransaction().remove(restored).commitNow()
+        }
+    }
+
     private fun installBackHandler() {
         onBackPressedDispatcher.addCallback(
             this,
@@ -501,7 +520,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
     }
 
-    private fun showPublication(openedPublication: Publication) {
+    private fun showPublication(openedPublication: Publication, requestedLocator: Locator? = null) {
         if (isFinishing || isDestroyed) {
             openedPublication.close()
             return
@@ -518,7 +537,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         chapterTitles = openedPublication.readingOrder.mapIndexed { index, link ->
             chapterTitle(openedPublication.tableOfContents, link) ?: link.title ?: "Chapter ${index + 1}"
         }
-        val initialLocator = initialLocator(openedPublication)
+        val initialLocator = requestedLocator
+            ?.takeIf { saved ->
+                openedPublication.readingOrder.any { link ->
+                    link.url().isEquivalent(saved.href.removeFragment())
+                }
+            }
+            ?: initialLocator(openedPublication)
         val paginationListener = object : EpubNavigatorFragment.PaginationListener {
             override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
                 currentPage = pageIndex.coerceAtLeast(0)
@@ -566,7 +591,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         progressView?.visibility = View.GONE
         applyReaderPadding()
-        showTapZoneTutorial()
+        if (!tapZoneTutorialHasShown) showTapZoneTutorial()
     }
 
     private fun initialLocator(openedPublication: Publication): Locator {
@@ -795,24 +820,30 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     internal fun hasShownTapZoneTutorial(): Boolean = tapZoneTutorialHasShown
 
-    private fun updateResult() {
-        if (isPreview) return
-        setResult(
-            Activity.RESULT_OK,
-            Intent()
-                .putExtra(EXTRA_RESULT_CHAPTER, currentChapter)
-                .putExtra(EXTRA_RESULT_PAGE, currentPage)
-                .putExtra(EXTRA_RESULT_PAGE_COUNT, currentPageCount)
-                .putExtra(EXTRA_RESULT_PERCENT, currentPercent)
-        )
+    private fun updateResult(reason: ReaderCompletionReason? = null) {
+        val data = Intent().apply {
+            reason?.let { putExtra(EXTRA_READER_COMPLETION_REASON, it.name) }
+            if (!isPreview) {
+                putExtra(EXTRA_RESULT_CHAPTER, currentChapter)
+                putExtra(EXTRA_RESULT_PAGE, currentPage)
+                putExtra(EXTRA_RESULT_PAGE_COUNT, currentPageCount)
+                putExtra(EXTRA_RESULT_PERCENT, currentPercent)
+            }
+        }
+        setResult(Activity.RESULT_OK, data)
     }
 
     private fun finishReader() {
-        if (::readingSessionReporter.isInitialized) {
+        endReadingSession()
+        updateResult(ReaderCompletionReason.USER_CLOSED)
+        finish()
+    }
+
+    private fun endReadingSession() {
+        if (!readingSessionEnded && ::readingSessionReporter.isInitialized) {
+            readingSessionEnded = true
             readingSessionReporter.end(currentPercent)
         }
-        updateResult()
-        finish()
     }
 
     private fun showError(message: String) {
@@ -860,11 +891,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    override fun onPause() {
-        if (::readingSessionReporter.isInitialized) {
+    override fun onStop() {
+        if (
+            shouldPauseReadingSession(isChangingConfigurations) &&
+            ::readingSessionReporter.isInitialized
+        ) {
             readingSessionReporter.pause(currentPercent)
         }
-        super.onPause()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -874,10 +908,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putReaderLocator(navigator?.currentLocator?.value ?: restoredLocator)
+        outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
+        outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
+        outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onDestroy() {
-        if (::readingSessionReporter.isInitialized) {
-            readingSessionReporter.end(currentPercent)
-        }
+        if (isFinishing && !isChangingConfigurations) endReadingSession()
         super.onDestroy()
         publication?.close()
         publication = null

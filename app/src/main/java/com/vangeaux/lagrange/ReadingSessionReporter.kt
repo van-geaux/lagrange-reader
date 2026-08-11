@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +55,20 @@ internal class ReadingSessionReporter(
     private fun enqueue(payload: ReadingSessionPayload) {
         scope.launch {
             repository.queueReadingSession(payload.copy(fileId = fileId))
+        }
+    }
+}
+
+internal class ReadingSessionReporterViewModel : ViewModel() {
+    private var reporter: ReadingSessionReporter? = null
+    private var reporterKey: String? = null
+
+    fun reporter(context: Context, fileId: String?, enabled: Boolean): ReadingSessionReporter {
+        val key = "${fileId.orEmpty()}|$enabled"
+        reporter?.takeIf { reporterKey == key }?.let { return it }
+        return ReadingSessionReporter(context.applicationContext, fileId, enabled).also {
+            reporter = it
+            reporterKey = key
         }
     }
 }

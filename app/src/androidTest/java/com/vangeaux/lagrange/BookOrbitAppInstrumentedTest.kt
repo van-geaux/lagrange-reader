@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -317,6 +318,47 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Download").assertIsEnabled()
         composeRule.onNodeWithContentDescription("User profile").performClick()
         composeRule.onNodeWithText("Log out").assertIsEnabled()
+    }
+
+    @Test
+    fun bookDetailsRemainOpenAfterSavedInstanceStateRestore() {
+        val book = BookSummary(
+            libraryId = "lib-1",
+            id = "book-orientation",
+            fileId = "file-orientation",
+            title = "Orientation Book",
+            format = "epub",
+            mediaKind = MediaKind.EPUB
+        )
+        val dataSource = InstrumentedFakeDataSource().apply {
+            loadBooksResult = listOf(book)
+            bookDetailResult = BookDetailInfo(book = book, libraryName = "Main")
+        }
+        val restorationTester = StateRestorationTester(composeRule)
+
+        restorationTester.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(book)
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Orientation Book").performClick()
+        composeRule.onNodeWithText("Book details").assertIsDisplayed()
+
+        restorationTester.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText("Book details").assertIsDisplayed()
+        composeRule.onNodeWithText("Orientation Book").assertIsDisplayed()
     }
 
     @Test
@@ -1958,8 +2000,11 @@ class BookOrbitAppInstrumentedTest {
     }
 }
 
-private class InstrumentedFakeDataSource : BookOrbitDataSource {
+internal class InstrumentedFakeDataSource : BookOrbitDataSource {
     var serverUrl: String? = null
+    var sessionState: SessionState = SessionState.Unauthenticated
+    var selectedLibraryId: String? = null
+    var librariesResult: List<LibrarySummary> = emptyList()
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
     val savedServerUrls = mutableListOf<String>()
@@ -1998,13 +2043,15 @@ private class InstrumentedFakeDataSource : BookOrbitDataSource {
         clearServerCalls += 1
     }
     override suspend fun clearSession() = Unit
-    override suspend fun getSelectedLibraryId(): String? = null
-    override suspend fun setSelectedLibraryId(libraryId: String) = Unit
-    override suspend fun getSessionState(): SessionState = SessionState.Unauthenticated
+    override suspend fun getSelectedLibraryId(): String? = selectedLibraryId
+    override suspend fun setSelectedLibraryId(libraryId: String) {
+        selectedLibraryId = libraryId
+    }
+    override suspend fun getSessionState(): SessionState = sessionState
     override suspend fun login(username: String, password: String) = Unit
     override suspend fun loadLibraries(): List<LibrarySummary> {
         loadLibrariesCalls += 1
-        return emptyList()
+        return librariesResult
     }
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
     override suspend fun searchBooks(query: String): List<BookSummary> {

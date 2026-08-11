@@ -9,8 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +38,9 @@ internal fun ReadiumEpubReaderLauncher(
     val context = LocalContext.current
     val latestOnFinished by rememberUpdatedState(onFinished)
     val latestOnProgress by rememberUpdatedState(onProgress)
-    var launched by remember(file, launchMode) { mutableStateOf(false) }
+    var launchState by rememberSaveable(stateSaver = ReaderLaunchStateSaver) {
+        mutableStateOf(ReaderLaunchState())
+    }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -50,11 +52,16 @@ internal fun ReadiumEpubReaderLauncher(
                 progress.percent
             )
         }
-        latestOnFinished()
+        val reason = readerCompletionReason(
+            result.data?.getStringExtra(EXTRA_READER_COMPLETION_REASON)
+        )
+        if (shouldCloseReader(reason)) latestOnFinished()
     }
     LaunchedEffect(file, title, readerKey, libraryId, launchMode) {
-        if (!launched) {
-            launched = true
+        val token = listOf(file.absolutePath, readerKey, launchMode.name).joinToString("|")
+        val claim = claimReaderLaunch(launchState, token)
+        if (claim.shouldLaunch) {
+            launchState = claim.state
             launcher.launch(
                 ReadiumEpubReaderActivity.createIntent(
                     context = context,

@@ -158,6 +158,46 @@ class ReadiumEpubOpenInstrumentedTest {
     }
 
     @Test
+    fun recreatesEpubReaderTwiceAtTheSameLocator() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-recreate.epub")
+        val readerKey = "instrumented-recreate-${System.nanoTime()}"
+        writeSvgCoverEpub(epub)
+
+        ActivityScenario.launch<ReadiumEpubReaderActivity>(
+            ReadiumEpubReaderActivity.createIntent(
+                context = context,
+                file = epub,
+                title = "Readium recreation",
+                readerKey = readerKey,
+                launchMode = ReaderLaunchMode.NORMAL,
+                initialChapter = 0,
+                initialPage = 0,
+                initialPageCount = 1,
+                initialPercent = null
+            )
+        ).use { scenario ->
+            val expected = awaitEpubLocator(scenario, context, readerKey)
+            repeat(2) {
+                scenario.recreate()
+                val restored = awaitEpubLocator(scenario, context, readerKey)
+                assertEquals(expected.href, restored.href)
+                assertEquals(expected.locations.progression, restored.locations.progression)
+                scenario.onActivity { activity ->
+                    assertEquals(
+                        1,
+                        activity.supportFragmentManager.fragments.count { fragment ->
+                            fragment.tag == "readium_epub_navigator"
+                        }
+                    )
+                    assertEquals(false, activity.isFinishing)
+                }
+            }
+        }
+        epub.delete()
+    }
+
+    @Test
     fun centerTapOpensLightweightReaderChrome() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val epub = File(context.cacheDir, "readium-center-tap.epub")
@@ -229,6 +269,24 @@ class ReadiumEpubOpenInstrumentedTest {
             assertEquals(false, optionsVisible)
         }
         epub.delete()
+    }
+
+    private fun awaitEpubLocator(
+        scenario: ActivityScenario<ReadiumEpubReaderActivity>,
+        context: android.content.Context,
+        readerKey: String
+    ): org.readium.r2.shared.publication.Locator {
+        repeat(40) {
+            var ready = false
+            scenario.onActivity { activity ->
+                ready = activity.supportFragmentManager
+                    .findFragmentByTag("readium_epub_navigator") is EpubNavigatorFragment
+            }
+            val locator = ReadiumEpubLocatorStore(context).read(readerKey)
+            if (ready && locator != null) return locator
+            SystemClock.sleep(250)
+        }
+        error("EPUB navigator and locator did not become ready")
     }
 
     private fun writeMultiResourceEpub(target: File) {
