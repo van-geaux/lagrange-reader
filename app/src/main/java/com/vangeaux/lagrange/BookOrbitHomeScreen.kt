@@ -559,6 +559,8 @@ internal fun NativeLibraryBrowserScreen(
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
+    releaseCheckStatus: ReleaseCheckStatus = ReleaseCheckStatus.IDLE,
+    onCheckForUpdates: () -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
     bookDetailRequest: AudioBookDetailRequest? = null,
@@ -1302,7 +1304,9 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
                     state = state,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier.padding(padding),
+                    releaseCheckStatus = releaseCheckStatus,
+                    onCheckForUpdates = onCheckForUpdates
                 )
                 (destination == BrowserDestination.HOME || destination == BrowserDestination.LIBRARY) && query.isNotBlank() -> SearchResults(
                     books = filteredBooks,
@@ -3313,7 +3317,9 @@ private fun <T> AppPreferenceChoiceDialog(
 @Composable
 private fun AboutScreen(
     state: BrowserState,
-    modifier: Modifier
+    modifier: Modifier,
+    releaseCheckStatus: ReleaseCheckStatus,
+    onCheckForUpdates: () -> Unit
 ) {
     val context = LocalContext.current
     val openLink: (String) -> Unit = { url ->
@@ -3347,6 +3353,32 @@ private fun AboutScreen(
                 Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                 Text("Connected server", style = MaterialTheme.typography.labelMedium)
                 Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("App updates", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(
+                    onClick = onCheckForUpdates,
+                    enabled = releaseCheckStatus != ReleaseCheckStatus.CHECKING,
+                    modifier = Modifier.testTag("check-for-updates")
+                ) {
+                    if (releaseCheckStatus == ReleaseCheckStatus.CHECKING) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text("Check for updates")
+                }
+                val result = when (releaseCheckStatus) {
+                    ReleaseCheckStatus.UP_TO_DATE -> "You are up to date."
+                    ReleaseCheckStatus.UPDATE_AVAILABLE -> "An update is available."
+                    ReleaseCheckStatus.ERROR -> "Unable to check for updates."
+                    else -> null
+                }
+                result?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         item {

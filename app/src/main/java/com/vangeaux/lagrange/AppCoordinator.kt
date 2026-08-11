@@ -23,6 +23,14 @@ import javax.net.ssl.SSLException
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
 
+enum class ReleaseCheckStatus {
+    IDLE,
+    CHECKING,
+    UP_TO_DATE,
+    UPDATE_AVAILABLE,
+    ERROR
+}
+
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
@@ -152,6 +160,8 @@ class AppCoordinator(
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private val _releaseUpdate = MutableStateFlow<ReleaseUpdate?>(null)
     val releaseUpdate: StateFlow<ReleaseUpdate?> = _releaseUpdate.asStateFlow()
+    private val _releaseCheckStatus = MutableStateFlow(ReleaseCheckStatus.IDLE)
+    val releaseCheckStatus: StateFlow<ReleaseCheckStatus> = _releaseCheckStatus.asStateFlow()
     private var lastBrowserState: BrowserState? = null
     private var restoredInterruptedDownloads: Map<String, DownloadRecord> = emptyMap()
     private var loginRefreshInFlight = false
@@ -186,14 +196,22 @@ class AppCoordinator(
         audioSessionHistoryOpener?.invoke(book, positionMs)
     }
 
-    fun checkForAppUpdate() {
+    fun checkForAppUpdate(forceShow: Boolean = false) {
         if (releaseCheckInFlight) return
         releaseCheckInFlight = true
+        if (forceShow) _releaseCheckStatus.value = ReleaseCheckStatus.CHECKING
         scope.launch {
             try {
                 val update = releaseChecker(BuildConfig.VERSION_NAME)
                 val ignoredTag = readIgnoredReleaseTag()
-                if (
+                if (forceShow) {
+                    _releaseUpdate.value = update
+                    _releaseCheckStatus.value = if (update == null) {
+                        ReleaseCheckStatus.UP_TO_DATE
+                    } else {
+                        ReleaseCheckStatus.UPDATE_AVAILABLE
+                    }
+                } else if (
                     update != null &&
                     update.tagName != dismissedReleaseTag &&
                     update.tagName != ignoredTag
@@ -203,6 +221,7 @@ class AppCoordinator(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Throwable) {
+                if (forceShow) _releaseCheckStatus.value = ReleaseCheckStatus.ERROR
                 // Release checks are optional and must not interrupt app startup.
             } finally {
                 releaseCheckInFlight = false
