@@ -106,6 +106,12 @@ When the affected scope requires it, verify:
 
 The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 
+### Multi-file streamed MP3 audiobook playback (issue #36)
+
+The implementation and live-device validation are complete. The user confirmed that a BookOrbit audiobook composed of ordered MP3 files plays as one continuous streamed audiobook. The fix is planned for inclusion in a release this week.
+
+For regression testing, verify chapter selection and automatic advancement across at least two file boundaries; compact-player elapsed/remaining time and slider position across the complete audiobook; ±10/30-second seeks around a boundary; and online relaunch/resume in a later file using the active file ID and in-file position. Recheck a single-file M4B and downloaded/local audio. Multi-file offline download/storage remains out of scope.
+
 ### Authentication and OIDC
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. The interim server-hosted sign-in WebView is distinct from native AppAuth. Native AppAuth requires deployed BookOrbit mobile-redirect support and separate provider/device validation.
