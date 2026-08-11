@@ -243,6 +243,56 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `manual update check resurfaces an ignored release and reports availability`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { "v1.2.0" }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+        assertNull(coordinator.releaseUpdate.value)
+
+        coordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+
+        assertEquals(update, coordinator.releaseUpdate.value)
+        assertEquals(ReleaseCheckStatus.UPDATE_AVAILABLE, coordinator.releaseCheckStatus.value)
+    }
+
+    @Test
+    fun `manual update check reports up to date and errors`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { null }
+        )
+
+        coordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+        assertEquals(ReleaseCheckStatus.UP_TO_DATE, coordinator.releaseCheckStatus.value)
+
+        val failingCoordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { error("network failure") }
+        )
+        failingCoordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+        assertEquals(ReleaseCheckStatus.ERROR, failingCoordinator.releaseCheckStatus.value)
+    }
+
+    @Test
     fun `bootstrap prefers local only active reader restore before session checks`() = runTest {
         val readerState = ReaderState(book = book, localFile = File("offline.epub"))
         val repository = FakeBookOrbitDataSource(

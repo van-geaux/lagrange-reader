@@ -164,7 +164,9 @@ fun BookOrbitApp(
             coordinator = coordinator,
             audioPlaybackController = audioPlaybackController,
             appPreferences = appPreferences,
-            onAppPreferencesChange = onAppPreferencesChange
+            onAppPreferencesChange = onAppPreferencesChange,
+            releaseCheckStatus = coordinator.releaseCheckStatus.collectAsState().value,
+            onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) }
         )
         if (screen !is AppScreen.Browser) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
@@ -232,7 +234,9 @@ private fun BookOrbitDestination(
     coordinator: AppCoordinator,
     audioPlaybackController: ReadiumAudioPlaybackController?,
     appPreferences: AppPreferences,
-    onAppPreferencesChange: (AppPreferences) -> Unit
+    onAppPreferencesChange: (AppPreferences) -> Unit,
+    releaseCheckStatus: ReleaseCheckStatus,
+    onCheckForUpdates: () -> Unit
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
@@ -303,6 +307,8 @@ private fun BookOrbitDestination(
             onMarkAsStatus = coordinator::setBookReadingStatus,
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
+            releaseCheckStatus = releaseCheckStatus,
+            onCheckForUpdates = onCheckForUpdates,
             storageUsageLoader = coordinator::loadStorageUsage,
             onClearCache = coordinator::clearAppCache,
             offlineCacheStatusLoader = coordinator::loadOfflineCacheStatus,
