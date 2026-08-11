@@ -118,6 +118,18 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `offline cache library ids round trip in stable order and discard blanks`() {
+        val stored = offlineCacheLibraryIdsStorageValue(setOf(" lib-secondary ", "", "lib-primary"))
+
+        assertEquals("lib-primary\nlib-secondary", stored)
+        assertEquals(
+            setOf("lib-primary", "lib-secondary"),
+            offlineCacheLibraryIdsFromStorage(stored)
+        )
+        assertEquals(emptySet<String>(), offlineCacheLibraryIdsFromStorage(null))
+    }
+
+    @Test
     fun `stored series grouping modes round trip and default to library`() {
         SeriesGroupingMode.values().forEach { value ->
             assertEquals(

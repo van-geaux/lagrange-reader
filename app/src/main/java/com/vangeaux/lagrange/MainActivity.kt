@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
 
         val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
+        graph.coordinator.reconfigureBackgroundRefresh()
         val preferencesStore = AppPreferencesStore(this)
         val initialPreferences = preferencesStore.read()
         requestedOrientation = requestedOrientationForLock(
@@ -119,7 +120,12 @@ class MainActivity : ComponentActivity() {
                             )
                             val refreshPolicyChanged =
                                 persisted.backgroundRefreshNetworkPolicy !=
-                                    appPreferences.backgroundRefreshNetworkPolicy
+                                    appPreferences.backgroundRefreshNetworkPolicy ||
+                                    persisted.offlineCacheLibraryIds != appPreferences.offlineCacheLibraryIds ||
+                                    persisted.offlineCacheDetailsEnabled != appPreferences.offlineCacheDetailsEnabled ||
+                                    persisted.offlineCacheCoversEnabled != appPreferences.offlineCacheCoversEnabled ||
+                                    persisted.offlineCacheAutoRefreshEnabled !=
+                                    appPreferences.offlineCacheAutoRefreshEnabled
                             preferencesStore.save(persisted)
                             appPreferences = persisted
                             if (refreshPolicyChanged) {

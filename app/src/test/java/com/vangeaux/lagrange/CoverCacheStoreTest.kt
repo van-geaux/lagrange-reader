@@ -31,4 +31,23 @@ class CoverCacheStoreTest {
             filesDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `saving beyond the byte cap evicts the least recently used thumbnail`() {
+        runBlocking {
+            val filesDir = Files.createTempDirectory("cover-cache-cap-test").toFile()
+            var now = 1L
+            val store = CoverCacheStore(filesDir, maxBytes = 6L, clock = { now++ })
+
+            store.save("server", "old", "old-cover", byteArrayOf(1, 2, 3))
+            store.save("server", "kept", "kept-cover", byteArrayOf(4, 5, 6))
+            assertArrayEquals(byteArrayOf(1, 2, 3), store.read("server", "old", "old-cover"))
+            store.save("server", "new", "new-cover", byteArrayOf(7, 8, 9))
+
+            assertArrayEquals(byteArrayOf(1, 2, 3), store.read("server", "old", "old-cover"))
+            assertNull(store.read("server", "kept", "kept-cover"))
+            assertArrayEquals(byteArrayOf(7, 8, 9), store.read("server", "new", "new-cover"))
+            filesDir.deleteRecursively()
+        }
+    }
 }

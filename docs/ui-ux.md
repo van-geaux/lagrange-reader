@@ -20,6 +20,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - Local books uses the completed-copy state, not an in-progress attempt, to decide whether `Delete local` is available.
 - Active and failed download rows are conditional and remain separate from completed local content.
 - Pull-to-refresh is user-initiated, non-blocking, duplicate-safe, and independent from background synchronization and destructive download actions.
+- Options exposes an Offline library cache card with multi-library selection, independent global Book details and Cover thumbnails switches, manual download/update, cancellation, progress/results, explicit clearing, and an optional approximately daily unmetered-network refresh. The control states that readable book files are not downloaded; deselecting a library does not silently delete its existing cache.
 - Server-missing catalog records remain visible with a yellow `Missing!` overlay; this is distinct from a locally deleted copy.
 - EPUB-only reader font controls include Publisher default, built-in normal/accessibility choices, and one imported custom font slot.
 - EPUB reader options open at approximately two-thirds of the available reader surface. The top handle is fixed outside the scrollable settings, exposes a minimum 48 dp touch target, and resizes the session-only sheet within bounded limits. EPUB line spacing is a persisted 1.0×–2.0× live-preview option, and default word spacing is a persisted 0.0–1.0 rem live-preview option; both are applied through Readium’s user CSS preferences.

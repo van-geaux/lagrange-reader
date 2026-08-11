@@ -143,6 +143,14 @@ class AppCoordinator(
         repository.clearAppCache()
     }
 
+    suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = repository.loadOfflineCacheStatus()
+
+    suspend fun startOfflineCacheUpdate(): Boolean = repository.startOfflineCacheUpdate()
+
+    suspend fun cancelOfflineCacheUpdate() = repository.cancelOfflineCacheUpdate()
+
+    suspend fun clearOfflineCache() = repository.clearOfflineCache()
+
     fun reconfigureBackgroundRefresh() {
         scope.launch { repository.reconfigureBackgroundRefresh() }
     }
