@@ -4,9 +4,9 @@ This is the active completion and validation checklist. Historical completed wor
 
 ## Current release
 
-- [x] Lagrange 1.4.3 release scope is integrated into `main`; publication is in progress.
-- [x] Release notes, merged feature state, release workflow, and current branch state verified.
-- [ ] Signed 1.4.3 asset, GitHub Release, tag, and post-publication state remain to be verified.
+- [x] Lagrange 1.4.3 released and integrated into `main`.
+- [x] Release notes, signed asset, release workflow, merge state, and current branch state verified.
+- [x] Current debug/unit/Android-test compilation and release-related verification recorded in the release notes and testing documents.
 
 ## Current implementation status
 
