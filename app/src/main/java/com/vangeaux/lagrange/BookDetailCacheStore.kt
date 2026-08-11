@@ -300,6 +300,7 @@ private fun JSONArray?.toBookFileOptions(): List<BookFileOption> {
                             ?.times(1000.0)
                             ?.roundToLong()
                 )
+            )
         }
     }
 }
