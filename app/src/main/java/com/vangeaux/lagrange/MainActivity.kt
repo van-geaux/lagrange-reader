@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        val graph = AppGraph(this)
+        val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
         val preferencesStore = AppPreferencesStore(this)
         val initialPreferences = preferencesStore.read()
@@ -136,4 +136,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+internal object MainActivityGraphProvider {
+    @Volatile
+    var testFactory: ((android.content.Context) -> AppGraph)? = null
+
+    fun create(context: android.content.Context): AppGraph =
+        testFactory?.invoke(context) ?: AppGraph(context)
 }

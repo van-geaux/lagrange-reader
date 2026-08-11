@@ -54,6 +54,22 @@ On Book Detail, Series, Authors, Local books, Statistics, and Achievements:
 - Local books refresh does not interrupt active downloads or destructive actions;
 - automatic/background synchronization remains silent.
 
+### Orientation and fold lifecycle
+
+On a connected device or emulator, verify:
+
+- Book Detail, Series, Author, and nested genre restore the correct selection and return destination after rotation;
+- two or more consecutive rotations preserve the same restored state;
+- EPUB/PDF/comic readers remain visible after Activity recreation, reopen at the exact locator/page, preserve visible controls, and contain one navigator after each transition;
+- recreating `MainActivity` underneath an active reader does not launch a duplicate reader or clear persisted active-reader state;
+- Back/Close emits one explicit user-close result, while configuration recreation emits no close result; Preview remains isolated;
+- one reading session continues across configuration recreation without a rotation-induced pause/end pair;
+- an orientation lock set before rotating is respected;
+- fold/unfold transitions where hardware permits;
+- process/task recreation as a separate scenario from ordinary configuration changes.
+
+Issue #47 instrumentation coverage compiled but did not execute assistant-side because no ADB target was available. The user confirmed the integrated build works on-device through the repeated orientation/fold recreation scenarios above; keep the matrix as regression coverage for future changes.
+
 ### Reader and media regression checks
 
 When the affected scope requires it, verify:

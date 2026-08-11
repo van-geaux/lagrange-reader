@@ -32,6 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
@@ -184,7 +185,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
     private var navigator: ImageNavigatorFragment? = null
     private var progressView: ProgressBar? = null
-    private var readerContainerId: Int = View.NO_ID
+    private val readerContainerId: Int = R.id.readium_reader_container
     private lateinit var rootView: FrameLayout
     private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
@@ -214,6 +215,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var currentPageCount by mutableStateOf(1)
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
+    private var restoredLocator: Locator? = null
+    private var readingSessionEnded = false
 
     private val locatorStore by lazy { ReadiumComicLocatorStore(this) }
 
@@ -223,10 +226,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             supportFragmentManager.fragmentFactory = ImageNavigatorFragment.createDummyFactory()
         }
         super.onCreate(savedInstanceState)
-        if (savedInstanceState != null) {
-            finish()
-            return
-        }
+        restoredLocator = savedInstanceState?.readReaderLocator()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         AppPreferencesStore(this).read().let { preferences ->
             requestedOrientation = requestedOrientationForLock(
@@ -241,13 +241,15 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         readerPreferences = AppPreferencesStore(this).read().readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
-        readingSessionReporter = ReadingSessionReporter(
+        readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
             context = this,
             fileId = intent.getStringExtra(EXTRA_FILE_ID),
             enabled = !isPreview
         )
         configureSystemBars()
         createReaderViews()
+        restoreReaderUi(savedInstanceState)
+        discardRestoredNavigatorIfNeeded(savedInstanceState)
         installBackHandler()
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
@@ -272,7 +274,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             }
             when (result) {
                 is ReadiumComicOpenResult.Error -> showError(result.message)
-                is ReadiumComicOpenResult.Opened -> showPublication(result.publication)
+                is ReadiumComicOpenResult.Opened -> showPublication(
+                    result.publication,
+                    requestedLocator = restoredLocator,
+                    showTutorial = !tapZoneTutorialHasShown
+                )
             }
         }
     }
@@ -287,7 +293,6 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        readerContainerId = View.generateViewId()
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
             setBackgroundColor(Color.BLACK)
@@ -407,6 +412,24 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
+    }
+
+    private fun restoreReaderUi(savedInstanceState: Bundle?) {
+        savedInstanceState ?: return
+        tapZoneTutorialHasShown = savedInstanceState.getBoolean(STATE_READER_TUTORIAL_SHOWN)
+        chromeView.visibility = if (
+            savedInstanceState.getBoolean(STATE_READER_CHROME_VISIBLE)
+        ) View.VISIBLE else View.GONE
+        optionsView.visibility = if (
+            savedInstanceState.getBoolean(STATE_READER_OPTIONS_VISIBLE)
+        ) View.VISIBLE else View.GONE
+    }
+
+    private fun discardRestoredNavigatorIfNeeded(savedInstanceState: Bundle?) {
+        if (readerRestoreAction(savedInstanceState != null) != ReaderRestoreAction.REOPEN) return
+        supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG)?.let { restored ->
+            supportFragmentManager.beginTransaction().remove(restored).commitNow()
+        }
     }
 
     private fun installBackHandler() {
@@ -758,28 +781,34 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     internal fun isContinuousComicReaderVisible(): Boolean =
         continuousComicView?.isAttachedToWindow == true
 
-    private fun updateResult() {
-        if (isPreview) return
+    private fun updateResult(reason: ReaderCompletionReason? = null) {
         val percent = if (currentPageCount <= 1) {
             100f
         } else {
             currentPage.toFloat() / (currentPageCount - 1).toFloat() * 100f
         }
-        setResult(
-            Activity.RESULT_OK,
-            Intent()
-                .putExtra(EXTRA_RESULT_PAGE, currentPage)
-                .putExtra(EXTRA_RESULT_PAGE_COUNT, currentPageCount)
-                .putExtra(EXTRA_RESULT_PERCENT, percent)
-        )
+        val data = Intent().apply {
+            reason?.let { putExtra(EXTRA_READER_COMPLETION_REASON, it.name) }
+            if (!isPreview) {
+                putExtra(EXTRA_RESULT_PAGE, currentPage)
+                putExtra(EXTRA_RESULT_PAGE_COUNT, currentPageCount)
+                putExtra(EXTRA_RESULT_PERCENT, percent)
+            }
+        }
+        setResult(Activity.RESULT_OK, data)
     }
 
     private fun finishReader() {
-        if (::readingSessionReporter.isInitialized) {
+        endReadingSession()
+        updateResult(ReaderCompletionReason.USER_CLOSED)
+        finish()
+    }
+
+    private fun endReadingSession() {
+        if (!readingSessionEnded && ::readingSessionReporter.isInitialized) {
+            readingSessionEnded = true
             readingSessionReporter.end(currentProgressPercent())
         }
-        updateResult()
-        finish()
     }
 
     private fun showError(message: String) {
@@ -816,11 +845,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    override fun onPause() {
-        if (::readingSessionReporter.isInitialized) {
+    override fun onStop() {
+        if (
+            shouldPauseReadingSession(isChangingConfigurations) &&
+            ::readingSessionReporter.isInitialized
+        ) {
             readingSessionReporter.pause(currentProgressPercent())
         }
-        super.onPause()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -828,6 +860,19 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         if (::readingSessionReporter.isInitialized && publication != null && !isFinishing) {
             readingSessionReporter.resume(currentProgressPercent())
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val currentLocator = navigator?.currentLocator?.value
+            ?: publication?.readingOrder?.getOrNull(currentPage)?.let { link ->
+                publication?.locatorFromLink(link)
+            }
+            ?: restoredLocator
+        outState.putReaderLocator(currentLocator)
+        outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
+        outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
+        outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
+        super.onSaveInstanceState(outState)
     }
 
     @Suppress("DEPRECATION")
@@ -853,9 +898,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
-        if (::readingSessionReporter.isInitialized) {
-            readingSessionReporter.end(currentProgressPercent())
-        }
+        if (isFinishing && !isChangingConfigurations) endReadingSession()
         super.onDestroy()
         publication?.close()
         publication = null

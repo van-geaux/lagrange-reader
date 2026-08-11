@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,7 +134,9 @@ internal fun ReadiumComicReaderLauncher(
     val context = LocalContext.current
     val latestOnFinished by rememberUpdatedState(onFinished)
     val latestOnProgress by rememberUpdatedState(onProgress)
-    var launched by remember(file, pagesUrl, launchMode) { mutableStateOf(false) }
+    var launchState by rememberSaveable(stateSaver = ReaderLaunchStateSaver) {
+        mutableStateOf(ReaderLaunchState())
+    }
     var preparation by remember(file, pagesUrl) {
         mutableStateOf<ReadiumComicPreparationResult?>(null)
     }
@@ -143,7 +146,10 @@ internal fun ReadiumComicReaderLauncher(
         ReadiumComicReaderActivity.readProgressResult(result.data)?.let { progress ->
             latestOnProgress(progress.pageIndex, progress.pageCount, progress.percent)
         }
-        latestOnFinished()
+        val reason = readerCompletionReason(
+            result.data?.getStringExtra(EXTRA_READER_COMPLETION_REASON)
+        )
+        if (shouldCloseReader(reason)) latestOnFinished()
     }
     LaunchedEffect(book, file, pagesUrl) {
         preparation = prepareReadiumComic(
@@ -154,7 +160,6 @@ internal fun ReadiumComicReaderLauncher(
         )
     }
     LaunchedEffect(preparation, title, readerKey, launchMode) {
-        if (launched) return@LaunchedEffect
         val intent = when (val ready = preparation) {
             is ReadiumComicPreparationResult.Local ->
                 ReadiumComicReaderActivity.createIntent(
@@ -182,8 +187,13 @@ internal fun ReadiumComicReaderLauncher(
                 )
             else -> null
         } ?: return@LaunchedEffect
-        launched = true
-        launcher.launch(intent)
+        val source = file?.absolutePath ?: pagesUrl.orEmpty()
+        val token = listOf(source, readerKey, launchMode.name).joinToString("|")
+        val claim = claimReaderLaunch(launchState, token)
+        if (claim.shouldLaunch) {
+            launchState = claim.state
+            launcher.launch(intent)
+        }
     }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (val result = preparation) {

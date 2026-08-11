@@ -139,6 +139,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -151,8 +153,20 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
+internal enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
+
+private fun <T> browserRouteProperty(
+    value: () -> T,
+    update: (T) -> Unit
+): ReadWriteProperty<Any?, T> = object : ReadWriteProperty<Any?, T> {
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T = value()
+
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+        update(value)
+    }
+}
+
 private enum class OptionsDialog {
     THEME,
     OPENING_SCREEN,
@@ -556,19 +570,68 @@ internal fun NativeLibraryBrowserScreen(
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
     }
     var query by rememberSaveable { mutableStateOf("") }
+    val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
+        value = null
+        if (query.isNotBlank()) {
+            delay(300)
+            value = searchBooks(query)
+        }
+    }
+    val filteredBooks = remoteSearchResults.orEmpty()
     var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
     var showMoreMenu by rememberSaveable { mutableStateOf(false) }
     var showProfileMenu by rememberSaveable { mutableStateOf(false) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
-    var selectedBook by remember { mutableStateOf<BookSummary?>(null) }
-    var selectedSeriesKey by remember { mutableStateOf<String?>(null) }
-    var selectedAuthor by remember { mutableStateOf<AuthorSummary?>(null) }
-    var activeBookGenre by rememberSaveable { mutableStateOf<String?>(null) }
-    var activeSeriesGenre by rememberSaveable { mutableStateOf<String?>(null) }
-    var genreSourceBook by remember { mutableStateOf<BookSummary?>(null) }
-    var genreSourceSeriesKey by remember { mutableStateOf<String?>(null) }
-    var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
+    var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
+        mutableStateOf(BrowserRouteSnapshot())
+    }
+    val selectedBookProperty = object : ReadWriteProperty<Any?, BookSummary?> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): BookSummary? =
+            resolveSelectedBook(listOf(state.books, state.homeBooks, filteredBooks), browserRoute.selectedBook)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: BookSummary?) {
+            browserRoute = browserRoute.copy(selectedBook = value?.let(::bookSelectionSnapshot))
+        }
+    }
+    var selectedBook by selectedBookProperty
+    val selectedSeriesKeyProperty = browserRouteProperty(
+        value = { browserRoute.selectedSeriesKey },
+        update = { browserRoute = browserRoute.copy(selectedSeriesKey = it) }
+    )
+    var selectedSeriesKey by selectedSeriesKeyProperty
+    val selectedAuthorProperty = browserRouteProperty(
+        value = { browserRoute.selectedAuthor },
+        update = { browserRoute = browserRoute.copy(selectedAuthor = it) }
+    )
+    var selectedAuthor by selectedAuthorProperty
+    val activeBookGenreProperty = browserRouteProperty(
+        value = { browserRoute.activeBookGenre },
+        update = { browserRoute = browserRoute.copy(activeBookGenre = it) }
+    )
+    var activeBookGenre by activeBookGenreProperty
+    val activeSeriesGenreProperty = browserRouteProperty(
+        value = { browserRoute.activeSeriesGenre },
+        update = { browserRoute = browserRoute.copy(activeSeriesGenre = it) }
+    )
+    var activeSeriesGenre by activeSeriesGenreProperty
+    val genreSourceBookProperty = object : ReadWriteProperty<Any?, BookSummary?> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): BookSummary? =
+            resolveSelectedBook(listOf(state.books, state.homeBooks, filteredBooks), browserRoute.genreSourceBook)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: BookSummary?) {
+            browserRoute = browserRoute.copy(genreSourceBook = value?.let(::bookSelectionSnapshot))
+        }
+    }
+    var genreSourceBook by genreSourceBookProperty
+    val genreSourceSeriesKeyProperty = browserRouteProperty(
+        value = { browserRoute.genreSourceSeriesKey },
+        update = { browserRoute = browserRoute.copy(genreSourceSeriesKey = it) }
+    )
+    var genreSourceSeriesKey by genreSourceSeriesKeyProperty
+    val detailReturnDestinationProperty = browserRouteProperty(
+        value = { browserRoute.detailReturnDestination },
+        update = { browserRoute = browserRoute.copy(detailReturnDestination = it) }
+    )
+    var detailReturnDestination by detailReturnDestinationProperty
     var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
@@ -610,14 +673,6 @@ internal fun NativeLibraryBrowserScreen(
             onDeleteLocalCopy(book)
         }
     }
-    val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
-        value = null
-        if (query.isNotBlank()) {
-            delay(300)
-            value = searchBooks(query)
-        }
-    }
-    val filteredBooks = remoteSearchResults.orEmpty()
     val sessionActionLabel = if (state.isOfflineSnapshot) "Sign in" else "Log out"
     val openOptions = {
         showProfileMenu = false
