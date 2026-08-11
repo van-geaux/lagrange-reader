@@ -2065,7 +2065,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
 
-    override suspend fun loadReaderProgress(book: BookSummary): BookSummary {
+    override suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
+    ): BookSummary {
         readerProgressBooks += book
         return readerProgressResult ?: book
     }

@@ -44,6 +44,10 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - PDF uses Readium PDFium. Paginated comics use Readium image navigation; continuous comics use a bounded book-scoped lazy surface with page/read limits and decoded-bitmap limits.
 - `ReaderTapZones` is the shared pure region model for Readium and continuous-comic tap handling and tutorial rendering. It stores normalized action rectangles, applies reading-direction and axis-inversion transforms, and keeps Menu handling separate from format-specific navigator progression.
 - Connected standalone audio uses authenticated direct Media3 streaming. Explicit downloaded/local audio remains on the local Readium/media path.
+- Connected multi-file audiobooks preserve BookOrbit's ordered audio-file list and per-file durations. Media3 receives one authenticated item per streamed file and advances through the playlist automatically.
+- `AudiobookTimeline` converts between absolute book-level offsets and Media3 item/in-file coordinates. Chapter selection, compact-player time, slider movement, and relative seeks therefore operate across the complete audiobook.
+- Audio progress reports the overall percentage together with the active file ID and in-file position. Online restoration rebuilds the ordered playlist and resolves file-aware server or queued-local progress; local exact-position history remains the seeking authority.
+- Multi-file offline download/storage is out of scope. Existing single-file M4B/MP3 and downloaded/local playback remain unchanged.
 - Audiobook restoration keeps Browser visible while the compact player prepares; explicit Book Detail Play may autoplay after preparation, while task/app restoration remains paused.
 - EPUB, PDF, and comic sessions begin after usable publication open and follow reader lifecycle/page activity. Audiobook sessions follow Media3 `isPlaying` transitions and remain separate from local exact-position audiobook history. Five minutes without active interaction/playback rolls a session over; Preview never queues a server session.
 - Preview never writes normal progress, active-reader state, or local session history.

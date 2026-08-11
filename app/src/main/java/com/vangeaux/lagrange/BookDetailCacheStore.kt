@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.roundToLong
 
 class BookDetailCacheStore private constructor(
     private val directory: File,
@@ -180,6 +181,7 @@ private fun BookFileOption.toJson(): JSONObject = JSONObject().apply {
     putNullable("sizeBytes", sizeBytes)
     putNullable("role", role)
     putNullable("updatedAtMillis", updatedAtMillis)
+    putNullable("durationMs", durationMs)
 }
 
 private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
@@ -291,7 +293,12 @@ private fun JSONArray?.toBookFileOptions(): List<BookFileOption> {
                     filename = item.optionalString("filename"),
                     sizeBytes = item.optionalLong("sizeBytes"),
                     role = item.optionalString("role"),
-                    updatedAtMillis = item.optionalLong("updatedAtMillis")
+                    updatedAtMillis = item.optionalLong("updatedAtMillis"),
+                    durationMs = item.optionalLong("durationMs")
+                        ?: item.optionalDouble("durationSeconds")
+                            ?.takeIf { it.isFinite() && it > 0.0 }
+                            ?.times(1000.0)
+                            ?.roundToLong()
                 )
             )
         }

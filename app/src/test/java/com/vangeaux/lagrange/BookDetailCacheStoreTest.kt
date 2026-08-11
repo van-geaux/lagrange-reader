@@ -45,7 +45,8 @@ class BookDetailCacheStoreTest {
                         filename = "alternate.epub",
                         sizeBytes = 1234L,
                         role = "alternate",
-                        updatedAtMillis = 200L
+                        updatedAtMillis = 200L,
+                        durationMs = 5_400_125L
                     )
                 ),
                 pageCount = 320,

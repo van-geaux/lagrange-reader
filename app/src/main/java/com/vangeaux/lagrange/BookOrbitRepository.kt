@@ -60,6 +60,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.roundToLong
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "lagrange_prefs")
@@ -271,7 +272,10 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
-    suspend fun loadReaderProgress(book: BookSummary): BookSummary = book
+    suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption> = emptyList()
+    ): BookSummary = book
     suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = Unit
     suspend fun setBookUserRating(
         book: BookSummary,
@@ -974,23 +978,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             fetchAuthoritativeBookDetail(book)
         } catch (error: Throwable) {
             if (error is CancellationException || error is AuthenticationRequiredException) throw error
-            cached?.copy(
-                book = cached.book.copy(
-                    localPath = book.localPath ?: cached.book.localPath,
-                    progressLabel = book.progressLabel ?: cached.book.progressLabel,
-                    progressPercent = book.progressPercent ?: cached.book.progressPercent,
-                    progressPositionMs = book.progressPositionMs ?: cached.book.progressPositionMs,
-                    progressPageIndex = book.progressPageIndex ?: cached.book.progressPageIndex,
-                    lastReadAtMillis = book.lastReadAtMillis ?: cached.book.lastReadAtMillis,
-                    readStatus = book.readStatus ?: cached.book.readStatus,
-                    isRead = book.isRead,
-                    coverAspectRatio = book.coverAspectRatio
-                )
-            ) ?: throw error
+            cached ?: throw error
         }
     }
 
-    override suspend fun loadReaderProgress(book: BookSummary): BookSummary = withContext(Dispatchers.IO) {
+    override suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
+    ): BookSummary = withContext(Dispatchers.IO) {
         if (book.fileId == null) return@withContext book
         val path = if (book.mediaKind == MediaKind.AUDIO) {
             "/api/v1/books/${book.id}/audio-progress"
@@ -1003,7 +998,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             if (error.code == 404) return@withContext book
             throw error
         }
-        BookOrbitPayloadParser.parseReaderProgress(book, payload)
+        BookOrbitPayloadParser.parseReaderProgress(book, payload, availableFiles)
     }
 
     private suspend fun fetchAuthoritativeBookDetail(book: BookSummary): BookDetailInfo {
@@ -1305,28 +1300,63 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
         val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
         val savedBook = savedSession.book
-        val localResolution = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
+        var bookForRestore = savedBook
+        var audioFiles = emptyList<BookFileOption>()
+        var queuedAudioProgress: ProgressUpdate? = null
+        if (!localOnly && savedBook.mediaKind == MediaKind.AUDIO) {
+            val detail = runCatching { loadBookDetail(savedBook) }.getOrNull()
+            audioFiles = detail
+                ?.availableFiles
+                ?.let(AudiobookTimeline::playableAudioFiles)
+                .orEmpty()
+            if (audioFiles.isNotEmpty()) {
+                val detailBook = requireNotNull(detail).book
+                bookForRestore = runCatching {
+                    loadReaderProgress(detailBook, audioFiles)
+                }.getOrDefault(detailBook)
+                queuedAudioProgress = queueStore.readAll()
+                    .asSequence()
+                    .filter { update ->
+                        update.serverUrl == serverUrl &&
+                            update.bookId == savedBook.id &&
+                            update.mediaKind == MediaKind.AUDIO
+                    }
+                    .maxByOrNull { it.updatedAtMillis }
+                val queuedFile = queuedAudioProgress
+                    ?.fileId
+                    ?.let { fileId -> audioFiles.firstOrNull { it.fileId == fileId } }
+                if (queuedFile != null) {
+                    bookForRestore = bookForRestore.copy(
+                        fileId = queuedFile.book.fileId,
+                        streamUrl = queuedFile.book.streamUrl,
+                        format = queuedFile.book.format,
+                        localPath = queuedFile.book.localPath
+                    )
+                }
+            }
+        }
+        val localResolution = resolveReadableFile(bookForRestore, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
         if (localOnly && localFile == null) {
             return@withContext null
         }
         val streamUrl = buildReaderStreamUrl(
-            fileId = savedBook.fileId,
+            fileId = bookForRestore.fileId,
             serverBase = serverBase(),
             localOnly = localOnly
         )
         val comicPagesUrl = buildComicPagesUrl(
-            fileId = savedBook.fileId,
+            fileId = bookForRestore.fileId,
             serverBase = serverBase(),
             localOnly = localOnly,
-            mediaKind = savedBook.mediaKind
+            mediaKind = bookForRestore.mediaKind
         )
         if (localOnly && savedBook.mediaKind == MediaKind.COMIC && localFile?.let(ReaderFileValidator::canRenderComicLocally) != true) {
             return@withContext null
         }
         runCatching {
             ensureReaderCanOpen(
-                book = savedBook,
+                book = bookForRestore,
                 localFile = localFile,
                 streamUrl = streamUrl,
                 comicPagesUrl = comicPagesUrl,
@@ -1336,16 +1366,25 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             return@withContext null
         }
         val restoredProgress = resolveRestoredReaderProgress(
-            book = savedBook,
-            latestProgress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
+            book = bookForRestore,
+            latestProgress = queuedAudioProgress ?: latestKnownProgress(
+                serverUrl,
+                bookForRestore.id,
+                bookForRestore.fileId,
+                bookForRestore.mediaKind
+            )
         )
-        val epubPosition = if (savedBook.mediaKind == MediaKind.EPUB) {
-            epubReaderPositionStore.read(serverUrl, savedBook.id, savedBook.fileId)
+        val epubPosition = if (bookForRestore.mediaKind == MediaKind.EPUB) {
+            epubReaderPositionStore.read(serverUrl, bookForRestore.id, bookForRestore.fileId)
         } else {
             null
         }
         ReaderState(
-            book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
+            book = if (localFile != null) {
+                bookForRestore.copy(localPath = localFile.absolutePath)
+            } else {
+                bookForRestore
+            },
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
@@ -1353,7 +1392,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
-            launchMode = savedSession.launchMode
+            launchMode = savedSession.launchMode,
+            audioFiles = audioFiles
         )
     }
 
@@ -2578,7 +2618,11 @@ internal object BookOrbitPayloadParser {
         }
     }
 
-    fun parseReaderProgress(book: BookSummary, payload: String): BookSummary {
+    fun parseReaderProgress(
+        book: BookSummary,
+        payload: String,
+        availableFiles: List<BookFileOption> = emptyList()
+    ): BookSummary {
         val progress = if (book.mediaKind == MediaKind.AUDIO) {
             extractObject(payload, "load audiobook progress")
         } else {
@@ -2596,7 +2640,18 @@ internal object BookOrbitPayloadParser {
 
         if (book.mediaKind == MediaKind.AUDIO) {
             val currentFileId = progress.stringValue("currentFileId", "current_file_id")
-            if (currentFileId == null || currentFileId != book.fileId) return book
+            if (currentFileId == null) return book
+            if (currentFileId != book.fileId) {
+                val matchedFile = availableFiles.firstOrNull {
+                    it.mediaKind == MediaKind.AUDIO && it.fileId == currentFileId
+                } ?: return book
+                val resolvedBook = book.copy(
+                    fileId = matchedFile.book.fileId,
+                    streamUrl = matchedFile.book.streamUrl,
+                    format = matchedFile.book.format
+                )
+                return resolvedBook.mergeReaderProgress(progress)
+            }
         }
         return book.mergeReaderProgress(progress)
     }
@@ -2709,13 +2764,24 @@ internal object BookOrbitPayloadParser {
                                 role = file.stringValue("role"),
                                 updatedAtMillis = file.timestampValue(
                                     "updatedAt", "modifiedAt", "lastModifiedAt"
-                                )
+                                ),
+                                durationMs = file.numberValue("durationSeconds", "duration")
+                                    ?.toDouble()
+                                    ?.takeIf { it.isFinite() && it > 0.0 }
+                                    ?.times(1000.0)
+                                    ?.coerceAtMost(Long.MAX_VALUE.toDouble())
+                                    ?.roundToLong()
                             )
                         )
                     }
                 }
             }
         }
+        val summedAudioDurationSeconds = AudiobookTimeline
+            .totalDurationMs(AudiobookTimeline.playableAudioFiles(availableFiles))
+            ?.let { totalMs ->
+                totalMs / 1000L + if (totalMs % 1000L >= 500L) 1L else 0L
+            }
         return BookDetailInfo(
             book = book.copy(audioChapters = audioChapters),
             libraryName = obj.stringValue("libraryName"),
@@ -2737,8 +2803,13 @@ internal object BookOrbitPayloadParser {
             fileCount = files?.length() ?: 0,
             availableFiles = availableFiles,
             totalSizeBytes = files.sumLong("sizeBytes", "size"),
-            durationSeconds = files.maxLong("durationSeconds", "duration")
-                ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong(),
+            durationSeconds = if (book.mediaKind == MediaKind.AUDIO) {
+                audioMetadata?.numberValue("durationSeconds", "duration")?.toLong()
+                    ?: summedAudioDurationSeconds
+            } else {
+                files.maxLong("durationSeconds", "duration")
+                    ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong()
+            },
             audioChapters = audioChapters,
             providerIds = obj.optJSONObject("providerIds").toProviderIds()
         )

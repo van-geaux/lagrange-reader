@@ -565,6 +565,70 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseReaderProgress resolves currentFileId against ordered available files`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "audio-progress-36",
+            fileId = "mp3-1",
+            title = "Gone Girl",
+            mediaKind = MediaKind.AUDIO,
+            coverUrl = "https://example.test/cover.jpg",
+            readStatus = BookReadStatus.READING,
+            audioChapters = listOf(AudiobookChapter("Part One", 0L))
+        )
+        val availableFiles = listOf(
+            BookFileOption(
+                book = book.copy(fileId = "mp3-1", format = "mp3", streamUrl = "https://example.test/mp3-1"),
+                filename = "01.mp3",
+                durationMs = 100_000L
+            ),
+            BookFileOption(
+                book = book.copy(fileId = "mp3-2", format = "mp3", streamUrl = "https://example.test/mp3-2"),
+                filename = "02.mp3",
+                durationMs = 200_000L
+            )
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":40.0,"currentFileId":"mp3-2","positionSeconds":30.0}""",
+            availableFiles = availableFiles
+        )
+
+        assertEquals("mp3-2", hydrated.fileId)
+        assertEquals("https://example.test/mp3-2", hydrated.streamUrl)
+        assertEquals(30_000L, hydrated.progressPositionMs)
+        assertEquals(40.0f, hydrated.progressPercent)
+        assertEquals("Gone Girl", hydrated.title)
+        assertEquals("https://example.test/cover.jpg", hydrated.coverUrl)
+        assertEquals(listOf(AudiobookChapter("Part One", 0L)), hydrated.audioChapters)
+        assertEquals(BookReadStatus.READING, hydrated.readStatus)
+    }
+
+    @Test
+    fun `parseReaderProgress falls back safely when currentFileId is unknown`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "audio-progress-36",
+            fileId = "mp3-1",
+            title = "Gone Girl",
+            mediaKind = MediaKind.AUDIO
+        )
+        val availableFiles = listOf(
+            BookFileOption(book = book.copy(fileId = "mp3-1"), durationMs = 100_000L),
+            BookFileOption(book = book.copy(fileId = "mp3-2"), durationMs = 200_000L)
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":40.0,"currentFileId":"deleted-file","positionSeconds":30.0}""",
+            availableFiles = availableFiles
+        )
+
+        assertEquals(book, hydrated)
+    }
+
+    @Test
     fun `parseReaderProgress preserves local fields omitted by an incomplete server response`() {
         val book = BookSummary(
             libraryId = "lib-progress",
@@ -653,6 +717,51 @@ class BookOrbitPayloadParserTest {
             detail.audioChapters
         )
         assertEquals(detail.audioChapters, detail.book.audioChapters)
+    }
+
+    @Test
+    fun `parseBookDetail preserves ordered multi-file audio durations and aggregate total`() {
+        val fallback = BookSummary(
+            libraryId = "lib-36",
+            id = "book-36",
+            fileId = "mp3-1",
+            title = "Fallback title"
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-36",
+                  "title": "Gone Girl",
+                  "audioMetadata": {
+                    "chapters": [
+                      {"title": "Part One", "startMs": 0},
+                      {"title": "Part Two", "startMs": 300000}
+                    ]
+                  },
+                  "files": [
+                    {"id": "mp3-1", "format": "mp3", "role": "primary", "filename": "01.mp3", "durationSeconds": 100.765},
+                    {"id": "mp3-2", "format": "mp3", "filename": "02.mp3", "durationSeconds": 200.5},
+                    {"id": "mp3-3", "format": "mp3", "filename": "03.mp3", "durationSeconds": 50},
+                    {"id": "mp3-4", "format": "mp3", "filename": "04.mp3", "durationSeconds": 300},
+                    {"id": "mp3-5", "format": "mp3", "filename": "05.mp3", "durationSeconds": 150}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(
+            listOf("mp3-1", "mp3-2", "mp3-3", "mp3-4", "mp3-5"),
+            detail.availableFiles.map { it.fileId }
+        )
+        assertEquals(
+            listOf(100_765L, 200_500L, 50_000L, 300_000L, 150_000L),
+            detail.availableFiles.map { it.durationMs }
+        )
+        assertEquals(801L, detail.durationSeconds)
     }
 
     @Test

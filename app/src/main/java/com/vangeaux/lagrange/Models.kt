@@ -136,7 +136,8 @@ data class BookFileOption(
     val filename: String? = null,
     val sizeBytes: Long? = null,
     val role: String? = null,
-    val updatedAtMillis: Long? = null
+    val updatedAtMillis: Long? = null,
+    val durationMs: Long? = null
 ) {
     val fileId: String? get() = book.fileId
     val format: String? get() = book.format
@@ -371,7 +372,8 @@ data class ReaderState(
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
-    val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
+    val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,
+    val audioFiles: List<BookFileOption> = emptyList()
 )
 
 data class ProgressUpdate(

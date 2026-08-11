@@ -897,12 +897,17 @@ class AppCoordinator(
                 } else {
                     detailForOpen?.book ?: book
                 }
+                val audioFiles = if (book.mediaKind == MediaKind.AUDIO && !offlineOpen) {
+                    AudiobookTimeline.playableAudioFiles(detailForOpen?.availableFiles.orEmpty())
+                } else {
+                    emptyList()
+                }
                 val progressBook = if (
                     launchMode == ReaderLaunchMode.NORMAL &&
                     !offlineOpen &&
                     syncResult == SyncAttemptResult.Success
                 ) {
-                    repository.loadReaderProgress(readerBook)
+                    repository.loadReaderProgress(readerBook, audioFiles)
                 } else {
                     readerBook
                 }
@@ -915,10 +920,14 @@ class AppCoordinator(
                         lastKnownPosition = 0L,
                         pageIndex = 0,
                         progressPercent = null,
+                        audioFiles = audioFiles,
                         launchMode = ReaderLaunchMode.PREVIEW
                     )
                 } else {
-                    preparedState.copy(launchMode = ReaderLaunchMode.NORMAL)
+                    preparedState.copy(
+                        launchMode = ReaderLaunchMode.NORMAL,
+                        audioFiles = audioFiles
+                    )
                 }
                 if (book.mediaKind == MediaKind.AUDIO) {
                     val opener = audioPlaybackOpener
