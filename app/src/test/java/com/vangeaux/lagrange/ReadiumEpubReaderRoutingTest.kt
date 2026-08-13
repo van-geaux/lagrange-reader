@@ -5,6 +5,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private data class AnnotationReanchorState(
+    val current: String,
+    val pending: String?
+)
+
+private fun settleAnnotationReanchor(state: AnnotationReanchorState): AnnotationReanchorState {
+    val target = state.pending ?: return state
+    return AnnotationReanchorState(current = target, pending = null)
+}
+
 class ReadiumEpubReaderRoutingTest {
     @Test
     fun previewTopSpaceUsesTheLargerOfReaderPaddingAndBannerInsteadOfAddingThem() {
@@ -80,5 +90,22 @@ class ReadiumEpubReaderRoutingTest {
                 totalProgressions = listOf(null, 0.0, 0.4)
             )
         )
+    }
+
+    @Test
+    fun promotionSettlesOnTheExactPendingAnnotationLocator() {
+        val settled = settleAnnotationReanchor(
+            AnnotationReanchorState(current = "chapter-2#old-page", pending = "chapter-2#annotation-cfi")
+        )
+
+        assertEquals("chapter-2#annotation-cfi", settled.current)
+        assertEquals(null, settled.pending)
+    }
+
+    @Test
+    fun ordinaryPreviewHasNoAnnotationLocatorToReanchor() {
+        val state = AnnotationReanchorState(current = "chapter-1#start", pending = null)
+
+        assertEquals(state, settleAnnotationReanchor(state))
     }
 }

@@ -429,6 +429,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var bookPositionCount by mutableStateOf<Int?>(null)
     private var bookPositions: List<Locator> = emptyList()
     private var previewAnnotationLocator: Locator? = null
+    private var pendingAnnotationReanchor: Locator? = null
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
@@ -807,7 +808,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                fragment.currentLocator.collect(::updateLocation)
+                fragment.currentLocator.collect { locator ->
+                    updateLocation(locator)
+                    pendingAnnotationReanchor?.let { target ->
+                        pendingAnnotationReanchor = null
+                        if (locator != target) fragment.go(target)
+                    }
+                    if (highlightAnnotations.isNotEmpty()) {
+                        refreshHighlightDecorations()
+                    }
+                }
             }
         }
         progressView?.visibility = View.GONE
@@ -1390,12 +1400,15 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readingSessionReporter.enable(currentPercent)
         viewOnlyBannerView.visibility = View.GONE
         applyReaderPadding()
-        val annotationLocator = previewAnnotationLocator
+        pendingAnnotationReanchor = previewAnnotationLocator
         readerContainer.post {
-            if (annotationLocator != null) {
-                navigator?.go(annotationLocator)
-                lifecycleScope.launch { refreshHighlightDecorations() }
+            navigator?.currentLocator?.value?.let { locator ->
+                pendingAnnotationReanchor?.let { target ->
+                    pendingAnnotationReanchor = null
+                    if (locator != target) navigator?.go(target)
+                }
             }
+            lifecycleScope.launch { refreshHighlightDecorations() }
         }
     }
 
