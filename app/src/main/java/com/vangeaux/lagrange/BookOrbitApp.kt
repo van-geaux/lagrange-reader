@@ -289,6 +289,8 @@ private fun BookOrbitDestination(
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,
             authorBooksLoader = coordinator::loadAuthorBooks,
+            annotationsLoader = coordinator::loadAnnotations,
+            onAnnotationSelected = coordinator::openAnnotation,
             achievementsLoader = coordinator::loadAchievements,
             statisticsLoader = coordinator::loadUserStatistics,
             catalogImageLoader = coordinator::loadCatalogImage,
@@ -938,6 +940,12 @@ private fun ReaderScreen(
                 initialPage = if (isPreview) 0 else state.readerPageIndex,
                 initialPageCount = if (isPreview) 1 else state.book.readerPageCount ?: 1,
                 initialPercent = if (isPreview) null else state.progressPercent,
+                initialCfi = state.initialCfi,
+                initialAnnotationText = state.annotationText,
+                initialAnnotationChapterIndex = state.annotationChapterIndex,
+                initialAnnotationId = state.annotationId,
+                initialAnnotationColor = state.annotationColor,
+                initialAnnotationStyle = state.annotationStyle,
                 onProgress = { chapterIndex, pageIndex, pageCount, percent ->
                     readerProgress(
                         state.book.copy(

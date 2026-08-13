@@ -1,19 +1,32 @@
 package com.vangeaux.lagrange
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.util.Log
+import android.view.ActionMode
 import android.view.Gravity
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ArrayAdapter
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -37,10 +50,14 @@ import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.readium.r2.navigator.DecorableNavigator
+import org.readium.r2.navigator.Decoration
+import org.readium.r2.navigator.Selection
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
@@ -204,6 +221,163 @@ internal data class ReadiumEpubProgressResult(
     val percent: Float?
 )
 
+internal const val DEFAULT_HIGHLIGHT_COLOR = "yellow"
+internal const val DEFAULT_HIGHLIGHT_STYLE = "highlight"
+internal const val HIGHLIGHT_DECORATION_GROUP = "bookorbit-highlights"
+
+internal data class HighlightChoice(
+    val label: String,
+    val color: String,
+    val style: String,
+    val previewColor: Int
+)
+
+internal fun epubHighlightChoices() = listOf(
+    HighlightChoice("Yellow highlight", "yellow", "highlight", 0xFFFFEB3B.toInt()),
+    HighlightChoice("Green highlight", "green", "highlight", 0xFF4CAF50.toInt()),
+    HighlightChoice("Blue highlight", "blue", "highlight", 0xFF2196F3.toInt()),
+    HighlightChoice("Pink highlight", "pink", "highlight", 0xFFE91E63.toInt()),
+    HighlightChoice("Yellow underline", "yellow", "underline", 0xFFFFEB3B.toInt())
+)
+
+internal data class EpubSelectionAction(val label: String)
+
+internal data class CapturedEpubSelection(
+    val selection: Selection,
+    val cfi: String?
+)
+
+internal fun epubSelectionActions() = listOf(
+    EpubSelectionAction("Copy"),
+    EpubSelectionAction("Share"),
+    EpubSelectionAction("Web search"),
+    EpubSelectionAction("Highlight"),
+    EpubSelectionAction("Highlight + Note")
+)
+
+internal suspend fun <T> captureSelectionBeforeAction(
+    capture: suspend () -> T?,
+    action: (T) -> Unit
+): Boolean {
+    val selection = capture() ?: return false
+    action(selection)
+    return true
+}
+
+internal fun decodeJavascriptString(value: String?): String? {
+    val encoded = value?.takeIf { it != "null" } ?: return null
+    return runCatching { org.json.JSONArray("[$encoded]").getString(0) }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+}
+
+internal fun selectedSpineIndex(
+    selectedHref: String,
+    readingOrderHrefs: List<String>
+): Int? {
+    fun normalized(value: String): String = value.substringBefore('#').substringBefore('?')
+    val selected = normalized(selectedHref)
+    return readingOrderHrefs.indexOfFirst { normalized(it) == selected }
+        .takeIf { it >= 0 }
+}
+
+internal fun combineEpubCfi(spineIndex: Int, innerRangeCfi: String?): String? {
+    if (spineIndex < 0) return null
+    val inner = innerRangeCfi
+        ?.trim()
+        ?.takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+        ?.removePrefix("epubcfi(")
+        ?.removeSuffix(")")
+        ?: return null
+    if (inner.count { it == ',' } != 2 || !inner.startsWith('/')) return null
+    return "epubcfi(/6/${(spineIndex + 1) * 2}!$inner)"
+}
+
+internal fun epubCfiSpineIndex(cfi: String?): Int? {
+    val spineStep = Regex("^epubcfi\\(/6/(\\d+)!")
+        .find(cfi.orEmpty())
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+        ?: return null
+    if (spineStep < 2 || spineStep % 2 != 0) return null
+    return spineStep / 2 - 1
+}
+
+private val NAMED_HIGHLIGHT_COLORS = mapOf(
+    "yellow" to 0x33FFEB3B,
+    "green" to 0x334CAF50,
+    "blue" to 0x332196F3,
+    "pink" to 0x33E91E63,
+    "orange" to 0x33FF9800,
+    "purple" to 0x339C27B0
+)
+
+internal fun highlightTintForColor(color: String?): Int {
+    val value = color?.trim()?.lowercase().orEmpty()
+    NAMED_HIGHLIGHT_COLORS[value]?.let { return it }
+    if (value.startsWith("#")) {
+        runCatching { Color.parseColor(value) }.getOrNull()?.let { return it }
+    }
+    return NAMED_HIGHLIGHT_COLORS.getValue(DEFAULT_HIGHLIGHT_COLOR)
+}
+
+internal fun annotationLocatorJson(
+    cfi: String,
+    chapterHref: String,
+    text: String? = null
+): JSONObject = JSONObject().apply {
+    put("href", chapterHref)
+    put("type", MediaType.XHTML.toString())
+    put("locations", JSONObject().put("fragments", org.json.JSONArray().put(cfi)))
+    text?.takeIf { it.isNotBlank() }?.let { selectedText ->
+        put("text", JSONObject().put("highlight", selectedText))
+    }
+}
+
+internal fun resolveAnnotationChapterHref(
+    cfi: String,
+    explicitChapterIndex: Int?,
+    readingOrderHrefs: List<String>
+): String? {
+    val index = explicitChapterIndex?.takeIf { it in readingOrderHrefs.indices }
+        ?: epubCfiSpineIndex(cfi)?.takeIf { it in readingOrderHrefs.indices }
+        ?: return null
+    return readingOrderHrefs.getOrNull(index)
+}
+
+internal fun resolveInitialAnnotationLocatorJson(
+    cfi: String,
+    explicitChapterIndex: Int?,
+    text: String?,
+    readingOrderHrefs: List<String>
+): JSONObject? {
+    val href = resolveAnnotationChapterHref(cfi, explicitChapterIndex, readingOrderHrefs) ?: return null
+    return annotationLocatorJson(cfi, href, text)
+}
+
+internal fun previewAnnotationTarget(
+    annotationId: String?,
+    bookId: String?,
+    cfi: String?,
+    text: String?,
+    chapterIndex: Int?,
+    color: String?,
+    style: String?
+): BookAnnotation? {
+    val id = annotationId?.takeIf { it.isNotBlank() } ?: return null
+    val cfiValue = cfi?.takeIf { it.isNotBlank() } ?: return null
+    return BookAnnotation(
+        id = id,
+        bookId = bookId.orEmpty(),
+        cfi = cfiValue,
+        text = text,
+        chapterIndex = chapterIndex,
+        color = color,
+        style = style
+    )
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumEpubReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
@@ -223,6 +397,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var displayTitle: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
+    private var bookId: String? = null
+    private val annotationRepository by lazy { BookOrbitRepository(applicationContext) }
+    private val highlightAnnotations = mutableMapOf<String, BookAnnotation>()
+    private val highlightLocators = mutableMapOf<String, Locator>()
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
     private var selectedFontFamily by mutableStateOf(EpubReaderFontFamily.PUBLISHER_DEFAULT)
     private var padding by mutableStateOf(EpubPaddingPercentages())
@@ -564,7 +742,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readerPreferences.wordSpacing
             ),
             paginationListener = paginationListener,
-            configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false)
+            configuration = EpubNavigatorFragment.Configuration(
+                shouldApplyInsetsPadding = false,
+                selectionActionModeCallback = if (isPreview || bookId == null) null else highlightActionModeCallback()
+            )
         )
         supportFragmentManager.fragmentFactory = fragmentFactory
         val fragment = fragmentFactory.instantiate(
@@ -584,6 +765,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         navigator = fragment
+        if (!isPreview && bookId != null) {
+            fragment.addDecorationListener(HIGHLIGHT_DECORATION_GROUP, highlightDecorationListener)
+            loadHighlights(openedPublication)
+        } else if (isPreview) {
+            applyPreviewAnnotationDecoration(fragment, openedPublication)
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect(::updateLocation)
@@ -594,7 +781,372 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (!tapZoneTutorialHasShown) showTapZoneTutorial()
     }
 
+    private fun loadHighlights(openedPublication: Publication) {
+        val currentBookId = bookId ?: return
+        lifecycleScope.launch {
+            val page = runCatching {
+                annotationRepository.loadAnnotations(
+                    AnnotationsFilter(bookId = currentBookId, status = "active"),
+                    page = 1,
+                    pageSize = ANNOTATIONS_PAGE_SIZE
+                )
+            }.getOrNull() ?: return@launch
+            page.items.forEach { annotation ->
+                val locator = annotation.toLocatorOrNull(openedPublication) ?: return@forEach
+                highlightAnnotations[annotation.id] = annotation
+                highlightLocators[annotation.id] = locator
+            }
+            refreshHighlightDecorations()
+        }
+    }
+
+    private fun applyPreviewAnnotationDecoration(fragment: EpubNavigatorFragment, openedPublication: Publication) {
+        val target = previewAnnotationTarget(
+            annotationId = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_ID),
+            bookId = bookId,
+            cfi = intent.getStringExtra(EXTRA_INITIAL_CFI),
+            text = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_TEXT),
+            chapterIndex = intent.getIntExtra(EXTRA_INITIAL_ANNOTATION_CHAPTER, -1).takeIf { it >= 0 },
+            color = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_COLOR),
+            style = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_STYLE)
+        ) ?: return
+        val locator = target.toLocatorOrNull(openedPublication) ?: return
+        fragment.addDecorationListener(HIGHLIGHT_DECORATION_GROUP, highlightDecorationListener)
+        highlightAnnotations[target.id] = target
+        highlightLocators[target.id] = locator
+        lifecycleScope.launch { refreshHighlightDecorations() }
+    }
+
+    private fun BookAnnotation.toLocatorOrNull(openedPublication: Publication): Locator? {
+        val cfiValue = cfi?.takeIf { it.isNotBlank() } ?: return null
+        val link = (chapterIndex ?: epubCfiSpineIndex(cfiValue))
+            ?.let { openedPublication.readingOrder.getOrNull(it) }
+            ?: openedPublication.readingOrder.firstOrNull()
+            ?: return null
+        return runCatching {
+            Locator.fromJSON(annotationLocatorJson(cfiValue, link.url().toString(), text))
+        }.getOrNull()
+    }
+
+    private suspend fun refreshHighlightDecorations() {
+        val fragment = navigator ?: return
+        val decorations = highlightAnnotations.mapNotNull { (id, annotation) ->
+            val locator = highlightLocators[id] ?: return@mapNotNull null
+            Decoration(
+                id = id,
+                locator = locator,
+                style = when (annotation.style?.trim()?.lowercase()) {
+                    "underline" -> Decoration.Style.Underline(
+                        tint = highlightTintForColor(annotation.color),
+                        isActive = false
+                    )
+                    else -> Decoration.Style.Highlight(
+                        tint = highlightTintForColor(annotation.color),
+                        isActive = false
+                    )
+                }
+            )
+        }
+        runCatching { fragment.applyDecorations(decorations, HIGHLIGHT_DECORATION_GROUP) }
+    }
+
+    private fun highlightActionModeCallback(): ActionMode.Callback = object : ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+            menu?.add(0, ACTION_COPY, 0, "Copy")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu?.add(0, ACTION_SHARE, 1, "Share")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu?.add(0, ACTION_WEB_SEARCH, 2, "Web search")
+            menu?.add(0, ACTION_HIGHLIGHT, 3, "Highlight")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu?.add(0, ACTION_HIGHLIGHT_WITH_NOTE, 4, "Highlight + Note")
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean = false
+
+        override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+            val action = item?.itemId ?: return false
+            if (action !in SELECTION_ACTIONS) return false
+            captureCurrentSelection(
+                mode = mode,
+                requireCfi = action == ACTION_HIGHLIGHT || action == ACTION_HIGHLIGHT_WITH_NOTE
+            ) { selection ->
+                when (action) {
+                    ACTION_COPY -> copySelection(selection)
+                    ACTION_SHARE -> shareSelection(selection)
+                    ACTION_WEB_SEARCH -> searchSelection(selection)
+                    ACTION_HIGHLIGHT -> showHighlightChoiceDialog(selection, note = null)
+                    ACTION_HIGHLIGHT_WITH_NOTE -> promptForNote(existingNote = null) { note ->
+                        showHighlightChoiceDialog(selection, note)
+                    }
+                }
+            }
+            return true
+        }
+
+        override fun onDestroyActionMode(mode: ActionMode?) = Unit
+    }
+
+    private fun captureCurrentSelection(
+        mode: ActionMode?,
+        requireCfi: Boolean,
+        action: (CapturedEpubSelection) -> Unit
+    ) {
+        val fragment = navigator ?: return
+        lifecycleScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val captured = runCatching {
+                captureSelectionBeforeAction(
+                    capture = {
+                        val selection = fragment.currentSelection()
+                            ?: return@captureSelectionBeforeAction null
+                        val cfi = if (requireCfi) generateSelectionCfi(fragment, selection) else null
+                        if (requireCfi && cfi == null) return@captureSelectionBeforeAction null
+                        CapturedEpubSelection(selection, cfi)
+                    },
+                    action = action
+                )
+            }.getOrElse { error ->
+                Log.e(TAG, "Could not capture the EPUB text selection.", error)
+                false
+            }
+            if (!captured) {
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    if (requireCfi) {
+                        "This text selection cannot be highlighted. Please try selecting it again."
+                    } else {
+                        "The selected text is no longer available. Please select it again."
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            mode?.finish()
+        }
+    }
+
+    private suspend fun generateSelectionCfi(
+        fragment: EpubNavigatorFragment,
+        selection: Selection
+    ): String? {
+        val openedPublication = publication ?: return null
+        val spineIndex = selectedSpineIndex(
+            selectedHref = selection.locator.href.toString(),
+            readingOrderHrefs = openedPublication.readingOrder.map { it.url().toString() }
+        ) ?: return null
+        val script = assets.open(FOLIATE_SELECTION_CFI_ASSET).bufferedReader().use { it.readText() }
+        val innerCfi = decodeJavascriptString(fragment.evaluateJavascript(script))
+        return combineEpubCfi(spineIndex, innerCfi)
+    }
+
+    private fun selectedText(selection: Selection): String? =
+        selection.locator.text.highlight?.takeIf { it.isNotBlank() }
+
+    private fun copySelection(captured: CapturedEpubSelection) {
+        val selection = captured.selection
+        val text = selectedText(selection) ?: return
+        getSystemService(ClipboardManager::class.java)
+            ?.setPrimaryClip(ClipData.newPlainText("Selected text", text))
+        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareSelection(captured: CapturedEpubSelection) {
+        val selection = captured.selection
+        val text = selectedText(selection) ?: return
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                },
+                "Share selected text"
+            )
+        )
+    }
+
+    private fun searchSelection(captured: CapturedEpubSelection) {
+        val selection = captured.selection
+        val text = selectedText(selection) ?: return
+        runCatching {
+            startActivity(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, text))
+        }.onFailure {
+            Toast.makeText(this, "No web search app is available.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showHighlightChoiceDialog(selection: CapturedEpubSelection, note: String?) {
+        if (isFinishing || isDestroyed) return
+        val choices = epubHighlightChoices()
+        val adapter = object : ArrayAdapter<HighlightChoice>(
+            this,
+            android.R.layout.simple_list_item_1,
+            choices
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = super.getView(position, convertView, parent) as TextView
+                val choice = getItem(position) ?: return view
+                view.text = choice.label
+                view.setPadding(dpToPx(20), view.paddingTop, dpToPx(20), view.paddingBottom)
+                val swatch = if (choice.style == "underline") {
+                    ColorDrawable(choice.previewColor).apply {
+                        setBounds(0, 0, dpToPx(32), dpToPx(4))
+                    }
+                } else {
+                    GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = dpToPx(4).toFloat()
+                        setColor(choice.previewColor)
+                        setBounds(0, 0, dpToPx(32), dpToPx(20))
+                    }
+                }
+                view.setCompoundDrawables(swatch, null, null, null)
+                view.compoundDrawablePadding = dpToPx(16)
+                return view
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Highlight style")
+            .setAdapter(adapter) { _, which ->
+                choices.getOrNull(which)?.let { choice ->
+                    createHighlightFromSelection(
+                        selection = selection,
+                        note = note,
+                        color = choice.color,
+                        style = choice.style
+                    )
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun createHighlightFromSelection(
+        selection: CapturedEpubSelection,
+        note: String?,
+        color: String = DEFAULT_HIGHLIGHT_COLOR,
+        style: String = DEFAULT_HIGHLIGHT_STYLE
+    ) {
+        val currentBookId = bookId ?: return
+        lifecycleScope.launch {
+            val cfiValue = selection.cfi
+            val text = selection.selection.locator.text.highlight?.takeIf { it.isNotBlank() }
+            if (cfiValue.isNullOrBlank() || text == null) {
+                Log.w(TAG, "The captured EPUB selection did not produce text and a range CFI.")
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "This text selection cannot be highlighted. Please try selecting it again.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            val annotation = runCatching {
+                annotationRepository.createAnnotation(
+                    bookId = currentBookId,
+                    cfi = cfiValue,
+                    bookFileId = intent.getStringExtra(EXTRA_FILE_ID),
+                    text = text,
+                    color = color,
+                    style = style,
+                    note = note,
+                    chapterTitle = chapterTitles.getOrNull(currentChapter)
+                )
+            }.onFailure { error ->
+                Log.e(TAG, "Could not create the EPUB annotation.", error)
+            }.getOrNull()
+            if (annotation == null) {
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "The highlight could not be saved.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            highlightAnnotations[annotation.id] = annotation
+            highlightLocators[annotation.id] = selection.selection.locator.copyWithLocations(
+                fragments = listOf(cfiValue)
+            )
+            navigator?.clearSelection()
+            refreshHighlightDecorations()
+        }
+    }
+
+    private val highlightDecorationListener = object : DecorableNavigator.Listener {
+        override fun onDecorationActivated(event: DecorableNavigator.OnActivatedEvent): Boolean {
+            val annotation = highlightAnnotations[event.decoration.id] ?: return false
+            showHighlightActionsDialog(annotation)
+            return true
+        }
+    }
+
+    private fun showHighlightActionsDialog(annotation: BookAnnotation) {
+        if (isFinishing || isDestroyed) return
+        AlertDialog.Builder(this)
+            .setTitle(if (annotation.note.isNullOrBlank()) "Highlight" else "Highlight note")
+            .setItems(arrayOf("Edit note", "Delete highlight", "Cancel")) { _, which ->
+                when (which) {
+                    0 -> promptForNote(existingNote = annotation.note) { note -> updateHighlightNote(annotation, note) }
+                    1 -> deleteHighlight(annotation)
+                }
+            }
+            .show()
+    }
+
+    private fun promptForNote(existingNote: String?, onSave: (String?) -> Unit) {
+        if (isFinishing || isDestroyed) return
+        val input = EditText(this).apply { setText(existingNote.orEmpty()) }
+        AlertDialog.Builder(this)
+            .setTitle("Note")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                onSave(input.text?.toString()?.trim()?.takeIf { it.isNotBlank() })
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun updateHighlightNote(annotation: BookAnnotation, note: String?) {
+        val currentBookId = bookId ?: return
+        lifecycleScope.launch {
+            val succeeded = runCatching {
+                annotationRepository.updateAnnotation(
+                    bookId = currentBookId,
+                    annotationId = annotation.id,
+                    note = note,
+                    color = annotation.color,
+                    style = annotation.style
+                )
+            }.isSuccess
+            if (succeeded) {
+                highlightAnnotations[annotation.id] = annotation.copy(note = note)
+            }
+        }
+    }
+
+    private fun deleteHighlight(annotation: BookAnnotation) {
+        val currentBookId = bookId ?: return
+        lifecycleScope.launch {
+            val succeeded = runCatching {
+                annotationRepository.deleteAnnotation(currentBookId, annotation.id)
+            }.isSuccess
+            if (succeeded) {
+                highlightAnnotations.remove(annotation.id)
+                highlightLocators.remove(annotation.id)
+                refreshHighlightDecorations()
+            }
+        }
+    }
+
     private fun initialLocator(openedPublication: Publication): Locator {
+        intent.getStringExtra(EXTRA_INITIAL_CFI)?.takeIf { it.isNotBlank() }?.let { cfi ->
+            val explicitChapterIndex = intent.getIntExtra(EXTRA_INITIAL_ANNOTATION_CHAPTER, -1)
+                .takeIf { it >= 0 }
+            val json = resolveInitialAnnotationLocatorJson(
+                cfi = cfi,
+                explicitChapterIndex = explicitChapterIndex,
+                text = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_TEXT),
+                readingOrderHrefs = openedPublication.readingOrder.map { it.url().toString() }
+            )
+            if (json != null) {
+                runCatching { Locator.fromJSON(json) }.getOrNull()?.let { return it }
+            }
+        }
         if (!isPreview) {
             locatorStore.read(readerKey)?.let { stored ->
                 if (openedPublication.readingOrder.any { link ->
@@ -930,21 +1482,43 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_epub_library_id"
         private const val EXTRA_FILE_ID = "readium_epub_file_id"
+        private const val EXTRA_BOOK_ID = "readium_epub_book_id"
         private const val EXTRA_IS_PREVIEW = "readium_epub_is_preview"
         private const val EXTRA_INITIAL_CHAPTER = "readium_epub_initial_chapter"
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
         private const val EXTRA_INITIAL_PAGE_COUNT = "readium_epub_initial_page_count"
         private const val EXTRA_INITIAL_PERCENT = "readium_epub_initial_percent"
+        private const val EXTRA_INITIAL_CFI = "readium_epub_initial_cfi"
+        private const val EXTRA_INITIAL_ANNOTATION_TEXT = "readium_epub_initial_annotation_text"
+        private const val EXTRA_INITIAL_ANNOTATION_CHAPTER = "readium_epub_initial_annotation_chapter"
+        private const val EXTRA_INITIAL_ANNOTATION_ID = "readium_epub_initial_annotation_id"
+        private const val EXTRA_INITIAL_ANNOTATION_COLOR = "readium_epub_initial_annotation_color"
+        private const val EXTRA_INITIAL_ANNOTATION_STYLE = "readium_epub_initial_annotation_style"
         private const val EXTRA_RESULT_CHAPTER = "readium_epub_result_chapter"
         private const val EXTRA_RESULT_PAGE = "readium_epub_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_epub_result_page_count"
         private const val EXTRA_RESULT_PERCENT = "readium_epub_result_percent"
         private const val NAVIGATOR_TAG = "readium_epub_navigator"
+        private const val TAG = "ReadiumEpubReader"
+        private const val FOLIATE_SELECTION_CFI_ASSET = "foliate-selection-cfi.js"
+        private const val ACTION_COPY = 1000
+        private const val ACTION_HIGHLIGHT = 1001
+        private const val ACTION_HIGHLIGHT_WITH_NOTE = 1002
+        private const val ACTION_SHARE = 1003
+        private const val ACTION_WEB_SEARCH = 1004
+        private val SELECTION_ACTIONS = setOf(
+            ACTION_COPY,
+            ACTION_SHARE,
+            ACTION_WEB_SEARCH,
+            ACTION_HIGHLIGHT,
+            ACTION_HIGHLIGHT_WITH_NOTE
+        )
 
         fun createIntent(
             context: Context,
             file: File,
             fileId: String? = null,
+            bookId: String? = null,
             title: String,
             readerKey: String,
             libraryId: String = "",
@@ -952,10 +1526,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             initialChapter: Int,
             initialPage: Int,
             initialPageCount: Int,
-            initialPercent: Float?
+            initialPercent: Float?,
+            initialCfi: String? = null,
+            initialAnnotationText: String? = null,
+            initialAnnotationChapterIndex: Int? = null,
+            initialAnnotationId: String? = null,
+            initialAnnotationColor: String? = null,
+            initialAnnotationStyle: String? = null
         ): Intent = Intent(context, ReadiumEpubReaderActivity::class.java)
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
             .putExtra(EXTRA_FILE_ID, fileId)
+            .putExtra(EXTRA_BOOK_ID, bookId)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_LIBRARY_ID, libraryId)
@@ -965,6 +1546,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_INITIAL_PAGE_COUNT, initialPageCount)
             .apply {
                 initialPercent?.let { putExtra(EXTRA_INITIAL_PERCENT, it) }
+                initialCfi?.let { putExtra(EXTRA_INITIAL_CFI, it) }
+                initialAnnotationText?.let { putExtra(EXTRA_INITIAL_ANNOTATION_TEXT, it) }
+                initialAnnotationChapterIndex?.let { putExtra(EXTRA_INITIAL_ANNOTATION_CHAPTER, it) }
+                initialAnnotationId?.let { putExtra(EXTRA_INITIAL_ANNOTATION_ID, it) }
+                initialAnnotationColor?.let { putExtra(EXTRA_INITIAL_ANNOTATION_COLOR, it) }
+                initialAnnotationStyle?.let { putExtra(EXTRA_INITIAL_ANNOTATION_STYLE, it) }
             }
 
         internal fun readProgressResult(data: Intent?): ReadiumEpubProgressResult? {

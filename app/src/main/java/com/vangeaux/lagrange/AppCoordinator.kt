@@ -117,6 +117,11 @@ class AppCoordinator(
             repository.loadAuthorBooks(authorId, page)
         }
 
+    suspend fun loadAnnotations(filter: AnnotationsFilter, page: Int): BookAnnotationsPage =
+        loadWithSessionRecovery(BookAnnotationsPage()) {
+            repository.loadAnnotations(filter, page)
+        }
+
     suspend fun loadAchievements(): AchievementCatalogue = loadWithSessionRecovery(
         AchievementCatalogue(status = AchievementCatalogueStatus.ERROR)
     ) {
@@ -885,7 +890,27 @@ class AppCoordinator(
         openBook(book, ReaderLaunchMode.PREVIEW)
     }
 
-    private fun openBook(book: BookSummary, launchMode: ReaderLaunchMode) {
+    fun openAnnotation(annotation: BookAnnotation) {
+        openBook(
+            book = annotation.toBookSummary(),
+            launchMode = ReaderLaunchMode.PREVIEW,
+            position = ReaderOpenPosition(
+                cfi = annotation.cfi,
+                pageIndex = annotation.pageno,
+                text = annotation.text,
+                chapterIndex = annotation.chapterIndex,
+                annotationId = annotation.id,
+                color = annotation.color,
+                style = annotation.style
+            )
+        )
+    }
+
+    private fun openBook(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode,
+        position: ReaderOpenPosition? = null
+    ) {
         scope.launch {
             if (book.mediaKind != MediaKind.AUDIO) {
                 _screen.value = AppScreen.ReaderLoading(book, launchMode)
@@ -937,7 +962,13 @@ class AppCoordinator(
                 val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {
                     preparedState.copy(
                         lastKnownPosition = 0L,
-                        pageIndex = 0,
+                        pageIndex = position?.pageIndex ?: 0,
+                        initialCfi = position?.cfi,
+                        annotationText = position?.text,
+                        annotationChapterIndex = position?.chapterIndex,
+                        annotationId = position?.annotationId,
+                        annotationColor = position?.color,
+                        annotationStyle = position?.style,
                         progressPercent = null,
                         audioFiles = audioFiles,
                         launchMode = ReaderLaunchMode.PREVIEW

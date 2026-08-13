@@ -7,6 +7,178 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun annotationBookSummaryPreservesBookAndFileIdentity() {
+        val annotation = BookAnnotation(
+            id = "a1",
+            bookId = "b1",
+            jumpFileId = "f1",
+            jumpFileFormat = "pdf",
+            bookTitle = "Book",
+            author = "Author"
+        )
+
+        val book = annotation.toBookSummary()
+
+        assertEquals("b1", book.id)
+        assertEquals("f1", book.fileId)
+        assertEquals(MediaKind.PDF, book.mediaKind)
+        assertEquals("Book", book.title)
+    }
+
+    @Test
+    fun parsesAnnotationHubItemsAndPaging() {
+        val result = BookOrbitPayloadParser.parseAnnotations("""
+            {"items":[{"id":"a1","bookId":"b1","text":"hello","note":"remember","cfi":"epubcfi(/6/2)","jumpFileId":"f1","pageno":4,"bookTitle":"Book","author":"Author"}],"total":1,"page":1,"pageSize":30}
+        """.trimIndent())
+
+        assertEquals(1, result.total)
+        assertEquals("a1", result.items.single().id)
+        assertEquals("hello", result.items.single().text)
+        assertEquals("f1", result.items.single().jumpFileId)
+        assertEquals(4, result.items.single().pageno)
+    }
+
+    @Test
+    fun parsesCreatedAnnotationResponse() {
+        val result = BookOrbitPayloadParser.parseAnnotation(
+            """{"id":"a1","bookId":"b1","cfi":"epubcfi(/6/2)","text":"hello","color":"yellow","style":"highlight"}"""
+        )
+
+        assertEquals("a1", result.id)
+        assertEquals("b1", result.bookId)
+        assertEquals("hello", result.text)
+        assertEquals("yellow", result.color)
+    }
+
+    @Test
+    fun annotationsPathEncodesBookId() {
+        assertEquals("/api/v1/books/book%20one/annotations", annotationsPath("book one"))
+    }
+
+    @Test
+    fun annotationPathEncodesBookAndAnnotationId() {
+        assertEquals(
+            "/api/v1/books/book%20one/annotations/local%3Aabc",
+            annotationPath("book one", "local:abc")
+        )
+    }
+
+    @Test
+    fun buildCreateAnnotationPayloadIncludesRequiredFieldsAndOmitsBlankBookFileId() {
+        val payload = buildCreateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "local:a",
+                bookId = "b1",
+                op = AnnotationMutationOp.CREATE,
+                cfi = "epubcfi(/6/2)",
+                bookFileId = "42",
+                text = "hello",
+                color = "yellow",
+                style = "highlight",
+                note = "remember",
+                chapterTitle = "Chapter 1"
+            )
+        )
+
+        assertEquals("epubcfi(/6/2)", payload.getString("cfi"))
+        assertEquals(42, payload.getInt("bookFileId"))
+        assertEquals("hello", payload.getString("text"))
+        assertEquals("yellow", payload.getString("color"))
+        assertEquals("highlight", payload.getString("style"))
+        assertEquals("remember", payload.getString("note"))
+        assertEquals("Chapter 1", payload.getString("chapterTitle"))
+    }
+
+    @Test
+    fun buildCreateAnnotationPayloadOmitsNonNumericBookFileId() {
+        val payload = buildCreateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "local:a",
+                bookId = "b1",
+                op = AnnotationMutationOp.CREATE,
+                bookFileId = "not-a-number",
+                text = "hello",
+                color = "yellow",
+                style = "highlight"
+            )
+        )
+
+        assertTrue(!payload.has("bookFileId"))
+    }
+
+    @Test
+    fun buildUpdateAnnotationPayloadOmitsUnsetFields() {
+        val payload = buildUpdateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "server-1",
+                bookId = "b1",
+                op = AnnotationMutationOp.UPDATE,
+                note = "updated note",
+                noteSpecified = true
+            )
+        )
+
+        assertEquals("updated note", payload.getString("note"))
+        assertTrue(!payload.has("color"))
+        assertTrue(!payload.has("style"))
+    }
+
+    @Test
+    fun `pending annotation overlay masks deletes and applies updates`() {
+        val page = BookAnnotationsPage(
+            items = listOf(
+                BookAnnotation("server-1", "b1", text = "old", color = "yellow", style = "highlight"),
+                BookAnnotation("server-2", "b1", text = "remove")
+            )
+        )
+        val result = overlayPendingAnnotations(
+            page,
+            listOf(
+                AnnotationMutationPayload(
+                    annotationId = "server-1",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.UPDATE,
+                    note = "new note",
+                    noteSpecified = true,
+                    color = "blue",
+                    updatedAtMillis = 2L
+                ),
+                AnnotationMutationPayload(
+                    annotationId = "server-2",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.DELETE,
+                    updatedAtMillis = 3L
+                )
+            ),
+            emptyMap()
+        )
+
+        assertEquals(1, result.items.size)
+        assertEquals("new note", result.items.single().note)
+        assertEquals("blue", result.items.single().color)
+    }
+
+    @Test
+    fun `pending create is visible with local id until server hydration catches up`() {
+        val result = overlayPendingAnnotations(
+            BookAnnotationsPage(),
+            listOf(
+                AnnotationMutationPayload(
+                    annotationId = "local:a",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.CREATE,
+                    cfi = "epubcfi(/6/2)",
+                    text = "new",
+                    updatedAtMillis = 4L
+                )
+            ),
+            emptyMap()
+        )
+
+        assertEquals("local:a", result.items.single().id)
+        assertEquals("new", result.items.single().text)
+    }
+    @Test
     fun `parseLibraries retains square covers and defaults unknown values to portrait`() {
         val libraries = BookOrbitPayloadParser.parseLibraries(
             """
