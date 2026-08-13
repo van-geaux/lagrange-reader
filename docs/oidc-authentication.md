@@ -93,7 +93,7 @@ Lagrange's current sign-out only clears local state. Final OIDC work (Phase 2, a
 
 - Phase 1: coordinator/repository tests for WebView-completion → `GET /api/v1/auth/me` → pending-destination resume, matching the pattern used for native login recovery.
 - Phase 2: PKCE/nonce generation, redirect-URI handling, and callback-exchange tests, plus regression coverage that password login and pending-destination recovery remain intact after the launcher swap.
-- Phase 1 source/unit verification is complete; physical-device validation is still required before considering the interim flow complete. Phase 2 also requires device/provider validation after AppAuth is implemented, consistent with this project's existing device-validation practice.
+- Phase 1 source/unit verification is complete, and the user confirmed the interim Open server sign-in WebView works on-device. Phase 2 still requires device/provider validation after AppAuth is implemented, consistent with this project's existing device-validation practice.
 
 ## External references
 

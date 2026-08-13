@@ -26,6 +26,7 @@ When asking the user to perform manual testing:
 4. Use the standard `app-debug.apk` only as the Gradle source artifact.
 
 ## Current validation priorities
+
 ### Browser navigation bar
 
 On a connected device or emulator, open Search, Series catalog, an individual Series, Authors, Book Detail, a genre view, and Local books. Verify Home, Libraries, and More remain visible and usable on each browser-owned screen. Tap Home or Libraries from a detail/search state and verify the active browser state closes and the selected destination opens. Open each EPUB, PDF, comic, and audiobook reader/player surface and verify the browser bottom bar is not shown there.
@@ -68,6 +69,8 @@ The user confirmed the implemented offline library cache works on-device. Keep t
 When the affected scope requires it, verify:
 
 - normal and Preview launch isolation;
+- tapping a positioned annotation opens it in isolated Preview mode at the saved highlight and does not overwrite normal reader progress, locator, or session state;
+- the tapped EPUB annotation remains visibly highlighted or underlined in Preview with its saved color/style, while ordinary Preview does not load or render annotation decorations;
 - EPUB resume and continuous-mode active-resource seeking;
 - EPUB reading-direction changes preserve text alignment, punctuation, and other typography/layout settings while only reversing left/right edge tap navigation; verify both directions in paginated and continuous modes. User-confirmed on the rebuilt debug APK;
 - tap-zone layouts and None/Horizontal/Vertical/Both inversion across EPUB, PDF, paginated comics, and continuous comics; the default uses equal-width Previous / Menu / Next thirds, Vertical thirds uses equal-height top / middle / bottom Previous / Menu / Next regions, changing layout or inversion from reader options re-shows the tutorial behind the options sheet, and continuous vertical swipes still scroll rather than firing a tap action;

@@ -23,6 +23,14 @@ import javax.net.ssl.SSLException
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
 
+enum class ReleaseCheckStatus {
+    IDLE,
+    CHECKING,
+    UP_TO_DATE,
+    UPDATE_AVAILABLE,
+    ERROR
+}
+
 class AppCoordinator(
     private val repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
@@ -109,6 +117,11 @@ class AppCoordinator(
             repository.loadAuthorBooks(authorId, page)
         }
 
+    suspend fun loadAnnotations(filter: AnnotationsFilter, page: Int): BookAnnotationsPage =
+        loadWithSessionRecovery(BookAnnotationsPage()) {
+            repository.loadAnnotations(filter, page)
+        }
+
     suspend fun loadAchievements(): AchievementCatalogue = loadWithSessionRecovery(
         AchievementCatalogue(status = AchievementCatalogueStatus.ERROR)
     ) {
@@ -160,6 +173,8 @@ class AppCoordinator(
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
     private val _releaseUpdate = MutableStateFlow<ReleaseUpdate?>(null)
     val releaseUpdate: StateFlow<ReleaseUpdate?> = _releaseUpdate.asStateFlow()
+    private val _releaseCheckStatus = MutableStateFlow(ReleaseCheckStatus.IDLE)
+    val releaseCheckStatus: StateFlow<ReleaseCheckStatus> = _releaseCheckStatus.asStateFlow()
     private var lastBrowserState: BrowserState? = null
     private var restoredInterruptedDownloads: Map<String, DownloadRecord> = emptyMap()
     private var loginRefreshInFlight = false
@@ -194,24 +209,35 @@ class AppCoordinator(
         audioSessionHistoryOpener?.invoke(book, positionMs)
     }
 
-    fun checkForAppUpdate() {
+    fun checkForAppUpdate(forceShow: Boolean = false) {
         if (releaseCheckInFlight) return
         releaseCheckInFlight = true
+        if (forceShow) _releaseCheckStatus.value = ReleaseCheckStatus.CHECKING
         scope.launch {
             try {
                 val update = releaseChecker(BuildConfig.VERSION_NAME)
                 val ignoredTag = readIgnoredReleaseTag()
-                if (
-                    update != null &&
-                    update.tagName != dismissedReleaseTag &&
-                    update.tagName != ignoredTag
-                ) {
+                if (update?.let {
+                        forceShow || (
+                            it.tagName != dismissedReleaseTag &&
+                                it.tagName != ignoredTag
+                            )
+                    } == true) {
                     _releaseUpdate.value = update
+                }
+                if (forceShow) {
+                    _releaseUpdate.value = update
+                    _releaseCheckStatus.value = if (update == null) {
+                        ReleaseCheckStatus.UP_TO_DATE
+                    } else {
+                        ReleaseCheckStatus.UPDATE_AVAILABLE
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Throwable) {
                 // Release checks are optional and must not interrupt app startup.
+                if (forceShow) _releaseCheckStatus.value = ReleaseCheckStatus.ERROR
             } finally {
                 releaseCheckInFlight = false
             }
@@ -866,7 +892,27 @@ class AppCoordinator(
         openBook(book, ReaderLaunchMode.PREVIEW)
     }
 
-    private fun openBook(book: BookSummary, launchMode: ReaderLaunchMode) {
+    fun openAnnotation(annotation: BookAnnotation) {
+        openBook(
+            book = annotation.toBookSummary(),
+            launchMode = ReaderLaunchMode.PREVIEW,
+            position = ReaderOpenPosition(
+                cfi = annotation.cfi,
+                pageIndex = annotation.pageno,
+                text = annotation.text,
+                chapterIndex = annotation.chapterIndex,
+                annotationId = annotation.id,
+                color = annotation.color,
+                style = annotation.style
+            )
+        )
+    }
+
+    private fun openBook(
+        book: BookSummary,
+        launchMode: ReaderLaunchMode,
+        position: ReaderOpenPosition? = null
+    ) {
         scope.launch {
             if (book.mediaKind != MediaKind.AUDIO) {
                 _screen.value = AppScreen.ReaderLoading(book, launchMode)
@@ -897,12 +943,17 @@ class AppCoordinator(
                 } else {
                     detailForOpen?.book ?: book
                 }
+                val audioFiles = if (book.mediaKind == MediaKind.AUDIO && !offlineOpen) {
+                    AudiobookTimeline.playableAudioFiles(detailForOpen?.availableFiles.orEmpty())
+                } else {
+                    emptyList()
+                }
                 val progressBook = if (
                     launchMode == ReaderLaunchMode.NORMAL &&
                     !offlineOpen &&
                     syncResult == SyncAttemptResult.Success
                 ) {
-                    repository.loadReaderProgress(readerBook)
+                    repository.loadReaderProgress(readerBook, audioFiles)
                 } else {
                     readerBook
                 }
@@ -913,12 +964,26 @@ class AppCoordinator(
                 val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {
                     preparedState.copy(
                         lastKnownPosition = 0L,
-                        pageIndex = 0,
+                        pageIndex = position?.pageIndex ?: 0,
+                        initialCfi = position?.cfi,
+                        annotationText = position?.text,
+                        annotationChapterIndex = position?.chapterIndex,
+                        annotationId = position?.annotationId,
+                        annotationColor = position?.color,
+                        annotationStyle = position?.style,
                         progressPercent = null,
+                        audioFiles = audioFiles,
                         launchMode = ReaderLaunchMode.PREVIEW
                     )
                 } else {
-                    preparedState.copy(launchMode = ReaderLaunchMode.NORMAL)
+                    preparedState.copy(
+                        pageIndex = position?.pageIndex ?: preparedState.pageIndex,
+                        initialCfi = position?.cfi,
+                        annotationText = position?.text,
+                        annotationChapterIndex = position?.chapterIndex,
+                        launchMode = ReaderLaunchMode.NORMAL,
+                        audioFiles = audioFiles
+                    )
                 }
                 if (book.mediaKind == MediaKind.AUDIO) {
                     val opener = audioPlaybackOpener

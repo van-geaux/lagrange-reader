@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.4.1](https://img.shields.io/badge/version-1.4.1-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.1)
+[![Version 1.4.2](https://img.shields.io/badge/version-1.4.2-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.2)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -54,8 +54,9 @@ The following screenshots show the main reading and library experience. More scr
 - **Offline-first library:** browse cached books and reopen downloaded EPUB, PDF, CBZ, and supported audiobook files without a connection.
 - **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
 - **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, and per-library font selection through grouped normal/accessibility menus, plus one imported custom `.ttf`/`.otf` font.
+- **Annotations:** global annotation browsing and search, EPUB text selection with highlight/note creation, highlight/underline rendering, durable offline mutation replay, and annotation taps that open the saved location in isolated Preview without changing normal reading state. PDF/comic annotation creation and publication full-text search remain pending.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
-- **Audiobook playback:** compact player with seeking, chapter selection, playback speed, resume, and read-along support.
+- **Audiobook playback:** compact player with seeking, chapter selection, playback speed, resume, and read-along support. Connected audiobooks made up of ordered split MP3 files play as one continuous timeline; multi-file offline storage remains out of scope, and single-file/downloaded audiobook behavior is unchanged.
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.
 - **Reliable offline downloads:** progress, cancellation, retry/update flows, cache validation, and safe local replacement.
 - **Personalized controls:** five app themes, reader themes, orientation lock, reduce motion, cellular download policy, cache management, and background-network controls.
@@ -68,7 +69,7 @@ The following screenshots show the main reading and library experience. More scr
 | PDF | Yes | Yes | Readium PDF reader with page navigation and resume. |
 | CBZ | Yes | Yes | Image-based comic reader. |
 | CBR / CB7 | Yes | Yes | Online page extraction is supported; offline reading uses client-side RAR4/RAR5/7z extraction into a cached CBZ. User-confirmed offline opening works. |
-| Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. |
+| Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. Ordered split-file MP3 playback is supported while connected; offline playback remains limited to explicitly downloaded/local audio and does not store a split playlist as one unit. |
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
 
@@ -84,6 +85,19 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 | Unsupported formats (MOBI, AZW, AZW3, FB2) | Nothing | No reader or progress sync is available for these formats. |
 
 Progress uploads are queued and throttled rather than sent immediately, and can be delayed by connectivity; a clean reader/player close attempts a best-effort flush of the pending queue but is not guaranteed to complete before the app fully closes offline.
+
+## Server reading sessions
+
+Lagrange separately records active reading/listening intervals through BookOrbit's file-scoped `POST /api/v1/books/files/{fileId}/sessions` endpoint. Sessions are authenticated, stored in a durable offline queue, retried in the background, and deduplicated with a stable session ID. The server source is `web`, which BookOrbit reports in its native `BookOrbit` source bucket.
+
+| Format | Session starts | Pause/close behavior | Progress and timing |
+| --- | --- | --- | --- |
+| EPUB / KEPUB | When usable publication content opens | Lifecycle pause finalizes the active interval; resume starts a new interval; reader close finalizes it | Percentage/chapter fallback; active foreground time only |
+| PDF | When usable pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; active foreground time only |
+| CBZ / CBR / CB7 | When usable comic pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; CBR/CB7 may be normalized to a cached CBZ locally, while the original BookOrbit file ID is retained |
+| Audiobooks | When actual playback begins | Tapping pause finalizes the active listening interval; play starts a new interval; player close also finalizes it | Wall-clock active listening duration and periodic position/percentage; playback speed does not multiply session duration |
+
+Preview sessions are excluded. Sessions shorter than 10 seconds are discarded by the client. Paused, background, and idle time is not counted. Server sessions support analytics and reading history; exact local audiobook seeking remains backed by Lagrange's local session history.
 
 ## Privacy, telemetry, and data
 
@@ -124,7 +138,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 | Audiobook sessions | Stores server reading sessions and reading attempts as analytics/history records. | Shows server history after local history; local exact-position audiobook sessions remain device-only and seekable. |
 | Statistics | Provides summary, daily reading, heatmap, source, peak-hour, timeline, goal, completion, pace, and related statistics APIs. | Currently consumes the summary and daily-reading endpoints in the lazy-loaded Statistics screen. |
 | Achievements | Owns achievement definitions and user progress. | Provides an Achievements destination that loads the user's server-backed achievements. |
-| Annotations, bookmarks, and notes | Provides server modules and APIs for these reading records. | Not currently exposed as a dedicated Lagrange feature. |
+| Annotations, bookmarks, and notes | Provides server modules and APIs for these reading records. | Lagrange exposes the annotation hub, EPUB highlight/note creation and rendering, durable mutation replay, and isolated saved-annotation Preview navigation; PDF/comic creation and publication full-text search remain pending. |
 | Integrations and administration | Includes integrations such as OPDS, KOReader, Kobo, Readwise, StoryGraph, notifications, and administrative/audit tools. | Focuses on the Android reading/listening experience and does not expose the server administration surface. |
 
 ## Roadmap
@@ -182,7 +196,7 @@ Lagrange Reader's interface and interaction ideas were informed by the clarity a
 
 ## Relationship with BookOrbit
 
-I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to distribute or promote this client, and have not received a response yet. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
+I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to distribute or promote this client. As of that date, no response had been received. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
 
 ## License and acknowledgements
 

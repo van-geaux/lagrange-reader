@@ -166,6 +166,7 @@ internal fun ReadiumComicReaderLauncher(
                 ReadiumComicReaderActivity.createIntent(
                     context = context,
                     file = ready.file,
+                    fileId = book.fileId,
                     title = title,
                     readerKey = readerKey,
                     libraryId = book.libraryId,
@@ -176,6 +177,7 @@ internal fun ReadiumComicReaderLauncher(
                 ReadiumComicReaderActivity.createRemoteIntent(
                     context = context,
                     pagesUrl = ready.pagesUrl,
+                    fileId = book.fileId,
                     pageCount = ready.pageCount,
                     pageMediaType = ready.pageMediaType,
                     title = title,

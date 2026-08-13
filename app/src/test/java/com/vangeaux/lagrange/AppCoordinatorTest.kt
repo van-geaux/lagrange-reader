@@ -243,6 +243,56 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `manual update check resurfaces an ignored release and reports availability`() = runTest {
+        val update = ReleaseUpdate(
+            versionName = "1.2.0",
+            tagName = "v1.2.0",
+            title = "Lagrange 1.2",
+            notes = "Notes",
+            htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0"
+        )
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { update },
+            readIgnoredReleaseTag = { "v1.2.0" }
+        )
+
+        coordinator.checkForAppUpdate()
+        advanceUntilIdle()
+        assertNull(coordinator.releaseUpdate.value)
+
+        coordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+
+        assertEquals(update, coordinator.releaseUpdate.value)
+        assertEquals(ReleaseCheckStatus.UPDATE_AVAILABLE, coordinator.releaseCheckStatus.value)
+    }
+
+    @Test
+    fun `manual update check reports up to date and errors`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { null }
+        )
+
+        coordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+        assertEquals(ReleaseCheckStatus.UP_TO_DATE, coordinator.releaseCheckStatus.value)
+
+        val failingCoordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            releaseChecker = { error("network failure") }
+        )
+        failingCoordinator.checkForAppUpdate(forceShow = true)
+        advanceUntilIdle()
+        assertEquals(ReleaseCheckStatus.ERROR, failingCoordinator.releaseCheckStatus.value)
+    }
+
+    @Test
     fun `bootstrap prefers local only active reader restore before session checks`() = runTest {
         val readerState = ReaderState(book = book, localFile = File("offline.epub"))
         val repository = FakeBookOrbitDataSource(
@@ -753,6 +803,36 @@ class AppCoordinatorTest {
         assertEquals(book, readerScreen.readerState.book)
         assertEquals(listOf(false, false), repository.buildReaderLocalOnlyCalls)
         assertEquals(listOf(book), repository.savedActiveReaders)
+    }
+
+    @Test
+    fun `opening an annotation preserves its cfi, page, text and chapter index into reader state`() = runTest {
+        val annotation = BookAnnotation(
+            id = "annotation-1",
+            bookId = book.id,
+            cfi = "epubcfi(/6/6!/4/2,/1:3,/1:9)",
+            pageno = 42,
+            text = "selected words",
+            chapterIndex = 2,
+            bookTitle = book.title
+        )
+        val repository = FakeBookOrbitDataSource(
+            buildReaderResult = ReaderState(book = book, streamUrl = "$serverUrl/stream")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openAnnotation(annotation)
+        advanceUntilIdle()
+
+        val readerState = (coordinator.screen.value as AppScreen.Reader).readerState
+        assertEquals(ReaderLaunchMode.PREVIEW, readerState.launchMode)
+        assertEquals(annotation.cfi, readerState.initialCfi)
+        assertEquals(annotation.pageno, readerState.pageIndex)
+        assertEquals(annotation.text, readerState.annotationText)
+        assertEquals(annotation.chapterIndex, readerState.annotationChapterIndex)
+        assertEquals(annotation.id, readerState.annotationId)
+        assertTrue(repository.savedActiveReaders.isEmpty())
+        assertEquals(0, repository.syncPendingProgressCalls)
     }
 
     @Test
@@ -2091,7 +2171,10 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
 
-    override suspend fun loadReaderProgress(book: BookSummary): BookSummary {
+    override suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
+    ): BookSummary {
         readerProgressBooks += book
         return readerProgressResult ?: book
     }

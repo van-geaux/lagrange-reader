@@ -211,15 +211,113 @@ internal class AudiobookMediaSessionCallback : MediaSession.Callback {
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
+internal data class AudiobookMediaItemSpec(
+    val fileId: String,
+    val streamUrl: String,
+    val mimeType: String,
+    val title: String,
+    val artist: String?
+)
+
+internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<AudiobookMediaItemSpec> =
+    AudiobookTimeline.playableAudioFiles(files).mapNotNull { file ->
+        val fileId = file.fileId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val streamUrl = file.book.streamUrl?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val mimeType = file.format?.let(::media3AudioMimeType) ?: return@mapNotNull null
+        AudiobookMediaItemSpec(
+            fileId = fileId,
+            streamUrl = streamUrl,
+            mimeType = mimeType,
+            title = file.filename ?: file.book.title,
+            artist = file.book.author
+        )
+    }
+
+internal fun buildAudiobookMediaItems(files: List<BookFileOption>): List<MediaItem> =
+    buildAudiobookMediaItemSpecs(files).map { spec ->
+        MediaItem.Builder()
+            .setMediaId(spec.fileId)
+            .setUri(spec.streamUrl)
+            .setMimeType(spec.mimeType)
+            .setMediaMetadata(
+                androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(spec.title)
+                    .setArtist(spec.artist)
+                    .build()
+            )
+            .build()
+    }
+
+internal fun resolveAbsolutePositionMs(
+    audioFiles: List<BookFileOption>,
+    currentFileId: String?,
+    currentFilePositionMs: Long
+): Long {
+    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+    val fileId = currentFileId ?: return currentFilePositionMs.coerceAtLeast(0L)
+    return AudiobookTimeline.fileRelativeToAbsolute(playableFiles, fileId, currentFilePositionMs)
+        ?: currentFilePositionMs.coerceAtLeast(0L)
+}
+
+internal fun resolveTotalDurationMs(audioFiles: List<BookFileOption>, fallbackDurationMs: Long): Long {
+    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+    return AudiobookTimeline.totalDurationMs(playableFiles) ?: fallbackDurationMs.coerceAtLeast(0L)
+}
+
+internal fun resolveSeekTarget(
+    audioFiles: List<BookFileOption>,
+    absolutePositionMs: Long
+): AudiobookTimelinePosition? {
+    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+    if (playableFiles.size < 2) return null
+    return AudiobookTimeline.absoluteToPosition(playableFiles, absolutePositionMs)
+}
+
+internal fun activeBookSummaryForActiveFile(
+    book: BookSummary,
+    audioFiles: List<BookFileOption>,
+    currentFileId: String?
+): BookSummary {
+    val activeFile = AudiobookTimeline.playableAudioFiles(audioFiles)
+        .firstOrNull { it.fileId == currentFileId }
+        ?: return book
+    return book.copy(
+        fileId = activeFile.book.fileId,
+        streamUrl = activeFile.book.streamUrl,
+        downloadUrl = activeFile.book.downloadUrl,
+        format = activeFile.book.format,
+        localPath = activeFile.book.localPath
+    )
+}
+
+internal fun absoluteProgressPercent(absolutePositionMs: Long, totalDurationMs: Long): Float? {
+    if (totalDurationMs <= 0L) return null
+    return ((absolutePositionMs.coerceAtLeast(0L).toDouble() / totalDurationMs.toDouble()) * 100.0)
+        .coerceIn(0.0, 100.0)
+        .toFloat()
+}
+
 @UnstableApi
 internal suspend fun openDirectMedia3Audio(
     application: Application,
     book: BookSummary,
     streamUrl: String?,
     initialPositionMs: Long,
+    audioFiles: List<BookFileOption> = emptyList(),
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult {
+    val playlistItems = buildAudiobookMediaItems(audioFiles)
+    if (playlistItems.size >= 2) {
+        return preparePlaylistMedia3Audio(
+            application = application,
+            mediaItems = playlistItems,
+            initialFileId = book.fileId,
+            initialPositionMs = initialPositionMs,
+            headersProvider = headersProvider,
+            recoverAuthentication = recoverAuthentication
+        )
+    }
     val url = streamUrl?.takeIf { it.isNotBlank() }
         ?: return ReadiumAudioOpenResult.Error("The audiobook has no valid BookOrbit stream.")
     val mimeType = book.format?.let(::media3AudioMimeType)
@@ -233,6 +331,52 @@ internal suspend fun openDirectMedia3Audio(
         headersProvider = headersProvider,
         recoverAuthentication = recoverAuthentication
     )
+}
+
+@UnstableApi
+private suspend fun preparePlaylistMedia3Audio(
+    application: Application,
+    mediaItems: List<MediaItem>,
+    initialFileId: String?,
+    initialPositionMs: Long,
+    headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
+    recoverAuthentication: suspend () -> Boolean
+): ReadiumAudioOpenResult = withContext(Dispatchers.Main.immediate) {
+    val player = ExoPlayer.Builder(application)
+        .setSeekBackIncrementMs(AUDIO_SEEK_BACK_INCREMENT_MS)
+        .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(application).setDataSourceFactory(
+                AuthenticatedMedia3HttpDataSourceFactory(
+                    headersProvider = headersProvider,
+                    recoverAuthentication = recoverAuthentication
+                )
+            )
+        )
+        .build()
+    val initialIndex = mediaItems.indexOfFirst { it.mediaId == initialFileId }
+        .let { if (it >= 0) it else 0 }
+    player.setMediaItems(mediaItems, initialIndex, initialPositionMs.coerceAtLeast(0L))
+    player.prepare()
+
+    try {
+        val playbackError = awaitMedia3Ready(player)
+        if (playbackError == null) {
+            ReadiumAudioOpenResult.Opened(AudioPlaybackEngine.DirectMedia3(player))
+        } else {
+            player.release()
+            ReadiumAudioOpenResult.Error(
+                "Media3 could not open the audiobook stream from BookOrbit " +
+                    "(${playbackError.errorCodeName})."
+            )
+        }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        player.release()
+        throw cancelled
+    } catch (error: Throwable) {
+        player.release()
+        throw error
+    }
 }
 
 @UnstableApi
@@ -502,10 +646,33 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         val book: BookSummary,
         val launchMode: ReaderLaunchMode,
         val engine: AudioPlaybackEngine,
-        val mediaSession: MediaSession
+        val mediaSession: MediaSession,
+        val audioFiles: List<BookFileOption> = emptyList()
     ) {
         val player: Player
             get() = engine.player
+
+        fun currentFileId(): String? =
+            player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() } ?: book.fileId
+
+        fun activeBookSummary(): BookSummary =
+            activeBookSummaryForActiveFile(book, audioFiles, currentFileId())
+
+        fun currentFilePositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
+
+        fun totalDurationMs(): Long = resolveTotalDurationMs(audioFiles, player.duration)
+
+        fun absolutePositionMs(): Long =
+            resolveAbsolutePositionMs(audioFiles, currentFileId(), currentFilePositionMs())
+
+        fun seekToAbsolutePosition(ms: Long) {
+            val target = resolveSeekTarget(audioFiles, ms)
+            if (target == null) {
+                player.seekTo(ms.coerceAtLeast(0L))
+            } else {
+                player.seekTo(target.fileIndex, target.positionMs)
+            }
+        }
     }
 
     private val mediaSessionCallback = AudiobookMediaSessionCallback()
@@ -517,7 +684,8 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         fun openSession(
             book: BookSummary,
             launchMode: ReaderLaunchMode,
-            engine: AudioPlaybackEngine
+            engine: AudioPlaybackEngine,
+            audioFiles: List<BookFileOption> = emptyList()
         ): Session {
             closeSession()
             var mediaSession: MediaSession? = null
@@ -530,7 +698,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                     .build()
                 mediaSession = createdSession
                 addSession(createdSession)
-                return Session(book, launchMode, engine, createdSession).also { session ->
+                return Session(book, launchMode, engine, createdSession, audioFiles).also { session ->
                     mutableSession.value = session
                 }
             } catch (error: Throwable) {
@@ -659,6 +827,8 @@ class ReadiumAudioPlaybackController internal constructor(
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
     private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
     private var serverUrlProvider: (suspend () -> String?)? = null
+    private var readingSessionReporter: ReadingSessionReporter? = null
+    private var readingSessionFileId: String? = null
     private var playbackStateListener: Player.Listener? = null
     private var lastRecordedIsPlaying: Boolean? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
@@ -718,7 +888,8 @@ class ReadiumAudioPlaybackController internal constructor(
         streamUrl: String? = null,
         initialPositionMs: Long,
         launchMode: ReaderLaunchMode,
-        playWhenReady: Boolean = true
+        playWhenReady: Boolean = true,
+        audioFiles: List<BookFileOption> = emptyList()
     ): ReadiumAudioOpenResult {
         val generation = withContext(Dispatchers.Main.immediate) {
             openGeneration += 1L
@@ -783,6 +954,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         book = book,
                         streamUrl = streamUrl,
                         initialPositionMs = initialPositionMs,
+                        audioFiles = audioFiles,
                         headersProvider = streamingHeadersProvider,
                         recoverAuthentication = streamingAuthenticationRecovery
                     )
@@ -820,7 +992,8 @@ class ReadiumAudioPlaybackController internal constructor(
                             ReadiumAudioOpenResult.Error(AUDIO_OPEN_CANCELLED_MESSAGE)
                         } else {
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
-                            val session = serviceBinder.openSession(book, launchMode, opened.engine)
+                            endReadingSession(serviceBinder.session.value)
+                            val session = serviceBinder.openSession(book, launchMode, opened.engine, audioFiles)
                             if (playWhenReady) opened.engine.player.play()
                             startProgressUpdates(session, recordInitialPlay = playWhenReady)
                             mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
@@ -859,7 +1032,8 @@ class ReadiumAudioPlaybackController internal constructor(
                         state.lastKnownPosition
                     },
                     launchMode = state.launchMode,
-                    playWhenReady = playWhenReady
+                    playWhenReady = playWhenReady,
+                    audioFiles = state.audioFiles
                 )
             ) {
                 is ReadiumAudioOpenResult.Opened -> true
@@ -937,6 +1111,7 @@ class ReadiumAudioPlaybackController internal constructor(
             openGeneration += 1L
             mutablePreparationState.value = AudioPlaybackPreparationState.IDLE
             mutablePreparingSession.value = null
+            endReadingSession(serviceBinder.session.value)
             serviceBinder.session.value?.let(::publishProgress)
             progressJob?.cancel()
             progressJob = null
@@ -956,13 +1131,14 @@ class ReadiumAudioPlaybackController internal constructor(
         if (session.launchMode == ReaderLaunchMode.PREVIEW) return
         val store = sessionHistoryStore ?: return
         val serverUrlProvider = serverUrlProvider ?: return
-        val positionMs = session.player.currentPosition.coerceAtLeast(0L)
+        val activeBook = session.activeBookSummary()
+        val positionMs = session.currentFilePositionMs()
         scope.launch(Dispatchers.IO) {
             val serverUrl = serverUrlProvider()?.takeIf { it.isNotBlank() } ?: return@launch
             runCatching {
                 store.record(
                     serverUrl = serverUrl,
-                    book = session.book,
+                    book = activeBook,
                     type = if (isPlaying) {
                         AudiobookSessionEventType.PLAY
                     } else {
@@ -986,30 +1162,75 @@ class ReadiumAudioPlaybackController internal constructor(
                 if (lastRecordedIsPlaying == isPlaying) return
                 lastRecordedIsPlaying = isPlaying
                 recordSessionEvent(session, isPlaying)
+                if (isPlaying) {
+                    readingSessionReporter(session)?.resume(progressPercent(session))
+                } else {
+                    readingSessionReporter(session)?.pause(progressPercent(session))
+                }
+            }
+
+            override fun onMediaItemTransition(
+                mediaItem: androidx.media3.common.MediaItem?,
+                reason: Int
+            ) {
+                if (session.player.isPlaying) {
+                    recordSessionEvent(session, isPlaying = true)
+                }
+                val reporter = readingSessionReporter(session)
+                if (session.player.isPlaying) {
+                    reporter?.resume(progressPercent(session))
+                }
+                publishProgress(session)
             }
         }.also(session.player::addListener)
         if (recordInitialPlay && session.player.isPlaying) {
             recordSessionEvent(session, isPlaying = true)
+            readingSessionReporter(session)?.resume(progressPercent(session))
         }
         progressJob = scope.launch {
             while (isActive) {
+                if (session.player.isPlaying) {
+                    readingSessionReporter(session)?.activity(progressPercent(session))
+                }
                 publishProgress(session)
                 delay(1_500L)
             }
         }
     }
 
+    private fun readingSessionReporter(
+        session: ReadiumAudioPlaybackService.Session
+    ): ReadingSessionReporter? {
+        val activeFileId = session.currentFileId()
+        if (session.launchMode == ReaderLaunchMode.PREVIEW || activeFileId.isNullOrBlank()) {
+            return null
+        }
+        if (readingSessionReporter == null || readingSessionFileId != activeFileId) {
+            readingSessionReporter?.end(progressPercent(session))
+            readingSessionFileId = activeFileId
+            readingSessionReporter = ReadingSessionReporter(
+                context = application,
+                fileId = activeFileId,
+                enabled = true
+            )
+        }
+        return readingSessionReporter
+    }
+
+    private fun endReadingSession(session: ReadiumAudioPlaybackService.Session?) {
+        readingSessionReporter?.end(session?.let(::progressPercent))
+        readingSessionReporter = null
+        readingSessionFileId = null
+    }
+
+    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? =
+        absoluteProgressPercent(session.absolutePositionMs(), session.totalDurationMs())
+
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
         progressListener?.invoke(
-            session.book,
-            session.player.currentPosition.coerceAtLeast(0L),
-            session.player.duration
-                .takeIf { it > 0L }
-                ?.let { duration ->
-                    ((session.player.currentPosition.toDouble() / duration.toDouble()) * 100.0)
-                        .coerceIn(0.0, 100.0)
-                        .toFloat()
-                },
+            session.activeBookSummary(),
+            session.currentFilePositionMs(),
+            progressPercent(session),
             session.launchMode
         )
     }

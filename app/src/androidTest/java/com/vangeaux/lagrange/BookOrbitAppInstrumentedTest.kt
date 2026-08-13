@@ -507,6 +507,60 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun cachedBookDetailsNavigateToSeriesNeighborsWhenOfflineDetailLoadingReturnsNull() {
+        fun cachedSeriesBook(id: String, title: String, index: Double) = BookSummary(
+            libraryId = "lib-1",
+            id = id,
+            fileId = "file-$id",
+            title = title,
+            seriesId = "series-1",
+            seriesName = "Test Series",
+            seriesIndex = index,
+            mediaKind = MediaKind.EPUB,
+            localPath = "/downloads/$id.epub"
+        )
+        val first = cachedSeriesBook("offline-first", "Offline First Book", 1.0)
+        val current = cachedSeriesBook("offline-current", "Offline Current Book", 2.0)
+        val next = cachedSeriesBook("offline-next", "Offline Next Book", 3.0)
+        val dataSource = InstrumentedFakeDataSource()
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = listOf(first, current, next),
+                            isOfflineSnapshot = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main),
+                    appPreferences = AppPreferences(seriesGroupingMode = SeriesGroupingMode.NONE)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Offline Current Book").performClick()
+        composeRule.onNodeWithContentDescription(
+            "Next book in Test Series: #3 \u00B7 Offline Next Book"
+        ).assertIsEnabled().performClick()
+        composeRule.onNodeWithContentDescription(
+            "Open full-screen cover for Offline Next Book"
+        ).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription(
+            "Previous book in Test Series: #2 \u00B7 Offline Current Book"
+        ).assertIsEnabled().performClick()
+        composeRule.onNodeWithContentDescription(
+            "Open full-screen cover for Offline Current Book"
+        ).assertIsDisplayed()
+
+        composeRule.runOnIdle { assertEquals(0, dataSource.seriesDetailLoadCalls) }
+    }
+
+    @Test
     fun bookDetailsShowSameIndexSeriesBooksAsOtherVersionsBelowSynopsis() {
         fun seriesBook(
             id: String,
@@ -660,6 +714,66 @@ class BookOrbitAppInstrumentedTest {
         }
         composeRule.onAllNodesWithTag("series-section-epub").assertCountEquals(0)
         composeRule.onAllNodesWithTag("series-section-cbz").assertCountEquals(0)
+    }
+
+    @Test
+    fun offlineSeriesOpenedFromSecondaryBookUsesCachedBooksFromEveryLibrary() {
+        val primary = BookSummary(
+            libraryId = "lib-primary",
+            id = "primary-volume",
+            fileId = "file-primary-volume",
+            title = "Primary Volume",
+            seriesId = "series-shared",
+            seriesName = "Shared Series",
+            seriesIndex = 1.0,
+            format = "epub",
+            mediaKind = MediaKind.EPUB,
+            localPath = "/downloads/primary-volume.epub"
+        )
+        val secondary = BookSummary(
+            libraryId = "lib-secondary",
+            id = "secondary-volume",
+            fileId = "file-secondary-volume",
+            title = "Secondary Volume",
+            seriesId = "series-shared",
+            seriesName = "Shared Series",
+            seriesIndex = 2.0,
+            format = "cbz",
+            mediaKind = MediaKind.COMIC,
+            localPath = "/downloads/secondary-volume.cbz"
+        )
+        val dataSource = InstrumentedFakeDataSource()
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(
+                                LibrarySummary(id = "lib-primary", name = "Primary"),
+                                LibrarySummary(id = "lib-secondary", name = "Secondary")
+                            ),
+                            selectedLibraryId = "lib-primary",
+                            books = listOf(primary),
+                            homeBooks = listOf(primary, secondary),
+                            isOfflineSnapshot = true
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Secondary Volume")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithContentDescription("Open series Shared Series").performClick()
+
+        composeRule.onNodeWithTag("series-section-lib-primary").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-section-lib-secondary").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Primary Volume").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Secondary Volume").assertIsDisplayed()
     }
 
     @Test

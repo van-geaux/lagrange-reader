@@ -7,6 +7,178 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun annotationBookSummaryPreservesBookAndFileIdentity() {
+        val annotation = BookAnnotation(
+            id = "a1",
+            bookId = "b1",
+            jumpFileId = "f1",
+            jumpFileFormat = "pdf",
+            bookTitle = "Book",
+            author = "Author"
+        )
+
+        val book = annotation.toBookSummary()
+
+        assertEquals("b1", book.id)
+        assertEquals("f1", book.fileId)
+        assertEquals(MediaKind.PDF, book.mediaKind)
+        assertEquals("Book", book.title)
+    }
+
+    @Test
+    fun parsesAnnotationHubItemsAndPaging() {
+        val result = BookOrbitPayloadParser.parseAnnotations("""
+            {"items":[{"id":"a1","bookId":"b1","text":"hello","note":"remember","cfi":"epubcfi(/6/2)","jumpFileId":"f1","pageno":4,"bookTitle":"Book","author":"Author"}],"total":1,"page":1,"pageSize":30}
+        """.trimIndent())
+
+        assertEquals(1, result.total)
+        assertEquals("a1", result.items.single().id)
+        assertEquals("hello", result.items.single().text)
+        assertEquals("f1", result.items.single().jumpFileId)
+        assertEquals(4, result.items.single().pageno)
+    }
+
+    @Test
+    fun parsesCreatedAnnotationResponse() {
+        val result = BookOrbitPayloadParser.parseAnnotation(
+            """{"id":"a1","bookId":"b1","cfi":"epubcfi(/6/2)","text":"hello","color":"yellow","style":"highlight"}"""
+        )
+
+        assertEquals("a1", result.id)
+        assertEquals("b1", result.bookId)
+        assertEquals("hello", result.text)
+        assertEquals("yellow", result.color)
+    }
+
+    @Test
+    fun annotationsPathEncodesBookId() {
+        assertEquals("/api/v1/books/book%20one/annotations", annotationsPath("book one"))
+    }
+
+    @Test
+    fun annotationPathEncodesBookAndAnnotationId() {
+        assertEquals(
+            "/api/v1/books/book%20one/annotations/local%3Aabc",
+            annotationPath("book one", "local:abc")
+        )
+    }
+
+    @Test
+    fun buildCreateAnnotationPayloadIncludesRequiredFieldsAndOmitsBlankBookFileId() {
+        val payload = buildCreateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "local:a",
+                bookId = "b1",
+                op = AnnotationMutationOp.CREATE,
+                cfi = "epubcfi(/6/2)",
+                bookFileId = "42",
+                text = "hello",
+                color = "yellow",
+                style = "highlight",
+                note = "remember",
+                chapterTitle = "Chapter 1"
+            )
+        )
+
+        assertEquals("epubcfi(/6/2)", payload.getString("cfi"))
+        assertEquals(42, payload.getInt("bookFileId"))
+        assertEquals("hello", payload.getString("text"))
+        assertEquals("yellow", payload.getString("color"))
+        assertEquals("highlight", payload.getString("style"))
+        assertEquals("remember", payload.getString("note"))
+        assertEquals("Chapter 1", payload.getString("chapterTitle"))
+    }
+
+    @Test
+    fun buildCreateAnnotationPayloadOmitsNonNumericBookFileId() {
+        val payload = buildCreateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "local:a",
+                bookId = "b1",
+                op = AnnotationMutationOp.CREATE,
+                bookFileId = "not-a-number",
+                text = "hello",
+                color = "yellow",
+                style = "highlight"
+            )
+        )
+
+        assertTrue(!payload.has("bookFileId"))
+    }
+
+    @Test
+    fun buildUpdateAnnotationPayloadOmitsUnsetFields() {
+        val payload = buildUpdateAnnotationPayload(
+            AnnotationMutationPayload(
+                annotationId = "server-1",
+                bookId = "b1",
+                op = AnnotationMutationOp.UPDATE,
+                note = "updated note",
+                noteSpecified = true
+            )
+        )
+
+        assertEquals("updated note", payload.getString("note"))
+        assertTrue(!payload.has("color"))
+        assertTrue(!payload.has("style"))
+    }
+
+    @Test
+    fun `pending annotation overlay masks deletes and applies updates`() {
+        val page = BookAnnotationsPage(
+            items = listOf(
+                BookAnnotation("server-1", "b1", text = "old", color = "yellow", style = "highlight"),
+                BookAnnotation("server-2", "b1", text = "remove")
+            )
+        )
+        val result = overlayPendingAnnotations(
+            page,
+            listOf(
+                AnnotationMutationPayload(
+                    annotationId = "server-1",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.UPDATE,
+                    note = "new note",
+                    noteSpecified = true,
+                    color = "blue",
+                    updatedAtMillis = 2L
+                ),
+                AnnotationMutationPayload(
+                    annotationId = "server-2",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.DELETE,
+                    updatedAtMillis = 3L
+                )
+            ),
+            emptyMap()
+        )
+
+        assertEquals(1, result.items.size)
+        assertEquals("new note", result.items.single().note)
+        assertEquals("blue", result.items.single().color)
+    }
+
+    @Test
+    fun `pending create is visible with local id until server hydration catches up`() {
+        val result = overlayPendingAnnotations(
+            BookAnnotationsPage(),
+            listOf(
+                AnnotationMutationPayload(
+                    annotationId = "local:a",
+                    bookId = "b1",
+                    op = AnnotationMutationOp.CREATE,
+                    cfi = "epubcfi(/6/2)",
+                    text = "new",
+                    updatedAtMillis = 4L
+                )
+            ),
+            emptyMap()
+        )
+
+        assertEquals("local:a", result.items.single().id)
+        assertEquals("new", result.items.single().text)
+    }
+    @Test
     fun `parseLibraries retains square covers and defaults unknown values to portrait`() {
         val libraries = BookOrbitPayloadParser.parseLibraries(
             """
@@ -565,6 +737,70 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseReaderProgress resolves currentFileId against ordered available files`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "audio-progress-36",
+            fileId = "mp3-1",
+            title = "Gone Girl",
+            mediaKind = MediaKind.AUDIO,
+            coverUrl = "https://example.test/cover.jpg",
+            readStatus = BookReadStatus.READING,
+            audioChapters = listOf(AudiobookChapter("Part One", 0L))
+        )
+        val availableFiles = listOf(
+            BookFileOption(
+                book = book.copy(fileId = "mp3-1", format = "mp3", streamUrl = "https://example.test/mp3-1"),
+                filename = "01.mp3",
+                durationMs = 100_000L
+            ),
+            BookFileOption(
+                book = book.copy(fileId = "mp3-2", format = "mp3", streamUrl = "https://example.test/mp3-2"),
+                filename = "02.mp3",
+                durationMs = 200_000L
+            )
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":40.0,"currentFileId":"mp3-2","positionSeconds":30.0}""",
+            availableFiles = availableFiles
+        )
+
+        assertEquals("mp3-2", hydrated.fileId)
+        assertEquals("https://example.test/mp3-2", hydrated.streamUrl)
+        assertEquals(30_000L, hydrated.progressPositionMs)
+        assertEquals(40.0f, hydrated.progressPercent)
+        assertEquals("Gone Girl", hydrated.title)
+        assertEquals("https://example.test/cover.jpg", hydrated.coverUrl)
+        assertEquals(listOf(AudiobookChapter("Part One", 0L)), hydrated.audioChapters)
+        assertEquals(BookReadStatus.READING, hydrated.readStatus)
+    }
+
+    @Test
+    fun `parseReaderProgress falls back safely when currentFileId is unknown`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "audio-progress-36",
+            fileId = "mp3-1",
+            title = "Gone Girl",
+            mediaKind = MediaKind.AUDIO
+        )
+        val availableFiles = listOf(
+            BookFileOption(book = book.copy(fileId = "mp3-1"), durationMs = 100_000L),
+            BookFileOption(book = book.copy(fileId = "mp3-2"), durationMs = 200_000L)
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """{"percentage":40.0,"currentFileId":"deleted-file","positionSeconds":30.0}""",
+            availableFiles = availableFiles
+        )
+
+        assertEquals(book, hydrated)
+    }
+
+    @Test
     fun `parseReaderProgress preserves local fields omitted by an incomplete server response`() {
         val book = BookSummary(
             libraryId = "lib-progress",
@@ -653,6 +889,51 @@ class BookOrbitPayloadParserTest {
             detail.audioChapters
         )
         assertEquals(detail.audioChapters, detail.book.audioChapters)
+    }
+
+    @Test
+    fun `parseBookDetail preserves ordered multi-file audio durations and aggregate total`() {
+        val fallback = BookSummary(
+            libraryId = "lib-36",
+            id = "book-36",
+            fileId = "mp3-1",
+            title = "Fallback title"
+        )
+
+        val detail = BookOrbitPayloadParser.parseBookDetail(
+            fallback = fallback,
+            payload = """
+                {
+                  "id": "book-36",
+                  "title": "Gone Girl",
+                  "audioMetadata": {
+                    "chapters": [
+                      {"title": "Part One", "startMs": 0},
+                      {"title": "Part Two", "startMs": 300000}
+                    ]
+                  },
+                  "files": [
+                    {"id": "mp3-1", "format": "mp3", "role": "primary", "filename": "01.mp3", "durationSeconds": 100.765},
+                    {"id": "mp3-2", "format": "mp3", "filename": "02.mp3", "durationSeconds": 200.5},
+                    {"id": "mp3-3", "format": "mp3", "filename": "03.mp3", "durationSeconds": 50},
+                    {"id": "mp3-4", "format": "mp3", "filename": "04.mp3", "durationSeconds": 300},
+                    {"id": "mp3-5", "format": "mp3", "filename": "05.mp3", "durationSeconds": 150}
+                  ]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(
+            listOf("mp3-1", "mp3-2", "mp3-3", "mp3-4", "mp3-5"),
+            detail.availableFiles.map { it.fileId }
+        )
+        assertEquals(
+            listOf(100_765L, 200_500L, 50_000L, 300_000L, 150_000L),
+            detail.availableFiles.map { it.durationMs }
+        )
+        assertEquals(801L, detail.durationSeconds)
     }
 
     @Test

@@ -164,7 +164,9 @@ fun BookOrbitApp(
             coordinator = coordinator,
             audioPlaybackController = audioPlaybackController,
             appPreferences = appPreferences,
-            onAppPreferencesChange = onAppPreferencesChange
+            onAppPreferencesChange = onAppPreferencesChange,
+            releaseCheckStatus = coordinator.releaseCheckStatus.collectAsState().value,
+            onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) }
         )
         if (screen !is AppScreen.Browser) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
@@ -232,7 +234,9 @@ private fun BookOrbitDestination(
     coordinator: AppCoordinator,
     audioPlaybackController: ReadiumAudioPlaybackController?,
     appPreferences: AppPreferences,
-    onAppPreferencesChange: (AppPreferences) -> Unit
+    onAppPreferencesChange: (AppPreferences) -> Unit,
+    releaseCheckStatus: ReleaseCheckStatus,
+    onCheckForUpdates: () -> Unit
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
@@ -285,6 +289,8 @@ private fun BookOrbitDestination(
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,
             authorBooksLoader = coordinator::loadAuthorBooks,
+            annotationsLoader = coordinator::loadAnnotations,
+            onAnnotationSelected = coordinator::openAnnotation,
             achievementsLoader = coordinator::loadAchievements,
             statisticsLoader = coordinator::loadUserStatistics,
             catalogImageLoader = coordinator::loadCatalogImage,
@@ -303,6 +309,8 @@ private fun BookOrbitDestination(
             onMarkAsStatus = coordinator::setBookReadingStatus,
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
+            releaseCheckStatus = releaseCheckStatus,
+            onCheckForUpdates = onCheckForUpdates,
             storageUsageLoader = coordinator::loadStorageUsage,
             onClearCache = coordinator::clearAppCache,
             offlineCacheStatusLoader = coordinator::loadOfflineCacheStatus,
@@ -923,6 +931,8 @@ private fun ReaderScreen(
         } else {
             ReadiumEpubReaderLauncher(
                 file = readerFile,
+                fileId = state.book.fileId,
+                bookId = state.book.id,
                 title = state.book.title,
                 readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
                 libraryId = state.book.libraryId,
@@ -931,6 +941,12 @@ private fun ReaderScreen(
                 initialPage = if (isPreview) 0 else state.readerPageIndex,
                 initialPageCount = if (isPreview) 1 else state.book.readerPageCount ?: 1,
                 initialPercent = if (isPreview) null else state.progressPercent,
+                initialCfi = state.initialCfi,
+                initialAnnotationText = state.annotationText,
+                initialAnnotationChapterIndex = state.annotationChapterIndex,
+                initialAnnotationId = state.annotationId,
+                initialAnnotationColor = state.annotationColor,
+                initialAnnotationStyle = state.annotationStyle,
                 onProgress = { chapterIndex, pageIndex, pageCount, percent ->
                     readerProgress(
                         state.book.copy(
@@ -977,6 +993,7 @@ private fun ReaderScreen(
     if (shouldUseReadiumPdfReader(state.book.mediaKind, state.localFile)) {
         ReadiumPdfReaderLauncher(
             file = requireNotNull(state.localFile),
+            fileId = state.book.fileId,
             title = state.book.title,
             readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
             libraryId = state.book.libraryId,
@@ -1224,12 +1241,13 @@ private data class AudioPlayerSnapshot(
     val speed: Float
 )
 
-private fun audioPlayerSnapshot(player: Player): AudioPlayerSnapshot = AudioPlayerSnapshot(
-    playWhenReady = player.playWhenReady,
-    positionMs = player.currentPosition.coerceAtLeast(0L),
-    durationMs = player.duration.takeIf { it > 0L },
-    speed = player.playbackParameters.speed
-)
+private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): AudioPlayerSnapshot =
+    AudioPlayerSnapshot(
+        playWhenReady = session.player.playWhenReady,
+        positionMs = session.absolutePositionMs(),
+        durationMs = session.totalDurationMs().takeIf { it > 0L },
+        speed = session.player.playbackParameters.speed
+    )
 
 @Composable
 internal fun ReadiumCompactAudioPlayer(
@@ -1313,16 +1331,16 @@ internal fun ReadiumCompactAudioPlayer(
         return
     }
     val current = requireNotNull(currentSession)
-    val playback by produceState(audioPlayerSnapshot(current.player), current.player) {
+    val playback by produceState(audioPlayerSnapshot(current), current.player) {
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                value = audioPlayerSnapshot(player)
+                value = audioPlayerSnapshot(current)
             }
         }
         current.player.addListener(listener)
         try {
             while (isActive) {
-                value = audioPlayerSnapshot(current.player)
+                value = audioPlayerSnapshot(current)
                 delay(500L)
             }
         } finally {
@@ -1419,7 +1437,7 @@ internal fun ReadiumCompactAudioPlayer(
                             seekPositionMs = it
                         },
                         onValueChangeFinished = {
-                            current.player.seekTo(seekPositionMs.toLong())
+                            current.seekToAbsolutePosition(seekPositionMs.toLong())
                             isSeeking = false
                         },
                         valueRange = 0f..(durationMs ?: 1L).toFloat(),
@@ -1474,7 +1492,7 @@ internal fun ReadiumCompactAudioPlayer(
                                     },
                                     onClick = {
                                         chapterMenuExpanded = false
-                                        current.player.seekTo(chapter.startMs)
+                                        current.seekToAbsolutePosition(chapter.startMs)
                                     }
                                 )
                             }
@@ -1482,7 +1500,9 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                     IconButton(
                         onClick = {
-                            current.player.seekTo((current.player.currentPosition - 10_000L).coerceAtLeast(0L))
+                            current.seekToAbsolutePosition(
+                                (current.absolutePositionMs() - 10_000L).coerceAtLeast(0L)
+                            )
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1501,8 +1521,10 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                     IconButton(
                         onClick = {
-                            val target = current.player.currentPosition + 30_000L
-                            current.player.seekTo(playback.durationMs?.let(target::coerceAtMost) ?: target)
+                            val target = current.absolutePositionMs() + 30_000L
+                            current.seekToAbsolutePosition(
+                                playback.durationMs?.let(target::coerceAtMost) ?: target
+                            )
                         },
                         modifier = Modifier.size(40.dp)
                     ) {

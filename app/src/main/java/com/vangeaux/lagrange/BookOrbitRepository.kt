@@ -60,6 +60,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.roundToLong
 import javax.net.ssl.SSLException
 
 private val Context.dataStore by preferencesDataStore(name = "lagrange_prefs")
@@ -68,6 +69,8 @@ private const val LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS = 4
 private const val LIBRARY_PARALLEL_PAGE_THRESHOLD = 4
 private const val COMPLETED_PROGRESS_PERCENT = 99.5f
 private val progressSyncMutex = Mutex()
+private val readingSessionSyncMutex = Mutex()
+private val annotationSyncMutex = Mutex()
 
 internal const val LAGRANGE_GITHUB_RELEASES_API_URL =
     "https://api.github.com/repos/van-geaux/lagrange-reader/releases/latest"
@@ -165,6 +168,18 @@ private enum class ProgressPostResult {
     DEFERRED
 }
 
+private enum class ReadingSessionPostResult {
+    ACCEPTED,
+    INVALID,
+    DEFERRED
+}
+
+private enum class AnnotationMutationPostResult {
+    ACCEPTED,
+    INVALID,
+    DEFERRED
+}
+
 internal fun bookReadingSessionsPath(bookId: String, page: Int, pageSize: Int): String {
     val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name())
     return "/api/v1/books/$encodedBookId/sessions" +
@@ -175,6 +190,108 @@ internal fun bookReadingAttemptsPath(bookId: String, page: Int, pageSize: Int): 
     val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name())
     return "/api/v1/books/$encodedBookId/reading-attempts" +
         "?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceAtLeast(1)}"
+}
+
+internal fun readingSessionPath(fileId: String): String {
+    val encodedFileId = java.net.URLEncoder.encode(fileId, Charsets.UTF_8.name())
+    return "/api/v1/books/files/$encodedFileId/sessions"
+}
+
+internal const val ANNOTATIONS_PAGE_SIZE = 30
+
+internal fun annotationsPath(filter: AnnotationsFilter, page: Int, pageSize: Int): String {
+    fun encode(value: String) = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
+    return buildString {
+        append("/api/v1/annotations?page=")
+        append(page.coerceAtLeast(1))
+        append("&pageSize=")
+        append(pageSize.coerceAtLeast(1))
+        filter.search?.trim()?.takeIf { it.isNotBlank() }?.let { append("&search=").append(encode(it)) }
+        filter.bookId?.trim()?.takeIf { it.isNotBlank() }?.let { append("&bookId=").append(encode(it)) }
+        filter.chapter?.trim()?.takeIf { it.isNotBlank() }?.let { append("&chapter=").append(encode(it)) }
+        filter.colors.takeIf { it.isNotEmpty() }?.let { append("&colors=").append(encode(it.joinToString(","))) }
+        filter.styles.takeIf { it.isNotEmpty() }?.let { append("&styles=").append(encode(it.joinToString(","))) }
+        filter.origins.takeIf { it.isNotEmpty() }?.let { append("&origins=").append(encode(it.joinToString(","))) }
+        filter.dateFrom?.trim()?.takeIf { it.isNotBlank() }?.let { append("&dateFrom=").append(encode(it)) }
+        filter.dateTo?.trim()?.takeIf { it.isNotBlank() }?.let { append("&dateTo=").append(encode(it)) }
+        filter.hasNote?.let { append("&hasNote=").append(it) }
+        append("&status=").append(encode(filter.status))
+        append("&sortBy=").append(encode(filter.sortBy))
+        append("&sortDir=").append(encode(filter.sortDir))
+    }
+}
+
+internal fun buildReadingSessionPayload(item: ReadingSessionPayload): JSONObject = JSONObject()
+    .put("sessionId", item.sessionId)
+    .put("startedAt", Instant.ofEpochMilli(item.startedAtMillis).toString())
+    .put("endedAt", Instant.ofEpochMilli(item.endedAtMillis).toString())
+    .put("durationSeconds", item.durationSeconds)
+    .apply {
+        item.progressDelta?.let { put("progressDelta", it) }
+        item.endProgress?.let { put("endProgress", it) }
+    }
+
+internal fun annotationsPath(bookId: String): String {
+    val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name()).replace("+", "%20")
+    return "/api/v1/books/$encodedBookId/annotations"
+}
+
+internal fun annotationPath(bookId: String, annotationId: String): String {
+    val encodedBookId = java.net.URLEncoder.encode(bookId, Charsets.UTF_8.name()).replace("+", "%20")
+    val encodedAnnotationId = java.net.URLEncoder.encode(annotationId, Charsets.UTF_8.name()).replace("+", "%20")
+    return "/api/v1/books/$encodedBookId/annotations/$encodedAnnotationId"
+}
+
+internal fun buildCreateAnnotationPayload(item: AnnotationMutationPayload): JSONObject = JSONObject().apply {
+    item.cfi?.let { put("cfi", it) }
+    item.bookFileId?.toIntOrNull()?.let { put("bookFileId", it) }
+    put("text", item.text.orEmpty())
+    put("color", item.color.orEmpty())
+    put("style", item.style.orEmpty())
+    put("note", item.note ?: JSONObject.NULL)
+    put("chapterTitle", item.chapterTitle ?: JSONObject.NULL)
+}
+
+internal fun buildUpdateAnnotationPayload(item: AnnotationMutationPayload): JSONObject = JSONObject().apply {
+    if (item.noteSpecified) put("note", item.note ?: JSONObject.NULL)
+    item.color?.let { put("color", it) }
+    item.style?.let { put("style", it) }
+}
+
+internal fun overlayPendingAnnotations(
+    page: BookAnnotationsPage,
+    pending: List<AnnotationMutationPayload>,
+    localToServerIds: Map<String, String>
+): BookAnnotationsPage {
+    val byId = page.items.associateBy { it.id }.toMutableMap()
+    pending.sortedBy { it.updatedAtMillis }.forEach { mutation ->
+        val resolvedId = localToServerIds[mutation.annotationId] ?: mutation.annotationId
+        when (mutation.op) {
+            AnnotationMutationOp.CREATE -> if (byId[resolvedId] == null) {
+                byId[resolvedId] = BookAnnotation(
+                    id = mutation.annotationId,
+                    bookId = mutation.bookId,
+                    cfi = mutation.cfi,
+                    jumpFileId = mutation.bookFileId,
+                    text = mutation.text,
+                    color = mutation.color,
+                    style = mutation.style,
+                    note = mutation.note,
+                    chapterTitle = mutation.chapterTitle,
+                    createdAt = Instant.ofEpochMilli(mutation.updatedAtMillis).toString()
+                )
+            }
+            AnnotationMutationOp.UPDATE -> byId[resolvedId]?.let { current ->
+                byId[resolvedId] = current.copy(
+                    note = if (mutation.noteSpecified) mutation.note else current.note,
+                    color = mutation.color ?: current.color,
+                    style = mutation.style ?: current.style
+                )
+            }
+            AnnotationMutationOp.DELETE -> byId.remove(resolvedId)
+        }
+    }
+    return page.copy(items = byId.values.toList())
 }
 
 internal fun extractAccessToken(payload: String): String? {
@@ -231,6 +348,11 @@ interface BookOrbitDataSource {
         loadSeriesCatalog(filter.query, page)
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
     suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
+    suspend fun loadAnnotations(
+        filter: AnnotationsFilter,
+        page: Int = 1,
+        pageSize: Int = ANNOTATIONS_PAGE_SIZE
+    ): BookAnnotationsPage = BookAnnotationsPage()
     suspend fun loadAchievements(): AchievementCatalogue = AchievementCatalogue(
         status = AchievementCatalogueStatus.UNSUPPORTED
     )
@@ -249,7 +371,10 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
-    suspend fun loadReaderProgress(book: BookSummary): BookSummary = book
+    suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption> = emptyList()
+    ): BookSummary = book
     suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = Unit
     suspend fun setBookUserRating(
         book: BookSummary,
@@ -281,12 +406,48 @@ interface BookOrbitDataSource {
     suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?)
     suspend fun pendingProgressCount(): Int
     suspend fun syncPendingProgress(): SyncAttemptResult
+    suspend fun queueReadingSession(payload: ReadingSessionPayload) = Unit
+    suspend fun pendingReadingSessionCount(): Int = 0
+    suspend fun syncPendingReadingSessions(): SyncAttemptResult = SyncAttemptResult.Success
+    suspend fun createAnnotation(
+        bookId: String,
+        cfi: String?,
+        bookFileId: String?,
+        text: String,
+        color: String,
+        style: String,
+        note: String? = null,
+        chapterTitle: String? = null
+    ): BookAnnotation = BookAnnotation(
+        id = "",
+        bookId = bookId,
+        cfi = cfi,
+        jumpFileId = bookFileId,
+        text = text,
+        color = color,
+        style = style,
+        note = note,
+        chapterTitle = chapterTitle
+    )
+    suspend fun updateAnnotation(
+        bookId: String,
+        annotationId: String,
+        note: String? = null,
+        color: String? = null,
+        style: String? = null
+    ) = Unit
+    suspend fun deleteAnnotation(bookId: String, annotationId: String) = Unit
+    suspend fun pendingAnnotationMutationCount(): Int = 0
+    suspend fun syncPendingAnnotationMutations(): SyncAttemptResult = SyncAttemptResult.Success
     suspend fun canReachServer(serverUrl: String): Boolean
     suspend fun checkServer(serverUrl: String): ServerCheckResult
 }
 
 class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
+    private val readingSessionQueueStore = ReadingSessionQueueStore(context)
+    private val annotationMutationQueueStore = AnnotationMutationQueueStore(context)
+    private val annotationLocalIdMappingStore = AnnotationLocalIdMappingStore(context)
     private val downloadStore = DownloadStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val libraryCatalogStore = LibraryCatalogStore(context)
@@ -760,6 +921,144 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    override suspend fun loadAnnotations(
+        filter: AnnotationsFilter,
+        page: Int,
+        pageSize: Int
+    ): BookAnnotationsPage = withContext(Dispatchers.IO) {
+        val responsePage = BookOrbitPayloadParser.parseAnnotations(
+            request(annotationsPath(filter, page, pageSize), "GET", null)
+        )
+        val serverUrl = getServerUrl().orEmpty()
+        val pending = annotationMutationQueueStore.readAll().filter { it.serverUrl == serverUrl }
+        val mappings = annotationLocalIdMappingStore.readAll()
+        overlayPendingAnnotations(responsePage, pending, mappings)
+    }
+
+    override suspend fun createAnnotation(
+        bookId: String,
+        cfi: String?,
+        bookFileId: String?,
+        text: String,
+        color: String,
+        style: String,
+        note: String?,
+        chapterTitle: String?
+    ): BookAnnotation = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val localId = LOCAL_ANNOTATION_ID_PREFIX + UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        annotationMutationQueueStore.enqueue(
+            AnnotationMutationPayload(
+                annotationId = localId,
+                serverUrl = serverUrl,
+                bookId = bookId,
+                op = AnnotationMutationOp.CREATE,
+                cfi = cfi,
+                bookFileId = bookFileId,
+                text = text,
+                color = color,
+                style = style,
+                note = note,
+                chapterTitle = chapterTitle,
+                updatedAtMillis = now
+            )
+        )
+        enqueueAnnotationSyncWorker()
+        BookAnnotation(
+            id = localId,
+            bookId = bookId,
+            cfi = cfi,
+            jumpFileId = bookFileId,
+            text = text,
+            color = color,
+            style = style,
+            note = note,
+            chapterTitle = chapterTitle,
+            createdAt = Instant.ofEpochMilli(now).toString()
+        )
+    }
+
+    override suspend fun updateAnnotation(
+        bookId: String,
+        annotationId: String,
+        note: String?,
+        color: String?,
+        style: String?
+    ) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
+        annotationMutationQueueStore.enqueue(
+            AnnotationMutationPayload(
+                annotationId = resolvedAnnotationId,
+                serverUrl = serverUrl,
+                bookId = bookId,
+                op = AnnotationMutationOp.UPDATE,
+                note = note,
+                noteSpecified = true,
+                color = color,
+                style = style,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
+        enqueueAnnotationSyncWorker()
+    }
+
+    override suspend fun deleteAnnotation(bookId: String, annotationId: String) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
+        annotationMutationQueueStore.enqueue(
+            AnnotationMutationPayload(
+                annotationId = resolvedAnnotationId,
+                serverUrl = serverUrl,
+                bookId = bookId,
+                op = AnnotationMutationOp.DELETE,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
+        enqueueAnnotationSyncWorker()
+    }
+
+    override suspend fun pendingAnnotationMutationCount(): Int = withContext(Dispatchers.IO) {
+        annotationMutationQueueStore.countFor(getServerUrl().orEmpty())
+    }
+
+    override suspend fun syncPendingAnnotationMutations(): SyncAttemptResult = withContext(Dispatchers.IO) {
+        annotationSyncMutex.withLock {
+            val pending = annotationMutationQueueStore.readAll()
+            if (pending.isEmpty()) return@withLock SyncAttemptResult.Success
+
+            val currentServerUrl = getServerUrl().orEmpty()
+            var authBlocked = false
+            var transientFailure = false
+            pending.sortedBy { it.updatedAtMillis }.forEach { item ->
+                if (authBlocked || item.serverUrl != currentServerUrl) return@forEach
+                runCatching { postAnnotationMutation(item) }
+                    .onSuccess { result ->
+                        if (result != AnnotationMutationPostResult.DEFERRED) {
+                            annotationMutationQueueStore.acknowledge(setOf(item.annotationId))
+                        }
+                    }
+                    .onFailure { error ->
+                        when (error) {
+                            is AuthenticationRequiredException -> authBlocked = true
+                            else -> transientFailure = true
+                        }
+                    }
+                    .getOrNull()
+            }
+
+            when {
+                authBlocked -> SyncAttemptResult.AuthenticationBlocked
+                transientFailure -> SyncAttemptResult.TransientFailure
+                else -> SyncAttemptResult.Success
+            }
+        }
+    }
+
     override suspend fun searchBooks(query: String): List<BookSummary> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val serverUrl = getServerUrl().orEmpty()
@@ -948,23 +1247,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             fetchAuthoritativeBookDetail(book)
         } catch (error: Throwable) {
             if (error is CancellationException || error is AuthenticationRequiredException) throw error
-            cached?.copy(
-                book = cached.book.copy(
-                    localPath = book.localPath ?: cached.book.localPath,
-                    progressLabel = book.progressLabel ?: cached.book.progressLabel,
-                    progressPercent = book.progressPercent ?: cached.book.progressPercent,
-                    progressPositionMs = book.progressPositionMs ?: cached.book.progressPositionMs,
-                    progressPageIndex = book.progressPageIndex ?: cached.book.progressPageIndex,
-                    lastReadAtMillis = book.lastReadAtMillis ?: cached.book.lastReadAtMillis,
-                    readStatus = book.readStatus ?: cached.book.readStatus,
-                    isRead = book.isRead,
-                    coverAspectRatio = book.coverAspectRatio
-                )
-            ) ?: throw error
+            cached ?: throw error
         }
     }
 
-    override suspend fun loadReaderProgress(book: BookSummary): BookSummary = withContext(Dispatchers.IO) {
+    override suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
+    ): BookSummary = withContext(Dispatchers.IO) {
         if (book.fileId == null) return@withContext book
         val path = if (book.mediaKind == MediaKind.AUDIO) {
             "/api/v1/books/${book.id}/audio-progress"
@@ -977,7 +1267,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             if (error.code == 404) return@withContext book
             throw error
         }
-        BookOrbitPayloadParser.parseReaderProgress(book, payload)
+        BookOrbitPayloadParser.parseReaderProgress(book, payload, availableFiles)
     }
 
     private suspend fun fetchAuthoritativeBookDetail(book: BookSummary): BookDetailInfo {
@@ -1279,22 +1569,57 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
         val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
         val savedBook = savedSession.book
-        val localResolution = resolveReadableFile(savedBook, allowRemoteCache = !localOnly)
+        var bookForRestore = savedBook
+        var audioFiles = emptyList<BookFileOption>()
+        var queuedAudioProgress: ProgressUpdate? = null
+        if (!localOnly && savedBook.mediaKind == MediaKind.AUDIO) {
+            val detail = runCatching { loadBookDetail(savedBook) }.getOrNull()
+            audioFiles = detail
+                ?.availableFiles
+                ?.let(AudiobookTimeline::playableAudioFiles)
+                .orEmpty()
+            if (audioFiles.isNotEmpty()) {
+                val detailBook = requireNotNull(detail).book
+                bookForRestore = runCatching {
+                    loadReaderProgress(detailBook, audioFiles)
+                }.getOrDefault(detailBook)
+                queuedAudioProgress = queueStore.readAll()
+                    .asSequence()
+                    .filter { update ->
+                        update.serverUrl == serverUrl &&
+                            update.bookId == savedBook.id &&
+                            update.mediaKind == MediaKind.AUDIO
+                    }
+                    .maxByOrNull { it.updatedAtMillis }
+                val queuedFile = queuedAudioProgress
+                    ?.fileId
+                    ?.let { fileId -> audioFiles.firstOrNull { it.fileId == fileId } }
+                if (queuedFile != null) {
+                    bookForRestore = bookForRestore.copy(
+                        fileId = queuedFile.book.fileId,
+                        streamUrl = queuedFile.book.streamUrl,
+                        format = queuedFile.book.format,
+                        localPath = queuedFile.book.localPath
+                    )
+                }
+            }
+        }
+        val localResolution = resolveReadableFile(bookForRestore, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
         if (localOnly && localFile == null) {
             activeReaderStore.clearIfMatches(serverUrl, savedBook.id)
             return@withContext null
         }
         val streamUrl = buildReaderStreamUrl(
-            fileId = savedBook.fileId,
+            fileId = bookForRestore.fileId,
             serverBase = serverBase(),
             localOnly = localOnly
         )
         val comicPagesUrl = buildComicPagesUrl(
-            fileId = savedBook.fileId,
+            fileId = bookForRestore.fileId,
             serverBase = serverBase(),
             localOnly = localOnly,
-            mediaKind = savedBook.mediaKind
+            mediaKind = bookForRestore.mediaKind
         )
         if (localOnly && savedBook.mediaKind == MediaKind.COMIC && localFile?.let(ReaderFileValidator::canRenderComicLocally) != true) {
             activeReaderStore.clearIfMatches(serverUrl, savedBook.id)
@@ -1302,7 +1627,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
         runCatching {
             ensureReaderCanOpen(
-                book = savedBook,
+                book = bookForRestore,
                 localFile = localFile,
                 streamUrl = streamUrl,
                 comicPagesUrl = comicPagesUrl,
@@ -1313,16 +1638,25 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             return@withContext null
         }
         val restoredProgress = resolveRestoredReaderProgress(
-            book = savedBook,
-            latestProgress = latestKnownProgress(serverUrl, savedBook.id, savedBook.fileId, savedBook.mediaKind)
+            book = bookForRestore,
+            latestProgress = queuedAudioProgress ?: latestKnownProgress(
+                serverUrl,
+                bookForRestore.id,
+                bookForRestore.fileId,
+                bookForRestore.mediaKind
+            )
         )
-        val epubPosition = if (savedBook.mediaKind == MediaKind.EPUB) {
-            epubReaderPositionStore.read(serverUrl, savedBook.id, savedBook.fileId)
+        val epubPosition = if (bookForRestore.mediaKind == MediaKind.EPUB) {
+            epubReaderPositionStore.read(serverUrl, bookForRestore.id, bookForRestore.fileId)
         } else {
             null
         }
         ReaderState(
-            book = if (localFile != null) savedBook.copy(localPath = localFile.absolutePath) else savedBook,
+            book = if (localFile != null) {
+                bookForRestore.copy(localPath = localFile.absolutePath)
+            } else {
+                bookForRestore
+            },
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
@@ -1330,7 +1664,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
-            launchMode = savedSession.launchMode
+            launchMode = savedSession.launchMode,
+            audioFiles = audioFiles
         )
     }
 
@@ -1603,6 +1938,56 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    override suspend fun queueReadingSession(payload: ReadingSessionPayload) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank() || payload.fileId.isBlank()) return@withContext
+        readingSessionQueueStore.enqueue(
+            payload.copy(
+                serverUrl = payload.serverUrl.ifBlank { serverUrl },
+                updatedAtMillis = payload.updatedAtMillis.takeIf { it > 0L } ?: System.currentTimeMillis()
+            )
+        )
+        enqueueReadingSessionWorker()
+    }
+
+    override suspend fun pendingReadingSessionCount(): Int = withContext(Dispatchers.IO) {
+        readingSessionQueueStore.countFor(getServerUrl().orEmpty())
+    }
+
+    override suspend fun syncPendingReadingSessions(): SyncAttemptResult = withContext(Dispatchers.IO) {
+        readingSessionSyncMutex.withLock {
+            val pending = readingSessionQueueStore.readAll()
+            if (pending.isEmpty()) return@withLock SyncAttemptResult.Success
+
+            val currentServerUrl = getServerUrl().orEmpty()
+            val acknowledgedIds = mutableSetOf<String>()
+            var authBlocked = false
+            var transientFailure = false
+            pending.sortedBy { it.updatedAtMillis }.forEach { item ->
+                if (authBlocked || item.serverUrl != currentServerUrl) return@forEach
+                runCatching { postReadingSession(item) }
+                    .onSuccess { result ->
+                        if (result != ReadingSessionPostResult.DEFERRED) {
+                            acknowledgedIds += item.sessionId
+                        }
+                    }
+                    .onFailure { error ->
+                        when (error) {
+                            is AuthenticationRequiredException -> authBlocked = true
+                            else -> transientFailure = true
+                        }
+                    }
+                    .getOrNull()
+            }
+            readingSessionQueueStore.acknowledge(acknowledgedIds)
+            when {
+                authBlocked -> SyncAttemptResult.AuthenticationBlocked
+                transientFailure -> SyncAttemptResult.TransientFailure
+                else -> SyncAttemptResult.Success
+            }
+        }
+    }
+
     override suspend fun canReachServer(serverUrl: String): Boolean = withContext(Dispatchers.IO) {
         checkServer(serverUrl) == ServerCheckResult.Reachable
     }
@@ -1716,6 +2101,74 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    private suspend fun postReadingSession(item: ReadingSessionPayload): ReadingSessionPostResult =
+        withContext(Dispatchers.IO) {
+            if (item.serverUrl.isBlank() || item.serverUrl != getServerUrl().orEmpty()) {
+                return@withContext ReadingSessionPostResult.DEFERRED
+            }
+            try {
+                request(
+                    path = readingSessionPath(item.fileId),
+                    method = "POST",
+                    body = buildReadingSessionPayload(item).toString().toRequestBody(JSON)
+                )
+                ReadingSessionPostResult.ACCEPTED
+            } catch (error: HttpRequestException) {
+                if (error.code in 400..499) {
+                    ReadingSessionPostResult.INVALID
+                } else {
+                    throw error
+                }
+            }
+        }
+
+    private suspend fun postAnnotationMutation(item: AnnotationMutationPayload): AnnotationMutationPostResult =
+        withContext(Dispatchers.IO) {
+            if (item.serverUrl.isBlank() || item.serverUrl != getServerUrl().orEmpty()) {
+                return@withContext AnnotationMutationPostResult.DEFERRED
+            }
+            try {
+                when (item.op) {
+                    AnnotationMutationOp.CREATE -> {
+                        val response = request(
+                            path = annotationsPath(item.bookId),
+                            method = "POST",
+                            body = buildCreateAnnotationPayload(item).toString().toRequestBody(JSON)
+                        )
+                        val created = BookOrbitPayloadParser.parseAnnotation(response)
+                        annotationLocalIdMappingStore.remember(item.annotationId, created.id)
+                    }
+                    AnnotationMutationOp.UPDATE -> {
+                        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(item.annotationId)
+                        if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
+                            // The matching CREATE has not reached the server yet (or failed this round);
+                            // retry later instead of sending the local id to the server as a server id.
+                            return@withContext AnnotationMutationPostResult.DEFERRED
+                        }
+                        request(
+                            path = annotationPath(item.bookId, resolvedAnnotationId),
+                            method = "PATCH",
+                            body = buildUpdateAnnotationPayload(item).toString().toRequestBody(JSON)
+                        )
+                    }
+                    AnnotationMutationOp.DELETE -> {
+                        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(item.annotationId)
+                        if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
+                            return@withContext AnnotationMutationPostResult.ACCEPTED
+                        }
+                        request(
+                            path = annotationPath(item.bookId, resolvedAnnotationId),
+                            method = "DELETE",
+                            body = null
+                        )
+                    }
+                }
+                AnnotationMutationPostResult.ACCEPTED
+            } catch (error: HttpRequestException) {
+                if (error.code in 400..499) AnnotationMutationPostResult.INVALID else throw error
+            }
+        }
+
     private fun enqueueSyncWorker() {
         val request = OneTimeWorkRequestBuilder<ProgressSyncWorker>()
             .setConstraints(
@@ -1734,6 +2187,48 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         WorkManager.getInstance(context).enqueueUniqueWork(
             "bookorbit-progress-sync",
             ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    private fun enqueueReadingSessionWorker() {
+        val request = OneTimeWorkRequestBuilder<ReadingSessionSyncWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                15,
+                TimeUnit.SECONDS
+            )
+            .setInitialDelay(2, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "bookorbit-reading-session-sync",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    private fun enqueueAnnotationSyncWorker() {
+        val request = OneTimeWorkRequestBuilder<AnnotationMutationSyncWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                15,
+                TimeUnit.SECONDS
+            )
+            .setInitialDelay(2, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "bookorbit-annotation-sync",
+            ExistingWorkPolicy.KEEP,
             request
         )
     }
@@ -2134,6 +2629,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             path.contains("/progress") && method == "DELETE" -> "clear reading progress"
             path.contains("/progress") -> "sync reading progress"
             path.endsWith("/status") && method == "PATCH" -> "sync reading status"
+            path.contains("/annotations") && method == "POST" -> "create annotation"
+            path.contains("/annotations") && method == "PATCH" -> "update annotation"
+            path.contains("/annotations") && method == "DELETE" -> "delete annotation"
             path.contains("/books") && method == "POST" -> "load books"
             else -> "complete this request"
         }
@@ -2463,7 +2961,11 @@ internal object BookOrbitPayloadParser {
         }
     }
 
-    fun parseReaderProgress(book: BookSummary, payload: String): BookSummary {
+    fun parseReaderProgress(
+        book: BookSummary,
+        payload: String,
+        availableFiles: List<BookFileOption> = emptyList()
+    ): BookSummary {
         val progress = if (book.mediaKind == MediaKind.AUDIO) {
             extractObject(payload, "load audiobook progress")
         } else {
@@ -2481,7 +2983,18 @@ internal object BookOrbitPayloadParser {
 
         if (book.mediaKind == MediaKind.AUDIO) {
             val currentFileId = progress.stringValue("currentFileId", "current_file_id")
-            if (currentFileId == null || currentFileId != book.fileId) return book
+            if (currentFileId == null) return book
+            if (currentFileId != book.fileId) {
+                val matchedFile = availableFiles.firstOrNull {
+                    it.mediaKind == MediaKind.AUDIO && it.fileId == currentFileId
+                } ?: return book
+                val resolvedBook = book.copy(
+                    fileId = matchedFile.book.fileId,
+                    streamUrl = matchedFile.book.streamUrl,
+                    format = matchedFile.book.format
+                )
+                return resolvedBook.mergeReaderProgress(progress)
+            }
         }
         return book.mergeReaderProgress(progress)
     }
@@ -2594,13 +3107,24 @@ internal object BookOrbitPayloadParser {
                                 role = file.stringValue("role"),
                                 updatedAtMillis = file.timestampValue(
                                     "updatedAt", "modifiedAt", "lastModifiedAt"
-                                )
+                                ),
+                                durationMs = file.numberValue("durationSeconds", "duration")
+                                    ?.toDouble()
+                                    ?.takeIf { it.isFinite() && it > 0.0 }
+                                    ?.times(1000.0)
+                                    ?.coerceAtMost(Long.MAX_VALUE.toDouble())
+                                    ?.roundToLong()
                             )
                         )
                     }
                 }
             }
         }
+        val summedAudioDurationSeconds = AudiobookTimeline
+            .totalDurationMs(AudiobookTimeline.playableAudioFiles(availableFiles))
+            ?.let { totalMs ->
+                totalMs / 1000L + if (totalMs % 1000L >= 500L) 1L else 0L
+            }
         return BookDetailInfo(
             book = book.copy(audioChapters = audioChapters),
             libraryName = obj.stringValue("libraryName"),
@@ -2622,8 +3146,13 @@ internal object BookOrbitPayloadParser {
             fileCount = files?.length() ?: 0,
             availableFiles = availableFiles,
             totalSizeBytes = files.sumLong("sizeBytes", "size"),
-            durationSeconds = files.maxLong("durationSeconds", "duration")
-                ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong(),
+            durationSeconds = if (book.mediaKind == MediaKind.AUDIO) {
+                audioMetadata?.numberValue("durationSeconds", "duration")?.toLong()
+                    ?: summedAudioDurationSeconds
+            } else {
+                files.maxLong("durationSeconds", "duration")
+                    ?: audioMetadata?.numberValue("durationSeconds", "duration")?.toLong()
+            },
             audioChapters = audioChapters,
             providerIds = obj.optJSONObject("providerIds").toProviderIds()
         )
@@ -2830,6 +3359,69 @@ internal object BookOrbitPayloadParser {
             page = root.numberValue("page")?.toInt(),
             pageSize = root.numberValue("pageSize", "size")?.toInt(),
             stats = stats
+        )
+    }
+
+    fun parseAnnotations(payload: String): BookAnnotationsPage {
+        val root = extractObject(payload, "load annotations")
+        val array = root.catalogArray("items", "annotations", "results")
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.stringValue("id", "_id") ?: continue
+                val bookId = item.stringValue("bookId", "book_id") ?: continue
+                add(BookAnnotation(
+                    id = id,
+                    bookId = bookId,
+                    cfi = item.stringValue("cfi"),
+                    jumpFileId = item.stringValue("jumpFileId", "jump_file_id", "fileId", "file_id"),
+                    pageno = item.numberValue("pageno", "page")?.toInt(),
+                    text = item.stringValue("text").orEmpty(),
+                    color = item.stringValue("color"),
+                    style = item.stringValue("style"),
+                    note = item.stringValue("note"),
+                    chapterTitle = item.stringValue("chapterTitle", "chapter_title"),
+                    origin = item.stringValue("origin"),
+                    positionStatus = item.stringValue("positionStatus", "position_status"),
+                    chapterIndex = item.numberValue("chapterIndex", "chapter_index")?.toInt(),
+                    createdAt = item.stringValue("createdAt", "created_at"),
+                    bookTitle = item.stringValue("bookTitle", "book_title"),
+                    author = item.stringValue("author"),
+                    deletedAt = item.stringValue("deletedAt", "deleted_at"),
+                    jumpFileFormat = item.stringValue("jumpFileFormat", "jump_file_format")
+                ))
+            }
+        }
+        return BookAnnotationsPage(items, root.numberValue("total")?.toInt(), root.numberValue("page")?.toInt(), root.numberValue("pageSize", "page_size")?.toInt())
+    }
+
+    fun parseAnnotation(payload: String): BookAnnotation {
+        val root = extractObject(payload, "save annotation")
+        val id = root.stringValue("id", "_id") ?: throw UserFacingException(
+            "The server response was missing an annotation id."
+        )
+        val bookId = root.stringValue("bookId", "book_id") ?: throw UserFacingException(
+            "The server response was missing a book id."
+        )
+        return BookAnnotation(
+            id = id,
+            bookId = bookId,
+            cfi = root.stringValue("cfi"),
+            jumpFileId = root.stringValue("jumpFileId", "jump_file_id", "fileId", "file_id"),
+            pageno = root.numberValue("pageno", "page")?.toInt(),
+            text = root.stringValue("text").orEmpty(),
+            color = root.stringValue("color"),
+            style = root.stringValue("style"),
+            note = root.stringValue("note"),
+            chapterTitle = root.stringValue("chapterTitle", "chapter_title"),
+            origin = root.stringValue("origin"),
+            positionStatus = root.stringValue("positionStatus", "position_status"),
+            chapterIndex = root.numberValue("chapterIndex", "chapter_index")?.toInt(),
+            createdAt = root.stringValue("createdAt", "created_at"),
+            bookTitle = root.stringValue("bookTitle", "book_title"),
+            author = root.stringValue("author"),
+            deletedAt = root.stringValue("deletedAt", "deleted_at"),
+            jumpFileFormat = root.stringValue("jumpFileFormat", "jump_file_format")
         )
     }
 

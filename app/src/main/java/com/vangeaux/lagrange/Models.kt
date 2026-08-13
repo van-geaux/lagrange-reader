@@ -136,7 +136,8 @@ data class BookFileOption(
     val filename: String? = null,
     val sizeBytes: Long? = null,
     val role: String? = null,
-    val updatedAtMillis: Long? = null
+    val updatedAtMillis: Long? = null,
+    val durationMs: Long? = null
 ) {
     val fileId: String? get() = book.fileId
     val format: String? get() = book.format
@@ -256,6 +257,63 @@ data class AuthorBooksPage(
     val size: Int? = null
 )
 
+data class BookAnnotation(
+    val id: String,
+    val bookId: String,
+    val cfi: String? = null,
+    val jumpFileId: String? = null,
+    val pageno: Int? = null,
+    val text: String? = null,
+    val color: String? = null,
+    val style: String? = null,
+    val note: String? = null,
+    val chapterTitle: String? = null,
+    val origin: String? = null,
+    val positionStatus: String? = null,
+    val chapterIndex: Int? = null,
+    val createdAt: String? = null,
+    val bookTitle: String? = null,
+    val author: String? = null,
+    val deletedAt: String? = null,
+    val jumpFileFormat: String? = null
+)
+
+data class AnnotationsFilter(
+    val search: String? = null,
+    val bookId: String? = null,
+    val chapter: String? = null,
+    val colors: List<String> = emptyList(),
+    val styles: List<String> = emptyList(),
+    val origins: List<String> = emptyList(),
+    val dateFrom: String? = null,
+    val dateTo: String? = null,
+    val hasNote: Boolean? = null,
+    val status: String = "active",
+    val sortBy: String = "createdAt",
+    val sortDir: String = "desc"
+)
+
+data class BookAnnotationsPage(
+    val items: List<BookAnnotation> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    val pageSize: Int? = null
+)
+
+internal fun BookAnnotation.toBookSummary(): BookSummary {
+    val format = jumpFileFormat?.takeIf { it.isNotBlank() }
+    return BookSummary(
+        libraryId = "",
+        id = bookId,
+        fileId = jumpFileId,
+        title = bookTitle ?: "Unknown book",
+        author = author,
+        format = format,
+        mediaKind = BookOrbitPayloadParser.inferMediaKind(format, bookTitle),
+        progressPageIndex = pageno?.coerceAtLeast(0)
+    )
+}
+
 enum class AchievementCatalogueStatus {
     AVAILABLE,
     UNSUPPORTED,
@@ -371,7 +429,24 @@ data class ReaderState(
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
-    val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
+    val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,
+    val audioFiles: List<BookFileOption> = emptyList(),
+    val initialCfi: String? = null,
+    val annotationText: String? = null,
+    val annotationChapterIndex: Int? = null,
+    val annotationId: String? = null,
+    val annotationColor: String? = null,
+    val annotationStyle: String? = null
+)
+
+data class ReaderOpenPosition(
+    val cfi: String? = null,
+    val pageIndex: Int? = null,
+    val text: String? = null,
+    val chapterIndex: Int? = null,
+    val annotationId: String? = null,
+    val color: String? = null,
+    val style: String? = null
 )
 
 data class ProgressUpdate(

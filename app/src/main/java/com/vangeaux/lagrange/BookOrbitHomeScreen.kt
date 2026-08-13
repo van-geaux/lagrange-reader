@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -79,6 +80,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -108,6 +110,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -151,7 +154,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
+private enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, ANNOTATIONS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 private enum class OptionsDialog {
     THEME,
@@ -315,6 +318,257 @@ internal fun collapsedLibraryBooks(
     )
 }
 
+internal fun booksDownloadableForLibrary(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
+    if (libraryId == null) emptyList() else books.filter { it.libraryId == libraryId && it.fileId != null }
+
+internal fun booksDownloadableForSeries(books: List<BookSummary>): List<BookSummary> =
+    books.filter { it.fileId != null }
+
+internal fun seriesSelectableFiles(books: List<BookSummary>): List<BookSummary> =
+    booksDownloadableForSeries(books).distinctBy { it.fileId }
+
+internal fun seriesDownloadDispatchOrder(books: List<BookSummary>): List<BookSummary> =
+    books.sortedWith(
+        compareBy<BookSummary> { it.seriesIndex == null }
+            .thenBy { it.seriesIndex ?: 0.0 }
+            .thenBy { it.title.lowercase() }
+            .thenBy { it.fileId.orEmpty() }
+    )
+
+internal fun seriesFileIsSelectable(book: BookSummary): Boolean =
+    !book.isDownloaded || book.hasDownloadUpdate
+
+internal fun hasSelectableBulkDownloads(books: List<BookSummary>): Boolean =
+    seriesSelectableFiles(books).any(::seriesFileIsSelectable)
+
+internal fun defaultSeriesFileSelection(books: List<BookSummary>): Set<String> =
+    seriesSelectableFiles(books)
+        .filter { seriesFileIsSelectable(it) }
+        .mapNotNull { it.fileId }
+        .toSet()
+
+internal fun selectedSeriesFiles(books: List<BookSummary>, selectedFileIds: Set<String>): List<BookSummary> =
+    seriesSelectableFiles(books).filter { seriesFileIsSelectable(it) && selectedFileIds.contains(it.fileId) }
+
+internal fun booksWithLocalFilePathOverrides(
+    books: List<BookSummary>,
+    localFilePathOverrides: Map<String, String?>
+): List<BookSummary> = books.map { book ->
+    val fileId = book.fileId
+    if (fileId != null && localFilePathOverrides.containsKey(fileId)) {
+        book.copy(localPath = localFilePathOverrides[fileId])
+    } else {
+        book
+    }
+}
+
+internal fun localCopiesForBulkAction(
+    books: List<BookSummary>,
+    localFilePathOverrides: Map<String, String?>
+): List<BookSummary> = seriesSelectableFiles(
+    booksWithLocalFilePathOverrides(books, localFilePathOverrides)
+)
+    .filter { it.isDownloaded }
+
+internal data class CollectionDownloadProgress(
+    val progress: Float?,
+    val activeCount: Int,
+    val totalCount: Int
+)
+
+internal fun collectionDownloadProgress(
+    fileIds: List<String>,
+    downloadingFileIds: Set<String>,
+    progressByFileId: Map<String, Float>,
+    completedFileIds: Set<String>
+): CollectionDownloadProgress? {
+    val distinctFileIds = fileIds.distinct()
+    val activeFileIds = distinctFileIds.filter { it in downloadingFileIds }
+    if (activeFileIds.isEmpty()) return null
+    val progress = if (activeFileIds.all(progressByFileId::containsKey)) {
+        distinctFileIds.sumOf { fileId ->
+            when {
+                fileId in downloadingFileIds -> progressByFileId.getValue(fileId).toDouble()
+                fileId in completedFileIds -> 1.0
+                else -> 0.0
+            }
+        }.div(distinctFileIds.size).toFloat().coerceIn(0f, 1f)
+    } else {
+        null
+    }
+    return CollectionDownloadProgress(
+        progress = progress,
+        activeCount = activeFileIds.size,
+        totalCount = distinctFileIds.size
+    )
+}
+
+private data class BulkDownloadGroup(
+    val key: String,
+    val label: String,
+    val books: List<BookSummary>
+)
+
+private data class PendingBulkDownload(
+    val scopeLabel: String,
+    val books: List<BookSummary>
+)
+
+internal fun bulkDownloadGroupKeys(
+    books: List<BookSummary>,
+    libraries: List<LibrarySummary>
+): List<String> {
+    val libraryNames = libraries.associate { it.id to it.name }
+    return seriesSelectableFiles(books)
+        .groupBy { book ->
+            val library = libraryNames[book.libraryId] ?: book.libraryId
+            val format = book.format?.takeIf { it.isNotBlank() }
+                ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+            "$library · $format"
+        }
+        .keys
+        .sorted()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SeriesFileSelectionDialog(
+    candidates: List<BookSummary>,
+    libraries: List<LibrarySummary>,
+    groupingMode: SeriesGroupingMode,
+    onGroupingModeChange: (SeriesGroupingMode) -> Unit,
+    selectedFileIds: Set<String>,
+    onSelectedFileIdsChange: (Set<String>) -> Unit,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+    title: String = "Select downloads"
+) {
+    val libraryNames = remember(libraries) { libraries.associate { it.id to it.name } }
+    val groups = remember(candidates, libraryNames) {
+        candidates
+            .groupBy { book ->
+                val library = libraryNames[book.libraryId] ?: book.libraryId
+                val format = book.format?.takeIf { it.isNotBlank() }
+                    ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+                "$library · $format"
+            }
+            .map { (key, books) -> BulkDownloadGroup(key, key, books) }
+            .sortedBy { it.label.lowercase() }
+    }
+    val selectableIds = remember(candidates) {
+        candidates.filter(::seriesFileIsSelectable).mapNotNull { it.fileId }.toSet()
+    }
+    val selectedCount = selectedFileIds.intersect(selectableIds).size
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.testTag("bulk-download-selection-sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "$selectedCount of ${selectableIds.size} files selected",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { onSelectedFileIdsChange(selectableIds) },
+                    modifier = Modifier.testTag("bulk-download-select-all")
+                ) { Text("Select all") }
+                TextButton(
+                    onClick = { onSelectedFileIdsChange(emptySet()) },
+                    modifier = Modifier.testTag("bulk-download-clear-all")
+                ) { Text("Clear all") }
+            }
+            if (groupingMode != SeriesGroupingMode.NONE) {
+                SeriesGroupingControls(groupingMode, onGroupingModeChange)
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                groups.forEach { group ->
+                    item(key = "bulk-group-${group.key}") {
+                        Text(
+                            group.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                        )
+                    }
+                    items(group.books, key = { "bulk-file-${it.fileId}" }) { book ->
+                        val fileId = book.fileId ?: return@items
+                        val selectable = seriesFileIsSelectable(book)
+                        val checked = !selectable || selectedFileIds.contains(fileId)
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    buildString {
+                                        book.seriesIndex?.let { append("#${formatSeriesIndex(it)} · ") }
+                                        append(book.title)
+                                    }
+                                )
+                            },
+                            supportingContent = {
+                                Text(if (selectable) group.label else "Downloaded")
+                            },
+                            leadingContent = {
+                                Checkbox(
+                                    checked = checked,
+                                    enabled = selectable,
+                                    onCheckedChange = { value ->
+                                        onSelectedFileIdsChange(
+                                            if (value) selectedFileIds + fileId else selectedFileIds - fileId
+                                        )
+                                    }
+                                )
+                            },
+                            modifier = Modifier.testTag("bulk-download-file-$fileId")
+                        )
+                    }
+                }
+            }
+            Button(
+                onClick = onConfirm,
+                enabled = selectedCount > 0,
+                modifier = Modifier.fillMaxWidth().testTag("bulk-download-continue")
+            ) { Text("Continue") }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun CollectionDownloadProgressIndicator(
+    state: CollectionDownloadProgress,
+    modifier: Modifier = Modifier,
+    testTag: String
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            state.progress?.let { progress ->
+                "Downloading ${state.totalCount} ${if (state.totalCount == 1) "file" else "files"} · " +
+                    "${(progress * 100).toInt()}%"
+            } ?: "Downloading ${state.totalCount} ${if (state.totalCount == 1) "file" else "files"}…",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        state.progress?.let { progress ->
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth()
+            )
+        } ?: LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+}
+
 internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, Int> = books
     .mapNotNull { book ->
         (book.seriesId ?: book.seriesName)
@@ -379,9 +633,70 @@ internal fun bookDetailOtherVersions(
         .toList()
 }
 
+private val EPUB_FAMILY_FORMATS = setOf("epub", "kepub")
+private val PDF_FAMILY_FORMATS = setOf("pdf")
+private val COMIC_FAMILY_FORMATS = setOf("cbz", "cbr", "cb7")
+private val AUDIO_FAMILY_FORMATS = setOf(
+    "mp3", "mpeg", "m4a", "m4b", "mp4", "x-m4b", "aac", "aif", "aiff", "flac", "ogg", "oga", "opus", "wav", "webm"
+)
+
+private fun formatFamilyKey(book: BookSummary): Int? {
+    if (book.mediaKind != MediaKind.UNKNOWN) {
+        return when (book.mediaKind) {
+            MediaKind.EPUB -> 0
+            MediaKind.PDF -> 1
+            MediaKind.COMIC -> 2
+            MediaKind.AUDIO -> 3
+            MediaKind.UNKNOWN -> null
+        }
+    }
+    val format = book.format?.lowercase()
+    return when {
+        format in EPUB_FAMILY_FORMATS || book.mediaKind == MediaKind.EPUB -> 0
+        format in PDF_FAMILY_FORMATS || book.mediaKind == MediaKind.PDF -> 1
+        format in COMIC_FAMILY_FORMATS || book.mediaKind == MediaKind.COMIC -> 2
+        format in AUDIO_FAMILY_FORMATS || book.mediaKind == MediaKind.AUDIO -> 3
+        else -> null
+    }
+}
+
+private fun formatFamilyRank(book: BookSummary): Int = formatFamilyKey(book) ?: 4
+
+private fun bestSeriesTarget(
+    current: BookSummary,
+    targets: List<BookSummary>,
+    libraryOrder: List<String>
+): BookSummary? {
+    if (targets.size <= 1) return targets.firstOrNull()
+    val tieBreak = compareBy<BookSummary> { it.title.lowercase() }.thenBy { it.id }
+    val libraryRank = libraryOrder.withIndex().associate { (rank, id) -> id to rank }
+    val currentFamily = formatFamilyKey(current)
+
+    if (currentFamily != null) {
+        targets
+            .filter { it.libraryId == current.libraryId && formatFamilyKey(it) == currentFamily }
+            .minWithOrNull(tieBreak)
+            ?.let { return it }
+
+        targets
+            .filter { formatFamilyKey(it) == currentFamily }
+            .minWithOrNull(
+                compareBy<BookSummary> { libraryRank[it.libraryId] ?: Int.MAX_VALUE }.thenComparing(tieBreak)
+            )
+            ?.let { return it }
+    }
+
+    return targets.minWithOrNull(
+        compareBy<BookSummary> { libraryRank[it.libraryId] ?: Int.MAX_VALUE }
+            .thenBy { formatFamilyRank(it) }
+            .thenComparing(tieBreak)
+    )
+}
+
 internal fun seriesBookNeighbors(
     current: BookSummary,
-    candidates: List<BookSummary>
+    candidates: List<BookSummary>,
+    libraryOrder: List<String> = emptyList()
 ): SeriesBookNeighbors {
     val seriesId = current.seriesId?.takeIf { it.isNotBlank() }
     val seriesName = current.seriesName?.takeIf { it.isNotBlank() }
@@ -391,32 +706,26 @@ internal fun seriesBookNeighbors(
     val sameSeries = (candidates + current)
         .filter { candidate -> booksShareSeries(current, candidate) }
         .distinctBy { it.id }
-        .sortedWith(
-            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
-                .thenBy { it.title.lowercase() }
-                .thenBy { it.id }
+    val slots = (
+        sameSeries.filter { it.seriesIndex != null }.groupBy { it.seriesIndex }.values +
+            sameSeries.filter { it.seriesIndex == null }.map { listOf(it) }
         )
-    val positions = buildList<BookSummary> {
-        sameSeries.forEach { candidate ->
-            val index = candidate.seriesIndex
-            if (index == null) {
-                add(candidate)
-            } else if (none { it.seriesIndex == index }) {
-                add(if (current.seriesIndex == index) current else candidate)
-            }
-        }
-    }
-    val currentIndex = positions.indexOfFirst { candidate ->
+        .sortedWith(
+            compareBy<List<BookSummary>> { it.first().seriesIndex ?: Double.MAX_VALUE }
+                .thenBy { it.first().title.lowercase() }
+                .thenBy { it.first().id }
+        )
+    val currentSlotIndex = slots.indexOfFirst { slot ->
         if (current.seriesIndex != null) {
-            candidate.seriesIndex == current.seriesIndex
+            slot.first().seriesIndex == current.seriesIndex
         } else {
-            candidate.id == current.id
+            slot.any { it.id == current.id }
         }
     }
     return SeriesBookNeighbors(
-        previous = positions.getOrNull(currentIndex - 1),
-        next = positions.getOrNull(currentIndex + 1),
-        total = positions.size
+        previous = slots.getOrNull(currentSlotIndex - 1)?.let { bestSeriesTarget(current, it, libraryOrder) },
+        next = slots.getOrNull(currentSlotIndex + 1)?.let { bestSeriesTarget(current, it, libraryOrder) },
+        total = slots.size
     )
 }
 
@@ -472,6 +781,8 @@ internal fun NativeLibraryBrowserScreen(
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
+    annotationsLoader: suspend (AnnotationsFilter, Int) -> BookAnnotationsPage,
+    onAnnotationSelected: (BookAnnotation) -> Unit = {},
     achievementsLoader: suspend () -> AchievementCatalogue,
     statisticsLoader: suspend () -> UserStatistics,
     catalogImageLoader: suspend (String) -> ByteArray?,
@@ -490,6 +801,8 @@ internal fun NativeLibraryBrowserScreen(
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
+    releaseCheckStatus: ReleaseCheckStatus = ReleaseCheckStatus.IDLE,
+    onCheckForUpdates: () -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
     offlineCacheStatusLoader: suspend () -> OfflineCacheStatus = { OfflineCacheStatus() },
@@ -519,6 +832,7 @@ internal fun NativeLibraryBrowserScreen(
     var genreSourceSeriesKey by remember { mutableStateOf<String?>(null) }
     var detailReturnDestination by remember { mutableStateOf(BrowserDestination.HOME) }
     var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
+    var pendingCellularBulkDownload by remember { mutableStateOf<PendingBulkDownload?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
     var localBooksLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -550,6 +864,23 @@ internal fun NativeLibraryBrowserScreen(
             CellularDownloadDecision.START -> onDownload(book)
             CellularDownloadDecision.ASK -> pendingCellularDownload = book
             CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
+        }
+    }
+    val requestBulkDownload: (String, List<BookSummary>) -> Unit = { scopeLabel, books ->
+        val frozen = seriesSelectableFiles(books)
+        if (frozen.isNotEmpty()) {
+            when (
+                cellularDownloadDecision(
+                    policy = appPreferences.cellularDownloadPolicy,
+                    isCellularOrMetered = context.isActiveCellularOrMeteredNetwork()
+                )
+            ) {
+                CellularDownloadDecision.START -> frozen.forEach(onDownload)
+                CellularDownloadDecision.ASK -> {
+                    pendingCellularBulkDownload = PendingBulkDownload(scopeLabel, frozen)
+                }
+                CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
+            }
         }
     }
     val requestLocalDelete: (BookSummary) -> Unit = { book ->
@@ -669,6 +1000,14 @@ internal fun NativeLibraryBrowserScreen(
                     selectedAuthor = null
                     selectedSeriesKey = null
                 },
+                onAnnotations = {
+                    showMoreMenu = false
+                    selectedBook = null
+                    destination = BrowserDestination.ANNOTATIONS
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
+                },
                 onLocalBooks = {
                     showMoreMenu = false
                     selectedBook = null
@@ -700,6 +1039,30 @@ internal fun NativeLibraryBrowserScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingCellularDownload = null }) { Text("Cancel") }
+            }
+        )
+    }
+    pendingCellularBulkDownload?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingCellularBulkDownload = null },
+            title = { Text("Download using cellular data?") },
+            text = {
+                Text(
+                    "Downloading ${pending.books.size} ${if (pending.books.size == 1) "file" else "files"} for ${pending.scopeLabel} " +
+                        "may use a significant amount of mobile data."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingCellularBulkDownload = null
+                        pending.books.forEach(onDownload)
+                    },
+                    modifier = Modifier.testTag("confirm-bulk-cellular-download")
+                ) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCellularBulkDownload = null }) { Text("Cancel") }
             }
         )
     }
@@ -935,6 +1298,7 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.LIBRARY -> "Libraries"
                         destination == BrowserDestination.SERIES -> "Series"
                         destination == BrowserDestination.AUTHORS -> "Authors"
+                        destination == BrowserDestination.ANNOTATIONS -> "Annotations"
                         destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
                         destination == BrowserDestination.ACHIEVEMENTS -> "Achievements"
                         destination == BrowserDestination.OPTIONS -> "Options"
@@ -1098,7 +1462,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 selectedSeriesKey != null -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
-                    books = state.books,
+                    books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
                     groupingMode = appPreferences.seriesGroupingMode,
                     onGroupingModeChange = { mode ->
@@ -1109,8 +1473,10 @@ internal fun NativeLibraryBrowserScreen(
                     detailLoader = seriesDetailLoader,
                     onBookSelected = { selectedBook = it },
                     onDeleteLocalCopy = requestLocalDelete,
+                    onDeleteLocalCopies = onDeleteLocalCopies,
                     downloadState = state,
                     onDownload = requestDownload,
+                    onBulkDownload = requestBulkDownload,
                     onCancelDownload = onCancelDownload,
                     onClearFailedDownload = onClearFailedDownload,
                     onMarkAsRead = onMarkAsRead,
@@ -1153,6 +1519,11 @@ internal fun NativeLibraryBrowserScreen(
                     loader = authorsCatalogLoader,
                     imageLoader = catalogImageLoader,
                     onAuthorSelected = { author -> selectedAuthor = author }
+                )
+                destination == BrowserDestination.ANNOTATIONS -> AnnotationsScreen(
+                    loader = annotationsLoader,
+                    onAnnotationSelected = onAnnotationSelected,
+                    modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.LOCAL_BOOKS -> LocalBooksScreen(
                     state = state,
@@ -1197,7 +1568,9 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
                     state = state,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier.padding(padding),
+                    releaseCheckStatus = releaseCheckStatus,
+                    onCheckForUpdates = onCheckForUpdates
                 )
                 (destination == BrowserDestination.HOME || destination == BrowserDestination.LIBRARY) && query.isNotBlank() -> SearchResults(
                     books = filteredBooks,
@@ -1270,9 +1643,11 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onDownload = requestDownload,
+                    onBulkDownload = requestBulkDownload,
                     onCancelDownload = onCancelDownload,
                     onClearFailedDownload = onClearFailedDownload,
                     onDeleteLocalCopy = requestLocalDelete,
+                    onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onDismissMessage = onDismissMessage,
@@ -1423,6 +1798,7 @@ private fun BrowserBottomNavigation(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
                 destination == BrowserDestination.LOCAL_BOOKS ||
+                destination == BrowserDestination.ANNOTATIONS ||
                 destination == BrowserDestination.STATISTICS ||
                 destination == BrowserDestination.ACHIEVEMENTS ||
                 destination == BrowserDestination.OPTIONS ||
@@ -1438,6 +1814,7 @@ private fun BrowserBottomNavigation(
 private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
+    onAnnotations: () -> Unit,
     onLocalBooks: () -> Unit
 ) {
     Column(
@@ -1460,6 +1837,11 @@ private fun MoreMenu(
             headlineContent = { Text("Authors") },
             leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
             modifier = Modifier.clickable(onClick = onAuthors)
+        )
+        ListItem(
+            headlineContent = { Text("Annotations") },
+            leadingContent = { Icon(Icons.Default.Highlight, contentDescription = "Annotations icon") },
+            modifier = Modifier.clickable(onClick = onAnnotations)
         )
         ListItem(
             headlineContent = { Text("Local books") },
@@ -3378,7 +3760,9 @@ private fun <T> AppPreferenceChoiceDialog(
 @Composable
 private fun AboutScreen(
     state: BrowserState,
-    modifier: Modifier
+    modifier: Modifier,
+    releaseCheckStatus: ReleaseCheckStatus,
+    onCheckForUpdates: () -> Unit
 ) {
     val context = LocalContext.current
     val openLink: (String) -> Unit = { url ->
@@ -3412,6 +3796,32 @@ private fun AboutScreen(
                 Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                 Text("Connected server", style = MaterialTheme.typography.labelMedium)
                 Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("App updates", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(
+                    onClick = onCheckForUpdates,
+                    enabled = releaseCheckStatus != ReleaseCheckStatus.CHECKING,
+                    modifier = Modifier.testTag("check-for-updates")
+                ) {
+                    if (releaseCheckStatus == ReleaseCheckStatus.CHECKING) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Check for updates")
+                    }
+                }
+                when (releaseCheckStatus) {
+                    ReleaseCheckStatus.CHECKING -> Text("Checking for updates…")
+                    ReleaseCheckStatus.UP_TO_DATE -> Text("You are up to date.")
+                    ReleaseCheckStatus.UPDATE_AVAILABLE -> Text("An update is available.")
+                    ReleaseCheckStatus.ERROR -> Text("Unable to check for updates.")
+                    ReleaseCheckStatus.IDLE -> Unit
+                }
             }
         }
         item {
@@ -4090,7 +4500,7 @@ private fun SearchResults(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 private fun LibraryContentScreen(
     state: BrowserState,
     tab: LibraryTab,
@@ -4103,14 +4513,131 @@ private fun LibraryContentScreen(
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onDownload: ((BookSummary) -> Unit)? = null,
+    onBulkDownload: ((String, List<BookSummary>) -> Unit)? = null,
     onCancelDownload: ((BookSummary) -> Unit)? = null,
     onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onDismissMessage: () -> Unit,
     onLocalBooksSelected: () -> Unit
 ) {
+    val libraryDownloadCandidates = remember(state.books, state.selectedLibraryId) {
+        booksDownloadableForLibrary(state.books, state.selectedLibraryId)
+    }
+    var showLibraryFileSelection by remember(state.selectedLibraryId) { mutableStateOf(false) }
+    var librarySelectedFileIds by remember(state.selectedLibraryId) { mutableStateOf(emptySet<String>()) }
+    var libraryFrozenSelection by remember(state.selectedLibraryId) { mutableStateOf<List<BookSummary>>(emptyList()) }
+    var libraryDownloadConfirmStep by remember(state.selectedLibraryId) { mutableStateOf(0) }
+    var pendingLibraryLocalDeletes by remember(state.selectedLibraryId) {
+        mutableStateOf<List<BookSummary>?>(null)
+    }
+    val libraryLocalCopies = localCopiesForBulkAction(
+        books = libraryDownloadCandidates,
+        localFilePathOverrides = state.localFilePathOverrides
+    )
+    val libraryActiveFileIds = libraryDownloadCandidates
+        .mapNotNull { it.fileId }
+        .filterTo(linkedSetOf()) { it in state.downloadingFileIds }
+    val libraryFrozenFileIds = libraryFrozenSelection.mapNotNull { it.fileId }
+    val libraryProgressFileIds = if (libraryFrozenFileIds.any { it in libraryActiveFileIds }) {
+        libraryFrozenFileIds
+    } else {
+        libraryActiveFileIds.toList()
+    }
+    val libraryDownloadProgress = collectionDownloadProgress(
+        fileIds = libraryProgressFileIds,
+        downloadingFileIds = state.downloadingFileIds,
+        progressByFileId = state.downloadProgressByFileId,
+        completedFileIds = libraryLocalCopies.mapNotNullTo(mutableSetOf()) { it.fileId }
+    )
+    if (showLibraryFileSelection) {
+        SeriesFileSelectionDialog(
+            title = "Select library downloads",
+            candidates = libraryDownloadCandidates,
+            libraries = state.libraries,
+            groupingMode = SeriesGroupingMode.NONE,
+            onGroupingModeChange = {},
+            selectedFileIds = librarySelectedFileIds,
+            onSelectedFileIdsChange = { librarySelectedFileIds = it },
+            onDismissRequest = { showLibraryFileSelection = false },
+            onConfirm = {
+                libraryFrozenSelection = selectedSeriesFiles(libraryDownloadCandidates, librarySelectedFileIds)
+                showLibraryFileSelection = false
+                if (libraryFrozenSelection.isNotEmpty()) libraryDownloadConfirmStep = 1
+            }
+        )
+    }
+    if (libraryDownloadConfirmStep == 1) {
+        AlertDialog(
+            onDismissRequest = { libraryDownloadConfirmStep = 0 },
+            title = { Text("Download this library?") },
+            text = {
+                Text(
+                    "This will download ${libraryFrozenSelection.size} " +
+                        "${if (libraryFrozenSelection.size == 1) "file" else "files"} to this device. " +
+                        "This may use a significant amount of storage and data."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { libraryDownloadConfirmStep = 2 },
+                    modifier = Modifier.testTag("confirm-download-library-step1")
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text("Cancel") }
+            }
+        )
+    } else if (libraryDownloadConfirmStep == 2) {
+        AlertDialog(
+            onDismissRequest = { libraryDownloadConfirmStep = 0 },
+            title = { Text("Are you sure?") },
+            text = {
+                Text(
+                    "Downloading the entire library may use a significant amount of storage " +
+                        "and mobile data, and cannot be paused as one operation."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        libraryDownloadConfirmStep = 0
+                        onBulkDownload?.invoke("the selected library", libraryFrozenSelection)
+                    },
+                    modifier = Modifier.testTag("confirm-download-library-step2")
+                ) { Text("Download library") }
+            },
+            dismissButton = {
+                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text("Cancel") }
+            }
+        )
+    }
+    pendingLibraryLocalDeletes?.let { books ->
+        AlertDialog(
+            onDismissRequest = { pendingLibraryLocalDeletes = null },
+            title = { Text("Delete ${books.size} local ${if (books.size == 1) "copy" else "copies"}?") },
+            text = {
+                Text(
+                    "The selected files will be removed from this device. " +
+                        "Your BookOrbit books are not deleted."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingLibraryLocalDeletes = null
+                        onDeleteLocalCopies(books)
+                    },
+                    modifier = Modifier.testTag("confirm-delete-library-local-copies")
+                ) { Text("Delete local") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLibraryLocalDeletes = null }) { Text("Cancel") }
+            }
+        )
+    }
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -4159,7 +4686,51 @@ private fun LibraryContentScreen(
                     onClearFailedDownload = onClearFailedDownload,
                     onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    headerContent = {
+                        val showDownload = onBulkDownload != null &&
+                            state.isCatalogComplete &&
+                            !state.isCatalogSyncing &&
+                            hasSelectableBulkDownloads(libraryDownloadCandidates)
+                        if (showDownload || libraryLocalCopies.isNotEmpty() || libraryDownloadProgress != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (showDownload) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                librarySelectedFileIds =
+                                                    defaultSeriesFileSelection(libraryDownloadCandidates)
+                                                showLibraryFileSelection = true
+                                            },
+                                            enabled = libraryActiveFileIds.isEmpty(),
+                                            modifier = Modifier.testTag("download-library")
+                                        ) { Text("Download library") }
+                                    }
+                                    if (libraryLocalCopies.isNotEmpty()) {
+                                        OutlinedButton(
+                                            onClick = { pendingLibraryLocalDeletes = libraryLocalCopies },
+                                            enabled = libraryActiveFileIds.isEmpty(),
+                                            modifier = Modifier.testTag("delete-library-local-copies")
+                                        ) { Text("Delete local books") }
+                                    }
+                                }
+                                libraryDownloadProgress?.let { progress ->
+                                    CollectionDownloadProgressIndicator(
+                                        state = progress,
+                                        testTag = "library-download-progress"
+                                    )
+                                }
+                            }
+                        }
+                    }
                 )
             }
         }
@@ -4208,7 +4779,8 @@ private fun LibraryBrowseScreen(
     onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val libraryId = state.selectedLibraryId
     var filter by remember(libraryId) { mutableStateOf(BookBrowseFilter()) }
@@ -4239,7 +4811,8 @@ private fun LibraryBrowseScreen(
         filter = filter,
         jumpRailEnabled = state.isCatalogComplete,
         serverJumpBuckets = state.libraryJumpBuckets.takeIf { filter == BookBrowseFilter() }.orEmpty(),
-        onFilterClick = { showFilter = true }
+        onFilterClick = { showFilter = true },
+        headerContent = headerContent
     )
     if (showFilter) {
         BookFilterSheet(
@@ -4339,7 +4912,8 @@ private fun LibraryBooks(
     onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onDeleteLocalCopy: ((BookSummary) -> Unit)? = null,
     confirmDeleteLocalCopy: Boolean = true,
-    onDeleteLocalCopies: ((List<BookSummary>) -> Unit)? = null
+    onDeleteLocalCopies: ((List<BookSummary>) -> Unit)? = null,
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
@@ -4448,6 +5022,7 @@ private fun LibraryBooks(
                 seriesCollapsed = !seriesCollapsed
             }
         )
+        headerContent?.invoke()
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -5149,33 +5724,33 @@ private fun BookDetails(
     val currentBookIsDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
     var isRefreshing by remember(currentBook.id, currentBook.fileId) { mutableStateOf(false) }
     var reloadKey by remember(currentBook.id, currentBook.fileId) { mutableIntStateOf(0) }
-    val detail by produceState(
-        initialValue = BookDetailInfo(currentBook),
-        currentBook.id,
-        currentBook.fileId,
-        currentBook.updatedAtMillis,
-        currentBook.localPath,
-        currentBookIsDownloading,
-        reloadKey
-    ) {
-        try {
-            value = value.copy(
-                book = value.book.copy(
-                    localPath = currentBook.localPath,
-                    progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
-                    progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
-                    progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
-                    progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
-                    lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
-                    readStatus = currentBook.readStatus ?: value.book.readStatus,
-                    isRead = currentBook.isRead,
-                    updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
-                    downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+    val detail by key(currentBook.id, currentBook.fileId) {
+        produceState(
+            initialValue = BookDetailInfo(currentBook),
+            currentBook.updatedAtMillis,
+            currentBook.localPath,
+            currentBookIsDownloading,
+            reloadKey
+        ) {
+            try {
+                value = value.copy(
+                    book = value.book.copy(
+                        localPath = currentBook.localPath,
+                        progressLabel = currentBook.progressLabel ?: value.book.progressLabel,
+                        progressPercent = currentBook.progressPercent ?: value.book.progressPercent,
+                        progressPositionMs = currentBook.progressPositionMs ?: value.book.progressPositionMs,
+                        progressPageIndex = currentBook.progressPageIndex ?: value.book.progressPageIndex,
+                        lastReadAtMillis = currentBook.lastReadAtMillis ?: value.book.lastReadAtMillis,
+                        readStatus = currentBook.readStatus ?: value.book.readStatus,
+                        isRead = currentBook.isRead,
+                        updatedAtMillis = currentBook.updatedAtMillis ?: value.book.updatedAtMillis,
+                        downloadedSourceUpdatedAtMillis = currentBook.downloadedSourceUpdatedAtMillis
+                    )
                 )
-            )
-            value = detailLoader(currentBook) ?: value
-        } finally {
-            isRefreshing = false
+                value = detailLoader(currentBook) ?: value
+            } finally {
+                isRefreshing = false
+            }
         }
     }
     val onRefresh: () -> Unit = {
@@ -5270,8 +5845,8 @@ private fun BookDetails(
     val seriesBooks = remember(localSeriesBooks, loadedSeriesBooks) {
         (localSeriesBooks + loadedSeriesBooks.orEmpty()).distinctBy { it.id }
     }
-    val seriesNeighbors = remember(displayBook, seriesBooks) {
-        seriesBookNeighbors(displayBook, seriesBooks)
+    val seriesNeighbors = remember(displayBook, seriesBooks, state.libraries) {
+        seriesBookNeighbors(displayBook, seriesBooks, state.libraries.map { it.id })
     }
     val otherVersions = remember(displayBook, seriesBooks) {
         bookDetailOtherVersions(displayBook, seriesBooks)
@@ -6789,6 +7364,7 @@ private fun SeriesGroupingControls(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun SeriesDetails(
     seriesKey: String,
     books: List<BookSummary>,
@@ -6800,8 +7376,10 @@ private fun SeriesDetails(
     detailLoader: suspend (String) -> SeriesDetailInfo?,
     onBookSelected: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     downloadState: BrowserState? = null,
     onDownload: ((BookSummary) -> Unit)? = null,
+    onBulkDownload: ((String, List<BookSummary>) -> Unit)? = null,
     onCancelDownload: ((BookSummary) -> Unit)? = null,
     onClearFailedDownload: ((BookSummary) -> Unit)? = null,
     onMarkAsRead: (BookSummary) -> Unit,
@@ -6824,6 +7402,108 @@ private fun SeriesDetails(
     }
     val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
+    val seriesDownloadCandidates = seriesSelectableFiles(
+        booksWithLocalFilePathOverrides(
+            books = detail.books,
+            localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
+        )
+    )
+    var showSeriesFileSelection by remember(seriesKey) { mutableStateOf(false) }
+    var seriesSelectedFileIds by remember(seriesKey) { mutableStateOf<Set<String>>(emptySet()) }
+    var seriesFrozenSelection by remember(seriesKey) { mutableStateOf<List<BookSummary>>(emptyList()) }
+    var showSeriesDownloadConfirm by remember(seriesKey) { mutableStateOf(false) }
+    var pendingSeriesLocalDeletes by remember(seriesKey) { mutableStateOf<List<BookSummary>?>(null) }
+    val seriesLocalCopies = localCopiesForBulkAction(
+        books = seriesDownloadCandidates,
+        localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
+    )
+    val seriesActiveFileIds = seriesDownloadCandidates
+        .mapNotNull { it.fileId }
+        .filterTo(linkedSetOf()) { it in downloadState?.downloadingFileIds.orEmpty() }
+    val seriesFrozenFileIds = seriesFrozenSelection.mapNotNull { it.fileId }
+    val seriesProgressFileIds = if (seriesFrozenFileIds.any { it in seriesActiveFileIds }) {
+        seriesFrozenFileIds
+    } else {
+        seriesActiveFileIds.toList()
+    }
+    val seriesDownloadProgress = collectionDownloadProgress(
+        fileIds = seriesProgressFileIds,
+        downloadingFileIds = downloadState?.downloadingFileIds.orEmpty(),
+        progressByFileId = downloadState?.downloadProgressByFileId.orEmpty(),
+        completedFileIds = seriesLocalCopies.mapNotNullTo(mutableSetOf()) { it.fileId }
+    )
+    if (showSeriesFileSelection) {
+        SeriesFileSelectionDialog(
+            candidates = seriesDownloadCandidates,
+            libraries = libraries,
+            groupingMode = groupingMode,
+            onGroupingModeChange = onGroupingModeChange,
+            selectedFileIds = seriesSelectedFileIds,
+            onSelectedFileIdsChange = { seriesSelectedFileIds = it },
+            onDismissRequest = { showSeriesFileSelection = false },
+            onConfirm = {
+                seriesFrozenSelection = seriesDownloadDispatchOrder(
+                    selectedSeriesFiles(seriesDownloadCandidates, seriesSelectedFileIds)
+                )
+                showSeriesFileSelection = false
+                if (seriesFrozenSelection.isNotEmpty()) showSeriesDownloadConfirm = true
+            }
+        )
+    }
+    if (showSeriesDownloadConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSeriesDownloadConfirm = false },
+            title = { Text("Download this series?") },
+            text = {
+                Text(
+                    "This will download ${seriesFrozenSelection.size} " +
+                        "${if (seriesFrozenSelection.size == 1) "file" else "files"} to this device. " +
+                        "This may use a significant amount of storage and data."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSeriesDownloadConfirm = false
+                        onBulkDownload?.invoke("this series", seriesFrozenSelection)
+                    },
+                    modifier = Modifier.testTag("confirm-download-series")
+                ) { Text("Download series") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSeriesDownloadConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+    pendingSeriesLocalDeletes?.let { booksToDelete ->
+        AlertDialog(
+            onDismissRequest = { pendingSeriesLocalDeletes = null },
+            title = {
+                Text(
+                    "Delete ${booksToDelete.size} local " +
+                        "${if (booksToDelete.size == 1) "copy" else "copies"}?"
+                )
+            },
+            text = {
+                Text(
+                    "The selected files will be removed from this device. " +
+                        "Your BookOrbit books are not deleted."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingSeriesLocalDeletes = null
+                        onDeleteLocalCopies(booksToDelete)
+                    },
+                    modifier = Modifier.testTag("confirm-delete-series-local-copies")
+                ) { Text("Delete local") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSeriesLocalDeletes = null }) { Text("Cancel") }
+            }
+        )
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
         modifier = modifier.fillMaxSize(),
@@ -6846,6 +7526,40 @@ private fun SeriesDetails(
                     progress = { completion.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 )
+                val showSeriesDownload = onBulkDownload != null &&
+                    hasSelectableBulkDownloads(seriesDownloadCandidates)
+                if (showSeriesDownload || seriesLocalCopies.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (showSeriesDownload) {
+                            OutlinedButton(
+                                onClick = {
+                                    seriesSelectedFileIds = defaultSeriesFileSelection(seriesDownloadCandidates)
+                                    showSeriesFileSelection = true
+                                },
+                                enabled = seriesActiveFileIds.isEmpty(),
+                                modifier = Modifier.testTag("download-series")
+                            ) { Text("Download series") }
+                        }
+                        if (seriesLocalCopies.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = { pendingSeriesLocalDeletes = seriesLocalCopies },
+                                enabled = seriesActiveFileIds.isEmpty(),
+                                modifier = Modifier.testTag("delete-series-local-copies")
+                            ) { Text("Delete local books") }
+                        }
+                    }
+                }
+                seriesDownloadProgress?.let { progress ->
+                    CollectionDownloadProgressIndicator(
+                        state = progress,
+                        modifier = Modifier.padding(top = 6.dp),
+                        testTag = "series-download-progress"
+                    )
+                }
             }
         }
         if (detail.possibleGaps.isNotEmpty()) {

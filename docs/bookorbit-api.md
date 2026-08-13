@@ -172,6 +172,27 @@ POST /api/v1/books/query
 
 The Android client sends `q`, an empty `sort` list, and pagination capped at 100 results. Search results retain their returned `libraryId` so details and reading actions target the correct library.
 
+### Global annotations hub
+
+Endpoint:
+
+```text
+GET /api/v1/annotations
+```
+
+The endpoint is authenticated and scoped to the current user across accessible books and libraries. The current Android client consumes the paginated response for the global Annotations destination.
+
+Defaults and limits:
+
+- `status=active`
+- `page=1`
+- `pageSize=25`, maximum `100`
+- newest-first ordering by `createdAt`
+
+Supported hub filters include `bookId`, `search`, `chapter`, `colors`, `styles`, `origins`, `dateFrom`, `dateTo`, `hasNote`, `status`, `sortBy`, and `sortDir`. The response contains `items`, `total`, `page`, `pageSize`, and `stats`.
+
+`search` searches annotation text and note text only. It must not be treated as full-text search over the loaded EPUB, KEPUB, or PDF publication. Annotation items may include `cfi`, `jumpFileId`, `jumpFileFormat`, and `pageno`; the Android client preserves those fields for reader navigation. The Android client implements EPUB annotation creation, note/style updates, deletion, and durable offline mutation replay. Restore, conflict-safe hydration, PDF/comic creation, and publication full-text search remain pending.
+
 ### Series catalog filters
 
 Endpoint:
@@ -356,14 +377,30 @@ On a clean reader close, the app immediately publishes the final known position 
 
 When a book is reopened, the client compares its own queued-or-last-synced local progress against the server-hydrated progress and keeps whichever position is further ahead (by page/chapter index, then position, then percentage), rather than unconditionally preferring one source.
 
-## Sessions and reading attempts (verified — 2026-07-26)
+## Sessions and reading attempts (verified — 2026-07-31)
 
 ```text
+POST /api/v1/books/files/{fileId}/sessions
 GET /api/v1/books/{bookId}/sessions
 GET /api/v1/books/{bookId}/reading-attempts
 ```
 
-`sessions` returns analytics sessions for the book with `startedAt`, `endedAt`, `durationSeconds`, `progressDelta`, `endProgress`, `format`, `source`, and `stats`. `reading-attempts` returns date-level attempts with `outcome`, `totalSessions`, and `totalSeconds`. Neither response carries an exact audio position or file ID; both endpoints are analytics-level summaries, not exact playback state. Lagrange's audiobook-only Server reading history section (Book Detail) is authenticated and consumes both endpoints with loading/unsupported/error/empty states. Server session/attempt data is never treated as an exact audio position; the local Room `AudiobookSessionHistoryStore` remains authoritative for seeking, as it retains exact play/pause position and seek behavior. See `docs/architecture.md` for the separation of concerns between the two history sources.
+Lagrange records completed normal-reader sessions with a JSON body containing:
+
+```json
+{
+  "sessionId": "client-generated UUID",
+  "startedAt": "ISO-8601 timestamp",
+  "endedAt": "ISO-8601 timestamp",
+  "durationSeconds": 120,
+  "progressDelta": 2.5,
+  "endProgress": 42.5
+}
+```
+
+The POST is authenticated and file-scoped. Android queues sessions durably and replays them through WorkManager; `204 No Content` acknowledges delivery. Session IDs are stable across retries, so BookOrbit's server-side deduplication prevents duplicate analytics records. Text and comic sessions start when usable content opens; audiobook sessions start only when Media3 playback begins. Preview sessions are excluded. Paused/background time is excluded, and a five-minute idle period rolls the active session into a new session. `progressDelta` and `endProgress` are optional when progress is unavailable.
+
+`GET /sessions` returns analytics sessions for the book with `startedAt`, `endedAt`, `durationSeconds`, `progressDelta`, `endProgress`, `format`, `source`, and `stats`. `reading-attempts` returns date-level attempts with `outcome`, `totalSessions`, and `totalSeconds`. Neither response carries an exact audio position or file ID; both endpoints are analytics-level summaries, not exact playback state. Lagrange's audiobook-only Server reading history section (Book Detail) is authenticated and consumes both endpoints with loading/unsupported/error/empty states. Server session/attempt data is never treated as an exact audio position; the local Room `AudiobookSessionHistoryStore` remains authoritative for seeking, as it retains exact play/pause position and seek behavior. See `docs/architecture.md` for the separation of concerns between the two history sources.
 
 ## User statistics (integrated — 2026-07-26)
 

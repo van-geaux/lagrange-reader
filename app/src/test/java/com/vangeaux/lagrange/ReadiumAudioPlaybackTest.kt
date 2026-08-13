@@ -10,6 +10,152 @@ import org.readium.r2.shared.util.mediatype.MediaType
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackTest {
+
+    private fun file(
+        id: String,
+        streamUrl: String?,
+        format: String = "mp3",
+        filename: String? = "$id.mp3",
+        durationMs: Long? = 100_000L,
+        mediaKind: MediaKind = MediaKind.AUDIO
+    ): BookFileOption {
+        val book = BookSummary(
+            libraryId = "lib",
+            id = "book-1",
+            fileId = id,
+            title = "Book Title",
+            author = "Book Author",
+            format = format,
+            mediaKind = mediaKind,
+            streamUrl = streamUrl
+        )
+        return BookFileOption(book = book, filename = filename, durationMs = durationMs)
+    }
+
+    @Test
+    fun buildAudiobookMediaItemSpecsPreservesServerOrderWithStableIdsAndMetadata() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1"),
+            file("f2", "https://server/stream/f2")
+        )
+
+        val specs = buildAudiobookMediaItemSpecs(files)
+
+        assertEquals(2, specs.size)
+        assertEquals("f1", specs[0].fileId)
+        assertEquals("https://server/stream/f1", specs[0].streamUrl)
+        assertEquals(MimeTypes.AUDIO_MPEG, specs[0].mimeType)
+        assertEquals("f1.mp3", specs[0].title)
+        assertEquals("Book Author", specs[0].artist)
+        assertEquals("f2", specs[1].fileId)
+        assertEquals("https://server/stream/f2", specs[1].streamUrl)
+    }
+
+    @Test
+    fun buildAudiobookMediaItemSpecsSkipsEntriesMissingStreamUrlFileIdOrMimeType() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1"),
+            file("f2", null),
+            file(id = "f3", streamUrl = "https://server/stream/f3", format = "epub")
+        )
+
+        val specs = buildAudiobookMediaItemSpecs(files)
+
+        assertEquals(1, specs.size)
+        assertEquals("f1", specs[0].fileId)
+    }
+
+    @Test
+    fun resolveAbsolutePositionMsMapsFileRelativePositionAcrossTracks() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        assertEquals(100_500L, resolveAbsolutePositionMs(files, "f2", 500L))
+        assertEquals(500L, resolveAbsolutePositionMs(files, "f1", 500L))
+        assertEquals(500L, resolveAbsolutePositionMs(files, null, 500L))
+    }
+
+    @Test
+    fun resolveTotalDurationMsPrefersKnownFileDurationsOverPlayerFallback() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        assertEquals(300_000L, resolveTotalDurationMs(files, fallbackDurationMs = 999L))
+        assertEquals(999L, resolveTotalDurationMs(emptyList(), fallbackDurationMs = 999L))
+    }
+
+    @Test
+    fun resolveSeekTargetMapsAbsolutePositionToTrackAndOffset() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        val target = resolveSeekTarget(files, 100_500L)
+
+        assertEquals(1, target?.fileIndex)
+        assertEquals("f2", target?.fileId)
+        assertEquals(500L, target?.positionMs)
+    }
+
+    @Test
+    fun resolveSeekTargetReturnsNullForSingleTrackAudiobooks() {
+        val files = listOf(file("f1", "https://server/stream/f1", durationMs = 100_000L))
+
+        assertNull(resolveSeekTarget(files, 50L))
+    }
+
+    @Test
+    fun activeBookSummaryForActiveFileSwitchesFileIdAndStreamButKeepsBookLevelMetadata() {
+        val bookLevel = BookSummary(
+            libraryId = "lib",
+            id = "book-1",
+            fileId = "f1",
+            title = "Gone Girl",
+            author = "Gillian Flynn",
+            format = "mp3",
+            mediaKind = MediaKind.AUDIO,
+            streamUrl = "https://server/stream/f1",
+            coverUrl = "https://server/cover.jpg",
+            audioChapters = listOf(AudiobookChapter(title = "Part One", startMs = 0L))
+        )
+        val files = listOf(
+            file("f1", "https://server/stream/f1"),
+            file("f2", "https://server/stream/f2")
+        )
+
+        val active = activeBookSummaryForActiveFile(bookLevel, files, "f2")
+
+        assertEquals("f2", active.fileId)
+        assertEquals("https://server/stream/f2", active.streamUrl)
+        assertEquals("Gone Girl", active.title)
+        assertEquals("Gillian Flynn", active.author)
+        assertEquals("https://server/cover.jpg", active.coverUrl)
+        assertEquals(bookLevel.audioChapters, active.audioChapters)
+    }
+
+    @Test
+    fun activeBookSummaryForActiveFileFallsBackToBookWhenFileIdUnknown() {
+        val bookLevel = file("f1", "https://server/stream/f1").book
+        val files = listOf(file("f1", "https://server/stream/f1"))
+
+        val active = activeBookSummaryForActiveFile(bookLevel, files, "unknown-file")
+
+        assertEquals(bookLevel, active)
+    }
+
+    @Test
+    fun absoluteProgressPercentDerivesPercentFromAbsolutePositionAndAggregateDuration() {
+        assertEquals(50.0f, absoluteProgressPercent(150_000L, 300_000L))
+        assertEquals(100.0f, absoluteProgressPercent(999_000L, 300_000L))
+        assertEquals(0.0f, absoluteProgressPercent(-10L, 300_000L))
+        assertNull(absoluteProgressPercent(100L, 0L))
+    }
+
     @Test
     fun supportedAudioExtensionsMapToReadiumMediaTypes() {
         assertEquals(MediaType.MP4, readiumAudioMediaType("book.m4b"))
