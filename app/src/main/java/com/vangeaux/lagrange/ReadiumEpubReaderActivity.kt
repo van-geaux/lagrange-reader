@@ -388,6 +388,24 @@ internal fun previewAnnotationTarget(
     )
 }
 
+internal fun epubAnnotationBookId(intent: Intent): String? =
+    intent.getStringExtra(ReadiumEpubReaderActivity.EXTRA_BOOK_ID)?.takeIf { it.isNotBlank() }
+
+internal fun epubAnnotationFeaturesEnabled(intent: Intent): Boolean =
+    !intent.getBooleanExtra(ReadiumEpubReaderActivity.EXTRA_IS_PREVIEW, false) &&
+        epubAnnotationBookId(intent) != null
+
+internal fun shouldLoadNextAnnotationPage(
+    loadedCount: Int,
+    total: Int?,
+    receivedCount: Int,
+    pageSize: Int
+): Boolean = when {
+    receivedCount == 0 -> false
+    total != null -> loadedCount < total
+    else -> receivedCount >= pageSize
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumEpubReaderActivity : FragmentActivity() {
     private var publication: Publication? = null
@@ -477,6 +495,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
+        bookId = epubAnnotationBookId(intent)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
             context = this,
             fileId = intent.getStringExtra(EXTRA_FILE_ID),
@@ -779,7 +798,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
                 shouldApplyInsetsPadding = false,
-                selectionActionModeCallback = if (isPreview || bookId == null) null else highlightActionModeCallback()
+                selectionActionModeCallback = if (epubAnnotationFeaturesEnabled(intent)) {
+                    highlightActionModeCallback()
+                } else null
             )
         )
         supportFragmentManager.fragmentFactory = fragmentFactory
@@ -800,7 +821,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         navigator = fragment
-        if (!isPreview && bookId != null) {
+        if (epubAnnotationFeaturesEnabled(intent)) {
             fragment.addDecorationListener(HIGHLIGHT_DECORATION_GROUP, highlightDecorationListener)
             loadHighlights(openedPublication)
         } else if (isPreview) {
@@ -828,18 +849,31 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun loadHighlights(openedPublication: Publication) {
         val currentBookId = bookId ?: return
         lifecycleScope.launch {
-            val page = runCatching {
-                annotationRepository.loadAnnotations(
-                    AnnotationsFilter(bookId = currentBookId, status = "active"),
-                    page = 1,
-                    pageSize = ANNOTATIONS_PAGE_SIZE
+            var pageNumber = 1
+            var loadedCount = 0
+            do {
+                val page = runCatching {
+                    annotationRepository.loadAnnotations(
+                        AnnotationsFilter(bookId = currentBookId, status = "active"),
+                        page = pageNumber,
+                        pageSize = ANNOTATIONS_PAGE_SIZE
+                    )
+                }.getOrNull() ?: break
+                page.items.forEach { annotation ->
+                    val locator = annotation.toLocatorOrNull(openedPublication) ?: return@forEach
+                    highlightAnnotations[annotation.id] = annotation
+                    highlightLocators[annotation.id] = locator
+                }
+                loadedCount += page.items.size
+                pageNumber++
+            } while (
+                shouldLoadNextAnnotationPage(
+                    loadedCount = loadedCount,
+                    total = page.total,
+                    receivedCount = page.items.size,
+                    pageSize = page.pageSize ?: ANNOTATIONS_PAGE_SIZE
                 )
-            }.getOrNull() ?: return@launch
-            page.items.forEach { annotation ->
-                val locator = annotation.toLocatorOrNull(openedPublication) ?: return@forEach
-                highlightAnnotations[annotation.id] = annotation
-                highlightLocators[annotation.id] = locator
-            }
+            )
             refreshHighlightDecorations()
         }
     }
@@ -1552,8 +1586,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_epub_library_id"
         private const val EXTRA_FILE_ID = "readium_epub_file_id"
-        private const val EXTRA_BOOK_ID = "readium_epub_book_id"
-        private const val EXTRA_IS_PREVIEW = "readium_epub_is_preview"
+        internal const val EXTRA_BOOK_ID = "readium_epub_book_id"
+        internal const val EXTRA_IS_PREVIEW = "readium_epub_is_preview"
         private const val EXTRA_INITIAL_CHAPTER = "readium_epub_initial_chapter"
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
         private const val EXTRA_INITIAL_PAGE_COUNT = "readium_epub_initial_page_count"
