@@ -224,6 +224,16 @@ internal fun annotationsPath(bookId: String): String =
 internal fun annotationPath(bookId: String, annotationId: String): String =
     "${annotationsPath(bookId)}/${java.net.URLEncoder.encode(annotationId, Charsets.UTF_8.name()).replace("+", "%20")}"
 
+internal fun annotationRestorePath(annotationId: String): String {
+    val encodedAnnotationId = java.net.URLEncoder.encode(annotationId, Charsets.UTF_8.name()).replace("+", "%20")
+    return "/api/v1/annotations/$encodedAnnotationId/restore"
+}
+
+internal fun annotationPurgePath(annotationId: String): String {
+    val encodedAnnotationId = java.net.URLEncoder.encode(annotationId, Charsets.UTF_8.name()).replace("+", "%20")
+    return "/api/v1/annotations/$encodedAnnotationId"
+}
+
 internal fun buildCreateAnnotationPayload(item: AnnotationMutationPayload): JSONObject = JSONObject().apply {
     item.cfi?.let { put("cfi", it) }
     item.bookFileId?.toIntOrNull()?.let { put("bookFileId", it) }
@@ -412,6 +422,20 @@ interface BookOrbitDataSource {
     ): BookAnnotation = BookAnnotation("", bookId, cfi, bookFileId, text = text, color = color, style = style, note = note, chapterTitle = chapterTitle)
     suspend fun updateAnnotation(bookId: String, annotationId: String, note: String? = null, color: String? = null, style: String? = null) = Unit
     suspend fun deleteAnnotation(bookId: String, annotationId: String) = Unit
+
+    /**
+     * Restores a trashed annotation via `POST /api/v1/annotations/{annotationId}/restore`.
+     * This call is online-only: it is not queued through [AnnotationMutationQueueStore], so it
+     * throws (rather than silently succeeding) when the device is offline or the request fails.
+     */
+    suspend fun restoreAnnotation(annotationId: String) = Unit
+
+    /**
+     * Permanently purges a trashed annotation via `DELETE /api/v1/annotations/{annotationId}`.
+     * Only meaningful for already-trashed annotations. Online-only like [restoreAnnotation];
+     * callers must surface any thrown error rather than treat it as a success.
+     */
+    suspend fun purgeAnnotation(annotationId: String) = Unit
     suspend fun pendingAnnotationMutationCount(): Int = 0
     suspend fun syncPendingAnnotationMutations(): SyncAttemptResult = SyncAttemptResult.Success
     suspend fun canReachServer(serverUrl: String): Boolean
@@ -995,6 +1019,28 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             )
         )
         enqueueAnnotationSyncWorker()
+    }
+
+    override suspend fun restoreAnnotation(annotationId: String) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
+        if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
+            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+        }
+        request(annotationRestorePath(resolvedAnnotationId), "POST", JSONObject().toString().toRequestBody(JSON))
+        Unit
+    }
+
+    override suspend fun purgeAnnotation(annotationId: String) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        if (serverUrl.isBlank()) throw AuthenticationRequiredException()
+        val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
+        if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
+            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+        }
+        request(annotationPurgePath(resolvedAnnotationId), "DELETE", null)
+        Unit
     }
 
     override suspend fun pendingAnnotationMutationCount(): Int = withContext(Dispatchers.IO) {
