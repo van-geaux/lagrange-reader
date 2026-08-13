@@ -107,4 +107,5 @@ Every final report should state:
 - ADB/device and instrumentation status;
 - remaining manual validation;
 - preserved unrelated worktree changes.
+- for issue-tracked delivery, the dedicated issue branch, PR state, merge/base relationship, and whether the PR is merged;
 - failed reader preparation/opening returns to the browser with an error message, clears the persisted active-reader state, and does not reopen the failed reader after an app restart;
