@@ -101,6 +101,23 @@ class AnnotationMutationQueueStoreTest {
         assertEquals(null, pending.note)
     }
 
+    @Test
+    fun `the mutation queue only understands create, update and delete - restore and purge are online-only`() {
+        // Issue #56 adds restore/purge routes that are not queued through this store: they are
+        // implemented as direct online-only calls in BookOrbitRepository instead of inventing a
+        // new queued op here. This test pins the op set so that assumption stays visible.
+        assertEquals(
+            setOf("CREATE", "UPDATE", "DELETE"),
+            AnnotationMutationOp.entries.map { it.name }.toSet()
+        )
+    }
+
+    @Test
+    fun `restore and purge routes are annotation-scoped, not book-scoped like update and delete`() {
+        assertEquals("/api/v1/annotations/annotation-1/restore", annotationRestorePath("annotation-1"))
+        assertEquals("/api/v1/annotations/annotation-1", annotationPurgePath("annotation-1"))
+    }
+
     private fun create(
         annotationId: String,
         serverUrl: String = "https://example.test",

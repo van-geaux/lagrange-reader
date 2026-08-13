@@ -783,6 +783,12 @@ internal fun NativeLibraryBrowserScreen(
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
     annotationsLoader: suspend (AnnotationsFilter, Int) -> BookAnnotationsPage,
     onAnnotationSelected: (BookAnnotation) -> Unit = {},
+
+    onUpdateAnnotation: suspend (annotation: BookAnnotation, note: String?, color: String?, style: String?) -> Boolean =
+        { _, _, _, _ -> false },
+    onTrashAnnotation: suspend (BookAnnotation) -> Boolean = { false },
+    onRestoreAnnotation: suspend (BookAnnotation) -> Boolean = { false },
+    onPurgeAnnotation: suspend (BookAnnotation) -> Boolean = { false },
     achievementsLoader: suspend () -> AchievementCatalogue,
     statisticsLoader: suspend () -> UserStatistics,
     catalogImageLoader: suspend (String) -> ByteArray?,
@@ -1523,6 +1529,14 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.ANNOTATIONS -> AnnotationsScreen(
                     loader = annotationsLoader,
                     onAnnotationSelected = onAnnotationSelected,
+                    onBookDetails = { book ->
+                        detailReturnDestination = destination
+                        selectedBook = book
+                    },
+                    onUpdateAnnotation = onUpdateAnnotation,
+                    onTrashAnnotation = onTrashAnnotation,
+                    onRestoreAnnotation = onRestoreAnnotation,
+                    onPurgeAnnotation = onPurgeAnnotation,
                     modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.LOCAL_BOOKS -> LocalBooksScreen(

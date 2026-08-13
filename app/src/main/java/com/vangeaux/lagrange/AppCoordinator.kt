@@ -908,6 +908,75 @@ class AppCoordinator(
         )
     }
 
+    /**
+     * Persists a note/color/style edit through the existing durable update-mutation queue
+     * (see [BookOrbitDataSource.updateAnnotation]), so the change survives offline use.
+     */
+    suspend fun updateAnnotation(
+        annotation: BookAnnotation,
+        note: String?,
+        color: String?,
+        style: String?
+    ): Boolean = try {
+        repository.updateAnnotation(annotation.bookId, annotation.id, note = note, color = color, style = style)
+        true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: AuthenticationRequiredException) {
+        recoverExpiredSession()
+        false
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
+     * Moves an active annotation to trash through the existing durable delete-mutation queue
+     * (soft delete via the book-scoped endpoint), so the change survives offline use.
+     */
+    suspend fun trashAnnotation(annotation: BookAnnotation): Boolean = try {
+        repository.deleteAnnotation(annotation.bookId, annotation.id)
+        true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: AuthenticationRequiredException) {
+        recoverExpiredSession()
+        false
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
+     * Restores a trashed annotation. This is online-only: [BookOrbitDataSource.restoreAnnotation]
+     * is not queued, so a failure here is surfaced as `false` instead of a fake success.
+     */
+    suspend fun restoreAnnotation(annotation: BookAnnotation): Boolean = try {
+        repository.restoreAnnotation(annotation.id)
+        true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: AuthenticationRequiredException) {
+        recoverExpiredSession()
+        false
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
+     * Permanently purges a trashed annotation. Online-only, like [restoreAnnotation]; server
+     * conflicts (e.g. purging an annotation that is not trashed) surface as `false`.
+     */
+    suspend fun purgeAnnotation(annotation: BookAnnotation): Boolean = try {
+        repository.purgeAnnotation(annotation.id)
+        true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: AuthenticationRequiredException) {
+        recoverExpiredSession()
+        false
+    } catch (_: Throwable) {
+        false
+    }
+
     private fun openBook(
         book: BookSummary,
         launchMode: ReaderLaunchMode,
