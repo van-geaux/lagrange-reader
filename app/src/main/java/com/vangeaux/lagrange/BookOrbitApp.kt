@@ -939,6 +939,7 @@ private fun ReaderScreen(
             ReadiumEpubReaderLauncher(
                 file = readerFile,
                 fileId = state.book.fileId,
+                bookId = state.book.id,
                 title = state.book.title,
                 readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
                 libraryId = state.book.libraryId,
