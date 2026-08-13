@@ -716,6 +716,14 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             }
         }
 
+        fun promotePreviewSession(): Session? {
+            val current = mutableSession.value ?: return null
+            if (current.launchMode != ReaderLaunchMode.PREVIEW) return current
+            return current.copy(launchMode = ReaderLaunchMode.NORMAL).also { promoted ->
+                mutableSession.value = promoted
+            }
+        }
+
         fun stop() {
             closeSession()
             ServiceCompat.stopForeground(
@@ -881,6 +889,21 @@ class ReadiumAudioPlaybackController internal constructor(
     }
 
     internal suspend fun session(): StateFlow<ReadiumAudioPlaybackService.Session?> = binder().session
+
+    internal fun pause() {
+        scope.launch {
+            binder().session.value?.player?.pause()
+        }
+    }
+
+    internal fun enableReadingProgress() {
+        scope.launch {
+            val serviceBinder = binder()
+            val session = serviceBinder.promotePreviewSession() ?: return@launch
+            startProgressUpdates(session, recordInitialPlay = false)
+            publishProgress(session)
+        }
+    }
 
     internal suspend fun open(
         book: BookSummary,

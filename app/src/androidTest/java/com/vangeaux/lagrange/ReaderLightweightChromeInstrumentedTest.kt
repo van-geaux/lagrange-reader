@@ -1,7 +1,11 @@
 package com.vangeaux.lagrange
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
@@ -10,11 +14,13 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -117,6 +123,81 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithContentDescription("Previous page").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Next page").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Page jump bar").assertIsDisplayed()
+    }
+
+    @Test
+    fun viewOnlyBannerConfirmsReadModeWithoutLeavingItsReservedSpace() {
+        val confirmCount = mutableIntStateOf(0)
+        composeRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().testTag("view-only-root")) {
+                ViewOnlyModeBanner(onConfirmReadMode = { confirmCount.intValue++ })
+            }
+        }
+
+        composeRule.onNodeWithText("Preview-only mode · Tap to enable reading progress").assertIsDisplayed()
+        composeRule.onNodeWithTag("view-only-mode-banner").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("view-only-confirmation-dialog").assertIsDisplayed()
+        composeRule.onNodeWithText("Leave preview-only mode?").assertIsDisplayed()
+        composeRule.onNodeWithText("You’ll switch to reading mode, remain on this page, and start saving reading progress.").assertIsDisplayed()
+        composeRule.onNodeWithTag("view-only-cancel-read-mode").performClick()
+        composeRule.onNodeWithTag("view-only-confirmation-dialog").assertDoesNotExist()
+        composeRule.onNodeWithTag("view-only-mode-banner").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Switch to reading mode").performClick()
+
+        composeRule.runOnIdle { assertEquals(1, confirmCount.intValue) }
+        val rootBounds = composeRule.onNodeWithTag("view-only-root").fetchSemanticsNode().boundsInRoot
+        val bannerBounds = composeRule.onNodeWithTag("view-only-mode-banner").fetchSemanticsNode().boundsInRoot
+        assertEquals(rootBounds.left, bannerBounds.left, 1f)
+        assertEquals(rootBounds.right, bannerBounds.right, 1f)
+        assertTrue(bannerBounds.height > 0f)
+    }
+
+    @Test
+    fun audiobookViewOnlyBannerPausesAndUsesListeningWording() {
+        val pauseCount = mutableIntStateOf(0)
+        val confirmCount = mutableIntStateOf(0)
+        composeRule.setContent {
+            ViewOnlyModeBanner(
+                onConfirmReadMode = { confirmCount.intValue++ },
+                onPrepareConfirmation = { pauseCount.intValue++ },
+                bannerText = "Preview-only mode · Tap to enable listening progress",
+                contentDescription = "Preview-only mode. Tap to enable listening progress.",
+                dialogText = "You’ll switch to listening mode and start saving your listening progress from this position.",
+                confirmText = "Switch to listening mode"
+            )
+        }
+
+        composeRule.onNodeWithText("Preview-only mode · Tap to enable listening progress")
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithText("You’ll switch to listening mode and start saving your listening progress from this position.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Switch to listening mode").performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(1, pauseCount.intValue)
+            assertEquals(1, confirmCount.intValue)
+        }
+    }
+
+    @Test
+    fun audiobookViewOnlyBannerUsesPlayerCardWidthWithoutChangingHeight() {
+        composeRule.setContent {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ViewOnlyModeBanner(onConfirmReadMode = {})
+                ViewOnlyModeBanner(
+                    onConfirmReadMode = {},
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        }
+
+        val banners = composeRule.onAllNodesWithTag("view-only-mode-banner").fetchSemanticsNodes()
+        assertEquals(2, banners.size)
+        assertEquals(banners[0].boundsInRoot.height, banners[1].boundsInRoot.height, 1f)
+        assertTrue(banners[1].boundsInRoot.left > banners[0].boundsInRoot.left)
+        assertTrue(banners[1].boundsInRoot.right < banners[0].boundsInRoot.right)
     }
 
     @Test

@@ -7,6 +7,23 @@ import org.junit.Test
 
 class ReadiumEpubReaderRoutingTest {
     @Test
+    fun previewTopSpaceUsesTheLargerOfReaderPaddingAndBannerInsteadOfAddingThem() {
+        assertEquals(80, effectiveReaderTopSpace(normalTopPadding = 80, bannerHeight = 48, isPreview = true))
+        assertEquals(80, effectiveReaderTopSpace(normalTopPadding = 32, bannerHeight = 80, isPreview = true))
+    }
+
+    @Test
+    fun readingModeRecoversBannerSpaceAndKeepsOnlyReaderPadding() {
+        assertEquals(32, effectiveReaderTopSpace(normalTopPadding = 32, bannerHeight = 80, isPreview = false))
+    }
+
+    @Test
+    fun previewBannerHostStartsBelowStatusBarWithoutChangingBannerHeight() {
+        assertEquals(104, occupiedPreviewBannerBottom(statusBarTop = 24, bannerHeight = 80))
+        assertEquals(104, effectiveReaderTopSpace(normalTopPadding = 32, bannerHeight = 104, isPreview = true))
+    }
+
+    @Test
     fun everyEpubLaunchUsesReadium() {
         assertTrue(shouldUseReadiumEpubReader(MediaKind.EPUB))
         assertFalse(shouldUseReadiumEpubReader(MediaKind.COMIC))

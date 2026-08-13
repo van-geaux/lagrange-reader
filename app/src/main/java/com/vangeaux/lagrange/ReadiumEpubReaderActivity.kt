@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -214,6 +215,15 @@ internal fun selectReadiumPositionIndex(
         ?: usable.minByOrNull { (_, progression) -> abs(progression - target) }?.first
 }
 
+internal fun effectiveReaderTopSpace(
+    normalTopPadding: Int,
+    bannerHeight: Int,
+    isPreview: Boolean
+): Int = if (isPreview) maxOf(normalTopPadding, bannerHeight) else normalTopPadding
+
+internal fun occupiedPreviewBannerBottom(statusBarTop: Int, bannerHeight: Int): Int =
+    statusBarTop.coerceAtLeast(0) + bannerHeight.coerceAtLeast(0)
+
 internal data class ReadiumEpubProgressResult(
     val chapterIndex: Int,
     val pageIndex: Int,
@@ -387,6 +397,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var rootView: FrameLayout
     private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
+    private lateinit var viewOnlyBannerView: ComposeView
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
@@ -417,6 +428,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentBookPage by mutableStateOf<Int?>(null)
     private var bookPositionCount by mutableStateOf<Int?>(null)
     private var bookPositions: List<Locator> = emptyList()
+    private var previewAnnotationLocator: Locator? = null
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
@@ -521,6 +533,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerViewport = FrameLayout(this).apply {
             setBackgroundColor(selectedTheme.backgroundColor)
         }
+
         rootView.addView(
             readerViewport,
             FrameLayout.LayoutParams(
@@ -539,6 +552,27 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        viewOnlyBannerView = ComposeView(this).apply {
+            visibility = if (isPreview) View.VISIBLE else View.GONE
+            setContent { BookOrbitTheme { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                val statusBarTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                    if (params.topMargin != statusBarTop) {
+                        params.topMargin = statusBarTop
+                        view.layoutParams = params
+                    }
+                }
+                applyReaderPadding()
+                insets
+            }
+        }
+        readerViewport.addView(viewOnlyBannerView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP
+        ))
         progressView = ProgressBar(this).also { progress ->
             readerViewport.addView(
                 progress,
@@ -811,6 +845,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             style = intent.getStringExtra(EXTRA_INITIAL_ANNOTATION_STYLE)
         ) ?: return
         val locator = target.toLocatorOrNull(openedPublication) ?: return
+        previewAnnotationLocator = locator
         fragment.addDecorationListener(HIGHLIGHT_DECORATION_GROUP, highlightDecorationListener)
         highlightAnnotations[target.id] = target
         highlightLocators[target.id] = locator
@@ -1312,9 +1347,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             (readerViewport.width * value.coerceIn(0f, 100f) / 400f).toInt()
         fun vertical(value: Float): Int =
             (readerViewport.height * value.coerceIn(0f, 100f) / 400f).toInt()
+        val normalTopPadding = vertical(padding.top)
+        val occupiedBannerBottom = if (
+            ::viewOnlyBannerView.isInitialized && viewOnlyBannerView.visibility == View.VISIBLE
+        ) {
+            val topMargin = (viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+            occupiedPreviewBannerBottom(topMargin, viewOnlyBannerView.height)
+        } else 0
         readerContainer.setPadding(
             horizontal(padding.left),
-            vertical(padding.top),
+            effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
             horizontal(padding.right),
             vertical(padding.bottom) + dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
         )
@@ -1340,6 +1382,21 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun enableReadMode() {
+        if (!isPreview) return
+        isPreview = false
+        readingSessionReporter.enable(currentPercent)
+        viewOnlyBannerView.visibility = View.GONE
+        applyReaderPadding()
+        val annotationLocator = previewAnnotationLocator
+        readerContainer.post {
+            if (annotationLocator != null) {
+                navigator?.go(annotationLocator)
+                lifecycleScope.launch { refreshHighlightDecorations() }
+            }
+        }
     }
 
     private fun showTapZoneTutorial() {
