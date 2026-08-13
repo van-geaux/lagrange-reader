@@ -1242,6 +1242,9 @@ private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): A
 internal fun shouldShowAudiobookPreviewBanner(launchMode: ReaderLaunchMode): Boolean =
     launchMode == ReaderLaunchMode.PREVIEW
 
+internal const val BOOK_PREVIEW_MODE_LABEL = "Preview mode · Tap to enable reading progress"
+internal const val AUDIOBOOK_PREVIEW_MODE_LABEL = "Preview mode · Tap to enable listening progress"
+
 @Composable
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
@@ -1365,8 +1368,8 @@ internal fun ReadiumCompactAudioPlayer(
                 modifier = Modifier.padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(12.dp),
                 onPrepareConfirmation = controller::pause,
-                bannerText = "Preview-only mode · Tap to enable listening progress",
-                contentDescription = "Preview-only mode · Tap to enable listening progress",
+                bannerText = AUDIOBOOK_PREVIEW_MODE_LABEL,
+                contentDescription = "Preview mode. Tap to enable listening progress.",
                 dialogText = "You’ll switch to listening mode and start saving your listening progress from this position.",
                 confirmText = "Switch to listening mode"
             )
@@ -1865,8 +1868,8 @@ internal fun ViewOnlyModeBanner(
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
     onPrepareConfirmation: () -> Unit = {},
-    bannerText: String = "Preview-only mode · Tap to enable reading progress",
-    contentDescription: String = "Preview-only mode. Tap to enable reading progress.",
+    bannerText: String = BOOK_PREVIEW_MODE_LABEL,
+    contentDescription: String = "Preview mode. Tap to enable reading progress.",
     dialogText: String = "You’ll switch to reading mode, remain on this page, and start saving reading progress.",
     confirmText: String = "Switch to reading mode"
 ) {
@@ -1897,7 +1900,7 @@ internal fun ViewOnlyModeBanner(
     if (showConfirmation) {
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
-            title = { Text("Leave preview-only mode?") },
+            title = { Text("Leave preview mode?") },
             text = { Text(dialogText) },
             confirmButton = {
                 TextButton(

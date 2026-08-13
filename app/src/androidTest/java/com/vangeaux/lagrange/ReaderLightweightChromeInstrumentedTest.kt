@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
@@ -134,10 +135,10 @@ class ReaderLightweightChromeInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Preview-only mode · Tap to enable reading progress").assertIsDisplayed()
+        composeRule.onNodeWithText(BOOK_PREVIEW_MODE_LABEL).assertIsDisplayed()
         composeRule.onNodeWithTag("view-only-mode-banner").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("view-only-confirmation-dialog").assertIsDisplayed()
-        composeRule.onNodeWithText("Leave preview-only mode?").assertIsDisplayed()
+        composeRule.onNodeWithText("Leave preview mode?").assertIsDisplayed()
         composeRule.onNodeWithText("You’ll switch to reading mode, remain on this page, and start saving reading progress.").assertIsDisplayed()
         composeRule.onNodeWithTag("view-only-cancel-read-mode").performClick()
         composeRule.onNodeWithTag("view-only-confirmation-dialog").assertDoesNotExist()
@@ -160,14 +161,14 @@ class ReaderLightweightChromeInstrumentedTest {
             ViewOnlyModeBanner(
                 onConfirmReadMode = { confirmCount.intValue++ },
                 onPrepareConfirmation = { pauseCount.intValue++ },
-                bannerText = "Preview-only mode · Tap to enable listening progress",
-                contentDescription = "Preview-only mode. Tap to enable listening progress.",
+                bannerText = AUDIOBOOK_PREVIEW_MODE_LABEL,
+                contentDescription = "Preview mode. Tap to enable listening progress.",
                 dialogText = "You’ll switch to listening mode and start saving your listening progress from this position.",
                 confirmText = "Switch to listening mode"
             )
         }
 
-        composeRule.onNodeWithText("Preview-only mode · Tap to enable listening progress")
+        composeRule.onNodeWithText(AUDIOBOOK_PREVIEW_MODE_LABEL)
             .assertIsDisplayed()
             .performClick()
         composeRule.onNodeWithText("You’ll switch to listening mode and start saving your listening progress from this position.")
@@ -183,12 +184,14 @@ class ReaderLightweightChromeInstrumentedTest {
     @Test
     fun audiobookViewOnlyBannerUsesPlayerCardWidthWithoutChangingHeight() {
         composeRule.setContent {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.width(360.dp)) {
                 ViewOnlyModeBanner(onConfirmReadMode = {})
                 ViewOnlyModeBanner(
                     onConfirmReadMode = {},
                     modifier = Modifier.padding(horizontal = 8.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    bannerText = AUDIOBOOK_PREVIEW_MODE_LABEL,
+                    contentDescription = "Preview mode. Tap to enable listening progress."
                 )
             }
         }

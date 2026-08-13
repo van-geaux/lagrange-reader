@@ -17,6 +17,12 @@ private fun settleAnnotationReanchor(state: AnnotationReanchorState): Annotation
 
 class ReadiumEpubReaderRoutingTest {
     @Test
+    fun previewLabelsUsePreviewModeTerminologyForReadingAndListening() {
+        assertEquals("Preview mode · Tap to enable reading progress", BOOK_PREVIEW_MODE_LABEL)
+        assertEquals("Preview mode · Tap to enable listening progress", AUDIOBOOK_PREVIEW_MODE_LABEL)
+    }
+
+    @Test
     fun previewTopSpaceUsesTheLargerOfReaderPaddingAndBannerInsteadOfAddingThem() {
         assertEquals(80, effectiveReaderTopSpace(normalTopPadding = 80, bannerHeight = 48, isPreview = true))
         assertEquals(80, effectiveReaderTopSpace(normalTopPadding = 32, bannerHeight = 80, isPreview = true))
