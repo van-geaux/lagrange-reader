@@ -61,6 +61,7 @@ On Book Detail, Series, Authors, Local books, Statistics, and Achievements:
 - failed refreshes preserve the last successful content where applicable;
 - Local books refresh does not interrupt active downloads or destructive actions;
 - automatic/background synchronization remains silent.
+- Series detail pull-to-refresh reloads `seriesDetailLoader` and clears the refreshing indicator on both success and failure; Home, Libraries, and More remain visible on Series detail (issue #62). Automated coverage is complete; physical-device validation of this standalone `main`-based rebuild remains pending.
 
 ### Orientation and fold lifecycle
 
