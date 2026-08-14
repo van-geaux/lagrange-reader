@@ -172,6 +172,27 @@ POST /api/v1/books/query
 
 The Android client sends `q`, an empty `sort` list, and pagination capped at 100 results. Search results retain their returned `libraryId` so details and reading actions target the correct library.
 
+### Global annotations hub
+
+Endpoint:
+
+```text
+GET /api/v1/annotations
+```
+
+The endpoint is authenticated and scoped to the current user across accessible books and libraries. The current Android client consumes the paginated response for the global Annotations destination.
+
+Defaults and limits:
+
+- `status=active`
+- `page=1`
+- `pageSize=25`, maximum `100`
+- newest-first ordering by `createdAt`
+
+Supported hub filters include `bookId`, `search`, `chapter`, `colors`, `styles`, `origins`, `dateFrom`, `dateTo`, `hasNote`, `status`, `sortBy`, and `sortDir`. The response contains `items`, `total`, `page`, `pageSize`, and `stats`.
+
+`search` searches annotation text and note text only. It must not be treated as full-text search over the loaded EPUB, KEPUB, or PDF publication. Annotation items may include `cfi`, `jumpFileId`, `jumpFileFormat`, and `pageno`; the Android client preserves those fields for reader navigation. The Android client implements EPUB annotation creation, note/style updates, deletion, and durable offline mutation replay. Restore, conflict-safe hydration, PDF/comic creation, and publication full-text search remain pending.
+
 ### Series catalog filters
 
 Endpoint:

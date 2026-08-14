@@ -24,6 +24,7 @@ internal fun shouldUseReadiumEpubReader(mediaKind: MediaKind): Boolean =
 internal fun ReadiumEpubReaderLauncher(
     file: File,
     fileId: String? = null,
+    bookId: String? = null,
     title: String,
     readerKey: String,
     libraryId: String,
@@ -32,6 +33,12 @@ internal fun ReadiumEpubReaderLauncher(
     initialPage: Int,
     initialPageCount: Int,
     initialPercent: Float?,
+    initialCfi: String? = null,
+    initialAnnotationText: String? = null,
+    initialAnnotationChapterIndex: Int? = null,
+    initialAnnotationId: String? = null,
+    initialAnnotationColor: String? = null,
+    initialAnnotationStyle: String? = null,
     onProgress: (chapterIndex: Int, pageIndex: Int, pageCount: Int, percent: Float?) -> Unit,
     onFinished: () -> Unit
 ) {
@@ -67,6 +74,7 @@ internal fun ReadiumEpubReaderLauncher(
                     context = context,
                     file = file,
                     fileId = fileId,
+                    bookId = bookId,
                     title = title,
                     readerKey = readerKey,
                     libraryId = libraryId,
@@ -74,7 +82,13 @@ internal fun ReadiumEpubReaderLauncher(
                     initialChapter = initialChapter,
                     initialPage = initialPage,
                     initialPageCount = initialPageCount,
-                    initialPercent = initialPercent
+                    initialPercent = initialPercent,
+                    initialCfi = initialCfi,
+                    initialAnnotationText = initialAnnotationText,
+                    initialAnnotationChapterIndex = initialAnnotationChapterIndex,
+                    initialAnnotationId = initialAnnotationId,
+                    initialAnnotationColor = initialAnnotationColor,
+                    initialAnnotationStyle = initialAnnotationStyle
                 )
             )
         }

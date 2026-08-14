@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -155,7 +156,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
+internal enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, ANNOTATIONS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private fun <T> browserRouteProperty(
@@ -794,6 +795,8 @@ internal fun NativeLibraryBrowserScreen(
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
+    annotationsLoader: suspend (AnnotationsFilter, Int) -> BookAnnotationsPage,
+    onAnnotationSelected: (BookAnnotation) -> Unit = {},
     achievementsLoader: suspend () -> AchievementCatalogue,
     statisticsLoader: suspend () -> UserStatistics,
     catalogImageLoader: suspend (String) -> ByteArray?,
@@ -1048,6 +1051,14 @@ internal fun NativeLibraryBrowserScreen(
                     showMoreMenu = false
                     selectedBook = null
                     destination = BrowserDestination.AUTHORS
+                    query = ""
+                    selectedAuthor = null
+                    selectedSeriesKey = null
+                },
+                onAnnotations = {
+                    showMoreMenu = false
+                    selectedBook = null
+                    destination = BrowserDestination.ANNOTATIONS
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
@@ -1349,6 +1360,7 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.LIBRARY -> "Libraries"
                         destination == BrowserDestination.SERIES -> "Series"
                         destination == BrowserDestination.AUTHORS -> "Authors"
+                        destination == BrowserDestination.ANNOTATIONS -> "Annotations"
                         destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
                         destination == BrowserDestination.ACHIEVEMENTS -> "Achievements"
                         destination == BrowserDestination.OPTIONS -> "Options"
@@ -1565,6 +1577,11 @@ internal fun NativeLibraryBrowserScreen(
                     loader = authorsCatalogLoader,
                     imageLoader = catalogImageLoader,
                     onAuthorSelected = { author -> selectedAuthor = author }
+                )
+                destination == BrowserDestination.ANNOTATIONS -> AnnotationsScreen(
+                    loader = annotationsLoader,
+                    onAnnotationSelected = onAnnotationSelected,
+                    modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.LOCAL_BOOKS -> LocalBooksScreen(
                     state = state,
@@ -1839,6 +1856,7 @@ private fun BrowserBottomNavigation(
             selected = destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
                 destination == BrowserDestination.LOCAL_BOOKS ||
+                destination == BrowserDestination.ANNOTATIONS ||
                 destination == BrowserDestination.STATISTICS ||
                 destination == BrowserDestination.ACHIEVEMENTS ||
                 destination == BrowserDestination.OPTIONS ||
@@ -1854,6 +1872,7 @@ private fun BrowserBottomNavigation(
 private fun MoreMenu(
     onSeries: () -> Unit,
     onAuthors: () -> Unit,
+    onAnnotations: () -> Unit,
     onLocalBooks: () -> Unit
 ) {
     Column(
@@ -1876,6 +1895,11 @@ private fun MoreMenu(
             headlineContent = { Text("Authors") },
             leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
             modifier = Modifier.clickable(onClick = onAuthors)
+        )
+        ListItem(
+            headlineContent = { Text("Annotations") },
+            leadingContent = { Icon(Icons.Default.Highlight, contentDescription = "Annotations icon") },
+            modifier = Modifier.clickable(onClick = onAnnotations)
         )
         ListItem(
             headlineContent = { Text("Local books") },
