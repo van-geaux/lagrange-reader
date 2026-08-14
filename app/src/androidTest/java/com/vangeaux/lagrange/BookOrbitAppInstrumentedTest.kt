@@ -487,6 +487,15 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Open series Orbit Saga").performClick()
         composeRule.onNodeWithText("Orbit Saga").assertIsDisplayed()
         composeRule.onNodeWithText("Orbit Rising").assertIsDisplayed()
+        composeRule.onNodeWithTag("browser_bottom_navigation").assertIsDisplayed()
+        composeRule.onNodeWithText("Home").assertIsDisplayed()
+        composeRule.onNodeWithText("Libraries").assertIsDisplayed()
+        composeRule.onNodeWithText("More").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(1, dataSource.seriesDetailLoadCalls) }
+        composeRule.onNodeWithTag("series_detail_pull_to_refresh")
+            .performTouchInput { swipeDown() }
+        composeRule.waitUntil { dataSource.seriesDetailLoadCalls >= 2 }
+        composeRule.runOnIdle { assertEquals(2, dataSource.seriesDetailLoadCalls) }
     }
 
     @Test

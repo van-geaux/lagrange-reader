@@ -1216,7 +1216,6 @@ internal fun NativeLibraryBrowserScreen(
         !isSearchOpen &&
             activeBookGenre == null &&
             activeSeriesGenre == null &&
-            selectedSeriesKey == null &&
             selectedAuthor == null
 
     Scaffold(
@@ -1822,7 +1821,7 @@ private fun BrowserBottomNavigation(
     onLibraries: () -> Unit,
     onMore: () -> Unit
 ) {
-    NavigationBar {
+    NavigationBar(modifier = Modifier.testTag("browser_bottom_navigation")) {
         NavigationBarItem(
             selected = destination == BrowserDestination.HOME,
             onClick = onHome,
@@ -7433,8 +7432,20 @@ private fun SeriesDetails(
         authors = localBooks.mapNotNull { it.author }.distinct(),
         books = localBooks
     )
-    val detail by produceState(initialValue = localDetail, seriesKey) {
-        value = detailLoader(seriesKey) ?: value
+    var isRefreshing by remember(seriesKey) { mutableStateOf(false) }
+    var reloadKey by remember(seriesKey) { mutableIntStateOf(0) }
+    val detail by produceState(initialValue = localDetail, seriesKey, reloadKey) {
+        try {
+            value = detailLoader(seriesKey) ?: value
+        } finally {
+            isRefreshing = false
+        }
+    }
+    val onRefresh: () -> Unit = {
+        if (!isRefreshing) {
+            isRefreshing = true
+            reloadKey += 1
+        }
     }
     val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
     val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
@@ -7540,9 +7551,16 @@ private fun SeriesDetails(
             }
         )
     }
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("series_detail_pull_to_refresh")
+    ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -7676,6 +7694,7 @@ private fun SeriesDetails(
                 )
             }
         }
+    }
     }
 }
 
