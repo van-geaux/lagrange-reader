@@ -806,6 +806,144 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `opening an annotation preserves its cfi, page, text and chapter index into reader state`() = runTest {
+        val annotation = BookAnnotation(
+            id = "annotation-1",
+            bookId = book.id,
+            cfi = "epubcfi(/6/6!/4/2,/1:3,/1:9)",
+            pageno = 42,
+            text = "selected words",
+            chapterIndex = 2,
+            bookTitle = book.title
+        )
+        val repository = FakeBookOrbitDataSource(
+            buildReaderResult = ReaderState(book = book, streamUrl = "$serverUrl/stream")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openAnnotation(annotation)
+        advanceUntilIdle()
+
+        val readerState = (coordinator.screen.value as AppScreen.Reader).readerState
+        assertEquals(ReaderLaunchMode.PREVIEW, readerState.launchMode)
+        assertEquals(annotation.cfi, readerState.initialCfi)
+        assertEquals(annotation.pageno, readerState.pageIndex)
+        assertEquals(annotation.text, readerState.annotationText)
+        assertEquals(annotation.chapterIndex, readerState.annotationChapterIndex)
+        assertEquals(annotation.id, readerState.annotationId)
+        assertTrue(repository.savedActiveReaders.isEmpty())
+        assertEquals(0, repository.syncPendingProgressCalls)
+    }
+
+    @Test
+    fun `updateAnnotation delegates to the durable update-mutation queue and returns true on success`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.updateAnnotation(annotation, note = "a note", color = "green", style = "highlight")
+        advanceUntilIdle()
+
+        assertTrue(result)
+        assertEquals(1, repository.updateAnnotationCalls.size)
+        val call = repository.updateAnnotationCalls.single()
+        assertEquals(book.id, call.bookId)
+        assertEquals("annotation-1", call.annotationId)
+        assertEquals("a note", call.note)
+        assertEquals("green", call.color)
+        assertEquals("highlight", call.style)
+    }
+
+    @Test
+    fun `updateAnnotation recovers the session and returns false on authentication failure`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text")
+        val repository = FakeBookOrbitDataSource(updateAnnotationError = AuthenticationRequiredException())
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.updateAnnotation(annotation, note = "a note", color = null, style = null)
+        advanceUntilIdle()
+
+        assertFalse(result)
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+    }
+
+    @Test
+    fun `trashAnnotation delegates to the durable delete-mutation queue and returns true on success`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.trashAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertTrue(result)
+        assertEquals(listOf(book.id to "annotation-1"), repository.deleteAnnotationCalls)
+    }
+
+    @Test
+    fun `trashAnnotation returns false without recovering session on a generic failure`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text")
+        val repository = FakeBookOrbitDataSource(deleteAnnotationError = IllegalStateException("boom"))
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.trashAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertFalse(result)
+        assertTrue(coordinator.screen.value is AppScreen.Loading)
+    }
+
+    @Test
+    fun `restoreAnnotation calls the online-only restore route and returns true on success`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text", deletedAt = "2026-08-01T00:00:00Z")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.restoreAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertTrue(result)
+        assertEquals(listOf("annotation-1"), repository.restoreAnnotationCalls)
+    }
+
+    @Test
+    fun `restoreAnnotation surfaces failure as false instead of a fake success`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text", deletedAt = "2026-08-01T00:00:00Z")
+        val repository = FakeBookOrbitDataSource(restoreAnnotationError = UserFacingException("not synced yet"))
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.restoreAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `purgeAnnotation calls the online-only purge route and returns true on success`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text", deletedAt = "2026-08-01T00:00:00Z")
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.purgeAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertTrue(result)
+        assertEquals(listOf("annotation-1"), repository.purgeAnnotationCalls)
+    }
+
+    @Test
+    fun `purgeAnnotation surfaces a server conflict as false instead of swallowing it`() = runTest {
+        val annotation = BookAnnotation(id = "annotation-1", bookId = book.id, text = "text", deletedAt = "2026-08-01T00:00:00Z")
+        val repository = FakeBookOrbitDataSource(purgeAnnotationError = HttpRequestException(409, "purge annotation"))
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        val result = coordinator.purgeAnnotation(annotation)
+        advanceUntilIdle()
+
+        assertFalse(result)
+    }
+
+    @Test
     fun `normal open refreshes the book before building reader state`() = runTest {
         val staleBook = book.copy(
             progressPositionMs = 0L,
@@ -2004,7 +2142,11 @@ private class FakeBookOrbitDataSource(
     var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
     var pendingProgressCountResult: Int = 0,
     var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success,
-    var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
+    var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap(),
+    var updateAnnotationError: Throwable? = null,
+    var deleteAnnotationError: Throwable? = null,
+    var restoreAnnotationError: Throwable? = null,
+    var purgeAnnotationError: Throwable? = null
 ) : BookOrbitDataSource {
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
@@ -2018,6 +2160,10 @@ private class FakeBookOrbitDataSource(
     val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
     val userRatingUpdates = mutableListOf<Pair<BookSummary, Int?>>()
     val deletedLocalBooks = mutableListOf<BookSummary>()
+    val updateAnnotationCalls = mutableListOf<UpdateAnnotationCall>()
+    val deleteAnnotationCalls = mutableListOf<Pair<String, String>>()
+    val restoreAnnotationCalls = mutableListOf<String>()
+    val purgeAnnotationCalls = mutableListOf<String>()
     var clearSessionCalls = 0
     var clearServerCalls = 0
     var clearActiveReaderCalls = 0
@@ -2191,7 +2337,35 @@ private class FakeBookOrbitDataSource(
     override suspend fun canReachServer(serverUrl: String): Boolean = checkServerResult == ServerCheckResult.Reachable
 
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = checkServerResult
+
+    override suspend fun updateAnnotation(bookId: String, annotationId: String, note: String?, color: String?, style: String?) {
+        updateAnnotationError?.let { throw it }
+        updateAnnotationCalls += UpdateAnnotationCall(bookId, annotationId, note, color, style)
+    }
+
+    override suspend fun deleteAnnotation(bookId: String, annotationId: String) {
+        deleteAnnotationError?.let { throw it }
+        deleteAnnotationCalls += bookId to annotationId
+    }
+
+    override suspend fun restoreAnnotation(annotationId: String) {
+        restoreAnnotationError?.let { throw it }
+        restoreAnnotationCalls += annotationId
+    }
+
+    override suspend fun purgeAnnotation(annotationId: String) {
+        purgeAnnotationError?.let { throw it }
+        purgeAnnotationCalls += annotationId
+    }
 }
+
+private data class UpdateAnnotationCall(
+    val bookId: String,
+    val annotationId: String,
+    val note: String?,
+    val color: String?,
+    val style: String?
+)
 
 private fun AppCoordinator.setScreenForTest(screen: AppScreen) {
     val field = AppCoordinator::class.java.getDeclaredField("_screen")

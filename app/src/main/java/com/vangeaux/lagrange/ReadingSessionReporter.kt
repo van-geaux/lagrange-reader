@@ -14,12 +14,18 @@ internal class ReadingSessionReporter(
     private val tracker: ReadingSessionTracker = ReadingSessionTracker()
 ) {
     private val fileId = fileId?.trim().orEmpty()
-    private val enabled = enabled && this.fileId.isNotBlank()
+    private var enabled = enabled && this.fileId.isNotBlank()
     private val repository = BookOrbitRepository(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start(progressPercent: Float?, atMillis: Long = System.currentTimeMillis()) {
         if (!enabled) return
+        tracker.start(progressPercent, atMillis)
+    }
+
+    fun enable(progressPercent: Float?, atMillis: Long = System.currentTimeMillis()) {
+        if (fileId.isBlank()) return
+        enabled = true
         tracker.start(progressPercent, atMillis)
     }
 

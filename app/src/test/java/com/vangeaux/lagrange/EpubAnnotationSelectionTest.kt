@@ -261,4 +261,17 @@ class EpubAnnotationSelectionTest {
             )
         )
     }
+
+    @Test
+    fun `annotation loading continues while total has not been reached`() {
+        assertTrue(shouldLoadNextAnnotationPage(loadedCount = 30, total = 61, receivedCount = 30, pageSize = 30))
+        assertTrue(shouldLoadNextAnnotationPage(loadedCount = 60, total = 61, receivedCount = 30, pageSize = 30))
+    }
+
+    @Test
+    fun `annotation loading stops at total or a short page`() {
+        assertTrue(!shouldLoadNextAnnotationPage(loadedCount = 61, total = 61, receivedCount = 1, pageSize = 30))
+        assertTrue(!shouldLoadNextAnnotationPage(loadedCount = 12, total = null, receivedCount = 12, pageSize = 30))
+        assertTrue(!shouldLoadNextAnnotationPage(loadedCount = 30, total = 61, receivedCount = 0, pageSize = 30))
+    }
 }

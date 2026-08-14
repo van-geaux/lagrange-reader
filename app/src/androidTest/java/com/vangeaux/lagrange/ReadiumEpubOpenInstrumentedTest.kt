@@ -34,6 +34,46 @@ import org.readium.r2.shared.publication.services.positions
 @RunWith(AndroidJUnit4::class)
 class ReadiumEpubOpenInstrumentedTest {
     @Test
+    fun readerIntentEnablesNormalAnnotationFeaturesForItsBook() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-annotation-identity.epub")
+        val intent = ReadiumEpubReaderActivity.createIntent(
+            context = context,
+            file = epub,
+            bookId = "book-42",
+            title = "Annotation identity",
+            readerKey = "annotation-identity",
+            launchMode = ReaderLaunchMode.NORMAL,
+            initialChapter = 0,
+            initialPage = 0,
+            initialPageCount = 1,
+            initialPercent = null
+        )
+
+        assertEquals("book-42", epubAnnotationBookId(intent))
+        assertTrue(epubAnnotationFeaturesEnabled(intent))
+    }
+
+    @Test
+    fun previewIntentDoesNotEnableAnnotationCreation() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val intent = ReadiumEpubReaderActivity.createIntent(
+            context = context,
+            file = File(context.cacheDir, "readium-preview-annotation-identity.epub"),
+            bookId = "book-42",
+            title = "Preview annotation identity",
+            readerKey = "preview-annotation-identity",
+            launchMode = ReaderLaunchMode.PREVIEW,
+            initialChapter = 0,
+            initialPage = 0,
+            initialPageCount = 1,
+            initialPercent = null
+        )
+
+        assertTrue(!epubAnnotationFeaturesEnabled(intent))
+    }
+
+    @Test
     fun opensEpubWithBitmapOnlySvgCover() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val epub = File(context.cacheDir, "readium-svg-cover.epub")

@@ -11,6 +11,13 @@ import org.readium.r2.shared.util.mediatype.MediaType
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackTest {
 
+    @Test
+    fun audiobookPreviewBannerVisibilityFollowsCurrentEmittedSessionMode() {
+        assertEquals(false, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.NORMAL))
+        assertEquals(true, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.PREVIEW))
+        assertEquals(false, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.NORMAL))
+    }
+
     private fun file(
         id: String,
         streamUrl: String?,

@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -133,6 +134,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var rootView: FrameLayout
     private lateinit var readerViewport: FrameLayout
     private lateinit var readerContainer: FrameLayout
+    private lateinit var viewOnlyBannerView: ComposeView
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
@@ -205,6 +207,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun createReaderViews() {
         rootView = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         readerViewport = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+
         rootView.addView(
             readerViewport,
             FrameLayout.LayoutParams(
@@ -224,6 +227,38 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        viewOnlyBannerView = ComposeView(this).apply {
+            visibility = if (isPreview) View.VISIBLE else View.GONE
+            setContent { BookOrbitTheme { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
+            addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                val topMargin = (view.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+                readerContainer.setPadding(
+                    readerContainer.paddingLeft,
+                    effectiveReaderTopSpace(
+                        0,
+                        occupiedPreviewBannerBottom(topMargin, view.height),
+                        view.visibility == View.VISIBLE && isPreview
+                    ),
+                    readerContainer.paddingRight,
+                    readerContainer.paddingBottom
+                )
+            }
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                val statusBarTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                    if (params.topMargin != statusBarTop) {
+                        params.topMargin = statusBarTop
+                        view.layoutParams = params
+                    }
+                }
+                insets
+            }
+        }
+        readerViewport.addView(viewOnlyBannerView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP
+        ))
         progressView = ProgressBar(this).also { progress ->
             readerViewport.addView(
                 progress,
@@ -497,6 +532,19 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun enableReadMode() {
+        if (!isPreview) return
+        isPreview = false
+        readingSessionReporter.enable(currentProgressPercent())
+        viewOnlyBannerView.visibility = View.GONE
+        readerContainer.setPadding(
+            readerContainer.paddingLeft,
+            0,
+            readerContainer.paddingRight,
+            readerContainer.paddingBottom
+        )
     }
 
     private fun showTapZoneTutorial() {

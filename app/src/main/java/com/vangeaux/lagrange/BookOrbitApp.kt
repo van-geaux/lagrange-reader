@@ -106,6 +106,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -116,6 +118,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -291,6 +294,10 @@ private fun BookOrbitDestination(
             authorBooksLoader = coordinator::loadAuthorBooks,
             annotationsLoader = coordinator::loadAnnotations,
             onAnnotationSelected = coordinator::openAnnotation,
+            onUpdateAnnotation = coordinator::updateAnnotation,
+            onTrashAnnotation = coordinator::trashAnnotation,
+            onRestoreAnnotation = coordinator::restoreAnnotation,
+            onPurgeAnnotation = coordinator::purgeAnnotation,
             achievementsLoader = coordinator::loadAchievements,
             statisticsLoader = coordinator::loadUserStatistics,
             catalogImageLoader = coordinator::loadCatalogImage,
@@ -932,6 +939,7 @@ private fun ReaderScreen(
             ReadiumEpubReaderLauncher(
                 file = readerFile,
                 fileId = state.book.fileId,
+                bookId = state.book.id,
                 title = state.book.title,
                 readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
                 libraryId = state.book.libraryId,
@@ -1231,6 +1239,12 @@ private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): A
         speed = session.player.playbackParameters.speed
     )
 
+internal fun shouldShowAudiobookPreviewBanner(launchMode: ReaderLaunchMode): Boolean =
+    launchMode == ReaderLaunchMode.PREVIEW
+
+internal const val BOOK_PREVIEW_MODE_LABEL = "Preview mode · Tap to enable reading progress"
+internal const val AUDIOBOOK_PREVIEW_MODE_LABEL = "Preview mode · Tap to enable listening progress"
+
 @Composable
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
@@ -1347,14 +1361,27 @@ internal fun ReadiumCompactAudioPlayer(
         ?.minus(if (isSeeking) seekPositionMs.toLong() else positionMs)
         ?.coerceAtLeast(0L)
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .semantics {
-                contentDescription = "Audiobook player for ${current.book.title}"
-                stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
-            },
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (shouldShowAudiobookPreviewBanner(current.launchMode)) {
+            ViewOnlyModeBanner(
+                onConfirmReadMode = controller::enableReadingProgress,
+                modifier = Modifier.padding(horizontal = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                onPrepareConfirmation = controller::pause,
+                bannerText = AUDIOBOOK_PREVIEW_MODE_LABEL,
+                contentDescription = "Preview mode. Tap to enable listening progress.",
+                dialogText = "You’ll switch to listening mode and start saving your listening progress from this position.",
+                confirmText = "Switch to listening mode"
+            )
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics {
+                    contentDescription = "Audiobook player for ${current.book.title}"
+                    stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
+                },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 8.dp,
@@ -1543,7 +1570,9 @@ internal fun ReadiumCompactAudioPlayer(
     }
 }
 
-private fun formatPlaybackSpeed(speed: Double): String =
+    }
+
+private fun formatPlaybackSpeed(speed: Double) =
     if (speed % 1.0 == 0.0) speed.toInt().toString() else speed.toString()
 
 @Composable
@@ -1829,6 +1858,66 @@ private fun ReaderTapZoneTutorialRegion(
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
+        )
+    }
+}
+
+@Composable
+internal fun ViewOnlyModeBanner(
+    onConfirmReadMode: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RectangleShape,
+    onPrepareConfirmation: () -> Unit = {},
+    bannerText: String = BOOK_PREVIEW_MODE_LABEL,
+    contentDescription: String = "Preview mode. Tap to enable reading progress.",
+    dialogText: String = "You’ll switch to reading mode, remain on this page, and start saving reading progress.",
+    confirmText: String = "Switch to reading mode"
+) {
+    var showConfirmation by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("view-only-mode-banner")
+            .clickable {
+                onPrepareConfirmation()
+                showConfirmation = true
+            },
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = shape,
+        tonalElevation = 2.dp
+    ) {
+        Text(
+            text = bannerText,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .semantics { this.contentDescription = contentDescription },
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelLarge
+        )
+    }
+    if (showConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showConfirmation = false },
+            title = { Text("Leave preview mode?") },
+            text = { Text(dialogText) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirmation = false
+                        onConfirmReadMode()
+                    },
+                    modifier = Modifier.testTag("view-only-confirm-read-mode")
+                ) { Text(confirmText) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showConfirmation = false },
+                    modifier = Modifier.testTag("view-only-cancel-read-mode")
+                ) { Text("Cancel") }
+            },
+            modifier = Modifier.testTag("view-only-confirmation-dialog")
         )
     }
 }
