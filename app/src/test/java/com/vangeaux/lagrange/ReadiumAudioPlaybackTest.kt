@@ -219,4 +219,30 @@ class ReadiumAudioPlaybackTest {
         assertEquals(10.seconds, configuration.seekBackwardIncrement)
         assertEquals(30.seconds, configuration.seekForwardIncrement)
     }
+
+    @Test
+    fun audiobookChapterBoundsUseTheNextChapterOrTotalDuration() {
+        val chapters = listOf(
+            AudiobookChapter("Opening", 0L),
+            AudiobookChapter("Middle", 100_000L),
+            AudiobookChapter("Ending", 250_000L)
+        )
+
+        assertEquals(100_000L to 250_000L, audiobookChapterBounds(chapters, 150_000L, 400_000L))
+        assertEquals(250_000L to 400_000L, audiobookChapterBounds(chapters, 300_000L, 400_000L))
+        assertEquals(250_000L, audiobookChapterEndMs(chapters, 150_000L))
+        assertEquals(null, audiobookChapterEndMs(chapters, 300_000L))
+    }
+
+    @Test
+    fun audiobookChapterBoundsRejectUnknownDuration() {
+        assertEquals(
+            null,
+            audiobookChapterBounds(
+                listOf(AudiobookChapter("Opening", 0L)),
+                positionMs = 0L,
+                totalDurationMs = 0L
+            )
+        )
+    }
 }

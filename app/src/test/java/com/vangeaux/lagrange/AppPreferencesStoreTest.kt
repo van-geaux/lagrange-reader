@@ -15,6 +15,13 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun audioSkipIntervalsNormalizeToSupportedValues() {
+        assertEquals(5, normalizeAudioSkipSeconds(1))
+        assertEquals(10, normalizeAudioSkipSeconds(12))
+        assertEquals(60, normalizeAudioSkipSeconds(90))
+    }
+
+    @Test
     fun `stored app theme values round trip and invalid values follow system`() {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))

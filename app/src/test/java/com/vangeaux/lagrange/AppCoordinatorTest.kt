@@ -29,6 +29,41 @@ class AppCoordinatorTest {
     )
 
     @Test
+    fun `full audio player overlays current browser screen and dismisses without navigation`() = runTest {
+        val audiobook = book.copy(
+            id = "audio-1",
+            fileId = "audio-file-1",
+            title = "Sample Audiobook",
+            mediaKind = MediaKind.AUDIO
+        )
+        val repository = FakeBookOrbitDataSource(
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book, audiobook)
+            ),
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book, audiobook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        val origin = coordinator.screen.value
+
+        coordinator.openAudioPlayer(audiobook)
+
+        assertEquals(origin, coordinator.screen.value)
+        assertEquals(audiobook, coordinator.fullAudioPlayerBook.value)
+
+        coordinator.closeAudioPlayer()
+
+        assertEquals(origin, coordinator.screen.value)
+        assertNull(coordinator.fullAudioPlayerBook.value)
+    }
+
+    @Test
     fun `loadBrowser restores persisted interrupted download as failed metadata row`() = runTest {
         val interrupted = DownloadRecord(
             serverUrl = serverUrl,

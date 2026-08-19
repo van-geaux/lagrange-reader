@@ -473,7 +473,27 @@ private suspend fun awaitMedia3Ready(player: Player): PlaybackException? {
 
 internal data class AudioBookDetailRequest(
     val sequence: Long,
+    val book: BookSummary,
+    val openSessionHistory: Boolean = false
+)
+
+internal data class AudioFullPlayerRequest(
+    val sequence: Long,
     val book: BookSummary
+)
+
+internal enum class AudioSleepTimerOption(val label: String, val durationMs: Long?) {
+    OFF("Off", null),
+    END_OF_CHAPTER("End of chapter", null),
+    FIFTEEN_MINUTES("15 minutes", 15 * 60_000L),
+    THIRTY_MINUTES("30 minutes", 30 * 60_000L),
+    FORTY_FIVE_MINUTES("45 minutes", 45 * 60_000L),
+    SIXTY_MINUTES("60 minutes", 60 * 60_000L)
+}
+
+internal data class AudioSleepTimerState(
+    val option: AudioSleepTimerOption = AudioSleepTimerOption.OFF,
+    val remainingMs: Long? = null
 )
 
 internal enum class AudioPlaybackPreparationState {
@@ -848,6 +868,15 @@ class ReadiumAudioPlaybackController internal constructor(
     internal val bookDetailRequest: StateFlow<AudioBookDetailRequest?> =
         mutableBookDetailRequest.asStateFlow()
     private var bookDetailRequestSequence = 0L
+    private val mutableFullPlayerRequest = MutableStateFlow<AudioFullPlayerRequest?>(null)
+    internal val fullPlayerRequest: StateFlow<AudioFullPlayerRequest?> =
+        mutableFullPlayerRequest.asStateFlow()
+    private var fullPlayerRequestSequence = 0L
+    private val mutableSleepTimer = MutableStateFlow(AudioSleepTimerState())
+    internal val sleepTimer: StateFlow<AudioSleepTimerState> = mutableSleepTimer.asStateFlow()
+    private var sleepTimerJob: Job? = null
+    private val mutablePlayerLocked = MutableStateFlow(false)
+    internal val playerLocked: StateFlow<Boolean> = mutablePlayerLocked.asStateFlow()
 
     fun setProgressListener(
         listener: (BookSummary, Long, Float?, ReaderLaunchMode) -> Unit
@@ -877,15 +906,69 @@ class ReadiumAudioPlaybackController internal constructor(
 
     internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)
 
-    internal fun requestBookDetail(book: BookSummary) {
+    internal fun requestBookDetail(book: BookSummary, openSessionHistory: Boolean = false) {
         bookDetailRequestSequence += 1L
-        mutableBookDetailRequest.value = AudioBookDetailRequest(bookDetailRequestSequence, book)
+        mutableBookDetailRequest.value = AudioBookDetailRequest(
+            sequence = bookDetailRequestSequence,
+            book = book,
+            openSessionHistory = openSessionHistory
+        )
     }
 
     internal fun consumeBookDetailRequest(sequence: Long) {
         if (mutableBookDetailRequest.value?.sequence == sequence) {
             mutableBookDetailRequest.value = null
         }
+    }
+
+    internal fun requestFullPlayer(book: BookSummary) {
+        fullPlayerRequestSequence += 1L
+        mutableFullPlayerRequest.value = AudioFullPlayerRequest(fullPlayerRequestSequence, book)
+    }
+
+    internal fun consumeFullPlayerRequest(sequence: Long) {
+        if (mutableFullPlayerRequest.value?.sequence == sequence) {
+            mutableFullPlayerRequest.value = null
+        }
+    }
+
+    internal fun setSleepTimer(option: AudioSleepTimerOption) {
+        sleepTimerJob?.cancel()
+        if (option == AudioSleepTimerOption.OFF) {
+            mutableSleepTimer.value = AudioSleepTimerState()
+            return
+        }
+        sleepTimerJob = scope.launch {
+            val session = binder().session.value
+            val durationMs = option.durationMs ?: session?.let { current ->
+                val positionMs = current.absolutePositionMs()
+                val chapterEndMs = audiobookChapterEndMs(current.book.audioChapters, positionMs)
+                    ?: current.totalDurationMs()
+                chapterEndMs
+                    .minus(positionMs)
+                    .coerceAtLeast(0L)
+            }
+            if (durationMs == null || durationMs <= 0L) {
+                mutableSleepTimer.value = AudioSleepTimerState()
+                return@launch
+            }
+            val timerDurationMs = requireNotNull(durationMs)
+            var remainingMs = timerDurationMs
+            mutableSleepTimer.value = AudioSleepTimerState(option, remainingMs)
+            while (isActive && remainingMs > 0L) {
+                delay(1_000L)
+                remainingMs = (remainingMs - 1_000L).coerceAtLeast(0L)
+                mutableSleepTimer.value = AudioSleepTimerState(option, remainingMs)
+            }
+            if (isActive) {
+                binder().session.value?.player?.pause()
+                mutableSleepTimer.value = AudioSleepTimerState()
+            }
+        }
+    }
+
+    internal fun setPlayerLocked(locked: Boolean) {
+        mutablePlayerLocked.value = locked
     }
 
     internal suspend fun session(): StateFlow<ReadiumAudioPlaybackService.Session?> = binder().session
@@ -1144,6 +1227,7 @@ class ReadiumAudioPlaybackController internal constructor(
             playbackStateListener = null
             lastRecordedIsPlaying = null
             serviceBinder.stop()
+            mutablePlayerLocked.value = false
         }
     }
 

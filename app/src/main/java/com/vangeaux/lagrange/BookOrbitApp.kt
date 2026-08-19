@@ -161,6 +161,14 @@ fun BookOrbitApp(
     onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
+    val fullAudioPlayerBook by coordinator.fullAudioPlayerBook.collectAsState()
+    val fullPlayerRequest = audioPlaybackController?.fullPlayerRequest?.collectAsState()?.value
+    LaunchedEffect(fullPlayerRequest?.sequence) {
+        fullPlayerRequest?.let { request ->
+            coordinator.openAudioPlayer(request.book)
+            requireNotNull(audioPlaybackController).consumeFullPlayerRequest(request.sequence)
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         BookOrbitDestination(
             screen = screen,
@@ -169,16 +177,32 @@ fun BookOrbitApp(
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
             releaseCheckStatus = coordinator.releaseCheckStatus.collectAsState().value,
-            onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) }
+            onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) },
+            showCompactAudioPlayer = fullAudioPlayerBook == null
         )
-        if (screen !is AppScreen.Browser) audioPlaybackController?.let { controller ->
+        if (screen !is AppScreen.Browser && fullAudioPlayerBook == null) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
                 controller = controller,
                 onClosed = coordinator::onAudioPlaybackClosed,
-                onCoverClick = controller::requestBookDetail,
+                onCoverClick = coordinator::openAudioPlayer,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
+            )
+        }
+        if (fullAudioPlayerBook != null) audioPlaybackController?.let { controller ->
+            ReadiumFullAudioPlayer(
+                controller = controller,
+                onCollapse = coordinator::closeAudioPlayer,
+                onBookDetails = { selectedBook ->
+                    controller.requestBookDetail(selectedBook)
+                    coordinator.closeAudioPlayer()
+                },
+                onClosePlayer = coordinator::closeAudioPlayer,
+                loadSessionHistory = coordinator::loadAudiobookSessionHistory,
+                clearSessionHistory = coordinator::clearAudiobookSessionHistory,
+                loadServerReadingSessions = coordinator::loadBookReadingSessions,
+                loadServerReadingAttempts = coordinator::loadBookReadingAttempts
             )
         }
         releaseUpdate?.let { update ->
@@ -239,7 +263,8 @@ private fun BookOrbitDestination(
     appPreferences: AppPreferences,
     onAppPreferencesChange: (AppPreferences) -> Unit,
     releaseCheckStatus: ReleaseCheckStatus,
-    onCheckForUpdates: () -> Unit
+    onCheckForUpdates: () -> Unit,
+    showCompactAudioPlayer: Boolean
 ) {
     when (screen) {
         AppScreen.Loading -> LoadingScreen()
@@ -328,12 +353,12 @@ private fun BookOrbitDestination(
             onBookDetailRequestConsumed = { sequence ->
                 audioPlaybackController?.consumeBookDetailRequest(sequence)
             },
-            bottomOverlay = audioPlaybackController?.let { controller ->
+            bottomOverlay = audioPlaybackController?.takeIf { showCompactAudioPlayer }?.let { controller ->
                 {
                     ReadiumCompactAudioPlayer(
                         controller = controller,
                         onClosed = coordinator::onAudioPlaybackClosed,
-                        onCoverClick = controller::requestBookDetail
+                        onCoverClick = coordinator::openAudioPlayer
                     )
                 }
             }
