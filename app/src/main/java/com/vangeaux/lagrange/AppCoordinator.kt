@@ -171,6 +171,8 @@ class AppCoordinator(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Loading)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
+    private val _fullAudioPlayerBook = MutableStateFlow<BookSummary?>(null)
+    val fullAudioPlayerBook: StateFlow<BookSummary?> = _fullAudioPlayerBook.asStateFlow()
     private val _releaseUpdate = MutableStateFlow<ReleaseUpdate?>(null)
     val releaseUpdate: StateFlow<ReleaseUpdate?> = _releaseUpdate.asStateFlow()
     private val _releaseCheckStatus = MutableStateFlow(ReleaseCheckStatus.IDLE)
@@ -1551,6 +1553,14 @@ class AppCoordinator(
         } ?: loadBrowser()
     }
 
+    fun openAudioPlayer(book: BookSummary) {
+        _fullAudioPlayerBook.value = book
+    }
+
+    fun closeAudioPlayer() {
+        _fullAudioPlayerBook.value = null
+    }
+
     fun onAudioPlaybackProgress(
         book: BookSummary,
         position: Long,
@@ -1674,7 +1684,10 @@ class AppCoordinator(
             downloadMetadataByFileId = state.downloadMetadataByFileId + restored
         )
         lastBrowserState = next
-        if (_screen.value is AppScreen.ReaderLoading || _screen.value is AppScreen.Reader) {
+        if (
+            _screen.value is AppScreen.ReaderLoading ||
+            _screen.value is AppScreen.Reader
+        ) {
             return
         }
         _screen.value = AppScreen.Browser(browserState = next)

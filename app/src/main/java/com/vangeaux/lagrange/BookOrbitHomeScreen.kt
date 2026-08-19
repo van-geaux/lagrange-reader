@@ -854,10 +854,12 @@ internal fun NativeLibraryBrowserScreen(
     var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
         mutableStateOf(BrowserRouteSnapshot())
     }
+    var openSessionHistoryRequest by rememberSaveable { mutableStateOf(false) }
     val selectedBookProperty = object : ReadWriteProperty<Any?, BookSummary?> {
         override fun getValue(thisRef: Any?, property: KProperty<*>): BookSummary? =
             resolveSelectedBook(listOf(state.books, state.homeBooks, filteredBooks), browserRoute.selectedBook)
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: BookSummary?) {
+            openSessionHistoryRequest = false
             browserRoute = browserRoute.copy(selectedBook = value?.let(::bookSelectionSnapshot))
         }
     }
@@ -921,6 +923,7 @@ internal fun NativeLibraryBrowserScreen(
         selectedSeriesKey = null
         selectedAuthor = null
         selectedBook = request.book
+        openSessionHistoryRequest = request.openSessionHistory
         onBookDetailRequestConsumed(request.sequence)
     }
     val requestDownload: (BookSummary) -> Unit = { book ->
@@ -1483,6 +1486,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 selectedBook != null -> BookDetails(
                     book = selectedBook!!,
+                    openSessionHistory = openSessionHistoryRequest,
                     state = state,
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
@@ -5756,6 +5760,7 @@ private fun LibraryBookCard(
 @Composable
 private fun BookDetails(
     book: BookSummary,
+    openSessionHistory: Boolean,
     state: BrowserState,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
@@ -5862,8 +5867,8 @@ private fun BookDetails(
     )
     val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
-    var showSessionHistory by remember(displayBook.id, displayBook.fileId) {
-        mutableStateOf(false)
+    var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
+        mutableStateOf(openSessionHistory)
     }
     var sessionHistory by remember(displayBook.id, displayBook.fileId) {
         mutableStateOf<List<AudiobookSessionEvent>>(emptyList())
@@ -6459,7 +6464,7 @@ private fun BookDetails(
 }
 
 @Composable
-private fun AudiobookSessionHistory(
+internal fun AudiobookSessionHistory(
     bookTitle: String,
     events: List<AudiobookSessionEvent>,
     isLoadingServerReadingHistory: Boolean,
@@ -7247,7 +7252,7 @@ private fun DetailMetadataGroup(title: String, entries: List<Pair<String, String
 }
 
 @Composable
-private fun FullScreenCoverViewer(
+internal fun FullScreenCoverViewer(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onDismiss: () -> Unit
