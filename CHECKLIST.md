@@ -17,6 +17,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] Server-missing catalog state implemented with distinct visibility, overlay, and action behavior.
 - [x] Download lifecycle state handling implemented with separate attempts and completed local copies.
 - [x] Interim server-hosted sign-in WebView implemented; native AppAuth remains deferred by the upstream redirect contract.
+- [x] [#68](https://github.com/van-geaux/lagrange-reader/issues/68) enhanced audiobook player delivered through merged [PR #70](https://github.com/van-geaux/lagrange-reader/pull/70), merged into `main` at `d0f2529`. The full player preserves the browser route, keeps playback service-owned, provides chapter/seek/speed/sleep/history/lock/cover controls, uses a shared navigation-safe chapter sheet, and scales the complete portrait/landscape group while preserving usable touch targets. The user confirmed the responsive layout and overflowing chapter-title marquee work.
 
 ## Active validation
 
