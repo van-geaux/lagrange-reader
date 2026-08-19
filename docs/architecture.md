@@ -22,7 +22,8 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Repository/data layer: authenticated BookOrbit requests, parsing, server switching, cache fallback, progress/status/rating operations, download reconciliation, and reader preparation.
 - Room/local persistence: server-scoped catalog/download state, active-reader metadata, queued progress, and local audiobook session history.
 - Readium: EPUB, PDF, comic, and local/explicit-download reading paths.
-- Media3/foreground service: connected and local audiobook playback, compact controls, chapters, seeking, speed, and process/task restoration.
+- Media3/foreground service: connected and local audiobook playback, compact controls, chapters, seeking, speed, sleep timers, and process/task restoration. The service/controller owns playback state and commands; Compose renders the compact or full player without creating a second playback session.
+- Full audiobook player overlay: `AppCoordinator.fullAudioPlayerBook` overlays the retained browser composition, so minimize and Close dismiss the player without implicitly navigating or losing the exact browser route. Metadata navigation is an explicit separate action.
 
 ## Data and synchronization rules
 
@@ -49,6 +50,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Audio progress reports the overall percentage together with the active file ID and in-file position. Online restoration rebuilds the ordered playlist and resolves file-aware server or queued-local progress; local exact-position history remains the seeking authority.
 - Multi-file offline download/storage is out of scope. Existing single-file M4B/MP3 and downloaded/local playback remain unchanged.
 - Audiobook restoration keeps Browser visible while the compact player prepares; explicit Book Detail Play may autoplay after preparation, while task/app restoration remains paused.
+- The full audiobook player keeps Chapter, Speed, and Sleep visible in both orientations. Portrait and landscape derive one height-based group scale for spacing, typography, cover allocation, seek rows, and control artwork while preserving usable interactive minimums. The shared chapter list uses a Material 3 `ModalBottomSheet` so sheet/window geometry owns Android navigation-bar handling.
 - EPUB, PDF, and comic sessions begin after usable publication open and follow reader lifecycle/page activity. Audiobook sessions follow Media3 `isPlaying` transitions and remain separate from local exact-position audiobook history. Five minutes without active interaction/playback rolls a session over; Preview never queues a server session.
 - Preview never writes normal progress, active-reader state, or local session history.
 - Browser drill-down state is one saveable route snapshot containing the selected identity and return path; restored identities resolve against current catalog/search data with bounded fallback metadata.

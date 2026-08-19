@@ -96,6 +96,9 @@ When the affected scope requires it, verify:
 - tutorial geometry and labels match the transformed runtime tap regions for LTR, RTL, and selected inversion;
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
+- audiobook full-player overlay above the retained browser route: minimize restores the exact browser location, Close removes the player without implicit navigation, and metadata navigation is explicit;
+- audiobook full-player Chapter/Speed/Sleep visibility and grouped responsive sizing in both portrait and landscape, including readable landscape touch targets;
+- the shared compact/full chapter `ModalBottomSheet`, active-chapter highlighting, seek-on-selection, Android navigation-bar containment, centered `Book progress`/`Chapter progress` labels, and overflowing chapter-title marquee scrolling;
 - server session registration for EPUB, PDF, CBZ/CBR/CB7, and audiobooks;
 - explicit audiobook pause finalizes and uploads the active listening interval; resumed playback starts a new interval;
 - no session POST for Preview, paused/background time, or audiobook screen-open without playback;
