@@ -13,6 +13,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] Pull-to-refresh implemented for Book Detail, Series, Authors, Local books, Statistics, and Achievements.
 - [x] Continuous EPUB active-resource seek rail implemented and user-confirmed on-device.
 - [x] EPUB reader font selection implemented, including Publisher default, built-in accessibility choices, and one imported custom-font slot.
+- [x] [#69](https://github.com/van-geaux/lagrange-reader/issues/69) EPUB text-size range extended to 90%–200%, both existing ± steppers can reach 200%, and normalization/Readium font-size mapping now share named-constant bounds. JVM unit coverage updated and passing; physical-device validation is user-confirmed.
 - [x] Staged startup behavior implemented; cached content remains usable without a blocking global spinner.
 - [x] Server-missing catalog state implemented with distinct visibility, overlay, and action behavior.
 - [x] Download lifecycle state handling implemented with separate attempts and completed local copies.
