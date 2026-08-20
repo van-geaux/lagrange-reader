@@ -376,6 +376,23 @@ internal fun booksWithLocalFilePathOverrides(
     }
 }
 
+internal fun resolveInitialSelectedFileId(
+    availableFiles: List<BookFileOption>,
+    localFilePathOverrides: Map<String, String?>,
+    currentFileId: String?
+): String? {
+    val downloaded = availableFiles.firstOrNull { option ->
+        val fileId = option.fileId ?: return@firstOrNull false
+        val effectiveLocalPath = if (localFilePathOverrides.containsKey(fileId)) {
+            localFilePathOverrides[fileId]
+        } else {
+            option.localPath
+        }
+        !effectiveLocalPath.isNullOrBlank()
+    }
+    return downloaded?.fileId ?: currentFileId
+}
+
 internal fun localCopiesForBulkAction(
     books: List<BookSummary>,
     localFilePathOverrides: Map<String, String?>
@@ -5800,6 +5817,7 @@ private fun BookDetails(
     val currentBookIsDownloading = currentFileId != null && currentFileId in state.downloadingFileIds
     var isRefreshing by remember(currentBook.id, currentBook.fileId) { mutableStateOf(false) }
     var reloadKey by remember(currentBook.id, currentBook.fileId) { mutableIntStateOf(0) }
+    var isInitialDetailLoadComplete by remember(currentBook.id, currentBook.fileId) { mutableStateOf(false) }
     val detail by key(currentBook.id, currentBook.fileId) {
         produceState(
             initialValue = BookDetailInfo(currentBook),
@@ -5828,6 +5846,7 @@ private fun BookDetails(
                 value = detailLoader(currentBook) ?: value
             } finally {
                 isRefreshing = false
+                isInitialDetailLoadComplete = true
             }
         }
     }
@@ -5847,6 +5866,17 @@ private fun BookDetails(
         }
     }
     var selectedFileId by remember(book.id, currentBook.fileId) { mutableStateOf(currentBook.fileId) }
+    var hasAppliedInitialFileSelection by remember(book.id, currentBook.fileId) { mutableStateOf(false) }
+    LaunchedEffect(book.id, currentBook.fileId, isInitialDetailLoadComplete, detail.availableFiles) {
+        if (!hasAppliedInitialFileSelection && isInitialDetailLoadComplete) {
+            hasAppliedInitialFileSelection = true
+            selectedFileId = resolveInitialSelectedFileId(
+                availableFiles = detail.availableFiles,
+                localFilePathOverrides = state.localFilePathOverrides,
+                currentFileId = currentBook.fileId
+            )
+        }
+    }
     val selectedFile = detail.availableFiles.firstOrNull { it.fileId == selectedFileId }
     val selectedBaseBook = selectedFile?.book ?: detail.book
     val selectedStateBook = if (selectedBaseBook.fileId == currentBook.fileId) currentBook else selectedBaseBook
@@ -6356,7 +6386,10 @@ private fun BookDetails(
                 BookDetailAvailableFilePicker(
                     options = detail.availableFiles,
                     selectedFileId = selectedFileId,
-                    onFileSelected = { selectedFileId = it }
+                    onFileSelected = {
+                        hasAppliedInitialFileSelection = true
+                        selectedFileId = it
+                    }
                 )
             }
         }
