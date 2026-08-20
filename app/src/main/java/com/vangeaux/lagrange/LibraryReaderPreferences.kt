@@ -36,6 +36,8 @@ internal val EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS = listOf(
 
 internal const val DEFAULT_READER_PAGE_GAP_DP = 16f
 internal const val MAX_READER_PAGE_GAP_DP = 48f
+internal const val MIN_EPUB_FONT_SCALE = 0.9f
+internal const val MAX_EPUB_FONT_SCALE = 2f
 internal const val DEFAULT_EPUB_LINE_SPACING = 1f
 internal const val MAX_EPUB_LINE_SPACING = 2f
 internal const val DEFAULT_EPUB_WORD_SPACING = 0f
@@ -62,7 +64,7 @@ data class LibraryReaderPreferences(
     val comicPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP
 ) {
     fun normalized(): LibraryReaderPreferences = copy(
-        fontScale = fontScale.coerceIn(0.9f, 1.5f),
+        fontScale = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE),
         lineSpacing = lineSpacing.coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING),
         wordSpacing = wordSpacing.coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING),
         padding = padding.normalizedReaderPadding(),

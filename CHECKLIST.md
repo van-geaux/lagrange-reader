@@ -13,10 +13,12 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] Pull-to-refresh implemented for Book Detail, Series, Authors, Local books, Statistics, and Achievements.
 - [x] Continuous EPUB active-resource seek rail implemented and user-confirmed on-device.
 - [x] EPUB reader font selection implemented, including Publisher default, built-in accessibility choices, and one imported custom-font slot.
+- [x] [#69](https://github.com/van-geaux/lagrange-reader/issues/69) EPUB text-size range extended to 90%–200%, both existing ± steppers can reach 200%, and normalization/Readium font-size mapping now share named-constant bounds. JVM unit coverage updated and passing; physical-device validation is user-confirmed.
 - [x] Staged startup behavior implemented; cached content remains usable without a blocking global spinner.
 - [x] Server-missing catalog state implemented with distinct visibility, overlay, and action behavior.
 - [x] Download lifecycle state handling implemented with separate attempts and completed local copies.
 - [x] Interim server-hosted sign-in WebView implemented; native AppAuth remains deferred by the upstream redirect contract.
+- [x] [#68](https://github.com/van-geaux/lagrange-reader/issues/68) enhanced audiobook player delivered through merged [PR #70](https://github.com/van-geaux/lagrange-reader/pull/70), merged into `main` at `d0f2529`. The full player preserves the browser route, keeps playback service-owned, provides chapter/seek/speed/sleep/history/lock/cover controls, uses a shared navigation-safe chapter sheet, and scales the complete portrait/landscape group while preserving usable touch targets. The user confirmed the responsive layout and overflowing chapter-title marquee work.
 
 ## Active validation
 
@@ -46,6 +48,8 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] [#47](https://github.com/van-geaux/lagrange-reader/issues/47): revise browser and reader lifecycle handling after the retained-reader prototype failed on-device. Browser drill-down state is now saved as one route snapshot; reader launches are idempotent across parent recreation; EPUB/PDF/comic activities reopen one navigator at the saved locator; only explicit user closure clears active-reader state. JVM tests, Kotlin/Android-test compilation, lint, and manifest processing pass, and the user confirmed the integrated build works on-device through repeated orientation/fold recreation. Assistant-side Activity instrumentation remains compiled but unexecuted because no ADB target was attached.
 - [x] [#50](https://github.com/van-geaux/lagrange-reader/issues/50): add one Check for updates button in the About screen; it shows checking/result states and shows the existing update card again when an update is available. Automated verification is complete; physical-device validation is user-confirmed.
 - [x] [#62](https://github.com/van-geaux/lagrange-reader/issues/62): restore Series-detail pull-to-refresh and keep the browser bottom navigation visible on Series detail. Automated verification is complete; physical-device validation of this standalone `main`-based rebuild remains pending.
+- [x] [#79](https://github.com/van-geaux/lagrange-reader/issues/79): implemented reactive local-reader fallback after normal detail/open failures, preserving selected local file identity and distinguishing absent, invalid, and corrupt/extraction-failed local content across EPUB, PDF, CBZ/CBR/CB7, and audiobooks. Automated verification is complete and the user confirmed the airplane-mode/device behavior works.
+- [x] [#78](https://github.com/van-geaux/lagrange-reader/issues/78): Book Detail always auto-selects the first downloaded compatible file in existing available-file order on open, falls back to the current default when no downloaded file or metadata fails, preserves manual picker selection, and never downloads, prefetches, renames, or reselects after opening. Automated verification is complete and the user confirmed the rebuilt APK works on-device.
 
 ## Verification handoff
 

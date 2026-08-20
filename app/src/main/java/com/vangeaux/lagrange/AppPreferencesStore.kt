@@ -157,6 +157,26 @@ internal class AppPreferencesStore(context: Context) {
             .apply()
     }
 
+    fun readAudioSkipBackSeconds(): Int = normalizeAudioSkipSeconds(
+        preferences.getInt(AUDIO_SKIP_BACK_SECONDS_KEY, DEFAULT_AUDIO_SKIP_SECONDS)
+    )
+
+    fun saveAudioSkipBackSeconds(value: Int) {
+        preferences.edit()
+            .putInt(AUDIO_SKIP_BACK_SECONDS_KEY, normalizeAudioSkipSeconds(value))
+            .apply()
+    }
+
+    fun readAudioSkipForwardSeconds(): Int = normalizeAudioSkipSeconds(
+        preferences.getInt(AUDIO_SKIP_FORWARD_SECONDS_KEY, DEFAULT_AUDIO_SKIP_SECONDS)
+    )
+
+    fun saveAudioSkipForwardSeconds(value: Int) {
+        preferences.edit()
+            .putInt(AUDIO_SKIP_FORWARD_SECONDS_KEY, normalizeAudioSkipSeconds(value))
+            .apply()
+    }
+
     fun readIgnoredReleaseTag(): String? = preferences.getString(IGNORED_RELEASE_TAG_KEY, null)
 
     fun saveIgnoredReleaseTag(value: String) {
@@ -183,6 +203,9 @@ internal class AppPreferencesStore(context: Context) {
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
+        const val AUDIO_SKIP_BACK_SECONDS_KEY = "audio_skip_back_seconds"
+        const val AUDIO_SKIP_FORWARD_SECONDS_KEY = "audio_skip_forward_seconds"
+        const val DEFAULT_AUDIO_SKIP_SECONDS = 10
         const val IGNORED_RELEASE_TAG_KEY = "ignored_release_tag"
     }
 }
@@ -207,6 +230,11 @@ internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
         ?: 1f
 
 internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+internal val AUDIO_SKIP_SECONDS_OPTIONS = listOf(5, 10, 15, 30, 60)
+
+internal fun normalizeAudioSkipSeconds(value: Int): Int =
+    AUDIO_SKIP_SECONDS_OPTIONS.minByOrNull { option -> kotlin.math.abs(option - value) } ?: 10
 
 internal fun lockedOrientationStorageValue(value: LockedOrientation): String =
     value.name.lowercase()

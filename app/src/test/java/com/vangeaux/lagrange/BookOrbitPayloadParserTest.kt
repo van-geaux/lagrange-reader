@@ -1422,4 +1422,99 @@ class BookOrbitPayloadParserTest {
         assertEquals(3661L, daily[0].readingSeconds)
         assertEquals(4, daily[0].eventsCount)
     }
+
+    private fun fileOption(fileId: String?, localPath: String? = null) = BookFileOption(
+        book = BookSummary(
+            libraryId = "lib",
+            id = "book-1",
+            fileId = fileId,
+            title = "Book",
+            localPath = localPath
+        )
+    )
+
+    @Test
+    fun `resolveInitialSelectedFileId selects the one downloaded alternate`() {
+        val availableFiles = listOf(
+            fileOption("f1", localPath = null),
+            fileOption("f2", localPath = "/local/f2.epub"),
+            fileOption("f3", localPath = null)
+        )
+
+        val selected = resolveInitialSelectedFileId(
+            availableFiles = availableFiles,
+            localFilePathOverrides = emptyMap(),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f2", selected)
+    }
+
+    @Test
+    fun `resolveInitialSelectedFileId picks first downloaded when multiple are downloaded preserving available-file order`() {
+        val availableFiles = listOf(
+            fileOption("f1", localPath = null),
+            fileOption("f2", localPath = "/local/f2.epub"),
+            fileOption("f3", localPath = "/local/f3.epub")
+        )
+
+        val selected = resolveInitialSelectedFileId(
+            availableFiles = availableFiles,
+            localFilePathOverrides = emptyMap(),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f2", selected)
+    }
+
+    @Test
+    fun `resolveInitialSelectedFileId falls back to current file id when none are downloaded`() {
+        val availableFiles = listOf(
+            fileOption("f1", localPath = null),
+            fileOption("f2", localPath = null)
+        )
+
+        val selected = resolveInitialSelectedFileId(
+            availableFiles = availableFiles,
+            localFilePathOverrides = emptyMap(),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f1", selected)
+    }
+
+    @Test
+    fun `resolveInitialSelectedFileId prefers local file path override over option local path`() {
+        val availableFiles = listOf(
+            fileOption("f1", localPath = "/local/f1.epub"),
+            fileOption("f2", localPath = null)
+        )
+
+        val selected = resolveInitialSelectedFileId(
+            availableFiles = availableFiles,
+            localFilePathOverrides = mapOf("f1" to null, "f2" to "/local/f2.epub"),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f2", selected)
+    }
+
+    @Test
+    fun `resolveInitialSelectedFileId falls back to current file id when metadata is unavailable`() {
+        val selected = resolveInitialSelectedFileId(
+            availableFiles = emptyList(),
+            localFilePathOverrides = emptyMap(),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f1", selected)
+
+        val selectedBlank = resolveInitialSelectedFileId(
+            availableFiles = listOf(fileOption("f1", localPath = "   ")),
+            localFilePathOverrides = emptyMap(),
+            currentFileId = "f1"
+        )
+
+        assertEquals("f1", selectedBlank)
+    }
 }

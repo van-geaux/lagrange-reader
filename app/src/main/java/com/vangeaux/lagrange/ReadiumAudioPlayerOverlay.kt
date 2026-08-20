@@ -29,7 +29,7 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
                         }
                     },
                     onCoverClick = { book ->
-                        controller.requestBookDetail(book)
+                        controller.requestFullPlayer(book)
                         finish()
                     }
                 )

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,6 +80,7 @@ private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): A
         speed = session.player.playbackParameters.speed
     )
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
@@ -180,7 +182,7 @@ internal fun ReadiumCompactAudioPlayer(
     val positionMs = playback.positionMs
     val durationMs = playback.durationMs
     val scope = rememberCoroutineScope()
-    var chapterMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
+    var showChapterList by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var speedMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var isSeeking by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var seekPositionMs by remember(current.book.id, current.book.fileId) {
@@ -223,23 +225,38 @@ internal fun ReadiumCompactAudioPlayer(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 8.dp)
+                    .clickable { onCoverClick(current.book) }
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             current.book.title,
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold
                         )
-                        Text(
-                            current.book.author.orEmpty(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                current.book.seriesName.orEmpty(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .basicMarquee(iterations = Int.MAX_VALUE),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            current.book.seriesIndex?.let { index ->
+                                Text(
+                                    "#${formatFullPlayerSeriesIndex(index)}",
+                                    modifier = Modifier.padding(start = 6.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                     }
                     IconButton(
                         onClick = {
@@ -291,7 +308,7 @@ internal fun ReadiumCompactAudioPlayer(
                 ) {
                     Box {
                         IconButton(
-                            onClick = { chapterMenuExpanded = true },
+                            onClick = { showChapterList = true },
                             enabled = chapters.isNotEmpty(),
                             modifier = Modifier.size(40.dp)
                         ) {
@@ -303,29 +320,6 @@ internal fun ReadiumCompactAudioPlayer(
                                     "Select audiobook chapter"
                                 }
                             )
-                        }
-                        DropdownMenu(
-                            expanded = chapterMenuExpanded,
-                            onDismissRequest = { chapterMenuExpanded = false }
-                        ) {
-                            chapters.forEachIndexed { index, chapter ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            chapter.title.ifBlank { "Chapter ${index + 1}" },
-                                            fontWeight = if (index == activeChapterIndex) {
-                                                FontWeight.Bold
-                                            } else {
-                                                FontWeight.Normal
-                                            }
-                                        )
-                                    },
-                                    onClick = {
-                                        chapterMenuExpanded = false
-                                        current.seekToAbsolutePosition(chapter.startMs)
-                                    }
-                                )
-                            }
                         }
                     }
                     IconButton(
@@ -389,12 +383,24 @@ internal fun ReadiumCompactAudioPlayer(
             }
         }
     }
+
+    if (showChapterList) {
+        FullPlayerChapterListSheet(
+            chapters = chapters,
+            activeChapterIndex = activeChapterIndex,
+            onChapterSelected = { chapter ->
+                current.seekToAbsolutePosition(chapter.startMs)
+                showChapterList = false
+            },
+            onClose = { showChapterList = false }
+        )
+    }
 }
 
-private fun formatPlaybackSpeed(speed: Double): String =
+internal fun formatPlaybackSpeed(speed: Double): String =
     if (speed % 1.0 == 0.0) speed.toInt().toString() else speed.toString()
 
-private fun formatPlaybackTime(millis: Long): String {
+internal fun formatPlaybackTime(millis: Long): String {
     val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
     val hours = totalSeconds / 3600L
     val minutes = (totalSeconds % 3600L) / 60L
@@ -407,10 +413,12 @@ private fun formatPlaybackTime(millis: Long): String {
 }
 
 @Composable
-private fun CompactAudiobookCover(
+internal fun CompactAudiobookCover(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    coverHeight: androidx.compose.ui.unit.Dp? = 72.dp
 ) {
     val bitmap by produceState<Bitmap?>(null, book.id, book.coverUrl, book.updatedAtMillis) {
         value = runCatching { coverLoader(book) }
@@ -419,8 +427,8 @@ private fun CompactAudiobookCover(
             ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
     }
     Box(
-        modifier = Modifier
-            .height(72.dp)
+        modifier = modifier
+            .then(coverHeight?.let(Modifier::height) ?: Modifier)
             .aspectRatio(book.coverAspectRatio.widthToHeight)
             .background(
                 color = MaterialTheme.colorScheme.primaryContainer,

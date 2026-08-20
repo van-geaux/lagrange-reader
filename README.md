@@ -55,7 +55,7 @@ The following screenshots show the main reading and library experience. More scr
 - **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
 - **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, and per-library font selection through grouped normal/accessibility menus, plus one imported custom `.ttf`/`.otf` font.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
-- **Audiobook playback:** compact player with seeking, chapter selection, playback speed, resume, and read-along support.
+- **Audiobook playback:** compact and full players with seeking, chapter selection, previous/next chapter controls, playback speed, sleep timer, resume, responsive portrait/landscape layouts, session history, and read-along support.
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.
 - **Reliable offline downloads:** progress, cancellation, retry/update flows, cache validation, and safe local replacement.
 - **Personalized controls:** five app themes, reader themes, orientation lock, reduce motion, cellular download policy, cache management, and background-network controls.

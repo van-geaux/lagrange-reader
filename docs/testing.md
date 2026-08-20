@@ -43,6 +43,12 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 
 The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
 
+### Local-open fallback
+
+On a connected device or emulator, complete a download, immediately enable Airplane Mode, open Local books, and tap the downloaded book before refreshing or restarting the app. Repeat for EPUB, PDF, CBZ/CBR/CB7, and audiobook files. Each valid completed local copy should open after the failed online/detail attempt. Also verify that an offline book with no local copy retains the normal network error, an invalid local file reports an integrity/preparation error, and a corrupt comic archive reports its extraction error rather than the network failure. Repeat one healthy online open to confirm the normal authoritative path remains preferred.
+
+Automated coverage verifies the retry seam, all four media families, local file identity preservation through detail hydration, authentication handling, no-local error preservation, and corruption/error distinction. The user confirmed the airplane-mode/device behavior works.
+
 ### Series and selected-library bulk download
 
 After the selected library has finished loading its complete catalog, verify the Browse tab places `Download library` below the filter/count row and opens file-level selection grouped by library/format. Confirm `Select all`, clear it, select individual files, and verify the summary updates. Confirm the first library warning and verify a second warning appears without starting a transfer; dismiss the second warning and verify no bulk transfer starts. Repeat and confirm both warnings, then verify aggregate progress appears while the frozen eligible files use the existing per-file download state. On a metered connection, verify one cellular-data warning describes the whole selected library and does not repeat per book.
@@ -96,6 +102,9 @@ When the affected scope requires it, verify:
 - tutorial geometry and labels match the transformed runtime tap regions for LTR, RTL, and selected inversion;
 - PDF/comic page navigation and progress;
 - audiobook compact-player restoration, seeking, chapters, and speed;
+- audiobook full-player overlay above the retained browser route: minimize restores the exact browser location, Close removes the player without implicit navigation, and metadata navigation is explicit;
+- audiobook full-player Chapter/Speed/Sleep visibility and grouped responsive sizing in both portrait and landscape, including readable landscape touch targets;
+- the shared compact/full chapter `ModalBottomSheet`, active-chapter highlighting, seek-on-selection, Android navigation-bar containment, centered `Book progress`/`Chapter progress` labels, and overflowing chapter-title marquee scrolling;
 - server session registration for EPUB, PDF, CBZ/CBR/CB7, and audiobooks;
 - explicit audiobook pause finalizes and uploads the active listening interval; resumed playback starts a new interval;
 - no session POST for Preview, paused/background time, or audiobook screen-open without playback;
@@ -108,6 +117,7 @@ When the affected scope requires it, verify:
 - Book Detail Previous/Next navigation from second and third libraries, including current-library/current-format-family preference, same-family fallback by library order, fallback format-family selection, audiobook extensions such as M4A, M4B, and MP3, duplicate indexes, and unavailable boundaries. User-confirmed on the rebuilt debug APK.
 - Book Detail available-file selection for a mixed EPUB/M4B/JSON response: EPUB is the default, M4B uses its own file ID for Play/Preview/download and remains selected after detail hydration, and JSON is not offered as a reader/media option.
 - Book Detail selection when multiple EPUBs are present: tap the `Available file` control and verify the bottom-sheet rows are visually separated, filenames, sizes, and `Primary`/`Alternate` labels distinguish normal duplicates, identical visible metadata receives a short file-ID suffix, and each action still uses the selected full file ID.
+- Book Detail available-file summary renders above Synopsis, manually verified in the layout preview/emulator (not on a physical device) for: a single file, where the summary shows no chevron and is not clickable; and multiple files, where the summary shows a chevron, is clickable, and opens the bottom sheet hosted outside the lazy Book Detail content. Verify a long selected filename remains on one line and automatically scrolls in the closed summary while the size/role/offline metadata remains stationary. In the open sheet, verify unselected filenames stay on one line with ellipsis while the currently selected filename wraps to enough lines to show the complete name without ellipsis, including on narrow portrait and landscape layouts. Verify the file-type badge and metadata render correctly. Selecting a file must update the underlying summary and move the selected checkmark without closing or replacing the sheet; verify the user can inspect or change the selection again, then dismiss the sheet explicitly with Back, an outside tap, or a downward swipe.
 - same-application-ID APK upgrade preserves EPUB theme/font/size/margins and the applicable PDF/comic direction, layout, and page-gap settings for more than one library;
 - the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;
 - server-missing versus locally deleted state;
@@ -124,6 +134,24 @@ For regression testing, verify chapter selection and automatic advancement acros
 ### Authentication and OIDC
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. The interim server-hosted sign-in WebView is distinct from native AppAuth. Native AppAuth requires deployed BookOrbit mobile-redirect support and separate provider/device validation.
+
+### Foreground WorkManager book downloads (issue #77)
+
+This scenario set is pending manual/device validation; nothing below has been device-confirmed yet. On a connected device or emulator, verify:
+
+- starting a large download shows the dataSync download notification, continues after switching apps or turning off the screen, and completes with the expected notification/state;
+- rotating or recreating the hosting activity during an active download does not restart or duplicate the transfer, and progress keeps projecting correctly from WorkManager state;
+- reopening the app after process death reattaches to an active download and shows correct in-progress or completed state;
+- after switching apps, turning off the screen, activity recreation, and process recreation, the active row retains the original initiating title rather than showing a numeric book or file ID;
+- losing connectivity mid-transfer surfaces a retryable failure and retry resumes the transfer;
+- cancelling an active download stops the transfer and clears its WorkManager work;
+- a failed update preserves the previous completed local copy rather than discarding it;
+- starting multiple file downloads concurrently keys and tracks each by server URL plus file ID without cross-file interference;
+- concurrent attempt persistence from separate `DownloadStore` instances retains every active download record;
+- cellular policy ALWAYS, NEVER, and ASK_FOR_CONFIRMATION are each respected, including that the worker rechecks policy/network before proceeding and does not start without the required grant;
+- an authentication-expiry outcome during a download routes back through foreground login recovery and resumes via `PostLoginDestination.DownloadBook`.
+
+Byte-range resume is out of scope; a connectivity loss or process death mid-transfer is expected to restart the file rather than resume partway through.
 
 ## Verification reporting
 
