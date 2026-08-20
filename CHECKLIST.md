@@ -49,6 +49,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] [#50](https://github.com/van-geaux/lagrange-reader/issues/50): add one Check for updates button in the About screen; it shows checking/result states and shows the existing update card again when an update is available. Automated verification is complete; physical-device validation is user-confirmed.
 - [x] [#62](https://github.com/van-geaux/lagrange-reader/issues/62): restore Series-detail pull-to-refresh and keep the browser bottom navigation visible on Series detail. Automated verification is complete; physical-device validation of this standalone `main`-based rebuild remains pending.
 - [x] [#79](https://github.com/van-geaux/lagrange-reader/issues/79): implemented reactive local-reader fallback after normal detail/open failures, preserving selected local file identity and distinguishing absent, invalid, and corrupt/extraction-failed local content across EPUB, PDF, CBZ/CBR/CB7, and audiobooks. Automated verification is complete and the user confirmed the airplane-mode/device behavior works.
+- [x] [#78](https://github.com/van-geaux/lagrange-reader/issues/78): Book Detail always auto-selects the first downloaded compatible file in existing available-file order on open, falls back to the current default when no downloaded file or metadata fails, preserves manual picker selection, and never downloads, prefetches, renames, or reselects after opening. Automated verification is complete and the user confirmed the rebuilt APK works on-device.
 
 ## Verification handoff
 
