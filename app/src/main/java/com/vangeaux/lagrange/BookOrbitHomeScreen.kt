@@ -1,12 +1,20 @@
 package com.vangeaux.lagrange
 
+import android.Manifest
+import android.os.Build
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.text.Html
+import android.util.DisplayMetrics
 import android.util.LruCache
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -15,6 +23,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -112,6 +124,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -123,12 +136,19 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -140,9 +160,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlin.math.roundToInt
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 import kotlinx.coroutines.launch
@@ -7383,12 +7407,97 @@ private fun DetailMetadataGroup(title: String, entries: List<Pair<String, String
     }
 }
 
+/**
+ * Vertical distance (in px) to shift the cover so its center lands on the physical
+ * display's center, correcting for a Dialog root that is offset from the screen
+ * (e.g. when the host Activity fits system windows but the dialog does not).
+ */
+internal fun coverCenterCorrectionPx(
+    rootScreenY: Float,
+    rootHeightPx: Float,
+    physicalScreenHeightPx: Float
+): Float {
+    val physicalScreenCenterY = physicalScreenHeightPx / 2f
+    val rootCenterY = rootScreenY + rootHeightPx / 2f
+    return physicalScreenCenterY - rootCenterY
+}
+
+internal fun isPointInsideTransformedCover(
+    pointX: Float,
+    pointY: Float,
+    coverLeft: Float,
+    coverTop: Float,
+    coverWidth: Float,
+    coverHeight: Float,
+    scale: Float,
+    panX: Float,
+    panY: Float
+): Boolean {
+    if (coverWidth <= 0f || coverHeight <= 0f || scale <= 0f) return false
+    val centerX = coverLeft + coverWidth / 2f + panX
+    val centerY = coverTop + coverHeight / 2f + panY
+    val halfWidth = coverWidth * scale / 2f
+    val halfHeight = coverHeight * scale / 2f
+    return pointX in (centerX - halfWidth)..(centerX + halfWidth) &&
+        pointY in (centerY - halfHeight)..(centerY + halfHeight)
+}
+
+private fun physicalDisplayHeightPx(context: Context): Int {
+    val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        windowManager.maximumWindowMetrics.bounds.height()
+    } else {
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+        metrics.heightPixels
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun FullScreenCoverViewer(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    var coverBytes by remember(book.id, book.coverUrl, book.updatedAtMillis) { mutableStateOf<ByteArray?>(null) }
+    var pendingDownloadBytes by remember { mutableStateOf<ByteArray?>(null) }
+    fun showExportResult(result: CoverExportResult) {
+        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+    }
+    fun export(bytes: ByteArray) {
+        showExportResult(exportCoverImage(context, book.title, bytes))
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val bytes = pendingDownloadBytes
+        pendingDownloadBytes = null
+        if (granted && bytes != null) {
+            export(bytes)
+        } else if (!granted) {
+            showExportResult(CoverExportResult(false, "Storage permission is required to save the cover"))
+        }
+    }
+    fun requestExport() {
+        val bytes = coverBytes
+        if (bytes == null) {
+            showExportResult(CoverExportResult(false, "Cover image is not available"))
+        } else if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownloadBytes = bytes
+            permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            export(bytes)
+        }
+    }
     val bitmap by produceState<Bitmap?>(initialValue = null, book.id, book.coverUrl, book.updatedAtMillis) {
         val bytes = try {
             coverLoader(book)
@@ -7397,6 +7506,7 @@ internal fun FullScreenCoverViewer(
         } catch (_: Throwable) {
             null
         }
+        coverBytes = bytes
         value = if (bytes != null && bytes.isNotEmpty()) {
             try {
                 withContext(Dispatchers.Default) {
@@ -7411,54 +7521,169 @@ internal fun FullScreenCoverViewer(
             null
         }
     }
+    val density = LocalDensity.current
+    var scale by remember(book.id) { mutableFloatStateOf(1f) }
+    var panOffset by remember(book.id) { mutableStateOf(Offset.Zero) }
+    var coverLayoutPosition by remember(book.id) { mutableStateOf(Offset.Zero) }
+    var coverLayoutSize by remember(book.id) { mutableStateOf(IntSize.Zero) }
+    var menuAnchor by remember(book.id) { mutableStateOf<Offset?>(null) }
+    val minScale = 1f
+    val maxScale = 4f
+    val presetZoomScale = 2.5f
+
+    fun boundedPan(candidate: Offset, currentScale: Float): Offset {
+        if (currentScale <= minScale || coverLayoutSize == IntSize.Zero) return Offset.Zero
+        val maxX = (coverLayoutSize.width * (currentScale - 1f)) / 2f
+        val maxY = (coverLayoutSize.height * (currentScale - 1f)) / 2f
+        return Offset(candidate.x.coerceIn(-maxX, maxX), candidate.y.coerceIn(-maxY, maxY))
+    }
+
+    fun resetTransform() {
+        scale = minScale
+        panOffset = Offset.Zero
+    }
+
+    fun isInsideVisibleCover(position: Offset): Boolean = isPointInsideTransformedCover(
+        pointX = position.x,
+        pointY = position.y,
+        coverLeft = coverLayoutPosition.x,
+        coverTop = coverLayoutPosition.y,
+        coverWidth = coverLayoutSize.width.toFloat(),
+        coverHeight = coverLayoutSize.height.toFloat(),
+        scale = scale,
+        panX = panOffset.x,
+        panY = panOffset.y
+    )
+
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+        scale = newScale
+        panOffset = boundedPan(panOffset + panChange, newScale)
+    }
+
+    var verticalCorrectionPx by remember { mutableFloatStateOf(0f) }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
         )
     ) {
+        val dialogView = androidx.compose.ui.platform.LocalView.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.94f))
-                .padding(24.dp)
-                .clickable(onClick = onDismiss)
-                .semantics { contentDescription = "Full-screen cover for ${book.title}. Tap anywhere to close" },
+                .onGloballyPositioned { coordinates ->
+                    val dialogLocation = IntArray(2)
+                    dialogView.getLocationOnScreen(dialogLocation)
+                    val rootScreenY = dialogLocation[1] + coordinates.positionInWindow().y
+                    val rootHeightPx = coordinates.size.height.toFloat()
+                    val physicalHeightPx = physicalDisplayHeightPx(context).toFloat()
+                    verticalCorrectionPx = coverCenterCorrectionPx(
+                        rootScreenY = rootScreenY,
+                        rootHeightPx = rootHeightPx,
+                        physicalScreenHeightPx = physicalHeightPx
+                    )
+                }
+                .pointerInput(book.id) {
+                    detectTapGestures(
+                        onTap = { position ->
+                            if (isInsideVisibleCover(position)) {
+                                resetTransform()
+                            } else {
+                                onDismiss()
+                            }
+                        },
+                        onDoubleTap = { position ->
+                            if (isInsideVisibleCover(position)) {
+                                if (scale > minScale) {
+                                    resetTransform()
+                                } else {
+                                    scale = presetZoomScale
+                                    panOffset = Offset.Zero
+                                }
+                            } else {
+                                onDismiss()
+                            }
+                        },
+                        onLongPress = { position ->
+                            if (isInsideVisibleCover(position)) menuAnchor = position
+                        }
+                    )
+                }
+                .transformable(state = transformableState)
+                .semantics {
+                    contentDescription = "Full-screen cover for ${book.title}. Pinch or double-tap to zoom. Tap the cover to reset zoom. Tap outside the cover or use back to close. Long-press the cover for options"
+                },
             contentAlignment = Alignment.Center
         ) {
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(book.coverAspectRatio.widthToHeight)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            )
-                        )
-                    )
-                    .clickable(onClick = onDismiss)
-                    .semantics {
-                        contentDescription = "Full-screen cover for ${book.title}. Tap to close"
-                    },
+                    .fillMaxSize()
+                    .offset { IntOffset(0, verticalCorrectionPx.roundToInt()) }
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap!!.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Text(
-                        text = book.title.take(1).uppercase(),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        style = MaterialTheme.typography.displaySmall
+                val ratio = book.coverAspectRatio.widthToHeight.coerceAtLeast(0.01f)
+                val coverWidth = minOf(maxWidth, maxHeight * ratio)
+                val coverHeight = minOf(maxHeight, maxWidth / ratio)
+                Box(
+                    modifier = Modifier
+                        .width(coverWidth)
+                        .height(coverHeight)
+                        .onGloballyPositioned { coverLayoutPosition = it.positionInRoot() }
+                        .onSizeChanged { coverLayoutSize = it }
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = panOffset.x,
+                            translationY = panOffset.y
+                        )
+                        .clip(MaterialTheme.shapes.small)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Text(
+                            text = book.title.take(1).uppercase(),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.displaySmall
+                        )
+                    }
+                }
+            }
+            val anchor = menuAnchor
+            if (anchor != null) {
+                val anchorOffset = with(density) { DpOffset(anchor.x.toDp(), anchor.y.toDp()) }
+                DropdownMenu(
+                    expanded = true,
+                    onDismissRequest = { menuAnchor = null },
+                    offset = anchorOffset
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Download") },
+                        onClick = {
+                            menuAnchor = null
+                            requestExport()
+                        }
                     )
                 }
             }

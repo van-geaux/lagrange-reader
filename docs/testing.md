@@ -105,6 +105,11 @@ When the affected scope requires it, verify:
 - audiobook full-player overlay above the retained browser route: minimize restores the exact browser location, Close removes the player without implicit navigation, and metadata navigation is explicit;
 - audiobook full-player Chapter/Speed/Sleep visibility and grouped responsive sizing in both portrait and landscape, including readable landscape touch targets;
 - the shared compact/full chapter `ModalBottomSheet`, active-chapter highlighting, seek-on-selection, Android navigation-bar containment, centered `Book progress`/`Chapter progress` labels, and overflowing chapter-title marquee scrolling;
+- cover viewer from Book Detail, the audiobook compact-player cover, and the audiobook full-player cover in portrait and landscape; rotate while open and verify the cover remains centered relative to the whole screen, preserves aspect ratio, and fits fully inside the landscape viewport;
+- cover viewer long-press inside the visible cover opens a context menu without starting a download; verify long-press outside the cover does not open the menu or download; verify tapping the menu's Download action saves a valid image under `Downloads/Lagrange Reader` with a readable collision-safe title filename and a success Toast;
+- cover viewer pinch zoom and pan: verify pinch zoom is bounded between 1x and 4x and pan stays bounded at zoomed scales, applying immediately; verify tapping inside the visible cover resets zoom and pan back to 1x; verify double-tap inside the cover toggles between 1x and the 2.5x preset zoom;
+- cover viewer dismissal: verify tapping outside the visible cover dismisses the viewer, verify double-tapping outside the cover also dismisses it, and verify Back closes the viewer;
+- cover viewer error paths: open the menu and tap Download before image data is available or while offline with an uncached cover and verify a clear failure Toast without a file; on API 26–28 verify the storage-permission request and denial message; simulate or observe a failed write and verify no partial output remains;
 - server session registration for EPUB, PDF, CBZ/CBR/CB7, and audiobooks;
 - explicit audiobook pause finalizes and uploads the active listening interval; resumed playback starts a new interval;
 - no session POST for Preview, paused/background time, or audiobook screen-open without playback;
