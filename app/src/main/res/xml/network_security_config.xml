@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <!--
+      base-config applies app-wide because the BookOrbit server URL is chosen by the
+      user at runtime, so no single domain can be pinned in advance. Both trust-anchor
+      stores are listed explicitly (system is not inherited by default once user is
+      added) so that self-hosted servers using certificates issued by a user-installed
+      CA (e.g. a private/internal CA) are trusted for HTTPS connections, the same as
+      publicly trusted system CAs.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
