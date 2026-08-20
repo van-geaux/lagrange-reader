@@ -5408,13 +5408,20 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
         ).toList().sorted()
     return fileIds.map { fileId ->
         val metadata = state.downloadMetadataByFileId[fileId]
-        val book = booksByFileId[fileId] ?: BookSummary(
-            id = metadata?.bookId ?: "download-$fileId",
+        val book = state.downloadBooksByFileId[fileId] ?: metadata?.let { restored ->
+            BookSummary(
+                id = restored.bookId,
+                libraryId = "",
+                fileId = fileId,
+                title = restored.title,
+                mediaKind = restored.mediaKind,
+                format = restored.mimeType
+            )
+        } ?: booksByFileId[fileId] ?: BookSummary(
+            id = "download-$fileId",
             libraryId = "",
             fileId = fileId,
-            title = metadata?.title ?: "File $fileId",
-            mediaKind = metadata?.mediaKind ?: MediaKind.UNKNOWN,
-            format = metadata?.mimeType
+            title = "File $fileId"
         )
         DownloadTransferRow(
             book = book,
@@ -5546,6 +5553,7 @@ private fun LocalBooksScreen(
         state.downloadingFileIds,
         state.failedDownloadFileIds,
         state.downloadProgressByFileId,
+        state.downloadBooksByFileId,
         state.downloadMetadataByFileId,
         state.books,
         state.homeBooks

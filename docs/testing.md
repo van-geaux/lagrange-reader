@@ -135,6 +135,24 @@ For regression testing, verify chapter selection and automatic advancement acros
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. The interim server-hosted sign-in WebView is distinct from native AppAuth. Native AppAuth requires deployed BookOrbit mobile-redirect support and separate provider/device validation.
 
+### Foreground WorkManager book downloads (issue #77)
+
+This scenario set is pending manual/device validation; nothing below has been device-confirmed yet. On a connected device or emulator, verify:
+
+- starting a large download shows the dataSync download notification, continues after switching apps or turning off the screen, and completes with the expected notification/state;
+- rotating or recreating the hosting activity during an active download does not restart or duplicate the transfer, and progress keeps projecting correctly from WorkManager state;
+- reopening the app after process death reattaches to an active download and shows correct in-progress or completed state;
+- after switching apps, turning off the screen, activity recreation, and process recreation, the active row retains the original initiating title rather than showing a numeric book or file ID;
+- losing connectivity mid-transfer surfaces a retryable failure and retry resumes the transfer;
+- cancelling an active download stops the transfer and clears its WorkManager work;
+- a failed update preserves the previous completed local copy rather than discarding it;
+- starting multiple file downloads concurrently keys and tracks each by server URL plus file ID without cross-file interference;
+- concurrent attempt persistence from separate `DownloadStore` instances retains every active download record;
+- cellular policy ALWAYS, NEVER, and ASK_FOR_CONFIRMATION are each respected, including that the worker rechecks policy/network before proceeding and does not start without the required grant;
+- an authentication-expiry outcome during a download routes back through foreground login recovery and resumes via `PostLoginDestination.DownloadBook`.
+
+Byte-range resume is out of scope; a connectivity loss or process death mid-transfer is expected to restart the file rather than resume partway through.
+
 ## Verification reporting
 
 Every final report should state:
