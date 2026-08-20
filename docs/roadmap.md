@@ -36,6 +36,7 @@ This document contains the current project direction only. Historical work order
 21. [x] [#50](https://github.com/van-geaux/lagrange-reader/issues/50): add one Check for updates button in the About screen; it shows checking/result states and shows the existing update card again when an update is available. Automated verification is complete; physical-device validation is user-confirmed; delivered through merged PR #51.
 22. [x] [#62](https://github.com/van-geaux/lagrange-reader/issues/62): restore Series-detail pull-to-refresh and keep the browser bottom navigation visible on Series detail. Automated verification is complete; physical-device validation of this standalone `main`-based rebuild remains pending.
 23. [x] [#69](https://github.com/van-geaux/lagrange-reader/issues/69): extend the persisted EPUB text-size range to 90%–200%, keep both existing ± steppers able to reach 200%, and share the range as named-constant bounds between preference normalization and the Readium font-size mapping. JVM unit coverage is updated and passing; physical-device validation is user-confirmed.
+24. [x] [#79](https://github.com/van-geaux/lagrange-reader/issues/79): implemented reactive local-reader fallback after normal detail/open failures, preserving selected local file identity and distinguishing absent, invalid, and corrupt/extraction-failed local content across EPUB, PDF, CBZ/CBR/CB7, and audiobooks. Automated verification is complete and the user confirmed the airplane-mode/device behavior works.
 
 ## Decision and documentation rules
 

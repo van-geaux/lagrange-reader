@@ -986,50 +986,8 @@ class AppCoordinator(
             if (book.mediaKind != MediaKind.AUDIO) {
                 _screen.value = AppScreen.ReaderLoading(book, launchMode)
             }
-            runCatching {
-                val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
-                val syncResult = if (launchMode == ReaderLaunchMode.NORMAL && !offlineOpen) {
-                    repository.syncPendingProgress()
-                } else {
-                    null
-                }
-                val detailForOpen: BookDetailInfo? = when {
-                    launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
-                        runCatching { repository.loadBookDetail(book) }.getOrNull()
-                    }
-                    book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty() -> {
-                        runCatching { repository.loadBookDetail(book) }.getOrNull()
-                    }
-                    else -> null
-                }
-                val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
-                    detailForOpen?.let { detail ->
-                        val chapters = detail.audioChapters.ifEmpty {
-                            detail.book.audioChapters
-                        }
-                        book.copy(audioChapters = chapters)
-                    } ?: book
-                } else {
-                    detailForOpen?.book ?: book
-                }
-                val audioFiles = if (book.mediaKind == MediaKind.AUDIO && !offlineOpen) {
-                    AudiobookTimeline.playableAudioFiles(detailForOpen?.availableFiles.orEmpty())
-                } else {
-                    emptyList()
-                }
-                val progressBook = if (
-                    launchMode == ReaderLaunchMode.NORMAL &&
-                    !offlineOpen &&
-                    syncResult == SyncAttemptResult.Success
-                ) {
-                    repository.loadReaderProgress(readerBook, audioFiles)
-                } else {
-                    readerBook
-                }
-                val preparedState = repository.buildReaderState(
-                    book = progressBook,
-                    localOnly = offlineOpen
-                )
+            var presentationStarted = false
+            suspend fun presentReaderState(preparedState: ReaderState, audioFiles: List<BookFileOption>) {
                 val readerState = if (launchMode == ReaderLaunchMode.PREVIEW) {
                     preparedState.copy(
                         lastKnownPosition = 0L,
@@ -1064,6 +1022,56 @@ class AppCoordinator(
                     }
                     _screen.value = AppScreen.Reader(readerState)
                 }
+            }
+            runCatching {
+                val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
+                val syncResult = if (launchMode == ReaderLaunchMode.NORMAL && !offlineOpen) {
+                    repository.syncPendingProgress()
+                } else {
+                    null
+                }
+                val detailForOpen: BookDetailInfo? = when {
+                    launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
+                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    }
+                    book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty() -> {
+                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    }
+                    else -> null
+                }
+                val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
+                    detailForOpen?.let { detail ->
+                        val chapters = detail.audioChapters.ifEmpty {
+                            detail.book.audioChapters
+                        }
+                        book.copy(audioChapters = chapters)
+                    } ?: book
+                } else {
+                    detailForOpen?.book?.copy(
+                        fileId = book.fileId ?: detailForOpen.book.fileId,
+                        localPath = book.localPath ?: detailForOpen.book.localPath
+                    ) ?: book
+                }
+                val audioFiles = if (book.mediaKind == MediaKind.AUDIO && !offlineOpen) {
+                    AudiobookTimeline.playableAudioFiles(detailForOpen?.availableFiles.orEmpty())
+                } else {
+                    emptyList()
+                }
+                val progressBook = if (
+                    launchMode == ReaderLaunchMode.NORMAL &&
+                    !offlineOpen &&
+                    syncResult == SyncAttemptResult.Success
+                ) {
+                    repository.loadReaderProgress(readerBook, audioFiles)
+                } else {
+                    readerBook
+                }
+                val preparedState = repository.buildReaderState(
+                    book = progressBook,
+                    localOnly = offlineOpen
+                )
+                presentationStarted = true
+                presentReaderState(preparedState, audioFiles)
             }.onFailure { error ->
                 if (error.message == AUDIO_OPEN_CANCELLED_MESSAGE) {
                     return@onFailure
@@ -1075,11 +1083,32 @@ class AppCoordinator(
                     )
                     return@onFailure
                 }
+                val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
+                val canRetryLocal = launchMode == ReaderLaunchMode.NORMAL && !offlineOpen && !presentationStarted
+                val finalError = if (canRetryLocal) {
+                    val localAttempt = runCatching { repository.buildReaderState(book = book, localOnly = true) }
+                        .mapCatching { state -> presentReaderState(state, emptyList()) }
+                    if (localAttempt.isSuccess) {
+                        return@onFailure
+                    }
+                    localAttempt.exceptionOrNull()
+                        ?.takeUnless(::isMissingLocalReaderError)
+                        ?: error
+                } else {
+                    error
+                }
+                if (finalError is AuthenticationRequiredException) {
+                    showLogin(
+                        message = "Your session expired. Sign in again to reopen ${book.title}.",
+                        destination = PostLoginDestination.OpenBook(book, launchMode)
+                    )
+                    return@onFailure
+                }
                 val fallback = lastBrowserState
                 if (fallback != null) {
                     navigateToBrowser(
                         fallback.copy(
-                            message = userMessage(error, "Unable to open ${book.title}.")
+                            message = userMessage(finalError, "Unable to open ${book.title}.")
                         )
                     )
                 } else {
@@ -1470,6 +1499,15 @@ class AppCoordinator(
             message = "Your session expired. Sign in again to continue.",
             destination = PostLoginDestination.Browser
         )
+    }
+
+    private fun isMissingLocalReaderError(error: Throwable): Boolean {
+        val message = error.message.orEmpty()
+        return error is UserFacingException && (
+            message.contains("Download it first or reconnect to the server.") ||
+                message.contains("missing both a local file and a playable stream.") ||
+                message.contains("does not expose a readable local file or stream.")
+            )
     }
 
     private fun userMessage(error: Throwable, fallback: String): String {

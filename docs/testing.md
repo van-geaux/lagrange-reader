@@ -43,6 +43,12 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 
 The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
 
+### Local-open fallback
+
+On a connected device or emulator, complete a download, immediately enable Airplane Mode, open Local books, and tap the downloaded book before refreshing or restarting the app. Repeat for EPUB, PDF, CBZ/CBR/CB7, and audiobook files. Each valid completed local copy should open after the failed online/detail attempt. Also verify that an offline book with no local copy retains the normal network error, an invalid local file reports an integrity/preparation error, and a corrupt comic archive reports its extraction error rather than the network failure. Repeat one healthy online open to confirm the normal authoritative path remains preferred.
+
+Automated coverage verifies the retry seam, all four media families, local file identity preservation through detail hydration, authentication handling, no-local error preservation, and corruption/error distinction. The user confirmed the airplane-mode/device behavior works.
+
 ### Series and selected-library bulk download
 
 After the selected library has finished loading its complete catalog, verify the Browse tab places `Download library` below the filter/count row and opens file-level selection grouped by library/format. Confirm `Select all`, clear it, select individual files, and verify the summary updates. Confirm the first library warning and verify a second warning appears without starting a transfer; dismiss the second warning and verify no bulk transfer starts. Repeat and confirm both warnings, then verify aggregate progress appears while the frozen eligible files use the existing per-file download state. On a metered connection, verify one cellular-data warning describes the whole selected library and does not repeat per book.
