@@ -1327,7 +1327,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
-            comicExtractionError = localResolution.comicExtractionError
+            comicExtractionError = localResolution.comicExtractionError,
+            localFileError = localResolution.localFileError
         )
         val restoredProgress = resolveRestoredReaderProgress(
             book = book,
@@ -1535,7 +1536,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 localFile = localFile,
                 streamUrl = streamUrl,
                 comicPagesUrl = comicPagesUrl,
-                comicExtractionError = localResolution.comicExtractionError
+                comicExtractionError = localResolution.comicExtractionError,
+                localFileError = localResolution.localFileError
             )
         }.getOrElse {
             return@withContext null
@@ -2107,7 +2109,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     private data class LocalReaderResolution(
         val file: File?,
-        val comicExtractionError: String? = null
+        val comicExtractionError: String? = null,
+        val localFileError: String? = null
     )
 
     private suspend fun resolveReadableFile(book: BookSummary, allowRemoteCache: Boolean = true): LocalReaderResolution {
@@ -2115,7 +2118,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val direct = book.localPath
             ?.let(::File)
             ?.takeIf(File::exists)
-            ?.takeIf { it.isReadableLocalReaderFile(book) }
+        if (direct != null && !direct.isReadableLocalReaderFile(book)) {
+            return LocalReaderResolution(
+                file = null,
+                localFileError = "The local reader file failed integrity checks."
+            )
+        }
         if (direct != null) {
             return resolveLocalComicArchive(book, direct, serverUrl)
         }
@@ -2124,7 +2132,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             ?.localPath
             ?.let(::File)
             ?.takeIf(File::exists)
-            ?.takeIf { it.isReadableLocalReaderFile(book) }
+        if (downloaded != null && !downloaded.isReadableLocalReaderFile(book)) {
+            return LocalReaderResolution(
+                file = null,
+                localFileError = "The local reader file failed integrity checks."
+            )
+        }
         if (downloaded != null) {
             return resolveLocalComicArchive(book, downloaded, serverUrl)
         }
@@ -2187,8 +2200,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         localFile: File?,
         streamUrl: String?,
         comicPagesUrl: String? = null,
-        comicExtractionError: String? = null
+        comicExtractionError: String? = null,
+        localFileError: String? = null
     ) {
+        if (localFileError != null) {
+            throw UserFacingException(localFileError)
+        }
         when (book.mediaKind) {
             MediaKind.AUDIO -> {
                 if (localFile == null && streamUrl.isNullOrBlank()) {

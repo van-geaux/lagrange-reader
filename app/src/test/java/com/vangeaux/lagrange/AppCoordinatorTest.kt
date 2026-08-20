@@ -841,6 +841,145 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `openBook falls back to the local copy when the online attempt fails`() = runTest {
+        val localBook = book.copy(localPath = "/downloads/sample.epub")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            buildReaderError = IOException("network down"),
+            buildReaderLocalOnlyResult = ReaderState(book = localBook, localFile = File("/downloads/sample.epub"))
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openBook(localBook)
+        advanceUntilIdle()
+
+        val readerScreen = coordinator.screen.value as AppScreen.Reader
+        assertEquals(localBook, readerScreen.readerState.book)
+        assertEquals(listOf(false, true), repository.buildReaderLocalOnlyCalls)
+        assertEquals(listOf(localBook, localBook), repository.buildReaderBooks)
+    }
+
+    @Test
+    fun `openBook local fallback covers every reader media kind`() = runTest {
+        listOf(MediaKind.EPUB, MediaKind.PDF, MediaKind.COMIC, MediaKind.AUDIO).forEach { mediaKind ->
+            val localBook = book.copy(
+                mediaKind = mediaKind,
+                format = mediaKind.name.lowercase(),
+                localPath = "/downloads/sample-${mediaKind.name.lowercase()}"
+            )
+            val repository = FakeBookOrbitDataSource(
+                serverUrl = serverUrl,
+                buildReaderError = IOException("network down"),
+                buildReaderLocalOnlyResult = ReaderState(
+                    book = localBook,
+                    localFile = File(localBook.localPath!!)
+                )
+            )
+            val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+            if (mediaKind == MediaKind.AUDIO) {
+                coordinator.setAudioPlaybackOpener { _, _ -> true }
+            }
+
+            coordinator.openBook(localBook)
+            advanceUntilIdle()
+
+            assertEquals(listOf(false, true), repository.buildReaderLocalOnlyCalls)
+        }
+    }
+
+    @Test
+    fun `openBook keeps local identity when detail hydration returns another book representation`() = runTest {
+        val localBook = book.copy(fileId = "local-file", localPath = "/downloads/sample.epub")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            bookDetailResult = BookDetailInfo(
+                book = localBook.copy(fileId = "server-file", localPath = null)
+            ),
+            buildReaderResult = ReaderState(book = localBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openBook(localBook)
+        advanceUntilIdle()
+
+        assertEquals(listOf(localBook), repository.buildReaderBooks)
+    }
+
+    @Test
+    fun `openBook preserves the original network error when no local copy exists`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            ),
+            buildReaderError = IOException("network down"),
+            buildReaderLocalOnlyError = UserFacingException(
+                "This EPUB could not be prepared for reading. Download it first or reconnect to the server."
+            )
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        coordinator.openBook(book)
+        advanceUntilIdle()
+
+        val browserScreen = coordinator.screen.value as AppScreen.Browser
+        assertTrue(browserScreen.browserState.message.orEmpty().contains("network error"))
+        assertEquals(listOf(false, true), repository.buildReaderLocalOnlyCalls)
+    }
+
+    @Test
+    fun `openBook surfaces a corrupt local archive error rather than the network failure`() = runTest {
+        val comicBook = book.copy(
+            id = "book-comic",
+            fileId = "file-comic",
+            mediaKind = MediaKind.COMIC,
+            localPath = "/downloads/sample.cbz"
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(comicBook)
+            ),
+            buildReaderError = IOException("network down"),
+            buildReaderLocalOnlyError = UserFacingException("This comic archive is corrupted and could not be extracted.")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        coordinator.openBook(comicBook)
+        advanceUntilIdle()
+
+        val browserScreen = coordinator.screen.value as AppScreen.Browser
+        assertTrue(browserScreen.browserState.message.orEmpty().contains("corrupted"))
+        assertFalse(browserScreen.browserState.message.orEmpty().contains("network down"))
+    }
+
+    @Test
+    fun `openBook does not attempt a local fallback when authentication expired`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            buildReaderError = AuthenticationRequiredException()
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.openBook(book)
+        advanceUntilIdle()
+
+        val loginScreen = coordinator.screen.value as AppScreen.Login
+        assertTrue(loginScreen.message.orEmpty().contains("reopen ${book.title}"))
+        assertEquals(listOf(false), repository.buildReaderLocalOnlyCalls)
+    }
+
+    @Test
     fun `opening an annotation preserves its cfi, page, text and chapter index into reader state`() = runTest {
         val annotation = BookAnnotation(
             id = "annotation-1",
@@ -2154,6 +2293,8 @@ private class FakeBookOrbitDataSource(
         )
     ),
     var buildReaderError: Throwable? = null,
+    var buildReaderLocalOnlyResult: ReaderState? = null,
+    var buildReaderLocalOnlyError: Throwable? = null,
     var bookDetailResult: BookDetailInfo? = null,
     var readerProgressResult: BookSummary? = null,
     var userRatingResult: BookDetailInfo? = null,
@@ -2313,6 +2454,10 @@ private class FakeBookOrbitDataSource(
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
         buildReaderBooks += book
         buildReaderLocalOnlyCalls += localOnly
+        if (localOnly && (buildReaderLocalOnlyResult != null || buildReaderLocalOnlyError != null)) {
+            buildReaderLocalOnlyError?.let { throw it }
+            return requireNotNull(buildReaderLocalOnlyResult)
+        }
         buildReaderError?.let { throw it }
         return buildReaderResult
     }
