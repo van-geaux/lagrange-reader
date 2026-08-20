@@ -94,7 +94,7 @@ class LibraryReaderPreferencesTest {
             "manga",
             LibraryReaderPreferences(
                 readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
-                fontScale = 2f,
+                fontScale = 2.5f,
                 lineSpacing = 3f,
                 wordSpacing = 2f,
                 padding = EpubPaddingPercentages(-1f, 101f, 25f, 50f),
@@ -104,7 +104,7 @@ class LibraryReaderPreferencesTest {
         )
 
         assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, initial.readerPreferencesFor("manga").readingDirection)
-        assertEquals(1.5f, initial.readerPreferencesFor("manga").fontScale)
+        assertEquals(MAX_EPUB_FONT_SCALE, initial.readerPreferencesFor("manga").fontScale)
         assertEquals(MAX_EPUB_LINE_SPACING, initial.readerPreferencesFor("manga").lineSpacing)
         assertEquals(MAX_EPUB_WORD_SPACING, initial.readerPreferencesFor("manga").wordSpacing)
         assertEquals(EpubPaddingPercentages(0f, 100f, 25f, 50f), initial.readerPreferencesFor("manga").padding)
