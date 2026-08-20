@@ -4,6 +4,8 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -12,7 +14,9 @@ class DownloadStore private constructor(
     private val downloadDir: File,
     private val attemptsFile: File
 ) {
-    private val mutex = Mutex()
+    private companion object {
+        val mutex = Mutex()
+    }
 
     constructor(context: Context) : this(
         file = File(context.filesDir, "downloads.json"),
@@ -159,8 +163,7 @@ class DownloadStore private constructor(
                 }
             )
         }
-        file.parentFile?.mkdirs()
-        file.writeText(array.toString())
+        writeAtomically(file, array.toString())
     }
 
     private fun readAttemptsUnlocked(): List<DownloadAttempt> {
@@ -203,8 +206,32 @@ class DownloadStore private constructor(
                 put("startedAtMillis", attempt.startedAtMillis)
             })
         }
-        attemptsFile.parentFile?.mkdirs()
-        attemptsFile.writeText(array.toString())
+        writeAtomically(attemptsFile, array.toString())
+    }
+
+    private fun writeAtomically(target: File, content: String) {
+        val parent = target.parentFile ?: return
+        parent.mkdirs()
+        val temporary = File.createTempFile(".${target.name}.", ".tmp", parent)
+        try {
+            temporary.writeText(content)
+            try {
+                java.nio.file.Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            }
+        } finally {
+            temporary.delete()
+        }
     }
 
     private fun sanitize(value: String): String {

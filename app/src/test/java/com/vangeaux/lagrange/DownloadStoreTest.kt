@@ -2,6 +2,9 @@ package com.vangeaux.lagrange
 
 import java.io.File
 import java.nio.file.Files
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -211,5 +214,70 @@ class DownloadStoreTest {
         assertEquals(localFile.absolutePath, store.readAttempts("https://example.test").single().existingLocalPath)
         assertEquals(true, store.removeAttempt("https://example.test", "file-update"))
         assertEquals(emptyList<DownloadAttempt>(), store.readAttempts("https://example.test"))
+    }
+
+    @Test
+    fun `queued download attempt preserves title metadata before worker starts`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-queued").toFile()
+        val store = DownloadStore(filesDir)
+        val target = store.downloadTarget("queued-file", "Queued title", MediaKind.EPUB, "epub")
+
+        store.saveAttempt(
+            DownloadAttempt(
+                serverUrl = "https://example.test",
+                fileId = "queued-file",
+                bookId = "queued-book",
+                title = "Queued title",
+                targetPath = target.absolutePath,
+                mediaKind = MediaKind.EPUB,
+                mimeType = "epub",
+                sourceUpdatedAtMillis = 42L
+            )
+        )
+
+        val restored = DownloadStore(filesDir).readAttempts("https://example.test").single()
+
+        assertEquals("Queued title", restored.title)
+        assertEquals("queued-book", restored.bookId)
+        assertEquals(target.absolutePath, restored.targetPath)
+        assertEquals(42L, restored.sourceUpdatedAtMillis)
+    }
+
+    @Test
+    fun `concurrent attempt saves from separate store instances sharing a directory do not lose data`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-concurrent").toFile()
+        val iterations = 40
+
+        coroutineScope {
+            repeat(iterations) { index ->
+                launch(Dispatchers.IO) {
+                    DownloadStore(filesDir).saveAttempt(
+                        DownloadAttempt(
+                            serverUrl = "https://example.test",
+                            fileId = "file-a-$index",
+                            bookId = "book-a-$index",
+                            title = "Title A $index",
+                            targetPath = "/tmp/a-$index.epub",
+                            mediaKind = MediaKind.EPUB
+                        )
+                    )
+                }
+                launch(Dispatchers.IO) {
+                    DownloadStore(filesDir).saveAttempt(
+                        DownloadAttempt(
+                            serverUrl = "https://example.test",
+                            fileId = "file-b-$index",
+                            bookId = "book-b-$index",
+                            title = "Title B $index",
+                            targetPath = "/tmp/b-$index.epub",
+                            mediaKind = MediaKind.EPUB
+                        )
+                    )
+                }
+            }
+        }
+
+        val restored = DownloadStore(filesDir).readAttempts("https://example.test")
+        assertEquals(iterations * 2, restored.size)
     }
 }

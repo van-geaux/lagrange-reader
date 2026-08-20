@@ -22,6 +22,17 @@ internal fun cellularDownloadDecision(
     }
 }
 
+internal fun backgroundDownloadMayStart(
+    policy: CellularDownloadPolicy,
+    isCellularOrMetered: Boolean,
+    cellularConsentGranted: Boolean
+): Boolean = when {
+    !isCellularOrMetered -> true
+    policy == CellularDownloadPolicy.ALWAYS -> true
+    policy == CellularDownloadPolicy.NEVER -> false
+    else -> cellularConsentGranted
+}
+
 internal fun Context.isActiveCellularOrMeteredNetwork(): Boolean {
     val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         ?: return false

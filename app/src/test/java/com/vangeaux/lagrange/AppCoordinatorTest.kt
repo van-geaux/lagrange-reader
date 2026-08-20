@@ -186,6 +186,59 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `download transfer rows prefer restored attempt metadata for unknown active files`() {
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = emptyList(),
+            downloadingFileIds = setOf("unknown-file"),
+            downloadMetadataByFileId = mapOf(
+                "unknown-file" to DownloadRecord(
+                    serverUrl = serverUrl,
+                    fileId = "unknown-file",
+                    bookId = "restored-book",
+                    title = "Restored title",
+                    localPath = "/tmp/restored-book.epub",
+                    mediaKind = MediaKind.EPUB
+                )
+            )
+        )
+
+        val rows = downloadTransferRows(state)
+
+        assertEquals("Restored title", rows.single().book.title)
+        assertEquals("restored-book", rows.single().book.id)
+        assertTrue(rows.single().isActive)
+    }
+
+    @Test
+    fun `download transfer rows prefer restored attempt metadata over a numeric catalog title`() {
+        val catalogBook = book.copy(fileId = "file-1", title = "413921")
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(catalogBook),
+            downloadingFileIds = setOf("file-1"),
+            downloadMetadataByFileId = mapOf(
+                "file-1" to DownloadRecord(
+                    serverUrl = serverUrl,
+                    fileId = "file-1",
+                    bookId = "book-1",
+                    title = "Original title",
+                    localPath = "/tmp/original.epub",
+                    mediaKind = MediaKind.EPUB
+                )
+            )
+        )
+
+        val rows = downloadTransferRows(state)
+
+        assertEquals("Original title", rows.single().book.title)
+    }
+
+    @Test
     fun `bootstrap shows server setup when no server is saved`() = runTest {
         val repository = FakeBookOrbitDataSource(serverUrl = null)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -1641,6 +1694,33 @@ class AppCoordinatorTest {
         val downloading = (coordinator.screen.value as AppScreen.Browser).browserState
         assertTrue(book.fileId in downloading.downloadingFileIds)
         assertEquals(0.5f, downloading.downloadProgressByFileId[book.fileId])
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `active download keeps initiating title when book is absent from browser catalog`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = gate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = emptyList(),
+                homeBooks = emptyList()
+            )
+        )
+
+        coordinator.downloadBook(book)
+        runCurrent()
+
+        val downloading = (coordinator.screen.value as AppScreen.Browser).browserState
+        val row = downloadTransferRows(downloading).single()
+        assertEquals(book.title, row.book.title)
+        assertTrue(row.isActive)
 
         gate.complete(Unit)
         advanceUntilIdle()

@@ -49,7 +49,8 @@ class AppGraph private constructor(
                 repository,
                 releaseChecker = GitHubReleaseChecker()::check,
                 readIgnoredReleaseTag = preferencesStore::readIgnoredReleaseTag,
-                saveIgnoredReleaseTag = preferencesStore::saveIgnoredReleaseTag
+                saveIgnoredReleaseTag = preferencesStore::saveIgnoredReleaseTag,
+                schedulerOverride = WorkManagerDownloadScheduler(context)
             ).also { it.setSessionHistoryStore(sessionHistoryStore) }
             return Dependencies(repository, sessionHistoryStore, coordinator)
         }

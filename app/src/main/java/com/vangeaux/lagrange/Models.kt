@@ -407,6 +407,7 @@ data class BrowserState(
     val downloadingFileIds: Set<String> = emptySet(),
     val downloadProgressByFileId: Map<String, Float> = emptyMap(),
     val failedDownloadFileIds: Set<String> = emptySet(),
+    val downloadBooksByFileId: Map<String, BookSummary> = emptyMap(),
     val downloadMetadataByFileId: Map<String, DownloadRecord> = emptyMap(),
     val localFilePathOverrides: Map<String, String?> = emptyMap(),
     val localBooksRevision: Int = 0,
