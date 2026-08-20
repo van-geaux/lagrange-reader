@@ -8,15 +8,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.assertHasNoClickAction
-import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -34,6 +36,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.test.espresso.Espresso.pressBack
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -476,9 +479,22 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Space opera").assertIsDisplayed().assertHasNoClickAction()
 
         composeRule.onNodeWithContentDescription("Open full-screen cover for Orbit Rising").performClick()
-        composeRule.onNodeWithContentDescription("Full-screen cover for Orbit Rising. Tap anywhere to close").assertIsDisplayed()
-            .performClick()
-        composeRule.onAllNodesWithContentDescription("Full-screen cover for Orbit Rising. Tap anywhere to close").assertCountEquals(0)
+        val coverViewerDescription =
+            "Full-screen cover for Orbit Rising. Pinch or double-tap to zoom. Tap the cover to reset zoom. Tap outside the cover or use back to close. Long-press the cover for options"
+        composeRule.onNodeWithContentDescription(coverViewerDescription)
+            .assertIsDisplayed()
+            .performTouchInput { longClick() }
+        composeRule.onNodeWithText("Download").assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithContentDescription(coverViewerDescription)
+            .assertIsDisplayed()
+            .performTouchInput { click(Offset(1f, 1f)) }
+        composeRule.onAllNodesWithContentDescription(coverViewerDescription).assertCountEquals(0)
+
+        composeRule.onNodeWithContentDescription("Open full-screen cover for Orbit Rising").performClick()
+        composeRule.onNodeWithContentDescription(coverViewerDescription).assertIsDisplayed()
+        pressBack()
+        composeRule.onAllNodesWithContentDescription(coverViewerDescription).assertCountEquals(0)
 
         composeRule.onNodeWithContentDescription("Filter Genres by Science fiction").performClick()
         composeRule.onNodeWithText("Books · Science fiction").assertIsDisplayed()
