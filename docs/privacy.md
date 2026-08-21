@@ -25,7 +25,7 @@
 - explicit HTTP BookOrbit URLs are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
 - the app trusts both Android's system CA store and user-installed CAs for all HTTPS connections; this is app-wide because the BookOrbit server URL is chosen by the user at runtime, so it lets self-hosted servers using a private/internal CA work over HTTPS without extra configuration, but it also means the app will trust any CA the user (or someone with access to the device) has installed, which is a broader trust surface than the system-only default
 - changing or clearing the configured server resets session state, but server-scoped cached browser and progress data may remain on disk
-- sign-out clears cookies and active-reader state, but it does not currently wipe downloads, cached browser snapshots, or queued progress
+- sign-out clears account-owned progress, reading-session events, annotations, catalog/detail/browser/reader state, and queued account-owned progress; downloaded media is preserved on-device as device-shared Local books and remains available to any account on the same device
 - downloaded files remain on disk until the user removes them from the browser UI
 - queued progress may remain on disk until it is successfully synced or superseded
 

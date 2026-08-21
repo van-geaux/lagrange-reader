@@ -135,7 +135,7 @@ The user has confirmed the validated reader, media, navigation, and server-sessi
 
 ### Multi-file streamed MP3 audiobook playback (issue #36)
 
-The implementation and live-device validation are complete. The user confirmed that a BookOrbit audiobook composed of ordered MP3 files plays as one continuous streamed audiobook. The fix is planned for inclusion in a release this week.
+The implementation and live-device validation are complete. The user confirmed that a BookOrbit audiobook composed of ordered MP3 files plays as one continuous streamed audiobook. Multi-file streamed MP3 support is included in the 1.5.0 release scope.
 
 For regression testing, verify chapter selection and automatic advancement across at least two file boundaries; compact-player elapsed/remaining time and slider position across the complete audiobook; ±10/30-second seeks around a boundary; and online relaunch/resume in a later file using the active file ID and in-file position. Recheck a single-file M4B and downloaded/local audio. Multi-file offline download/storage remains out of scope.
 
@@ -147,7 +147,7 @@ For logout and account-switch regression, start audiobook playback, verify that 
 
 ### Foreground WorkManager book downloads (issue #77)
 
-This scenario set is pending manual/device validation; nothing below has been device-confirmed yet. On a connected device or emulator, verify:
+The user confirmed that downloads continue after the app moves to the background and that active download rows retain the original initiating book title rather than a numeric ID. The detailed scenario list below remains useful regression and manual coverage; any edge scenarios not yet validated on a physical device must be distinguished from the user-confirmed behavior. On a connected device or emulator, verify:
 
 - starting a large download shows the dataSync download notification, continues after switching apps or turning off the screen, and completes with the expected notification/state;
 - rotating or recreating the hosting activity during an active download does not restart or duplicate the transfer, and progress keeps projecting correctly from WorkManager state;
