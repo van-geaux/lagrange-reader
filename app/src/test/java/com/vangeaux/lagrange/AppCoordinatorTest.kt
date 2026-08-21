@@ -1675,6 +1675,31 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `download permission denial keeps the user in the browser`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            downloadError = HttpRequestException(403, "download this title")
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.downloadBook(book)
+        advanceUntilIdle()
+
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertTrue(browser.browserState.message.orEmpty().contains("don’t have permission"))
+        assertTrue(book.fileId in browser.browserState.permissionDeniedDownloadFileIds)
+        assertTrue(book.fileId !in browser.browserState.failedDownloadFileIds)
+    }
+
+    @Test
     fun `active download exposes determinate progress in browser state`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeBookOrbitDataSource(downloadGate = gate)

@@ -1217,6 +1217,16 @@ class AppCoordinator internal constructor(
                     message = "Download canceled."
                 )
             }
+            DownloadOutcome.PermissionDenied -> {
+                val label = book?.title ?: "this title"
+                updateDownloadState(
+                    fileId = fileId,
+                    isDownloading = false,
+                    failed = false,
+                    permissionDenied = true,
+                    message = "You don’t have permission to download $label."
+                )
+            }
             DownloadOutcome.AuthRequired -> {
                 updateDownloadState(
                     fileId = fileId,
@@ -1265,11 +1275,12 @@ class AppCoordinator internal constructor(
 
     fun clearFailedDownload(fileId: String) {
         val current = lastBrowserState ?: return
-        if (fileId !in current.failedDownloadFileIds) return
+        if (fileId !in current.failedDownloadFileIds && fileId !in current.permissionDeniedDownloadFileIds) return
         restoredInterruptedDownloads -= fileId
         scope.launch { repository.clearInterruptedDownload(fileId) }
         showBrowser(current.copy(
             failedDownloadFileIds = current.failedDownloadFileIds - fileId,
+            permissionDeniedDownloadFileIds = current.permissionDeniedDownloadFileIds - fileId,
             downloadBooksByFileId = current.downloadBooksByFileId - fileId,
             downloadMetadataByFileId = current.downloadMetadataByFileId - fileId
         ))
@@ -1277,16 +1288,19 @@ class AppCoordinator internal constructor(
 
     fun clearAllFailedDownloads() {
         val current = lastBrowserState ?: return
-        if (current.failedDownloadFileIds.isEmpty()) return
         val failed = current.failedDownloadFileIds
+        val permissionDenied = current.permissionDeniedDownloadFileIds
+        if (failed.isEmpty() && permissionDenied.isEmpty()) return
         restoredInterruptedDownloads -= failed
+        restoredInterruptedDownloads -= permissionDenied
         scope.launch {
-            failed.forEach { fileId -> repository.clearInterruptedDownload(fileId) }
+            (failed + permissionDenied).forEach { fileId -> repository.clearInterruptedDownload(fileId) }
         }
         showBrowser(current.copy(
             failedDownloadFileIds = emptySet(),
-            downloadBooksByFileId = current.downloadBooksByFileId - failed,
-            downloadMetadataByFileId = current.downloadMetadataByFileId - failed
+            permissionDeniedDownloadFileIds = emptySet(),
+            downloadBooksByFileId = current.downloadBooksByFileId - failed - permissionDenied,
+            downloadMetadataByFileId = current.downloadMetadataByFileId - failed - permissionDenied
         ))
     }
 
@@ -1489,12 +1503,14 @@ class AppCoordinator internal constructor(
         fileId: String,
         isDownloading: Boolean,
         failed: Boolean,
+        permissionDenied: Boolean = false,
         message: String?
     ) {
         val current = lastBrowserState ?: return
         val downloading = current.downloadingFileIds.toMutableSet()
         val progressByFile = current.downloadProgressByFileId.toMutableMap()
         val failedDownloads = current.failedDownloadFileIds.toMutableSet()
+        val permissionDeniedDownloads = current.permissionDeniedDownloadFileIds.toMutableSet()
         if (isDownloading) {
             downloading += fileId
         } else {
@@ -1506,11 +1522,17 @@ class AppCoordinator internal constructor(
         } else {
             failedDownloads -= fileId
         }
+        if (permissionDenied) {
+            permissionDeniedDownloads += fileId
+        } else {
+            permissionDeniedDownloads -= fileId
+        }
         showBrowser(
             current.copy(
                 downloadingFileIds = downloading,
                 downloadProgressByFileId = progressByFile,
                 failedDownloadFileIds = failedDownloads,
+                permissionDeniedDownloadFileIds = permissionDeniedDownloads,
                 downloadMetadataByFileId = current.downloadMetadataByFileId,
                 message = message
             )

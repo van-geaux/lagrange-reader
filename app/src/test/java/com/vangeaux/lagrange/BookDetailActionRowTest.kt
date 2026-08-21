@@ -58,6 +58,14 @@ class BookDetailActionRowTest {
     }
 
     @Test
+    fun permissionDeniedDownloadDoesNotOfferRetry() {
+        val denied = state(isDownloaded = false, permissionDenied = true)
+
+        assertNull(denied.inlineTransfer)
+        assertNull(denied.overflowTransferLabel)
+    }
+
+    @Test
     fun serverMissingBookHasNoFileActionsButCanCancelAnExistingTransfer() {
         val missing = state(isDownloaded = false, isServerMissing = true)
         assertNull(missing.inlineTransfer)
@@ -162,6 +170,7 @@ class BookDetailActionRowTest {
         isDownloaded: Boolean,
         isDownloading: Boolean = false,
         downloadFailed: Boolean = false,
+        permissionDenied: Boolean = false,
         hasDownloadUpdate: Boolean = false,
         isOfflineSnapshot: Boolean = false,
         isServerMissing: Boolean = false
@@ -169,6 +178,7 @@ class BookDetailActionRowTest {
         isDownloaded = isDownloaded,
         isDownloading = isDownloading,
         downloadFailed = downloadFailed,
+        permissionDenied = permissionDenied,
         hasDownloadUpdate = hasDownloadUpdate,
         isOfflineSnapshot = isOfflineSnapshot,
         isServerMissing = isServerMissing

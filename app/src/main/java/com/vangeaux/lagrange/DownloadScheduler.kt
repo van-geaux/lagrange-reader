@@ -15,6 +15,7 @@ internal sealed interface DownloadOutcome {
     data class Success(val localFile: File) : DownloadOutcome
     data object Canceled : DownloadOutcome
     data object AuthRequired : DownloadOutcome
+    data object PermissionDenied : DownloadOutcome
     data class Failed(val error: Throwable) : DownloadOutcome
 }
 
@@ -90,6 +91,11 @@ internal class InProcessDownloadScheduler(
                     when (error) {
                         is CancellationException -> onOutcome(DownloadOutcome.Canceled)
                         is AuthenticationRequiredException -> onOutcome(DownloadOutcome.AuthRequired)
+                        is HttpRequestException -> if (error.code == 403) {
+                            onOutcome(DownloadOutcome.PermissionDenied)
+                        } else {
+                            onOutcome(DownloadOutcome.Failed(error))
+                        }
                         else -> onOutcome(DownloadOutcome.Failed(error))
                     }
                 }

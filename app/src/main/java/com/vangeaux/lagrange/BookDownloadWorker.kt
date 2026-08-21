@@ -75,6 +75,7 @@ internal const val KEY_LOCAL_PATH = "local-path"
 
 internal const val OUTCOME_AUTH_REQUIRED = "auth_required"
 internal const val OUTCOME_POLICY_BLOCKED = "policy_blocked"
+internal const val OUTCOME_PERMISSION_DENIED = "permission_denied"
 internal const val OUTCOME_FAILED = "failed"
 
 private const val NOTIFICATION_CHANNEL_ID = "bookorbit-downloads"
@@ -198,7 +199,9 @@ class BookDownloadWorker(
         } catch (io: SSLException) {
             Result.retry()
         } catch (http: HttpRequestException) {
-            if (http.code >= 500 || http.code == 408 || http.code == 429) {
+            if (http.code == 403) {
+                Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_PERMISSION_DENIED))
+            } else if (http.code >= 500 || http.code == 408 || http.code == 429) {
                 Result.retry()
             } else {
                 Result.failure(
@@ -406,6 +409,7 @@ internal class WorkManagerDownloadScheduler(
             WorkInfo.State.FAILED -> {
                 when (info.outputData.getString(KEY_OUTCOME)) {
                     OUTCOME_AUTH_REQUIRED -> onOutcome(DownloadOutcome.AuthRequired)
+                    OUTCOME_PERMISSION_DENIED -> onOutcome(DownloadOutcome.PermissionDenied)
                     else -> {
                         val message = info.outputData.getString(KEY_ERROR_MESSAGE)
                             ?: "Download failed."

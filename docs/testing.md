@@ -40,6 +40,8 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - force-closing during a download restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;
 - a failed update preserves the previous local copy and exposes `Update local` plus `Delete local`.
+- using an account without download permission, attempting a download shows a permission-specific notice, keeps the app logged in on the current screen, and does not offer immediate `Retry` for that item until the state is cleared or refreshed;
+- ordinary failed downloads continue to offer `Retry` and `Clear` alongside the permission-denied case above.
 
 The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
 
