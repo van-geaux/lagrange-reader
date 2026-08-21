@@ -198,7 +198,9 @@ class AppCoordinator internal constructor(
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
+    private var acceptAudioProgress = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
+    private var audioPlaybackCloser: (suspend () -> Unit)? = null
     private var audioSessionHistoryOpener: ((BookSummary, Long) -> Unit)? = null
     private var releaseCheckInFlight = false
     private var dismissedReleaseTag: String? = null
@@ -206,6 +208,10 @@ class AppCoordinator internal constructor(
 
     fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
         audioPlaybackOpener = opener
+    }
+
+    internal fun setAudioPlaybackCloser(closer: suspend () -> Unit) {
+        audioPlaybackCloser = closer
     }
 
     internal fun setSessionHistoryStore(store: AudiobookSessionHistoryStore) {
@@ -369,7 +375,10 @@ class AppCoordinator internal constructor(
 
     fun changeServer(serverUrl: String) {
         scope.launch {
+            acceptAudioProgress = false
             val oldServerUrl = repository.getServerUrl().orEmpty()
+            _fullAudioPlayerBook.value = null
+            runCatching { audioPlaybackCloser?.invoke() }
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
             sessionHistoryStore?.clearServer(oldServerUrl)
@@ -388,7 +397,10 @@ class AppCoordinator internal constructor(
 
     fun clearServer() {
         scope.launch {
+            acceptAudioProgress = false
             val oldServerUrl = repository.getServerUrl().orEmpty()
+            _fullAudioPlayerBook.value = null
+            runCatching { audioPlaybackCloser?.invoke() }
             resetTransientState(clearBrowserState = true)
             sessionHistoryStore?.clearServer(oldServerUrl)
             repository.clearServer()
@@ -510,6 +522,11 @@ class AppCoordinator internal constructor(
 
     fun signOut() {
         scope.launch {
+            acceptAudioProgress = false
+            val serverUrl = repository.getServerUrl().orEmpty()
+            _fullAudioPlayerBook.value = null
+            runCatching { audioPlaybackCloser?.invoke() }
+            sessionHistoryStore?.clearServer(serverUrl)
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
             repository.clearSession()
@@ -597,6 +614,7 @@ class AppCoordinator internal constructor(
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
+            acceptAudioProgress = true
             showStartup("Loading libraries…")
             restoredInterruptedDownloads = runCatching {
                 repository.loadInterruptedDownloads().associateBy { it.fileId }
@@ -1614,6 +1632,7 @@ class AppCoordinator internal constructor(
     }
 
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        if (!acceptAudioProgress) return
         if ((_screen.value as? AppScreen.Reader)?.readerState?.launchMode == ReaderLaunchMode.PREVIEW) {
             return
         }
@@ -1654,7 +1673,10 @@ class AppCoordinator internal constructor(
                     )
                 )
             }
-            if (ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
+            if (
+                acceptAudioProgress &&
+                    ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())
+            ) {
                 queueProgress(key, progress)
             }
         }

@@ -399,9 +399,24 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun clearSession() {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork("bookorbit-progress-sync")
+        workManager.cancelUniqueWork("bookorbit-reading-session-sync")
+        workManager.cancelUniqueWork("bookorbit-annotation-sync")
         OfflineCacheSyncWorker.cancel(context)
+        // DownloadStore is device-shared local content; do not remove completed files on logout.
+        queueStore.clear()
+        readingSessionQueueStore.clear()
+        annotationMutationQueueStore.clear()
+        annotationLocalIdMappingStore.clear()
+        lastSyncedProgressStore.clear()
+        browserSnapshotStore.clear()
+        catalogSnapshotStore.clear()
+        libraryCatalogStore.clear()
+        bookDetailCacheStore.clear()
         context.dataStore.edit { prefs ->
             prefs.remove(Keys.ACCESS_TOKEN)
+            prefs.remove(Keys.SELECTED_LIBRARY_ID)
         }
         activeReaderStore.clear()
         epubReaderPositionStore.clear()

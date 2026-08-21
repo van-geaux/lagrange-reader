@@ -142,6 +142,8 @@ For regression testing, verify chapter selection and automatic advancement acros
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. The interim server-hosted sign-in WebView is distinct from native AppAuth. Native AppAuth requires deployed BookOrbit mobile-redirect support and separate provider/device validation.
 
+For logout and account-switch regression, start audiobook playback, verify that explicit logout immediately removes the compact/full player and foreground playback notification before the Login screen is usable, then sign in as a different account on the same server. Confirm the previous account's queued progress, reading-session events, annotations, cached catalog/detail state, and exact reader positions are not replayed or displayed for the new account. Confirm completed downloaded media remains available and appears in Local books for the new account, while its progress/status reflects only the new account's server state. Verify that same-user background playback still survives ordinary task removal. Repeat from compact playback, full-player playback, paused playback, and while the player is preparing. Automated coverage verifies coordinator teardown and durable progress-store cleanup; physical player, notification, and two-account validation require a connected device or emulator.
+
 ### Foreground WorkManager book downloads (issue #77)
 
 This scenario set is pending manual/device validation; nothing below has been device-confirmed yet. On a connected device or emulator, verify:

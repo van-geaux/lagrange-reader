@@ -31,6 +31,10 @@ class AppGraph private constructor(
         coordinator.setAudioPlaybackOpener { state, playWhenReady ->
             controller.restorePersistedSession(state, playWhenReady)
         }
+        coordinator.setAudioPlaybackCloser {
+            controller.discardPendingOutboundSession()
+            controller.close()
+        }
         coordinator.setAudioSessionHistoryOpener(controller::openFromSessionHistory)
     }
 

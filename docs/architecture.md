@@ -28,6 +28,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 ## Data and synchronization rules
 
 - Server identity is part of local cache and persistence boundaries; do not mix records between configured servers.
+- Explicit logout, server change, and server removal close the Media3 audiobook service before credentials are cleared, disable late audio-progress callbacks, cancel outbound sync workers, and purge queued progress, reading-session, annotation, catalog, browser-snapshot, detail-cache, and exact-reader state. Downloaded media files remain device-shared assets and are not removed by session cleanup; Local books may therefore appear for another account on the same server/device, without carrying over the previous account's reading state or metadata.
 - Completed local-copy records are separate from active/failed download attempts. Failed first downloads remain remote-only; failed updates preserve the prior completed copy.
 - Local exact-position audiobook history remains authoritative for seeking. Server sessions/reading attempts supplement it as analytics context.
 - Pending progress replay is outbound protection. It does not replace authoritative inbound progress hydration on normal online opens.

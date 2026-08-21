@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 internal class ReadingSessionReporter(
@@ -50,6 +51,11 @@ internal class ReadingSessionReporter(
     fun end(progressPercent: Float?, atMillis: Long = System.currentTimeMillis()) {
         if (!enabled) return
         tracker.end(progressPercent, atMillis)?.let(::enqueue)
+    }
+
+    fun disable() {
+        enabled = false
+        scope.cancel()
     }
 
     private fun enqueue(payloads: List<ReadingSessionPayload>) {
