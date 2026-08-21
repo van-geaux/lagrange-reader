@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.4.3](https://img.shields.io/badge/version-1.4.3-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.4.3)
+[![Version 1.5.0](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -24,28 +24,14 @@ This is a community project, not an official BookOrbit application. Development 
 
 The following screenshots show the main reading and library experience. More screenshots are available below.
 
-<p align="center">
-  <img src="screenshots/03-home-screen.jpg" alt="Lagrange Reader home screen" width="220">
-  <img src="screenshots/05-reader-options.jpg" alt="Reader options" width="220">
-  <img src="screenshots/09-audiobook-player.jpg" alt="Audiobook player" width="220">
-</p>
+
+![home, reader, and audiobook player](screenshots/03-05-09-combined.jpg)
 
 <details>
 <summary>More screenshots</summary>
 
-<p align="center">
-  <img src="screenshots/01-server-input.jpg" alt="Image 1" width="200">
-  <img src="screenshots/02-login-screen.jpg" alt="Image 2" width="200">
-  <img src="screenshots/04-book-detail.jpg" alt="Image 3" width="200">
-  <img src="screenshots/08-download-local.jpg" alt="Image 4" width="200">
-</p>
-
-<p align="center">
-  <img src="screenshots/06-app-options.jpg" alt="Image 5" width="200">
-  <img src="screenshots/07-achievements.jpg" alt="Image 6" width="200">
-  <img src="screenshots/10-audiobook-read-along.jpg" alt="Image 7" width="200">
-  <img src="screenshots/11-light-mode-library.jpg" alt="Image 7" width="200">
-</p>
+![server, detail, option, achievement](screenshots/01-04-06-07-combined.jpg)
+![download, player, read along, big](screenshots/08-09-10-12-combined.jpg)
 
 </details>
 
