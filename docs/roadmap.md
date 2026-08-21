@@ -4,8 +4,8 @@ This document contains the current project direction only. Historical work order
 
 ## Current status
 
-- Release: Lagrange 1.5.0 release preparation is complete locally; publication is pending until the tag workflow completes. See [`docs/release-notes/v1.5.0.md`](release-notes/v1.5.0.md).
-- Branch: `release/1.5.0`, branched from `main`.
+- Release: Lagrange 1.5.0 is published. See [`docs/release-notes/v1.5.0.md`](release-notes/v1.5.0.md).
+- Branch: `main`, aligned with `origin/main`.
 - Current implementation state: all 1.5.0-scope issues (#73, #75, #76, #77, #88) are closed and merged. EPUB annotations, Preview mode, enhanced audiobook player (#68/#70), background-safe downloads (#77/#84), improved fullscreen cover viewer (#73/#85), account isolation on logout (#88/#89), and audiobook session-history improvements (#75/#92) are implemented and user-confirmed working. BOOX issue #25 remains pending physical-device access.
 - User-installed CA support for self-hosted servers is implemented through [PR #72](https://github.com/van-geaux/lagrange-reader/pull/72), with explicit system/user trust anchors, a documented app-wide trust rationale, privacy disclosure, and focused Android resource validation. Local compilation, unit tests, and debug/Android-test APK assembly pass; connected-device instrumentation was not available and GitHub reports no checks for the PR.
 
