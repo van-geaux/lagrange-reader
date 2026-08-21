@@ -1477,6 +1477,7 @@ internal fun NativeLibraryBrowserScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isSearchOpen -> SearchLayerContent(
                     query = query,
@@ -1728,7 +1729,6 @@ internal fun NativeLibraryBrowserScreen(
                     onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage,
                     onLocalBooksSelected = {
                         localBooksLibraryId = null
                         destination = BrowserDestination.LOCAL_BOOKS
@@ -1767,7 +1767,6 @@ internal fun NativeLibraryBrowserScreen(
                     onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage,
                     onLocalBooksSelected = {
                         localBooksLibraryId = state.selectedLibraryId
                         destination = BrowserDestination.LOCAL_BOOKS
@@ -1785,10 +1784,21 @@ internal fun NativeLibraryBrowserScreen(
                     onClearFailedDownload = onClearFailedDownload,
                     onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage
+                    onMarkAsUnread = onMarkAsUnread
                 )
             }
+            state.message?.let { message ->
+                OrbitMessage(
+                    text = message,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(padding)
+                        .padding(16.dp),
+                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR,
+                    onDismiss = onDismissMessage
+                )
+            }
+        }
     }
 }
 
@@ -2037,14 +2047,6 @@ private fun LibraryPickerScreen(
                 "Select which library to browse.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        state.message?.let { message ->
-            item {
-                OrbitMessage(
-                    text = message,
-                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
-                )
-            }
         }
         if (state.isLoadingLibraries) {
             item { LoadingFeedRow("Loading libraries...") }
@@ -4034,7 +4036,6 @@ private fun RefreshableHomeFeed(
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onDismissMessage: () -> Unit,
     onLocalBooksSelected: () -> Unit
 ) {
     PullToRefreshLayout(
@@ -4058,7 +4059,6 @@ private fun RefreshableHomeFeed(
             onDeleteLocalCopy = onDeleteLocalCopy,
             onMarkAsRead = onMarkAsRead,
             onMarkAsUnread = onMarkAsUnread,
-            onDismissMessage = onDismissMessage,
             onLocalBooksSelected = onLocalBooksSelected
         )
     }
@@ -4079,7 +4079,6 @@ private fun HomeFeed(
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onDismissMessage: (() -> Unit)? = null,
     onLocalBooksSelected: (() -> Unit)? = null,
     localBooksLibraryId: String? = null,
     showHeader: Boolean = false
@@ -4121,16 +4120,6 @@ private fun HomeFeed(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-            }
-        }
-        state.message?.let { message ->
-            item {
-                OrbitMessage(
-                    text = message,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR,
-                    onDismiss = onDismissMessage
-                )
             }
         }
         if (currentlyReading.isNotEmpty()) {
@@ -4637,7 +4626,6 @@ private fun LibraryContentScreen(
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onDismissMessage: () -> Unit,
     onLocalBooksSelected: () -> Unit
 ) {
     val libraryDownloadCandidates = remember(state.books, state.selectedLibraryId) {
@@ -4787,7 +4775,6 @@ private fun LibraryContentScreen(
                     onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
-                    onDismissMessage = onDismissMessage,
                     onLocalBooksSelected = onLocalBooksSelected,
                     localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
@@ -5167,14 +5154,6 @@ private fun LibraryBooks(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LoadingFeedRow(
                     if (state.isCatalogComplete) "Updating cached catalog..." else "Caching full library..."
-                )
-            }
-        }
-        state.message?.let { message ->
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OrbitMessage(
-                    message,
-                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
                 )
             }
         }
@@ -5666,14 +5645,6 @@ private fun LibraryBookList(
     ) {
         item { Text(title, style = MaterialTheme.typography.headlineSmall) }
         if (isLoading) item { LoadingFeedRow("Loading books...") }
-        state.message?.let { message ->
-            item {
-                OrbitMessage(
-                    message,
-                    tone = if (state.isOfflineSnapshot) OrbitMessageTone.OFFLINE else OrbitMessageTone.ERROR
-                )
-            }
-        }
         if (!isLoading && books.isEmpty()) {
             item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
