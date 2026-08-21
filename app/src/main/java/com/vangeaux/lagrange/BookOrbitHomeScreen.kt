@@ -5971,6 +5971,7 @@ private fun BookDetails(
     val fileId = displayBook.fileId
     val downloadProgress = fileId?.let(state.downloadProgressByFileId::get)
     val downloadFailed = fileId != null && fileId in state.failedDownloadFileIds
+    val permissionDenied = fileId != null && fileId in state.permissionDeniedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !displayBook.isDownloaded
     val seriesKey = displayBook.seriesId ?: displayBook.seriesName
     val localSeriesBooks = remember(state.books, state.homeBooks, displayBook, seriesKey) {
@@ -6155,6 +6156,7 @@ private fun BookDetails(
                 isDownloaded = displayBook.isDownloaded,
                 isDownloading = isDownloading,
                 downloadFailed = downloadFailed,
+                permissionDenied = permissionDenied,
                 hasDownloadUpdate = displayBook.hasDownloadUpdate,
                 isOfflineSnapshot = state.isOfflineSnapshot,
                 isServerMissing = displayBook.isServerMissing
@@ -7138,6 +7140,7 @@ internal fun bookDetailActionState(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadFailed: Boolean,
+    permissionDenied: Boolean = false,
     hasDownloadUpdate: Boolean,
     isOfflineSnapshot: Boolean,
     isServerMissing: Boolean = false
@@ -7151,6 +7154,7 @@ internal fun bookDetailActionState(
     BookDetailActionState(
         inlineTransfer = when {
             isDownloading -> BookDetailInlineTransfer.CANCEL_DOWNLOAD
+            permissionDenied -> null
             downloadFailed -> BookDetailInlineTransfer.RETRY_DOWNLOAD
             else -> BookDetailInlineTransfer.DOWNLOAD
         },

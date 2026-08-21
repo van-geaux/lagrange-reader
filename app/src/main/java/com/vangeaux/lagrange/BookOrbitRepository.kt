@@ -2412,7 +2412,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             }
         }
         response.use {
-            if (it.code == 401 || it.code == 403) {
+            if (it.code == 401) {
                 throw AuthenticationRequiredException()
             }
             if (!it.isSuccessful) {
@@ -2455,7 +2455,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             }
         }
         response.use {
-            if (it.code == 401 || it.code == 403) {
+            if (it.code == 401) {
                 throw AuthenticationRequiredException()
             }
             if (!it.isSuccessful) {
