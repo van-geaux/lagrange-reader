@@ -614,35 +614,20 @@ private fun FullPlayerSessionHistoryDialog(
             color = Color(0xFF242222),
             contentColor = Color.White
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onCloseClick) {
-                        Icon(Icons.Default.Close, contentDescription = "Close session history")
-                    }
-                    Text(
-                        text = "Session history",
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
-                    )
-                }
-                AudiobookSessionHistory(
-                    bookTitle = bookTitle,
-                    events = events,
-                    isLoadingServerReadingHistory = isLoadingServerReadingHistory,
-                    serverReadingSessions = serverReadingSessions,
-                    serverReadingAttempts = serverReadingAttempts,
-                    onEventClick = onEventClick,
-                    onClearClick = onClearClick,
-                    onCloseClick = onCloseClick
-                )
-            }
+            AudiobookSessionHistory(
+                bookTitle = bookTitle,
+                events = events,
+                isLoadingServerReadingHistory = isLoadingServerReadingHistory,
+                serverReadingSessions = serverReadingSessions,
+                serverReadingAttempts = serverReadingAttempts,
+                onEventClick = onEventClick,
+                onClearClick = onClearClick,
+                onCloseClick = onCloseClick,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+            )
         }
     }
 }
