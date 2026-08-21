@@ -126,6 +126,26 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `home local shelf prefers all downloaded books over the catalog home subset`() {
+        val currentlyReading = seriesBook("reading", index = 1.0, status = BookReadStatus.READING)
+            .copy(title = "Reading", localPath = "/local/reading.epub")
+        val unread = seriesBook("unread", index = 2.0, status = BookReadStatus.UNREAD)
+            .copy(title = "Unread", localPath = "/local/unread.epub")
+        val finished = seriesBook("finished", index = 3.0, status = BookReadStatus.READ, isRead = true)
+            .copy(title = "Finished", localPath = "/local/finished.epub")
+        val onHold = seriesBook("on-hold", index = 4.0, status = BookReadStatus.ON_HOLD)
+            .copy(title = "On hold", localPath = "/local/on-hold.epub")
+
+        assertEquals(
+            listOf("finished", "on-hold", "reading", "unread"),
+            homeLocalBooksPreview(
+                catalogHomeBooks = listOf(currentlyReading),
+                downloadedBooks = listOf(onHold, unread, currentlyReading, finished)
+            ).map { it.id }
+        )
+    }
+
+    @Test
     fun `library download candidates are scoped to the selected library and skip missing file ids`() {
         val withFile = seriesBook("alpha", index = 1.0)
         val withoutFile = seriesBook("beta", index = 2.0).copy(fileId = null)
