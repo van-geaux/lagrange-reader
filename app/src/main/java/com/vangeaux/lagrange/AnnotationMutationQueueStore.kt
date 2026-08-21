@@ -203,6 +203,10 @@ internal class AnnotationLocalIdMappingStore private constructor(
         writeUnlocked(current)
     }
 
+    suspend fun clear() = mutex.withLock {
+        if (file.exists()) file.delete()
+    }
+
     private fun readUnlocked(): Map<String, String> {
         if (!file.exists()) return emptyMap()
         return runCatching {

@@ -35,6 +35,10 @@ class CatalogSnapshotStore(context: Context) {
         readPage(serverUrl, "authorBooks", pageKey(authorId, page))
     }
 
+    suspend fun clear() = mutex.withLock {
+        if (file.exists()) file.delete()
+    }
+
     private fun savePage(serverUrl: String, catalog: String, key: String, payload: String) {
         val root = readRoot()
         val servers = root.optJSONObject("servers") ?: JSONObject().also { root.put("servers", it) }

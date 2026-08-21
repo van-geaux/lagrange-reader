@@ -2308,6 +2308,34 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `sign out closes audio playback and dismisses full player before showing login`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unauthenticated
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        var playbackClosed = false
+        coordinator.setAudioPlaybackCloser { playbackClosed = true }
+        coordinator.openAudioPlayer(book.copy(mediaKind = MediaKind.AUDIO))
+
+        coordinator.signOut()
+        advanceUntilIdle()
+
+        assertTrue(playbackClosed)
+        assertNull(coordinator.fullAudioPlayerBook.value)
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+
+        coordinator.onAudioPlaybackProgress(
+            book = book.copy(mediaKind = MediaKind.AUDIO),
+            position = 12_000L,
+            progressPercent = 0.2f,
+            launchMode = ReaderLaunchMode.NORMAL
+        )
+        advanceUntilIdle()
+        assertTrue(repository.queuedProgress.isEmpty())
+    }
+
+    @Test
     fun `server sign-in can open and close without changing native login state`() = runTest {
         val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))

@@ -4,6 +4,7 @@ import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProgressQueueStoreTest {
@@ -281,6 +282,16 @@ class ProgressQueueStoreTest {
         store.removeForBook("https://example.test", "book-1")
 
         assertEquals(listOf("other-book", "other-server"), store.readAll().map { it.id })
+    }
+
+    @Test
+    fun `clear removes all pending updates`() = runBlocking {
+        val store = ProgressQueueStore(Files.createTempDirectory("progress-queue-clear").toFile())
+        store.enqueue(update("clear-1", "book-1", "file-1", MediaKind.EPUB, updatedAtMillis = 1L))
+
+        store.clear()
+
+        assertTrue(store.readAll().isEmpty())
     }
 
     private fun update(

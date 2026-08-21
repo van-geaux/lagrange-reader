@@ -178,9 +178,14 @@ fun BookOrbitApp(
             onAppPreferencesChange = onAppPreferencesChange,
             releaseCheckStatus = coordinator.releaseCheckStatus.collectAsState().value,
             onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) },
-            showCompactAudioPlayer = fullAudioPlayerBook == null
+            showCompactAudioPlayer = screen is AppScreen.Browser && fullAudioPlayerBook == null
         )
-        if (screen !is AppScreen.Browser && fullAudioPlayerBook == null) audioPlaybackController?.let { controller ->
+        if (
+            screen !is AppScreen.Browser &&
+                screen !is AppScreen.Login &&
+                screen !is AppScreen.ServerSetup &&
+                fullAudioPlayerBook == null
+        ) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
                 controller = controller,
                 onClosed = coordinator::onAudioPlaybackClosed,

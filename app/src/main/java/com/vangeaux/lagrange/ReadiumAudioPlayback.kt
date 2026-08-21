@@ -1231,6 +1231,10 @@ class ReadiumAudioPlaybackController internal constructor(
         }
     }
 
+    internal fun discardPendingOutboundSession() {
+        readingSessionReporter?.disable()
+    }
+
     private fun recordSessionEvent(
         session: ReadiumAudioPlaybackService.Session,
         isPlaying: Boolean

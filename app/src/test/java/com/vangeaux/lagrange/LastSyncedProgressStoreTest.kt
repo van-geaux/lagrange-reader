@@ -87,4 +87,25 @@ class LastSyncedProgressStoreTest {
         assertNull(store.read(target.progressKey()))
         assertEquals(other.progressPercent, store.read(other.progressKey())?.progressPercent)
     }
+
+    @Test
+    fun `clear removes all synchronized updates`() = runBlocking {
+        val store = LastSyncedProgressStore(Files.createTempDirectory("last-synced-progress-clear").toFile())
+        val update = ProgressUpdate(
+            id = "clear-1",
+            serverUrl = "https://example.test",
+            bookId = "book-1",
+            fileId = "file-1",
+            mediaKind = MediaKind.EPUB,
+            positionMs = 100L,
+            pageIndex = 1,
+            progressPercent = 10f,
+            updatedAtMillis = 1L
+        )
+        store.save(update)
+
+        store.clear()
+
+        assertNull(store.read(update.progressKey()))
+    }
 }
