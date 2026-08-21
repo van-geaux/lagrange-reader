@@ -71,6 +71,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Highlight
@@ -6552,18 +6554,19 @@ internal fun AudiobookSessionHistory(
     serverReadingAttempts: ReadingAttemptsResult?,
     onEventClick: (AudiobookSessionEvent) -> Unit,
     onClearClick: () -> Unit,
-    onCloseClick: () -> Unit
+    onCloseClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp)
             .testTag("audiobook-session-history"),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp, 20.dp, 20.dp, 0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -6586,31 +6589,86 @@ internal fun AudiobookSessionHistory(
                 Icon(Icons.Default.Close, contentDescription = "Close session history")
             }
         }
-        events.forEachIndexed { index, event ->
-            Card(
-                onClick = { onEventClick(event) },
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp, 8.dp, 20.dp, 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            LocalListeningHistorySection(
+                events = events,
+                onEventClick = onEventClick
+            )
+            ServerReadingHistorySection(
+                isLoading = isLoadingServerReadingHistory,
+                sessions = serverReadingSessions,
+                attempts = serverReadingAttempts
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocalListeningHistorySection(
+    events: List<AudiobookSessionEvent>,
+    onEventClick: (AudiobookSessionEvent) -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("local-listening-history")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("audiobook-session-history-event-$index")
+                    .clickable { expanded = !expanded }
+                    .testTag("local-listening-history-header"),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ListItem(
-                    headlineContent = {
-                        Text(if (event.type == AudiobookSessionEventType.PLAY) "Played" else "Paused")
-                    },
-                    supportingContent = {
-                        Text(
-                            "${formatSessionHistoryTimestamp(event.occurredAtMillis)} · " +
-                                formatDetailDuration(event.positionMs / 1000L)
-                        )
-                    }
+                Text(
+                    "Local listening history",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse local listening history" else "Expand local listening history"
                 )
             }
+            if (expanded) {
+                Text(
+                    "Local history shows play and pause events on this device and can seek to the exact position.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (events.isEmpty()) {
+                    Text("No local listening activity recorded.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    events.forEachIndexed { index, event ->
+                        ListItem(
+                            modifier = Modifier
+                                .clickable { onEventClick(event) }
+                                .testTag("audiobook-session-history-event-$index"),
+                            headlineContent = {
+                                Text(if (event.type == AudiobookSessionEventType.PLAY) "Played" else "Paused")
+                            },
+                            supportingContent = {
+                                Text(
+                                    "${formatSessionHistoryTimestamp(event.occurredAtMillis)} · " +
+                                        formatDetailDuration(event.positionMs / 1000L)
+                                )
+                            }
+                        )
+                    }
+                }
+            }
         }
-        ServerReadingHistorySection(
-            isLoading = isLoadingServerReadingHistory,
-            sessions = serverReadingSessions,
-            attempts = serverReadingAttempts
-        )
     }
 }
 
@@ -6620,6 +6678,7 @@ private fun ServerReadingHistorySection(
     sessions: BookReadingSessionsResult?,
     attempts: ReadingAttemptsResult?
 ) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -6629,57 +6688,75 @@ private fun ServerReadingHistorySection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Server reading history", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Server history shows reading activity and analytics. It does not contain exact audio positions.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            when {
-                isLoading -> Text("Loading server history…", style = MaterialTheme.typography.bodyMedium)
-                sessions?.status == ServerReadingHistoryStatus.UNSUPPORTED &&
-                    attempts?.status == ServerReadingHistoryStatus.UNSUPPORTED ->
-                    Text("This BookOrbit server does not provide reading history.", style = MaterialTheme.typography.bodyMedium)
-                sessions?.status == ServerReadingHistoryStatus.ERROR &&
-                    attempts?.status == ServerReadingHistoryStatus.ERROR ->
-                    Text("Server reading history could not be loaded.", style = MaterialTheme.typography.bodyMedium)
-                sessions?.items.isNullOrEmpty() && attempts?.items.isNullOrEmpty() ->
-                    Text("No server reading activity recorded.", style = MaterialTheme.typography.bodyMedium)
-                else -> {
-                    sessions?.items.orEmpty().forEach { session ->
-                        ListItem(
-                            headlineContent = {
-                                Text("Reading session · ${formatServerReadingDuration(session.durationSeconds)}")
-                            },
-                            supportingContent = {
-                                Text(
-                                    listOfNotNull(
-                                        formatServerDateRange(session.startedAt, session.endedAt),
-                                        session.progressDelta?.let { "Progress change ${formatServerProgress(it)}" },
-                                        session.endProgress?.let { "Ended at ${formatServerProgress(it)}" },
-                                        session.format,
-                                        session.source
-                                    ).joinToString(" · ")
-                                )
-                            }
-                        )
-                    }
-                    attempts?.items.orEmpty().forEach { attempt ->
-                        ListItem(
-                            headlineContent = {
-                                Text("Reading attempt · ${formatReadingAttemptOutcome(attempt.outcome)}")
-                            },
-                            supportingContent = {
-                                Text(
-                                    listOfNotNull(
-                                        formatServerDateRange(attempt.startedOn, attempt.endedOn),
-                                        attempt.totalSessions?.let { "$it sessions" },
-                                        attempt.totalSeconds?.let { formatServerReadingDuration(it) },
-                                        attempt.origin
-                                    ).joinToString(" · ")
-                                )
-                            }
-                        )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .testTag("server-reading-history-header"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Server reading history",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse server reading history" else "Expand server reading history"
+                )
+            }
+            if (expanded) {
+                Text(
+                    "Server history shows reading activity and analytics. It does not contain exact audio positions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                when {
+                    isLoading -> Text("Loading server history…", style = MaterialTheme.typography.bodyMedium)
+                    sessions?.status == ServerReadingHistoryStatus.UNSUPPORTED &&
+                        attempts?.status == ServerReadingHistoryStatus.UNSUPPORTED ->
+                        Text("This BookOrbit server does not provide reading history.", style = MaterialTheme.typography.bodyMedium)
+                    sessions?.status == ServerReadingHistoryStatus.ERROR &&
+                        attempts?.status == ServerReadingHistoryStatus.ERROR ->
+                        Text("Server reading history could not be loaded.", style = MaterialTheme.typography.bodyMedium)
+                    sessions?.items.isNullOrEmpty() && attempts?.items.isNullOrEmpty() ->
+                        Text("No server reading activity recorded.", style = MaterialTheme.typography.bodyMedium)
+                    else -> {
+                        sessions?.items.orEmpty().forEach { session ->
+                            ListItem(
+                                headlineContent = {
+                                    Text("Reading session · ${formatServerReadingDuration(session.durationSeconds)}")
+                                },
+                                supportingContent = {
+                                    Text(
+                                        listOfNotNull(
+                                            formatServerDateRange(session.startedAt, session.endedAt),
+                                            session.progressDelta?.let { "Progress change ${formatServerProgress(it)}" },
+                                            session.endProgress?.let { "Ended at ${formatServerProgress(it)}" },
+                                            session.format,
+                                            session.source
+                                        ).joinToString(" · ")
+                                    )
+                                }
+                            )
+                        }
+                        attempts?.items.orEmpty().forEach { attempt ->
+                            ListItem(
+                                headlineContent = {
+                                    Text("Reading attempt · ${formatReadingAttemptOutcome(attempt.outcome)}")
+                                },
+                                supportingContent = {
+                                    Text(
+                                        listOfNotNull(
+                                            formatServerDateRange(attempt.startedOn, attempt.endedOn),
+                                            attempt.totalSessions?.let { "$it sessions" },
+                                            attempt.totalSeconds?.let { formatServerReadingDuration(it) },
+                                            attempt.origin
+                                        ).joinToString(" · ")
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
