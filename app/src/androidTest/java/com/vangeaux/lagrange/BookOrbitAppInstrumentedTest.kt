@@ -1037,7 +1037,8 @@ class BookOrbitAppInstrumentedTest {
             fileId = "file-main",
             title = "Main Local",
             localPath = "/local/main.epub",
-            mediaKind = MediaKind.EPUB
+            mediaKind = MediaKind.EPUB,
+            readStatus = BookReadStatus.READING
         )
         val mangaLocal = BookSummary(
             libraryId = "lib-2",
@@ -1047,8 +1048,23 @@ class BookOrbitAppInstrumentedTest {
             localPath = "/local/manga.cbz",
             mediaKind = MediaKind.COMIC
         )
+        val unreadLocal = mainLocal.copy(
+            id = "local-unread",
+            fileId = "file-unread",
+            title = "Unread Local",
+            localPath = "/local/unread.epub",
+            readStatus = BookReadStatus.UNREAD
+        )
+        val finishedLocal = mainLocal.copy(
+            id = "local-finished",
+            fileId = "file-finished",
+            title = "Finished Local",
+            localPath = "/local/finished.epub",
+            readStatus = BookReadStatus.READ,
+            isRead = true
+        )
         val dataSource = InstrumentedFakeDataSource().apply {
-            localBooksResult = listOf(mainLocal, mangaLocal)
+            localBooksResult = listOf(mainLocal, mangaLocal, unreadLocal, finishedLocal)
         }
         composeRule.setContent {
             BookOrbitTheme {
@@ -1062,7 +1078,7 @@ class BookOrbitAppInstrumentedTest {
                             ),
                             selectedLibraryId = "lib-1",
                             books = listOf(mainLocal),
-                            homeBooks = listOf(mainLocal, mangaLocal)
+                            homeBooks = listOf(mainLocal)
                         )
                     ),
                     coordinator = AppCoordinator(dataSource, Dispatchers.Main)
@@ -1073,6 +1089,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Local books").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Cover for Main Local").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Cover for Manga Local").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cover for Unread Local").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cover for Finished Local").assertIsDisplayed()
+        composeRule.onNodeWithText("Currently reading").assertIsDisplayed()
         composeRule.onNodeWithText("See all").performClick()
         composeRule.onNodeWithContentDescription("Main Local").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Manga Local").assertIsDisplayed()

@@ -648,6 +648,17 @@ internal fun localBooksShelf(
     .take(limit)
     .toList()
 
+internal fun homeLocalBooksPreview(
+    catalogHomeBooks: List<BookSummary>,
+    downloadedBooks: List<BookSummary>?,
+    libraryId: String? = null,
+    limit: Int = 12
+): List<BookSummary> = localBooksShelf(
+    books = downloadedBooks ?: catalogHomeBooks,
+    libraryId = libraryId,
+    limit = limit
+)
+
 internal data class SeriesBookNeighbors(
     val previous: BookSummary?,
     val next: BookSummary?,
@@ -1713,6 +1724,7 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
+                    localBooksLoader = localBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.HOME
@@ -1749,6 +1761,7 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
+                    localBooksLoader = localBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.LIBRARY
@@ -4026,6 +4039,7 @@ private fun RefreshableHomeFeed(
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -4038,6 +4052,12 @@ private fun RefreshableHomeFeed(
     onMarkAsUnread: (BookSummary) -> Unit,
     onLocalBooksSelected: () -> Unit
 ) {
+    val downloadedLocalBooks by produceState<List<BookSummary>?>(
+        initialValue = null,
+        state.localBooksRevision
+    ) {
+        value = runCatching { localBooksLoader() }.getOrNull()
+    }
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -4048,6 +4068,7 @@ private fun RefreshableHomeFeed(
         HomeFeed(
             state = state,
             books = state.homeBooks,
+            downloadedLocalBooks = downloadedLocalBooks,
             modifier = Modifier.fillMaxSize(),
             coverLoader = coverLoader,
             onBookSelected = onBookSelected,
@@ -4068,6 +4089,7 @@ private fun RefreshableHomeFeed(
 private fun HomeFeed(
     state: BrowserState,
     books: List<BookSummary> = state.books,
+    downloadedLocalBooks: List<BookSummary>? = null,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
@@ -4093,9 +4115,10 @@ private fun HomeFeed(
     val recentSeries = remember(books) { recentSeries(books, useUpdatedAt = false) }
     val updatedSeries = remember(books) { recentSeries(books, useUpdatedAt = true) }
     val recentlyRead = remember(books) { recentlyReadBooks(books) }
-    val localBooks = remember(books, localBooksLibraryId) {
-        localBooksShelf(
-            books = books,
+    val localBooks = remember(books, downloadedLocalBooks, localBooksLibraryId) {
+        homeLocalBooksPreview(
+            catalogHomeBooks = books,
+            downloadedBooks = downloadedLocalBooks,
             libraryId = localBooksLibraryId
         )
     }
@@ -4614,6 +4637,7 @@ private fun LibraryContentScreen(
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -4628,6 +4652,13 @@ private fun LibraryContentScreen(
     onMarkAsUnread: (BookSummary) -> Unit,
     onLocalBooksSelected: () -> Unit
 ) {
+    val downloadedLocalBooks by produceState<List<BookSummary>?>(
+        initialValue = null,
+        state.localBooksRevision,
+        state.selectedLibraryId
+    ) {
+        value = runCatching { localBooksLoader() }.getOrNull()
+    }
     val libraryDownloadCandidates = remember(state.books, state.selectedLibraryId) {
         booksDownloadableForLibrary(state.books, state.selectedLibraryId)
     }
@@ -4764,6 +4795,7 @@ private fun LibraryContentScreen(
             when (tab) {
                 LibraryTab.RECOMMENDED -> HomeFeed(
                     state = state,
+                    downloadedLocalBooks = downloadedLocalBooks,
                     modifier = Modifier.weight(1f),
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
