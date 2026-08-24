@@ -483,7 +483,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             event.keyCode,
             reverse = readerPreferences.reverseVolumeButtonNavigation
         )
-        if (action == null || !readerPreferences.volumeButtonPageNavigation) {
+        val audioPlaybackController =
+            (application as BookOrbitApplication).audioPlaybackController
+        if (action == null || !volumeButtonNavigationEnabled(
+                readerEnabled = readerPreferences.volumeButtonPageNavigation,
+                audiobookSessionActive = audioPlaybackController.hasActiveAudiobookSession()
+            )
+        ) {
             return super.dispatchKeyEvent(event)
         }
         if (!canNavigateWithVolumeButtons()) return super.dispatchKeyEvent(event)

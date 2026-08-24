@@ -2,7 +2,9 @@ package com.vangeaux.lagrange
 
 import android.view.KeyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VolumeButtonNavigationTest {
@@ -29,6 +31,13 @@ class VolumeButtonNavigationTest {
             VolumeButtonNavigationAction.NEXT,
             volumeButtonNavigationAction(KeyEvent.KEYCODE_VOLUME_UP, reverse = true)
         )
+    }
+
+    @Test
+    fun `active audiobook session disables volume page navigation`() {
+        assertFalse(volumeButtonNavigationEnabled(readerEnabled = true, audiobookSessionActive = true))
+        assertTrue(volumeButtonNavigationEnabled(readerEnabled = true, audiobookSessionActive = false))
+        assertFalse(volumeButtonNavigationEnabled(readerEnabled = false, audiobookSessionActive = false))
     }
 
     @Test

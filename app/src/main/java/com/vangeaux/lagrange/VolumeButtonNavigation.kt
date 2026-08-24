@@ -7,6 +7,11 @@ internal enum class VolumeButtonNavigationAction {
     NEXT
 }
 
+internal fun volumeButtonNavigationEnabled(
+    readerEnabled: Boolean,
+    audiobookSessionActive: Boolean
+): Boolean = readerEnabled && !audiobookSessionActive
+
 internal fun volumeButtonNavigationAction(
     keyCode: Int,
     reverse: Boolean = false
