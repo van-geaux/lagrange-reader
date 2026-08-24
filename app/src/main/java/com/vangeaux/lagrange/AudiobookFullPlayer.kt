@@ -299,7 +299,10 @@ internal fun ReadiumFullAudioPlayer(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
                 val coverHeight = minOf(
                     maxHeight * coverFraction,
                     maxWidth / current.book.coverAspectRatio.widthToHeight
