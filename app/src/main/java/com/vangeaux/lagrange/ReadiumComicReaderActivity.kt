@@ -9,6 +9,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.LruCache
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -221,6 +222,32 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var readingSessionEnded = false
 
     private val locatorStore by lazy { ReadiumComicLocatorStore(this) }
+
+    @Suppress("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val action = volumeButtonNavigationAction(event.keyCode)
+        if (action == null || !readerPreferences.volumeButtonPageNavigation) {
+            return super.dispatchKeyEvent(event)
+        }
+        if (!canNavigateWithVolumeButtons()) return super.dispatchKeyEvent(event)
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        if (event.repeatCount > 0) return true
+        when (action) {
+            VolumeButtonNavigationAction.PREVIOUS ->
+                volumeButtonNavigationTarget(action, currentPage, currentPageCount)?.let(::goToPage)
+            VolumeButtonNavigationAction.NEXT ->
+                volumeButtonNavigationTarget(action, currentPage, currentPageCount)?.let(::goToPage)
+        }
+        return true
+    }
+
+    private fun canNavigateWithVolumeButtons(): Boolean =
+        !isFinishing && !isDestroyed &&
+            publication != null &&
+            ::readerContainer.isInitialized &&
+            readerContainer.isShown &&
+            !areReaderControlsVisible() &&
+            !isTapZoneTutorialVisible()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)

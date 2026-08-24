@@ -3585,6 +3585,15 @@ internal fun ReaderConfigurationControls(
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {}
 ) {
+    AppPreferenceSwitchRow(
+        title = "Turn pages with volume buttons",
+        summary = "Use Volume Up and Volume Down for reader navigation instead of changing volume.",
+        checked = value.volumeButtonPageNavigation,
+        testTag = "$testTagPrefix-volume-button-navigation",
+        onCheckedChange = { enabled ->
+            onPreferencesChange(value.copy(volumeButtonPageNavigation = enabled))
+        }
+    )
     Text("Reading direction", style = MaterialTheme.typography.titleMedium)
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),

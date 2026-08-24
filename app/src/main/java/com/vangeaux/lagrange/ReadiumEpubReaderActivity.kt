@@ -15,6 +15,7 @@ import android.content.ClipboardManager
 import android.util.Log
 import android.view.ActionMode
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -475,6 +476,30 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
     }
+
+    @Suppress("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val action = volumeButtonNavigationAction(event.keyCode)
+        if (action == null || !readerPreferences.volumeButtonPageNavigation) {
+            return super.dispatchKeyEvent(event)
+        }
+        if (!canNavigateWithVolumeButtons()) return super.dispatchKeyEvent(event)
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        if (event.repeatCount > 0) return true
+        when (action) {
+            VolumeButtonNavigationAction.PREVIOUS -> navigator?.goBackward(true)
+            VolumeButtonNavigationAction.NEXT -> navigator?.goForward(true)
+        }
+        return true
+    }
+
+    private fun canNavigateWithVolumeButtons(): Boolean =
+        !isFinishing && !isDestroyed &&
+            publication != null &&
+            ::readerContainer.isInitialized &&
+            readerContainer.isShown &&
+            !areReaderControlsVisible() &&
+            !isTapZoneTutorialVisible()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
