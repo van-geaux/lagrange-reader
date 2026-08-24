@@ -49,6 +49,7 @@ private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val volumeButtonPageNavigation: Boolean = false,
+    val reverseVolumeButtonNavigation: Boolean = false,
     val tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
     val tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
@@ -139,6 +140,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
         JSONObject().apply {
             put("readingDirection", libraryReadingDirectionStorageValue(normalized.readingDirection))
             put("volumeButtonPageNavigation", normalized.volumeButtonPageNavigation)
+            put("reverseVolumeButtonNavigation", normalized.reverseVolumeButtonNavigation)
             put("tapZoneLayout", readerTapZoneLayoutStorageValue(normalized.tapZoneLayout))
             put("tapZoneInvertMode", readerTapZoneInvertModeStorageValue(normalized.tapZoneInvertMode))
             put("theme", epubReaderThemeStorageValue(normalized.theme))
@@ -172,6 +174,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         volumeButtonPageNavigation = item.optBoolean("volumeButtonPageNavigation", false),
+                        reverseVolumeButtonNavigation = item.optBoolean("reverseVolumeButtonNavigation", false),
                         tapZoneLayout = readerTapZoneLayoutFromStorage(item.optString("tapZoneLayout")),
                         tapZoneInvertMode = readerTapZoneInvertModeFromStorage(item.optString("tapZoneInvertMode")),
                         theme = epubReaderThemeFromStorage(item.optString("theme")),

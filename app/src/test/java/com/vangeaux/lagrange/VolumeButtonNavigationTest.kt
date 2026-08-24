@@ -7,16 +7,28 @@ import org.junit.Test
 
 class VolumeButtonNavigationTest {
     @Test
-    fun `volume keys map to logical previous and next`() {
+    fun `volume keys map to logical next and previous by default`() {
         assertEquals(
-            VolumeButtonNavigationAction.PREVIOUS,
+            VolumeButtonNavigationAction.NEXT,
             volumeButtonNavigationAction(KeyEvent.KEYCODE_VOLUME_DOWN)
         )
         assertEquals(
-            VolumeButtonNavigationAction.NEXT,
+            VolumeButtonNavigationAction.PREVIOUS,
             volumeButtonNavigationAction(KeyEvent.KEYCODE_VOLUME_UP)
         )
         assertNull(volumeButtonNavigationAction(KeyEvent.KEYCODE_BACK))
+    }
+
+    @Test
+    fun `reversing volume buttons swaps logical actions`() {
+        assertEquals(
+            VolumeButtonNavigationAction.PREVIOUS,
+            volumeButtonNavigationAction(KeyEvent.KEYCODE_VOLUME_DOWN, reverse = true)
+        )
+        assertEquals(
+            VolumeButtonNavigationAction.NEXT,
+            volumeButtonNavigationAction(KeyEvent.KEYCODE_VOLUME_UP, reverse = true)
+        )
     }
 
     @Test

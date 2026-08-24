@@ -160,7 +160,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
     @Suppress("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val action = volumeButtonNavigationAction(event.keyCode)
+        val action = volumeButtonNavigationAction(
+            event.keyCode,
+            reverse = readerPreferences.reverseVolumeButtonNavigation
+        )
         if (action == null || !readerPreferences.volumeButtonPageNavigation) {
             return super.dispatchKeyEvent(event)
         }

@@ -15,6 +15,7 @@ class LibraryReaderPreferencesTest {
         val profile = LibraryReaderPreferences(
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
             volumeButtonPageNavigation = true,
+            reverseVolumeButtonNavigation = true,
             theme = EpubReaderTheme.Dark,
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
@@ -136,14 +137,19 @@ class LibraryReaderPreferencesTest {
         val decoded = libraryReaderPreferencesFromStorage(
             libraryReaderPreferencesStorageValue(
                 mapOf(
-                    "enabled" to LibraryReaderPreferences(volumeButtonPageNavigation = true),
+                    "enabled" to LibraryReaderPreferences(
+                        volumeButtonPageNavigation = true,
+                        reverseVolumeButtonNavigation = true
+                    ),
                     "disabled" to LibraryReaderPreferences()
                 )
             )
         )
 
         assertTrue(decoded.getValue("enabled").volumeButtonPageNavigation)
+        assertTrue(decoded.getValue("enabled").reverseVolumeButtonNavigation)
         assertFalse(decoded.getValue("disabled").volumeButtonPageNavigation)
+        assertFalse(decoded.getValue("disabled").reverseVolumeButtonNavigation)
     }
 
     @Test

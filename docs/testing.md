@@ -135,7 +135,7 @@ The user has confirmed the validated reader, media, navigation, and server-sessi
 
 ### Reader volume-button navigation (issue #95)
 
-On a connected device or emulator, verify the per-library `Turn pages with volume buttons` setting is off by default and remains independently persisted per library. Enable it, then test EPUB, PDF, paginated comics, and continuous comics: Volume Down performs logical Previous and Volume Up performs logical Next, including when the reader's reading direction or navigation mode changes. While the reader is active, unobstructed, and focused, confirm the system volume overlay does not appear.
+On a connected device or emulator, verify the per-library `Turn pages with volume buttons` setting is off by default and remains independently persisted per library. Enable it, then test EPUB, PDF, paginated comics, and continuous comics: by default Volume Down performs logical Next and Volume Up performs logical Previous, including when the reader's reading direction or navigation mode changes. Enable `Swap volume button actions` and verify the two mappings reverse. While the reader is active, unobstructed, and focused, confirm the system volume overlay does not appear.
 
 Disable the setting and verify the keys adjust system volume normally. Repeat while the reader is loading, showing an error, empty, unfocused, or covered by a reader/options/other overlay; each state must delegate normal volume behavior. Verify audiobook playback/player controls and external media controls retain their existing behavior.
 

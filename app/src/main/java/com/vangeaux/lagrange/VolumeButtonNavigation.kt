@@ -7,9 +7,20 @@ internal enum class VolumeButtonNavigationAction {
     NEXT
 }
 
-internal fun volumeButtonNavigationAction(keyCode: Int): VolumeButtonNavigationAction? = when (keyCode) {
-    KeyEvent.KEYCODE_VOLUME_DOWN -> VolumeButtonNavigationAction.PREVIOUS
-    KeyEvent.KEYCODE_VOLUME_UP -> VolumeButtonNavigationAction.NEXT
+internal fun volumeButtonNavigationAction(
+    keyCode: Int,
+    reverse: Boolean = false
+): VolumeButtonNavigationAction? = when (keyCode) {
+    KeyEvent.KEYCODE_VOLUME_DOWN -> if (reverse) {
+        VolumeButtonNavigationAction.PREVIOUS
+    } else {
+        VolumeButtonNavigationAction.NEXT
+    }
+    KeyEvent.KEYCODE_VOLUME_UP -> if (reverse) {
+        VolumeButtonNavigationAction.NEXT
+    } else {
+        VolumeButtonNavigationAction.PREVIOUS
+    }
     else -> null
 }
 
