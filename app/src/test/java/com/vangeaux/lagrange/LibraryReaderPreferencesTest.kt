@@ -14,6 +14,8 @@ class LibraryReaderPreferencesTest {
     fun `reader profile storage uses a versioned envelope`() {
         val profile = LibraryReaderPreferences(
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+            volumeButtonPageNavigation = true,
+            reverseVolumeButtonNavigation = true,
             theme = EpubReaderTheme.Dark,
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
@@ -127,6 +129,27 @@ class LibraryReaderPreferencesTest {
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
         assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
+        assertFalse(decoded.volumeButtonPageNavigation)
+    }
+
+    @Test
+    fun `volume button navigation preference persists independently per library`() {
+        val decoded = libraryReaderPreferencesFromStorage(
+            libraryReaderPreferencesStorageValue(
+                mapOf(
+                    "enabled" to LibraryReaderPreferences(
+                        volumeButtonPageNavigation = true,
+                        reverseVolumeButtonNavigation = true
+                    ),
+                    "disabled" to LibraryReaderPreferences()
+                )
+            )
+        )
+
+        assertTrue(decoded.getValue("enabled").volumeButtonPageNavigation)
+        assertTrue(decoded.getValue("enabled").reverseVolumeButtonNavigation)
+        assertFalse(decoded.getValue("disabled").volumeButtonPageNavigation)
+        assertFalse(decoded.getValue("disabled").reverseVolumeButtonNavigation)
     }
 
     @Test

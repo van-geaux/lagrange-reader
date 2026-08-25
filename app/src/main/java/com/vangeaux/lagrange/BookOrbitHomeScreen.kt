@@ -3585,6 +3585,25 @@ internal fun ReaderConfigurationControls(
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {}
 ) {
+    AppPreferenceSwitchRow(
+        title = "Turn pages with volume buttons",
+        summary = "Use Volume Up and Volume Down for reader navigation instead of changing volume.",
+        checked = value.volumeButtonPageNavigation,
+        testTag = "$testTagPrefix-volume-button-navigation",
+        onCheckedChange = { enabled ->
+            onPreferencesChange(value.copy(volumeButtonPageNavigation = enabled))
+        }
+    )
+    AppPreferenceSwitchRow(
+        title = "Swap volume button actions",
+        summary = "Use Volume Down for previous and Volume Up for next",
+        checked = value.reverseVolumeButtonNavigation,
+        enabled = value.volumeButtonPageNavigation,
+        testTag = "$testTagPrefix-reverse-volume-button-navigation",
+        onCheckedChange = { reversed ->
+            onPreferencesChange(value.copy(reverseVolumeButtonNavigation = reversed))
+        }
+    )
     Text("Reading direction", style = MaterialTheme.typography.titleMedium)
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -3810,6 +3829,7 @@ private fun AppPreferenceSwitchRow(
     summary: String,
     checked: Boolean,
     testTag: String,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     ListItem(
@@ -3818,13 +3838,14 @@ private fun AppPreferenceSwitchRow(
         trailingContent = {
             Switch(
                 checked = checked,
+                enabled = enabled,
                 onCheckedChange = null
             )
         },
         modifier = Modifier
             .fillMaxWidth()
             .testTag(testTag)
-            .clickable { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }

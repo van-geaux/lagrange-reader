@@ -844,6 +844,9 @@ class ReadiumAudioPlaybackController internal constructor(
     private val preferencesStore = AppPreferencesStore(application)
     private val binderDeferred = CompletableDeferred<ReadiumAudioPlaybackService.Binder>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var sessionStateJob: Job? = null
+    @Volatile
+    private var activeAudiobookSession = false
     private val mutablePreparationState = MutableStateFlow(AudioPlaybackPreparationState.IDLE)
     internal val preparationState: StateFlow<AudioPlaybackPreparationState> =
         mutablePreparationState.asStateFlow()
@@ -972,6 +975,8 @@ class ReadiumAudioPlaybackController internal constructor(
     }
 
     internal suspend fun session(): StateFlow<ReadiumAudioPlaybackService.Session?> = binder().session
+
+    internal fun hasActiveAudiobookSession(): Boolean = activeAudiobookSession
 
     internal fun pause() {
         scope.launch {
@@ -1356,7 +1361,16 @@ class ReadiumAudioPlaybackController internal constructor(
                 binderDeferred.completeExceptionally(error)
             }
         }
-        return binderDeferred.await()
+        val serviceBinder = binderDeferred.await()
+        activeAudiobookSession = serviceBinder.session.value != null
+        if (sessionStateJob == null) {
+            sessionStateJob = scope.launch {
+                serviceBinder.session.collect { session ->
+                    activeAudiobookSession = session != null
+                }
+            }
+        }
+        return serviceBinder
     }
 
     private companion object {
