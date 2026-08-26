@@ -958,19 +958,24 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithText("Currently reading").assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("More options for Current Book")[0].performClick()
-        composeRule.onNodeWithText("Mark as read").assertIsDisplayed()
-        composeRule.onNodeWithText("Mark as unread").assertIsDisplayed()
-        composeRule.onNodeWithText("Remove from Currently reading").assertIsDisplayed()
-
-        composeRule.onNodeWithText("Mark as read").performClick()
-        composeRule.waitUntil { dataSource.markedReadBooks == listOf(current) }
+        composeRule.onNodeWithText("Mark as...").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Mark as read").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Mark as unread").assertCountEquals(0)
+        composeRule.onNodeWithText("Mark as...").performClick()
+        listOf("Unread", "Want to read", "Reading", "Rereading", "On hold", "Abandoned", "Read", "Skimmed")
+            .forEach { status -> composeRule.onNodeWithText(status).assertIsDisplayed() }
+        composeRule.onNodeWithTag("book-detail-status-on_hold").performClick()
+        composeRule.waitUntil { dataSource.readingStatusUpdates == listOf(current to BookReadStatus.ON_HOLD) }
 
         composeRule.onAllNodesWithContentDescription("More options for Current Book")[0].performClick()
-        composeRule.onNodeWithText("Mark as unread").performClick()
-        composeRule.waitUntil { dataSource.resetReadingStateBooks == listOf(current) }
+        composeRule.onNodeWithText("Mark as...").performClick()
+        composeRule.onNodeWithTag("book-detail-status-read").performClick()
+        composeRule.waitUntil { dataSource.markedReadBooks == listOf(current) }
 
         composeRule.onAllNodesWithTag("book_card_${current.id}")[0].performTouchInput { longClick() }
-        composeRule.onNodeWithText("Mark as read").assertIsDisplayed()
+        composeRule.onNodeWithText("Mark as...").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Mark as read").assertCountEquals(0)
+
     }
 
     @Test
