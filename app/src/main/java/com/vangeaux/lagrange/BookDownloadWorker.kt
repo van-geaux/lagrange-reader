@@ -1,14 +1,10 @@
 package com.vangeaux.lagrange
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -77,9 +73,6 @@ internal const val OUTCOME_AUTH_REQUIRED = "auth_required"
 internal const val OUTCOME_POLICY_BLOCKED = "policy_blocked"
 internal const val OUTCOME_PERMISSION_DENIED = "permission_denied"
 internal const val OUTCOME_FAILED = "failed"
-
-private const val NOTIFICATION_CHANNEL_ID = "bookorbit-downloads"
-private const val NOTIFICATION_ID_BASE = 40_000
 
 /**
  * Builds the input [androidx.work.Data] and [OneTimeWorkRequest] for downloading a single book.
@@ -220,34 +213,23 @@ class BookDownloadWorker(
                     KEY_ERROR_MESSAGE to (error.message ?: "Download failed for $title.")
                 )
             )
+        } finally {
+            clearDownloadNotification(applicationContext, fileId, id.toString())
         }
     }
 
     private fun foregroundInfo(context: Context, title: String, progressPercent: Int?): ForegroundInfo {
         ensureNotificationChannel(context)
-        val openAppIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            ?: Intent(context, MainActivity::class.java)
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            0,
-            openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val fileId = inputData.getString(KEY_FILE_ID).orEmpty()
+        val notification = buildDownloadNotification(
+            context = context,
+            title = title,
+            fileId = fileId,
+            serverUrl = inputData.getString(KEY_SERVER_URL).orEmpty(),
+            progress = progressPercent?.div(100f)
         )
-        val notification: Notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Downloading $title")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(contentIntent)
-            .apply {
-                if (progressPercent == null) {
-                    setProgress(0, 0, true)
-                } else {
-                    setProgress(100, progressPercent, false)
-                }
-            }
-            .build()
-        val notificationId = NOTIFICATION_ID_BASE + (inputData.getString(KEY_FILE_ID)?.hashCode() ?: 0)
+        refreshDownloadNotificationSummary(context)
+        val notificationId = downloadNotificationId(fileId)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -258,16 +240,16 @@ class BookDownloadWorker(
     private fun ensureNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) return
-        manager.createNotificationChannel(
+        if (manager.getNotificationChannel(DOWNLOAD_NOTIFICATION_CHANNEL_ID) != null) return
+        runCatching { manager.createNotificationChannel(
             NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
+                DOWNLOAD_NOTIFICATION_CHANNEL_ID,
                 "Book downloads",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Shows progress while a book is downloading."
             }
-        )
+        ) }
     }
 }
 
