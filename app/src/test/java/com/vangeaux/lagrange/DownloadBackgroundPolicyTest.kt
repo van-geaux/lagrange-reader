@@ -71,6 +71,36 @@ class DownloadBackgroundPolicyTest {
     }
 
     @Test
+    fun `notification identity is stable and per file`() {
+        assertEquals(downloadNotificationId("file-1"), downloadNotificationId("file-1"))
+        assertNotEquals(downloadNotificationId("file-1"), downloadNotificationId("file-2"))
+    }
+
+    @Test
+    fun `notification content policy preserves title and progress presentation`() {
+        assertEquals("Downloading My Book", downloadNotificationTitle("My Book"))
+        assertEquals(DownloadNotificationProgress.Indeterminate, downloadNotificationProgress(null))
+        assertEquals(
+            DownloadNotificationProgress.Determinate(37),
+            downloadNotificationProgress(0.375f)
+        )
+        assertEquals(
+            DownloadNotificationProgress.Determinate(100),
+            downloadNotificationProgress(2f)
+        )
+    }
+
+    @Test
+    fun `cancel action uses the existing per-file unique work identity`() {
+        val serverUrl = "https://example.test"
+        val fileId = "file-1"
+        assertEquals(
+            "bookorbit-download:$serverUrl:$fileId",
+            downloadUniqueWorkName(serverUrl, fileId)
+        )
+        assertEquals("com.vangeaux.lagrange.CANCEL_DOWNLOAD", DOWNLOAD_NOTIFICATION_CANCEL_ACTION)
+    }
+    @Test
     fun `persisted attempt restores active download identity`() {
         val book = downloadAttemptBookSummary(
             DownloadAttempt(

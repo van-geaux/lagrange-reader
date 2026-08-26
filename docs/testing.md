@@ -170,6 +170,10 @@ The user confirmed that downloads continue after the app moves to the background
 - cellular policy ALWAYS, NEVER, and ASK_FOR_CONFIRMATION are each respected, including that the worker rechecks policy/network before proceeding and does not start without the required grant;
 - an authentication-expiry outcome during a download routes back through foreground login recovery and resumes via `PostLoginDestination.DownloadBook`.
 
+For issue #103 notification regression, with one or more active book downloads, open the system notification shade and verify each active notification is grouped under the BookOrbit downloads group, keeps the initiating book title, shows determinate progress when available (otherwise indeterminate), and offers a per-book `Cancel` action. Start multiple downloads and verify a summary notification reports the active count; tap an individual notification or the summary and verify the app launches. Cancel one item and verify only its existing unique WorkManager download is cancelled. Complete, fail, or cancel the remaining work and verify terminal cleanup removes the per-download and summary notifications. Deny `POST_NOTIFICATIONS` and repeat a download: notification UI may be absent, but the download must continue and its final local state must still reconcile. Repeat the background/screen-off portion of issue #77 to confirm the notification changes do not regress WorkManager execution after the app is backgrounded or the screen turns off.
+
+The notification procedure is manual device/emulator coverage; the automated focused and full Gradle verification passes, but physical-device notification validation remains pending.
+
 Byte-range resume is out of scope; a connectivity loss or process death mid-transfer is expected to restart the file rather than resume partway through.
 
 ## Verification reporting

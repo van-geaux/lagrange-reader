@@ -49,7 +49,7 @@ This document contains the current project direction only. Historical work order
 35. [x] [#100](https://github.com/van-geaux/lagrange-reader/issues/100): bound and improved the active Local books download section with an accessible expand/collapse control, half-screen-height internal scrolling, one-line marquee titles, and active-row Cancel actions beside progress. Automated verification passed; the user confirmed the behavior works on-device.
 36. [ ] [#101](https://github.com/van-geaux/lagrange-reader/issues/101): add Smart scopes under the Series menu.
 37. [ ] [#102](https://github.com/van-geaux/lagrange-reader/issues/102): use the full Mark as status menu in book context menus.
-38. [ ] [#103](https://github.com/van-geaux/lagrange-reader/issues/103): improve Android notifications for active book downloads.
+38. [x] [#103](https://github.com/van-geaux/lagrange-reader/issues/103): active book downloads now use grouped per-download notifications with the initiating book title, determinate/indeterminate progress, app-launch taps, and a Cancel action wired to the existing unique WorkManager work. Multiple active downloads show a summary, terminal work cleans up its notifications, and denied `POST_NOTIFICATIONS` leaves downloads running without notification UI. Focused source-contract checks and full Gradle verification pass; physical-device notification validation remains pending.
 
 ## Decision and documentation rules
 
