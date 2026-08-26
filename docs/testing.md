@@ -36,6 +36,7 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - failed transfers show `Retry` and `Clear`;
 - downloaded books show `Delete local`;
 - Local books shows active/failed Downloads rows only when needed;
+- Local books Downloads can be expanded and collapsed; expanded rows scroll inside a body no taller than half the available screen, long titles remain one line and marquee, and active-row `Cancel` is beside its progress bar;
 - `Clear` and `Clear all` remove failed state without cancelling active transfers;
 - force-closing during a download restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;

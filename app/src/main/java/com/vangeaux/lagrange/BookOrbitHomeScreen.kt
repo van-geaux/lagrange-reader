@@ -5491,6 +5491,7 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadTransfersSection(
     rows: List<DownloadTransferRow>,
@@ -5500,41 +5501,66 @@ private fun DownloadTransfersSection(
     onClearAllFailedDownloads: () -> Unit
 ) {
     val failedRows = rows.filter { it.isFailed && !it.isActive }
-    Column(
+    var isExpanded by rememberSaveable { mutableStateOf(true) }
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .testTag("local-downloads-section"),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .testTag("local-downloads-section")
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Downloads", style = MaterialTheme.typography.titleLarge)
-            if (failedRows.isNotEmpty()) {
-                TextButton(onClick = onClearAllFailedDownloads) { Text("Clear all") }
+        val sectionMaxHeight = maxHeight
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (failedRows.isNotEmpty()) {
+                        TextButton(onClick = onClearAllFailedDownloads) { Text("Clear all") }
+                    }
+                    IconButton(
+                        onClick = { isExpanded = !isExpanded },
+                        modifier = Modifier.testTag("local-downloads-toggle")
+                    ) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "Collapse downloads" else "Expand downloads"
+                        )
+                    }
+                }
             }
-        }
-        rows.filter { it.isActive }.forEach { row ->
-            DownloadTransferRowItem(
-                row = row,
-                onAction = { onCancelDownload(row.book) },
-                actionLabel = "Cancel"
-            )
-        }
-        failedRows.forEach { row ->
-            DownloadTransferRowItem(
-                row = row,
-                onAction = { onDownload(row.book) },
-                actionLabel = "Retry",
-                onClear = { onClearFailedDownload(row.book) }
-            )
+            if (isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = sectionMaxHeight / 2)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rows.filter { it.isActive }.forEach { row ->
+                        DownloadTransferRowItem(
+                            row = row,
+                            onAction = { onCancelDownload(row.book) },
+                            actionLabel = "Cancel"
+                        )
+                    }
+                    failedRows.forEach { row ->
+                        DownloadTransferRowItem(
+                            row = row,
+                            onAction = { onDownload(row.book) },
+                            actionLabel = "Retry",
+                            onClear = { onClearFailedDownload(row.book) }
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadTransferRowItem(
     row: DownloadTransferRow,
@@ -5544,22 +5570,51 @@ private fun DownloadTransferRowItem(
 ) {
     Card(modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}")) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(row.book.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                row.book.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("download-row-${row.fileId}-title")
+                    .basicMarquee(iterations = Int.MAX_VALUE),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             if (row.isActive) {
-                row.progress?.let { progress ->
-                    Text("Downloading · ${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
-                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                } ?: run {
-                    Text("Downloading…", style = MaterialTheme.typography.bodySmall)
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        row.progress?.let { progress ->
+                            Text("Downloading · ${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
+                            )
+                        } ?: run {
+                            Text("Downloading…", style = MaterialTheme.typography.bodySmall)
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onAction,
+                        modifier = Modifier.testTag("download-row-${row.fileId}-action")
+                    ) { Text(actionLabel) }
                 }
             } else {
                 Text("Download failed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onAction) { Text(actionLabel) }
-                onClear?.let { clear ->
-                    TextButton(onClick = clear) { Text("Clear") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onAction,
+                        modifier = Modifier.testTag("download-row-${row.fileId}-action")
+                    ) { Text(actionLabel) }
+                    onClear?.let { clear ->
+                        TextButton(onClick = clear) { Text("Clear") }
+                    }
                 }
             }
         }
