@@ -1151,6 +1151,18 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Retry").assertIsDisplayed()
         composeRule.onNodeWithText("Clear").assertIsDisplayed()
         composeRule.onNodeWithText("Clear all").assertIsDisplayed()
+        composeRule.onNodeWithTag("download-row-download-active-title").assertIsDisplayed()
+        composeRule.onNodeWithTag("download-row-download-active-progress").assertIsDisplayed()
+        composeRule.onNodeWithTag("download-row-download-active-action").assertIsDisplayed()
+        val progressBounds = composeRule.onNodeWithTag("download-row-download-active-progress")
+            .fetchSemanticsNode().boundsInRoot
+        val actionBounds = composeRule.onNodeWithTag("download-row-download-active-action")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(actionBounds.left >= progressBounds.right - 1f)
+        composeRule.onNodeWithContentDescription("Collapse downloads").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Active Download").assertIsNotDisplayed()
+        composeRule.onNodeWithContentDescription("Expand downloads").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Active Download").assertIsDisplayed()
     }
 
     @Test
