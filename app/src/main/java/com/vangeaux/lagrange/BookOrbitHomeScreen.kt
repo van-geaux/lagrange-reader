@@ -1089,7 +1089,7 @@ internal fun NativeLibraryBrowserScreen(
             selectedSeriesKey = genreSourceSeriesKey
             genreSourceSeriesKey = null
         } else if (destination == BrowserDestination.SMART_SCOPES) {
-            destination = BrowserDestination.SERIES
+            destination = smartScopePickerBackDestination()
         } else if (selectedBook != null) {
             selectedBook = null
         } else if (selectedAuthor != null) {
@@ -1450,8 +1450,6 @@ internal fun NativeLibraryBrowserScreen(
                         } else {
                             { showLibraryPicker = true }
                         }
-                    } else if (destination == BrowserDestination.SERIES && selectedSmartScope != null) {
-                        { destination = BrowserDestination.SMART_SCOPES }
                     } else null,
                     onSessionAction = {
                         showProfileMenu = false
@@ -1598,7 +1596,7 @@ internal fun NativeLibraryBrowserScreen(
                         activeBookGenre = genre
                     }
                 )
-                selectedSeriesKey != null -> SeriesDetails(
+                selectedSeriesKey != null && destination != BrowserDestination.SMART_SCOPES -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
                     books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
@@ -2164,6 +2162,9 @@ internal fun selectDefaultSmartScope(scopes: List<SmartScope>, selectedScope: Sm
 
 internal fun smartScopeEntryDestination(selectedScope: SmartScope?): BrowserDestination =
     if (selectedScope == null) BrowserDestination.SMART_SCOPES else BrowserDestination.SERIES
+
+internal fun smartScopePickerBackDestination(): BrowserDestination =
+    BrowserDestination.SERIES
 
 @Composable
 private fun SeriesCatalogScreen(

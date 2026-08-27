@@ -69,6 +69,7 @@ class SmartScopeTest {
     @Test fun smartScopeEntryReopensSelectedCatalogInsteadOfPicker() {
         assertEquals(BrowserDestination.SERIES, smartScopeEntryDestination(SmartScope(12, "Selected")))
         assertEquals(BrowserDestination.SMART_SCOPES, smartScopeEntryDestination(null))
+        assertEquals(BrowserDestination.SERIES, smartScopePickerBackDestination())
     }
 
     @Test fun catalogImageCacheIdentityIsStableForTheSameUrl() {
