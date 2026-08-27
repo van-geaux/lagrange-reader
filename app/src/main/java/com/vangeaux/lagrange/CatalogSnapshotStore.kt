@@ -19,6 +19,30 @@ class CatalogSnapshotStore(context: Context) {
         readPage(serverUrl, "series", pageKey(query, page))
     }
 
+    suspend fun saveScopedSeries(serverUrl: String, scopeId: Long, filterKey: String, page: Int, payload: String) = mutex.withLock {
+        savePage(serverUrl, "series", catalogScopePageKey(scopeId, filterKey, page), payload)
+    }
+
+    suspend fun readScopedSeries(serverUrl: String, scopeId: Long, filterKey: String, page: Int): String? = mutex.withLock {
+        readPage(serverUrl, "series", catalogScopePageKey(scopeId, filterKey, page))
+    }
+
+    suspend fun saveSmartScopes(serverUrl: String, payload: String) = mutex.withLock {
+        savePage(serverUrl, "smartScopes", "all", payload)
+    }
+
+    suspend fun readSmartScopes(serverUrl: String): String? = mutex.withLock {
+        readPage(serverUrl, "smartScopes", "all")
+    }
+
+    suspend fun saveScopedBooks(serverUrl: String, scopeId: Long, page: Int, payload: String) = mutex.withLock {
+        savePage(serverUrl, "smartScopeBooks", smartScopeBooksPageKey(scopeId, page), payload)
+    }
+
+    suspend fun readScopedBookPages(serverUrl: String, scopeId: Long): List<String> = mutex.withLock {
+        readPages(serverUrl, "smartScopeBooks", "smart-scope-books:$scopeId|")
+    }
+
     suspend fun saveAuthors(serverUrl: String, query: String?, page: Int, payload: String) = mutex.withLock {
         savePage(serverUrl, "authors", pageKey(query, page), payload)
     }
@@ -55,6 +79,15 @@ class CatalogSnapshotStore(context: Context) {
         return server.optJSONObject(catalog)?.optString(key)?.takeIf { it.isNotBlank() }
     }
 
+    private fun readPages(serverUrl: String, catalog: String, keyPrefix: String): List<String> {
+        val pages = readRoot().optJSONObject("servers")?.optJSONObject(serverUrl)?.optJSONObject(catalog) ?: return emptyList()
+        return pages.keys().asSequence()
+            .filter { it.startsWith(keyPrefix) }
+            .sortedBy { it.substringAfterLast('|').toIntOrNull() ?: Int.MAX_VALUE }
+            .mapNotNull { pages.optString(it).takeIf(String::isNotBlank) }
+            .toList()
+    }
+
     private fun readRoot(): JSONObject {
         if (!file.exists()) return JSONObject()
         return runCatching { JSONObject(file.readText()) }
@@ -67,3 +100,9 @@ class CatalogSnapshotStore(context: Context) {
         const val SNAPSHOT_VERSION = 1
     }
 }
+
+internal fun catalogScopePageKey(scopeId: Long, filterKey: String, page: Int): String =
+    "smart-scope:$scopeId|$filterKey|${page.coerceAtLeast(0)}"
+
+internal fun smartScopeBooksPageKey(scopeId: Long, page: Int): String =
+    "smart-scope-books:$scopeId|${page.coerceAtLeast(0)}"

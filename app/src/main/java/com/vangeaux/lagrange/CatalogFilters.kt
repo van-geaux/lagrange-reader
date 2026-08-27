@@ -169,6 +169,51 @@ internal fun filterAndSortLocalBooks(
     } ?: filtered
 }
 
+internal fun aggregateBooksToSeriesCatalog(books: List<BookSummary>): SeriesCatalogPage {
+    val items = books.asSequence()
+        .filter { !it.seriesId.isNullOrBlank() || !it.seriesName.isNullOrBlank() }
+        .groupBy { it.seriesId?.takeIf(String::isNotBlank) ?: "name:${it.seriesName!!.trim()}" }
+        .map { (key, grouped) ->
+            SeriesSummary(
+                id = key,
+                name = grouped.firstNotNullOfOrNull { it.seriesName?.takeIf(String::isNotBlank) } ?: "Series",
+                authors = grouped.flatMap { it.author.orEmpty().split(",") }.map(String::trim).filter(String::isNotBlank).distinct().sorted(),
+                bookCount = grouped.size,
+                readCount = grouped.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
+                coverUrl = grouped.firstNotNullOfOrNull { it.coverUrl },
+                lastAddedAtMillis = grouped.mapNotNull { it.addedAtMillis }.maxOrNull()
+            )
+        }
+        .sortedBy { it.name.lowercase() }
+    return SeriesCatalogPage(items = items, total = items.size, page = 0, size = items.size)
+}
+
+internal fun filterAndSortSeriesCatalog(
+    items: List<SeriesSummary>,
+    filter: SeriesCatalogFilter
+): List<SeriesSummary> {
+    val filtered = items.filter { series ->
+        val queryMatches = filter.query.isNullOrBlank() || series.name.contains(filter.query.trim(), ignoreCase = true)
+        val authorMatches = filter.author.isNullOrBlank() || series.authors.any {
+            it.contains(filter.author.trim(), ignoreCase = true)
+        }
+        queryMatches && authorMatches
+    }
+    val comparator = when (filter.sort) {
+        SeriesSortOption.NAME -> compareBy<SeriesSummary> { it.name.lowercase() }
+        SeriesSortOption.BOOK_COUNT -> compareBy { it.bookCount }
+        SeriesSortOption.LAST_ADDED -> compareBy<SeriesSummary> { it.lastAddedAtMillis ?: 0L }
+        SeriesSortOption.READ_PROGRESS -> compareBy<SeriesSummary> {
+            if (it.bookCount == 0) 0f else it.readCount.toFloat() / it.bookCount
+        }
+    }
+    return if (filter.direction == SortDirection.ASCENDING) filtered.sortedWith(comparator)
+    else filtered.sortedWith(comparator.reversed())
+}
+
+internal fun mergeSmartScopeBookPages(pages: List<List<BookSummary>>): List<BookSummary> =
+    pages.flatten().asReversed().distinctBy { it.id to it.fileId }.asReversed()
+
 private fun BookSummary.hasStartedReading(): Boolean {
     return (progressPercent ?: 0f) > 0f ||
         (progressPositionMs ?: 0L) > 0L ||

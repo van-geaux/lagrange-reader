@@ -105,10 +105,11 @@ data class BookSummary(
     val readerPageCount: Int? = null,
     val audioChapters: List<AudiobookChapter> = emptyList(),
     val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT,
-    val isServerMissing: Boolean = false
+    val isServerMissing: Boolean = false,
+    val isLocalOnlyOverride: Boolean? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
-    val isLocalOnly: Boolean get() = libraryId.isBlank()
+    val isLocalOnly: Boolean get() = isLocalOnlyOverride ?: libraryId.isBlank()
     val hasDownloadUpdate: Boolean
         get() = isDownloaded && updatedAtMillis != null &&
             (downloadedSourceUpdatedAtMillis == null || updatedAtMillis > downloadedSourceUpdatedAtMillis)
@@ -225,7 +226,8 @@ data class SeriesSummary(
     val authors: List<String> = emptyList(),
     val bookCount: Int = 0,
     val readCount: Int = 0,
-    val coverUrl: String? = null
+    val coverUrl: String? = null,
+    val lastAddedAtMillis: Long? = null
 )
 
 data class AuthorSummary(
@@ -240,6 +242,11 @@ data class SeriesCatalogPage(
     val total: Int? = null,
     val page: Int? = null,
     val size: Int? = null
+)
+
+data class SmartScope(
+    val id: Long,
+    val name: String
 )
 
 data class AuthorCatalogPage(

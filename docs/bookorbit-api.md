@@ -193,6 +193,24 @@ Supported hub filters include `bookId`, `search`, `chapter`, `colors`, `styles`,
 
 `search` searches annotation text and note text only. It must not be treated as full-text search over the loaded EPUB, KEPUB, or PDF publication. Annotation items may include `cfi`, `jumpFileId`, `jumpFileFormat`, and `pageno`; the Android client preserves those fields for reader navigation. The Android client implements EPUB annotation creation, note/style updates, deletion, and durable offline mutation replay. Restore, conflict-safe hydration, PDF/comic creation, and publication full-text search remain pending.
 
+### Smart Scopes under Series
+
+The Android client discovers available Smart Scopes with:
+
+```text
+GET /api/v1/smart-scopes
+```
+
+The current discovery response is a top-level JSON array of Smart Scope objects, rather than an object wrapper. The Android client remains tolerant of wrapped compatibility shapes when present. A successful discovery payload is cached per configured server for best-effort offline reuse.
+
+After a scope is selected, it fetches the scope's books in pages from:
+
+```text
+GET /api/v1/smart-scopes/:id/books?page=0&size=100
+```
+
+The client follows the paginated book response, groups the returned books by their Series identity, and derives the Series catalog locally. No authoritative Series-aware Smart Scope endpoint was verified, so the Android client does not claim that the server supplies a Series catalog for a scope. Each successful scoped-books page is cached separately per configured server, Smart Scope ID, and page. Offline catalog and Series-detail views can reconstruct their content from the cached scoped book pages; cached content is best-effort and refreshes when online. A non-authentication request failure can fall back to the relevant cached response. Authentication failures remain errors.
+
 ### Series catalog filters
 
 Endpoint:

@@ -183,7 +183,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal enum class BrowserDestination { HOME, LIBRARY, SERIES, AUTHORS, ANNOTATIONS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
+internal enum class BrowserDestination { HOME, LIBRARY, SERIES, SMART_SCOPES, AUTHORS, ANNOTATIONS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private fun <T> browserRouteProperty(
@@ -802,19 +802,14 @@ private val coverBitmapCache = object : LruCache<String, Bitmap>(32 * 1024 * 102
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
 }
 private val coverLoadLocks = Array(32) { Mutex() }
-private val catalogImageCache = object : LruCache<String, ByteArray>(4 * 1024 * 1024) {
-    override fun sizeOf(key: String, value: ByteArray): Int = value.size
-}
 
 private suspend fun loadCatalogImageWithRetry(
     url: String,
     loader: suspend (String) -> ByteArray?
 ): ByteArray? {
-    catalogImageCache.get(url)?.let { return it }
     repeat(2) { attempt ->
         val loaded = runCatching { loader(url) }.getOrNull()
         if (loaded != null && loaded.isNotEmpty()) {
-            catalogImageCache.put(url, loaded)
             return loaded
         }
         if (attempt == 0) delay(220)
@@ -848,6 +843,9 @@ internal fun NativeLibraryBrowserScreen(
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    smartScopesLoader: suspend () -> List<SmartScope> = { emptyList() },
+    smartScopeSeriesCatalogLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
+    smartScopeSeriesDetailLoader: suspend (Long, String) -> SeriesDetailInfo? = { _, _ -> null },
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
     annotationsLoader: suspend (AnnotationsFilter, Int) -> BookAnnotationsPage,
@@ -904,6 +902,7 @@ internal fun NativeLibraryBrowserScreen(
     var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
     var showMoreMenu by rememberSaveable { mutableStateOf(false) }
     var showProfileMenu by rememberSaveable { mutableStateOf(false) }
+    var selectedSmartScope by rememberSaveable { mutableStateOf<SmartScope?>(null) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
     var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
@@ -1077,7 +1076,7 @@ internal fun NativeLibraryBrowserScreen(
         showChangeServerEditor = true
     }
 
-    BackHandler(enabled = isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
+    BackHandler(enabled = destination == BrowserDestination.SMART_SCOPES || isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
         if (isSearchOpen) {
             isSearchOpen = false
             query = ""
@@ -1089,6 +1088,8 @@ internal fun NativeLibraryBrowserScreen(
             activeSeriesGenre = null
             selectedSeriesKey = genreSourceSeriesKey
             genreSourceSeriesKey = null
+        } else if (destination == BrowserDestination.SMART_SCOPES) {
+            destination = smartScopePickerBackDestination()
         } else if (selectedBook != null) {
             selectedBook = null
         } else if (selectedAuthor != null) {
@@ -1110,6 +1111,12 @@ internal fun NativeLibraryBrowserScreen(
                     query = ""
                     selectedAuthor = null
                     selectedSeriesKey = null
+                },
+                onSmartScopes = {
+                    showMoreMenu = false
+                    selectedBook = null
+                    selectedSeriesKey = null
+                    destination = smartScopeEntryDestination(selectedSmartScope)
                 },
                 onAuthors = {
                     showMoreMenu = false
@@ -1421,7 +1428,9 @@ internal fun NativeLibraryBrowserScreen(
                         destination == BrowserDestination.LIBRARY && !showLibraryPicker ->
                             state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name ?: "Library"
                         destination == BrowserDestination.LIBRARY -> "Libraries"
+                        destination == BrowserDestination.SERIES && selectedSmartScope != null -> selectedSmartScope!!.name
                         destination == BrowserDestination.SERIES -> "Series"
+                        destination == BrowserDestination.SMART_SCOPES -> "Smart scopes"
                         destination == BrowserDestination.AUTHORS -> "Authors"
                         destination == BrowserDestination.ANNOTATIONS -> "Annotations"
                         destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
@@ -1532,8 +1541,10 @@ internal fun NativeLibraryBrowserScreen(
                     query = "",
                     initialFilter = SeriesCatalogFilter(genre = activeSeriesGenre),
                     libraryOptions = state.libraries,
+                    selectedScope = selectedSmartScope,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
+                    scopeLoader = smartScopeSeriesCatalogLoader,
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
@@ -1585,7 +1596,7 @@ internal fun NativeLibraryBrowserScreen(
                         activeBookGenre = genre
                     }
                 )
-                selectedSeriesKey != null -> SeriesDetails(
+                selectedSeriesKey != null && destination != BrowserDestination.SMART_SCOPES -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
                     books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
@@ -1595,7 +1606,11 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
-                    detailLoader = seriesDetailLoader,
+                    detailLoader = if (selectedSmartScope == null) {
+                        seriesDetailLoader
+                    } else {
+                        { seriesId -> smartScopeSeriesDetailLoader(selectedSmartScope!!.id, seriesId) }
+                    },
                     onBookSelected = { selectedBook = it },
                     onDeleteLocalCopy = requestLocalDelete,
                     onDeleteLocalCopies = onDeleteLocalCopies,
@@ -1627,12 +1642,20 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus
                 )
+                destination == BrowserDestination.SMART_SCOPES -> SmartScopesScreen(
+                    loader = smartScopesLoader,
+                    modifier = Modifier.padding(padding),
+                    selectedScope = selectedSmartScope,
+                    onSelected = { selectedSmartScope = it; destination = BrowserDestination.SERIES }
+                )
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
                     query = "",
                     initialFilter = SeriesCatalogFilter(),
                     libraryOptions = state.libraries,
+                    selectedScope = selectedSmartScope,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
+                    scopeLoader = smartScopeSeriesCatalogLoader,
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
@@ -1962,6 +1985,7 @@ private fun BrowserBottomNavigation(
 @Composable
 private fun MoreMenu(
     onSeries: () -> Unit,
+    onSmartScopes: () -> Unit,
     onAuthors: () -> Unit,
     onAnnotations: () -> Unit,
     onLocalBooks: () -> Unit
@@ -1981,6 +2005,11 @@ private fun MoreMenu(
             headlineContent = { Text("Series") },
             leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Series icon") },
             modifier = Modifier.clickable(onClick = onSeries)
+        )
+        ListItem(
+            headlineContent = { Text("Smart scopes") },
+            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Smart scopes icon") },
+            modifier = Modifier.clickable(onClick = onSmartScopes)
         )
         ListItem(
             headlineContent = { Text("Authors") },
@@ -2097,20 +2126,64 @@ private fun LibraryPickerScreen(
 }
 
 @Composable
+private fun SmartScopesScreen(
+    loader: suspend () -> List<SmartScope>,
+    modifier: Modifier,
+    selectedScope: SmartScope?,
+    onSelected: (SmartScope) -> Unit
+) {
+    var scopes by remember { mutableStateOf<List<SmartScope>?>(null) }
+    var error by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        runCatching { loader() }
+            .onSuccess { loadedScopes ->
+                scopes = loadedScopes
+                selectDefaultSmartScope(loadedScopes, selectedScope)?.let { defaultScope ->
+                    if (selectedScope == null) onSelected(defaultScope)
+                }
+            }
+            .onFailure { error = true }
+    }
+    LazyColumn(modifier = modifier.fillMaxSize().testTag("smart_scopes_screen"), contentPadding = PaddingValues(16.dp)) {
+        item { Text("Smart scopes", style = MaterialTheme.typography.headlineSmall) }
+        when {
+            scopes == null && !error -> item { LoadingFeedRow("Loading smart scopes...") }
+            error -> item { Text("Unable to load smart scopes.", color = MaterialTheme.colorScheme.error) }
+            scopes.orEmpty().isEmpty() -> item { Text("No smart scopes found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            else -> items(scopes.orEmpty(), key = { "smart-scope-${it.id}" }) { scope ->
+                ListItem(headlineContent = { Text(scope.name) }, modifier = Modifier.testTag("smart_scope_${scope.id}").clickable { onSelected(scope) })
+            }
+        }
+    }
+}
+
+internal fun selectDefaultSmartScope(scopes: List<SmartScope>, selectedScope: SmartScope?): SmartScope? =
+    selectedScope ?: scopes.firstOrNull()
+
+internal fun smartScopeEntryDestination(selectedScope: SmartScope?): BrowserDestination =
+    if (selectedScope == null) BrowserDestination.SMART_SCOPES else BrowserDestination.SERIES
+
+internal fun smartScopePickerBackDestination(): BrowserDestination =
+    BrowserDestination.SERIES
+
+@Composable
 private fun SeriesCatalogScreen(
     query: String,
     initialFilter: SeriesCatalogFilter,
     libraryOptions: List<LibrarySummary>,
+    selectedScope: SmartScope? = null,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
-    var items by remember(query, initialFilter) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
-    var total by remember(query, initialFilter) { mutableStateOf(0) }
-    var isLoading by remember(query, initialFilter) { mutableStateOf(false) }
-    var isRefreshing by remember(query, initialFilter) { mutableStateOf(false) }
-    var reloadKey by remember(query, initialFilter) { mutableIntStateOf(0) }
+    var items by remember(query, initialFilter, selectedScope) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var total by remember(query, initialFilter, selectedScope) { mutableStateOf(0) }
+    var isLoading by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
+    var isRefreshing by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
+    var loadError by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
+    var reloadKey by remember(query, initialFilter, selectedScope) { mutableIntStateOf(0) }
     var filter by remember(query, initialFilter) {
         mutableStateOf(initialFilter.copy(query = query.takeIf { it.isNotBlank() }))
     }
@@ -2121,19 +2194,29 @@ private fun SeriesCatalogScreen(
 
     LaunchedEffect(query, filter) {
         isLoading = true
+        loadError = false
+        items = emptyList()
+        total = 0
         gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
         val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-        val catalog = loadCompleteSeriesCatalog { page -> loader(activeFilter, page) }
-        items = catalog.items
-        total = catalog.total ?: catalog.items.size
+        runCatching { loadCompleteSeriesCatalog { page ->
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+            } }.onSuccess { catalog ->
+            items = catalog.items
+            total = catalog.total ?: catalog.items.size
+        }.onFailure {
+            loadError = true
+        }
         isLoading = false
     }
     LaunchedEffect(reloadKey) {
         if (reloadKey == 0) return@LaunchedEffect
         try {
             val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-            val catalog = loadCompleteSeriesCatalog { page -> loader(activeFilter, page) }
+            val catalog = loadCompleteSeriesCatalog { page ->
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+            }
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
                 total = catalog.total ?: catalog.items.size
@@ -2178,7 +2261,7 @@ private fun SeriesCatalogScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                if (total > 0) "$total series" else "Browse every accessible series",
+                if (selectedScope != null) "${selectedScope.name} · $total series" else if (total > 0) "$total series" else "Browse every accessible series",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedButton(onClick = { showFilter = true }) {
@@ -2206,7 +2289,10 @@ private fun SeriesCatalogScreen(
         if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading series...") }
         if (!isLoading && items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("No series found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (loadError) "Unable to load series." else "No series found.",
+                    color = if (loadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         gridItems(items, key = { "catalog-series-${it.id}" }) { series ->
@@ -4063,11 +4149,9 @@ private fun CatalogImage(
     loader: suspend (String) -> ByteArray?,
     modifier: Modifier
 ) {
-    val bytes by produceState<ByteArray?>(initialValue = null, url) {
-        value = url?.let { imageUrl -> loadCatalogImageWithRetry(imageUrl, loader) }
-    }
-    val bitmap = remember(bytes) {
-        bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val cacheKey = url?.let(::catalogImageCacheKey)
+    val bitmap by produceState<Bitmap?>(initialValue = cacheKey?.let(coverBitmapCache::get), url) {
+        value = url?.let { imageUrl -> loadCatalogBitmap(imageUrl, loader) }
     }
     Box(
         modifier = modifier
@@ -4077,13 +4161,40 @@ private fun CatalogImage(
     ) {
         if (bitmap != null) {
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = label,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
         } else {
             Text(label.substringAfterLast(" ").take(1).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+internal fun catalogImageCacheKey(url: String): String = url
+
+private suspend fun loadCatalogBitmap(
+    url: String,
+    loader: suspend (String) -> ByteArray?
+): Bitmap? {
+    val key = catalogImageCacheKey(url)
+    coverBitmapCache.get(key)?.let { return it }
+    val lock = coverLoadLocks[(key.hashCode() and Int.MAX_VALUE) % coverLoadLocks.size]
+    return lock.withLock {
+        coverBitmapCache.get(key)?.let { return@withLock it }
+        val bytes = loadCatalogImageWithRetry(url, loader) ?: return@withLock null
+        val bitmap = try {
+            withContext(Dispatchers.Default) {
+                decodeCoverBitmap(bytes, targetWidth = 256, targetHeight = 384)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            null
+        }
+        bitmap?.also {
+            coverBitmapCache.put(key, bitmap)
         }
     }
 }
