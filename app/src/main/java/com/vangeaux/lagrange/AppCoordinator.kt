@@ -117,6 +117,18 @@ class AppCoordinator internal constructor(
             repository.loadSeriesCatalog(filter, page)
         }
 
+    suspend fun loadSmartScopes(): List<SmartScope> = loadWithSessionRecovery(emptyList()) {
+        repository.loadSmartScopes()
+    }
+
+    suspend fun loadSmartScopeSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
+        loadWithSessionRecovery(SeriesCatalogPage()) {
+            repository.loadSmartScopeSeriesCatalog(scopeId, filter, page)
+        }
+
+    suspend fun loadSmartScopeSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? =
+        loadWithSessionRecovery(null) { repository.loadSmartScopeSeriesDetail(scopeId, seriesId) }
+
     suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage =
         loadWithSessionRecovery(AuthorCatalogPage()) {
             repository.loadAuthorsCatalog(query, page)
