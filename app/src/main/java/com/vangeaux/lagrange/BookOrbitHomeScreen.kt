@@ -1107,6 +1107,7 @@ internal fun NativeLibraryBrowserScreen(
                 onSeries = {
                     showMoreMenu = false
                     selectedBook = null
+                    selectedSmartScope = smartScopeSelectionAfterOpeningUnscopedSeries()
                     destination = BrowserDestination.SERIES
                     query = ""
                     selectedAuthor = null
@@ -2165,6 +2166,9 @@ internal fun smartScopeEntryDestination(selectedScope: SmartScope?): BrowserDest
 
 internal fun smartScopePickerBackDestination(): BrowserDestination =
     BrowserDestination.SERIES
+
+internal fun smartScopeSelectionAfterOpeningUnscopedSeries(): SmartScope? =
+    null
 
 @Composable
 private fun SeriesCatalogScreen(
