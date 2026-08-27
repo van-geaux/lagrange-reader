@@ -73,6 +73,15 @@ class SmartScopeTest {
         assertEquals(null, smartScopeSelectionAfterOpeningUnscopedSeries())
     }
 
+    @Test fun smartScopeCatalogStateChangesWhenScopeChanges() {
+        assertEquals(null, smartScopeCatalogStateKey(null))
+        assertEquals(12L, smartScopeCatalogStateKey(SmartScope(12, "First")))
+        assertNotEquals(
+            smartScopeCatalogStateKey(SmartScope(12, "First")),
+            smartScopeCatalogStateKey(SmartScope(13, "Second"))
+        )
+    }
+
     @Test fun catalogImageCacheIdentityIsStableForTheSameUrl() {
         val url = "https://example.test/api/v1/books/files/cover-1/serve"
         assertEquals(url, catalogImageCacheKey(url))

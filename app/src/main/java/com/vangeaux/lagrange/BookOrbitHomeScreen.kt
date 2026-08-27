@@ -2170,6 +2170,9 @@ internal fun smartScopePickerBackDestination(): BrowserDestination =
 internal fun smartScopeSelectionAfterOpeningUnscopedSeries(): SmartScope? =
     null
 
+internal fun smartScopeCatalogStateKey(selectedScope: SmartScope?): Long? =
+    selectedScope?.id
+
 @Composable
 private fun SeriesCatalogScreen(
     query: String,
@@ -2182,13 +2185,14 @@ private fun SeriesCatalogScreen(
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
-    var items by remember(query, initialFilter, selectedScope) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
-    var total by remember(query, initialFilter, selectedScope) { mutableStateOf(0) }
-    var isLoading by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
-    var isRefreshing by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
-    var loadError by remember(query, initialFilter, selectedScope) { mutableStateOf(false) }
-    var reloadKey by remember(query, initialFilter, selectedScope) { mutableIntStateOf(0) }
-    var filter by remember(query, initialFilter) {
+    val selectedScopeId = smartScopeCatalogStateKey(selectedScope)
+    var items by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var total by remember(query, initialFilter, selectedScopeId) { mutableStateOf(0) }
+    var isLoading by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
+    var isRefreshing by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
+    var loadError by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
+    var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
+    var filter by remember(query, initialFilter, selectedScopeId) {
         mutableStateOf(initialFilter.copy(query = query.takeIf { it.isNotBlank() }))
     }
     var showFilter by rememberSaveable(query, initialFilter) { mutableStateOf(false) }
@@ -2196,7 +2200,7 @@ private fun SeriesCatalogScreen(
     val scope = rememberCoroutineScope()
     val reduceMotion = LocalReduceMotion.current
 
-    LaunchedEffect(query, filter) {
+    LaunchedEffect(query, filter, selectedScopeId) {
         isLoading = true
         loadError = false
         items = emptyList()
