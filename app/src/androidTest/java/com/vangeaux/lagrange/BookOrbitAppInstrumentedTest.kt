@@ -50,6 +50,12 @@ class BookOrbitAppInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun moreMenuSheetBottomPaddingUsesHostNavigationInset() {
+        assertEquals(96, moreMenuSheetBottomPaddingPx(96))
+        assertEquals(0, moreMenuSheetBottomPaddingPx(-1))
+    }
+
+    @Test
     fun serverSetupRejectsUnsupportedScheme() {
         composeRule.setContent {
             BookOrbitTheme {
@@ -1406,6 +1412,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
+        composeRule.onNodeWithTag("more-menu-sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("more-menu-last-item").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Series icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Authors icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Local books icon").assertIsDisplayed()

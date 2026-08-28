@@ -72,6 +72,12 @@ Focused JVM verification:
 ./gradlew testDebugUnitTest --tests com.vangeaux.lagrange.SmartScopeTest
 ```
 
+### More sheet navigation-bar inset regression (issue #115)
+
+On a physical Android device or emulator configured for three-button navigation, open More and verify it opens directly at maximum expanded height, without requiring a swipe on the top area. Verify the entire More bottom sheet, including the `Local books` item at its end, stops above the Android navigation-bar area rather than being obscured or padded twice. Dismiss the sheet and reopen it to confirm the same whole-surface inset and expanded-state behavior remains consistent.
+
+Focused Android compilation, including the instrumentation source, passed. The user confirmed the expanded-state and whole-sheet navigation-bar behavior works on-device; assistant-side connected instrumentation remains unavailable when no ADB device is attached.
+
 ### Refresh lifecycle
 
 On Book Detail, Series, Authors, Local books, Statistics, and Achievements:

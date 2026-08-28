@@ -108,6 +108,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -153,6 +154,10 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -231,6 +236,9 @@ internal fun catalogGridEndPadding(hasJumpRail: Boolean) =
 
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
 internal val LocalLibraryCardSize = staticCompositionLocalOf { LibraryCardSize.SMALL }
+
+internal fun moreMenuSheetBottomPaddingPx(hostNavigationBarInsetPx: Int): Int =
+    hostNavigationBarInsetPx.coerceAtLeast(0)
 
 private fun DefaultOpeningScreen.toBrowserDestination(): BrowserDestination = when (this) {
     DefaultOpeningScreen.HOME -> BrowserDestination.HOME
@@ -887,6 +895,12 @@ internal fun NativeLibraryBrowserScreen(
     bottomOverlay: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val hostView = LocalView.current
+    val hostNavigationBarInsetPx = remember(hostView) {
+        ViewCompat.getRootWindowInsets(hostView)
+            ?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())
+            ?.bottom ?: 0
+    }
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
     }
@@ -1102,7 +1116,17 @@ internal fun NativeLibraryBrowserScreen(
     }
 
     if (showMoreMenu) {
-        ModalBottomSheet(onDismissRequest = { showMoreMenu = false }) {
+        val moreSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showMoreMenu = false },
+            sheetState = moreSheetState,
+            modifier = Modifier
+                .padding(bottom = with(LocalDensity.current) {
+                    moreMenuSheetBottomPaddingPx(hostNavigationBarInsetPx).toDp()
+                })
+                .testTag("more-menu-sheet"),
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        ) {
             MoreMenu(
                 onSeries = {
                     showMoreMenu = false
@@ -1994,7 +2018,6 @@ private fun MoreMenu(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(top = 16.dp, bottom = 72.dp)
     ) {
         Text(
@@ -2025,7 +2048,9 @@ private fun MoreMenu(
         ListItem(
             headlineContent = { Text("Local books") },
             leadingContent = { Icon(Icons.Default.DownloadForOffline, contentDescription = "Local books icon") },
-            modifier = Modifier.clickable(onClick = onLocalBooks)
+            modifier = Modifier
+                .testTag("more-menu-last-item")
+                .clickable(onClick = onLocalBooks)
         )
     }
 }
