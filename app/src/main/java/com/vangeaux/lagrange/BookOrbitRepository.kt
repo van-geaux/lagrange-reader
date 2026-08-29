@@ -222,6 +222,11 @@ interface BookOrbitDataSource {
         page: Int,
         filter: BookBrowseFilter
     ): LibraryBooksPage = loadBooksPage(libraryId, page)
+    suspend fun loadRecentBooksPage(
+        libraryId: String,
+        section: HomeSection,
+        page: Int
+    ): LibraryBooksPage = loadBooksPage(libraryId, page, section.recentBooksFilter())
     suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = null
     suspend fun refreshLibraryCatalog(
         libraryId: String,
@@ -552,6 +557,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
         requestLibraryBooksPage(libraryId, page, filter, downloads)
     }
+
+    override suspend fun loadRecentBooksPage(
+        libraryId: String,
+        section: HomeSection,
+        page: Int
+    ): LibraryBooksPage = loadBooksPage(libraryId, page, section.recentBooksFilter())
 
     override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? =
         withContext(Dispatchers.IO) {

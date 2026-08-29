@@ -7,6 +7,13 @@ import org.junit.Test
 
 class HomeShelfTest {
     @Test
+    fun `recent home sections use server sort filters`() {
+        assertEquals(BookSortOption.ADDED, HomeSection.RECENTLY_ADDED_BOOKS.recentBooksFilter().sort)
+        assertEquals(BookSortOption.UPDATED, HomeSection.RECENTLY_UPDATED_SERIES.recentBooksFilter().sort)
+        assertEquals(BookSortOption.LAST_READ, HomeSection.RECENTLY_READ.recentBooksFilter().sort)
+        assertEquals(SortDirection.DESCENDING, HomeSection.RECENTLY_READ.recentBooksFilter().direction)
+    }
+    @Test
     fun `currently reading includes only reading and rereading states`() {
         val reading = seriesBook("book-reading", index = 1.0, status = BookReadStatus.READING)
             .copy(lastReadAtMillis = 200L)
@@ -65,6 +72,50 @@ class HomeShelfTest {
         val abandoned = seriesBook("book-3", index = 3.0, status = BookReadStatus.ABANDONED)
 
         assertEquals(listOf(newer, older), wantToReadBooks(listOf(older, abandoned, newer)))
+    }
+
+    @Test
+    fun `home reading shelves expose eight-item previews and complete projections`() {
+        val books = (1..10).map { index ->
+            seriesBook("reading-$index", index.toDouble(), status = BookReadStatus.READING)
+                .copy(lastReadAtMillis = index.toLong())
+        }
+
+        assertEquals(8, currentlyReadingBooks(books).size)
+        assertEquals(10, currentlyReadingBooks(books, limit = null).size)
+    }
+
+    @Test
+    fun `home want-to-read preview keeps ordering while full projection remains available`() {
+        val books = (1..10).map { index ->
+            seriesBook("want-$index", index.toDouble(), status = BookReadStatus.WANT_TO_READ)
+                .copy(updatedAtMillis = index.toLong())
+        }
+
+        assertEquals(
+            wantToReadBooks(books, limit = null).take(8),
+            wantToReadBooks(books)
+        )
+        assertEquals(10, wantToReadBooks(books, limit = null).size)
+    }
+
+    @Test
+    fun `recent book and series previews expose eight items with complete projections`() {
+        val books = (1..10).map { index ->
+            seriesBook("recent-$index", index.toDouble(), status = BookReadStatus.READ, isRead = true)
+                .copy(
+                    seriesId = "series-$index",
+                    seriesName = "Series $index",
+                    addedAtMillis = index.toLong(),
+                    updatedAtMillis = index.toLong()
+                )
+        }
+
+        assertEquals(8, recentlyReadBooks(books).size)
+        assertEquals(10, recentlyReadBooks(books, limit = null).size)
+        assertEquals(8, recentSeries(books, useUpdatedAt = false).size)
+        assertEquals(10, recentSeries(books, useUpdatedAt = false, limit = null).size)
+        assertEquals(10, homeSeriesSummaries(books, useUpdatedAt = true).size)
     }
 
     @Test

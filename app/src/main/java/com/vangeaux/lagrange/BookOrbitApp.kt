@@ -310,6 +310,7 @@ private fun BookOrbitDestination(
             searchBooks = coordinator::searchBooks,
             localBooksLoader = coordinator::loadLocalBooks,
             libraryBooksPageLoader = coordinator::loadLibraryBooksPage,
+            recentBooksPageLoader = coordinator::loadRecentBooksPage,
             coverLoader = coordinator::loadBookCover,
             bookDetailLoader = coordinator::loadBookDetail,
             sessionHistoryLoader = coordinator::loadAudiobookSessionHistory,
