@@ -25,6 +25,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] Validate the complete interrupted-download and failed-update lifecycle on a connected physical device or emulator; the user confirmed the lifecycle works correctly.
 - [x] Reconcile the remaining device-validation items against [`docs/testing.md`](docs/testing.md); the user confirmed the validated reader, media, navigation, and session behavior works correctly.
 - [ ] Validate native OIDC only after deployed BookOrbit mobile-redirect support is available; do not treat the interim WebView as native AppAuth.
+- [ ] Validate issue #118 PDF internal navigation, HTTP/HTTPS and `mailto:` external-handler opening, and unsupported-scheme fallback on a connected device or emulator; automated verification is complete, but no device instrumentation target was available.
 
 ## Active product follow-up
 
@@ -65,6 +66,7 @@ This is the active completion and validation checklist. Historical completed wor
 - [x] [#102](https://github.com/van-geaux/lagrange-reader/issues/102): actual book context menus in Home, Search, Library, Genre, and Author now use the shared eight-option `Mark as...` status menu; series-only representative cards remain excluded and existing offline gating is preserved. Automated verification passed `compileDebugKotlin`, `compileDebugAndroidTestKotlin`, `testDebugUnitTest`, and `assembleDebug`; physical-device validation remains separate.
 - [x] [#103](https://github.com/van-geaux/lagrange-reader/issues/103): implemented grouped active-download notifications with per-book titles, progress, app-launch taps, and per-download Cancel actions that cancel the existing unique WorkManager work; concurrent downloads also expose a summary notification, and terminal cleanup removes per-download/summary notifications. Notification UI is optional when `POST_NOTIFICATIONS` is denied, so downloads continue. Focused source-contract checks and full Gradle verification pass; physical-device notification validation remains pending.
 - [x] [#115](https://github.com/van-geaux/lagrange-reader/issues/115): More opens directly at maximum expanded height, and the entire selection sheet is moved above the Android navigation-bar inset so the final `Local books` option remains reachable. Automated verification passed; the user confirmed the behavior works on-device.
+- [x] [#118](https://github.com/van-geaux/lagrange-reader/issues/118): PDFium link metadata is hit-tested before directional tap zones; internal PDF destinations navigate within the publication, HTTP/HTTPS and `mailto:` links open through Android `ACTION_VIEW`, and unsupported or malformed schemes are rejected with fallback to existing tap handling. Focused and full verification passed with 599 JVM tests (0 failures/errors/skips), main and Android-test Kotlin compilation, lint, and debug/Android-test APK assembly; no connected device was available, so device/emulator interaction validation remains pending.
 
 ## Verification handoff
 
