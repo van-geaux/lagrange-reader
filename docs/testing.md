@@ -27,6 +27,10 @@ When asking the user to perform manual testing:
 
 ## Current validation priorities
 
+### Home and Recommended shelf previews (issue #116)
+
+On Home and Library → Recommended, verify Currently reading, On deck, and Want to read show no more than eight preview cards when additional matching books exist. Each such shelf exposes `See all`; open it and verify the destination shows the complete matching section, preserves the originating Home or selected-library context, and returns to that origin with Back. When a shelf has eight or fewer matches, `See all` should be absent.
+
 ### Download lifecycle
 
 On a connected device or emulator, verify from Home, Library, Search, Series, Authors, Genre, and Local books:

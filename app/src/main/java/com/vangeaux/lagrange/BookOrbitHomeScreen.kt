@@ -188,8 +188,43 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal enum class BrowserDestination { HOME, LIBRARY, SERIES, SMART_SCOPES, AUTHORS, ANNOTATIONS, LOCAL_BOOKS, STATISTICS, ACHIEVEMENTS, OPTIONS, ABOUT }
+internal enum class BrowserDestination {
+    HOME,
+    LIBRARY,
+    SERIES,
+    SMART_SCOPES,
+    AUTHORS,
+    ANNOTATIONS,
+    LOCAL_BOOKS,
+    CURRENTLY_READING,
+    ON_DECK,
+    WANT_TO_READ,
+    STATISTICS,
+    ACHIEVEMENTS,
+    OPTIONS,
+    ABOUT
+}
+internal enum class HomeSection(val title: String) {
+    CURRENTLY_READING("Currently reading"),
+    ON_DECK("On deck"),
+    WANT_TO_READ("Want to read")
+}
 private enum class LibraryTab { RECOMMENDED, BROWSE }
+
+private const val HOME_PREVIEW_LIMIT = 8
+
+private fun HomeSection.toBrowserDestination(): BrowserDestination = when (this) {
+    HomeSection.CURRENTLY_READING -> BrowserDestination.CURRENTLY_READING
+    HomeSection.ON_DECK -> BrowserDestination.ON_DECK
+    HomeSection.WANT_TO_READ -> BrowserDestination.WANT_TO_READ
+}
+
+private fun BrowserDestination.toHomeSection(): HomeSection? = when (this) {
+    BrowserDestination.CURRENTLY_READING -> HomeSection.CURRENTLY_READING
+    BrowserDestination.ON_DECK -> HomeSection.ON_DECK
+    BrowserDestination.WANT_TO_READ -> HomeSection.WANT_TO_READ
+    else -> null
+}
 
 private fun <T> browserRouteProperty(
     value: () -> T,
@@ -922,6 +957,7 @@ internal fun NativeLibraryBrowserScreen(
     var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
         mutableStateOf(BrowserRouteSnapshot())
     }
+    var homeSectionReturnDestination by rememberSaveable { mutableStateOf(BrowserDestination.HOME) }
     var openSessionHistoryRequest by rememberSaveable { mutableStateOf(false) }
     val selectedBookProperty = object : ReadWriteProperty<Any?, BookSummary?> {
         override fun getValue(thisRef: Any?, property: KProperty<*>): BookSummary? =
@@ -1030,6 +1066,13 @@ internal fun NativeLibraryBrowserScreen(
             onDeleteLocalCopy(book)
         }
     }
+    val openHomeSection: (HomeSection, BrowserDestination) -> Unit = { section, returnDestination ->
+        homeSectionReturnDestination = returnDestination
+        destination = section.toBrowserDestination()
+        selectedBook = null
+        selectedSeriesKey = null
+        selectedAuthor = null
+    }
     val sessionActionLabel = if (state.isOfflineSnapshot) "Sign in" else "Log out"
     val openOptions = {
         showProfileMenu = false
@@ -1090,7 +1133,12 @@ internal fun NativeLibraryBrowserScreen(
         showChangeServerEditor = true
     }
 
-    BackHandler(enabled = destination == BrowserDestination.SMART_SCOPES || isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
+    BackHandler(enabled = destination == BrowserDestination.SMART_SCOPES ||
+        destination in setOf(
+            BrowserDestination.CURRENTLY_READING,
+            BrowserDestination.ON_DECK,
+            BrowserDestination.WANT_TO_READ
+        ) || isSearchOpen || activeBookGenre != null || activeSeriesGenre != null || selectedBook != null || selectedSeriesKey != null || selectedAuthor != null) {
         if (isSearchOpen) {
             isSearchOpen = false
             query = ""
@@ -1104,6 +1152,12 @@ internal fun NativeLibraryBrowserScreen(
             genreSourceSeriesKey = null
         } else if (destination == BrowserDestination.SMART_SCOPES) {
             destination = smartScopePickerBackDestination()
+        } else if (destination in setOf(
+                BrowserDestination.CURRENTLY_READING,
+                BrowserDestination.ON_DECK,
+                BrowserDestination.WANT_TO_READ
+            )) {
+            destination = homeSectionReturnDestination
         } else if (selectedBook != null) {
             selectedBook = null
         } else if (selectedAuthor != null) {
@@ -1387,6 +1441,26 @@ internal fun NativeLibraryBrowserScreen(
                     profileExpanded = showProfileMenu,
                     onDismissProfile = { showProfileMenu = false },
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
+                    sessionActionLabel = sessionActionLabel,
+                    onOptions = openOptions,
+                    onStatistics = openStatistics,
+                    onAchievements = openAchievements,
+                    onAbout = openAbout,
+                    onChangeServer = openChangeServerEditor
+                )
+                selectedBook == null && destination.toHomeSection() != null -> BrowserTopBar(
+                    title = destination.toHomeSection()!!.title,
+                    navigationIcon = {
+                        TextButton(onClick = { destination = homeSectionReturnDestination }) { Text("Back") }
+                    },
+                    onSearch = { isSearchOpen = true },
+                    onProfile = { showProfileMenu = true },
+                    profileExpanded = showProfileMenu,
+                    onDismissProfile = { showProfileMenu = false },
+                    onSessionAction = {
+                        showProfileMenu = false
+                        if (state.isOfflineSnapshot) onSignIn() else onSignOut()
+                    },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
                     onStatistics = openStatistics,
@@ -1773,6 +1847,28 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus
                 )
+                destination.toHomeSection() != null -> HomeSectionScreen(
+                    section = destination.toHomeSection()!!,
+                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
+                        state.books
+                    } else {
+                        state.homeBooks
+                    },
+                    state = state,
+                    modifier = Modifier.padding(padding),
+                    coverLoader = coverLoader,
+                    onBookSelected = { book ->
+                        detailReturnDestination = destination
+                        selectedBook = book
+                    },
+                    onDownload = requestDownload,
+                    onCancelDownload = onCancelDownload,
+                    onClearFailedDownload = onClearFailedDownload,
+                    onDeleteLocalCopy = requestLocalDelete,
+                    onMarkAsRead = onMarkAsRead,
+                    onMarkAsUnread = onMarkAsUnread,
+                    onMarkAsStatus = onMarkAsStatus
+                )
                 destination == BrowserDestination.HOME -> RefreshableHomeFeed(
                     state = state,
                     modifier = Modifier.padding(padding),
@@ -1799,6 +1895,9 @@ internal fun NativeLibraryBrowserScreen(
                     onLocalBooksSelected = {
                         localBooksLibraryId = null
                         destination = BrowserDestination.LOCAL_BOOKS
+                    },
+                    onHomeSectionSelected = { section ->
+                        openHomeSection(section, BrowserDestination.HOME)
                     }
                 )
                 destination == BrowserDestination.LIBRARY && showLibraryPicker -> LibraryPickerScreen(
@@ -1839,6 +1938,9 @@ internal fun NativeLibraryBrowserScreen(
                     onLocalBooksSelected = {
                         localBooksLibraryId = state.selectedLibraryId
                         destination = BrowserDestination.LOCAL_BOOKS
+                    },
+                    onHomeSectionSelected = { section ->
+                        openHomeSection(section, BrowserDestination.LIBRARY)
                     }
                 )
                 else -> HomeFeed(
@@ -4251,7 +4353,8 @@ private fun RefreshableHomeFeed(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
-    onLocalBooksSelected: () -> Unit
+    onLocalBooksSelected: () -> Unit,
+    onHomeSectionSelected: (HomeSection) -> Unit
 ) {
     val downloadedLocalBooks by produceState<List<BookSummary>?>(
         initialValue = null,
@@ -4282,6 +4385,7 @@ private fun RefreshableHomeFeed(
             onMarkAsRead = onMarkAsRead,
             onMarkAsUnread = onMarkAsUnread,
             onMarkAsStatus = onMarkAsStatus,
+            onHomeSectionSelected = onHomeSectionSelected,
             onLocalBooksSelected = onLocalBooksSelected
         )
     }
@@ -4305,12 +4409,16 @@ private fun HomeFeed(
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
     onLocalBooksSelected: (() -> Unit)? = null,
+    onHomeSectionSelected: ((HomeSection) -> Unit)? = null,
     localBooksLibraryId: String? = null,
     showHeader: Boolean = false
 ) {
-    val currentlyReading = remember(books) { currentlyReadingBooks(books) }
-    val onDeck = remember(books) { onDeckBooks(books) }
-    val wantToRead = remember(books) { wantToReadBooks(books) }
+    val currentlyReadingAll = remember(books) { currentlyReadingBooks(books, limit = null) }
+    val onDeckAll = remember(books) { onDeckBooks(books, limit = null) }
+    val wantToReadAll = remember(books) { wantToReadBooks(books, limit = null) }
+    val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
+    val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
+    val wantToRead = wantToReadAll.take(HOME_PREVIEW_LIMIT)
     val recentlyAddedBooks = books.sortedWith(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
@@ -4364,15 +4472,19 @@ private fun HomeFeed(
                         state.isOfflineSnapshot
                     },
                     onMarkAsRead = availableMarkAsRead,
-                    onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus
+                    onMarkAsUnread = availableMarkAsUnread,
+                    onMarkAsStatus = onMarkAsStatus,
+                    onSeeAll = if (currentlyReadingAll.size > currentlyReading.size) {
+                        { onHomeSectionSelected?.invoke(HomeSection.CURRENTLY_READING) }
+                    } else null
                 )
             }
         }
         if (onDeck.isNotEmpty()) item {
-            BookShelf("On deck", onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus)
+            BookShelf("On deck", onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = if (onDeckAll.size > onDeck.size) { { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) } } else null)
         }
         if (wantToRead.isNotEmpty()) item {
-            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus)
+            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = if (wantToReadAll.size > wantToRead.size) { { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) } } else null)
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
             BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus)
@@ -4500,7 +4612,10 @@ private fun ShelfTitle(title: String, onSeeAll: (() -> Unit)? = null) {
     ) {
         Text(title, style = MaterialTheme.typography.titleLarge)
         if (onSeeAll != null) {
-            TextButton(onClick = onSeeAll) { Text("See all") }
+            TextButton(
+                onClick = onSeeAll,
+                modifier = Modifier.testTag("home_see_all_${title.lowercase().replace(' ', '_')}")
+            ) { Text("See all") }
         }
     }
 }
@@ -4880,7 +4995,8 @@ private fun LibraryContentScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
-    onLocalBooksSelected: () -> Unit
+    onLocalBooksSelected: () -> Unit,
+    onHomeSectionSelected: (HomeSection) -> Unit
 ) {
     val downloadedLocalBooks by produceState<List<BookSummary>?>(
         initialValue = null,
@@ -5038,6 +5154,7 @@ private fun LibraryContentScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus,
+                    onHomeSectionSelected = onHomeSectionSelected,
                     onLocalBooksSelected = onLocalBooksSelected,
                     localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
@@ -5132,6 +5249,54 @@ internal fun PullToRefreshLayout(
                 .testTag("pull_to_refresh_indicator")
         )
     }
+}
+
+@Composable
+private fun HomeSectionScreen(
+    section: HomeSection,
+    books: List<BookSummary>,
+    state: BrowserState,
+    modifier: Modifier,
+    coverLoader: suspend (BookSummary) -> ByteArray?,
+    onBookSelected: (BookSummary) -> Unit,
+    onDownload: (BookSummary) -> Unit,
+    onCancelDownload: (BookSummary) -> Unit,
+    onClearFailedDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    onMarkAsRead: (BookSummary) -> Unit,
+    onMarkAsUnread: (BookSummary) -> Unit,
+    onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?
+) {
+    val sectionBooks = remember(books, section) {
+        when (section) {
+            HomeSection.CURRENTLY_READING -> currentlyReadingBooks(books, limit = null)
+            HomeSection.ON_DECK -> onDeckBooks(books, limit = null)
+            HomeSection.WANT_TO_READ -> wantToReadBooks(books, limit = null)
+        }
+    }
+    LibraryBooks(
+        state = state.copy(
+            books = sectionBooks,
+            booksTotal = sectionBooks.size,
+            booksSeriesTotal = null,
+            isLoadingBooks = false
+        ),
+        modifier = modifier,
+        coverLoader = coverLoader,
+        onBookSelected = onBookSelected,
+        titleOverride = section.title,
+        emptyMessage = "No ${section.title.lowercase()} books found.",
+        allowSeriesCollapse = false,
+        totalBooks = sectionBooks.size,
+        jumpRailEnabled = false,
+        onMarkAsRead = onMarkAsRead,
+        onMarkAsUnread = onMarkAsUnread,
+        onMarkAsStatus = onMarkAsStatus,
+        onDownload = onDownload,
+        onCancelDownload = onCancelDownload,
+        onClearFailedDownload = onClearFailedDownload,
+        onDeleteLocalCopy = onDeleteLocalCopy
+    )
 }
 
 @Composable
@@ -8585,7 +8750,10 @@ private fun LoadingFeedRow(text: String) {
     }
 }
 
-internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
+internal fun onDeckBooks(
+    books: List<BookSummary>,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<BookSummary> {
     return books
         .filter { !it.seriesName.isNullOrBlank() }
         .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
@@ -8605,17 +8773,23 @@ internal fun onDeckBooks(books: List<BookSummary>): List<BookSummary> {
                     it.readStatus in setOf(BookReadStatus.READING, BookReadStatus.REREADING)
                 }
         }
-        .take(12)
+        .let { result -> limit?.let(result::take) ?: result }
 }
 
-internal fun wantToReadBooks(books: List<BookSummary>): List<BookSummary> {
+internal fun wantToReadBooks(
+    books: List<BookSummary>,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<BookSummary> {
     return books
         .filter { it.readStatus == BookReadStatus.WANT_TO_READ }
         .sortedWith(readingStateShelfComparator())
-        .take(12)
+        .let { result -> limit?.let(result::take) ?: result }
 }
 
-internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> {
+internal fun currentlyReadingBooks(
+    books: List<BookSummary>,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<BookSummary> {
     return books
         .filter {
             it.readStatus == BookReadStatus.READING ||
@@ -8627,7 +8801,7 @@ internal fun currentlyReadingBooks(books: List<BookSummary>): List<BookSummary> 
                 .thenByDescending { it.updatedAtMillis ?: 0L }
                 .thenBy { it.title.lowercase() }
         )
-        .take(12)
+        .let { result -> limit?.let(result::take) ?: result }
 }
 
 internal fun recentlyReadBooks(books: List<BookSummary>): List<BookSummary> {

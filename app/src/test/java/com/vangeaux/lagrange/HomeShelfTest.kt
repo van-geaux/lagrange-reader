@@ -68,6 +68,31 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `home reading shelves expose eight-item previews and complete projections`() {
+        val books = (1..10).map { index ->
+            seriesBook("reading-$index", index.toDouble(), status = BookReadStatus.READING)
+                .copy(lastReadAtMillis = index.toLong())
+        }
+
+        assertEquals(8, currentlyReadingBooks(books).size)
+        assertEquals(10, currentlyReadingBooks(books, limit = null).size)
+    }
+
+    @Test
+    fun `home want-to-read preview keeps ordering while full projection remains available`() {
+        val books = (1..10).map { index ->
+            seriesBook("want-$index", index.toDouble(), status = BookReadStatus.WANT_TO_READ)
+                .copy(updatedAtMillis = index.toLong())
+        }
+
+        assertEquals(
+            wantToReadBooks(books, limit = null).take(8),
+            wantToReadBooks(books)
+        )
+        assertEquals(10, wantToReadBooks(books, limit = null).size)
+    }
+
+    @Test
     fun `recently read includes read and skimmed states only`() {
         val read = seriesBook("book-read", index = 1.0, status = BookReadStatus.READ, isRead = true)
             .copy(lastReadAtMillis = 300L)
