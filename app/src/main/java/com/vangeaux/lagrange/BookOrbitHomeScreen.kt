@@ -199,6 +199,10 @@ internal enum class BrowserDestination {
     CURRENTLY_READING,
     ON_DECK,
     WANT_TO_READ,
+    RECENTLY_ADDED_BOOKS,
+    RECENTLY_ADDED_SERIES,
+    RECENTLY_UPDATED_SERIES,
+    RECENTLY_READ,
     STATISTICS,
     ACHIEVEMENTS,
     OPTIONS,
@@ -207,7 +211,11 @@ internal enum class BrowserDestination {
 internal enum class HomeSection(val title: String) {
     CURRENTLY_READING("Currently reading"),
     ON_DECK("On deck"),
-    WANT_TO_READ("Want to read")
+    WANT_TO_READ("Want to read"),
+    RECENTLY_ADDED_BOOKS("Recently added books"),
+    RECENTLY_ADDED_SERIES("Recently added series"),
+    RECENTLY_UPDATED_SERIES("Recently updated series"),
+    RECENTLY_READ("Recently read books")
 }
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 
@@ -217,12 +225,20 @@ private fun HomeSection.toBrowserDestination(): BrowserDestination = when (this)
     HomeSection.CURRENTLY_READING -> BrowserDestination.CURRENTLY_READING
     HomeSection.ON_DECK -> BrowserDestination.ON_DECK
     HomeSection.WANT_TO_READ -> BrowserDestination.WANT_TO_READ
+    HomeSection.RECENTLY_ADDED_BOOKS -> BrowserDestination.RECENTLY_ADDED_BOOKS
+    HomeSection.RECENTLY_ADDED_SERIES -> BrowserDestination.RECENTLY_ADDED_SERIES
+    HomeSection.RECENTLY_UPDATED_SERIES -> BrowserDestination.RECENTLY_UPDATED_SERIES
+    HomeSection.RECENTLY_READ -> BrowserDestination.RECENTLY_READ
 }
 
 private fun BrowserDestination.toHomeSection(): HomeSection? = when (this) {
     BrowserDestination.CURRENTLY_READING -> HomeSection.CURRENTLY_READING
     BrowserDestination.ON_DECK -> HomeSection.ON_DECK
     BrowserDestination.WANT_TO_READ -> HomeSection.WANT_TO_READ
+    BrowserDestination.RECENTLY_ADDED_BOOKS -> HomeSection.RECENTLY_ADDED_BOOKS
+    BrowserDestination.RECENTLY_ADDED_SERIES -> HomeSection.RECENTLY_ADDED_SERIES
+    BrowserDestination.RECENTLY_UPDATED_SERIES -> HomeSection.RECENTLY_UPDATED_SERIES
+    BrowserDestination.RECENTLY_READ -> HomeSection.RECENTLY_READ
     else -> null
 }
 
@@ -1134,7 +1150,7 @@ internal fun NativeLibraryBrowserScreen(
     }
 
     BackHandler(enabled = destination == BrowserDestination.SMART_SCOPES ||
-        destination in setOf(
+        destination.toHomeSection() != null || destination in setOf(
             BrowserDestination.CURRENTLY_READING,
             BrowserDestination.ON_DECK,
             BrowserDestination.WANT_TO_READ
@@ -1152,7 +1168,7 @@ internal fun NativeLibraryBrowserScreen(
             genreSourceSeriesKey = null
         } else if (destination == BrowserDestination.SMART_SCOPES) {
             destination = smartScopePickerBackDestination()
-        } else if (destination in setOf(
+        } else if (destination.toHomeSection() != null || destination in setOf(
                 BrowserDestination.CURRENTLY_READING,
                 BrowserDestination.ON_DECK,
                 BrowserDestination.WANT_TO_READ
@@ -1846,6 +1862,23 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus
+                )
+                destination.toHomeSection() in setOf(
+                    HomeSection.RECENTLY_ADDED_SERIES,
+                    HomeSection.RECENTLY_UPDATED_SERIES
+                ) -> HomeSeriesSectionScreen(
+                    section = destination.toHomeSection()!!,
+                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
+                        state.books
+                    } else {
+                        state.homeBooks
+                    },
+                    modifier = Modifier.padding(padding),
+                    imageLoader = catalogImageLoader,
+                    onSeriesSelected = { series ->
+                        selectedSeriesKey = series.id
+                        detailReturnDestination = destination
+                    }
                 )
                 destination.toHomeSection() != null -> HomeSectionScreen(
                     section = destination.toHomeSection()!!,
@@ -4419,13 +4452,17 @@ private fun HomeFeed(
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
     val wantToRead = wantToReadAll.take(HOME_PREVIEW_LIMIT)
-    val recentlyAddedBooks = books.sortedWith(
+    val recentlyAddedBooksAll = books.sortedWith(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
-    ).take(12)
-    val recentSeries = remember(books) { recentSeries(books, useUpdatedAt = false) }
-    val updatedSeries = remember(books) { recentSeries(books, useUpdatedAt = true) }
-    val recentlyRead = remember(books) { recentlyReadBooks(books) }
+    )
+    val recentSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = false, limit = null) }
+    val updatedSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = true, limit = null) }
+    val recentlyReadAll = remember(books) { recentlyReadBooks(books, limit = null) }
+    val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
+    val recentSeries = recentSeriesAll.take(HOME_PREVIEW_LIMIT)
+    val updatedSeries = updatedSeriesAll.take(HOME_PREVIEW_LIMIT)
+    val recentlyRead = recentlyReadAll.take(HOME_PREVIEW_LIMIT)
     val localBooks = remember(books, downloadedLocalBooks, localBooksLibraryId) {
         homeLocalBooksPreview(
             catalogHomeBooks = books,
@@ -4487,12 +4524,12 @@ private fun HomeFeed(
             BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = if (wantToReadAll.size > wantToRead.size) { { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) } } else null)
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
-            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus)
+            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = if (recentlyAddedBooksAll.size > recentlyAddedBooks.size) { { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) } } else null)
         }
-        if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected) }
-        if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected) }
+        if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected, onSeeAll = if (recentSeriesAll.size > recentSeries.size) { { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) } } else null) }
+        if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected, onSeeAll = if (updatedSeriesAll.size > updatedSeries.size) { { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) } } else null) }
         if (recentlyRead.isNotEmpty()) item {
-            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus)
+            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = if (recentlyReadAll.size > recentlyRead.size) { { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_READ) } } else null)
         }
         if (localBooks.isNotEmpty()) item {
             BookShelf(
@@ -4583,10 +4620,11 @@ private fun SeriesShelf(
     title: String,
     series: List<Pair<String, BookSummary>>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
-    onSeriesSelected: (String) -> Unit
+    onSeriesSelected: (String) -> Unit,
+    onSeeAll: (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ShelfTitle(title)
+        ShelfTitle(title, onSeeAll)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -5252,6 +5290,67 @@ internal fun PullToRefreshLayout(
 }
 
 @Composable
+private fun HomeSeriesSectionScreen(
+    section: HomeSection,
+    books: List<BookSummary>,
+    modifier: Modifier,
+    imageLoader: suspend (String) -> ByteArray?,
+    onSeriesSelected: (SeriesSummary) -> Unit
+) {
+    val series = remember(books, section) {
+        homeSeriesSummaries(
+            books = books,
+            useUpdatedAt = section == HomeSection.RECENTLY_UPDATED_SERIES
+        )
+    }
+    val gridState = rememberLazyGridState()
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = LocalLibraryCardSize.current.gridMinSize),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(CATALOG_GRID_PADDING),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (series.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("No ${section.title.lowercase()} found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        gridItems(series, key = { "home-series-${section.name}-${it.id}" }) { item ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("series_card_${item.id}")
+                    .clickable { onSeriesSelected(item) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CatalogImage(
+                        url = item.coverUrl,
+                        label = "Cover for ${item.name}",
+                        loader = imageLoader,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                    )
+                    Text(item.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (item.authors.isNotEmpty()) {
+                        Text(item.authors.joinToString(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        "${item.bookCount} books · ${item.readCount} read",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun HomeSectionScreen(
     section: HomeSection,
     books: List<BookSummary>,
@@ -5272,6 +5371,13 @@ private fun HomeSectionScreen(
             HomeSection.CURRENTLY_READING -> currentlyReadingBooks(books, limit = null)
             HomeSection.ON_DECK -> onDeckBooks(books, limit = null)
             HomeSection.WANT_TO_READ -> wantToReadBooks(books, limit = null)
+            HomeSection.RECENTLY_ADDED_BOOKS -> books.sortedWith(
+                compareByDescending<BookSummary> { it.addedAtMillis != null }
+                    .thenByDescending { it.addedAtMillis ?: 0L }
+            )
+            HomeSection.RECENTLY_READ -> recentlyReadBooks(books, limit = null)
+            HomeSection.RECENTLY_ADDED_SERIES,
+            HomeSection.RECENTLY_UPDATED_SERIES -> emptyList()
         }
     }
     LibraryBooks(
@@ -8804,14 +8910,17 @@ internal fun currentlyReadingBooks(
         .let { result -> limit?.let(result::take) ?: result }
 }
 
-internal fun recentlyReadBooks(books: List<BookSummary>): List<BookSummary> {
+internal fun recentlyReadBooks(
+    books: List<BookSummary>,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<BookSummary> {
     return books
         .filter {
             it.readStatus == BookReadStatus.READ ||
                 it.readStatus == BookReadStatus.SKIMMED
         }
         .sortedWith(readingStateShelfComparator())
-        .take(12)
+        .let { result -> limit?.let(result::take) ?: result }
 }
 
 private fun readingStateShelfComparator(): Comparator<BookSummary> =
@@ -8845,7 +8954,30 @@ internal fun librarySeriesCount(
     }
 }
 
-internal fun recentSeries(books: List<BookSummary>, useUpdatedAt: Boolean): List<Pair<String, BookSummary>> {
+internal fun homeSeriesSummaries(
+    books: List<BookSummary>,
+    useUpdatedAt: Boolean
+): List<SeriesSummary> {
+    return recentSeries(books, useUpdatedAt = useUpdatedAt, limit = null).map { (name, representative) ->
+        val key = representative.seriesId ?: name
+        val members = books.filter { (it.seriesId ?: it.seriesName) == key }
+        SeriesSummary(
+            id = key,
+            name = name,
+            authors = members.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct(),
+            bookCount = members.size,
+            readCount = members.count { it.isRead || it.readStatus in setOf(BookReadStatus.READ, BookReadStatus.SKIMMED) },
+            coverUrl = representative.coverUrl,
+            lastAddedAtMillis = representative.addedAtMillis
+        )
+    }
+}
+
+internal fun recentSeries(
+    books: List<BookSummary>,
+    useUpdatedAt: Boolean,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<Pair<String, BookSummary>> {
     return books
         .filter { !it.seriesName.isNullOrBlank() }
         .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
@@ -8857,7 +8989,7 @@ internal fun recentSeries(books: List<BookSummary>, useUpdatedAt: Boolean): List
             if (timestamp == null) null else timestamped.seriesName.orEmpty() to timestamped
         }
         .sortedByDescending { (_, book) -> if (useUpdatedAt) book.updatedAtMillis else book.addedAtMillis }
-        .take(12)
+        .let { result -> limit?.let(result::take) ?: result }
 }
 
 private fun nativeBookStatus(book: BookSummary, offline: Boolean): String {

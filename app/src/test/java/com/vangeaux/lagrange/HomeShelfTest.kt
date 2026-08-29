@@ -93,6 +93,25 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `recent book and series previews expose eight items with complete projections`() {
+        val books = (1..10).map { index ->
+            seriesBook("recent-$index", index.toDouble(), status = BookReadStatus.READ, isRead = true)
+                .copy(
+                    seriesId = "series-$index",
+                    seriesName = "Series $index",
+                    addedAtMillis = index.toLong(),
+                    updatedAtMillis = index.toLong()
+                )
+        }
+
+        assertEquals(8, recentlyReadBooks(books).size)
+        assertEquals(10, recentlyReadBooks(books, limit = null).size)
+        assertEquals(8, recentSeries(books, useUpdatedAt = false).size)
+        assertEquals(10, recentSeries(books, useUpdatedAt = false, limit = null).size)
+        assertEquals(10, homeSeriesSummaries(books, useUpdatedAt = true).size)
+    }
+
+    @Test
     fun `recently read includes read and skimmed states only`() {
         val read = seriesBook("book-read", index = 1.0, status = BookReadStatus.READ, isRead = true)
             .copy(lastReadAtMillis = 300L)
