@@ -44,6 +44,8 @@ This document contains current interaction contracts, design rules, and unresolv
 - Portrait and landscape use grouped height-responsive sizing rather than shrinking only the bottom buttons. The complete group reduces spacing, typography, cover allocation, seek-row height, and control artwork when constrained; Chapter, Speed, Sleep, and transport touch targets retain usable minimums. An overflowing one-line chapter title uses marquee auto-scroll, matching the existing book-title behavior.
 - A connected split-MP3 audiobook is presented as one continuous audiobook: the compact player's time and slider use the complete duration, chapter and ±10/30-second seeks may cross file boundaries, and playback automatically continues into the next ordered file. Single-file and downloaded/local audio behavior is unchanged.
 - EPUB/PDF/comic readers may recreate for orientation, screen-size, and fold changes, but must remain visible by reopening one navigator at the exact saved locator. Configuration recreation must not look like user closure, duplicate the reader, or clear active-reader state; process recovery is validated separately.
+- EPUB hyperlinks use the Readium HTML navigator, so internal and external EPUB links remain tappable without competing with the reader tap zones; EPUB text remains selectable through the existing WebView-based selection path.
+- PDF hyperlink hit-testing reads PDFium link metadata before the existing directional tap-zone listener. Internal destination links navigate within the PDF; external HTTP/HTTPS and `mailto:` links open through Android `ACTION_VIEW` using the installed system handler. Unsupported or malformed schemes are rejected and fall back to the existing tap handling.
 
 ## Current visual rules
 

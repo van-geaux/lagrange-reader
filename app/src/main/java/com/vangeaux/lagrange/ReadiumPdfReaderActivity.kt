@@ -11,9 +11,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.net.Uri
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -476,13 +478,19 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         fragment.publicationView.layoutDirection = if (
             readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
         ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        val directionalNavigation = LibraryDirectionalNavigationAdapter(
+            navigator = fragment,
+            readingDirection = { readingDirection },
+            tapZoneLayout = { readerPreferences.tapZoneLayout },
+            tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
+            onMenu = ::toggleChrome
+        )
         fragment.addInputListener(
-            LibraryDirectionalNavigationAdapter(
+            PdfHyperlinkTapHandler(
                 navigator = fragment,
-                readingDirection = { readingDirection },
-                tapZoneLayout = { readerPreferences.tapZoneLayout },
-                tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
-                onMenu = ::toggleChrome
+                onExternalLink = ::openPdfExternalLink,
+                onInternalLink = ::openPdfInternalLink,
+                fallback = directionalNavigation
             )
         )
         navigator = fragment
@@ -493,6 +501,22 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         }
         progressView?.visibility = View.GONE
         if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+    }
+
+    private fun openPdfExternalLink(uri: String): Boolean {
+        val opened = runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+            true
+        }.getOrDefault(false)
+        if (!opened) {
+            Toast.makeText(this, "No app is available to open this link.", Toast.LENGTH_SHORT).show()
+        }
+        return opened
+    }
+
+    private fun openPdfInternalLink(pageIndex: Int): Boolean {
+        val locator = pageLocators.getOrNull(pageIndex) ?: return false
+        return navigator?.go(locator) == true
     }
 
     private fun initialLocator(openedPublication: Publication): Locator? {

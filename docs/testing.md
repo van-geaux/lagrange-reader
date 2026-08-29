@@ -152,6 +152,16 @@ When the affected scope requires it, verify:
 
 The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 
+### EPUB links and text selection
+
+The user confirmed EPUB links work in the existing Readium HTML navigator. Verify an EPUB with an internal chapter or footnote link and an external link, then confirm the destination opens correctly and ordinary EPUB text remains selectable through the existing selection actions.
+
+### PDF hyperlinks (issue #118)
+
+On a connected device or emulator, open a PDF containing internal, HTTP/HTTPS, and `mailto:` links. Tap a link target and verify PDFium hit-testing takes precedence over the directional tap zones: internal destination links navigate to the linked page within the same PDF, and valid external links open through Android `ACTION_VIEW` using the installed system handler. Verify unsupported or malformed schemes are ignored and the existing directional tap handling remains available.
+
+Focused and full automated verification passed: 599 JVM tests with 0 failures, errors, or skips; main and Android-test Kotlin compilation; lint; and debug and Android-test APK assembly. No connected device was available, so the interaction checks above remain pending device/emulator validation; compiled Android-test sources do not constitute executed instrumentation.
+
 ### Reader volume-button navigation (issue #95)
 
 On a connected device or emulator, verify the per-library `Turn pages with volume buttons` setting is off by default and remains independently persisted per library. Enable it, then test EPUB, PDF, paginated comics, and continuous comics: by default Volume Down performs logical Next and Volume Up performs logical Previous, including when the reader's reading direction or navigation mode changes. Enable `Swap volume button actions` and verify the two mappings reverse. While the reader is active, unobstructed, and focused, confirm the system volume overlay does not appear.
