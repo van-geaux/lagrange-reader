@@ -73,6 +73,14 @@ class AppCoordinator internal constructor(
         repository.loadBooksPage(libraryId, page, filter)
     }
 
+    internal suspend fun loadRecentBooksPage(
+        libraryId: String,
+        section: HomeSection,
+        page: Int
+    ): LibraryBooksPage = loadWithSessionRecovery(LibraryBooksPage(page = page)) {
+        repository.loadRecentBooksPage(libraryId, section, page)
+    }
+
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = loadWithSessionRecovery(null) {
         repository.loadBookDetail(book)
     }

@@ -7,6 +7,13 @@ import org.junit.Test
 
 class HomeShelfTest {
     @Test
+    fun `recent home sections use server sort filters`() {
+        assertEquals(BookSortOption.ADDED, HomeSection.RECENTLY_ADDED_BOOKS.recentBooksFilter().sort)
+        assertEquals(BookSortOption.UPDATED, HomeSection.RECENTLY_UPDATED_SERIES.recentBooksFilter().sort)
+        assertEquals(BookSortOption.LAST_READ, HomeSection.RECENTLY_READ.recentBooksFilter().sort)
+        assertEquals(SortDirection.DESCENDING, HomeSection.RECENTLY_READ.recentBooksFilter().direction)
+    }
+    @Test
     fun `currently reading includes only reading and rereading states`() {
         val reading = seriesBook("book-reading", index = 1.0, status = BookReadStatus.READING)
             .copy(lastReadAtMillis = 200L)
