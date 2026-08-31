@@ -12,6 +12,11 @@ class HomeShelfTest {
         assertEquals(BookSortOption.UPDATED, HomeSection.RECENTLY_UPDATED_SERIES.recentBooksFilter().sort)
         assertEquals(BookSortOption.LAST_READ, HomeSection.RECENTLY_READ.recentBooksFilter().sort)
         assertEquals(SortDirection.DESCENDING, HomeSection.RECENTLY_READ.recentBooksFilter().direction)
+        assertEquals(SeriesSortOption.LAST_ADDED, SeriesCatalogFilter(sort = SeriesSortOption.LAST_ADDED).sort)
+        assertEquals(SortDirection.DESCENDING, SeriesCatalogFilter(
+            sort = SeriesSortOption.LAST_ADDED,
+            direction = SortDirection.DESCENDING
+        ).direction)
     }
     @Test
     fun `currently reading includes only reading and rereading states`() {
@@ -116,6 +121,41 @@ class HomeShelfTest {
         assertEquals(8, recentSeries(books, useUpdatedAt = false).size)
         assertEquals(10, recentSeries(books, useUpdatedAt = false, limit = null).size)
         assertEquals(10, homeSeriesSummaries(books, useUpdatedAt = true).size)
+    }
+
+    @Test
+    fun `authoritative home series preview uses series recency and identity`() {
+        val newestBookIsOlderSeries = SeriesSummary(
+            id = "series-a",
+            name = "Series A",
+            coverUrl = "https://example.test/a.jpg",
+            lastAddedAtMillis = 100L
+        )
+        val newestSeries = SeriesSummary(
+            id = "series-b",
+            name = "Series B",
+            coverUrl = "https://example.test/b.jpg",
+            lastAddedAtMillis = 200L
+        )
+        val duplicate = newestSeries.copy(name = "Duplicate label", lastAddedAtMillis = 50L)
+
+        assertEquals(
+            listOf("series-b", "series-a"),
+            homeSeriesPreview(listOf(newestBookIsOlderSeries, duplicate, newestSeries)).map { it.id }
+        )
+        assertEquals("Series B", homeSeriesPreview(listOf(duplicate, newestSeries)).first().name)
+        assertEquals("https://example.test/b.jpg", homeSeriesPreview(listOf(newestSeries)).first().coverUrl)
+    }
+
+    @Test
+    fun `authoritative home series preview keeps complete results beyond eight`() {
+        val series = (1..10).map { index ->
+            SeriesSummary(id = "series-$index", name = "Series $index", lastAddedAtMillis = index.toLong())
+        }
+
+        assertEquals(8, homeSeriesPreview(series).size)
+        assertEquals(10, homeSeriesPreview(series, limit = Int.MAX_VALUE).size)
+        assertEquals(listOf("series-10", "series-9"), homeSeriesPreview(series).take(2).map { it.id })
     }
 
     @Test

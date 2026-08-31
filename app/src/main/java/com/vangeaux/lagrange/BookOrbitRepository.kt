@@ -781,11 +781,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         )
         try {
             val payload = request(path, "GET", null)
-            catalogSnapshotStore.saveSeries(serverUrl, filter.query, page, payload)
+            catalogSnapshotStore.saveSeries(serverUrl, filter.query, filter.toString(), page, payload)
             BookOrbitPayloadParser.parseSeriesCatalogPage(payload, serverBase)
         } catch (error: Throwable) {
             if (error is AuthenticationRequiredException) throw error
-            if (!filter.isActive) catalogSnapshotStore.readSeries(serverUrl, filter.query, page)?.let { cached ->
+            if (!filter.isActive) catalogSnapshotStore.readSeries(serverUrl, filter.query, filter.toString(), page)?.let { cached ->
                 return@withContext BookOrbitPayloadParser.parseSeriesCatalogPage(cached, serverBase)
             }
             throw error

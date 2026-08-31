@@ -1894,6 +1894,7 @@ internal fun NativeLibraryBrowserScreen(
                     state = state,
                     serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
                     recentBooksPageLoader = recentBooksPageLoader,
+                    seriesCatalogLoader = seriesCatalogLoader,
                     modifier = Modifier.padding(padding),
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
@@ -1931,6 +1932,7 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     localBooksLoader = localBooksLoader,
+                    seriesCatalogLoader = seriesCatalogLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.HOME
@@ -4398,6 +4400,7 @@ private fun RefreshableHomeFeed(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     localBooksLoader: suspend () -> List<BookSummary>,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -4431,6 +4434,7 @@ private fun RefreshableHomeFeed(
             downloadedLocalBooks = downloadedLocalBooks,
             modifier = Modifier.fillMaxSize(),
             coverLoader = coverLoader,
+            seriesCatalogLoader = seriesCatalogLoader,
             onBookSelected = onBookSelected,
             onSeriesSelected = onSeriesSelected,
             onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
@@ -4454,6 +4458,7 @@ private fun HomeFeed(
     downloadedLocalBooks: List<BookSummary>? = null,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
+    seriesCatalogLoader: (suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage)? = null,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
@@ -4479,7 +4484,31 @@ private fun HomeFeed(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
     )
-    val recentSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = false, limit = null) }
+    val fallbackRecentSeries = remember(books) { homeSeriesSummaries(books, useUpdatedAt = false) }
+    val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
+        initialValue = null,
+        books,
+        seriesCatalogLoader
+    ) {
+        value = seriesCatalogLoader?.let { loader ->
+            runCatching {
+                loadCompleteSeriesCatalog { page ->
+                    loader(
+                        SeriesCatalogFilter(
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING
+                        ),
+                        page
+                    )
+                }.items
+            }.getOrNull()
+        }
+    }
+    val recentSeriesAll = remember(fallbackRecentSeries, authoritativeRecentSeries) {
+        (authoritativeRecentSeries ?: fallbackRecentSeries)
+            .let { series -> homeSeriesPreview(series, limit = Int.MAX_VALUE) }
+            .map { series -> series.name to series.asShelfBook() }
+    }
     val updatedSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = true, limit = null) }
     val recentlyReadAll = remember(books) { recentlyReadBooks(books, limit = null) }
     val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
@@ -5317,12 +5346,30 @@ private fun HomeSeriesSectionScreen(
     state: BrowserState,
     serverWide: Boolean,
     recentBooksPageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     modifier: Modifier,
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
     var sourceBooks by remember(books, section) { mutableStateOf(books) }
+    var authoritativeSeries by remember(books, section, serverWide) {
+        mutableStateOf<List<SeriesSummary>?>(null)
+    }
     LaunchedEffect(books, section) {
+        if (serverWide && section == HomeSection.RECENTLY_ADDED_SERIES) {
+            authoritativeSeries = runCatching {
+                loadCompleteSeriesCatalog { page ->
+                    seriesCatalogLoader(
+                        SeriesCatalogFilter(
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING
+                        ),
+                        page
+                    )
+                }.items
+            }.getOrNull()
+            return@LaunchedEffect
+        }
         val libraryIds = if (serverWide) {
             state.libraries.map { it.id }
         } else {
@@ -5332,12 +5379,13 @@ private fun HomeSeriesSectionScreen(
             runCatching { recentBooksPageLoader(libraryId, section, 0).items }.getOrDefault(emptyList())
         }.distinctBy { it.id to it.fileId }
     }
-    val series = remember(sourceBooks, section) {
+    val fallbackSeries = remember(sourceBooks, section) {
         homeSeriesSummaries(
             books = sourceBooks,
             useUpdatedAt = section == HomeSection.RECENTLY_UPDATED_SERIES
         )
     }
+    val series = authoritativeSeries ?: fallbackSeries
     val gridState = rememberLazyGridState()
     LazyVerticalGrid(
         state = gridState,
@@ -9067,6 +9115,27 @@ internal fun homeSeriesSummaries(
         )
     }
 }
+
+internal fun homeSeriesPreview(
+    series: List<SeriesSummary>,
+    limit: Int = HOME_PREVIEW_LIMIT
+): List<SeriesSummary> = series
+    .groupBy { it.id }
+    .values
+    .mapNotNull { entries -> entries.maxByOrNull { it.lastAddedAtMillis ?: 0L } }
+    .sortedByDescending { it.lastAddedAtMillis ?: 0L }
+    .take(limit)
+
+private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
+    libraryId = "series",
+    id = id,
+    fileId = null,
+    title = name,
+    coverUrl = coverUrl,
+    seriesId = id,
+    seriesName = name,
+    author = authors.joinToString().takeIf { it.isNotBlank() }
+)
 
 internal fun recentSeries(
     books: List<BookSummary>,

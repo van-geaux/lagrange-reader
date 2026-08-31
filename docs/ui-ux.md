@@ -5,7 +5,7 @@ This document contains current interaction contracts, design rules, and unresolv
 ## Current product direction
 
 - Lagrange uses a native Android shell with Home, Libraries, and More as primary destinations.
-- Home aggregates server-wide reading shelves; selected-library scope belongs to Libraries.
+- Home aggregates server-wide reading shelves; selected-library scope belongs to Libraries. The `Recently added series` preview and its `See all` destination use the complete server Series catalog sorted by `lastAddedAt` descending; the preview is capped for the Home shelf, while `See all` retains the complete result set.
 - The interface uses compact, touch-safe cards and controls with accessibility semantics, large-text support, and clear offline/error states.
 - Startup should show usable cached content as soon as possible and avoid blocking/global progress indicators when content is already available.
 - Native username/password and the implemented server-hosted sign-in WebView are supported; native AppAuth remains deferred by the upstream redirect contract.
