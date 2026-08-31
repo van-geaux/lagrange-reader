@@ -159,6 +159,44 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `home recently added series uses first book addition rather than latest book addition`() {
+        val oldSeriesBooks = listOf(
+            seriesBook("old-1", 1.0, addedAt = 100L),
+            seriesBook("old-2", 2.0, addedAt = 1_000L)
+        ).map { it.copy(seriesId = "old-series", seriesName = "Old Saga") }
+        val newSeriesBooks = listOf(
+            seriesBook("new-1", 1.0, addedAt = 2_000L),
+            seriesBook("new-2", 2.0, addedAt = 2_100L)
+        ).map { it.copy(seriesId = "new-series", seriesName = "New Saga") }
+        val serverSeries = listOf(
+            SeriesSummary(id = "old-series", name = "Old Saga", lastAddedAtMillis = 1_000L),
+            SeriesSummary(id = "new-series", name = "New Saga", lastAddedAtMillis = 2_100L)
+        )
+
+        assertEquals(
+            listOf("new-series", "old-series"),
+            homeSeriesPreview(serverSeries, books = oldSeriesBooks + newSeriesBooks, limit = Int.MAX_VALUE)
+                .map { it.id }
+        )
+
+        assertEquals(
+            listOf("new-index-id", "old-index-id"),
+            homeSeriesPreview(
+                listOf(
+                    SeriesSummary(id = "new-index-id", name = "New Saga", lastAddedAtMillis = 2_100L),
+                    SeriesSummary(id = "old-index-id", name = "Old Saga", lastAddedAtMillis = 1_000L)
+                ),
+                books = oldSeriesBooks + newSeriesBooks,
+                limit = Int.MAX_VALUE
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("new-series", "old-series"),
+            homeSeriesSummaries(oldSeriesBooks + newSeriesBooks, useUpdatedAt = false).map { it.id }
+        )
+    }
+
+    @Test
     fun `recently read includes read and skimmed states only`() {
         val read = seriesBook("book-read", index = 1.0, status = BookReadStatus.READ, isRead = true)
             .copy(lastReadAtMillis = 300L)
