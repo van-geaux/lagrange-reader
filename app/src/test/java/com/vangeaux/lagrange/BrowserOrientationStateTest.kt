@@ -42,6 +42,31 @@ class BrowserOrientationStateTest {
     )
 
     @Test
+    fun `back from peer root destinations returns to Home while Home and nested states fall through`() {
+        BrowserDestination.entries
+            .filter { destination ->
+                destination !in setOf(
+                    BrowserDestination.HOME,
+                    BrowserDestination.SMART_SCOPES,
+                    BrowserDestination.CURRENTLY_READING,
+                    BrowserDestination.ON_DECK,
+                    BrowserDestination.WANT_TO_READ,
+                    BrowserDestination.RECENTLY_ADDED_BOOKS,
+                    BrowserDestination.RECENTLY_ADDED_SERIES,
+                    BrowserDestination.RECENTLY_UPDATED_SERIES,
+                    BrowserDestination.RECENTLY_READ
+                )
+            }
+            .forEach { destination ->
+                assertEquals(BrowserDestination.HOME, browserRootBackDestination(destination))
+            }
+
+        assertNull(browserRootBackDestination(BrowserDestination.HOME))
+        assertNull(browserRootBackDestination(BrowserDestination.SMART_SCOPES))
+        assertNull(browserRootBackDestination(BrowserDestination.RECENTLY_ADDED_BOOKS))
+    }
+
+    @Test
     fun `selection identity distinguishes files for the same book`() {
         val epub = book("lib-1", "book-1", "file-epub", "EPUB")
         val pdf = book("lib-1", "book-1", "file-pdf", "PDF")

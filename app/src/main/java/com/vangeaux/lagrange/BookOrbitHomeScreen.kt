@@ -259,6 +259,27 @@ private fun BrowserDestination.toHomeSection(): HomeSection? = when (this) {
     else -> null
 }
 
+internal fun browserRootBackDestination(destination: BrowserDestination): BrowserDestination? = when (destination) {
+    BrowserDestination.HOME,
+    BrowserDestination.SMART_SCOPES,
+    BrowserDestination.CURRENTLY_READING,
+    BrowserDestination.ON_DECK,
+    BrowserDestination.WANT_TO_READ,
+    BrowserDestination.RECENTLY_ADDED_BOOKS,
+    BrowserDestination.RECENTLY_ADDED_SERIES,
+    BrowserDestination.RECENTLY_UPDATED_SERIES,
+    BrowserDestination.RECENTLY_READ -> null
+    BrowserDestination.LIBRARY,
+    BrowserDestination.SERIES,
+    BrowserDestination.AUTHORS,
+    BrowserDestination.ANNOTATIONS,
+    BrowserDestination.LOCAL_BOOKS,
+    BrowserDestination.STATISTICS,
+    BrowserDestination.ACHIEVEMENTS,
+    BrowserDestination.OPTIONS,
+    BrowserDestination.ABOUT -> BrowserDestination.HOME
+}
+
 private fun <T> browserRouteProperty(
     value: () -> T,
     update: (T) -> Unit
@@ -1167,7 +1188,7 @@ internal fun NativeLibraryBrowserScreen(
         showChangeServerEditor = true
     }
 
-    BackHandler(enabled = destination == BrowserDestination.SMART_SCOPES ||
+    BackHandler(enabled = showLibraryPicker || browserRootBackDestination(destination) != null || destination == BrowserDestination.SMART_SCOPES ||
         destination.toHomeSection() != null || destination in setOf(
             BrowserDestination.CURRENTLY_READING,
             BrowserDestination.ON_DECK,
@@ -1176,6 +1197,8 @@ internal fun NativeLibraryBrowserScreen(
         if (isSearchOpen) {
             isSearchOpen = false
             query = ""
+        } else if (showLibraryPicker) {
+            showLibraryPicker = false
         } else if (activeBookGenre != null) {
             activeBookGenre = null
             selectedBook = genreSourceBook
@@ -1197,6 +1220,8 @@ internal fun NativeLibraryBrowserScreen(
         } else if (selectedAuthor != null) {
             selectedAuthor = null
             destination = BrowserDestination.AUTHORS
+        } else if (browserRootBackDestination(destination) != null) {
+            destination = BrowserDestination.HOME
         } else {
             selectedSeriesKey = null
             destination = detailReturnDestination
