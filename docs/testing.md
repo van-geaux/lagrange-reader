@@ -129,6 +129,7 @@ When the affected scope requires it, verify:
 - audiobook compact-player restoration, seeking, chapters, and speed;
 - audiobook full-player overlay above the retained browser route: minimize restores the exact browser location, Close removes the player without implicit navigation, and metadata navigation is explicit;
 - audiobook full-player Chapter/Speed/Sleep visibility and grouped responsive sizing in both portrait and landscape, including readable landscape touch targets;
+- audiobook full-player theme adherence in both portrait and landscape: validate Light, Follow system/light, and at least one dark theme while the player is preparing and open, confirming the player surfaces, chapter sheet, session-history dialog, seek labels, and inactive tracks follow the selected app theme;
 - the shared compact/full chapter `ModalBottomSheet`, active-chapter highlighting, seek-on-selection, Android navigation-bar containment, centered `Book progress`/`Chapter progress` labels, and overflowing chapter-title marquee scrolling;
 - audiobook session history in both Book Detail and the full player: the `Session history` header, `Clear`, and `Close` remain fixed while the body scrolls; the `Local listening history` and `Server reading history` sections are independently collapsible and start expanded; local rows still seek to their exact positions and server rows remain read-only; collapsed sections retain their headers; and the server loading/error/unsupported/empty states remain non-blocking;
 - cover viewer from Book Detail, the audiobook compact-player cover, and the audiobook full-player cover in portrait and landscape; rotate while open and verify the cover remains centered relative to the whole screen, preserves aspect ratio, and fits fully inside the landscape viewport;
@@ -153,6 +154,12 @@ When the affected scope requires it, verify:
 - the reader preference store accepts legacy flat profiles and preserves valid profiles when another stored profile is malformed; migration from the retired `com.bookorbit.android` package is intentionally out of scope;
 - server-missing versus locally deleted state;
 - large text, accessibility, orientation, offline, and narrow-width behavior.
+
+Focused JVM verification for the full-player theme regression:
+
+```text
+./gradlew testDebugUnitTest --tests com.vangeaux.lagrange.AudiobookFullPlayerThemeTest
+```
 
 The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 

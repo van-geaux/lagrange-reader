@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -104,6 +105,20 @@ private fun fullAudioSnapshot(session: ReadiumAudioPlaybackService.Session): Ful
         speed = session.player.playbackParameters.speed
     )
 
+internal data class FullPlayerPalette(
+    val background: Color,
+    val content: Color,
+    val secondaryContent: Color,
+    val inactiveTrack: Color
+)
+
+internal fun fullPlayerPalette(colorScheme: ColorScheme): FullPlayerPalette = FullPlayerPalette(
+    background = colorScheme.background,
+    content = colorScheme.onBackground,
+    secondaryContent = colorScheme.onSurfaceVariant,
+    inactiveTrack = colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
+)
+
 internal fun audiobookChapterBounds(
     chapters: List<AudiobookChapter>,
     positionMs: Long,
@@ -135,6 +150,7 @@ internal fun ReadiumFullAudioPlayer(
     loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult
 ) {
     val playerLocked by controller.playerLocked.collectAsState()
+    val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     val playerScope = rememberCoroutineScope()
     val closePlayer = {
         playerScope.launch {
@@ -148,9 +164,13 @@ internal fun ReadiumFullAudioPlayer(
     }
     val current = session
     if (current == null) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF242222)) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = palette.background,
+            contentColor = palette.content
+        ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text("Preparing audiobook player…", color = Color.White)
+                Text("Preparing audiobook player…")
             }
         }
         return
@@ -234,7 +254,11 @@ internal fun ReadiumFullAudioPlayer(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF242222), contentColor = Color.White) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = palette.background,
+        contentColor = palette.content
+    ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val groupScale = fullPlayerGroupScale(maxHeight.value, landscape = false)
             val contentPadding = (24f * groupScale).coerceAtLeast(16f).dp
@@ -346,7 +370,7 @@ internal fun ReadiumFullAudioPlayer(
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * groupScale
                 ),
-                color = Color.White.copy(alpha = 0.65f),
+                color = palette.secondaryContent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
@@ -359,7 +383,7 @@ internal fun ReadiumFullAudioPlayer(
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontSize = MaterialTheme.typography.titleMedium.fontSize * groupScale
                 ),
-                color = Color.White.copy(alpha = 0.82f),
+                color = palette.secondaryContent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
@@ -524,7 +548,7 @@ internal fun ReadiumFullAudioPlayer(
             if (sleepTimer.option != AudioSleepTimerOption.OFF) {
                 Text(
                     text = "Sleep timer: ${sleepTimer.option.label} · ${sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()}",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = palette.secondaryContent,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -608,14 +632,15 @@ private fun FullPlayerSessionHistoryDialog(
     onClearClick: () -> Unit,
     onCloseClick: () -> Unit
 ) {
+    val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     Dialog(
         onDismissRequest = onCloseClick,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color(0xFF242222),
-            contentColor = Color.White
+            color = palette.background,
+            contentColor = palette.content
         ) {
             AudiobookSessionHistory(
                 bookTitle = bookTitle,
@@ -643,6 +668,7 @@ internal fun FullPlayerChapterListSheet(
     onChapterSelected: (AudiobookChapter) -> Unit,
     onClose: () -> Unit
 ) {
+    val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onClose,
@@ -651,8 +677,8 @@ internal fun FullPlayerChapterListSheet(
             .fillMaxHeight()
             .testTag("audiobook-chapter-sheet"),
         shape = RectangleShape,
-        containerColor = Color(0xFF242222),
-        contentColor = Color.White,
+        containerColor = palette.background,
+        contentColor = palette.content,
         dragHandle = null
     ) {
         Column(
@@ -673,8 +699,7 @@ internal fun FullPlayerChapterListSheet(
                 Text(
                     text = "Chapters",
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
             LazyColumn(
@@ -754,6 +779,7 @@ private fun FullPlayerLandscape(
     loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult
 ) {
     val playerScope = rememberCoroutineScope()
+    val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     val closePlayer = {
         playerScope.launch {
             controller.close()
@@ -798,8 +824,8 @@ private fun FullPlayerLandscape(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF242222),
-        contentColor = Color.White
+        color = palette.background,
+        contentColor = palette.content
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val groupScale = fullPlayerGroupScale(maxHeight.value, landscape = true)
@@ -909,7 +935,7 @@ private fun FullPlayerLandscape(
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * groupScale
                     ),
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = palette.secondaryContent,
                     maxLines = 1,
                     textAlign = TextAlign.Center
                 )
@@ -921,7 +947,7 @@ private fun FullPlayerLandscape(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = MaterialTheme.typography.titleMedium.fontSize * groupScale
                     ),
-                    color = Color.White.copy(alpha = 0.82f),
+                    color = palette.secondaryContent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
@@ -1058,7 +1084,7 @@ private fun FullPlayerLandscape(
                 if (sleepTimer.option != AudioSleepTimerOption.OFF) {
                     Text(
                         text = "Sleep timer: ${sleepTimer.option.label} · ${sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()}",
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = palette.secondaryContent,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
@@ -1180,6 +1206,7 @@ private fun AudioSeekBar(
     description: String,
     enabled: Boolean = true
 ) {
+    val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     Column(modifier = Modifier.fillMaxWidth().semantics { contentDescription = description }) {
         val timestampStyle = MaterialTheme.typography.labelMedium.copy(
             fontSize = (MaterialTheme.typography.labelMedium.fontSize.value * layoutScale).coerceAtLeast(10f).sp
@@ -1197,7 +1224,7 @@ private fun AudioSeekBar(
                 label,
                 modifier = Modifier.align(Alignment.Center),
                 style = progressLabelStyle,
-                color = Color.White.copy(alpha = 0.65f)
+                color = palette.secondaryContent
             )
             Text(
                 trailing,
@@ -1213,7 +1240,7 @@ private fun AudioSeekBar(
             enabled = enabled,
             colors = SliderDefaults.colors(
                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = Color.White.copy(alpha = 0.42f),
+                inactiveTrackColor = palette.inactiveTrack,
                 thumbColor = MaterialTheme.colorScheme.primary
             ),
             modifier = Modifier.fillMaxWidth().height((32f * layoutScale).coerceAtLeast(24f).dp)
