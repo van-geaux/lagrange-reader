@@ -1185,6 +1185,7 @@ class BookOrbitPayloadParserTest {
                     "authors": [{"name": "Ada Reader"}],
                     "bookCount": 8,
                     "readCount": 3,
+                    "lastAddedAt": 1720000000000,
                     "cover": {"url": "/media/series-1.jpg"}
                   }],
                   "total": 1,
@@ -1194,6 +1195,7 @@ class BookOrbitPayloadParserTest {
             """.trimIndent(),
             serverBase = "https://example.test"
         )
+        assertEquals(1720000000000L, series.items.single().lastAddedAtMillis)
         val authors = BookOrbitPayloadParser.parseAuthorCatalogPage(
             payload = """
                 {

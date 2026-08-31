@@ -219,7 +219,7 @@ Endpoint:
 GET /api/v1/series?q=&page=0&size=100&sort=name&order=asc
 ```
 
-The Series filter sheet uses BookOrbit's `completionStatus`, `author`, `libraryId`, `genre`, `sort`, and `order` query parameters. A Series-detail genre chip opens a fully paginated catalog with `genre=<value>`. Completion values are `not_started`, `in_progress`, and `complete`; catalog sort values are `name`, `bookCount`, `lastAddedAt`, and `readProgress`. Genre query compatibility and exact result scope still require validation against the target server.
+- The Series filter sheet uses BookOrbit's `completionStatus`, `author`, `libraryId`, `genre`, `sort`, and `order` query parameters. A Series-detail genre chip opens a fully paginated catalog with `genre=<value>`. Completion values are `not_started`, `in_progress`, and `complete`; catalog sort values are `name`, `bookCount`, `lastAddedAt`, and `readProgress`. Home's `Recently added series` preview and `See all` request the complete catalog for server-backed series records, then apply client-side earliest-book `addedAtMillis` ordering; the preview applies its eight-card cap while `See all` retains the complete result set.
 
 ### Book cover
 

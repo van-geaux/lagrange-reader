@@ -29,7 +29,7 @@ When asking the user to perform manual testing:
 
 ### Home and Recommended shelf previews (issue #116)
 
-On Home and Library → Recommended, verify Currently reading, On deck, Want to read, Recently added books, Recently added series, Recently updated series, and Recently read books show no more than eight preview cards. Each visible shelf exposes `See all`, including when it has eight or fewer results. Recent book and series destinations request sorted server pages; verify recent book destinations expose additional pages through `Load more`, preserve the originating Home or selected-library context, and return to that origin with Back.
+On Home and Library → Recommended, verify Currently reading, On deck, Want to read, Recently added books, Recently added series, Recently updated series, and Recently read books show no more than eight preview cards. For Home's `Recently added series`, verify the preview and its `See all` destination load complete `/api/v1/series` records for identity/name/cover, order by the earliest local book `addedAtMillis` per series, exclude promotion of an old series when a later volume is added, and retain the eight-card preview cap while `See all` shows the complete result. Verify that request/offline fallback still renders the existing book-derived grouping when the complete Series request is unavailable. Recent book destinations retain their sorted-page/`Load more` behavior and preserve the originating Home or selected-library context when returning with Back.
 
 ### Download lifecycle
 

@@ -1894,6 +1894,7 @@ internal fun NativeLibraryBrowserScreen(
                     state = state,
                     serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
                     recentBooksPageLoader = recentBooksPageLoader,
+                    seriesCatalogLoader = seriesCatalogLoader,
                     modifier = Modifier.padding(padding),
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
@@ -1931,6 +1932,7 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     localBooksLoader = localBooksLoader,
+                    seriesCatalogLoader = seriesCatalogLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
                         detailReturnDestination = BrowserDestination.HOME
@@ -4398,6 +4400,7 @@ private fun RefreshableHomeFeed(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     localBooksLoader: suspend () -> List<BookSummary>,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -4431,6 +4434,7 @@ private fun RefreshableHomeFeed(
             downloadedLocalBooks = downloadedLocalBooks,
             modifier = Modifier.fillMaxSize(),
             coverLoader = coverLoader,
+            seriesCatalogLoader = seriesCatalogLoader,
             onBookSelected = onBookSelected,
             onSeriesSelected = onSeriesSelected,
             onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
@@ -4454,6 +4458,7 @@ private fun HomeFeed(
     downloadedLocalBooks: List<BookSummary>? = null,
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
+    seriesCatalogLoader: (suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage)? = null,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
@@ -4479,7 +4484,31 @@ private fun HomeFeed(
         compareByDescending<BookSummary> { it.addedAtMillis != null }
             .thenByDescending { it.addedAtMillis ?: 0L }
     )
-    val recentSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = false, limit = null) }
+    val fallbackRecentSeries = remember(books) { homeSeriesSummaries(books, useUpdatedAt = false) }
+    val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
+        initialValue = null,
+        books,
+        seriesCatalogLoader
+    ) {
+        value = seriesCatalogLoader?.let { loader ->
+            runCatching {
+                loadCompleteSeriesCatalog { page ->
+                    loader(
+                        SeriesCatalogFilter(
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING
+                        ),
+                        page
+                    )
+                }.items
+            }.getOrNull()
+        }
+    }
+    val recentSeriesAll = remember(fallbackRecentSeries, authoritativeRecentSeries) {
+        (authoritativeRecentSeries ?: fallbackRecentSeries)
+            .let { series -> homeSeriesPreview(series, books = books, limit = Int.MAX_VALUE) }
+            .map { series -> series.name to series.asShelfBook() }
+    }
     val updatedSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = true, limit = null) }
     val recentlyReadAll = remember(books) { recentlyReadBooks(books, limit = null) }
     val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
@@ -5317,12 +5346,30 @@ private fun HomeSeriesSectionScreen(
     state: BrowserState,
     serverWide: Boolean,
     recentBooksPageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     modifier: Modifier,
     imageLoader: suspend (String) -> ByteArray?,
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
     var sourceBooks by remember(books, section) { mutableStateOf(books) }
+    var authoritativeSeries by remember(books, section, serverWide) {
+        mutableStateOf<List<SeriesSummary>?>(null)
+    }
     LaunchedEffect(books, section) {
+        if (serverWide && section == HomeSection.RECENTLY_ADDED_SERIES) {
+            authoritativeSeries = runCatching {
+                loadCompleteSeriesCatalog { page ->
+                    seriesCatalogLoader(
+                        SeriesCatalogFilter(
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING
+                        ),
+                        page
+                    )
+                }.items
+            }.getOrNull()
+            return@LaunchedEffect
+        }
         val libraryIds = if (serverWide) {
             state.libraries.map { it.id }
         } else {
@@ -5332,11 +5379,20 @@ private fun HomeSeriesSectionScreen(
             runCatching { recentBooksPageLoader(libraryId, section, 0).items }.getOrDefault(emptyList())
         }.distinctBy { it.id to it.fileId }
     }
-    val series = remember(sourceBooks, section) {
+    val fallbackSeries = remember(sourceBooks, section) {
         homeSeriesSummaries(
             books = sourceBooks,
             useUpdatedAt = section == HomeSection.RECENTLY_UPDATED_SERIES
         )
+    }
+    val series = if (
+        authoritativeSeries != null &&
+        serverWide &&
+        section == HomeSection.RECENTLY_ADDED_SERIES
+    ) {
+        homeSeriesPreview(authoritativeSeries!!, books = books, limit = Int.MAX_VALUE)
+    } else {
+        authoritativeSeries ?: fallbackSeries
     }
     val gridState = rememberLazyGridState()
     LazyVerticalGrid(
@@ -9053,20 +9109,74 @@ internal fun homeSeriesSummaries(
     books: List<BookSummary>,
     useUpdatedAt: Boolean
 ): List<SeriesSummary> {
-    return recentSeries(books, useUpdatedAt = useUpdatedAt, limit = null).map { (name, representative) ->
-        val key = representative.seriesId ?: name
-        val members = books.filter { (it.seriesId ?: it.seriesName) == key }
+    val grouped = books
+        .filter { !it.seriesName.isNullOrBlank() }
+        .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
+    return grouped.mapNotNull { (seriesKey, members) ->
+        val representative = if (useUpdatedAt) {
+            members.maxByOrNull { it.updatedAtMillis ?: 0L }
+        } else {
+            members.minByOrNull { it.addedAtMillis ?: Long.MAX_VALUE }
+        } ?: return@mapNotNull null
+        val timestamp = if (useUpdatedAt) representative.updatedAtMillis else representative.addedAtMillis
+        if (timestamp == null) return@mapNotNull null
+        val name = representative.seriesName.orEmpty()
         SeriesSummary(
-            id = key,
+            id = seriesKey,
             name = name,
             authors = members.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct(),
             bookCount = members.size,
             readCount = members.count { it.isRead || it.readStatus in setOf(BookReadStatus.READ, BookReadStatus.SKIMMED) },
             coverUrl = representative.coverUrl,
-            lastAddedAtMillis = representative.addedAtMillis
+            lastAddedAtMillis = timestamp
         )
-    }
+    }.sortedByDescending { it.lastAddedAtMillis ?: 0L }
 }
+
+internal fun homeSeriesPreview(
+    series: List<SeriesSummary>,
+    books: List<BookSummary>? = null,
+    limit: Int = HOME_PREVIEW_LIMIT
+): List<SeriesSummary> {
+    val uniqueSeries = series.groupBy { it.id }
+        .values
+        .mapNotNull { entries -> entries.maxByOrNull { it.lastAddedAtMillis ?: 0L } }
+    val firstAddedBySeries: Map<String, Long> = books?.let { sourceBooks ->
+        buildList {
+            sourceBooks.forEach { book ->
+                val timestamp = book.addedAtMillis ?: return@forEach
+                book.seriesId?.takeIf(String::isNotBlank)?.let { add(it to timestamp) }
+                book.seriesName?.trim()?.takeIf(String::isNotBlank)?.let { add(it to timestamp) }
+            }
+        }
+            .groupBy({ (key, _) -> key }, { (_, timestamp) -> timestamp })
+            .mapValues { (_, timestamps) -> timestamps.min() }
+    } ?: emptyMap()
+    return uniqueSeries
+        .mapNotNull { summary ->
+            val timestamp = if (books == null) {
+                summary.lastAddedAtMillis
+            } else {
+                firstAddedBySeries[summary.id]
+                    ?: firstAddedBySeries[summary.name.trim()]
+            }
+            timestamp?.let { timestamp to summary }
+        }
+        .sortedByDescending { (timestamp, _) -> timestamp }
+        .map { (_, summary) -> summary }
+        .take(limit)
+}
+
+private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
+    libraryId = "series",
+    id = id,
+    fileId = null,
+    title = name,
+    coverUrl = coverUrl,
+    seriesId = id,
+    seriesName = name,
+    author = authors.joinToString().takeIf { it.isNotBlank() }
+)
 
 internal fun recentSeries(
     books: List<BookSummary>,

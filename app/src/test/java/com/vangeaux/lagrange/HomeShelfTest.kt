@@ -12,6 +12,11 @@ class HomeShelfTest {
         assertEquals(BookSortOption.UPDATED, HomeSection.RECENTLY_UPDATED_SERIES.recentBooksFilter().sort)
         assertEquals(BookSortOption.LAST_READ, HomeSection.RECENTLY_READ.recentBooksFilter().sort)
         assertEquals(SortDirection.DESCENDING, HomeSection.RECENTLY_READ.recentBooksFilter().direction)
+        assertEquals(SeriesSortOption.LAST_ADDED, SeriesCatalogFilter(sort = SeriesSortOption.LAST_ADDED).sort)
+        assertEquals(SortDirection.DESCENDING, SeriesCatalogFilter(
+            sort = SeriesSortOption.LAST_ADDED,
+            direction = SortDirection.DESCENDING
+        ).direction)
     }
     @Test
     fun `currently reading includes only reading and rereading states`() {
@@ -116,6 +121,79 @@ class HomeShelfTest {
         assertEquals(8, recentSeries(books, useUpdatedAt = false).size)
         assertEquals(10, recentSeries(books, useUpdatedAt = false, limit = null).size)
         assertEquals(10, homeSeriesSummaries(books, useUpdatedAt = true).size)
+    }
+
+    @Test
+    fun `authoritative home series preview uses series recency and identity`() {
+        val newestBookIsOlderSeries = SeriesSummary(
+            id = "series-a",
+            name = "Series A",
+            coverUrl = "https://example.test/a.jpg",
+            lastAddedAtMillis = 100L
+        )
+        val newestSeries = SeriesSummary(
+            id = "series-b",
+            name = "Series B",
+            coverUrl = "https://example.test/b.jpg",
+            lastAddedAtMillis = 200L
+        )
+        val duplicate = newestSeries.copy(name = "Duplicate label", lastAddedAtMillis = 50L)
+
+        assertEquals(
+            listOf("series-b", "series-a"),
+            homeSeriesPreview(listOf(newestBookIsOlderSeries, duplicate, newestSeries)).map { it.id }
+        )
+        assertEquals("Series B", homeSeriesPreview(listOf(duplicate, newestSeries)).first().name)
+        assertEquals("https://example.test/b.jpg", homeSeriesPreview(listOf(newestSeries)).first().coverUrl)
+    }
+
+    @Test
+    fun `authoritative home series preview keeps complete results beyond eight`() {
+        val series = (1..10).map { index ->
+            SeriesSummary(id = "series-$index", name = "Series $index", lastAddedAtMillis = index.toLong())
+        }
+
+        assertEquals(8, homeSeriesPreview(series).size)
+        assertEquals(10, homeSeriesPreview(series, limit = Int.MAX_VALUE).size)
+        assertEquals(listOf("series-10", "series-9"), homeSeriesPreview(series).take(2).map { it.id })
+    }
+
+    @Test
+    fun `home recently added series uses first book addition rather than latest book addition`() {
+        val oldSeriesBooks = listOf(
+            seriesBook("old-1", 1.0, addedAt = 100L),
+            seriesBook("old-2", 2.0, addedAt = 1_000L)
+        ).map { it.copy(seriesId = "old-series", seriesName = "Old Saga") }
+        val newSeriesBooks = listOf(
+            seriesBook("new-1", 1.0, addedAt = 2_000L),
+            seriesBook("new-2", 2.0, addedAt = 2_100L)
+        ).map { it.copy(seriesId = "new-series", seriesName = "New Saga") }
+        val serverSeries = listOf(
+            SeriesSummary(id = "old-series", name = "Old Saga", lastAddedAtMillis = 1_000L),
+            SeriesSummary(id = "new-series", name = "New Saga", lastAddedAtMillis = 2_100L)
+        )
+
+        assertEquals(
+            listOf("new-series", "old-series"),
+            homeSeriesPreview(serverSeries, books = oldSeriesBooks + newSeriesBooks, limit = Int.MAX_VALUE)
+                .map { it.id }
+        )
+
+        assertEquals(
+            listOf("new-index-id", "old-index-id"),
+            homeSeriesPreview(
+                listOf(
+                    SeriesSummary(id = "new-index-id", name = "New Saga", lastAddedAtMillis = 2_100L),
+                    SeriesSummary(id = "old-index-id", name = "Old Saga", lastAddedAtMillis = 1_000L)
+                ),
+                books = oldSeriesBooks + newSeriesBooks,
+                limit = Int.MAX_VALUE
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("new-series", "old-series"),
+            homeSeriesSummaries(oldSeriesBooks + newSeriesBooks, useUpdatedAt = false).map { it.id }
+        )
     }
 
     @Test

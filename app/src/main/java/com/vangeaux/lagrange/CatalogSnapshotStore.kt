@@ -11,12 +11,13 @@ class CatalogSnapshotStore(context: Context) {
     private val mutex = Mutex()
     private val file = File(context.filesDir, "catalog_snapshots.json")
 
-    suspend fun saveSeries(serverUrl: String, query: String?, page: Int, payload: String) = mutex.withLock {
-        savePage(serverUrl, "series", pageKey(query, page), payload)
+    suspend fun saveSeries(serverUrl: String, query: String?, filterKey: String = "", page: Int, payload: String) = mutex.withLock {
+        savePage(serverUrl, "series", catalogFilterPageKey(query, filterKey, page), payload)
     }
 
-    suspend fun readSeries(serverUrl: String, query: String?, page: Int): String? = mutex.withLock {
-        readPage(serverUrl, "series", pageKey(query, page))
+    suspend fun readSeries(serverUrl: String, query: String?, filterKey: String = "", page: Int): String? = mutex.withLock {
+        readPage(serverUrl, "series", catalogFilterPageKey(query, filterKey, page))
+            ?: filterKey.takeIf { it.isBlank() }?.let { readPage(serverUrl, "series", pageKey(query, page)) }
     }
 
     suspend fun saveScopedSeries(serverUrl: String, scopeId: Long, filterKey: String, page: Int, payload: String) = mutex.withLock {
@@ -95,6 +96,9 @@ class CatalogSnapshotStore(context: Context) {
     }
 
     private fun pageKey(scope: String?, page: Int): String = "${scope.orEmpty()}|${page.coerceAtLeast(0)}"
+
+    private fun catalogFilterPageKey(scope: String?, filterKey: String, page: Int): String =
+        "${scope.orEmpty()}|$filterKey|${page.coerceAtLeast(0)}"
 
     private companion object {
         const val SNAPSHOT_VERSION = 1
