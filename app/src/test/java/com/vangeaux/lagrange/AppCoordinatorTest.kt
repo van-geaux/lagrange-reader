@@ -186,7 +186,24 @@ class AppCoordinatorTest {
     }
 
     @Test
-    fun `download transfer rows prefer restored attempt metadata for unknown active files`() {
+    fun `active download count includes only active transfer rows`() {
+        val active = DownloadTransferRow(book, "file-1", isActive = true, isFailed = false, progress = 0.5f)
+        val secondActive = DownloadTransferRow(
+            book.copy(id = "book-2", fileId = "file-2"),
+            "file-2",
+            isActive = true,
+            isFailed = false,
+            progress = null
+        )
+        val failed = DownloadTransferRow(book, "file-3", isActive = false, isFailed = true, progress = null)
+
+        assertEquals(0, activeDownloadCount(emptyList()))
+        assertEquals(1, activeDownloadCount(listOf(active)))
+        assertEquals(2, activeDownloadCount(listOf(active, secondActive, failed)))
+    }
+
+    @Test
+    fun `download transfer rows prefer restored attempt metadata over unknown active files`() {
         val state = BrowserState(
             serverUrl = serverUrl,
             libraries = listOf(library),

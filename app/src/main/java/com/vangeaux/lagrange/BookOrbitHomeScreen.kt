@@ -6163,6 +6163,8 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
     }
 }
 
+internal fun activeDownloadCount(rows: List<DownloadTransferRow>): Int = rows.count { it.isActive }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadTransfersSection(
@@ -6173,6 +6175,7 @@ private fun DownloadTransfersSection(
     onClearAllFailedDownloads: () -> Unit
 ) {
     val failedRows = rows.filter { it.isFailed && !it.isActive }
+    val activeCount = activeDownloadCount(rows)
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     BoxWithConstraints(
         modifier = Modifier
@@ -6187,7 +6190,20 @@ private fun DownloadTransfersSection(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                    if (activeCount > 0) {
+                        Text(
+                            text = "$activeCount downloading",
+                            modifier = Modifier.testTag("local-downloads-active-count"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (failedRows.isNotEmpty()) {
                         TextButton(onClick = onClearAllFailedDownloads) { Text("Clear all") }
