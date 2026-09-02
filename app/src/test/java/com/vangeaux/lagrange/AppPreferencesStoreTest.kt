@@ -22,6 +22,14 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun audiobookSeekConfirmationDefaultsToEnabledAndRoundTrips() {
+        assertEquals(true, AppPreferences().confirmAudiobookSeek)
+        assertEquals(false, audiobookSeekConfirmationFromStorage(false))
+        assertEquals(true, audiobookSeekConfirmationFromStorage(true))
+        assertEquals(true, audiobookSeekConfirmationFromStorage(null))
+    }
+
+    @Test
     fun `stored app theme values round trip and invalid values follow system`() {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))

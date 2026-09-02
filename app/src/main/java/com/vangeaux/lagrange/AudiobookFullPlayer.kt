@@ -73,6 +73,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,6 +82,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -88,6 +91,7 @@ import android.content.res.Configuration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 private data class FullAudioSnapshot(
@@ -147,7 +151,9 @@ internal fun ReadiumFullAudioPlayer(
     loadSessionHistory: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     clearSessionHistory: (BookSummary) -> Unit,
     loadServerReadingSessions: suspend (String) -> BookReadingSessionsResult,
-    loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult
+    loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult,
+    confirmAudiobookSeek: Boolean = true,
+    onConfirmAudiobookSeekChange: (Boolean) -> Unit = {}
 ) {
     val playerLocked by controller.playerLocked.collectAsState()
     val palette = fullPlayerPalette(MaterialTheme.colorScheme)
@@ -215,7 +221,9 @@ internal fun ReadiumFullAudioPlayer(
             loadSessionHistory = loadSessionHistory,
             clearSessionHistory = clearSessionHistory,
             loadServerReadingSessions = loadServerReadingSessions,
-            loadServerReadingAttempts = loadServerReadingAttempts
+            loadServerReadingAttempts = loadServerReadingAttempts,
+            confirmAudiobookSeek = confirmAudiobookSeek,
+            onConfirmAudiobookSeekChange = onConfirmAudiobookSeekChange
         )
         return
     }
@@ -240,6 +248,21 @@ internal fun ReadiumFullAudioPlayer(
     var chapterSeekPosition by remember { mutableFloatStateOf(chapterPositionMs.toFloat()) }
     var isSeekingOverall by remember { mutableStateOf(false) }
     var isSeekingChapter by remember { mutableStateOf(false) }
+    var confirmSeekEnabled by remember { mutableStateOf(confirmAudiobookSeek) }
+    var pendingSeek by remember { mutableStateOf<AudiobookSeekTransaction?>(null) }
+    var confirmationAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+    fun requestSeek(targetPositionMs: Long) {
+        val previousPositionMs = current.absolutePositionMs()
+        current.seekToAbsolutePosition(targetPositionMs)
+        pendingSeek = audiobookSeekTransactionOrNull(
+            previousPositionMs,
+            targetPositionMs,
+            confirmSeekEnabled
+        )
+    }
+    LaunchedEffect(confirmAudiobookSeek) {
+        confirmSeekEnabled = confirmAudiobookSeek
+    }
     LaunchedEffect(playback.positionMs, isSeekingOverall, isSeekingChapter) {
         if (!isSeekingOverall) overallSeekPosition = playback.positionMs.toFloat()
         if (!isSeekingChapter) chapterSeekPosition = chapterPositionMs.toFloat()
@@ -336,10 +359,32 @@ internal fun ReadiumFullAudioPlayer(
                     coverLoader = controller::loadCover,
                     modifier = Modifier
                         .width(coverHeight * current.book.coverAspectRatio.widthToHeight)
-                        .height(coverHeight),
+                        .height(coverHeight)
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInWindow()
+                            confirmationAnchorBounds = IntRect(
+                                bounds.left.roundToInt(), bounds.top.roundToInt(),
+                                bounds.right.roundToInt(), bounds.bottom.roundToInt()
+                            )
+                        },
                     coverHeight = null,
                     onClick = { showCoverViewer = true }
                 )
+                pendingSeek?.let { transaction ->
+                    AudiobookSeekConfirmationOverlay(
+                        onKeepPosition = { pendingSeek = null },
+                        onReturnToPrevious = {
+                            current.seekToAbsolutePosition(transaction.previousPositionMs)
+                            pendingSeek = null
+                        },
+                        onDontShowAgainChange = { dontShowAgain ->
+                            confirmSeekEnabled = !dontShowAgain
+                            onConfirmAudiobookSeekChange(!dontShowAgain)
+                        },
+                        anchorBounds = confirmationAnchorBounds,
+                        placement = AudiobookSeekConfirmationPlacement.OVER_ANCHOR
+                    )
+                }
             }
             Spacer(Modifier.height(sectionGap))
             Text(
@@ -393,7 +438,7 @@ internal fun ReadiumFullAudioPlayer(
                 positionMs = overallSeekPosition,
                 durationMs = playback.durationMs,
                 onSeeking = { isSeekingOverall = true; overallSeekPosition = it },
-                onSeekFinished = { current.seekToAbsolutePosition(overallSeekPosition.toLong()); isSeekingOverall = false },
+                onSeekFinished = { requestSeek(overallSeekPosition.toLong()); isSeekingOverall = false },
                 leading = formatPlaybackTime(overallSeekPosition.toLong()),
                 trailing = "−${formatPlaybackTime((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L))}",
                 label = "Book progress",
@@ -405,7 +450,7 @@ internal fun ReadiumFullAudioPlayer(
                 durationMs = (chapterEndMs - chapterStartMs).coerceAtLeast(1L),
                 onSeeking = { isSeekingChapter = true; chapterSeekPosition = it },
                 onSeekFinished = {
-                    current.seekToAbsolutePosition(chapterStartMs + chapterSeekPosition.toLong())
+                    requestSeek(chapterStartMs + chapterSeekPosition.toLong())
                     isSeekingChapter = false
                 },
                 leading = formatPlaybackTime(chapterSeekPosition.toLong()),
@@ -776,7 +821,9 @@ private fun FullPlayerLandscape(
     loadSessionHistory: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     clearSessionHistory: (BookSummary) -> Unit,
     loadServerReadingSessions: suspend (String) -> BookReadingSessionsResult,
-    loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult
+    loadServerReadingAttempts: suspend (String) -> ReadingAttemptsResult,
+    confirmAudiobookSeek: Boolean,
+    onConfirmAudiobookSeekChange: (Boolean) -> Unit
 ) {
     val playerScope = rememberCoroutineScope()
     val palette = fullPlayerPalette(MaterialTheme.colorScheme)
@@ -808,6 +855,21 @@ private fun FullPlayerLandscape(
     var chapterPosition by remember { mutableFloatStateOf(chapterPositionMs.toFloat()) }
     var isSeekingOverall by remember { mutableStateOf(false) }
     var isSeekingChapter by remember { mutableStateOf(false) }
+    var confirmSeekEnabled by remember { mutableStateOf(confirmAudiobookSeek) }
+    var pendingSeek by remember { mutableStateOf<AudiobookSeekTransaction?>(null) }
+    var confirmationAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+    fun requestSeek(targetPositionMs: Long) {
+        val previousPositionMs = current.absolutePositionMs()
+        current.seekToAbsolutePosition(targetPositionMs)
+        pendingSeek = audiobookSeekTransactionOrNull(
+            previousPositionMs,
+            targetPositionMs,
+            confirmSeekEnabled
+        )
+    }
+    LaunchedEffect(confirmAudiobookSeek) {
+        confirmSeekEnabled = confirmAudiobookSeek
+    }
     LaunchedEffect(playback.positionMs, isSeekingOverall, isSeekingChapter) {
         if (!isSeekingOverall) overallPosition = playback.positionMs.toFloat()
         if (!isSeekingChapter) chapterPosition = chapterPositionMs.toFloat()
@@ -860,10 +922,32 @@ private fun FullPlayerLandscape(
                     coverLoader = controller::loadCover,
                     modifier = Modifier
                         .width(coverHeight * current.book.coverAspectRatio.widthToHeight)
-                        .height(coverHeight),
+                        .height(coverHeight)
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInWindow()
+                            confirmationAnchorBounds = IntRect(
+                                bounds.left.roundToInt(), bounds.top.roundToInt(),
+                                bounds.right.roundToInt(), bounds.bottom.roundToInt()
+                            )
+                        },
                     coverHeight = null,
                     onClick = { showCoverViewer = true }
                 )
+                pendingSeek?.let { transaction ->
+                    AudiobookSeekConfirmationOverlay(
+                        onKeepPosition = { pendingSeek = null },
+                        onReturnToPrevious = {
+                            current.seekToAbsolutePosition(transaction.previousPositionMs)
+                            pendingSeek = null
+                        },
+                        onDontShowAgainChange = { dontShowAgain ->
+                            confirmSeekEnabled = !dontShowAgain
+                            onConfirmAudiobookSeekChange(!dontShowAgain)
+                        },
+                        anchorBounds = confirmationAnchorBounds,
+                        placement = AudiobookSeekConfirmationPlacement.OVER_ANCHOR
+                    )
+                }
             }
             Column(
                 modifier = Modifier.weight(0.58f).fillMaxHeight(),
@@ -957,7 +1041,7 @@ private fun FullPlayerLandscape(
                     positionMs = overallPosition,
                     durationMs = playback.durationMs,
                     onSeeking = { isSeekingOverall = true; overallPosition = it },
-                    onSeekFinished = { current.seekToAbsolutePosition(overallPosition.toLong()); isSeekingOverall = false },
+                    onSeekFinished = { requestSeek(overallPosition.toLong()); isSeekingOverall = false },
                     leading = formatPlaybackTime(overallPosition.toLong()),
                     trailing = "−${formatPlaybackTime((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L))}",
                     label = "Book progress",
@@ -969,7 +1053,7 @@ private fun FullPlayerLandscape(
                     durationMs = (chapterEndMs - chapterStartMs).coerceAtLeast(1L),
                     onSeeking = { isSeekingChapter = true; chapterPosition = it },
                     onSeekFinished = {
-                        current.seekToAbsolutePosition(chapterStartMs + chapterPosition.toLong())
+                        requestSeek(chapterStartMs + chapterPosition.toLong())
                         isSeekingChapter = false
                     },
                     leading = formatPlaybackTime(chapterPosition.toLong()),

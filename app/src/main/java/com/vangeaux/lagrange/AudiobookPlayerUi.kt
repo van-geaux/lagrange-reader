@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +49,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -59,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.roundToInt
 
 internal fun shouldShowAudiobookPreviewBanner(launchMode: ReaderLaunchMode): Boolean =
     launchMode == ReaderLaunchMode.PREVIEW
@@ -84,6 +89,8 @@ private fun audioPlayerSnapshot(session: ReadiumAudioPlaybackService.Session): A
 @Composable
 internal fun ReadiumCompactAudioPlayer(
     controller: ReadiumAudioPlaybackController,
+    confirmAudiobookSeek: Boolean = true,
+    onConfirmAudiobookSeekChange: (Boolean) -> Unit = {},
     onClosed: (BookSummary, ReaderLaunchMode) -> Unit = { _, _ -> },
     onCoverClick: (BookSummary) -> Unit = {},
     modifier: Modifier = Modifier
@@ -188,6 +195,12 @@ internal fun ReadiumCompactAudioPlayer(
     var seekPositionMs by remember(current.book.id, current.book.fileId) {
         mutableStateOf(positionMs.toFloat())
     }
+    var confirmSeekEnabled by remember { mutableStateOf(confirmAudiobookSeek) }
+    var pendingSeek by remember { mutableStateOf<AudiobookSeekTransaction?>(null) }
+    var confirmationAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+    LaunchedEffect(confirmAudiobookSeek) {
+        confirmSeekEnabled = confirmAudiobookSeek
+    }
     LaunchedEffect(positionMs, isSeeking) {
         if (!isSeeking) seekPositionMs = positionMs.toFloat()
     }
@@ -197,14 +210,24 @@ internal fun ReadiumCompactAudioPlayer(
         ?.minus(if (isSeeking) seekPositionMs.toLong() else positionMs)
         ?.coerceAtLeast(0L)
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .semantics {
-                contentDescription = "Audiobook player for ${current.book.title}"
-                stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
-            },
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .onGloballyPositioned { coordinates ->
+                    val bounds = coordinates.boundsInWindow()
+                    confirmationAnchorBounds = IntRect(
+                        bounds.left.roundToInt(),
+                        bounds.top.roundToInt(),
+                        bounds.right.roundToInt(),
+                        bounds.bottom.roundToInt()
+                    )
+                }
+                .semantics {
+                    contentDescription = "Audiobook player for ${current.book.title}"
+                    stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
+                },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 8.dp,
@@ -284,7 +307,14 @@ internal fun ReadiumCompactAudioPlayer(
                             seekPositionMs = it
                         },
                         onValueChangeFinished = {
-                            current.seekToAbsolutePosition(seekPositionMs.toLong())
+                            val requestedPositionMs = seekPositionMs.toLong()
+                            val previousPositionMs = current.absolutePositionMs()
+                            current.seekToAbsolutePosition(requestedPositionMs)
+                            pendingSeek = audiobookSeekTransactionOrNull(
+                                previousPositionMs,
+                                requestedPositionMs,
+                                confirmSeekEnabled
+                            )
                             isSeeking = false
                         },
                         valueRange = 0f..(durationMs ?: 1L).toFloat(),
@@ -381,6 +411,22 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                 }
             }
+        }
+        }
+        pendingSeek?.let { transaction ->
+            AudiobookSeekConfirmationOverlay(
+                onKeepPosition = { pendingSeek = null },
+                onReturnToPrevious = {
+                    current.seekToAbsolutePosition(transaction.previousPositionMs)
+                    pendingSeek = null
+                },
+                onDontShowAgainChange = { enabled ->
+                    confirmSeekEnabled = !enabled
+                    onConfirmAudiobookSeekChange(!enabled)
+                },
+                anchorBounds = confirmationAnchorBounds,
+                placement = AudiobookSeekConfirmationPlacement.ABOVE_ANCHOR
+            )
         }
     }
 

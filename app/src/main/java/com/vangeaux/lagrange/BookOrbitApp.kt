@@ -188,6 +188,10 @@ fun BookOrbitApp(
         ) audioPlaybackController?.let { controller ->
             ReadiumCompactAudioPlayer(
                 controller = controller,
+                confirmAudiobookSeek = appPreferences.confirmAudiobookSeek,
+                onConfirmAudiobookSeekChange = { enabled ->
+                    onAppPreferencesChange(appPreferences.copy(confirmAudiobookSeek = enabled))
+                },
                 onClosed = coordinator::onAudioPlaybackClosed,
                 onCoverClick = coordinator::openAudioPlayer,
                 modifier = Modifier
@@ -207,7 +211,11 @@ fun BookOrbitApp(
                 loadSessionHistory = coordinator::loadAudiobookSessionHistory,
                 clearSessionHistory = coordinator::clearAudiobookSessionHistory,
                 loadServerReadingSessions = coordinator::loadBookReadingSessions,
-                loadServerReadingAttempts = coordinator::loadBookReadingAttempts
+                loadServerReadingAttempts = coordinator::loadBookReadingAttempts,
+                confirmAudiobookSeek = appPreferences.confirmAudiobookSeek,
+                onConfirmAudiobookSeekChange = { enabled ->
+                    onAppPreferencesChange(appPreferences.copy(confirmAudiobookSeek = enabled))
+                }
             )
         }
         releaseUpdate?.let { update ->
@@ -366,6 +374,10 @@ private fun BookOrbitDestination(
                 {
                     ReadiumCompactAudioPlayer(
                         controller = controller,
+                        confirmAudiobookSeek = appPreferences.confirmAudiobookSeek,
+                        onConfirmAudiobookSeekChange = { enabled ->
+                            onAppPreferencesChange(appPreferences.copy(confirmAudiobookSeek = enabled))
+                        },
                         onClosed = coordinator::onAudioPlaybackClosed,
                         onCoverClick = coordinator::openAudioPlayer
                     )

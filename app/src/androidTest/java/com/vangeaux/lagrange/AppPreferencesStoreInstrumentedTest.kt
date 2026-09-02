@@ -22,6 +22,7 @@ class AppPreferencesStoreInstrumentedTest {
             cellularDownloadPolicy = CellularDownloadPolicy.ALWAYS,
             backgroundRefreshNetworkPolicy = BackgroundRefreshNetworkPolicy.DISABLED,
             confirmDeleteLocalCopy = false,
+            confirmAudiobookSeek = false,
             seriesGroupingMode = SeriesGroupingMode.FORMAT,
             libraryReaderPreferences = mapOf(
                 "manga" to LibraryReaderPreferences(

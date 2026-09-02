@@ -163,6 +163,14 @@ Focused JVM verification for the full-player theme regression:
 
 The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 
+### Audiobook seek confirmation (issue #129)
+
+On a connected Android device or emulator with a split-file audiobook available, start playback and exercise each seek bar in compact player, full-player portrait, and full-player landscape states. In each state, test both the overall book bar and the chapter bar: drag/tap to a new position and verify the seek applies immediately, playback continues, and the in-place confirmation offers `Yes, keep position` and `No, go back`. Accept with `Yes, keep position` and verify the new position remains. Repeat a seek, choose `No, go back`, and verify the prior absolute position is restored, including when the requested position crosses a split-file boundary.
+
+While the confirmation is open, tap outside the card and press Android Back; verify neither dismisses the modal or changes the seek, and verify an underlying player control cannot be activated. Verify the scrim/filter leaves the player visible but clearly blocks interaction. Verify the separate `Don’t show confirmations again` checkbox does not close the current modal, disables future confirmations, and points to Options. Open Options, confirm the toggle persists after leaving/reopening the screen and after an app restart/update, then re-enable it for the remaining checks. Verify playback remains continuous, the compact card is above the compact player, and the full-player card is over the cover in both portrait and landscape without covering seek or transport controls. For a split-file audiobook, verify rollback restores the prior absolute book position/file when `No, go back` is selected; single-file playback should retain its existing behavior.
+
+Compiled Android instrumentation is not executed device validation: report Android-test compilation separately, and do not claim this procedure was device-validated unless it was actually run on a connected target.
+
 ### EPUB links and text selection
 
 The user confirmed EPUB links work in the existing Readium HTML navigator. Verify an EPUB with an internal chapter or footnote link and an external link, then confirm the destination opens correctly and ordinary EPUB text remains selectable through the existing selection actions.
