@@ -16,13 +16,19 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
     readerViewport: View
 ) {
     val controller = (application as BookOrbitApplication).audioPlaybackController
-    val themeMode = AppPreferencesStore(this).read().themeMode
+    val preferenceStore = AppPreferencesStore(this)
+    val storedPreferences = preferenceStore.read()
+    val themeMode = storedPreferences.themeMode
     val playerView = ComposeView(this).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             BookOrbitTheme(themeMode = themeMode) {
                 ReadiumCompactAudioPlayer(
                     controller = controller,
+                    confirmAudiobookSeek = storedPreferences.confirmAudiobookSeek,
+                    onConfirmAudiobookSeekChange = { enabled ->
+                        preferenceStore.save(storedPreferences.copy(confirmAudiobookSeek = enabled))
+                    },
                     onClosed = { _, _ ->
                         lifecycleScope.launch {
                             BookOrbitRepository(applicationContext).clearActiveReader()

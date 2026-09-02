@@ -59,6 +59,7 @@ data class AppPreferences(
     val offlineCacheCoversEnabled: Boolean = false,
     val offlineCacheAutoRefreshEnabled: Boolean = false,
     val confirmDeleteLocalCopy: Boolean = true,
+    val confirmAudiobookSeek: Boolean = true,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
     val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap()
@@ -93,6 +94,7 @@ internal class AppPreferencesStore(context: Context) {
         offlineCacheCoversEnabled = preferences.getBoolean(OFFLINE_CACHE_COVERS_KEY, false),
         offlineCacheAutoRefreshEnabled = preferences.getBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, false),
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
+        confirmAudiobookSeek = preferences.getBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, true),
         seriesGroupingMode = seriesGroupingModeFromStorage(
             preferences.getString(SERIES_GROUPING_MODE_KEY, null)
         ),
@@ -133,6 +135,7 @@ internal class AppPreferencesStore(context: Context) {
             .putBoolean(OFFLINE_CACHE_COVERS_KEY, value.offlineCacheCoversEnabled)
             .putBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, value.offlineCacheAutoRefreshEnabled)
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
+            .putBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, value.confirmAudiobookSeek)
             .putString(
                 SERIES_GROUPING_MODE_KEY,
                 seriesGroupingModeStorageValue(value.seriesGroupingMode)
@@ -199,6 +202,7 @@ internal class AppPreferencesStore(context: Context) {
         const val OFFLINE_CACHE_COVERS_KEY = "offline_cache_covers"
         const val OFFLINE_CACHE_AUTO_REFRESH_KEY = "offline_cache_auto_refresh"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
+        const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"

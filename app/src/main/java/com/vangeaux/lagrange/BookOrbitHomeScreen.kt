@@ -3378,6 +3378,17 @@ internal fun OptionsScreen(
                 }
             )
         }
+        item(key = "confirm-audiobook-seek") {
+            AppPreferenceSwitchRow(
+                title = "Confirm audiobook seek jumps",
+                summary = "Ask before keeping a new position after tapping a seek bar",
+                checked = preferences.confirmAudiobookSeek,
+                testTag = "options-confirm-audiobook-seek",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(confirmAudiobookSeek = it))
+                }
+            )
+        }
     }
 
     when (openDialog) {
