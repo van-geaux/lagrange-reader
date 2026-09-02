@@ -1129,6 +1129,11 @@ class BookOrbitAppInstrumentedTest {
             title = "Failed Download",
             mediaKind = MediaKind.EPUB
         )
+        val secondActive = active.copy(
+            id = "download-active-2",
+            fileId = "download-active-2",
+            title = "Second Active Download"
+        )
         val dataSource = InstrumentedFakeDataSource()
         composeRule.setContent {
             BookOrbitTheme {
@@ -1138,9 +1143,9 @@ class BookOrbitAppInstrumentedTest {
                             serverUrl = "https://books.example.test",
                             libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
                             selectedLibraryId = "lib-1",
-                            books = listOf(active, failed),
-                            homeBooks = listOf(active, failed),
-                            downloadingFileIds = setOf("download-active"),
+                            books = listOf(active, secondActive, failed),
+                            homeBooks = listOf(active, secondActive, failed),
+                            downloadingFileIds = setOf("download-active", "download-active-2"),
                             downloadProgressByFileId = mapOf("download-active" to 0.5f),
                             failedDownloadFileIds = setOf("download-failed")
                         )
@@ -1154,6 +1159,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Local books").performClick()
         composeRule.onNodeWithTag("local-downloads-section").assertIsDisplayed()
         composeRule.onNodeWithText("Downloads").assertIsDisplayed()
+        composeRule.onNodeWithText("2 downloading").assertIsDisplayed()
         composeRule.onNodeWithText("Active Download").assertIsDisplayed()
         composeRule.onNodeWithText("Downloading · 50%").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").assertIsDisplayed()
