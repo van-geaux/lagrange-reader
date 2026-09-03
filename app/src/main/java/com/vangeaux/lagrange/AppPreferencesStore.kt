@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import org.json.JSONObject
 
 enum class AppThemeMode(val displayName: String) {
     FOLLOW_SYSTEM("Follow system"),
@@ -62,7 +63,8 @@ data class AppPreferences(
     val confirmAudiobookSeek: Boolean = true,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
-    val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap()
+    val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap(),
+    val libraryBrowseOptionsExpanded: Map<String, Boolean> = emptyMap()
 )
 
 internal class AppPreferencesStore(context: Context) {
@@ -103,6 +105,9 @@ internal class AppPreferencesStore(context: Context) {
         ),
         libraryReaderPreferences = libraryReaderPreferencesFromStorage(
             preferences.getString(LIBRARY_READER_PREFERENCES_KEY, null)
+        ),
+        libraryBrowseOptionsExpanded = libraryBrowseOptionsExpandedFromStorage(
+            preferences.getString(LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY, null)
         )
     )
 
@@ -147,6 +152,10 @@ internal class AppPreferencesStore(context: Context) {
             .putString(
                 LIBRARY_READER_PREFERENCES_KEY,
                 libraryReaderPreferencesStorageValue(value.libraryReaderPreferences)
+            )
+            .putString(
+                LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY,
+                libraryBrowseOptionsExpandedStorageValue(value.libraryBrowseOptionsExpanded)
             )
             .apply()
     }
@@ -206,6 +215,7 @@ internal class AppPreferencesStore(context: Context) {
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
+        const val LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY = "library_browse_options_expanded"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
         const val AUDIO_SKIP_BACK_SECONDS_KEY = "audio_skip_back_seconds"
         const val AUDIO_SKIP_FORWARD_SECONDS_KEY = "audio_skip_forward_seconds"
@@ -227,6 +237,25 @@ internal fun offlineCacheLibraryIdsFromStorage(value: String?): Set<String> = va
     .map(String::trim)
     .filter(String::isNotBlank)
     .toSet()
+
+internal fun libraryBrowseOptionsExpandedStorageValue(values: Map<String, Boolean>): String =
+    JSONObject().apply {
+        values.toSortedMap().forEach { (libraryId, expanded) ->
+            if (libraryId.isNotBlank()) put(libraryId, expanded)
+        }
+    }.toString()
+
+internal fun libraryBrowseOptionsExpandedFromStorage(value: String?): Map<String, Boolean> {
+    if (value.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        val storage = JSONObject(value)
+        buildMap {
+            storage.keys().forEach { libraryId ->
+                if (libraryId.isNotBlank()) put(libraryId, storage.optBoolean(libraryId, false))
+            }
+        }
+    }.getOrDefault(emptyMap())
+}
 
 internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
     AUDIO_PLAYBACK_SPEED_OPTIONS
