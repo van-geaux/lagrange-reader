@@ -722,9 +722,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
             .sortedByDescending { it.downloadedAtMillis }
             .map { record ->
-                val snapshotBook = snapshotBooks.firstOrNull { book ->
-                    book.id == record.bookId || book.fileId == record.fileId
-                }
+                val snapshotBook = selectLocalBookMetadata(snapshotBooks, record)
                 val cachedDetailBook = bookDetailCacheStore.readLatest(
                     serverUrl = serverUrl,
                     bookId = record.bookId,
@@ -740,9 +738,16 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     seriesIndex = snapshotBook.seriesIndex ?: cachedDetailBook?.seriesIndex
                 ) ?: cachedDetailBook
                 metadataBook?.copy(
-                    fileId = metadataBook.fileId ?: record.fileId,
+                    fileId = record.fileId,
+                    format = metadataBook.format.takeIf { metadataBook.fileId == record.fileId }
+                        ?: record.mimeType
+                        ?: metadataBook.format,
+                    mediaKind = record.mediaKind,
                     localPath = record.localPath,
-                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis
+                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis,
+                    downloadedFormats = listOfNotNull(
+                        normalizedDownloadedFormat(record.mimeType, record.mediaKind, record.localPath)
+                    )
                 ) ?: BookSummary(
                     libraryId = "",
                     id = record.bookId,
@@ -751,7 +756,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
                     localPath = record.localPath,
-                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis
+                    downloadedSourceUpdatedAtMillis = record.sourceUpdatedAtMillis,
+                    downloadedFormats = listOfNotNull(
+                        normalizedDownloadedFormat(record.mimeType, record.mediaKind, record.localPath)
+                    )
                 )
             }
             .withCoverAspectRatios(libraryCoverAspectRatios)
@@ -2897,6 +2905,21 @@ internal object BookOrbitPayloadParser {
                     ?: obj.optJSONObject("bookFile")?.stringValue("id", "_id")
                 val format = primaryFile?.stringValue("format", "mimeType", "mime_type", "extension")
                     ?: obj.stringValue("format", "mimeType", "mime_type", "extension")
+                val availableFormats = normalizedAvailableFormats(
+                    buildList {
+                        val files = obj.optJSONArray("files")
+                        if (files != null) {
+                            for (fileIndex in 0 until files.length()) {
+                                val file = files.optJSONObject(fileIndex) ?: continue
+                                val fileFormat = file.stringValue("format", "mimeType", "mime_type", "extension")
+                                val fileTitle = file.stringValue("name", "title", "path", "filename")
+                                add(fileFormat to inferMediaKind(fileFormat, fileTitle))
+                            }
+                        } else {
+                            add(format to inferMediaKind(format, obj.stringValue("title", "name")))
+                        }
+                    }
+                )
                 val mediaKind = inferMediaKind(
                     format = format,
                     title = primaryFile?.stringValue("name", "title", "path", "filename")
@@ -2954,6 +2977,7 @@ internal object BookOrbitPayloadParser {
                         title = obj.stringValue("title", "name", "displayName") ?: "Untitled",
                         author = obj.authorDisplayName(),
                         format = format,
+                        availableFormats = availableFormats,
                         mediaKind = mediaKind,
                         streamUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/serve" },
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
@@ -2987,7 +3011,7 @@ internal object BookOrbitPayloadParser {
                     )
                 )
             }
-        }
+        }.withCurrentDownloads(downloads)
     }
 
     fun parseReaderProgress(
@@ -3275,7 +3299,13 @@ internal object BookOrbitPayloadParser {
                             fallbackPath = representativeThumbnailPath,
                             keys = arrayOf("coverUrl", "cover", "coverImage")
                         ) ?: representativeThumbnailPath?.let { "$serverBase$it" },
-                        lastAddedAtMillis = info.numberValue("lastAddedAtMillis", "lastAddedAt")?.toLong()
+                        lastAddedAtMillis = info.numberValue("lastAddedAtMillis", "lastAddedAt")?.toLong(),
+                        availableFormats = normalizedAvailableFormats(
+                            buildList {
+                                info.stringList("formats").forEach { add(it to MediaKind.UNKNOWN) }
+                                info.stringValue("format")?.let { add(it to MediaKind.UNKNOWN) }
+                            }
+                        )
                     )
                 )
             }
@@ -4054,23 +4084,49 @@ internal fun libraryCatalogPagesAreStable(
     return totals.distinct().size <= 1 && totals.lastOrNull()?.let { it == mergedBooks.size } != false
 }
 
-private fun List<BookSummary>.withCurrentDownloads(
+internal fun List<BookSummary>.withCurrentDownloads(
     downloads: Map<String, DownloadRecord>
-): List<BookSummary> = map { book ->
-    val download = book.fileId?.let(downloads::get)?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
-    val localPath = download?.localPath
-    if (
-        localPath == book.localPath &&
-        download?.sourceUpdatedAtMillis == book.downloadedSourceUpdatedAtMillis
-    ) {
-        book
-    } else {
-        book.copy(
-            localPath = localPath,
-            downloadedSourceUpdatedAtMillis = download?.sourceUpdatedAtMillis
-        )
+): List<BookSummary> {
+    val downloadsByBookId = downloads.values
+        .filter { it.status == DownloadRecordStatus.COMPLETE }
+        .groupBy { it.bookId }
+    return map { book ->
+        val download = book.fileId?.let(downloads::get)?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
+        val localPath = download?.localPath
+        val downloadedFormats = normalizedAvailableFormats(
+            downloadsByBookId[book.id].orEmpty().flatMap { record ->
+                listOf(
+                    record.mimeType to record.mediaKind,
+                    record.localPath.substringAfterLast('/').substringAfterLast('.') to MediaKind.UNKNOWN
+                )
+            }
+        ).filter { format ->
+            val availableFormats = book.availableFormats.ifEmpty {
+                normalizedAvailableFormats(listOf(book.format to book.mediaKind))
+            }
+            format in availableFormats
+        }
+        if (
+            localPath == book.localPath &&
+            download?.sourceUpdatedAtMillis == book.downloadedSourceUpdatedAtMillis &&
+            downloadedFormats == book.downloadedFormats
+        ) {
+            book
+        } else {
+            book.copy(
+                localPath = localPath,
+                downloadedSourceUpdatedAtMillis = download?.sourceUpdatedAtMillis,
+                downloadedFormats = downloadedFormats
+            )
+        }
     }
 }
+
+internal fun selectLocalBookMetadata(
+    books: List<BookSummary>,
+    record: DownloadRecord
+): BookSummary? = books.firstOrNull { book -> book.fileId == record.fileId }
+    ?: books.firstOrNull { book -> book.id == record.bookId }
 
 internal fun downloadUpdateAvailable(book: BookSummary, record: DownloadRecord): Boolean {
     val currentSourceVersion = book.updatedAtMillis ?: return false

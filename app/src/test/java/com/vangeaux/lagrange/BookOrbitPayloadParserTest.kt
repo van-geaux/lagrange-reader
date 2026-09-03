@@ -316,6 +316,47 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks projects every completed downloaded format available on the book`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "Multi-format book",
+                    "files": [
+                      {"id": "file-epub", "format": "epub", "role": "primary"},
+                      {"id": "file-pdf", "format": "application/pdf"},
+                      {"id": "file-cbz", "format": "cbz"}
+                    ]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = mapOf(
+                "file-pdf" to DownloadRecord(
+                    serverUrl = "https://example.test",
+                    fileId = "file-pdf",
+                    bookId = "book-1",
+                    title = "Multi-format book",
+                    localPath = "/tmp/book.pdf",
+                    mediaKind = MediaKind.PDF
+                ),
+                "file-cbz" to DownloadRecord(
+                    serverUrl = "https://example.test",
+                    fileId = "file-cbz",
+                    bookId = "book-1",
+                    title = "Multi-format book",
+                    localPath = "/tmp/book.cbz",
+                    mediaKind = MediaKind.COMIC
+                )
+            ),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(listOf("PDF", "CBZ"), books.single().downloadedFormats)
+    }
+
+    @Test
     fun `parseBooks preserves server missing resource state separately from reading status`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "library-missing",
@@ -1518,5 +1559,26 @@ class BookOrbitPayloadParserTest {
         )
 
         assertEquals("f1", selectedBlank)
+    }
+
+    @Test
+    fun `parseBooks exposes supported formats in deterministic order without duplicates`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "library",
+            payload = """
+                {"items":[{"id":"book-1","title":"Formats","files":[
+                    {"id":"audio","format":"m4b"},
+                    {"id":"json","format":"json"},
+                    {"id":"pdf","format":"application/pdf"},
+                    {"id":"epub-a","format":"epub"},
+                    {"id":"epub-b","format":"application/epub+zip"},
+                    {"id":"comic","format":"cbz"}
+                ]}]}
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://books.example.test"
+        )
+
+        assertEquals(listOf("EPUB", "PDF", "CBZ", "AUDIO"), books.single().availableFormats)
     }
 }

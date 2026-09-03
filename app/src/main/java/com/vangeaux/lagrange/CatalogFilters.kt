@@ -180,12 +180,42 @@ internal fun aggregateBooksToSeriesCatalog(books: List<BookSummary>): SeriesCata
                 authors = grouped.flatMap { it.author.orEmpty().split(",") }.map(String::trim).filter(String::isNotBlank).distinct().sorted(),
                 bookCount = grouped.size,
                 readCount = grouped.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
+                availableFormats = normalizedAvailableFormats(
+                    grouped.flatMap { book ->
+                        book.availableFormats.map { it to MediaKind.UNKNOWN }
+                            .ifEmpty { listOf(book.format to book.mediaKind) }
+                    }
+                ),
+                downloadedFormats = normalizedAvailableFormats(
+                    grouped.flatMap { book -> downloadedFormatLabels(book).map { it to MediaKind.UNKNOWN } }
+                ),
                 coverUrl = grouped.firstNotNullOfOrNull { it.coverUrl },
                 lastAddedAtMillis = grouped.mapNotNull { it.addedAtMillis }.maxOrNull()
             )
         }
         .sortedBy { it.name.lowercase() }
     return SeriesCatalogPage(items = items, total = items.size, page = 0, size = items.size)
+}
+
+internal fun enrichSeriesAvailableFormats(
+    series: List<SeriesSummary>,
+    books: List<BookSummary>
+): List<SeriesSummary> = series.map { item ->
+    val matchingBooks = books.filter { book ->
+        book.seriesId == item.id || book.seriesName?.equals(item.name, ignoreCase = true) == true
+    }
+    if (matchingBooks.isEmpty()) item else item.copy(
+        availableFormats = normalizedAvailableFormats(
+            item.availableFormats.map { it to MediaKind.UNKNOWN } + matchingBooks.flatMap { book ->
+                book.availableFormats.map { it to MediaKind.UNKNOWN }
+                    .ifEmpty { listOf(book.format to book.mediaKind) }
+            }
+        ),
+        downloadedFormats = normalizedAvailableFormats(
+            item.downloadedFormats.map { it to MediaKind.UNKNOWN } +
+                matchingBooks.flatMap { book -> downloadedFormatLabels(book).map { it to MediaKind.UNKNOWN } }
+        )
+    )
 }
 
 internal fun filterAndSortSeriesCatalog(

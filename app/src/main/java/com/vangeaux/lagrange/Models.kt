@@ -11,6 +11,58 @@ enum class MediaKind {
     UNKNOWN
 }
 
+private val AUDIO_FORMATS = setOf(
+    "aac", "aif", "aiff", "flac", "m4a", "m4b", "mp3", "mp4", "mpeg", "oga", "ogg", "opus", "wav", "webm", "x-m4b"
+)
+
+internal fun normalizedAvailableFormats(formats: Iterable<Pair<String?, MediaKind>>): List<String> {
+    val labels = formats.mapNotNull { (format, mediaKind) ->
+        val normalized = format
+            ?.trim()
+            ?.lowercase(Locale.US)
+            ?.substringAfterLast('/')
+            ?.substringBefore(';')
+            ?.trimStart('.')
+            ?.takeIf { it.isNotBlank() }
+        when {
+            normalized == "epub" || mediaKind == MediaKind.EPUB && normalized == "epub+zip" -> "EPUB"
+            normalized == "kepub" -> "KEPUB"
+            normalized == "pdf" -> "PDF"
+            normalized == "cbz" -> "CBZ"
+            normalized == "cbr" -> "CBR"
+            normalized == "cb7" -> "CB7"
+            normalized == "audio" || normalized in AUDIO_FORMATS || mediaKind == MediaKind.AUDIO -> "AUDIO"
+            else -> when (mediaKind) {
+                MediaKind.EPUB -> "EPUB"
+                MediaKind.PDF -> "PDF"
+                MediaKind.COMIC -> null
+                MediaKind.AUDIO -> "AUDIO"
+                MediaKind.UNKNOWN -> null
+            }
+        }
+    }.distinct()
+    val order = listOf("EPUB", "KEPUB", "PDF", "CBZ", "CBR", "CB7", "AUDIO")
+    return labels.sortedBy { order.indexOf(it).takeIf { index -> index >= 0 } ?: order.size }
+}
+
+internal fun normalizedDownloadedFormat(
+    format: String?,
+    mediaKind: MediaKind,
+    localPath: String?
+): String? = normalizedAvailableFormats(
+    listOf(localPath?.substringAfterLast('/')?.substringAfterLast('.') to MediaKind.UNKNOWN) +
+        listOf(format to mediaKind)
+).firstOrNull()
+
+internal fun downloadedFormatLabels(book: BookSummary): List<String> =
+    book.downloadedFormats.ifEmpty {
+        if (book.localPath.isNullOrBlank()) {
+            emptyList()
+        } else {
+            listOfNotNull(normalizedDownloadedFormat(book.format, book.mediaKind, book.localPath))
+        }
+    }
+
 enum class BookReadStatus(val wireValue: String) {
     UNREAD("unread"),
     WANT_TO_READ("want_to_read"),
@@ -106,7 +158,9 @@ data class BookSummary(
     val audioChapters: List<AudiobookChapter> = emptyList(),
     val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT,
     val isServerMissing: Boolean = false,
-    val isLocalOnlyOverride: Boolean? = null
+    val isLocalOnlyOverride: Boolean? = null,
+    val availableFormats: List<String> = emptyList(),
+    val downloadedFormats: List<String> = emptyList()
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
     val isLocalOnly: Boolean get() = isLocalOnlyOverride ?: libraryId.isBlank()
@@ -227,7 +281,9 @@ data class SeriesSummary(
     val bookCount: Int = 0,
     val readCount: Int = 0,
     val coverUrl: String? = null,
-    val lastAddedAtMillis: Long? = null
+    val lastAddedAtMillis: Long? = null,
+    val availableFormats: List<String> = emptyList(),
+    val downloadedFormats: List<String> = emptyList()
 )
 
 data class AuthorSummary(

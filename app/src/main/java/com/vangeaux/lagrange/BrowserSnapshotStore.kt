@@ -177,6 +177,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("title", book.title)
                                     put("author", book.author)
                                     put("format", book.format)
+                                    put("availableFormats", JSONArray(book.availableFormats))
                                     put("mediaKind", book.mediaKind.name)
                                     put("streamUrl", book.streamUrl)
                                     put("downloadUrl", book.downloadUrl)
@@ -237,6 +238,7 @@ class BrowserSnapshotStore(context: Context) {
                         title = item.optString("title"),
                         author = item.optString("author").takeIf { it.isNotBlank() },
                         format = item.optString("format").takeIf { it.isNotBlank() },
+                        availableFormats = item.optJSONArray("availableFormats").toStringList(),
                         mediaKind = runCatching {
                             MediaKind.valueOf(item.optString("mediaKind"))
                         }.getOrDefault(MediaKind.UNKNOWN),
@@ -298,4 +300,13 @@ class BrowserSnapshotStore(context: Context) {
         val libraries: List<LibrarySummary>,
         val booksByLibraryId: Map<String, List<BookSummary>>
     )
+}
+
+private fun JSONArray?.toStringList(): List<String> {
+    this ?: return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            optString(index).takeIf { it.isNotBlank() }?.let(::add)
+        }
+    }
 }

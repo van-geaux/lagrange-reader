@@ -16,6 +16,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 
 @Entity(
     tableName = "library_catalog_books",
@@ -31,6 +32,7 @@ internal data class LibraryCatalogBookEntity(
     val title: String,
     val author: String?,
     val format: String?,
+    val availableFormats: String? = null,
     val mediaKind: String,
     val streamUrl: String?,
     val downloadUrl: String?,
@@ -236,7 +238,7 @@ internal interface LibraryCatalogDao {
         LibraryCatalogMetadataEntity::class,
         LibraryCatalogJumpBucketEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 internal abstract class LibraryCatalogDatabase : RoomDatabase() {
@@ -364,7 +366,7 @@ internal class LibraryCatalogStore(context: Context) {
                 context.applicationContext,
                 LibraryCatalogDatabase::class.java,
                 "library-catalog.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -387,6 +389,12 @@ internal class LibraryCatalogStore(context: Context) {
                 db.execSQL("ALTER TABLE library_catalog_books ADD COLUMN isServerMissing INTEGER NOT NULL DEFAULT 0")
             }
         }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE library_catalog_books ADD COLUMN availableFormats TEXT")
+            }
+        }
     }
 }
 
@@ -403,6 +411,7 @@ private fun BookSummary.toCatalogEntity(
     title = title,
     author = author,
     format = format,
+    availableFormats = JSONArray(availableFormats).toString(),
     mediaKind = mediaKind.name,
     streamUrl = streamUrl,
     downloadUrl = downloadUrl,
@@ -433,6 +442,8 @@ private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
     title = title,
     author = author,
     format = format,
+    availableFormats = runCatching { JSONArray(availableFormats ?: "[]").toStringList() }
+        .getOrDefault(emptyList()),
     mediaKind = runCatching { MediaKind.valueOf(mediaKind) }.getOrDefault(MediaKind.UNKNOWN),
     streamUrl = streamUrl,
     downloadUrl = downloadUrl,
@@ -455,3 +466,9 @@ private fun LibraryCatalogBookEntity.toBookSummary(): BookSummary = BookSummary(
     coverAspectRatio = CoverAspectRatio.fromWireValue(coverAspectRatio),
     isServerMissing = isServerMissing
 )
+
+private fun JSONArray.toStringList(): List<String> = buildList {
+    for (index in 0 until length()) {
+        optString(index).takeIf { it.isNotBlank() }?.let(::add)
+    }
+}

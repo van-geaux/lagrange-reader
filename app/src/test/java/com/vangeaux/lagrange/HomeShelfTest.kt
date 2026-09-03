@@ -18,6 +18,149 @@ class HomeShelfTest {
             direction = SortDirection.DESCENDING
         ).direction)
     }
+
+    @Test
+    fun `recent series summaries retain available formats for home cards`() {
+        val summaries = homeSeriesSummaries(
+            listOf(
+                BookSummary("lib", "book-1", "file-1", "One", seriesId = "series", seriesName = "Saga", format = "pdf", addedAtMillis = 1L),
+                BookSummary("lib", "book-2", "file-2", "Two", seriesId = "series", seriesName = "Saga", availableFormats = listOf("EPUB"), addedAtMillis = 2L)
+            ),
+            useUpdatedAt = false
+        )
+
+        assertEquals(listOf("EPUB", "PDF"), summaries.single().availableFormats)
+    }
+
+    @Test
+    fun `recent series shelf items preserve enriched formats through shelf projection`() {
+        val items = homeSeriesShelfItems(
+            series = listOf(SeriesSummary(id = "series", name = "Saga")),
+            books = listOf(
+                BookSummary("lib", "book-1", "file-1", "One", seriesId = "series", seriesName = "Saga", format = "pdf", addedAtMillis = 1L),
+                BookSummary("lib", "book-2", "file-2", "Two", seriesId = "series", seriesName = "Saga", availableFormats = listOf("EPUB"), addedAtMillis = 2L)
+            )
+        )
+
+        assertEquals(listOf("EPUB", "PDF"), items.single().second.availableFormats)
+    }
+
+    @Test
+    fun `local format display keeps all formats and marks the downloaded format`() {
+        val book = BookSummary(
+            "lib", "book", "file", "Book",
+            format = "application/pdf",
+            mediaKind = MediaKind.PDF,
+            localPath = "/books/book.pdf",
+            availableFormats = listOf("EPUB", "PDF", "AUDIO")
+        )
+
+        assertEquals(listOf("EPUB", "PDF", "AUDIO"), bookAvailableFormatsForDisplay(book))
+        assertEquals(listOf("PDF"), downloadedFormatLabels(book))
+    }
+
+    @Test
+    fun `primary format is not marked when book has no downloaded file`() {
+        val book = BookSummary(
+            "lib", "book", "file", "Book",
+            format = "EPUB",
+            mediaKind = MediaKind.EPUB,
+            availableFormats = listOf("EPUB", "PDF", "CBZ")
+        )
+
+        assertEquals(emptyList<String>(), downloadedFormatLabels(book))
+    }
+
+    @Test
+    fun `multiple downloaded formats remain marked`() {
+        val book = BookSummary(
+            "lib", "book", "file", "Book",
+            format = "EPUB",
+            mediaKind = MediaKind.EPUB,
+            availableFormats = listOf("EPUB", "PDF", "CBZ"),
+            downloadedFormats = listOf("PDF", "CBZ")
+        )
+
+        assertEquals(listOf("PDF", "CBZ"), downloadedFormatLabels(book))
+    }
+
+    @Test
+    fun `downloaded m4b marks audio instead of primary epub`() {
+        val book = BookSummary(
+            "lib", "book", "epub-file", "Book",
+            format = "EPUB",
+            mediaKind = MediaKind.EPUB,
+            availableFormats = listOf("EPUB", "AUDIO")
+        )
+        val download = DownloadRecord(
+            serverUrl = "https://example.test",
+            fileId = "m4b-file",
+            bookId = "book",
+            title = "Book",
+            localPath = "/books/book.m4b",
+            mediaKind = MediaKind.AUDIO,
+            mimeType = "audio/mp4"
+        )
+
+        val displayed = listOf(book).withCurrentDownloads(mapOf(download.fileId to download)).single()
+
+        assertEquals(listOf("AUDIO"), displayed.downloadedFormats)
+        assertEquals("epub-file", displayed.fileId)
+        assertEquals(listOf("EPUB", "AUDIO"), bookAvailableFormatsForDisplay(displayed))
+    }
+
+    @Test
+    fun `exact downloaded file metadata wins over same book fallback`() {
+        val epub = BookSummary("lib", "book", "epub-file", "Book", format = "EPUB", mediaKind = MediaKind.EPUB)
+        val audio = BookSummary("lib", "book", "m4b-file", "Book", format = "M4B", mediaKind = MediaKind.AUDIO)
+        val record = DownloadRecord(
+            serverUrl = "https://example.test",
+            fileId = "m4b-file",
+            bookId = "book",
+            title = "Book",
+            localPath = "/books/book.m4b",
+            mediaKind = MediaKind.AUDIO,
+            mimeType = "audio/mp4"
+        )
+
+        assertEquals(audio, selectLocalBookMetadata(listOf(epub, audio), record))
+        assertEquals("AUDIO", normalizedDownloadedFormat("audio/mp4", MediaKind.AUDIO, "/books/book.m4b"))
+    }
+
+    @Test
+    fun `series aggregation carries downloaded formats from member books`() {
+        val series = aggregateBooksToSeriesCatalog(
+            listOf(
+                BookSummary(
+                    "lib", "book", "file", "Book",
+                    seriesId = "series", seriesName = "Saga",
+                    format = "EPUB", mediaKind = MediaKind.EPUB,
+                    availableFormats = listOf("EPUB", "AUDIO"),
+                    downloadedFormats = listOf("AUDIO")
+                )
+            )
+        ).items.single()
+
+        assertEquals(listOf("EPUB", "AUDIO"), series.availableFormats)
+        assertEquals(listOf("AUDIO"), series.downloadedFormats)
+    }
+
+    @Test
+    fun `series aggregation does not mark primary format without downloaded members`() {
+        val series = aggregateBooksToSeriesCatalog(
+            listOf(
+                BookSummary(
+                    "lib", "book", "file", "Book",
+                    seriesId = "series", seriesName = "Saga",
+                    format = "EPUB", mediaKind = MediaKind.EPUB,
+                    availableFormats = listOf("EPUB", "PDF", "CBZ")
+                )
+            )
+        ).items.single()
+
+        assertEquals(emptyList<String>(), series.downloadedFormats)
+    }
+
     @Test
     fun `currently reading includes only reading and rereading states`() {
         val reading = seriesBook("book-reading", index = 1.0, status = BookReadStatus.READING)
