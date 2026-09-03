@@ -47,6 +47,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -164,6 +166,12 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -171,6 +179,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlin.math.roundToInt
@@ -757,6 +766,13 @@ internal fun homeLocalBooksPreview(
     libraryId = libraryId,
     limit = limit
 )
+
+internal fun bookAvailableFormatsForDisplay(
+    book: BookSummary
+): List<String> = book.availableFormats.ifEmpty {
+    normalizedAvailableFormats(listOf(book.format to book.mediaKind))
+}
+
 
 internal data class SeriesBookNeighbors(
     val previous: BookSummary?,
@@ -1700,6 +1716,7 @@ internal fun NativeLibraryBrowserScreen(
                     initialFilter = SeriesCatalogFilter(genre = activeSeriesGenre),
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
+                    books = state.homeBooks,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     scopeLoader = smartScopeSeriesCatalogLoader,
@@ -1811,6 +1828,7 @@ internal fun NativeLibraryBrowserScreen(
                     initialFilter = SeriesCatalogFilter(),
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
+                    books = state.homeBooks,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     scopeLoader = smartScopeSeriesCatalogLoader,
@@ -2389,6 +2407,7 @@ private fun SeriesCatalogScreen(
     initialFilter: SeriesCatalogFilter,
     libraryOptions: List<LibrarySummary>,
     selectedScope: SmartScope? = null,
+    books: List<BookSummary> = emptyList(),
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -2449,9 +2468,10 @@ private fun SeriesCatalogScreen(
             reloadKey += 1
         }
     }
-    val jumpTargets = remember(items, filter.sort, filter.direction, isLoading) {
+    val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
+    val jumpTargets = remember(displayItems, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
-            buildSeriesJumpTargets(items, filter.direction)
+            buildSeriesJumpTargets(displayItems, filter.direction)
         } else {
             emptyList()
         }
@@ -2513,7 +2533,7 @@ private fun SeriesCatalogScreen(
                 )
             }
         }
-        gridItems(items, key = { "catalog-series-${it.id}" }) { series ->
+        gridItems(displayItems, key = { "catalog-series-${it.id}" }) { series ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2530,6 +2550,10 @@ private fun SeriesCatalogScreen(
                         label = "Cover for ${series.name}",
                         loader = imageLoader,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                    )
+                    AvailableFormatsLabel(
+                        series.availableFormats,
+                        "series-format-label-${series.id}"
                     )
                     Text(series.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (series.authors.isNotEmpty()) {
@@ -2960,6 +2984,74 @@ private fun AuthorDetails(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+private fun BookAvailableFormatsLabel(
+    book: BookSummary,
+    modifier: Modifier = Modifier
+) {
+    val formats = bookAvailableFormatsForDisplay(book)
+    val downloaded = downloadedFormatLabels(book).toSet()
+    AvailableFormatsLabel(formats, "book-format-label-${book.id}", downloaded, modifier)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AvailableFormatsLabel(
+    formats: List<String>,
+    testTagId: String,
+    downloadedFormats: Set<String> = emptySet(),
+    modifier: Modifier = Modifier
+) {
+    if (formats.isEmpty()) return
+    val label = buildAnnotatedString {
+        formats.forEachIndexed { index, format ->
+            if (index > 0) append(" · ")
+            if (format in downloadedFormats) {
+                appendInlineContent("download-$format", "Downloaded")
+                append(" ")
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)) {
+                    append(format)
+                }
+            } else {
+                append(format)
+            }
+        }
+    }
+    val inlineContent = downloadedFormats.associateWith { format ->
+        "download-$format" to InlineTextContent(
+            placeholder = Placeholder(14.sp, 14.sp, PlaceholderVerticalAlign.TextCenter)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }.values.associate { (id, content) -> id to content }
+    Text(
+        text = label,
+        inlineContent = inlineContent,
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (LocalReduceMotion.current) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+            .semantics {
+                contentDescription = buildString {
+                    append("Available formats: ${formats.joinToString(", ")}")
+                    if (downloadedFormats.isNotEmpty()) {
+                        append(". Downloaded locally: ${downloadedFormats.joinToString(", ")}")
+                    }
+                }
+            }
+            .testTag(testTagId),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.labelSmall
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 private fun BookPosterCard(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
@@ -3100,6 +3192,7 @@ private fun BookPosterCard(
                     }
                 }
             }
+            BookAvailableFormatsLabel(book)
             Text(
                 displayTitle,
                 maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
@@ -4540,10 +4633,12 @@ private fun HomeFeed(
             }.getOrNull()
         }
     }
-    val recentSeriesAll = remember(fallbackRecentSeries, authoritativeRecentSeries) {
-        (authoritativeRecentSeries ?: fallbackRecentSeries)
-            .let { series -> homeSeriesPreview(series, books = books, limit = Int.MAX_VALUE) }
-            .map { series -> series.name to series.asShelfBook() }
+    val recentSeriesAll = remember(fallbackRecentSeries, authoritativeRecentSeries, books) {
+        homeSeriesShelfItems(
+            series = authoritativeRecentSeries ?: fallbackRecentSeries,
+            books = books,
+            limit = Int.MAX_VALUE
+        )
     }
     val updatedSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = true, limit = null) }
     val recentlyReadAll = remember(books) { recentlyReadBooks(books, limit = null) }
@@ -4694,7 +4789,7 @@ private fun BookShelf(
                     onDeleteLocalCopy = onDeleteLocalCopy?.let { delete -> { delete(book) } },
                     onMarkAsRead = onMarkAsRead?.let { mark -> { mark(book) } },
                     onMarkAsUnread = onMarkAsUnread?.let { mark -> { mark(book) } },
-                    onMarkAsStatus = onMarkAsStatus?.let { mark -> { statusBook, status -> mark(statusBook, status) } }
+                    onMarkAsStatus = onMarkAsStatus?.let { mark -> { statusBook, status -> mark(statusBook, status) } },
                 )
             }
         }
@@ -4854,6 +4949,7 @@ private fun ShelfBookCard(
                 }
             }
         }
+        BookAvailableFormatsLabel(book)
         Text(
             displayTitle,
             maxLines = if (isBookCard && book.seriesName.isNullOrBlank()) 3 else 1,
@@ -5430,6 +5526,7 @@ private fun HomeSeriesSectionScreen(
     } else {
         authoritativeSeries ?: fallbackSeries
     }
+    val displaySeries = remember(series, books) { enrichSeriesAvailableFormats(series, books) }
     val gridState = rememberLazyGridState()
     LazyVerticalGrid(
         state = gridState,
@@ -5444,7 +5541,7 @@ private fun HomeSeriesSectionScreen(
                 Text("No ${section.title.lowercase()} found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        gridItems(series, key = { "home-series-${section.name}-${it.id}" }) { item ->
+        gridItems(displaySeries, key = { "home-series-${section.name}-${it.id}" }) { item ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -5461,6 +5558,10 @@ private fun HomeSeriesSectionScreen(
                         label = "Cover for ${item.name}",
                         loader = imageLoader,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                    )
+                    AvailableFormatsLabel(
+                        item.availableFormats,
+                        "series-format-label-${item.id}"
                     )
                     Text(item.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (item.authors.isNotEmpty()) {
@@ -6511,6 +6612,7 @@ private fun LibraryBookCard(
             ) {
                 Text(book.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                BookAvailableFormatsLabel(book)
                 Text(nativeBookStatus(book, state.isOfflineSnapshot), style = MaterialTheme.typography.bodySmall)
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -9180,7 +9282,13 @@ internal fun homeSeriesSummaries(
             bookCount = members.size,
             readCount = members.count { it.isRead || it.readStatus in setOf(BookReadStatus.READ, BookReadStatus.SKIMMED) },
             coverUrl = representative.coverUrl,
-            lastAddedAtMillis = timestamp
+            lastAddedAtMillis = timestamp,
+            availableFormats = normalizedAvailableFormats(
+                members.flatMap { book ->
+                    book.availableFormats.map { it to MediaKind.UNKNOWN }
+                        .ifEmpty { listOf(book.format to book.mediaKind) }
+                }
+            )
         )
     }.sortedByDescending { it.lastAddedAtMillis ?: 0L }
 }
@@ -9219,6 +9327,16 @@ internal fun homeSeriesPreview(
         .take(limit)
 }
 
+internal fun homeSeriesShelfItems(
+    series: List<SeriesSummary>,
+    books: List<BookSummary>,
+    limit: Int = Int.MAX_VALUE
+): List<Pair<String, BookSummary>> = homeSeriesPreview(
+    enrichSeriesAvailableFormats(series, books),
+    books = books,
+    limit = limit
+).map { item -> item.name to item.asShelfBook() }
+
 private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
     libraryId = "series",
     id = id,
@@ -9227,7 +9345,8 @@ private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
     coverUrl = coverUrl,
     seriesId = id,
     seriesName = name,
-    author = authors.joinToString().takeIf { it.isNotBlank() }
+    author = authors.joinToString().takeIf { it.isNotBlank() },
+    availableFormats = availableFormats
 )
 
 internal fun recentSeries(

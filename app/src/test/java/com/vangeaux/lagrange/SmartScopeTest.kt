@@ -26,6 +26,17 @@ class SmartScopeTest {
         assertEquals(1, page.items.first { it.id == "s" }.readCount)
     }
 
+    @Test fun enrichesServerSeriesWithFormatsFromCachedBooks() {
+        val enriched = enrichSeriesAvailableFormats(
+            series = listOf(SeriesSummary(id = "s", name = "Saga")),
+            books = listOf(
+                BookSummary("lib", "1", "f1", "One", seriesId = "s", seriesName = "Saga", format = "application/pdf"),
+                BookSummary("lib", "2", "f2", "Two", seriesId = "s", seriesName = "Saga", availableFormats = listOf("EPUB", "PDF"))
+            )
+        )
+        assertEquals(listOf("EPUB", "PDF"), enriched.single().availableFormats)
+    }
+
     @Test fun parsesScopedBookPageContract() {
         val page = BookOrbitPayloadParser.parseSmartScopeBooksPage(
             scopeId = 12,

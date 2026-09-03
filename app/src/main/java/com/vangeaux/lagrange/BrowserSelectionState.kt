@@ -36,7 +36,9 @@ internal data class BookSelectionSnapshot(
     val readerPageIndex: Int?,
     val readerPageCount: Int?,
     val coverAspectRatio: CoverAspectRatio,
-    val isServerMissing: Boolean
+    val isServerMissing: Boolean,
+    val availableFormats: List<String> = emptyList(),
+    val downloadedFormats: List<String> = emptyList()
 )
 
 internal fun bookSelectionSnapshot(book: BookSummary): BookSelectionSnapshot = BookSelectionSnapshot(
@@ -46,6 +48,8 @@ internal fun bookSelectionSnapshot(book: BookSummary): BookSelectionSnapshot = B
     title = book.title,
     author = book.author,
     format = book.format,
+    availableFormats = book.availableFormats,
+    downloadedFormats = book.downloadedFormats,
     mediaKind = book.mediaKind,
     streamUrl = book.streamUrl,
     downloadUrl = book.downloadUrl,
@@ -80,6 +84,8 @@ private fun BookSelectionSnapshot.toFallbackBookSummary(): BookSummary = BookSum
     title = title,
     author = author,
     format = format,
+    availableFormats = availableFormats,
+    downloadedFormats = downloadedFormats,
     mediaKind = mediaKind,
     streamUrl = streamUrl,
     downloadUrl = downloadUrl,
@@ -144,7 +150,9 @@ internal fun saveBookSelection(snapshot: BookSelectionSnapshot?): List<Any?> = l
     snapshot?.readerPageIndex,
     snapshot?.readerPageCount,
     snapshot?.coverAspectRatio?.name,
-    snapshot?.isServerMissing
+    snapshot?.isServerMissing,
+    snapshot?.availableFormats,
+    snapshot?.downloadedFormats
 )
 
 internal fun restoreBookSelection(saved: List<Any?>): BookSelectionSnapshot? {
@@ -178,7 +186,9 @@ internal fun restoreBookSelection(saved: List<Any?>): BookSelectionSnapshot? {
         readerPageIndex = saved.getOrNull(24) as? Int,
         readerPageCount = saved.getOrNull(25) as? Int,
         coverAspectRatio = enumValueOrDefault(saved.getOrNull(26), CoverAspectRatio.PORTRAIT),
-        isServerMissing = saved.getOrNull(27) as? Boolean ?: false
+        isServerMissing = saved.getOrNull(27) as? Boolean ?: false,
+        availableFormats = (saved.getOrNull(28) as? List<*>)?.filterIsInstance<String>().orEmpty(),
+        downloadedFormats = (saved.getOrNull(29) as? List<*>)?.filterIsInstance<String>().orEmpty()
     )
 }
 
