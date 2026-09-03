@@ -26,3 +26,6 @@ keystore.properties
 # Local agent/session handovers and historical operator archives
 docs/handover.md
 docs/*-archive.md
+
+# Local sample fixtures
+samples/

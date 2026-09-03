@@ -4,9 +4,9 @@ This document contains the current project direction only. Historical work order
 
 ## Current status
 
-- Release: Lagrange 1.5.0 is published. See [`docs/release-notes/v1.5.0.md`](release-notes/v1.5.0.md).
+- Release: Lagrange 1.5.1 release preparation is in progress. See [`docs/release-notes/v1.5.1.md`](release-notes/v1.5.1.md).
 - Branch: `main`, aligned with `origin/main`.
-- Current implementation state: all 1.5.0-scope issues (#73, #75, #76, #77, #88) are closed and merged. EPUB annotations, Preview mode, enhanced audiobook player (#68/#70), background-safe downloads (#77/#84), improved fullscreen cover viewer (#73/#85), account isolation on logout (#88/#89), and audiobook session-history improvements (#75/#92) are implemented and user-confirmed working. BOOX issue #25 remains pending physical-device access.
+- Current implementation state: 1.5.1 adds Smart Scopes, improved download/local-book feedback, bounded Home shelves, audiobook-player refinements, browse-format indicators, compact Library Browse actions, PDF hyperlink routing, and navigation/seek fixes. BOOX issue #25 remains pending physical-device access; device/emulator checks for volume-button navigation, download notifications, PDF hyperlink interactions, and browser Back behavior remain outstanding.
 - User-installed CA support for self-hosted servers is implemented through [PR #72](https://github.com/van-geaux/lagrange-reader/pull/72), with explicit system/user trust anchors, a documented app-wide trust rationale, privacy disclosure, and focused Android resource validation. Local compilation, unit tests, and debug/Android-test APK assembly pass; connected-device instrumentation was not available and GitHub reports no checks for the PR.
 - [x] [#116](https://github.com/van-geaux/lagrange-reader/issues/116): Home and Library Recommended previews are capped at eight items across all seven shelves, every visible shelf exposes `See all`, and recent book/series destinations use sorted server pages with on-demand recent-book loading. The user confirmed the behavior works on-device; focused/full Android verification passed, while assistant-side instrumentation had no connected target.
 

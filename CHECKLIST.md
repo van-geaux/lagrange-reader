@@ -4,7 +4,7 @@ This is the active completion and validation checklist. Historical completed wor
 
 ## Current release
 
-- [x] Lagrange 1.5.0 published and integrated into main.
+- [ ] Lagrange 1.5.1 release preparation is in progress.
 - [x] Release notes, signed asset, release workflow, merge state, and current branch state verified.
 - [x] Current debug/unit/Android-test compilation and release-related verification recorded in the release notes and testing documents.
 
