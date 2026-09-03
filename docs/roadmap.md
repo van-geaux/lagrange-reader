@@ -4,7 +4,7 @@ This document contains the current project direction only. Historical work order
 
 ## Current status
 
-- Release: Lagrange 1.5.1 release preparation is in progress. See [`docs/release-notes/v1.5.1.md`](release-notes/v1.5.1.md).
+- Release: Lagrange 1.5.1 is published. See [`docs/release-notes/v1.5.1.md`](release-notes/v1.5.1.md).
 - Branch: `main`, aligned with `origin/main`.
 - Current implementation state: 1.5.1 adds Smart Scopes, improved download/local-book feedback, bounded Home shelves, audiobook-player refinements, browse-format indicators, compact Library Browse actions, PDF hyperlink routing, and navigation/seek fixes. BOOX issue #25 remains pending physical-device access; device/emulator checks for volume-button navigation, download notifications, PDF hyperlink interactions, and browser Back behavior remain outstanding.
 - User-installed CA support for self-hosted servers is implemented through [PR #72](https://github.com/van-geaux/lagrange-reader/pull/72), with explicit system/user trust anchors, a documented app-wide trust rationale, privacy disclosure, and focused Android resource validation. Local compilation, unit tests, and debug/Android-test APK assembly pass; connected-device instrumentation was not available and GitHub reports no checks for the PR.
