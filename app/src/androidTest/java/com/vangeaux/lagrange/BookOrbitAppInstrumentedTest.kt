@@ -1831,6 +1831,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Main").assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("Lagrange logo").assertCountEquals(0)
         composeRule.onNodeWithText("Browse").performClick()
+        composeRule.onNodeWithTag("library_browse_options_toggle").performClick()
         composeRule.onNodeWithText("Collapse series").performClick()
         composeRule.onNodeWithText("Test Series").assertIsDisplayed()
         composeRule.onNodeWithText("Expand series").performClick()
@@ -1880,6 +1881,8 @@ class BookOrbitAppInstrumentedTest {
         assertEquals(toolbarBefore.top, toolbarAfter.top, 0.5f)
         assertEquals(toolbarBefore.bottom, toolbarAfter.bottom, 0.5f)
         composeRule.onNodeWithText("40 books").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Filter").assertCountEquals(0)
+        composeRule.onNodeWithTag("library_browse_options_toggle").performClick()
         composeRule.onNodeWithText("Filter").assertIsDisplayed()
     }
 

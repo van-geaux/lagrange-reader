@@ -141,6 +141,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -2036,6 +2037,8 @@ internal fun NativeLibraryBrowserScreen(
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
                     onMarkAsStatus = onMarkAsStatus,
+                    appPreferences = appPreferences,
+                    onAppPreferencesChange = onAppPreferencesChange,
                     onLocalBooksSelected = {
                         localBooksLibraryId = state.selectedLibraryId
                         destination = BrowserDestination.LOCAL_BOOKS
@@ -5215,6 +5218,8 @@ private fun LibraryContentScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
+    appPreferences: AppPreferences,
+    onAppPreferencesChange: (AppPreferences) -> Unit,
     onLocalBooksSelected: () -> Unit,
     onHomeSectionSelected: (HomeSection) -> Unit
 ) {
@@ -5229,6 +5234,7 @@ private fun LibraryContentScreen(
         booksDownloadableForLibrary(state.books, state.selectedLibraryId)
     }
     var showLibraryFileSelection by remember(state.selectedLibraryId) { mutableStateOf(false) }
+    val browseOptionsExpanded = appPreferences.libraryBrowseOptionsExpanded[state.selectedLibraryId] ?: false
     var librarySelectedFileIds by remember(state.selectedLibraryId) { mutableStateOf(emptySet<String>()) }
     var libraryFrozenSelection by remember(state.selectedLibraryId) { mutableStateOf<List<BookSummary>>(emptyList()) }
     var libraryDownloadConfirmStep by remember(state.selectedLibraryId) { mutableStateOf(0) }
@@ -5391,19 +5397,34 @@ private fun LibraryContentScreen(
                     onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
+                    browseOptionsExpanded = browseOptionsExpanded,
+                    onBrowseOptionsExpandedChange = { expanded ->
+                        state.selectedLibraryId?.let { libraryId ->
+                            onAppPreferencesChange(
+                                appPreferences.copy(
+                                    libraryBrowseOptionsExpanded = appPreferences.libraryBrowseOptionsExpanded +
+                                        (libraryId to expanded)
+                                )
+                            )
+                        }
+                    },
                     headerContent = {
                         val showDownload = onBulkDownload != null &&
                             state.isCatalogComplete &&
                             !state.isCatalogSyncing &&
                             hasSelectableBulkDownloads(libraryDownloadCandidates)
-                        if (showDownload || libraryLocalCopies.isNotEmpty() || libraryDownloadProgress != null) {
+                        if ((browseOptionsExpanded &&
+                                (showDownload || libraryLocalCopies.isNotEmpty())) ||
+                            libraryDownloadProgress != null
+                        ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                FlowRow(
+                                if (browseOptionsExpanded) {
+                                    FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
@@ -5424,6 +5445,7 @@ private fun LibraryContentScreen(
                                             enabled = libraryActiveFileIds.isEmpty(),
                                             modifier = Modifier.testTag("delete-library-local-copies")
                                         ) { Text("Delete local books") }
+                                    }
                                     }
                                 }
                                 libraryDownloadProgress?.let { progress ->
@@ -5699,6 +5721,8 @@ private fun LibraryBrowseScreen(
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
+    browseOptionsExpanded: Boolean,
+    onBrowseOptionsExpandedChange: (Boolean) -> Unit,
     headerContent: (@Composable () -> Unit)? = null
 ) {
     val libraryId = state.selectedLibraryId
@@ -5728,6 +5752,8 @@ private fun LibraryBrowseScreen(
         totalBooks = total,
         totalSeries = seriesTotal,
         filter = filter,
+        browseOptionsExpanded = browseOptionsExpanded,
+        onBrowseOptionsExpandedChange = onBrowseOptionsExpandedChange,
         jumpRailEnabled = state.isCatalogComplete,
         serverJumpBuckets = state.libraryJumpBuckets.takeIf { filter == BookBrowseFilter() }.orEmpty(),
         onFilterClick = { showFilter = true },
@@ -5823,6 +5849,8 @@ private fun LibraryBooks(
     totalBooks: Int? = null,
     totalSeries: Int? = null,
     filter: BookBrowseFilter? = null,
+    browseOptionsExpanded: Boolean = false,
+    onBrowseOptionsExpandedChange: ((Boolean) -> Unit)? = null,
     jumpRailEnabled: Boolean = true,
     serverJumpBuckets: List<LibraryJumpBucket> = emptyList(),
     onFilterClick: (() -> Unit)? = null,
@@ -5934,6 +5962,8 @@ private fun LibraryBooks(
             onFilterClick = onFilterClick,
             showSeriesCollapse = allowSeriesCollapse && seriesKeys.isNotEmpty(),
             seriesCollapsed = seriesCollapsed,
+            browseOptionsExpanded = browseOptionsExpanded,
+            onBrowseOptionsExpandedChange = onBrowseOptionsExpandedChange,
             onToggleSeriesCollapse = {
                 val anchor = displayedBooks.getOrNull(gridState.firstVisibleItemIndex)
                 pendingAnchor = anchor?.let { (book, seriesKey) ->
@@ -6092,9 +6122,11 @@ private fun LibraryBooksToolbar(
     onFilterClick: (() -> Unit)?,
     showSeriesCollapse: Boolean,
     seriesCollapsed: Boolean,
+    browseOptionsExpanded: Boolean,
+    onBrowseOptionsExpandedChange: ((Boolean) -> Unit)?,
     onToggleSeriesCollapse: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("library_books_toolbar")
@@ -6103,8 +6135,7 @@ private fun LibraryBooksToolbar(
                 top = CATALOG_GRID_PADDING,
                 end = CATALOG_GRID_PADDING
             ),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (selectedBooks.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -6133,40 +6164,123 @@ private fun LibraryBooksToolbar(
                     TextButton(onClick = onClearSelection) { Text("Clear selection") }
                 }
             }
-        } else {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        } else if (onBrowseOptionsExpandedChange == null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    buildString {
-                        append("$bookCount ${if (bookCount == 1) "book" else "books"}")
-                        if (seriesCount != null && seriesCount > 0) {
-                            append(" · $seriesCount series")
-                        }
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                LibraryBooksCount(
+                    bookCount = bookCount,
+                    seriesCount = seriesCount,
+                    modifier = Modifier.weight(1f)
+                )
+                LibraryBooksFilterAndCollapse(
+                    filterActive = filterActive,
+                    onFilterClick = onFilterClick,
+                    showSeriesCollapse = showSeriesCollapse,
+                    seriesCollapsed = seriesCollapsed,
+                    onToggleSeriesCollapse = onToggleSeriesCollapse
                 )
             }
-            if (onFilterClick != null) {
-                OutlinedButton(onClick = onFilterClick) {
-                    Text(if (filterActive) "Filter · active" else "Filter")
-                }
-            }
-            if (showSeriesCollapse) {
-                TextButton(
-                    onClick = onToggleSeriesCollapse,
-                    modifier = Modifier.semantics {
-                        contentDescription = if (seriesCollapsed) {
-                            "Expand series"
-                        } else {
-                            "Collapse series"
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LibraryBooksCount(
+                    bookCount = bookCount,
+                    seriesCount = seriesCount,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(
+                    modifier = Modifier
+                        .clickable { onBrowseOptionsExpandedChange(!browseOptionsExpanded) }
+                        .testTag("library_browse_options_toggle")
+                        .semantics {
+                            contentDescription = if (browseOptionsExpanded) {
+                                "Collapse Browse options"
+                            } else {
+                                "Expand Browse options"
+                            }
+                            stateDescription = if (browseOptionsExpanded) "Expanded" else "Collapsed"
                         }
-                    }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(if (seriesCollapsed) "Expand series" else "Collapse series")
+                    Text("Browse options", style = MaterialTheme.typography.labelLarge)
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier.rotate(if (browseOptionsExpanded) 180f else 0f)
+                    )
                 }
             }
+            if (browseOptionsExpanded) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    LibraryBooksFilterAndCollapse(
+                        filterActive = filterActive,
+                        onFilterClick = onFilterClick,
+                        showSeriesCollapse = showSeriesCollapse,
+                        seriesCollapsed = seriesCollapsed,
+                        onToggleSeriesCollapse = onToggleSeriesCollapse
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryBooksCount(
+    bookCount: Int,
+    seriesCount: Int?,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            buildString {
+                append("$bookCount ${if (bookCount == 1) "book" else "books"}")
+                if (seriesCount != null && seriesCount > 0) append(" · $seriesCount series")
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun LibraryBooksFilterAndCollapse(
+    filterActive: Boolean,
+    onFilterClick: (() -> Unit)?,
+    showSeriesCollapse: Boolean,
+    seriesCollapsed: Boolean,
+    onToggleSeriesCollapse: () -> Unit
+) {
+    if (onFilterClick != null) {
+        OutlinedButton(onClick = onFilterClick) {
+            Text(if (filterActive) "Filter · active" else "Filter")
+        }
+    }
+    if (showSeriesCollapse) {
+        TextButton(
+            onClick = onToggleSeriesCollapse,
+            modifier = Modifier.semantics {
+                contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
+            }
+        ) {
+            Text(if (seriesCollapsed) "Expand series" else "Collapse series")
         }
     }
 }

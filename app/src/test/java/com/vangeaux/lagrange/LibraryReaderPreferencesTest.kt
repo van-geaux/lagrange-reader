@@ -285,4 +285,22 @@ class LibraryReaderPreferencesTest {
         assertEquals(12.0, paginated.pageSpacing)
         assertEquals(Axis.VERTICAL, continuous.scrollAxis)
     }
+
+    @Test
+    fun `browse options expansion persists independently by library`() {
+        val storage = libraryBrowseOptionsExpandedStorageValue(
+            mapOf("library-b" to true, "library-a" to false, "" to true)
+        )
+
+        assertEquals(
+            mapOf("library-a" to false, "library-b" to true),
+            libraryBrowseOptionsExpandedFromStorage(storage)
+        )
+    }
+
+    @Test
+    fun `malformed browse options expansion falls back to collapsed`() {
+        assertEquals(emptyMap<String, Boolean>(), libraryBrowseOptionsExpandedFromStorage("not-json"))
+        assertEquals(false, libraryBrowseOptionsExpandedFromStorage("{\"library\":\"yes\"}")["library"])
+    }
 }
