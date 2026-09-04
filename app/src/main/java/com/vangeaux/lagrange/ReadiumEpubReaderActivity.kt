@@ -239,6 +239,27 @@ internal data class ReadiumEpubProgressResult(
 internal const val DEFAULT_HIGHLIGHT_COLOR = "yellow"
 internal const val DEFAULT_HIGHLIGHT_STYLE = "highlight"
 internal const val HIGHLIGHT_DECORATION_GROUP = "bookorbit-highlights"
+
+internal fun readiumEpubImageColorOverrideScript(): String = """
+    (function() {
+      const styleId = 'bookorbit-readium-epub-image-color-preservation';
+      let style = document.getElementById(styleId);
+      if (!style) {
+        style = document.createElement('style');
+        style.id = styleId;
+        document.head.appendChild(style);
+      }
+      style.textContent = `
+        :root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child,
+        :root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child,
+        :root[style*="readium-night-on"] img[class*="gaiji"] {
+          filter: none !important;
+          -webkit-filter: none !important;
+        }
+      `;
+    })();
+""".trimIndent()
+
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
@@ -902,6 +923,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect { locator ->
+                    runCatching {
+                        fragment.evaluateJavascript(readiumEpubImageColorOverrideScript())
+                    }
                     updateLocation(locator)
                     pendingAnnotationReanchor?.let { target ->
                         pendingAnnotationReanchor = null

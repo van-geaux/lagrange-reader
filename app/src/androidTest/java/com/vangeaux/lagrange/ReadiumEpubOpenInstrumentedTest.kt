@@ -105,6 +105,25 @@ class ReadiumEpubOpenInstrumentedTest {
         }
     }
 
+    @Test
+    fun generatedEpubImageColorOverrideIsScopedAndIdempotent() {
+        val script = readiumEpubImageColorOverrideScript()
+
+        assertTrue(script.contains("bookorbit-readium-epub-image-color-preservation"))
+        assertEquals(1, script.split("createElement('style')").size - 1)
+        assertEquals(1, script.split("appendChild(style)").size - 1)
+        assertTrue(script.contains(""":root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child"""))
+        assertTrue(script.contains(""":root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child"""))
+        assertTrue(script.contains(""":root[style*="readium-night-on"] img[class*="gaiji"]"""))
+        assertEquals(1, script.split("filter: none !important").size - 1)
+        assertEquals(1, script.split("-webkit-filter: none !important").size - 1)
+        assertTrue(!script.contains("readium-darken-on"))
+        assertTrue(!script.contains("readium-invert-on"))
+        assertTrue(!script.contains("mix-blend-mode"))
+        assertTrue(script.contains("getElementById"))
+        assertTrue(script.contains("if (!style)"))
+    }
+
     @OptIn(ExperimentalReadiumApi::class)
     @Test
     fun mapsExistingAppearanceToReadiumPreferences() {
