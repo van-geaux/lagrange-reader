@@ -17,6 +17,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,7 +33,10 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.os.BundleCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -50,6 +54,7 @@ import org.json.JSONObject
 import org.readium.r2.navigator.image.ImageNavigatorFragment
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
+import com.github.chrisbanes.photoview.PhotoView
 import org.readium.r2.shared.DelicateReadiumApi
 import org.readium.r2.shared.publication.Href
 import org.readium.r2.shared.publication.Link
@@ -216,6 +221,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var navigatorLocationJob: Job? = null
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
+    private var comicPageViewer by mutableStateOf<Pair<Int, Bitmap>?>(null)
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
@@ -480,6 +486,21 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        val comicPageViewerView = ComposeView(this).apply {
+            setContent {
+                BookOrbitTheme {
+                    comicPageViewer?.let { (pageIndex, bitmap) ->
+                        ComicPageImageViewer(
+                            title = displayTitle,
+                            pageIndex = pageIndex,
+                            bitmap = bitmap,
+                            onDismiss = { comicPageViewer = null }
+                        )
+                    }
+                }
+            }
+        }
+        readerViewport.addView(comicPageViewerView, FrameLayout.LayoutParams(1, 1))
         optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
@@ -568,6 +589,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 onMenu = ::toggleChrome
             )
         )
+        installPaginatedComicLongPress(fragment, openedPublication)
         navigator = fragment
         navigatorLocationJob?.cancel()
         navigatorLocationJob = lifecycleScope.launch {
@@ -577,6 +599,80 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         }
         progressView?.visibility = View.GONE
         if (showTutorial) showTapZoneTutorial()
+    }
+
+    private fun installPaginatedComicLongPress(
+        fragment: ImageNavigatorFragment,
+        openedPublication: Publication
+    ) {
+        fun attach(pageFragment: Fragment) {
+            val photoView = findComicPhotoView(pageFragment.view) ?: return
+            val pageIndex = pageFragment.arguments?.let { arguments ->
+                BundleCompat.getParcelable(arguments, "link", Link::class.java)
+            }?.let { pageLink ->
+                paginatedComicPageIndex(
+                    pageHref = pageLink.url().toString(),
+                    readingOrderHrefs = openedPublication.readingOrder.map { link ->
+                        link.url().toString()
+                    }
+                )
+            } ?: return
+            photoView.setOnLongClickListener {
+                openPaginatedComicPage(openedPublication, pageIndex, photoView.width)
+                true
+            }
+        }
+
+        fragment.childFragmentManager.registerFragmentLifecycleCallbacks(
+            object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(
+                    fragmentManager: FragmentManager,
+                    pageFragment: Fragment,
+                    view: View,
+                    savedInstanceState: Bundle?
+                ) {
+                    attach(pageFragment)
+                }
+            },
+            true
+        )
+        fragment.childFragmentManager.fragments.forEach(::attach)
+    }
+
+    private fun findComicPhotoView(view: View?): PhotoView? = when (view) {
+        is PhotoView -> view
+        is ViewGroup -> (0 until view.childCount)
+            .firstNotNullOfOrNull { index -> findComicPhotoView(view.getChildAt(index)) }
+        else -> null
+    }
+
+    private fun openPaginatedComicPage(
+        openedPublication: Publication,
+        pageIndex: Int,
+        targetWidthPx: Int
+    ) {
+        lifecycleScope.launch {
+            val link = openedPublication.readingOrder.getOrNull(pageIndex)
+            val bitmap = link?.let { pageLink ->
+                val resource = openedPublication.get(pageLink) ?: return@let null
+                try {
+                    readContinuousComicPageBytes(resource)?.let { bytes ->
+                        decodeContinuousComicPage(bytes, targetWidthPx.coerceAtLeast(1))
+                    }
+                } finally {
+                    resource.close()
+                }
+            }
+            if (bitmap != null) {
+                comicPageViewer = pageIndex to bitmap
+            } else {
+                Toast.makeText(
+                    this@ReadiumComicReaderActivity,
+                    "This comic page could not be opened.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun showContinuousPublication(
@@ -608,6 +704,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         },
                         onPageChanged = ::updateContinuousPage,
                         onTap = ::handleContinuousTap,
+                        onLongPress = { pageIndex, bitmap -> comicPageViewer = pageIndex to bitmap },
                         onListStateAvailable = { continuousListState = it },
                         modifier = Modifier.fillMaxSize()
                     )

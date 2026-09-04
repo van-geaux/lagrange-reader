@@ -49,6 +49,21 @@ class ReadiumEpubReaderRoutingTest {
     }
 
     @Test
+    fun epubImageHrefResolvesRelativeToTheCurrentChapter() {
+        assertEquals(
+            "OPS/images/cover.png",
+            resolveEpubImageHref("OPS/text/chapter.xhtml", "../images/cover.png")
+        )
+    }
+
+    @Test
+    fun epubImageViewerOpensOnlyForLongPress() {
+        assertTrue(shouldOpenEpubImageViewer("long_press"))
+        assertFalse(shouldOpenEpubImageViewer("tap"))
+        assertFalse(shouldOpenEpubImageViewer(""))
+    }
+
+    @Test
     fun overallProgressUsesReadiumTotalProgressionWhenAvailable() {
         assertEquals(
             62.5f,

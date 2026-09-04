@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -64,6 +66,20 @@ class ContinuousComicReaderTest {
                 readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
                 layout = ReaderTapZoneLayout.KINDLE,
                 invertMode = ReaderTapZoneInvertMode.VERTICAL
+            )
+        )
+    }
+
+    @Test
+    fun `continuous page tap preserves vertical coordinates from its visible page`() {
+        assertEquals(
+            ContinuousComicTapAction.NEXT,
+            continuousComicTapAction(
+                position = Offset(50f, 90f),
+                size = IntSize(100, 100),
+                readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+                layout = ReaderTapZoneLayout.VERTICAL_THIRDS,
+                invertMode = ReaderTapZoneInvertMode.NONE
             )
         )
     }

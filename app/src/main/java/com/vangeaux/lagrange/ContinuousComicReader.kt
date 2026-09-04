@@ -3,9 +3,7 @@ package com.vangeaux.lagrange
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,11 +27,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -77,6 +77,22 @@ internal fun continuousComicTapAction(
         ReaderTapZoneAction.MENU -> ContinuousComicTapAction.MENU
     }
 }
+
+internal fun continuousComicTapAction(
+    position: Offset,
+    size: IntSize,
+    readingDirection: LibraryReadingDirection,
+    layout: ReaderTapZoneLayout,
+    invertMode: ReaderTapZoneInvertMode
+): ContinuousComicTapAction = continuousComicTapAction(
+    x = position.x,
+    y = position.y,
+    width = size.width.toFloat(),
+    height = size.height.toFloat(),
+    readingDirection = readingDirection,
+    layout = layout,
+    invertMode = invertMode
+)
 
 internal fun decodeContinuousComicPage(bytes: ByteArray, targetWidthPx: Int): Bitmap? {
     if (bytes.isEmpty()) return null
@@ -137,6 +153,7 @@ internal fun ContinuousComicReader(
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     onPageChanged: (Int) -> Unit,
     onTap: (ContinuousComicTapAction) -> Unit,
+    onLongPress: (pageIndex: Int, bitmap: Bitmap) -> Unit,
     onListStateAvailable: (LazyListState?) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -171,32 +188,7 @@ internal fun ContinuousComicReader(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(
-                    readingDirection,
-                    tapZoneLayout,
-                    tapZoneInvertMode,
-                    pageIndexes.size
-                ) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        val up = waitForUpOrCancellation()
-                        if (up != null) {
-                            onTap(
-                                continuousComicTapAction(
-                                    x = up.position.x,
-                                    y = up.position.y,
-                                    width = size.width.toFloat(),
-                                    height = size.height.toFloat(),
-                                    readingDirection = readingDirection,
-                                    layout = tapZoneLayout,
-                                    invertMode = tapZoneInvertMode
-                                )
-                            )
-                        }
-                    }
-                },
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(pageGapDp.coerceIn(0f, MAX_READER_PAGE_GAP_DP).dp)
         ) {
             items(pageIndexes, key = { it }) { pageIndex ->
@@ -206,6 +198,18 @@ internal fun ContinuousComicReader(
                     cachedPage = cachedPage,
                     cachedPageAspectRatio = cachedPageAspectRatio,
                     loadPage = loadPage,
+                    onTap = { position, size ->
+                        onTap(
+                            continuousComicTapAction(
+                                position = position,
+                                size = size,
+                                readingDirection = readingDirection,
+                                layout = tapZoneLayout,
+                                invertMode = tapZoneInvertMode
+                            )
+                        )
+                    },
+                    onLongPress = { bitmap -> onLongPress(pageIndex, bitmap) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -220,6 +224,8 @@ private fun ContinuousComicPage(
     cachedPage: (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     cachedPageAspectRatio: (pageIndex: Int, targetWidthPx: Int) -> Float?,
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
+    onTap: (position: Offset, size: IntSize) -> Unit,
+    onLongPress: (Bitmap) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var retryKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -254,7 +260,12 @@ private fun ContinuousComicPage(
             bitmap = pageState.bitmap.asImageBitmap(),
             contentDescription = "Page ${pageIndex + 1}",
             contentScale = ContentScale.FillWidth,
-            modifier = modifier
+            modifier = modifier.pointerInput(pageIndex) {
+                detectTapGestures(
+                    onTap = { position -> onTap(position, size) },
+                    onLongPress = { onLongPress(pageState.bitmap) }
+                )
+            }
         )
         ContinuousComicPageState.Failed -> Box(
             modifier = placeholderModifier ?: modifier.padding(vertical = 72.dp),
