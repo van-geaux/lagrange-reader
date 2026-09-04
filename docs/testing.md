@@ -15,6 +15,10 @@ For release work, also run the approved release assembly and release workflow ch
 
 Compiled Android instrumentation is not executed instrumentation. If `adb devices -l` does not enumerate a usable target, report connected tests as unexecuted.
 
+## Comic page-image gestures (issue #74)
+
+On a connected device or emulator, test local CBZ and extracted CBR files in both paginated and continuous modes. Tap loaded pages and verify the reader's existing pagination, menu, and continuous-scrolling controls remain usable. Long-press a loaded page and verify the shared fullscreen image viewer opens on that exact page. In an EPUB document containing one visible image and no meaningful text or interactive controls, verify pinch zooms from 1× to 4×, one-finger drag pans while zoomed, and pinching back to 1× restores ordinary reader ownership. At 1×, tap and swipe the image page and verify normal Readium pagination/menu behavior continues without opening the viewer. Repeat on a mixed text-and-image EPUB page and verify pinch, taps, text selection, and page navigation remain owned by Readium. Long-press either EPUB image type and verify the viewer opens without also turning the page. In the viewer, verify pinch and double-tap zoom, bounded panning, single taps inside the image do nothing, and a tap outside the visible image closes the viewer without accidental dismissal during a pinch. Long-press inside the viewer and verify `Download page` appears just below the finger; dismissing it must not download, while selecting it saves the image with the book title and one-based page number. Repeat with network disabled after the book or page has been downloaded/cached. Loading, failed, or missing images must not expose a usable download action or crash the reader.
+
 ## Debug APK handoff
 
 When asking the user to perform manual testing:

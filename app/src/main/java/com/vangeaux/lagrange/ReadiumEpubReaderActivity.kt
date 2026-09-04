@@ -5,6 +5,8 @@ import android.app.AlertDialog
 import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -54,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -71,6 +74,7 @@ import org.readium.r2.navigator.preferences.FontFamily as ReadiumFontFamily
 import org.readium.r2.navigator.preferences.Theme as ReadiumTheme
 import org.readium.r2.navigator.preferences.ReadingProgression as ReadiumReadingProgression
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Href
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -235,6 +239,11 @@ internal data class ReadiumEpubProgressResult(
 internal const val DEFAULT_HIGHLIGHT_COLOR = "yellow"
 internal const val DEFAULT_HIGHLIGHT_STYLE = "highlight"
 internal const val HIGHLIGHT_DECORATION_GROUP = "bookorbit-highlights"
+private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
+private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
+    "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
+
+internal fun shouldOpenEpubImageViewer(gesture: String): Boolean = gesture == "long_press"
 
 internal data class HighlightChoice(
     val label: String,
@@ -281,6 +290,11 @@ internal fun decodeJavascriptString(value: String?): String? {
         .getOrNull()
         ?.takeIf { it.isNotBlank() }
 }
+
+internal fun resolveEpubImageHref(baseHref: String, imageHref: String): String? =
+    runCatching { java.net.URI(baseHref).resolve(imageHref).toString() }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
 
 internal fun selectedSpineIndex(
     selectedHref: String,
@@ -453,6 +467,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
     private var readingSessionEnded = false
+    private var epubImageGestureJob: Job? = null
+    private var epubImageViewer by mutableStateOf<Pair<Int, Bitmap>?>(null)
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
@@ -747,6 +763,27 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+        val epubImageViewerView = ComposeView(this).apply {
+            setContent {
+                BookOrbitTheme {
+                    epubImageViewer?.let { (_, bitmap) ->
+                        ComicPageImageViewer(
+                            title = displayTitle,
+                            pageIndex = currentPage,
+                            bitmap = bitmap,
+                            onDismiss = { epubImageViewer = null }
+                        )
+                    }
+                }
+            }
+        }
+        readerViewport.addView(
+            epubImageViewerView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
         optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
@@ -861,6 +898,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         } else if (isPreview) {
             applyPreviewAnnotationDecoration(fragment, openedPublication)
         }
+        startEpubImageGestureBridge(fragment)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect { locator ->
@@ -878,6 +916,59 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         progressView?.visibility = View.GONE
         applyReaderPadding()
         if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+    }
+
+    private fun startEpubImageGestureBridge(fragment: EpubNavigatorFragment) {
+        epubImageGestureJob?.cancel()
+        val installScript = runCatching {
+            assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
+        }.getOrNull() ?: return
+        epubImageGestureJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    runCatching { fragment.evaluateJavascript(installScript) }
+                    val event = runCatching {
+                        decodeJavascriptString(
+                            fragment.evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
+                        )
+                    }.getOrNull()
+                    if (event != null) handleEpubImageGesture(fragment, event)
+                    delay(250)
+                }
+            }
+        }
+    }
+
+    private fun handleEpubImageGesture(fragment: EpubNavigatorFragment, event: String) {
+        val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
+        if (!shouldOpenEpubImageViewer(payload.optString("gesture"))) return
+        val rawHref = payload.optString("href").ifBlank { payload.optString("src") }
+        val baseHref = payload.optString("base")
+            .ifBlank { fragment.currentLocator.value.href.toString() }
+        val imageHref = resolveEpubImageHref(baseHref, rawHref) ?: return
+        val openedPublication = publication ?: return
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                val href = Href(imageHref) ?: return@withContext null
+                val link = Link(href = href)
+                val resource = openedPublication.get(link) ?: return@withContext null
+                try {
+                    val bytes = readContinuousComicPageBytes(resource) ?: return@withContext null
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                } finally {
+                    resource.close()
+                }
+            }
+            if (bitmap != null) {
+                epubImageViewer = currentPage to bitmap
+            } else {
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "This EPUB image could not be opened.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun loadHighlights(openedPublication: Publication) {
