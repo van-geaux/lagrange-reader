@@ -16,7 +16,11 @@ import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -106,26 +110,58 @@ class ReadiumEpubOpenInstrumentedTest {
     }
 
     @Test
-    fun generatedEpubImageColorOverrideIsScopedAndIdempotent() {
+    fun currentDocumentBridgeInstallerIncludesColorPreservationAndImageGestures() {
+        val script = epubCurrentDocumentInstallScript("gesture-installer")
+
+        assertTrue(script.contains("bookorbit-readium-epub-image-color-preservation"))
+        assertTrue(script.endsWith("gesture-installer"))
+    }
+
+    @Test
+    fun currentDocumentBridgeRetriesInstallerAfterNullEvaluation() = runBlocking {
+        val retried = CompletableDeferred<Unit>()
+        var installAttempts = 0
+        val bridgeJob = launch {
+            runEpubCurrentDocumentBridgeLoop(
+                installScript = "install-current-document",
+                evaluateJavascript = { script ->
+                    if (script == "install-current-document") {
+                        installAttempts += 1
+                        if (installAttempts == 2) retried.complete(Unit)
+                        if (installAttempts == 1) null else "\"installed\""
+                    } else {
+                        null
+                    }
+                },
+                onGesture = {},
+                pollIntervalMillis = 1L
+            )
+        }
+
+        withTimeout(1_000L) { retried.await() }
+        bridgeJob.cancelAndJoin()
+
+        assertEquals(2, installAttempts)
+    }
+
+    @Test
+    fun generatedEpubImageColorOverrideIsUniversalAndIdempotent() {
         val script = readiumEpubImageColorOverrideScript()
 
         assertTrue(script.contains("bookorbit-readium-epub-image-color-preservation"))
         assertEquals(1, script.split("createElement('style')").size - 1)
         assertEquals(1, script.split("appendChild(style)").size - 1)
-        assertTrue(script.contains(""":root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child"""))
-        assertTrue(script.contains(""":root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child"""))
-        assertTrue(script.contains(""":root[style*="readium-night-on"] img[class*="gaiji"]"""))
-        assertTrue(script.contains(""":root[style*="readium-night-on"][style*="readium-invert-on"] img"""))
-        assertTrue(script.contains(""":root[style*="readium-night-on"][style*="readium-darken-on"][style*="readium-invert-on"] img"""))
-        assertEquals(4, script.split("\n          filter: none !important").size - 1)
-        assertEquals(4, script.split("\n          -webkit-filter: none !important").size - 1)
-        assertEquals(1, script.split("\n          filter: brightness(80%) !important").size - 1)
-        assertEquals(1, script.split("\n          -webkit-filter: brightness(80%) !important").size - 1)
+        assertEquals(1, script.split("img, svg {").size - 1)
+        assertEquals(1, script.split("\n          filter: none !important;").size - 1)
+        assertEquals(1, script.split("\n          -webkit-filter: none !important;").size - 1)
+        assertEquals(1, script.split("mix-blend-mode: normal !important;").size - 1)
+        assertTrue(script.contains("return 'already-installed'"))
+        assertTrue(script.indexOf("getElementById") < script.indexOf("createElement('style')"))
+        assertTrue(!script.contains("readium-night-on"))
         assertTrue(!script.contains("readium-sepia-on"))
-        assertTrue(!script.contains("mix-blend-mode"))
-        assertTrue(!script.contains("img:only-child,"))
-        assertTrue(script.contains("getElementById"))
-        assertTrue(script.contains("if (!style)"))
+        assertTrue(!script.contains("titlepage"))
+        assertTrue(!script.contains("gaiji"))
+        assertTrue(!script.contains("brightness"))
     }
 
     @OptIn(ExperimentalReadiumApi::class)

@@ -55,6 +55,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -243,40 +244,44 @@ internal const val HIGHLIGHT_DECORATION_GROUP = "bookorbit-highlights"
 internal fun readiumEpubImageColorOverrideScript(): String = """
     (function() {
       const styleId = 'bookorbit-readium-epub-image-color-preservation';
-      let style = document.getElementById(styleId);
-      if (!style) {
-        style = document.createElement('style');
-        style.id = styleId;
-        document.head.appendChild(style);
-      }
+      if (document.getElementById(styleId)) return 'already-installed';
+      const style = document.createElement('style');
+      style.id = styleId;
       style.textContent = `
-        :root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child {
+        img, svg {
           filter: none !important;
           -webkit-filter: none !important;
-        }
-        :root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child {
-          filter: none !important;
-          -webkit-filter: none !important;
-        }
-        :root[style*="readium-night-on"] img[class*="gaiji"] {
-          filter: none !important;
-          -webkit-filter: none !important;
-        }
-        :root[style*="readium-night-on"][style*="readium-invert-on"] img {
-          filter: none !important;
-          -webkit-filter: none !important;
-        }
-        :root[style*="readium-night-on"][style*="readium-darken-on"][style*="readium-invert-on"] img {
-          filter: brightness(80%) !important;
-          -webkit-filter: brightness(80%) !important;
+          mix-blend-mode: normal !important;
         }
       `;
+      document.head.appendChild(style);
+      return 'installed';
     })();
 """.trimIndent()
 
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
+
+internal fun epubCurrentDocumentInstallScript(gestureScript: String): String =
+    readiumEpubImageColorOverrideScript() + "\n" + gestureScript
+
+internal suspend fun runEpubCurrentDocumentBridgeLoop(
+    installScript: String,
+    evaluateJavascript: suspend (String) -> String?,
+    onGesture: (String) -> Unit,
+    pollIntervalMillis: Long = 250L
+) {
+    while (currentCoroutineContext().isActive) {
+        runCatching { evaluateJavascript(installScript) }
+        val event = runCatching {
+            evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
+                ?.let(::decodeJavascriptString)
+        }.getOrNull()
+        if (event != null) onGesture(event)
+        delay(pollIntervalMillis)
+    }
+}
 
 internal fun shouldOpenEpubImageViewer(gesture: String): Boolean = gesture == "long_press"
 
@@ -937,9 +942,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect { locator ->
-                    runCatching {
-                        fragment.evaluateJavascript(readiumEpubImageColorOverrideScript())
-                    }
                     updateLocation(locator)
                     pendingAnnotationReanchor?.let { target ->
                         pendingAnnotationReanchor = null
@@ -958,21 +960,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun startEpubImageGestureBridge(fragment: EpubNavigatorFragment) {
         epubImageGestureJob?.cancel()
-        val installScript = runCatching {
+        val gestureScript = runCatching {
             assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
+        val installScript = epubCurrentDocumentInstallScript(gestureScript)
         epubImageGestureJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (isActive) {
-                    runCatching { fragment.evaluateJavascript(installScript) }
-                    val event = runCatching {
-                        decodeJavascriptString(
-                            fragment.evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
-                        )
-                    }.getOrNull()
-                    if (event != null) handleEpubImageGesture(fragment, event)
-                    delay(250)
-                }
+                runEpubCurrentDocumentBridgeLoop(
+                    installScript = installScript,
+                    evaluateJavascript = fragment::evaluateJavascript,
+                    onGesture = { event -> handleEpubImageGesture(fragment, event) }
+                )
             }
         }
     }
