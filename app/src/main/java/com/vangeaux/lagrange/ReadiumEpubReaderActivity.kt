@@ -250,11 +250,25 @@ internal fun readiumEpubImageColorOverrideScript(): String = """
         document.head.appendChild(style);
       }
       style.textContent = `
-        :root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child,
-        :root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child,
+        :root[style*="readium-night-on"] [epub\\:type~="titlepage"] img:only-child {
+          filter: none !important;
+          -webkit-filter: none !important;
+        }
+        :root[style*="readium-night-on"] [epub|type~="titlepage"] img:only-child {
+          filter: none !important;
+          -webkit-filter: none !important;
+        }
         :root[style*="readium-night-on"] img[class*="gaiji"] {
           filter: none !important;
           -webkit-filter: none !important;
+        }
+        :root[style*="readium-night-on"][style*="readium-invert-on"] img {
+          filter: none !important;
+          -webkit-filter: none !important;
+        }
+        :root[style*="readium-night-on"][style*="readium-darken-on"][style*="readium-invert-on"] img {
+          filter: brightness(80%) !important;
+          -webkit-filter: brightness(80%) !important;
         }
       `;
     })();

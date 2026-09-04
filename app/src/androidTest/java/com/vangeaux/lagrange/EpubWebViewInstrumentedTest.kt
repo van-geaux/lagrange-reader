@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,6 +27,64 @@ import org.junit.runner.RunWith
 class EpubWebViewInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun readiumTitlepageAndGaijiInversionIsRemovedFromComputedStyles() {
+        val filters = loadImageFiltersAndApplyOverride(
+            htmlStyle = "readium-night-on",
+            readiumCss = """
+                @namespace epub url("http://www.idpf.org/2007/ops");
+                [epub\:type~="titlepage"] img:only-child,
+                [epub|type~="titlepage"] img:only-child,
+                img[class*="gaiji"] { filter: invert(100%); -webkit-filter: invert(100%); }
+            """.trimIndent(),
+            body = """
+                <section epub:type="frontmatter titlepage"><img id="titlepage"></section>
+                <img id="gaiji" class="book-gaiji-symbol">
+            """.trimIndent(),
+            imageIds = listOf("titlepage", "gaiji")
+        )
+
+        assertTrue(filters.before.all { it.contains("invert") })
+        assertEquals(listOf("none", "none"), filters.after)
+    }
+
+    @Test
+    fun readiumInvertOnDoesNotInvertAnArbitraryImage() {
+        val filters = loadImageFiltersAndApplyOverride(
+            htmlStyle = "readium-night-on readium-invert-on",
+            readiumCss = """
+                :root[style*="readium-night-on"][style*="readium-invert-on"] img {
+                  filter: invert(100%); -webkit-filter: invert(100%);
+                }
+            """.trimIndent(),
+            body = "<p><img id=\"ordinary\"></p>",
+            imageIds = listOf("ordinary")
+        )
+
+        assertTrue(filters.before.single().contains("invert"))
+        assertEquals("none", filters.after.single())
+    }
+
+    @Test
+    fun readiumDarkenAndInvertKeepsBrightnessWithoutInversion() {
+        val filters = loadImageFiltersAndApplyOverride(
+            htmlStyle = "readium-night-on readium-darken-on readium-invert-on",
+            readiumCss = """
+                :root[style*="readium-night-on"][style*="readium-darken-on"][style*="readium-invert-on"] img {
+                  filter: brightness(80%) invert(100%);
+                  -webkit-filter: brightness(80%) invert(100%);
+                }
+            """.trimIndent(),
+            body = "<img id=\"darkened\">",
+            imageIds = listOf("darkened")
+        )
+
+        assertTrue(filters.before.single().contains("brightness"))
+        assertTrue(filters.before.single().contains("invert"))
+        assertTrue(filters.after.single().contains("brightness"))
+        assertTrue(!filters.after.single().contains("invert"))
+    }
 
     @Test
     fun knownGoodTranslatedPagesStayVisibleWhenExternalVerticalPaddingResizesWebView() {
@@ -211,6 +270,50 @@ class EpubWebViewInstrumentedTest {
         assertTrue(jumpedGeometry.getBoolean("visibleText"))
     }
 
+    private fun loadImageFiltersAndApplyOverride(
+        htmlStyle: String,
+        readiumCss: String,
+        body: String,
+        imageIds: List<String>
+    ): ImageFilters {
+        val loaded = CountDownLatch(1)
+        lateinit var webView: WebView
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                super.onPageFinished(view, url)
+                                loaded.countDown()
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            "https://reader.test/",
+                            "<html style=\"$htmlStyle\"><head><style>$readiumCss</style></head><body>$body</body></html>",
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }.also { webView = it }
+                }
+            )
+        }
+
+        assertTrue("EPUB image fixture did not finish loading", loaded.await(10, TimeUnit.SECONDS))
+        val expression = imageIds.joinToString(",") { id ->
+            "getComputedStyle(document.getElementById('$id')).filter"
+        }
+        val before = JSONArray(evaluateJavascript(webView, "[$expression]"))
+            .let { values -> (0 until values.length()).map(values::getString) }
+        evaluateJavascript(webView, readiumEpubImageColorOverrideScript())
+        val after = JSONArray(evaluateJavascript(webView, "[$expression]"))
+            .let { values -> (0 until values.length()).map(values::getString) }
+        return ImageFilters(before, after)
+    }
+
     private fun awaitGeometry(
         webView: WebView,
         condition: (JSONObject) -> Boolean
@@ -239,6 +342,11 @@ class EpubWebViewInstrumentedTest {
     private fun decodeJavascriptString(value: String): String {
         return JSONArray("[$value]").getString(0)
     }
+
+    private data class ImageFilters(
+        val before: List<String>,
+        val after: List<String>
+    )
 
     @Suppress("UNUSED_PARAMETER")
     private class TestReaderBridge(
