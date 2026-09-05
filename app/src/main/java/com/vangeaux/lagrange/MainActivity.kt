@@ -66,8 +66,9 @@ class MainActivity : ComponentActivity() {
         val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
         graph.coordinator.reconfigureBackgroundRefresh()
-        val preferencesStore = AppPreferencesStore(this)
+        preferencesStore = AppPreferencesStore(this)
         val initialPreferences = preferencesStore.read()
+        appPreferencesState.value = initialPreferences
         requestedOrientation = requestedOrientationForLock(
             enabled = initialPreferences.lockOrientation,
             lockedOrientation = initialPreferences.lockedOrientation
