@@ -49,10 +49,99 @@ class ReadiumEpubReaderRoutingTest {
     }
 
     @Test
-    fun epubImageHrefResolvesRelativeToTheCurrentChapter() {
+    fun epubImageHrefResolvesRelativeToTheCurrentPublicationLocator() {
         assertEquals(
-            "OPS/images/cover.png",
-            resolveEpubImageHref("OPS/text/chapter.xhtml", "../images/cover.png")
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/insert001.xhtml",
+                imageHrefs = listOf("../Images/Art_insert001.jpg")
+            )
+        )
+    }
+
+    @Test
+    fun epubImageHrefNormalizesReadiumPublicationBaseBeforeResolvingRelativeSource() {
+        assertEquals(
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "https://readium/publication/OEBPS/Text/insert001.xhtml",
+                imageHrefs = listOf("../Images/Art_insert001.jpg")
+            )
+        )
+    }
+
+    @Test
+    fun epubImageCurrentSrcRemovesTheReadiumPublicationOrigin() {
+        assertEquals(
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/insert001.xhtml",
+                imageHrefs = listOf("https://readium/publication/OEBPS/Images/Art_insert001.jpg")
+            )
+        )
+    }
+
+    @Test
+    fun epubImageHrefPreservesEncodedPublicationPathSegments() {
+        assertEquals(
+            "OEBPS/Images/Art%20insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/Chapter%201.xhtml",
+                imageHrefs = listOf("../Images/Art%20insert001.jpg")
+            )
+        )
+    }
+
+    @Test
+    fun epubImageHrefDropsQueryAndFragmentBeforePublicationLookup() {
+        assertEquals(
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/insert001.xhtml?layout=page#position",
+                imageHrefs = listOf("../Images/Art_insert001.jpg?width=1200#figure")
+            )
+        )
+        assertEquals(
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/insert001.xhtml",
+                imageHrefs = listOf(
+                    "https://readium/publication/OEBPS/Images/Art_insert001.jpg?width=1200#figure"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun epubImageHrefRejectsNonPublicationUrls() {
+        val currentLocator = "OEBPS/Text/insert001.xhtml"
+
+        listOf(
+            "https://example.com/Art_insert001.jpg",
+            "data:image/png;base64,AAAA",
+            "blob:https://readium/example-id",
+            "file:///android_asset/Art_insert001.jpg",
+            "https://readium/assets/Art_insert001.jpg"
+        ).forEach { imageHref ->
+            assertEquals(
+                imageHref,
+                null,
+                resolveEpubImageHref(currentLocator, listOf(imageHref))
+            )
+        }
+    }
+
+    @Test
+    fun epubImageHrefFallsBackFromRejectedHrefToReadiumCurrentSrc() {
+        assertEquals(
+            "OEBPS/Images/Art_insert001.jpg",
+            resolveEpubImageHref(
+                currentLocatorHref = "OEBPS/Text/insert001.xhtml",
+                imageHrefs = listOf(
+                    "https://example.com/Art_insert001.jpg",
+                    "https://readium/publication/OEBPS/Images/Art_insert001.jpg"
+                )
+            )
         )
     }
 

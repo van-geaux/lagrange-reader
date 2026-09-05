@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
 import android.util.Size
@@ -30,6 +31,8 @@ import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Href
+import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.publication.services.coverFitting
@@ -103,6 +106,39 @@ class ReadiumEpubOpenInstrumentedTest {
             assertTrue(fittedCover.height in 1..90)
             cover.recycle()
             if (fittedCover !== cover) fittedCover.recycle()
+        } finally {
+            publication.close()
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun resolvedReadiumImageHrefLoadsAndDecodesFromPublication() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-image-resource.epub")
+        writeSvgCoverEpub(epub)
+
+        val result = openReadiumEpub(context, epub)
+        assertTrue(result is ReadiumEpubOpenResult.Opened)
+        val publication = (result as ReadiumEpubOpenResult.Opened).publication
+        try {
+            val imageHref = requireNotNull(
+                resolveEpubImageHref(
+                    currentLocatorHref = "OEBPS/Text/titlepage.xhtml",
+                    imageHrefs = listOf("https://readium/publication/OEBPS/Images/cover.jpg")
+                )
+            )
+            assertEquals("OEBPS/Images/cover.jpg", imageHref)
+            val resource = requireNotNull(publication.get(Link(href = requireNotNull(Href(imageHref)))))
+            val bytes = try {
+                requireNotNull(readContinuousComicPageBytes(resource))
+            } finally {
+                resource.close()
+            }
+            val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+            assertEquals(120, bitmap.width)
+            assertEquals(180, bitmap.height)
+            bitmap.recycle()
         } finally {
             publication.close()
             epub.delete()

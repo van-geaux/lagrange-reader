@@ -331,10 +331,51 @@ internal fun decodeJavascriptString(value: String?): String? {
         ?.takeIf { it.isNotBlank() }
 }
 
-internal fun resolveEpubImageHref(baseHref: String, imageHref: String): String? =
-    runCatching { java.net.URI(baseHref).resolve(imageHref).toString() }
-        .getOrNull()
-        ?.takeIf { it.isNotBlank() }
+internal fun resolveEpubImageHref(
+    currentLocatorHref: String,
+    imageHrefs: List<String>
+): String? {
+    fun publicationPath(value: String): String? {
+        val uri = runCatching { java.net.URI(value).normalize() }.getOrNull() ?: return null
+        val path = when {
+            uri.isAbsolute -> {
+                if (
+                    !uri.scheme.equals("https", ignoreCase = true) ||
+                    !uri.host.equals("readium", ignoreCase = true) ||
+                    uri.port != -1 ||
+                    uri.userInfo != null
+                ) {
+                    return null
+                }
+                uri.rawPath?.removePrefix("/publication/")
+                    ?.takeIf { it != uri.rawPath }
+            }
+            uri.rawAuthority == null -> uri.rawPath
+            else -> null
+        } ?: return null
+        return path.takeIf {
+            it.isNotBlank() &&
+                !it.startsWith('/') &&
+                it != ".." &&
+                !it.startsWith("../")
+        }
+    }
+
+    val currentPath = publicationPath(currentLocatorHref) ?: return null
+    val baseUri = runCatching { java.net.URI(currentPath) }.getOrNull() ?: return null
+    return imageHrefs.firstNotNullOfOrNull { imageHref ->
+        val candidate = imageHref.takeIf { it.isNotBlank() } ?: return@firstNotNullOfOrNull null
+        val candidateUri = runCatching { java.net.URI(candidate) }.getOrNull()
+            ?: return@firstNotNullOfOrNull null
+        if (candidateUri.isAbsolute || candidateUri.rawAuthority != null) {
+            publicationPath(candidate)
+        } else {
+            val resolved = runCatching { baseUri.resolve(candidateUri).normalize() }.getOrNull()
+                ?: return@firstNotNullOfOrNull null
+            publicationPath(resolved.rawPath.orEmpty())
+        }
+    }
+}
 
 internal fun selectedSpineIndex(
     selectedHref: String,
@@ -978,10 +1019,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun handleEpubImageGesture(fragment: EpubNavigatorFragment, event: String) {
         val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
         if (!shouldOpenEpubImageViewer(payload.optString("gesture"))) return
-        val rawHref = payload.optString("href").ifBlank { payload.optString("src") }
-        val baseHref = payload.optString("base")
-            .ifBlank { fragment.currentLocator.value.href.toString() }
-        val imageHref = resolveEpubImageHref(baseHref, rawHref) ?: return
+        val imageHref = resolveEpubImageHref(
+            currentLocatorHref = fragment.currentLocator.value.href.toString(),
+            imageHrefs = listOf(payload.optString("href"), payload.optString("src"))
+        ) ?: return
         val openedPublication = publication ?: return
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
