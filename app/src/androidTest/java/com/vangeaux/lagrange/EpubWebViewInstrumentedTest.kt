@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,6 +27,121 @@ import org.junit.runner.RunWith
 class EpubWebViewInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun lightModeRemovesColorEffectsFromArbitraryImagesAndSvgWithoutThemeScope() {
+        val effects = loadImageColorEffectsAndApplyOverride(
+            htmlStyle = "",
+            readiumCss = """
+                img, svg {
+                  filter: sepia(100%); -webkit-filter: sepia(100%);
+                  mix-blend-mode: multiply;
+                }
+            """.trimIndent(),
+            body = """
+                <p><img id="ordinary"></p>
+                <svg id="vector" width="10" height="10"><rect width="10" height="10"/></svg>
+            """.trimIndent(),
+            elementIds = listOf("ordinary", "vector")
+        )
+
+        assertTrue(effects.beforeFilters.all { it.contains("sepia") })
+        assertEquals(listOf("multiply", "multiply"), effects.beforeBlendModes)
+        assertEquals(listOf("none", "none"), effects.afterFilters)
+        assertEquals(listOf("normal", "normal"), effects.afterBlendModes)
+    }
+
+    @Test
+    fun darkModeRemovesColorEffectsFromNestedTitlepageArbitraryGaijiAndSvg() {
+        val effects = loadImageColorEffectsAndApplyOverride(
+            htmlStyle = "readium-night-on readium-invert-on",
+            readiumCss = """
+                @namespace epub url("http://www.idpf.org/2007/ops");
+                [epub\:type~="titlepage"] img:only-child,
+                [epub|type~="titlepage"] img:only-child,
+                img[class*="gaiji"],
+                :root[style*="readium-invert-on"] img,
+                :root[style*="readium-invert-on"] svg {
+                  filter: invert(100%); -webkit-filter: invert(100%);
+                  mix-blend-mode: screen;
+                }
+            """.trimIndent(),
+            body = """
+                <section epub:type="frontmatter titlepage"><div><img id="titlepage"></div></section>
+                <p><img id="ordinary"></p>
+                <img id="gaiji" class="book-gaiji-symbol">
+                <svg id="vector" width="10" height="10"><rect width="10" height="10"/></svg>
+            """.trimIndent(),
+            elementIds = listOf("titlepage", "ordinary", "gaiji", "vector")
+        )
+
+        assertTrue(effects.beforeFilters.all { it.contains("invert") })
+        assertTrue(effects.beforeBlendModes.all { it == "screen" })
+        assertTrue(effects.afterFilters.all { it == "none" })
+        assertTrue(effects.afterBlendModes.all { it == "normal" })
+    }
+
+    @Test
+    fun sepiaModeRemovesImageAndSvgBlendModes() {
+        val effects = loadImageColorEffectsAndApplyOverride(
+            htmlStyle = "readium-sepia-on",
+            readiumCss = "img, svg { mix-blend-mode: multiply; }",
+            body = """
+                <img id="sepia-image">
+                <svg id="sepia-vector" width="10" height="10"><rect width="10" height="10"/></svg>
+            """.trimIndent(),
+            elementIds = listOf("sepia-image", "sepia-vector")
+        )
+
+        assertEquals(listOf("multiply", "multiply"), effects.beforeBlendModes)
+        assertEquals(listOf("none", "none"), effects.afterFilters)
+        assertEquals(listOf("normal", "normal"), effects.afterBlendModes)
+    }
+
+    @Test
+    fun repeatedInstallerDoesNotRewriteTheExistingStyleNode() {
+        val loaded = CountDownLatch(1)
+        lateinit var webView: WebView
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                super.onPageFinished(view, url)
+                                loaded.countDown()
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            "https://reader.test/",
+                            "<html><head></head><body><img></body></html>",
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }.also { webView = it }
+                }
+            )
+        }
+
+        assertTrue("EPUB image fixture did not finish loading", loaded.await(10, TimeUnit.SECONDS))
+        evaluateJavascript(webView, readiumEpubImageColorOverrideScript())
+        evaluateJavascript(
+            webView,
+            "window.__bookorbitStyleTextNode = document.getElementById('bookorbit-readium-epub-image-color-preservation').firstChild"
+        )
+        evaluateJavascript(webView, readiumEpubImageColorOverrideScript())
+
+        assertEquals(
+            "true",
+            evaluateJavascript(
+                webView,
+                "window.__bookorbitStyleTextNode === document.getElementById('bookorbit-readium-epub-image-color-preservation').firstChild"
+            )
+        )
+    }
 
     @Test
     fun knownGoodTranslatedPagesStayVisibleWhenExternalVerticalPaddingResizesWebView() {
@@ -211,6 +327,62 @@ class EpubWebViewInstrumentedTest {
         assertTrue(jumpedGeometry.getBoolean("visibleText"))
     }
 
+    private fun loadImageColorEffectsAndApplyOverride(
+        htmlStyle: String,
+        readiumCss: String,
+        body: String,
+        elementIds: List<String>
+    ): ImageColorEffects {
+        val loaded = CountDownLatch(1)
+        lateinit var webView: WebView
+        composeRule.setContent {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                super.onPageFinished(view, url)
+                                loaded.countDown()
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            "https://reader.test/",
+                            "<html style=\"$htmlStyle\"><head><style>$readiumCss</style></head><body>$body</body></html>",
+                            "text/html",
+                            Charsets.UTF_8.name(),
+                            null
+                        )
+                    }.also { webView = it }
+                }
+            )
+        }
+
+        assertTrue("EPUB image fixture did not finish loading", loaded.await(10, TimeUnit.SECONDS))
+        val filterExpression = elementIds.joinToString(",") { id ->
+            "getComputedStyle(document.getElementById('$id')).filter"
+        }
+        val blendExpression = elementIds.joinToString(",") { id ->
+            "getComputedStyle(document.getElementById('$id')).mixBlendMode"
+        }
+        val beforeFilters = javascriptStringArray(webView, "[$filterExpression]")
+        val beforeBlendModes = javascriptStringArray(webView, "[$blendExpression]")
+        evaluateJavascript(webView, readiumEpubImageColorOverrideScript())
+        val afterFilters = javascriptStringArray(webView, "[$filterExpression]")
+        val afterBlendModes = javascriptStringArray(webView, "[$blendExpression]")
+        return ImageColorEffects(
+            beforeFilters = beforeFilters,
+            beforeBlendModes = beforeBlendModes,
+            afterFilters = afterFilters,
+            afterBlendModes = afterBlendModes
+        )
+    }
+
+    private fun javascriptStringArray(webView: WebView, expression: String): List<String> =
+        JSONArray(evaluateJavascript(webView, expression))
+            .let { values -> (0 until values.length()).map(values::getString) }
+
     private fun awaitGeometry(
         webView: WebView,
         condition: (JSONObject) -> Boolean
@@ -239,6 +411,13 @@ class EpubWebViewInstrumentedTest {
     private fun decodeJavascriptString(value: String): String {
         return JSONArray("[$value]").getString(0)
     }
+
+    private data class ImageColorEffects(
+        val beforeFilters: List<String>,
+        val beforeBlendModes: List<String>,
+        val afterFilters: List<String>,
+        val afterBlendModes: List<String>
+    )
 
     @Suppress("UNUSED_PARAMETER")
     private class TestReaderBridge(

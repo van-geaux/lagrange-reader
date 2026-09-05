@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
 import android.util.Size
@@ -16,7 +17,11 @@ import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +31,8 @@ import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Href
+import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.publication.services.coverFitting
@@ -103,6 +110,94 @@ class ReadiumEpubOpenInstrumentedTest {
             publication.close()
             epub.delete()
         }
+    }
+
+    @Test
+    fun resolvedReadiumImageHrefLoadsAndDecodesFromPublication() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-image-resource.epub")
+        writeSvgCoverEpub(epub)
+
+        val result = openReadiumEpub(context, epub)
+        assertTrue(result is ReadiumEpubOpenResult.Opened)
+        val publication = (result as ReadiumEpubOpenResult.Opened).publication
+        try {
+            val imageHref = requireNotNull(
+                resolveEpubImageHref(
+                    currentLocatorHref = "OEBPS/Text/titlepage.xhtml",
+                    imageHrefs = listOf("https://readium/publication/OEBPS/Images/cover.jpg")
+                )
+            )
+            assertEquals("OEBPS/Images/cover.jpg", imageHref)
+            val resource = requireNotNull(publication.get(Link(href = requireNotNull(Href(imageHref)))))
+            val bytes = try {
+                requireNotNull(readContinuousComicPageBytes(resource))
+            } finally {
+                resource.close()
+            }
+            val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+            assertEquals(120, bitmap.width)
+            assertEquals(180, bitmap.height)
+            bitmap.recycle()
+        } finally {
+            publication.close()
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun currentDocumentBridgeInstallerIncludesColorPreservationAndImageGestures() {
+        val script = epubCurrentDocumentInstallScript("gesture-installer")
+
+        assertTrue(script.contains("bookorbit-readium-epub-image-color-preservation"))
+        assertTrue(script.endsWith("gesture-installer"))
+    }
+
+    @Test
+    fun currentDocumentBridgeRetriesInstallerAfterNullEvaluation() = runBlocking {
+        val retried = CompletableDeferred<Unit>()
+        var installAttempts = 0
+        val bridgeJob = launch {
+            runEpubCurrentDocumentBridgeLoop(
+                installScript = "install-current-document",
+                evaluateJavascript = { script ->
+                    if (script == "install-current-document") {
+                        installAttempts += 1
+                        if (installAttempts == 2) retried.complete(Unit)
+                        if (installAttempts == 1) null else "\"installed\""
+                    } else {
+                        null
+                    }
+                },
+                onGesture = {},
+                pollIntervalMillis = 1L
+            )
+        }
+
+        withTimeout(1_000L) { retried.await() }
+        bridgeJob.cancelAndJoin()
+
+        assertEquals(2, installAttempts)
+    }
+
+    @Test
+    fun generatedEpubImageColorOverrideIsUniversalAndIdempotent() {
+        val script = readiumEpubImageColorOverrideScript()
+
+        assertTrue(script.contains("bookorbit-readium-epub-image-color-preservation"))
+        assertEquals(1, script.split("createElement('style')").size - 1)
+        assertEquals(1, script.split("appendChild(style)").size - 1)
+        assertEquals(1, script.split("img, svg {").size - 1)
+        assertEquals(1, script.split("\n          filter: none !important;").size - 1)
+        assertEquals(1, script.split("\n          -webkit-filter: none !important;").size - 1)
+        assertEquals(1, script.split("mix-blend-mode: normal !important;").size - 1)
+        assertTrue(script.contains("return 'already-installed'"))
+        assertTrue(script.indexOf("getElementById") < script.indexOf("createElement('style')"))
+        assertTrue(!script.contains("readium-night-on"))
+        assertTrue(!script.contains("readium-sepia-on"))
+        assertTrue(!script.contains("titlepage"))
+        assertTrue(!script.contains("gaiji"))
+        assertTrue(!script.contains("brightness"))
     }
 
     @OptIn(ExperimentalReadiumApi::class)

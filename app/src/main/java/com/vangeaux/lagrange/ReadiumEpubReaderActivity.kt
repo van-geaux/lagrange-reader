@@ -55,6 +55,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -239,9 +240,48 @@ internal data class ReadiumEpubProgressResult(
 internal const val DEFAULT_HIGHLIGHT_COLOR = "yellow"
 internal const val DEFAULT_HIGHLIGHT_STYLE = "highlight"
 internal const val HIGHLIGHT_DECORATION_GROUP = "bookorbit-highlights"
+
+internal fun readiumEpubImageColorOverrideScript(): String = """
+    (function() {
+      const styleId = 'bookorbit-readium-epub-image-color-preservation';
+      if (document.getElementById(styleId)) return 'already-installed';
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        img, svg {
+          filter: none !important;
+          -webkit-filter: none !important;
+          mix-blend-mode: normal !important;
+        }
+      `;
+      document.head.appendChild(style);
+      return 'installed';
+    })();
+""".trimIndent()
+
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
+
+internal fun epubCurrentDocumentInstallScript(gestureScript: String): String =
+    readiumEpubImageColorOverrideScript() + "\n" + gestureScript
+
+internal suspend fun runEpubCurrentDocumentBridgeLoop(
+    installScript: String,
+    evaluateJavascript: suspend (String) -> String?,
+    onGesture: (String) -> Unit,
+    pollIntervalMillis: Long = 250L
+) {
+    while (currentCoroutineContext().isActive) {
+        runCatching { evaluateJavascript(installScript) }
+        val event = runCatching {
+            evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
+                ?.let(::decodeJavascriptString)
+        }.getOrNull()
+        if (event != null) onGesture(event)
+        delay(pollIntervalMillis)
+    }
+}
 
 internal fun shouldOpenEpubImageViewer(gesture: String): Boolean = gesture == "long_press"
 
@@ -291,10 +331,51 @@ internal fun decodeJavascriptString(value: String?): String? {
         ?.takeIf { it.isNotBlank() }
 }
 
-internal fun resolveEpubImageHref(baseHref: String, imageHref: String): String? =
-    runCatching { java.net.URI(baseHref).resolve(imageHref).toString() }
-        .getOrNull()
-        ?.takeIf { it.isNotBlank() }
+internal fun resolveEpubImageHref(
+    currentLocatorHref: String,
+    imageHrefs: List<String>
+): String? {
+    fun publicationPath(value: String): String? {
+        val uri = runCatching { java.net.URI(value).normalize() }.getOrNull() ?: return null
+        val path = when {
+            uri.isAbsolute -> {
+                if (
+                    !uri.scheme.equals("https", ignoreCase = true) ||
+                    !uri.host.equals("readium", ignoreCase = true) ||
+                    uri.port != -1 ||
+                    uri.userInfo != null
+                ) {
+                    return null
+                }
+                uri.rawPath?.removePrefix("/publication/")
+                    ?.takeIf { it != uri.rawPath }
+            }
+            uri.rawAuthority == null -> uri.rawPath
+            else -> null
+        } ?: return null
+        return path.takeIf {
+            it.isNotBlank() &&
+                !it.startsWith('/') &&
+                it != ".." &&
+                !it.startsWith("../")
+        }
+    }
+
+    val currentPath = publicationPath(currentLocatorHref) ?: return null
+    val baseUri = runCatching { java.net.URI(currentPath) }.getOrNull() ?: return null
+    return imageHrefs.firstNotNullOfOrNull { imageHref ->
+        val candidate = imageHref.takeIf { it.isNotBlank() } ?: return@firstNotNullOfOrNull null
+        val candidateUri = runCatching { java.net.URI(candidate) }.getOrNull()
+            ?: return@firstNotNullOfOrNull null
+        if (candidateUri.isAbsolute || candidateUri.rawAuthority != null) {
+            publicationPath(candidate)
+        } else {
+            val resolved = runCatching { baseUri.resolve(candidateUri).normalize() }.getOrNull()
+                ?: return@firstNotNullOfOrNull null
+            publicationPath(resolved.rawPath.orEmpty())
+        }
+    }
+}
 
 internal fun selectedSpineIndex(
     selectedHref: String,
@@ -920,21 +1001,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun startEpubImageGestureBridge(fragment: EpubNavigatorFragment) {
         epubImageGestureJob?.cancel()
-        val installScript = runCatching {
+        val gestureScript = runCatching {
             assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
+        val installScript = epubCurrentDocumentInstallScript(gestureScript)
         epubImageGestureJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (isActive) {
-                    runCatching { fragment.evaluateJavascript(installScript) }
-                    val event = runCatching {
-                        decodeJavascriptString(
-                            fragment.evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
-                        )
-                    }.getOrNull()
-                    if (event != null) handleEpubImageGesture(fragment, event)
-                    delay(250)
-                }
+                runEpubCurrentDocumentBridgeLoop(
+                    installScript = installScript,
+                    evaluateJavascript = fragment::evaluateJavascript,
+                    onGesture = { event -> handleEpubImageGesture(fragment, event) }
+                )
             }
         }
     }
@@ -942,10 +1019,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun handleEpubImageGesture(fragment: EpubNavigatorFragment, event: String) {
         val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
         if (!shouldOpenEpubImageViewer(payload.optString("gesture"))) return
-        val rawHref = payload.optString("href").ifBlank { payload.optString("src") }
-        val baseHref = payload.optString("base")
-            .ifBlank { fragment.currentLocator.value.href.toString() }
-        val imageHref = resolveEpubImageHref(baseHref, rawHref) ?: return
+        val imageHref = resolveEpubImageHref(
+            currentLocatorHref = fragment.currentLocator.value.href.toString(),
+            imageHrefs = listOf(payload.optString("href"), payload.optString("src"))
+        ) ?: return
         val openedPublication = publication ?: return
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
