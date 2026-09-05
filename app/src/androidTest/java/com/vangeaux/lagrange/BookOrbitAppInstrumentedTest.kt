@@ -1386,6 +1386,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("profile-session-divider").assertIsDisplayed()
         val achievementsBounds = composeRule.onNodeWithText("Achievements")
             .fetchSemanticsNode().boundsInRoot
+        val faqBounds = composeRule.onNodeWithText("FAQ")
+            .fetchSemanticsNode().boundsInRoot
         val optionsBounds = composeRule.onNodeWithText("Options")
             .fetchSemanticsNode().boundsInRoot
         val aboutBounds = composeRule.onNodeWithText("About")
@@ -1396,7 +1398,8 @@ class BookOrbitAppInstrumentedTest {
             .fetchSemanticsNode().boundsInRoot
         val logoutBounds = composeRule.onNodeWithText("Log out")
             .fetchSemanticsNode().boundsInRoot
-        assertTrue(achievementsBounds.top < optionsBounds.top)
+        assertTrue(achievementsBounds.top < faqBounds.top)
+        assertTrue(faqBounds.top < optionsBounds.top)
         assertTrue(optionsBounds.top < aboutBounds.top)
         assertTrue(aboutBounds.bottom <= dividerBounds.top)
         assertTrue(dividerBounds.bottom <= changeServerBounds.top)
