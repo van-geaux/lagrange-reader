@@ -77,6 +77,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -1198,6 +1199,15 @@ internal fun NativeLibraryBrowserScreen(
         genreSourceSeriesKey = null
         selectedBook = null
     }
+    val openFaq = {
+        showProfileMenu = false
+        context.startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://github.com/van-geaux/lagrange-reader/wiki/FAQ")
+            )
+        )
+    }
     val openChangeServerEditor = {
         showProfileMenu = false
         changeServerUrl = state.serverUrl
@@ -1479,6 +1489,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1500,6 +1511,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1521,6 +1533,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1541,6 +1554,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1559,6 +1573,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1577,6 +1592,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1595,6 +1611,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -1634,6 +1651,7 @@ internal fun NativeLibraryBrowserScreen(
                     onOptions = openOptions,
                     onStatistics = openStatistics,
                     onAchievements = openAchievements,
+                    onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
                 )
@@ -2097,6 +2115,7 @@ private fun BrowserTopBar(
     onOptions: () -> Unit = {},
     onStatistics: () -> Unit = {},
     onAchievements: () -> Unit = {},
+    onFaq: () -> Unit = {},
     onAbout: () -> Unit = {},
     onChangeServer: () -> Unit = {},
     showSearchAction: Boolean = true,
@@ -2136,6 +2155,14 @@ private fun BrowserTopBar(
                         onClick = {
                             onDismissProfile()
                             onAchievements()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("FAQ") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null) },
+                        onClick = {
+                            onDismissProfile()
+                            onFaq()
                         }
                     )
                     DropdownMenuItem(
