@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -88,6 +89,15 @@ class MainActivityBrowserRecreationInstrumentedTest {
                 )
             )
         )
+        val resumedPreferences = persistedPreferences.copy(
+            themeMode = AppThemeMode.OLED_BLACK,
+            libraryReaderPreferences = persistedPreferences.libraryReaderPreferences + (
+                "lib-preferences" to persistedPreferences.readerPreferencesFor("lib-preferences").copy(
+                    readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
+                    fontScale = 0.9f
+                )
+            )
+        )
         val dataSource = InstrumentedFakeDataSource().apply {
             serverUrl = "https://books.example.test"
             sessionState = SessionState.Authenticated
@@ -126,6 +136,7 @@ class MainActivityBrowserRecreationInstrumentedTest {
                 composeRule.onNodeWithText("Warm black").assertIsDisplayed()
                 composeRule.onNodeWithTag("options-reduce-motion").assertIsOn()
                 composeRule.onNodeWithText("Large").assertIsDisplayed()
+                composeRule.onNodeWithTag("options-list").performScrollToIndex(6)
                 composeRule.onNodeWithTag("options-reading-library").performScrollTo()
                 composeRule.onNodeWithText("Persisted preferences library").assertIsDisplayed()
                 composeRule.onNodeWithTag("options-reading-direction-right_to_left")
@@ -134,8 +145,13 @@ class MainActivityBrowserRecreationInstrumentedTest {
                 composeRule.onNodeWithText("Text size 130%").performScrollTo().assertIsDisplayed()
 
                 scenario.moveToState(Lifecycle.State.STARTED)
-                preferencesStore.save(persistedPreferences.copy(themeMode = AppThemeMode.OLED_BLACK))
+                preferencesStore.save(resumedPreferences)
                 scenario.moveToState(Lifecycle.State.RESUMED)
+                waitForText("Text size 90%")
+                composeRule.onNodeWithTag("options-reading-direction-left_to_right")
+                    .assertIsSelected()
+                composeRule.onNodeWithText("Text size 90%").assertIsDisplayed()
+                composeRule.onNodeWithTag("options-list").performScrollToIndex(2)
                 waitForText("OLED black")
                 composeRule.onNodeWithText("OLED black").assertIsDisplayed()
             }
