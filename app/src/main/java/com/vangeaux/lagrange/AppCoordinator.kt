@@ -56,6 +56,15 @@ class AppCoordinator internal constructor(
         repository.loadBookCover(book)
     }
 
+    suspend fun prepareEpubImageLibrarySource(
+        book: BookSummary,
+        allowRemoteCache: Boolean
+    ): EpubImageLibrarySourceResult = loadWithSessionRecovery(
+        EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
+    ) {
+        repository.prepareEpubImageLibrarySource(book, allowRemoteCache)
+    }
+
     suspend fun loadLocalBooks(): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.loadLocalBooks()
     }

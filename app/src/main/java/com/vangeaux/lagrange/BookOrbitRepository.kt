@@ -277,6 +277,12 @@ interface BookOrbitDataSource {
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = null
     suspend fun loadCachedBrowserState(libraryId: String? = null): BrowserState?
     suspend fun buildReaderState(book: BookSummary, localOnly: Boolean = false): ReaderState
+    suspend fun prepareEpubImageLibrarySource(
+        book: BookSummary,
+        allowRemoteCache: Boolean
+    ): EpubImageLibrarySourceResult = EpubImageLibrarySourceResult.Unavailable(
+        "The selected EPUB is not available locally."
+    )
     suspend fun saveActiveReader(
         book: BookSummary,
         launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL
@@ -1464,6 +1470,24 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
             readerPageIndex = epubPosition?.pageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent
+        )
+    }
+
+    override suspend fun prepareEpubImageLibrarySource(
+        book: BookSummary,
+        allowRemoteCache: Boolean
+    ): EpubImageLibrarySourceResult = withContext(Dispatchers.IO) {
+        if (book.mediaKind != MediaKind.EPUB) {
+            return@withContext EpubImageLibrarySourceResult.Unavailable(
+                "The selected file is not an EPUB."
+            )
+        }
+        val resolution = resolveReadableFile(book, allowRemoteCache = allowRemoteCache)
+        epubImageLibrarySourceResult(
+            localFile = resolution.file,
+            localFileError = resolution.localFileError,
+            fileId = book.fileId,
+            allowRemoteCache = allowRemoteCache
         )
     }
 

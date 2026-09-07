@@ -7,7 +7,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -17,10 +19,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,6 +55,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -118,12 +131,39 @@ internal fun boundedComicImagePan(
     return Offset(pan.x.coerceIn(-maxX, maxX), pan.y.coerceIn(-maxY, maxY))
 }
 
+internal fun shouldHandleReaderImageSwipe(scale: Float): Boolean = scale <= 1.01f
+
+internal fun readerImageSwipeDirection(deltaX: Float, scale: Float): Int {
+    if (!shouldHandleReaderImageSwipe(scale) || kotlin.math.abs(deltaX) < 80f) return 0
+    return if (deltaX < 0f) 1 else -1
+}
+
+internal fun readerImageViewerBottomInsetPx(hostNavigationBarInsetPx: Int): Int =
+    hostNavigationBarInsetPx.coerceAtLeast(0)
+
+internal fun readerImageViewerReservedBottomInsetPx(
+    hostNavigationBarInsetPx: Int,
+    bottomContentHeightPx: Int,
+    bottomContentGapPx: Int
+): Int = readerImageViewerBottomInsetPx(hostNavigationBarInsetPx) +
+    bottomContentHeightPx.coerceAtLeast(0) + bottomContentGapPx.coerceAtLeast(0)
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ComicPageImageViewer(
     title: String,
     pageIndex: Int,
     bitmap: Bitmap,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    bottomContent: @Composable () -> Unit = {},
+    onSwipePrevious: (() -> Unit)? = null,
+    onSwipeNext: (() -> Unit)? = null,
+    bottomContentBottomInsetPx: Int = 0,
+    bottomContentHeight: Dp = 0.dp,
+    bottomContentBottomGap: Dp = 12.dp,
+    showTransientTopBar: Boolean = false,
+    exportTitle: String = comicPageExportTitle(title, pageIndex),
+    exportBytes: (() -> ByteArray?)? = null
 ) {
     val context = LocalContext.current
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
@@ -131,15 +171,36 @@ internal fun ComicPageImageViewer(
     var menuAnchor by remember(pageIndex) { mutableStateOf<Offset?>(null) }
     var imageTopLeft by remember(pageIndex) { mutableStateOf(Offset.Zero) }
     var imageSize by remember(pageIndex) { mutableStateOf(Size.Zero) }
+    var showViewerTopBar by remember(pageIndex) { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf(false) }
     val density = LocalDensity.current
+    val bottomContentInsetDp = with(density) {
+        readerImageViewerBottomInsetPx(bottomContentBottomInsetPx).toDp()
+    }
+    val reservedBottomContentPadding = with(density) {
+        readerImageViewerReservedBottomInsetPx(
+            hostNavigationBarInsetPx = bottomContentBottomInsetPx,
+            bottomContentHeightPx = if (bottomContentHeight > 0.dp) {
+                bottomContentHeight.toPx().roundToInt()
+            } else {
+                0
+            },
+            bottomContentGapPx = if (bottomContentHeight > 0.dp) {
+                bottomContentBottomGap.toPx().roundToInt()
+            } else {
+                0
+            }
+        ).toDp()
+    }
     val currentScale by rememberUpdatedState(scale)
     val currentPan by rememberUpdatedState(pan)
     val currentImageTopLeft by rememberUpdatedState(imageTopLeft)
     val currentImageSize by rememberUpdatedState(imageSize)
 
     fun export() {
-        val result = exportCoverImage(context, comicPageExportTitle(title, pageIndex), bitmapToPng(bitmap))
+        val bytes = exportBytes?.invoke() ?: if (exportBytes == null) bitmapToPng(bitmap) else null
+        val result = bytes?.let { exportCoverImage(context, exportTitle, it) }
+            ?: return Toast.makeText(context, "Could not read the image", Toast.LENGTH_SHORT).show()
         Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
     }
 
@@ -199,7 +260,9 @@ internal fun ComicPageImageViewer(
                 .pointerInput(pageIndex) {
                     detectTapGestures(
                         onTap = { position ->
-                            if (
+                            if (showTransientTopBar && isInsideImage(position)) {
+                                showViewerTopBar = !showViewerTopBar
+                            } else if (
                                 shouldDismissReaderImageViewerTap(
                                     isInsideImage = isInsideImage(position),
                                     isTransformInProgress = transformState.isTransformInProgress
@@ -227,15 +290,42 @@ internal fun ComicPageImageViewer(
                     )
                 }
                 .transformable(transformState)
+                .pointerInput(pageIndex, scale, onSwipePrevious, onSwipeNext) {
+                    if (
+                        (onSwipePrevious != null || onSwipeNext != null) &&
+                        shouldHandleReaderImageSwipe(scale)
+                    ) {
+                        var horizontalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                horizontalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                when (readerImageSwipeDirection(horizontalDrag, scale)) {
+                                    -1 -> onSwipePrevious?.invoke()
+                                    1 -> onSwipeNext?.invoke()
+                                }
+                            }
+                        )
+                    }
+                }
                 .semantics {
-                    contentDescription = "Page image ${pageIndex + 1}. Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options."
+                    contentDescription = buildString {
+                        append("Page image ${pageIndex + 1}. ")
+                        if (showTransientTopBar) {
+                            append("Single tap toggles viewer controls. ")
+                        }
+                        append("Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options.")
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .padding(bottom = reservedBottomContentPadding),
                 contentAlignment = Alignment.Center
             ) {
                 val fittedSize = fittedReaderImageSize(
@@ -265,6 +355,47 @@ internal fun ComicPageImageViewer(
                             translationY = pan.y
                         }
                 )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        bottom = bottomContentBottomGap + bottomContentInsetDp
+                    )
+            ) {
+                bottomContent()
+            }
+            if (showTransientTopBar && showViewerTopBar) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.88f))
+                        .statusBarsPadding()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier
+                            .weight(1f)
+                            .basicMarquee(iterations = Int.MAX_VALUE),
+                        maxLines = 1,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close image viewer",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
             menuAnchor?.let { anchor ->
                 Box(

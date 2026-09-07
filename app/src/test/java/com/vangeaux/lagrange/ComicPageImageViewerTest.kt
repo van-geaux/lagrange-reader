@@ -95,4 +95,27 @@ class ComicPageImageViewerTest {
         assertEquals(false, shouldDismissReaderImageViewerTap(false, true))
         assertEquals(false, shouldDismissReaderImageViewerTap(true, false))
     }
+
+    @Test
+    fun `horizontal swipe maps to next or previous only at one times scale`() {
+        assertEquals(true, shouldHandleReaderImageSwipe(1f))
+        assertEquals(false, shouldHandleReaderImageSwipe(2f))
+        assertEquals(1, readerImageSwipeDirection(deltaX = -120f, scale = 1f))
+        assertEquals(-1, readerImageSwipeDirection(deltaX = 120f, scale = 1f))
+        assertEquals(0, readerImageSwipeDirection(deltaX = 20f, scale = 1f))
+        assertEquals(0, readerImageSwipeDirection(deltaX = -120f, scale = 2f))
+    }
+
+    @Test
+    fun `viewer bottom inset uses host navigation bar inset`() {
+        assertEquals(48, readerImageViewerBottomInsetPx(48))
+        assertEquals(0, readerImageViewerBottomInsetPx(0))
+        assertEquals(0, readerImageViewerBottomInsetPx(-12))
+    }
+
+    @Test
+    fun `viewer reserves thumbnail height gap and navigation inset`() {
+        assertEquals(156, readerImageViewerReservedBottomInsetPx(48, 84, 24))
+        assertEquals(0, readerImageViewerReservedBottomInsetPx(-12, -84, -24))
+    }
 }

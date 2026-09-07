@@ -41,6 +41,8 @@ enum class LibraryCardSize(val displayName: String) {
     LARGE("Large")
 }
 
+internal const val DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX = 250
+
 enum class LockedOrientation {
     PORTRAIT,
     LANDSCAPE
@@ -61,6 +63,7 @@ data class AppPreferences(
     val offlineCacheAutoRefreshEnabled: Boolean = false,
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
+    val epubImageMinimumDimensionPx: Int = DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
     val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap(),
@@ -97,6 +100,12 @@ internal class AppPreferencesStore(context: Context) {
         offlineCacheAutoRefreshEnabled = preferences.getBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, false),
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         confirmAudiobookSeek = preferences.getBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, true),
+        epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
+            preferences.getInt(
+                EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
+                DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX
+            )
+        ),
         seriesGroupingMode = seriesGroupingModeFromStorage(
             preferences.getString(SERIES_GROUPING_MODE_KEY, null)
         ),
@@ -141,6 +150,10 @@ internal class AppPreferencesStore(context: Context) {
             .putBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, value.offlineCacheAutoRefreshEnabled)
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
             .putBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, value.confirmAudiobookSeek)
+            .putInt(
+                EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
+                normalizeEpubImageMinimumDimensionPx(value.epubImageMinimumDimensionPx)
+            )
             .putString(
                 SERIES_GROUPING_MODE_KEY,
                 seriesGroupingModeStorageValue(value.seriesGroupingMode)
@@ -212,6 +225,7 @@ internal class AppPreferencesStore(context: Context) {
         const val OFFLINE_CACHE_AUTO_REFRESH_KEY = "offline_cache_auto_refresh"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
+        const val EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY = "epub_image_minimum_dimension_px"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
@@ -265,6 +279,19 @@ internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
 internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
 internal val AUDIO_SKIP_SECONDS_OPTIONS = listOf(5, 10, 15, 30, 60)
+
+internal const val EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX = 0
+internal const val EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX = 1000
+internal const val EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX = 25
+
+internal fun normalizeEpubImageMinimumDimensionPx(value: Int): Int {
+    val clamped = value.coerceIn(
+        EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX,
+        EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX
+    )
+    return ((clamped + EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX / 2) /
+        EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX) * EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX
+}
 
 internal fun normalizeAudioSkipSeconds(value: Int): Int =
     AUDIO_SKIP_SECONDS_OPTIONS.minByOrNull { option -> kotlin.math.abs(option - value) } ?: 10

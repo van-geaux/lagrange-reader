@@ -947,6 +947,8 @@ internal fun NativeLibraryBrowserScreen(
     recentBooksPageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage = { _, _, _ -> LibraryBooksPage() },
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult =
+        { _, _ -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.") },
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
     onClearSessionHistory: (BookSummary) -> Unit = {},
@@ -1754,6 +1756,8 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
+                    epubImageLibrarySourceLoader = epubImageLibrarySourceLoader,
+                    appPreferences = appPreferences,
                     sessionHistoryLoader = sessionHistoryLoader,
                     onSessionHistoryEntryClick = onSessionHistoryEntryClick,
                     onClearSessionHistory = onClearSessionHistory,
@@ -3388,6 +3392,50 @@ internal fun OptionsScreen(
                 testTag = "options-library-card-size",
                 onClick = { openDialog = OptionsDialog.LIBRARY_CARD_SIZE }
             )
+        }
+        item(key = "epub-image-minimum-size") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("options-epub-image-minimum-size")
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "EPUB Image Library minimum size",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    "${preferences.epubImageMinimumDimensionPx} x " +
+                        "${preferences.epubImageMinimumDimensionPx} px; both width and height apply " +
+                        "across all libraries",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Slider(
+                    value = preferences.epubImageMinimumDimensionPx.toFloat(),
+                    onValueChange = { next ->
+                        onPreferencesChange(
+                            preferences.copy(
+                                epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
+                                    next.roundToInt()
+                                )
+                            )
+                        )
+                    },
+                    valueRange = EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX.toFloat()..
+                        EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX.toFloat(),
+                    steps = (EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX -
+                        EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX) /
+                        EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX - 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription =
+                                "Minimum EPUB image width and height in pixels"
+                        }
+                )
+            }
         }
         item(key = "reading-configuration") {
             LibraryReaderConfiguration(
@@ -6851,6 +6899,8 @@ private fun BookDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult,
+    appPreferences: AppPreferences,
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit,
     onClearSessionHistory: (BookSummary) -> Unit,
@@ -6965,6 +7015,79 @@ private fun BookDetails(
         downloadedSourceUpdatedAtMillis = selectedStateBook.downloadedSourceUpdatedAtMillis,
         audioChapters = selectedBaseBook.audioChapters.ifEmpty { detail.audioChapters }
     )
+    var showEpubImageLibrary by rememberSaveable(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    var showEpubRemoteConsent by rememberSaveable(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    var epubImageCatalog by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf<EpubImageCatalog?>(null)
+    }
+    var epubImageLibraryMessage by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf<String?>(null)
+    }
+    var isLoadingEpubImageLibrary by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    val epubImageLibraryScope = rememberCoroutineScope()
+    fun openEpubImageLibrary(allowRemoteCache: Boolean) {
+        if (isLoadingEpubImageLibrary) return
+        epubImageLibraryScope.launch {
+            isLoadingEpubImageLibrary = true
+            epubImageLibraryMessage = null
+            epubImageCatalog = null
+            val source = try {
+                epubImageLibrarySourceLoader(displayBook, allowRemoteCache)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
+            }
+            when (source) {
+                is EpubImageLibrarySourceResult.Ready -> {
+                    val catalog = try {
+                        withContext(Dispatchers.IO) {
+                            EpubImageLibraryScanner.scan(
+                                source.file,
+                                appPreferences.epubImageMinimumDimensionPx
+                            )
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (catalog == null) {
+                        epubImageLibraryMessage = "The selected EPUB could not be inspected."
+                    } else if (catalog.entries.isEmpty()) {
+                        epubImageLibraryMessage =
+                            "No raster images meet the current minimum size of " +
+                                "${appPreferences.epubImageMinimumDimensionPx} x " +
+                                "${appPreferences.epubImageMinimumDimensionPx} pixels."
+                    } else {
+                        epubImageCatalog = catalog
+                        showEpubImageLibrary = true
+                    }
+                }
+                EpubImageLibrarySourceResult.RemoteConsentRequired -> {
+                    if (state.isOfflineSnapshot) {
+                        epubImageLibraryMessage =
+                            "The selected EPUB is not downloaded and is unavailable offline."
+                    } else {
+                        showEpubRemoteConsent = true
+                    }
+                }
+                is EpubImageLibrarySourceResult.Unavailable -> {
+                    epubImageLibraryMessage = source.message
+                }
+                is EpubImageLibrarySourceResult.Error -> {
+                    epubImageLibraryMessage = source.message
+                }
+            }
+            isLoadingEpubImageLibrary = false
+        }
+    }
     val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
@@ -7452,7 +7575,12 @@ private fun BookDetails(
                 BookDetailAvailableFileSummary(
                     options = detail.availableFiles,
                     selectedFileId = selectedFileId,
-                    onOpenSheet = { showAvailableFileSheet = true }
+                    onOpenSheet = { showAvailableFileSheet = true },
+                    onOpenEpubImageLibrary = if (shouldShowEpubImageLibrary(displayBook)) {
+                        { openEpubImageLibrary(allowRemoteCache = false) }
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -7512,6 +7640,58 @@ private fun BookDetails(
             }
         }
     }
+    }
+    if (showEpubRemoteConsent) {
+        AlertDialog(
+            onDismissRequest = { showEpubRemoteConsent = false },
+            title = { Text("Download EPUB for Image Library?") },
+            text = {
+                Text(
+                    "The selected EPUB is not downloaded. Continuing will temporarily download " +
+                        "the full file to this device for image discovery and may use network data. " +
+                        "The temporary copy can be removed with Clear cache."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEpubRemoteConsent = false
+                        openEpubImageLibrary(allowRemoteCache = true)
+                    }
+                ) {
+                    Text("Yes, continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEpubRemoteConsent = false }) {
+                    Text("No")
+                }
+            }
+        )
+    }
+    epubImageLibraryMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { epubImageLibraryMessage = null },
+            title = { Text("Image Library unavailable") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { epubImageLibraryMessage = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+    if (showEpubImageLibrary) {
+        epubImageCatalog?.let { catalog ->
+            EpubImageLibraryViewer(
+                title = displayBook.title,
+                catalog = catalog,
+                onDismiss = {
+                    showEpubImageLibrary = false
+                    epubImageCatalog = null
+                }
+            )
+        }
     }
     if (showAvailableFileSheet && detail.availableFiles.size > 1) {
         BookDetailAvailableFileSheet(
@@ -7891,17 +8071,22 @@ private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileL
 internal fun BookDetailAvailableFileSummary(
     options: List<BookFileOption>,
     selectedFileId: String?,
-    onOpenSheet: () -> Unit
+    onOpenSheet: () -> Unit,
+    onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
     val labels = availableFileDisplayLabels(options)
     val selectedOption = options.firstOrNull { it.fileId == selectedFileId } ?: options.firstOrNull()
     val selectedLabel = selectedOption?.fileId?.let(labels::get)
     val canChooseFile = options.size > 1
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .then(if (canChooseFile) Modifier.clickable(onClick = onOpenSheet) else Modifier)
                 .testTag("book-detail-available-file"),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -7952,6 +8137,19 @@ internal fun BookDetailAvailableFileSummary(
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
                         contentDescription = "Choose available file"
+                    )
+                }
+            }
+        }
+        if (selectedOption?.mediaKind == MediaKind.EPUB) {
+            onOpenEpubImageLibrary?.let { onOpen ->
+                IconButton(
+                    onClick = onOpen,
+                    modifier = Modifier.testTag("book-detail-image-library")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CollectionsBookmark,
+                        contentDescription = "Open EPUB image library"
                     )
                 }
             }
