@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenu
@@ -125,6 +124,9 @@ internal fun readerImageSwipeDirection(deltaX: Float, scale: Float): Int {
     return if (deltaX < 0f) 1 else -1
 }
 
+internal fun readerImageViewerBottomInsetPx(hostNavigationBarInsetPx: Int): Int =
+    hostNavigationBarInsetPx.coerceAtLeast(0)
+
 @Composable
 internal fun ComicPageImageViewer(
     title: String,
@@ -134,6 +136,7 @@ internal fun ComicPageImageViewer(
     bottomContent: @Composable () -> Unit = {},
     onSwipePrevious: (() -> Unit)? = null,
     onSwipeNext: (() -> Unit)? = null,
+    bottomContentBottomInsetPx: Int = 0,
     exportTitle: String = comicPageExportTitle(title, pageIndex),
     exportBytes: (() -> ByteArray?)? = null
 ) {
@@ -300,8 +303,11 @@ internal fun ComicPageImageViewer(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
+                    .padding(
+                        bottom = 12.dp + with(density) {
+                            readerImageViewerBottomInsetPx(bottomContentBottomInsetPx).toDp()
+                        }
+                    )
             ) {
                 bottomContent()
             }

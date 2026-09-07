@@ -103,4 +103,11 @@ class ComicPageImageViewerTest {
         assertEquals(0, readerImageSwipeDirection(deltaX = 20f, scale = 1f))
         assertEquals(0, readerImageSwipeDirection(deltaX = -120f, scale = 2f))
     }
+
+    @Test
+    fun `viewer bottom inset uses host navigation bar inset`() {
+        assertEquals(48, readerImageViewerBottomInsetPx(48))
+        assertEquals(0, readerImageViewerBottomInsetPx(0))
+        assertEquals(0, readerImageViewerBottomInsetPx(-12))
+    }
 }
