@@ -120,8 +120,10 @@ internal fun boundedComicImagePan(
     return Offset(pan.x.coerceIn(-maxX, maxX), pan.y.coerceIn(-maxY, maxY))
 }
 
+internal fun shouldHandleReaderImageSwipe(scale: Float): Boolean = scale <= 1.01f
+
 internal fun readerImageSwipeDirection(deltaX: Float, scale: Float): Int {
-    if (scale > 1.01f || kotlin.math.abs(deltaX) < 80f) return 0
+    if (!shouldHandleReaderImageSwipe(scale) || kotlin.math.abs(deltaX) < 80f) return 0
     return if (deltaX < 0f) 1 else -1
 }
 
@@ -273,7 +275,10 @@ internal fun ComicPageImageViewer(
                 }
                 .transformable(transformState)
                 .pointerInput(pageIndex, scale, onSwipePrevious, onSwipeNext) {
-                    if (onSwipePrevious != null || onSwipeNext != null) {
+                    if (
+                        (onSwipePrevious != null || onSwipeNext != null) &&
+                        shouldHandleReaderImageSwipe(scale)
+                    ) {
                         var horizontalDrag = 0f
                         detectHorizontalDragGestures(
                             onHorizontalDrag = { change, dragAmount ->
