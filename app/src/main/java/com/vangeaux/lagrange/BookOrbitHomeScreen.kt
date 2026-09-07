@@ -3324,7 +3324,7 @@ internal fun OptionsScreen(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().testTag("options-list"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp)
     ) {
         item(key = "options-intro") {
