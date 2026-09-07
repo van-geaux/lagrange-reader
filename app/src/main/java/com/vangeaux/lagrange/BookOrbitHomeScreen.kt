@@ -7575,36 +7575,12 @@ private fun BookDetails(
                 BookDetailAvailableFileSummary(
                     options = detail.availableFiles,
                     selectedFileId = selectedFileId,
-                    onOpenSheet = { showAvailableFileSheet = true }
-                )
-            }
-        }
-        if (shouldShowEpubImageLibrary(displayBook)) {
-            item(key = "epub-image-library") {
-                ListItem(
-                    headlineContent = { Text("Image Library") },
-                    supportingContent = {
-                        Text(
-                            if (isLoadingEpubImageLibrary) {
-                                "Finding images in the selected EPUB…"
-                            } else {
-                                "Browse eligible images from the selected EPUB"
-                            }
-                        )
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.CollectionsBookmark,
-                            contentDescription = "Image Library icon"
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("book-detail-image-library")
-                        .clickable(
-                            enabled = !isLoadingEpubImageLibrary,
-                            onClick = { openEpubImageLibrary(allowRemoteCache = false) }
-                        )
+                    onOpenSheet = { showAvailableFileSheet = true },
+                    onOpenEpubImageLibrary = if (shouldShowEpubImageLibrary(displayBook)) {
+                        { openEpubImageLibrary(allowRemoteCache = false) }
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -8095,17 +8071,22 @@ private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileL
 internal fun BookDetailAvailableFileSummary(
     options: List<BookFileOption>,
     selectedFileId: String?,
-    onOpenSheet: () -> Unit
+    onOpenSheet: () -> Unit,
+    onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
     val labels = availableFileDisplayLabels(options)
     val selectedOption = options.firstOrNull { it.fileId == selectedFileId } ?: options.firstOrNull()
     val selectedLabel = selectedOption?.fileId?.let(labels::get)
     val canChooseFile = options.size > 1
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .then(if (canChooseFile) Modifier.clickable(onClick = onOpenSheet) else Modifier)
                 .testTag("book-detail-available-file"),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -8156,6 +8137,19 @@ internal fun BookDetailAvailableFileSummary(
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
                         contentDescription = "Choose available file"
+                    )
+                }
+            }
+        }
+        if (selectedOption?.mediaKind == MediaKind.EPUB) {
+            onOpenEpubImageLibrary?.let { onOpen ->
+                IconButton(
+                    onClick = onOpen,
+                    modifier = Modifier.testTag("book-detail-image-library")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CollectionsBookmark,
+                        contentDescription = "Open EPUB image library"
                     )
                 }
             }
