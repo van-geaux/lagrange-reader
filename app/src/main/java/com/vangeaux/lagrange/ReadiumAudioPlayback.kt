@@ -781,8 +781,8 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         binder.session.value?.mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Playback intentionally survives removal of the app task.
         super.onTaskRemoved(rootIntent)
+        binder.stop()
     }
 
     override fun onDestroy() {
