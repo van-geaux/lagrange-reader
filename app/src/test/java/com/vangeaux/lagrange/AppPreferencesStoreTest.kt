@@ -8,6 +8,16 @@ import org.junit.Test
 
 class AppPreferencesStoreTest {
     @Test
+    fun `EPUB image minimum dimension defaults to 250 and normalizes to 25 pixel steps`() {
+        assertEquals(250, AppPreferences().epubImageMinimumDimensionPx)
+        assertEquals(0, normalizeEpubImageMinimumDimensionPx(-1))
+        assertEquals(250, normalizeEpubImageMinimumDimensionPx(250))
+        assertEquals(250, normalizeEpubImageMinimumDimensionPx(238))
+        assertEquals(275, normalizeEpubImageMinimumDimensionPx(263))
+        assertEquals(1000, normalizeEpubImageMinimumDimensionPx(1001))
+    }
+
+    @Test
     fun audioPlaybackSpeedStaysWithinTheSupportedGlobalOptions() {
         assertEquals(1.5f, normalizeAudioPlaybackSpeed(1.5f))
         assertEquals(0.75f, normalizeAudioPlaybackSpeed(0.6f))

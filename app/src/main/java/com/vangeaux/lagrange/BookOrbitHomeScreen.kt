@@ -3389,6 +3389,50 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.LIBRARY_CARD_SIZE }
             )
         }
+        item(key = "epub-image-minimum-size") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("options-epub-image-minimum-size")
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "EPUB Image Library minimum size",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    "${preferences.epubImageMinimumDimensionPx} x " +
+                        "${preferences.epubImageMinimumDimensionPx} px; both width and height apply " +
+                        "across all libraries",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Slider(
+                    value = preferences.epubImageMinimumDimensionPx.toFloat(),
+                    onValueChange = { next ->
+                        onPreferencesChange(
+                            preferences.copy(
+                                epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
+                                    next.roundToInt()
+                                )
+                            )
+                        )
+                    },
+                    valueRange = EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX.toFloat()..
+                        EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX.toFloat(),
+                    steps = (EPUB_IMAGE_MINIMUM_DIMENSION_MAX_PX -
+                        EPUB_IMAGE_MINIMUM_DIMENSION_MIN_PX) /
+                        EPUB_IMAGE_MINIMUM_DIMENSION_STEP_PX - 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription =
+                                "Minimum EPUB image width and height in pixels"
+                        }
+                )
+            }
+        }
         item(key = "reading-configuration") {
             LibraryReaderConfiguration(
                 libraries = libraries,
