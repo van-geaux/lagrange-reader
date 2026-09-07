@@ -48,6 +48,7 @@ class AppCoordinator internal constructor(
     // process death). Merged into every BrowserState until each fileId resolves, mirroring how
     // restoredInterruptedDownloads is merged in showBrowser().
     private var reconciledActiveDownloadsByFileId: Map<String, BookSummary> = emptyMap()
+    private val epubImageLibraryDownloadCallbacks = mutableMapOf<String, (BookSummary) -> Unit>()
     suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.searchBooks(query)
     }
@@ -1232,6 +1233,15 @@ class AppCoordinator internal constructor(
         }
     }
 
+    fun downloadBookForEpubImageLibrary(book: BookSummary, onSuccess: (BookSummary) -> Unit) {
+        val fileId = book.fileId ?: run {
+            showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
+            return
+        }
+        epubImageLibraryDownloadCallbacks[fileId] = onSuccess
+        downloadBook(book)
+    }
+
     private suspend fun handleDownloadOutcome(fileId: String, book: BookSummary?, outcome: DownloadOutcome) {
         reconciledActiveDownloadsByFileId -= fileId
         when (outcome) {
@@ -1250,10 +1260,14 @@ class AppCoordinator internal constructor(
                         localPath = outcome.localFile.absolutePath,
                         downloadedSourceUpdatedAtMillis = book.updatedAtMillis
                     )
+                    epubImageLibraryDownloadCallbacks.remove(fileId)?.invoke(
+                        book.copy(localPath = outcome.localFile.absolutePath)
+                    )
                 }
                 loadBrowser()
             }
             DownloadOutcome.Canceled -> {
+                epubImageLibraryDownloadCallbacks.remove(fileId)
                 restoredInterruptedDownloads -= fileId
                 removeDownloadBook(fileId)
                 scope.launch { repository.clearInterruptedDownload(fileId) }
@@ -1265,6 +1279,7 @@ class AppCoordinator internal constructor(
                 )
             }
             DownloadOutcome.PermissionDenied -> {
+                epubImageLibraryDownloadCallbacks.remove(fileId)
                 val label = book?.title ?: "this title"
                 updateDownloadState(
                     fileId = fileId,
@@ -1288,6 +1303,7 @@ class AppCoordinator internal constructor(
                 )
             }
             is DownloadOutcome.Failed -> {
+                epubImageLibraryDownloadCallbacks.remove(fileId)
                 val label = book?.title ?: "this title"
                 updateDownloadState(
                     fileId = fileId,
@@ -1301,6 +1317,7 @@ class AppCoordinator internal constructor(
 
     fun cancelDownload(book: BookSummary) {
         val fileId = book.fileId ?: return
+        epubImageLibraryDownloadCallbacks.remove(fileId)
         restoredInterruptedDownloads -= fileId
         reconciledActiveDownloadsByFileId -= fileId
         updateDownloadState(
