@@ -19,6 +19,20 @@ Compiled Android instrumentation is not executed instrumentation. If `adb device
 
 On a connected device or emulator, test local CBZ and extracted CBR files in both paginated and continuous modes. Tap loaded pages and verify the reader's existing pagination, menu, and continuous-scrolling controls remain usable. Long-press a loaded page and verify the shared fullscreen image viewer opens on that exact page. In an EPUB document containing one visible image and no meaningful text or interactive controls, verify pinch zooms from 1× to 4×, one-finger drag pans while zoomed, and pinching back to 1× restores ordinary reader ownership. At 1×, tap and swipe the image page and verify normal Readium pagination/menu behavior continues without opening the viewer. Repeat on a mixed text-and-image EPUB page and verify pinch, taps, text selection, and page navigation remain owned by Readium. Long-press either EPUB image type and verify the viewer opens without also turning the page. In the viewer, verify pinch and double-tap zoom, bounded panning, single taps inside the image do nothing, and a tap outside the visible image closes the viewer without accidental dismissal during a pinch. Long-press inside the viewer and verify `Download page` appears just below the finger; dismissing it must not download, while selecting it saves the image with the book title and one-based page number. Repeat with network disabled after the book or page has been downloaded/cached. Loading, failed, or missing images must not expose a usable download action or crash the reader.
 
+### EPUB Image Library (issue #143)
+
+On a connected device or emulator, open an EPUB Book Detail and verify the EPUB-only `Image Library` action is labeled and absent for non-EPUB files. With a downloaded EPUB, open the gallery and verify images are ordered by first spine/in-document appearance, duplicate references appear once, unreferenced raster entries follow in normalized archive-path order, SVG is excluded, and both width and height must meet the Options minimum-size setting. Change the persisted minimum from its 250 px default in 25 px steps, leave and reopen Options, and verify the selected value is retained.
+
+Open an online EPUB that is not downloaded. Verify the first action shows no download prompt and does not make a network request; choose No and confirm nothing starts, then choose Yes and confirm the temporary full-file cache is used only after consent. Repeat offline and verify the missing EPUB reports unavailable without a consent prompt. In the gallery, verify thumbnail selection, physical left/right swipe navigation at 1×, bounded pinch zoom/pan, outside-tap dismissal only when untransformed, and original-image export. Reading-direction and inversion settings must not reverse gallery left/right navigation. Clear the temporary cache and verify the cached source is removed.
+
+Focused JVM and build verification:
+
+```text
+./gradlew --no-daemon --console=plain :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug
+```
+
+Compiled Android instrumentation is not executed device validation; report the APK path and keep the device/emulator procedure above pending until run on a connected target.
+
 ## Debug APK handoff
 
 When asking the user to perform manual testing:
