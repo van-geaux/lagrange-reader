@@ -347,6 +347,7 @@ private fun BookOrbitDestination(
             onBookOpen = coordinator::openBook,
             onPreview = coordinator::previewBook,
             onDownload = coordinator::downloadBook,
+            onDownloadForEpubImageLibrary = coordinator::downloadBookForEpubImageLibrary,
             onCancelDownload = coordinator::cancelDownload,
             onClearFailedDownload = coordinator::clearFailedDownload,
             onClearAllFailedDownloads = coordinator::clearAllFailedDownloads,

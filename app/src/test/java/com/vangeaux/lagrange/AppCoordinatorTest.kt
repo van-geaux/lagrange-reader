@@ -833,6 +833,33 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `image library download callback receives the durable local book after success`() = runTest {
+        val downloadGate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = downloadGate)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+        var downloadedBook: BookSummary? = null
+
+        coordinator.downloadBookForEpubImageLibrary(book) { downloadedBook = it }
+        runCurrent()
+
+        assertNull(downloadedBook)
+        downloadGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(File("downloaded.bin").absolutePath, downloadedBook?.localPath)
+        assertEquals(book.fileId, downloadedBook?.fileId)
+        assertEquals(listOf(book), repository.downloadedBooks)
+    }
+
+    @Test
     fun `failed reconciliation keeps the complete cached catalog usable`() = runTest {
         val cachedBook = book.copy(title = "Cached title")
         val repository = FakeBookOrbitDataSource(

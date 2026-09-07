@@ -949,6 +949,7 @@ internal fun NativeLibraryBrowserScreen(
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult =
         { _, _ -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.") },
+    onDownloadForEpubImageLibrary: (BookSummary, (BookSummary) -> Unit) -> Unit = { _, _ -> },
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
     onClearSessionHistory: (BookSummary) -> Unit = {},
@@ -1757,6 +1758,7 @@ internal fun NativeLibraryBrowserScreen(
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
                     epubImageLibrarySourceLoader = epubImageLibrarySourceLoader,
+                    onDownloadForEpubImageLibrary = onDownloadForEpubImageLibrary,
                     appPreferences = appPreferences,
                     sessionHistoryLoader = sessionHistoryLoader,
                     onSessionHistoryEntryClick = onSessionHistoryEntryClick,
@@ -6900,6 +6902,7 @@ private fun BookDetails(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
     epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult,
+    onDownloadForEpubImageLibrary: (BookSummary, (BookSummary) -> Unit) -> Unit,
     appPreferences: AppPreferences,
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit,
@@ -7031,14 +7034,17 @@ private fun BookDetails(
         mutableStateOf(false)
     }
     val epubImageLibraryScope = rememberCoroutineScope()
-    fun openEpubImageLibrary(allowRemoteCache: Boolean) {
+    fun openEpubImageLibrary(
+        bookToOpen: BookSummary = displayBook,
+        allowRemoteCache: Boolean
+    ) {
         if (isLoadingEpubImageLibrary) return
         epubImageLibraryScope.launch {
             isLoadingEpubImageLibrary = true
             epubImageLibraryMessage = null
             epubImageCatalog = null
             val source = try {
-                epubImageLibrarySourceLoader(displayBook, allowRemoteCache)
+                epubImageLibrarySourceLoader(bookToOpen, allowRemoteCache)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Throwable) {
@@ -7647,16 +7653,20 @@ private fun BookDetails(
             title = { Text("Download EPUB for Image Library?") },
             text = {
                 Text(
-                    "The selected EPUB is not downloaded. Continuing will temporarily download " +
-                        "the full file to this device for image discovery and may use network data. " +
-                        "The temporary copy can be removed with Clear cache."
+                    "The selected EPUB is not downloaded. Continuing will download the selected " +
+                        "file to this device for offline use and may use network data."
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showEpubRemoteConsent = false
-                        openEpubImageLibrary(allowRemoteCache = true)
+                        onDownloadForEpubImageLibrary(displayBook) { downloadedBook ->
+                            openEpubImageLibrary(
+                                bookToOpen = downloadedBook,
+                                allowRemoteCache = false
+                            )
+                        }
                     }
                 ) {
                     Text("Yes, continue")
