@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,10 +19,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -137,6 +148,7 @@ internal fun readerImageViewerReservedBottomInsetPx(
 ): Int = readerImageViewerBottomInsetPx(hostNavigationBarInsetPx) +
     bottomContentHeightPx.coerceAtLeast(0) + bottomContentGapPx.coerceAtLeast(0)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ComicPageImageViewer(
     title: String,
@@ -149,6 +161,7 @@ internal fun ComicPageImageViewer(
     bottomContentBottomInsetPx: Int = 0,
     bottomContentHeight: Dp = 0.dp,
     bottomContentBottomGap: Dp = 12.dp,
+    showTransientTopBar: Boolean = false,
     exportTitle: String = comicPageExportTitle(title, pageIndex),
     exportBytes: (() -> ByteArray?)? = null
 ) {
@@ -158,6 +171,7 @@ internal fun ComicPageImageViewer(
     var menuAnchor by remember(pageIndex) { mutableStateOf<Offset?>(null) }
     var imageTopLeft by remember(pageIndex) { mutableStateOf(Offset.Zero) }
     var imageSize by remember(pageIndex) { mutableStateOf(Size.Zero) }
+    var showViewerTopBar by remember(pageIndex) { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val bottomContentInsetDp = with(density) {
@@ -246,7 +260,9 @@ internal fun ComicPageImageViewer(
                 .pointerInput(pageIndex) {
                     detectTapGestures(
                         onTap = { position ->
-                            if (
+                            if (showTransientTopBar && isInsideImage(position)) {
+                                showViewerTopBar = !showViewerTopBar
+                            } else if (
                                 shouldDismissReaderImageViewerTap(
                                     isInsideImage = isInsideImage(position),
                                     isTransformInProgress = transformState.isTransformInProgress
@@ -295,7 +311,13 @@ internal fun ComicPageImageViewer(
                     }
                 }
                 .semantics {
-                    contentDescription = "Page image ${pageIndex + 1}. Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options."
+                    contentDescription = buildString {
+                        append("Page image ${pageIndex + 1}. ")
+                        if (showTransientTopBar) {
+                            append("Single tap toggles viewer controls. ")
+                        }
+                        append("Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options.")
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -342,6 +364,38 @@ internal fun ComicPageImageViewer(
                     )
             ) {
                 bottomContent()
+            }
+            if (showTransientTopBar && showViewerTopBar) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.88f))
+                        .statusBarsPadding()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier
+                            .weight(1f)
+                            .basicMarquee(iterations = Int.MAX_VALUE),
+                        maxLines = 1,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close image viewer",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
             menuAnchor?.let { anchor ->
                 Box(

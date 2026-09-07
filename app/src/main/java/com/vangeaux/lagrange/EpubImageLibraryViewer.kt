@@ -120,6 +120,7 @@ internal fun EpubImageLibraryViewer(
             onSwipeNext = {
                 if (selectedIndex < catalog.entries.lastIndex) selectedIndexState = selectedIndex + 1
             },
+            showTransientTopBar = true,
             bottomContentBottomInsetPx = hostNavigationBarInsetPx,
             bottomContentHeight = EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT,
             bottomContentBottomGap = EPUB_IMAGE_THUMBNAIL_BOTTOM_GAP,
