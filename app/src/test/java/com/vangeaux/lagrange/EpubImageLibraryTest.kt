@@ -8,6 +8,13 @@ import org.junit.Test
 
 class EpubImageLibraryTest {
     @Test
+    fun `thumbnail centering delta moves item center toward viewport center`() {
+        assertEquals(100, thumbnailCenteringScrollDeltaPx(0, 400, 250, 100))
+        assertEquals(-100, thumbnailCenteringScrollDeltaPx(0, 400, 50, 100))
+        assertEquals(0, thumbnailCenteringScrollDeltaPx(0, 400, 150, 100))
+    }
+
+    @Test
     fun `image library action is gated by the selected file media kind`() {
         val epub = BookSummary("library", "book", "epub-file", "Book", mediaKind = MediaKind.EPUB)
         val pdf = epub.copy(fileId = "pdf-file", mediaKind = MediaKind.PDF)

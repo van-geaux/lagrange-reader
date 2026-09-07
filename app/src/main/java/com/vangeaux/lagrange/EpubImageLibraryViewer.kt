@@ -13,16 +13,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,9 +46,21 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 private val EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT = 84.dp
 private val EPUB_IMAGE_THUMBNAIL_BOTTOM_GAP = 24.dp
+
+internal fun thumbnailCenteringScrollDeltaPx(
+    viewportStartPx: Int,
+    viewportEndPx: Int,
+    itemOffsetPx: Int,
+    itemSizePx: Int
+): Int {
+    val viewportCenter = (viewportStartPx + viewportEndPx) / 2f
+    val itemCenter = itemOffsetPx + itemSizePx / 2f
+    return (itemCenter - viewportCenter).roundToInt()
+}
 
 @Composable
 internal fun EpubImageLibraryViewer(
@@ -65,6 +80,24 @@ internal fun EpubImageLibraryViewer(
     }
     val selectedIndex = selectedIndexState.coerceIn(catalog.entries.indices)
     val selectedEntry = catalog.entries[selectedIndex]
+    val thumbnailListState = rememberLazyListState()
+    LaunchedEffect(selectedIndex) {
+        thumbnailListState.animateScrollToItem(selectedIndex)
+        val selectedItem = thumbnailListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.index == selectedIndex }
+        if (selectedItem != null) {
+            val centeringDelta = thumbnailCenteringScrollDeltaPx(
+                viewportStartPx = thumbnailListState.layoutInfo.viewportStartOffset,
+                viewportEndPx = thumbnailListState.layoutInfo.viewportEndOffset,
+                itemOffsetPx = selectedItem.offset,
+                itemSizePx = selectedItem.size
+            )
+            thumbnailListState.animateScrollToItem(
+                index = selectedIndex,
+                scrollOffset = -(selectedItem.offset - centeringDelta)
+            )
+        }
+    }
     val bitmap by produceState<Bitmap?>(
         initialValue = null,
         catalog.sourceFile.absolutePath,
@@ -100,6 +133,7 @@ internal fun EpubImageLibraryViewer(
                 EpubImageThumbnailStrip(
                     catalog = catalog,
                     selectedIndex = selectedIndex,
+                    listState = thumbnailListState,
                     onSelected = { selectedIndexState = it }
                 )
             },
@@ -151,6 +185,7 @@ private fun EpubImageLibraryLoadingDialog(onDismiss: () -> Unit) {
 private fun EpubImageThumbnailStrip(
     catalog: EpubImageCatalog,
     selectedIndex: Int,
+    listState: LazyListState,
     onSelected: (Int) -> Unit
 ) {
     Surface(
@@ -158,6 +193,7 @@ private fun EpubImageThumbnailStrip(
         color = Color.Black.copy(alpha = 0.72f)
     ) {
         LazyRow(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT)
