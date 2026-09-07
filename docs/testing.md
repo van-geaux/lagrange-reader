@@ -187,6 +187,17 @@ Focused JVM verification for the full-player theme regression:
 
 The user has confirmed the validated reader, media, navigation, and server-session behavior works correctly. Keep these checks as the regression matrix for future changes.
 
+### Audiobook app lifecycle
+
+On a connected Android device or emulator with audiobook playback active, exercise these as separate scenarios:
+
+- **Ordinary backgrounding and screen lock:** switch to another app, then turn the screen off and on. Playback remains owned by the foreground service and continues; returning to Lagrange must reconnect to the existing playback state.
+- **Android app-task removal:** remove Lagrange from the recent-apps/task list. The playback service runs its cleanup path: playback stops, the foreground playback notification is removed, and the service stops. Do not treat this as ordinary backgrounding or screen lock.
+- **Notification dismissal:** dismiss the audiobook playback notification as its own scenario, without removing the app task. Record the resulting playback/service and notification behavior separately; notification dismissal is not a substitute for the task-removal check.
+- **Force-stop:** use Android Settings to force-stop Lagrange, then relaunch it. Treat force-stop as a separate termination path and verify playback and notification state after relaunch; do not report it as evidence for the task-removal contract.
+
+This procedure documents the lifecycle contract; no automated or physical validation result is asserted here.
+
 ### Audiobook seek confirmation (issue #129)
 
 On a connected Android device or emulator with a split-file audiobook available, start playback and exercise each seek bar in compact player, full-player portrait, and full-player landscape states. In each state, test both the overall book bar and the chapter bar: drag/tap to a new position and verify the seek applies immediately, playback continues, and the in-place confirmation offers `Yes, keep position` and `No, go back`. Accept with `Yes, keep position` and verify the new position remains. Repeat a seek, choose `No, go back`, and verify the prior absolute position is restored, including when the requested position crosses a split-file boundary.
@@ -223,7 +234,7 @@ For regression testing, verify chapter selection and automatic advancement acros
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. The interim server-hosted sign-in WebView is distinct from native AppAuth. Native AppAuth requires deployed BookOrbit mobile-redirect support and separate provider/device validation.
 
-For logout and account-switch regression, start audiobook playback, verify that explicit logout immediately removes the compact/full player and foreground playback notification before the Login screen is usable, then sign in as a different account on the same server. Confirm the previous account's queued progress, reading-session events, annotations, cached catalog/detail state, and exact reader positions are not replayed or displayed for the new account. Confirm completed downloaded media remains available and appears in Local books for the new account, while its progress/status reflects only the new account's server state. Verify that same-user background playback still survives ordinary task removal. Repeat from compact playback, full-player playback, paused playback, and while the player is preparing. Automated coverage verifies coordinator teardown and durable progress-store cleanup; physical player, notification, and two-account validation require a connected device or emulator.
+For logout and account-switch regression, start audiobook playback, verify that explicit logout immediately removes the compact/full player and foreground playback notification before the Login screen is usable, then sign in as a different account on the same server. Confirm the previous account's queued progress, reading-session events, annotations, cached catalog/detail state, and exact reader positions are not replayed or displayed for the new account. Confirm completed downloaded media remains available and appears in Local books for the new account, while its progress/status reflects only the new account's server state. Verify that same-user background playback still survives ordinary backgrounding or screen lock. Task removal is covered separately below. Repeat from compact playback, full-player playback, paused playback, and while the player is preparing. Automated coverage verifies coordinator teardown and durable progress-store cleanup; physical player, notification, and two-account validation require a connected device or emulator.
 
 ### Foreground WorkManager book downloads (issue #77)
 

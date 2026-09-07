@@ -22,7 +22,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 - Repository/data layer: authenticated BookOrbit requests, parsing, server switching, cache fallback, progress/status/rating operations, download reconciliation, and reader preparation.
 - Room/local persistence: server-scoped catalog/download state, active-reader metadata, queued progress, and local audiobook session history.
 - Readium: EPUB, PDF, comic, and local/explicit-download reading paths.
-- Media3/foreground service: connected and local audiobook playback, compact controls, chapters, seeking, speed, sleep timers, and process/task restoration. The service/controller owns playback state and commands; Compose renders the compact or full player without creating a second playback session.
+- Media3/foreground service: connected and local audiobook playback, compact controls, chapters, seeking, speed, sleep timers, and process restoration. The service/controller owns playback state and commands; Compose renders the compact or full player without creating a second playback session. Ordinary app backgrounding and screen lock remain service-owned; Android app-task removal invokes service cleanup, which stops playback, removes the foreground notification, and stops the service.
 - Full audiobook player overlay: `AppCoordinator.fullAudioPlayerBook` overlays the retained browser composition, so minimize and Close dismiss the player without implicitly navigating or losing the exact browser route. Metadata navigation is an explicit separate action.
 
 ## Data and synchronization rules
