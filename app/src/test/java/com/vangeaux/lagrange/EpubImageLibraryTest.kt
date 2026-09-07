@@ -8,10 +8,10 @@ import org.junit.Test
 
 class EpubImageLibraryTest {
     @Test
-    fun `thumbnail centering delta moves item center toward viewport center`() {
-        assertEquals(100, thumbnailCenteringScrollDeltaPx(0, 400, 250, 100))
-        assertEquals(-100, thumbnailCenteringScrollDeltaPx(0, 400, 50, 100))
-        assertEquals(0, thumbnailCenteringScrollDeltaPx(0, 400, 150, 100))
+    fun `thumbnail auto-scroll only triggers for partial or hidden items`() {
+        assertEquals(true, isThumbnailFullyVisible(0, 400, 150, 100))
+        assertEquals(false, isThumbnailFullyVisible(0, 400, 350, 100))
+        assertEquals(false, isThumbnailFullyVisible(0, 400, -50, 100))
     }
 
     @Test

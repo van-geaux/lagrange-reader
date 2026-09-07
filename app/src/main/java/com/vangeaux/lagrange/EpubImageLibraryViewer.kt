@@ -46,21 +46,17 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 private val EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT = 84.dp
 private val EPUB_IMAGE_THUMBNAIL_BOTTOM_GAP = 24.dp
 
-internal fun thumbnailCenteringScrollDeltaPx(
+internal fun isThumbnailFullyVisible(
     viewportStartPx: Int,
     viewportEndPx: Int,
     itemOffsetPx: Int,
     itemSizePx: Int
-): Int {
-    val viewportCenter = (viewportStartPx + viewportEndPx) / 2f
-    val itemCenter = itemOffsetPx + itemSizePx / 2f
-    return (itemCenter - viewportCenter).roundToInt()
-}
+): Boolean = itemOffsetPx >= viewportStartPx &&
+    itemOffsetPx + itemSizePx <= viewportEndPx
 
 @Composable
 internal fun EpubImageLibraryViewer(
@@ -82,20 +78,18 @@ internal fun EpubImageLibraryViewer(
     val selectedEntry = catalog.entries[selectedIndex]
     val thumbnailListState = rememberLazyListState()
     LaunchedEffect(selectedIndex) {
-        thumbnailListState.animateScrollToItem(selectedIndex)
         val selectedItem = thumbnailListState.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == selectedIndex }
-        if (selectedItem != null) {
-            val centeringDelta = thumbnailCenteringScrollDeltaPx(
+        val isFullyVisible = selectedItem?.let {
+            isThumbnailFullyVisible(
                 viewportStartPx = thumbnailListState.layoutInfo.viewportStartOffset,
                 viewportEndPx = thumbnailListState.layoutInfo.viewportEndOffset,
-                itemOffsetPx = selectedItem.offset,
-                itemSizePx = selectedItem.size
+                itemOffsetPx = it.offset,
+                itemSizePx = it.size
             )
-            thumbnailListState.animateScrollToItem(
-                index = selectedIndex,
-                scrollOffset = -(selectedItem.offset - centeringDelta)
-            )
+        } == true
+        if (!isFullyVisible) {
+            thumbnailListState.animateScrollToItem(selectedIndex)
         }
     }
     val bitmap by produceState<Bitmap?>(
