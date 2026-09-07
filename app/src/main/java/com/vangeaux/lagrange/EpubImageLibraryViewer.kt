@@ -86,6 +86,10 @@ internal fun EpubImageLibraryViewer(
                     selectedIndex = selectedIndex,
                     onSelected = { selectedIndexState = it }
                 )
+            },
+            exportTitle = "$title - Image ${selectedIndex + 1}",
+            exportBytes = {
+                EpubImageLibraryScanner.readEpubImageBytes(catalog.sourceFile, selectedEntry.archivePath)
             }
         )
     }

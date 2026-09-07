@@ -23,6 +23,7 @@ class AppPreferencesStoreInstrumentedTest {
             backgroundRefreshNetworkPolicy = BackgroundRefreshNetworkPolicy.DISABLED,
             confirmDeleteLocalCopy = false,
             confirmAudiobookSeek = false,
+            epubImageMinimumDimensionPx = 525,
             seriesGroupingMode = SeriesGroupingMode.FORMAT,
             libraryReaderPreferences = mapOf(
                 "manga" to LibraryReaderPreferences(

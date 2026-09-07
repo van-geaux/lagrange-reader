@@ -132,7 +132,9 @@ internal fun ComicPageImageViewer(
     onDismiss: () -> Unit,
     bottomContent: @Composable () -> Unit = {},
     onSwipePrevious: (() -> Unit)? = null,
-    onSwipeNext: (() -> Unit)? = null
+    onSwipeNext: (() -> Unit)? = null,
+    exportTitle: String = comicPageExportTitle(title, pageIndex),
+    exportBytes: (() -> ByteArray?)? = null
 ) {
     val context = LocalContext.current
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
@@ -148,7 +150,9 @@ internal fun ComicPageImageViewer(
     val currentImageSize by rememberUpdatedState(imageSize)
 
     fun export() {
-        val result = exportCoverImage(context, comicPageExportTitle(title, pageIndex), bitmapToPng(bitmap))
+        val bytes = exportBytes?.invoke() ?: if (exportBytes == null) bitmapToPng(bitmap) else null
+        val result = bytes?.let { exportCoverImage(context, exportTitle, it) }
+            ?: return Toast.makeText(context, "Could not read the image", Toast.LENGTH_SHORT).show()
         Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
     }
 

@@ -7579,7 +7579,7 @@ private fun BookDetails(
                 )
             }
         }
-        if (displayBook.mediaKind == MediaKind.EPUB) {
+        if (shouldShowEpubImageLibrary(displayBook)) {
             item(key = "epub-image-library") {
                 ListItem(
                     headlineContent = { Text("Image Library") },

@@ -30,6 +30,9 @@ internal fun epubImageLibrarySourceResult(
     else -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.")
 }
 
+internal fun shouldShowEpubImageLibrary(book: BookSummary): Boolean =
+    book.mediaKind == MediaKind.EPUB
+
 internal data class EpubImageDimensions(
     val width: Int,
     val height: Int
@@ -185,7 +188,7 @@ internal object EpubImageLibraryScanner {
         return zipFile.getInputStream(entry).use(::readBounded)
     }
 
-    private fun readBounded(input: InputStream): ByteArray {
+    private fun readBounded(input: InputStream, maximumBytes: Long = MAX_XML_BYTES): ByteArray {
         val output = java.io.ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         var total = 0L
@@ -193,7 +196,7 @@ internal object EpubImageLibraryScanner {
             val count = input.read(buffer)
             if (count < 0) break
             total += count
-            if (total > MAX_XML_BYTES) throw IllegalArgumentException("EPUB XML entry is too large")
+            if (total > maximumBytes) throw IllegalArgumentException("EPUB entry is too large")
             output.write(buffer, 0, count)
         }
         return output.toByteArray()
@@ -228,6 +231,15 @@ internal object EpubImageLibraryScanner {
             BitmapFactory.decodeStream(input, null, options)
         }
     }
+
+    internal fun readEpubImageBytes(sourceFile: File, archivePath: String): ByteArray? =
+        ZipFile(sourceFile).use { zipFile ->
+            val entry = zipFile.getEntry(archivePath) ?: return@use null
+            if (entry.size > MAX_IMAGE_ENTRY_BYTES) return@use null
+            zipFile.getInputStream(entry).use { input ->
+                readBounded(input, MAX_IMAGE_ENTRY_BYTES)
+            }
+        }
 
     private fun calculateSampleSize(width: Int, height: Int, maximumDimension: Int): Int {
         var sampleSize = 1

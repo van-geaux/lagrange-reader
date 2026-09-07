@@ -8,6 +8,15 @@ import org.junit.Test
 
 class EpubImageLibraryTest {
     @Test
+    fun `image library action is gated by the selected file media kind`() {
+        val epub = BookSummary("library", "book", "epub-file", "Book", mediaKind = MediaKind.EPUB)
+        val pdf = epub.copy(fileId = "pdf-file", mediaKind = MediaKind.PDF)
+
+        assertEquals(true, shouldShowEpubImageLibrary(epub))
+        assertEquals(false, shouldShowEpubImageLibrary(pdf))
+    }
+
+    @Test
     fun `source preparation requires consent before remote caching`() {
         assertEquals(
             EpubImageLibrarySourceResult.RemoteConsentRequired,
