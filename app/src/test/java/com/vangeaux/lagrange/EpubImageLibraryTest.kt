@@ -8,6 +8,28 @@ import org.junit.Test
 
 class EpubImageLibraryTest {
     @Test
+    fun `source preparation requires consent before remote caching`() {
+        assertEquals(
+            EpubImageLibrarySourceResult.RemoteConsentRequired,
+            epubImageLibrarySourceResult(
+                localFile = null,
+                localFileError = null,
+                fileId = "file-1",
+                allowRemoteCache = false
+            )
+        )
+        assertEquals(
+            EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally."),
+            epubImageLibrarySourceResult(
+                localFile = null,
+                localFileError = null,
+                fileId = "file-1",
+                allowRemoteCache = true
+            )
+        )
+    }
+
+    @Test
     fun `scan orders referenced images by spine appearance and appends unreferenced raster entries`() {
         val epub = zipFile(
             "mimetype" to "application/epub+zip",

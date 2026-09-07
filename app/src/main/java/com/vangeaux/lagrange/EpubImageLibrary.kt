@@ -10,6 +10,26 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 
+sealed interface EpubImageLibrarySourceResult {
+    data class Ready(val file: File) : EpubImageLibrarySourceResult
+    data object RemoteConsentRequired : EpubImageLibrarySourceResult
+    data class Unavailable(val message: String) : EpubImageLibrarySourceResult
+    data class Error(val message: String) : EpubImageLibrarySourceResult
+}
+
+internal fun epubImageLibrarySourceResult(
+    localFile: File?,
+    localFileError: String?,
+    fileId: String?,
+    allowRemoteCache: Boolean
+): EpubImageLibrarySourceResult = when {
+    localFile != null -> EpubImageLibrarySourceResult.Ready(localFile)
+    localFileError != null -> EpubImageLibrarySourceResult.Error(localFileError)
+    !allowRemoteCache && !fileId.isNullOrBlank() ->
+        EpubImageLibrarySourceResult.RemoteConsentRequired
+    else -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.")
+}
+
 internal data class EpubImageDimensions(
     val width: Int,
     val height: Int
@@ -186,6 +206,35 @@ internal object EpubImageLibraryScanner {
         zipFile.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, options) }
         if (options.outWidth <= 0 || options.outHeight <= 0) return null
         return EpubImageDimensions(options.outWidth, options.outHeight)
+    }
+
+    internal fun decodeEpubImageBitmap(
+        sourceFile: File,
+        archivePath: String,
+        maximumDimension: Int
+    ): android.graphics.Bitmap? = ZipFile(sourceFile).use { zipFile ->
+        val entry = zipFile.getEntry(archivePath) ?: return@use null
+        if (entry.size > MAX_IMAGE_ENTRY_BYTES) return@use null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        zipFile.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@use null
+        val sampleSize = calculateSampleSize(
+            width = bounds.outWidth,
+            height = bounds.outHeight,
+            maximumDimension = maximumDimension
+        )
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        zipFile.getInputStream(entry).use { input ->
+            BitmapFactory.decodeStream(input, null, options)
+        }
+    }
+
+    private fun calculateSampleSize(width: Int, height: Int, maximumDimension: Int): Int {
+        var sampleSize = 1
+        while (width / sampleSize > maximumDimension || height / sampleSize > maximumDimension) {
+            sampleSize *= 2
+        }
+        return sampleSize
     }
 
     private fun normalizeArchivePath(basePath: String?, reference: String): String? {

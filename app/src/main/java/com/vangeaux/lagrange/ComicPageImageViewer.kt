@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -118,12 +119,20 @@ internal fun boundedComicImagePan(
     return Offset(pan.x.coerceIn(-maxX, maxX), pan.y.coerceIn(-maxY, maxY))
 }
 
+internal fun readerImageSwipeDirection(deltaX: Float, scale: Float): Int {
+    if (scale > 1.01f || kotlin.math.abs(deltaX) < 80f) return 0
+    return if (deltaX < 0f) 1 else -1
+}
+
 @Composable
 internal fun ComicPageImageViewer(
     title: String,
     pageIndex: Int,
     bitmap: Bitmap,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    bottomContent: @Composable () -> Unit = {},
+    onSwipePrevious: (() -> Unit)? = null,
+    onSwipeNext: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
@@ -227,6 +236,23 @@ internal fun ComicPageImageViewer(
                     )
                 }
                 .transformable(transformState)
+                .pointerInput(pageIndex, scale, onSwipePrevious, onSwipeNext) {
+                    if (onSwipePrevious != null || onSwipeNext != null) {
+                        var horizontalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                horizontalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                when (readerImageSwipeDirection(horizontalDrag, scale)) {
+                                    -1 -> onSwipePrevious?.invoke()
+                                    1 -> onSwipeNext?.invoke()
+                                }
+                            }
+                        )
+                    }
+                }
                 .semantics {
                     contentDescription = "Page image ${pageIndex + 1}. Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options."
                 },
@@ -265,6 +291,13 @@ internal fun ComicPageImageViewer(
                             translationY = pan.y
                         }
                 )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp)
+            ) {
+                bottomContent()
             }
             menuAnchor?.let { anchor ->
                 Box(

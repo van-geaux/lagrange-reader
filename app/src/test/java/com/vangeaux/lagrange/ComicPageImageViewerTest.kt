@@ -95,4 +95,12 @@ class ComicPageImageViewerTest {
         assertEquals(false, shouldDismissReaderImageViewerTap(false, true))
         assertEquals(false, shouldDismissReaderImageViewerTap(true, false))
     }
+
+    @Test
+    fun `horizontal swipe maps to next or previous only at one times scale`() {
+        assertEquals(1, readerImageSwipeDirection(deltaX = -120f, scale = 1f))
+        assertEquals(-1, readerImageSwipeDirection(deltaX = 120f, scale = 1f))
+        assertEquals(0, readerImageSwipeDirection(deltaX = 20f, scale = 1f))
+        assertEquals(0, readerImageSwipeDirection(deltaX = -120f, scale = 2f))
+    }
 }

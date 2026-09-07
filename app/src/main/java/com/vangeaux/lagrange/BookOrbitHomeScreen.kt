@@ -947,6 +947,8 @@ internal fun NativeLibraryBrowserScreen(
     recentBooksPageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage = { _, _, _ -> LibraryBooksPage() },
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult =
+        { _, _ -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.") },
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
     onClearSessionHistory: (BookSummary) -> Unit = {},
@@ -1754,6 +1756,8 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     detailLoader = bookDetailLoader,
+                    epubImageLibrarySourceLoader = epubImageLibrarySourceLoader,
+                    appPreferences = appPreferences,
                     sessionHistoryLoader = sessionHistoryLoader,
                     onSessionHistoryEntryClick = onSessionHistoryEntryClick,
                     onClearSessionHistory = onClearSessionHistory,
@@ -6895,6 +6899,8 @@ private fun BookDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (BookSummary) -> BookDetailInfo?,
+    epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult,
+    appPreferences: AppPreferences,
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent>,
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit,
     onClearSessionHistory: (BookSummary) -> Unit,
@@ -7009,6 +7015,79 @@ private fun BookDetails(
         downloadedSourceUpdatedAtMillis = selectedStateBook.downloadedSourceUpdatedAtMillis,
         audioChapters = selectedBaseBook.audioChapters.ifEmpty { detail.audioChapters }
     )
+    var showEpubImageLibrary by rememberSaveable(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    var showEpubRemoteConsent by rememberSaveable(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    var epubImageCatalog by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf<EpubImageCatalog?>(null)
+    }
+    var epubImageLibraryMessage by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf<String?>(null)
+    }
+    var isLoadingEpubImageLibrary by remember(displayBook.id, displayBook.fileId) {
+        mutableStateOf(false)
+    }
+    val epubImageLibraryScope = rememberCoroutineScope()
+    fun openEpubImageLibrary(allowRemoteCache: Boolean) {
+        if (isLoadingEpubImageLibrary) return
+        epubImageLibraryScope.launch {
+            isLoadingEpubImageLibrary = true
+            epubImageLibraryMessage = null
+            epubImageCatalog = null
+            val source = try {
+                epubImageLibrarySourceLoader(displayBook, allowRemoteCache)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
+            }
+            when (source) {
+                is EpubImageLibrarySourceResult.Ready -> {
+                    val catalog = try {
+                        withContext(Dispatchers.IO) {
+                            EpubImageLibraryScanner.scan(
+                                source.file,
+                                appPreferences.epubImageMinimumDimensionPx
+                            )
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (catalog == null) {
+                        epubImageLibraryMessage = "The selected EPUB could not be inspected."
+                    } else if (catalog.entries.isEmpty()) {
+                        epubImageLibraryMessage =
+                            "No raster images meet the current minimum size of " +
+                                "${appPreferences.epubImageMinimumDimensionPx} x " +
+                                "${appPreferences.epubImageMinimumDimensionPx} pixels."
+                    } else {
+                        epubImageCatalog = catalog
+                        showEpubImageLibrary = true
+                    }
+                }
+                EpubImageLibrarySourceResult.RemoteConsentRequired -> {
+                    if (state.isOfflineSnapshot) {
+                        epubImageLibraryMessage =
+                            "The selected EPUB is not downloaded and is unavailable offline."
+                    } else {
+                        showEpubRemoteConsent = true
+                    }
+                }
+                is EpubImageLibrarySourceResult.Unavailable -> {
+                    epubImageLibraryMessage = source.message
+                }
+                is EpubImageLibrarySourceResult.Error -> {
+                    epubImageLibraryMessage = source.message
+                }
+            }
+            isLoadingEpubImageLibrary = false
+        }
+    }
     val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
@@ -7500,6 +7579,35 @@ private fun BookDetails(
                 )
             }
         }
+        if (displayBook.mediaKind == MediaKind.EPUB) {
+            item(key = "epub-image-library") {
+                ListItem(
+                    headlineContent = { Text("Image Library") },
+                    supportingContent = {
+                        Text(
+                            if (isLoadingEpubImageLibrary) {
+                                "Finding images in the selected EPUB…"
+                            } else {
+                                "Browse eligible images from the selected EPUB"
+                            }
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.CollectionsBookmark,
+                            contentDescription = "Image Library icon"
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("book-detail-image-library")
+                        .clickable(
+                            enabled = !isLoadingEpubImageLibrary,
+                            onClick = { openEpubImageLibrary(allowRemoteCache = false) }
+                        )
+                )
+            }
+        }
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
             item { ExpandableDescription("Synopsis", plainText(synopsis)) }
         }
@@ -7556,6 +7664,58 @@ private fun BookDetails(
             }
         }
     }
+    }
+    if (showEpubRemoteConsent) {
+        AlertDialog(
+            onDismissRequest = { showEpubRemoteConsent = false },
+            title = { Text("Download EPUB for Image Library?") },
+            text = {
+                Text(
+                    "The selected EPUB is not downloaded. Continuing will temporarily download " +
+                        "the full file to this device for image discovery and may use network data. " +
+                        "The temporary copy can be removed with Clear cache."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEpubRemoteConsent = false
+                        openEpubImageLibrary(allowRemoteCache = true)
+                    }
+                ) {
+                    Text("Yes, continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEpubRemoteConsent = false }) {
+                    Text("No")
+                }
+            }
+        )
+    }
+    epubImageLibraryMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { epubImageLibraryMessage = null },
+            title = { Text("Image Library unavailable") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { epubImageLibraryMessage = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+    if (showEpubImageLibrary) {
+        epubImageCatalog?.let { catalog ->
+            EpubImageLibraryViewer(
+                title = displayBook.title,
+                catalog = catalog,
+                onDismiss = {
+                    showEpubImageLibrary = false
+                    epubImageCatalog = null
+                }
+            )
+        }
     }
     if (showAvailableFileSheet && detail.availableFiles.size > 1) {
         BookDetailAvailableFileSheet(
