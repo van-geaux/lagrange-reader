@@ -44,6 +44,9 @@ import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private val EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT = 84.dp
+private val EPUB_IMAGE_THUMBNAIL_BOTTOM_GAP = 24.dp
+
 @Composable
 internal fun EpubImageLibraryViewer(
     title: String,
@@ -91,6 +94,8 @@ internal fun EpubImageLibraryViewer(
                 if (selectedIndex < catalog.entries.lastIndex) selectedIndexState = selectedIndex + 1
             },
             bottomContentBottomInsetPx = hostNavigationBarInsetPx,
+            bottomContentHeight = EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT,
+            bottomContentBottomGap = EPUB_IMAGE_THUMBNAIL_BOTTOM_GAP,
             bottomContent = {
                 EpubImageThumbnailStrip(
                     catalog = catalog,
@@ -155,7 +160,7 @@ private fun EpubImageThumbnailStrip(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(84.dp)
+                .height(EPUB_IMAGE_THUMBNAIL_STRIP_HEIGHT)
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {

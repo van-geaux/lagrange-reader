@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -127,6 +128,13 @@ internal fun readerImageSwipeDirection(deltaX: Float, scale: Float): Int {
 internal fun readerImageViewerBottomInsetPx(hostNavigationBarInsetPx: Int): Int =
     hostNavigationBarInsetPx.coerceAtLeast(0)
 
+internal fun readerImageViewerReservedBottomInsetPx(
+    hostNavigationBarInsetPx: Int,
+    bottomContentHeightPx: Int,
+    bottomContentGapPx: Int
+): Int = readerImageViewerBottomInsetPx(hostNavigationBarInsetPx) +
+    bottomContentHeightPx.coerceAtLeast(0) + bottomContentGapPx.coerceAtLeast(0)
+
 @Composable
 internal fun ComicPageImageViewer(
     title: String,
@@ -137,6 +145,8 @@ internal fun ComicPageImageViewer(
     onSwipePrevious: (() -> Unit)? = null,
     onSwipeNext: (() -> Unit)? = null,
     bottomContentBottomInsetPx: Int = 0,
+    bottomContentHeight: Dp = 0.dp,
+    bottomContentBottomGap: Dp = 12.dp,
     exportTitle: String = comicPageExportTitle(title, pageIndex),
     exportBytes: (() -> ByteArray?)? = null
 ) {
@@ -148,6 +158,24 @@ internal fun ComicPageImageViewer(
     var imageSize by remember(pageIndex) { mutableStateOf(Size.Zero) }
     var pendingExport by remember { mutableStateOf(false) }
     val density = LocalDensity.current
+    val bottomContentInsetDp = with(density) {
+        readerImageViewerBottomInsetPx(bottomContentBottomInsetPx).toDp()
+    }
+    val reservedBottomContentPadding = with(density) {
+        readerImageViewerReservedBottomInsetPx(
+            hostNavigationBarInsetPx = bottomContentBottomInsetPx,
+            bottomContentHeightPx = if (bottomContentHeight > 0.dp) {
+                bottomContentHeight.toPx().roundToInt()
+            } else {
+                0
+            },
+            bottomContentGapPx = if (bottomContentHeight > 0.dp) {
+                bottomContentBottomGap.toPx().roundToInt()
+            } else {
+                0
+            }
+        ).toDp()
+    }
     val currentScale by rememberUpdatedState(scale)
     val currentPan by rememberUpdatedState(pan)
     val currentImageTopLeft by rememberUpdatedState(imageTopLeft)
@@ -269,7 +297,8 @@ internal fun ComicPageImageViewer(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .padding(bottom = reservedBottomContentPadding),
                 contentAlignment = Alignment.Center
             ) {
                 val fittedSize = fittedReaderImageSize(
@@ -304,9 +333,7 @@ internal fun ComicPageImageViewer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(
-                        bottom = 12.dp + with(density) {
-                            readerImageViewerBottomInsetPx(bottomContentBottomInsetPx).toDp()
-                        }
+                        bottom = bottomContentBottomGap + bottomContentInsetDp
                     )
             ) {
                 bottomContent()

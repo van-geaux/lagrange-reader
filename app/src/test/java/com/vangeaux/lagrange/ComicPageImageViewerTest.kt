@@ -110,4 +110,10 @@ class ComicPageImageViewerTest {
         assertEquals(0, readerImageViewerBottomInsetPx(0))
         assertEquals(0, readerImageViewerBottomInsetPx(-12))
     }
+
+    @Test
+    fun `viewer reserves thumbnail height gap and navigation inset`() {
+        assertEquals(156, readerImageViewerReservedBottomInsetPx(48, 84, 24))
+        assertEquals(0, readerImageViewerReservedBottomInsetPx(-12, -84, -24))
+    }
 }
