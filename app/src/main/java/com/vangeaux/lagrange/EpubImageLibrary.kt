@@ -53,6 +53,7 @@ internal data class EpubImageCatalog(
 internal object EpubImageLibraryScanner {
     private const val MAX_XML_BYTES = 2 * 1024 * 1024L
     private const val MAX_IMAGE_ENTRY_BYTES = 64 * 1024 * 1024L
+    private const val MAX_ARCHIVE_UNCOMPRESSED_BYTES = 256 * 1024 * 1024L
     private const val MAX_ARCHIVE_ENTRIES = 20_000
     private const val MAX_IMAGE_DIMENSION = 100_000
     private val supportedRasterExtensions = setOf("jpg", "jpeg", "png", "webp", "gif")
@@ -75,9 +76,16 @@ internal object EpubImageLibraryScanner {
             if (entries.size > MAX_ARCHIVE_ENTRIES) {
                 throw IllegalArgumentException("EPUB contains too many archive entries")
             }
-            val byPath = entries
-                .filterNot(ZipEntry::isDirectory)
-                .associateBy { normalizeArchivePath(null, it.name) ?: it.name }
+            var totalUncompressedBytes = 0L
+            val byPath = buildMap {
+                entries.filterNot(ZipEntry::isDirectory).forEach { entry ->
+                    totalUncompressedBytes += entry.size.coerceAtLeast(0L)
+                    if (totalUncompressedBytes > MAX_ARCHIVE_UNCOMPRESSED_BYTES) {
+                        throw IllegalArgumentException("EPUB archive is too large")
+                    }
+                    putIfAbsent(normalizeArchivePath(null, entry.name) ?: entry.name, entry)
+                }
+            }
             val packagePath = findPackagePath(zipFile)
             val packageDocument = parseXml(readEntry(zipFile, byPath, packagePath))
             val manifest = manifestItems(packageDocument, packagePath)
