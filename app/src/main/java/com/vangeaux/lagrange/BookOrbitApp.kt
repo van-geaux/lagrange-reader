@@ -96,6 +96,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -157,6 +158,7 @@ fun BookOrbitApp(
     coordinator: AppCoordinator,
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
+    browserStartIdentity: String = "default",
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
@@ -175,6 +177,7 @@ fun BookOrbitApp(
             coordinator = coordinator,
             audioPlaybackController = audioPlaybackController,
             appPreferences = appPreferences,
+            browserStartIdentity = browserStartIdentity,
             onAppPreferencesChange = onAppPreferencesChange,
             releaseCheckStatus = coordinator.releaseCheckStatus.collectAsState().value,
             onCheckForUpdates = { coordinator.checkForAppUpdate(forceShow = true) },
@@ -274,6 +277,7 @@ private fun BookOrbitDestination(
     coordinator: AppCoordinator,
     audioPlaybackController: ReadiumAudioPlaybackController?,
     appPreferences: AppPreferences,
+    browserStartIdentity: String,
     onAppPreferencesChange: (AppPreferences) -> Unit,
     releaseCheckStatus: ReleaseCheckStatus,
     onCheckForUpdates: () -> Unit,
@@ -305,9 +309,10 @@ private fun BookOrbitDestination(
                 onOpenServerSignIn = coordinator::openServerSignIn
             )
         }
-        is AppScreen.Browser -> CompositionLocalProvider(
-            LocalLibraryCardSize provides appPreferences.libraryCardSize
-        ) {
+        is AppScreen.Browser -> key(browserStartIdentity) {
+            CompositionLocalProvider(
+                LocalLibraryCardSize provides appPreferences.libraryCardSize
+            ) {
             NativeLibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::refreshBrowser,
@@ -386,6 +391,7 @@ private fun BookOrbitDestination(
                 }
             }
             )
+        }
         }
         is AppScreen.ReaderLoading -> ReaderLoadingScreen(
             book = screen.book,

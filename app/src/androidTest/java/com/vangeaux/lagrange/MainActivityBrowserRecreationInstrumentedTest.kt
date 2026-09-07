@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.app.Activity
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.State
 import androidx.compose.ui.test.assertIsDisplayed
@@ -159,6 +160,42 @@ class MainActivityBrowserRecreationInstrumentedTest {
             }
         } finally {
             application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
+            preferencesStore.save(originalPreferences)
+            MainActivityGraphProvider.testFactory = null
+        }
+    }
+
+    @Test
+    fun launcherReentryAppliesThePersistedOpeningScreenToTheBrowserRoot() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferencesStore = AppPreferencesStore(context)
+        val originalPreferences = preferencesStore.read()
+        val dataSource = InstrumentedFakeDataSource().apply {
+            serverUrl = "https://books.example.test"
+            sessionState = SessionState.Authenticated
+            selectedLibraryId = "lib-launcher"
+            librariesResult = listOf(LibrarySummary(id = "lib-launcher", name = "Launcher library"))
+        }
+        MainActivityGraphProvider.testFactory = {
+            AppGraph(AppCoordinator(dataSource, Dispatchers.Main))
+        }
+
+        try {
+            preferencesStore.save(originalPreferences.copy(defaultOpeningScreen = DefaultOpeningScreen.HOME))
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                composeRule.onNodeWithText("Home").performClick()
+                preferencesStore.save(
+                    originalPreferences.copy(defaultOpeningScreen = DefaultOpeningScreen.LIBRARY)
+                )
+                scenario.onActivity { activity ->
+                    activity.handleIncomingIntent(
+                        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                    )
+                }
+                waitForText("Recommended")
+                composeRule.onNodeWithText("Recommended").assertIsDisplayed()
+            }
+        } finally {
             preferencesStore.save(originalPreferences)
             MainActivityGraphProvider.testFactory = null
         }

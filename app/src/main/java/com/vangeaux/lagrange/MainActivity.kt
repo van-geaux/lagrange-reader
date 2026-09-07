@@ -17,6 +17,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
+import java.util.UUID
+
+internal fun browserStartIdentity(
+    savedProcessIdentity: String?,
+    savedStartIdentity: String?,
+    currentProcessIdentity: String,
+    newStartIdentity: String
+): String = if (
+    savedProcessIdentity == currentProcessIdentity && !savedStartIdentity.isNullOrBlank()
+) {
+    savedStartIdentity
+} else {
+    newStartIdentity
+}
+
+private const val BROWSER_START_PROCESS_ID_KEY = "browser_start_process_id"
+private const val BROWSER_START_ID_KEY = "browser_start_id"
+private val MAIN_PROCESS_IDENTITY = UUID.randomUUID().toString()
 
 internal fun requestedOrientationForLock(
     enabled: Boolean,
@@ -48,6 +66,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferencesStore: AppPreferencesStore
     private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
+    private val browserStartIdentityState = mutableStateOf(UUID.randomUUID().toString())
 
     override fun onResume() {
         super.onResume()
@@ -62,6 +81,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        browserStartIdentityState.value = browserStartIdentity(
+            savedProcessIdentity = savedInstanceState?.getString(BROWSER_START_PROCESS_ID_KEY),
+            savedStartIdentity = savedInstanceState?.getString(BROWSER_START_ID_KEY),
+            currentProcessIdentity = MAIN_PROCESS_IDENTITY,
+            newStartIdentity = UUID.randomUUID().toString()
+        )
 
         val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
@@ -91,6 +117,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val screen by graph.coordinator.screen.collectAsState()
             var appPreferences by appPreferencesState
+            val browserStartIdentity by browserStartIdentityState
             LaunchedEffect(Unit) {
                 graph.coordinator.bootstrap()
             }
@@ -112,6 +139,7 @@ class MainActivity : ComponentActivity() {
                         coordinator = graph.coordinator,
                         audioPlaybackController = audioPlaybackController,
                         appPreferences = appPreferences,
+                        browserStartIdentity = browserStartIdentity,
                         onAppPreferencesChange = { updated ->
                             val persisted = preferencesForOrientationLockChange(
                                 previous = appPreferences,
@@ -142,6 +170,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    internal fun handleIncomingIntent(intent: Intent) {
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            browserStartIdentityState.value = UUID.randomUUID().toString()
+            if (::preferencesStore.isInitialized) {
+                appPreferencesState.value = preferencesStore.read()
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(BROWSER_START_PROCESS_ID_KEY, MAIN_PROCESS_IDENTITY)
+        outState.putString(BROWSER_START_ID_KEY, browserStartIdentityState.value)
+        super.onSaveInstanceState(outState)
     }
 }
 
