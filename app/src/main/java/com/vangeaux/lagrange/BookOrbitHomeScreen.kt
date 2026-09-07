@@ -198,6 +198,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 internal enum class BrowserDestination {
     HOME,
@@ -248,6 +249,8 @@ internal fun HomeSection.recentBooksFilter(): BookBrowseFilter = when (this) {
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private const val HOME_PREVIEW_LIMIT = 8
+
+private val BROWSER_PROCESS_SESSION_ID = UUID.randomUUID().toString()
 
 private fun HomeSection.toBrowserDestination(): BrowserDestination = when (this) {
     HomeSection.CURRENTLY_READING -> BrowserDestination.CURRENTLY_READING
@@ -1014,6 +1017,15 @@ internal fun NativeLibraryBrowserScreen(
     }
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
+    }
+    var restoredProcessSessionId by rememberSaveable {
+        mutableStateOf(BROWSER_PROCESS_SESSION_ID)
+    }
+    LaunchedEffect(Unit) {
+        if (restoredProcessSessionId != BROWSER_PROCESS_SESSION_ID) {
+            destination = appPreferences.defaultOpeningScreen.toBrowserDestination()
+            restoredProcessSessionId = BROWSER_PROCESS_SESSION_ID
+        }
     }
     var query by rememberSaveable { mutableStateOf("") }
     val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {

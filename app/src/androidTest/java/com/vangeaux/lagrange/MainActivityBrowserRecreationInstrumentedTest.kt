@@ -82,6 +82,7 @@ class MainActivityBrowserRecreationInstrumentedTest {
             themeMode = AppThemeMode.WARM_BLACK,
             reduceMotion = true,
             libraryCardSize = LibraryCardSize.LARGE,
+            defaultOpeningScreen = DefaultOpeningScreen.LIBRARY,
             libraryReaderPreferences = originalPreferences.libraryReaderPreferences + (
                 "lib-preferences" to LibraryReaderPreferences(
                     readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
@@ -129,6 +130,7 @@ class MainActivityBrowserRecreationInstrumentedTest {
             preferencesStore.save(persistedPreferences)
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 assertEquals(persistedPreferences, preferencesAtActivityCreated.get())
+                composeRule.onNodeWithText("Recommended").assertIsDisplayed()
                 composeRule.onNodeWithContentDescription("User profile").performClick()
                 composeRule.onNodeWithText("Options").performClick()
                 waitForText("Interface")
