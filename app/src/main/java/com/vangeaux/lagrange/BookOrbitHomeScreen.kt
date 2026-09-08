@@ -3562,6 +3562,17 @@ internal fun OptionsScreen(
                 }
             )
         }
+        item(key = "pause-audiobook-interruptions") {
+            AppPreferenceSwitchRow(
+                title = "Pause audiobook for audio interruptions",
+                summary = "Pause briefly when another app or system sound takes audio focus",
+                checked = preferences.pauseAudiobookForAudioInterruptions,
+                testTag = "options-pause-audiobook-interruptions",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(pauseAudiobookForAudioInterruptions = it))
+                }
+            )
+        }
     }
 
     when (openDialog) {

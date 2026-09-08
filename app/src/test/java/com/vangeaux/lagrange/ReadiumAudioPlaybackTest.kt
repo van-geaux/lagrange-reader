@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.session.CommandButton
 import kotlin.time.Duration.Companion.seconds
@@ -16,6 +17,14 @@ class ReadiumAudioPlaybackTest {
         assertEquals(false, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.NORMAL))
         assertEquals(true, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.PREVIEW))
         assertEquals(false, shouldShowAudiobookPreviewBanner(ReaderLaunchMode.NORMAL))
+    }
+
+    @Test
+    fun audiobookAudioAttributesUseSpeechMediaPolicy() {
+        val attributes = audiobookMedia3AudioAttributes()
+
+        assertEquals(C.USAGE_MEDIA, attributes.usage)
+        assertEquals(C.AUDIO_CONTENT_TYPE_SPEECH, attributes.contentType)
     }
 
     private fun file(

@@ -1463,6 +1463,14 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("options-reduce-motion").performScrollTo().performClick()
         composeRule.runOnIdle { assertTrue(preferences.value.reduceMotion) }
 
+        composeRule.onNodeWithTag("options-pause-audiobook-interruptions")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(false, preferences.value.pauseAudiobookForAudioInterruptions)
+        }
+
         composeRule.onNodeWithTag("options-library-card-size").performScrollTo().performClick()
         composeRule.onNodeWithText("Medium").performClick()
         composeRule.runOnIdle {
