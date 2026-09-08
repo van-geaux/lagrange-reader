@@ -398,12 +398,12 @@ internal fun ReadiumCompactAudioPlayer(
                             expanded = speedMenuExpanded,
                             onDismissRequest = { speedMenuExpanded = false }
                         ) {
-                            listOf(0.75, 1.0, 1.25, 1.5, 2.0).forEach { speed ->
+                            AUDIO_PLAYBACK_SPEED_OPTIONS.forEach { speed ->
                                 DropdownMenuItem(
-                                    text = { Text("${formatPlaybackSpeed(speed)}×") },
+                                    text = { Text("${formatPlaybackSpeed(speed.toDouble())}×") },
                                     onClick = {
                                         speedMenuExpanded = false
-                                        controller.setPlaybackSpeed(current.player, speed.toFloat())
+                                        controller.setPlaybackSpeed(current.player, speed)
                                     }
                                 )
                             }
@@ -444,7 +444,9 @@ internal fun ReadiumCompactAudioPlayer(
 }
 
 internal fun formatPlaybackSpeed(speed: Double): String =
-    if (speed % 1.0 == 0.0) speed.toInt().toString() else speed.toString()
+    String.format(Locale.US, "%.2f", speed)
+        .trimEnd('0')
+        .trimEnd('.')
 
 internal fun formatPlaybackTime(millis: Long): String {
     val totalSeconds = (millis / 1000L).coerceAtLeast(0L)

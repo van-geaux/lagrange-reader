@@ -150,7 +150,7 @@ When the affected scope requires it, verify:
 - tap-zone layouts and None/Horizontal/Vertical/Both inversion across EPUB, PDF, paginated comics, and continuous comics; the default uses equal-width Previous / Menu / Next thirds, Vertical thirds uses equal-height top / middle / bottom Previous / Menu / Next regions, changing layout or inversion from reader options re-shows the tutorial behind the options sheet, and continuous vertical swipes still scroll rather than firing a tap action;
 - tutorial geometry and labels match the transformed runtime tap regions for LTR, RTL, and selected inversion;
 - PDF/comic page navigation and progress;
-- audiobook compact-player restoration, seeking, chapters, and speed;
+- audiobook compact-player restoration, seeking, chapters, and speed; both the compact and full players expose the shared options `0.75x`, `1x`, `1.05x`, `1.10x`, `1.15x`, `1.20x`, `1.25x`, `1.5x`, and `2x`, with stable decimal labels;
 - audiobook full-player overlay above the retained browser route: minimize restores the exact browser location, Close removes the player without implicit navigation, and metadata navigation is explicit;
 - audiobook full-player Chapter/Speed/Sleep visibility and grouped responsive sizing in both portrait and landscape, including readable landscape touch targets;
 - audiobook full-player theme adherence in both portrait and landscape: validate Light, Follow system/light, and at least one dark theme while the player is preparing and open, confirming the player surfaces, chapter sheet, session-history dialog, seek labels, and inactive tracks follow the selected app theme;

@@ -19,9 +19,27 @@ class AppPreferencesStoreTest {
 
     @Test
     fun audioPlaybackSpeedStaysWithinTheSupportedGlobalOptions() {
+        assertEquals(
+            listOf(0.75f, 1f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f, 1.5f, 2f),
+            AUDIO_PLAYBACK_SPEED_OPTIONS
+        )
         assertEquals(1.5f, normalizeAudioPlaybackSpeed(1.5f))
         assertEquals(0.75f, normalizeAudioPlaybackSpeed(0.6f))
+        assertEquals(1.05f, normalizeAudioPlaybackSpeed(1.04f))
+        assertEquals(1.10f, normalizeAudioPlaybackSpeed(1.08f))
+        assertEquals(1.15f, normalizeAudioPlaybackSpeed(1.13f))
+        assertEquals(1.20f, normalizeAudioPlaybackSpeed(1.18f))
         assertEquals(2f, normalizeAudioPlaybackSpeed(2.5f))
+    }
+
+    @Test
+    fun playbackSpeedLabelsAvoidFloatPrecisionNoise() {
+        assertEquals("1", formatPlaybackSpeed(1.0))
+        assertEquals("1.05", formatPlaybackSpeed(1.0499999523162842))
+        assertEquals("1.1", formatPlaybackSpeed(1.100000023841858))
+        assertEquals("1.15", formatPlaybackSpeed(1.149999976158142))
+        assertEquals("1.2", formatPlaybackSpeed(1.2000000476837158))
+        assertEquals("2", formatPlaybackSpeed(2.0))
     }
 
     @Test
