@@ -198,6 +198,10 @@ On a connected Android device or emulator with audiobook playback active, exerci
 
 This procedure documents the lifecycle contract; no automated or physical validation result is asserted here.
 
+### Audiobook audio interruptions (issue #153)
+
+On a connected Android device or emulator, open Options and verify `Pause audiobook for audio interruptions` is enabled by default. Start an audiobook, then trigger a competing app or system sound that requests Android audio focus; verify playback pauses and resumes after the competing focus ends. Disable the option, repeat the audio-focus interruption, and verify playback does not pause. Open and close the notification shade without triggering a competing audio-focus request and verify playback continues; Android does not guarantee that every notification sound requests audio focus, so use an audio-focus request for the interruption case. The user confirmed this behavior works on-device.
+
 ### Audiobook seek confirmation (issue #129)
 
 On a connected Android device or emulator with a split-file audiobook available, start playback and exercise each seek bar in compact player, full-player portrait, and full-player landscape states. In each state, test both the overall book bar and the chapter bar: drag/tap to a new position and verify the seek applies immediately, playback continues, and the in-place confirmation offers `Yes, keep position` and `No, go back`. Accept with `Yes, keep position` and verify the new position remains. Repeat a seek, choose `No, go back`, and verify the prior absolute position is restored, including when the requested position crosses a split-file boundary.

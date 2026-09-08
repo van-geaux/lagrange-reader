@@ -40,6 +40,14 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun audioInterruptionPauseDefaultsToEnabledAndRoundTrips() {
+        assertEquals(true, AppPreferences().pauseAudiobookForAudioInterruptions)
+        assertEquals(false, audiobookAudioInterruptionPauseFromStorage(false))
+        assertEquals(true, audiobookAudioInterruptionPauseFromStorage(true))
+        assertEquals(true, audiobookAudioInterruptionPauseFromStorage(null))
+    }
+
+    @Test
     fun `stored app theme values round trip and invalid values follow system`() {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))

@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -81,6 +83,12 @@ internal val audiobookSeekForwardSessionCommand = SessionCommand(
     AUDIO_SEEK_FORWARD_SESSION_ACTION,
     Bundle()
 )
+
+internal fun audiobookMedia3AudioAttributes(): AudioAttributes =
+    AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
+        .build()
 
 internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuration =
     ExoPlayerEngine.Configuration(
@@ -304,6 +312,7 @@ internal suspend fun openDirectMedia3Audio(
     streamUrl: String?,
     initialPositionMs: Long,
     audioFiles: List<BookFileOption> = emptyList(),
+    pauseForAudioInterruptions: Boolean = true,
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult {
@@ -314,6 +323,7 @@ internal suspend fun openDirectMedia3Audio(
             mediaItems = playlistItems,
             initialFileId = book.fileId,
             initialPositionMs = initialPositionMs,
+            pauseForAudioInterruptions = pauseForAudioInterruptions,
             headersProvider = headersProvider,
             recoverAuthentication = recoverAuthentication
         )
@@ -328,6 +338,7 @@ internal suspend fun openDirectMedia3Audio(
         streamUrl = url,
         mimeType = mimeType,
         initialPositionMs = initialPositionMs,
+        pauseForAudioInterruptions = pauseForAudioInterruptions,
         headersProvider = headersProvider,
         recoverAuthentication = recoverAuthentication
     )
@@ -339,10 +350,13 @@ private suspend fun preparePlaylistMedia3Audio(
     mediaItems: List<MediaItem>,
     initialFileId: String?,
     initialPositionMs: Long,
+    pauseForAudioInterruptions: Boolean,
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult = withContext(Dispatchers.Main.immediate) {
     val player = ExoPlayer.Builder(application)
+        .setAudioAttributes(audiobookMedia3AudioAttributes(), pauseForAudioInterruptions)
+        .setHandleAudioBecomingNoisy(true)
         .setSeekBackIncrementMs(AUDIO_SEEK_BACK_INCREMENT_MS)
         .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
         .setMediaSourceFactory(
@@ -386,10 +400,13 @@ private suspend fun prepareDirectMedia3Audio(
     streamUrl: String,
     mimeType: String,
     initialPositionMs: Long,
+    pauseForAudioInterruptions: Boolean,
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult = withContext(Dispatchers.Main.immediate) {
     val player = ExoPlayer.Builder(application)
+        .setAudioAttributes(audiobookMedia3AudioAttributes(), pauseForAudioInterruptions)
+        .setHandleAudioBecomingNoisy(true)
         .setSeekBackIncrementMs(AUDIO_SEEK_BACK_INCREMENT_MS)
         .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
         .setMediaSourceFactory(
@@ -581,6 +598,7 @@ internal suspend fun openReadiumAudio(
     book: BookSummary,
     file: File? = null,
     initialPositionMs: Long,
+    pauseForAudioInterruptions: Boolean = true,
     httpClient: HttpClient = DefaultHttpClient()
 ): ReadiumAudioOpenResult = withContext(Dispatchers.IO) {
     val localFile = file?.takeIf { it.isFile && it.length() > 0L }
@@ -641,11 +659,19 @@ internal suspend fun openReadiumAudio(
                     publication.close()
                     return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
                 }
+            val player = navigator.asMedia3Player()
+            (player as? ExoPlayer)?.apply {
+                setAudioAttributes(
+                    audiobookMedia3AudioAttributes(),
+                    pauseForAudioInterruptions
+                )
+                setHandleAudioBecomingNoisy(true)
+            }
             ReadiumAudioOpenResult.Opened(
                 AudioPlaybackEngine.Readium(
                     publication = publication,
                     navigator = navigator,
-                    player = navigator.asMedia3Player()
+                    player = player
                 )
             )
         }
@@ -1049,6 +1075,7 @@ class ReadiumAudioPlaybackController internal constructor(
                 ReadiumAudioOpenResult.Error("Could not resume audiobook playback.")
             }
         }
+        val pauseForAudioInterruptions = preferencesStore.read().pauseAudiobookForAudioInterruptions
         val opened = try {
             withTimeoutOrNull(AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS) {
                 if (file?.isFile == true) {
@@ -1057,6 +1084,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         book = book,
                         file = file,
                         initialPositionMs = initialPositionMs,
+                        pauseForAudioInterruptions = pauseForAudioInterruptions,
                         httpClient = DefaultHttpClient()
                     )
                 } else {
@@ -1066,6 +1094,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         streamUrl = streamUrl,
                         initialPositionMs = initialPositionMs,
                         audioFiles = audioFiles,
+                        pauseForAudioInterruptions = pauseForAudioInterruptions,
                         headersProvider = streamingHeadersProvider,
                         recoverAuthentication = streamingAuthenticationRecovery
                     )

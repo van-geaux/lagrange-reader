@@ -63,6 +63,7 @@ data class AppPreferences(
     val offlineCacheAutoRefreshEnabled: Boolean = false,
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
+    val pauseAudiobookForAudioInterruptions: Boolean = true,
     val epubImageMinimumDimensionPx: Int = DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
@@ -100,6 +101,9 @@ internal class AppPreferencesStore(context: Context) {
         offlineCacheAutoRefreshEnabled = preferences.getBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, false),
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         confirmAudiobookSeek = preferences.getBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, true),
+        pauseAudiobookForAudioInterruptions = audiobookAudioInterruptionPauseFromStorage(
+            preferences.getBoolean(PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY, true)
+        ),
         epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
             preferences.getInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
@@ -150,6 +154,10 @@ internal class AppPreferencesStore(context: Context) {
             .putBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, value.offlineCacheAutoRefreshEnabled)
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
             .putBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, value.confirmAudiobookSeek)
+            .putBoolean(
+                PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY,
+                value.pauseAudiobookForAudioInterruptions
+            )
             .putInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
                 normalizeEpubImageMinimumDimensionPx(value.epubImageMinimumDimensionPx)
@@ -225,6 +233,8 @@ internal class AppPreferencesStore(context: Context) {
         const val OFFLINE_CACHE_AUTO_REFRESH_KEY = "offline_cache_auto_refresh"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
+        const val PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY =
+            "pause_audiobook_for_audio_interruptions"
         const val EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY = "epub_image_minimum_dimension_px"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
@@ -275,6 +285,8 @@ internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
     AUDIO_PLAYBACK_SPEED_OPTIONS
         .minByOrNull { option -> kotlin.math.abs(option - value) }
         ?: 1f
+
+internal fun audiobookAudioInterruptionPauseFromStorage(value: Boolean?): Boolean = value ?: true
 
 internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
