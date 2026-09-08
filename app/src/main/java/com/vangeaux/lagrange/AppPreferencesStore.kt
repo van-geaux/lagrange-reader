@@ -288,7 +288,17 @@ internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
 
 internal fun audiobookAudioInterruptionPauseFromStorage(value: Boolean?): Boolean = value ?: true
 
-internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(
+    0.75f,
+    1f,
+    1.05f,
+    1.10f,
+    1.15f,
+    1.20f,
+    1.25f,
+    1.5f,
+    2f
+)
 
 internal val AUDIO_SKIP_SECONDS_OPTIONS = listOf(5, 10, 15, 30, 60)
 
