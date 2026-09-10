@@ -8,6 +8,49 @@ import org.junit.Test
 
 class BookDetailActionRowTest {
     @Test
+    fun groupedFileActionReflectsPhysicalTransferState() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val option = BookFileOption(book = book, filename = "Chapter 01.mp3")
+
+        assertEquals(
+            GroupedFileAction.DOWNLOAD,
+            groupedFileAction(option, emptySet(), emptySet())
+        )
+        assertEquals(
+            GroupedFileAction.DOWNLOADING,
+            groupedFileAction(option, setOf("file-1"), emptySet())
+        )
+        assertEquals(
+            GroupedFileAction.DOWNLOADING,
+            groupedFileAction(option, emptySet(), setOf("file-1"))
+        )
+        assertEquals(
+            GroupedFileAction.DELETE,
+            groupedFileAction(option.copy(book = book.copy(localPath = "/downloads/part-1.mp3")), emptySet(), emptySet())
+        )
+    }
+
+    @Test
+    fun groupedFileDownloadPayloadRetainsPhysicalFilename() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-4",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val option = BookFileOption(book = book, filename = "Chapter 04.mp3")
+
+        assertEquals("Chapter 04.mp3", singleFileDownloadBook(option).filename)
+    }
+
+    @Test
     fun nonlocalTransferSlotMapsIdleRetryAndCancelStates() {
         assertEquals(
             BookDetailInlineTransfer.DOWNLOAD,
@@ -65,6 +108,12 @@ class BookDetailActionRowTest {
         assertNull(denied.overflowTransferLabel)
     }
 
+    @Test
+    fun partialGroupOffersDownloadRemaining() {
+        val partial = state(isDownloaded = false, isPartial = true)
+
+        assertEquals(BookDetailInlineTransfer.DOWNLOAD_REMAINING, partial.inlineTransfer)
+    }
     @Test
     fun serverMissingBookHasNoFileActionsButCanCancelAnExistingTransfer() {
         val missing = state(isDownloaded = false, isServerMissing = true)
@@ -170,6 +219,7 @@ class BookDetailActionRowTest {
         isDownloaded: Boolean,
         isDownloading: Boolean = false,
         downloadFailed: Boolean = false,
+        isPartial: Boolean = false,
         permissionDenied: Boolean = false,
         hasDownloadUpdate: Boolean = false,
         isOfflineSnapshot: Boolean = false,
@@ -178,6 +228,7 @@ class BookDetailActionRowTest {
         isDownloaded = isDownloaded,
         isDownloading = isDownloading,
         downloadFailed = downloadFailed,
+        isPartial = isPartial,
         permissionDenied = permissionDenied,
         hasDownloadUpdate = hasDownloadUpdate,
         isOfflineSnapshot = isOfflineSnapshot,

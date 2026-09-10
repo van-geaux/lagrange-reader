@@ -346,6 +346,21 @@ interface BookOrbitDataSource {
     suspend fun checkServer(serverUrl: String): ServerCheckResult
 }
 
+internal fun interruptedDownloadRecord(attempt: DownloadAttempt): DownloadRecord = DownloadRecord(
+    serverUrl = attempt.serverUrl,
+    fileId = attempt.fileId,
+    bookId = attempt.bookId,
+    title = attempt.title,
+    filename = attempt.filename,
+    localPath = attempt.targetPath,
+    mediaKind = attempt.mediaKind,
+    mimeType = attempt.mimeType,
+    sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
+    downloadedAtMillis = attempt.startedAtMillis,
+    status = DownloadRecordStatus.INTERRUPTED,
+    hasExistingLocalCopy = attempt.existingLocalPath?.let(::File)?.exists() == true
+)
+
 class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val queueStore = ProgressQueueStore(context)
     private val readingSessionQueueStore = ReadingSessionQueueStore(context)
@@ -750,6 +765,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 ) ?: cachedDetailBook
                 metadataBook?.copy(
                     fileId = record.fileId,
+                    filename = record.filename ?: metadataBook.filename,
                     format = metadataBook.format.takeIf { metadataBook.fileId == record.fileId }
                         ?: record.mimeType
                         ?: metadataBook.format,
@@ -764,6 +780,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     id = record.bookId,
                     fileId = record.fileId,
                     title = record.title,
+                    filename = record.filename,
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
                     localPath = record.localPath,
@@ -1931,21 +1948,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     }
 
     override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = withContext(Dispatchers.IO) {
-        downloadStore.readAttempts(getServerUrl().orEmpty()).map { attempt ->
-            DownloadRecord(
-                serverUrl = attempt.serverUrl,
-                fileId = attempt.fileId,
-                bookId = attempt.bookId,
-                title = attempt.title,
-                localPath = attempt.targetPath,
-                mediaKind = attempt.mediaKind,
-                mimeType = attempt.mimeType,
-                sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
-                downloadedAtMillis = attempt.startedAtMillis,
-                status = DownloadRecordStatus.INTERRUPTED,
-                hasExistingLocalCopy = attempt.existingLocalPath?.let(::File)?.exists() == true
-            )
-        }
+        downloadStore.readAttempts(getServerUrl().orEmpty()).map(::interruptedDownloadRecord)
     }
 
     override suspend fun clearInterruptedDownload(fileId: String) = withContext(Dispatchers.IO) {

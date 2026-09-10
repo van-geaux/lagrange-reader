@@ -224,23 +224,89 @@ data class AvailableFileGroup(
     val fileId: String? get() = options.firstOrNull()?.fileId
     val groupingPath: String? get() = options.firstOrNull()?.groupingPath
     val groupName: String
-        get() = groupingPath
-            ?.trimEnd('/')
-            ?.substringAfterLast('/')
-            ?.takeIf { it.isNotBlank() }
-            ?: "Available files"
+        get() = when (options.firstOrNull()?.mediaKind) {
+            MediaKind.AUDIO -> groupingPath
+                ?.trimEnd('/')
+                ?.substringAfterLast('/')
+                ?.takeIf { it.isNotBlank() }
+            else -> options.firstOrNull()?.filename
+                ?.substringAfterLast('/')
+                ?.substringBeforeLast('.', missingDelimiterValue = "")
+                ?.takeIf { it.isNotBlank() }
+                ?: groupingPath
+                    ?.trimEnd('/')
+                    ?.substringAfterLast('/')
+                    ?.takeIf { it.isNotBlank() }
+        } ?: "Available files"
     val totalSizeBytes: Long?
         get() = options.takeIf { files -> files.all { it.sizeBytes != null } }
             ?.sumOf { it.sizeBytes ?: 0L }
 }
 
+internal enum class AvailableFileGroupDownloadState {
+    NOT_DOWNLOADED,
+    PARTIAL,
+    COMPLETE
+}
+
+internal data class AvailableFileGroupDownloadProgress(
+    val totalFileCount: Int,
+    val downloadedFileCount: Int,
+    val totalKnownBytes: Long?,
+    val downloadedKnownBytes: Long?,
+    val state: AvailableFileGroupDownloadState
+)
+
+internal fun availableFileGroupDownloadProgress(
+    group: AvailableFileGroup
+): AvailableFileGroupDownloadProgress {
+    val totalFileCount = group.options.size
+    val downloadedFiles = group.options.filter { !it.localPath.isNullOrBlank() }
+    val totalKnownBytes = group.options.takeIf { options -> options.all { it.sizeBytes != null } }
+        ?.sumOf { it.sizeBytes ?: 0L }
+    val downloadedKnownBytes = totalKnownBytes?.let {
+        downloadedFiles.sumOf { it.sizeBytes ?: 0L }
+    }
+    val state = when {
+        downloadedFiles.isEmpty() -> AvailableFileGroupDownloadState.NOT_DOWNLOADED
+        downloadedFiles.size == totalFileCount -> AvailableFileGroupDownloadState.COMPLETE
+        else -> AvailableFileGroupDownloadState.PARTIAL
+    }
+    return AvailableFileGroupDownloadProgress(
+        totalFileCount = totalFileCount,
+        downloadedFileCount = downloadedFiles.size,
+        totalKnownBytes = totalKnownBytes,
+        downloadedKnownBytes = downloadedKnownBytes,
+        state = state
+    )
+}
+
+internal fun availableFileGroupIsMultipart(group: AvailableFileGroup): Boolean =
+    group.options.size > 1
+
+internal fun availableFileGroupFileIdsToCancel(
+    group: AvailableFileGroup,
+    downloadingFileIds: Set<String>,
+    queuedFileIds: Set<String>
+): List<String> = group.options.mapNotNull { option ->
+    option.fileId?.takeIf { it in downloadingFileIds || it in queuedFileIds }
+}
+
 internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableFileGroup> =
     options.fold(mutableListOf<AvailableFileGroup>()) { groups, option ->
         val groupingPath = option.groupingPath?.takeIf { it.isNotBlank() }
+        val format = availableFileGroupFormat(option)
+        val discriminator = when (option.mediaKind) {
+            MediaKind.AUDIO -> "format:$format"
+            MediaKind.EPUB,
+            MediaKind.PDF -> "stem:${availableFileGroupStem(option)}"
+            MediaKind.COMIC,
+            MediaKind.UNKNOWN -> "file:${option.fileId}"
+        }
         val key = if (groupingPath == null) {
-            "file:${option.fileId}"
+            "${option.book.id}:${option.mediaKind}:$discriminator"
         } else {
-            "book:${option.book.id}:path:$groupingPath"
+            "book:${option.book.id}:path:$groupingPath:${option.mediaKind}:$discriminator"
         }
         val existing = groups.indexOfFirst { it.key == key }
         if (existing >= 0) {
@@ -250,6 +316,85 @@ internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableF
         }
         groups
     }
+
+private fun availableFileGroupFormat(option: BookFileOption): String =
+    option.format
+            ?.substringAfterLast('/')
+            ?.substringBefore(';')
+            ?.trimStart('.')
+            ?.lowercase(Locale.US)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { serverFormat ->
+                if (serverFormat == "mp4") {
+                    option.filename
+                        ?.substringAfterLast('.', missingDelimiterValue = "")
+                        ?.lowercase(Locale.US)
+                        ?.takeIf { it == "m4a" || it == "m4b" }
+                        ?: serverFormat
+                } else {
+                    serverFormat
+                }
+            }
+        ?: option.filename
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.lowercase(Locale.US)
+            ?.takeIf { it.isNotBlank() }
+        ?: option.mediaKind.name.lowercase(Locale.US)
+
+private fun availableFileGroupStem(option: BookFileOption): String =
+    option.filename
+        ?.substringAfterLast('/')
+        ?.substringBeforeLast('.', missingDelimiterValue = "")
+        ?.let(::normalizeAvailableFileGroupStem)
+        ?.takeIf { it.isNotBlank() }
+        ?: option.fileId.orEmpty()
+
+private fun normalizeAvailableFileGroupStem(stem: String): String {
+    val withoutDelimitedSegments = removeDelimitedSegments(stem)
+    val tokens = withoutDelimitedSegments
+        .replace('.', ' ')
+        .replace('_', ' ')
+        .replace('-', ' ')
+        .split(' ')
+        .filter { it.isNotBlank() }
+    val suffixes = setOf("retail", "fixed", "repack", "proper", "unabridged", "abridged")
+    val withoutReleaseSuffix = tokens.dropLastWhile { token ->
+        val normalized = token.lowercase(Locale.US)
+        normalized in suffixes ||
+            (normalized.length > 1 && normalized[0] == 'v' && normalized.drop(1).all(Char::isDigit))
+    }
+    return withoutReleaseSuffix.joinToString(" ").lowercase(Locale.US)
+}
+
+private fun removeDelimitedSegments(value: String): String {
+    val openingToClosing = mapOf('(' to ')', '[' to ']', '{' to '}')
+    val result = StringBuilder(value.length)
+    var index = 0
+    while (index < value.length) {
+        val closing = openingToClosing[value[index]]
+        if (closing == null) {
+            result.append(value[index])
+            index += 1
+            continue
+        }
+        var depth = 1
+        var end = index + 1
+        while (end < value.length && depth > 0) {
+            when (value[end]) {
+                value[index] -> depth += 1
+                closing -> depth -= 1
+            }
+            end += 1
+        }
+        if (depth > 0) {
+            result.append(value[index])
+            index += 1
+        } else {
+            index = end
+        }
+    }
+    return result.toString()
+}
 
 data class AvailableFileLabel(
     val title: String,

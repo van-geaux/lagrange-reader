@@ -32,6 +32,43 @@ class AppCoordinatorTest {
     )
 
     @Test
+    fun `interrupted download record preserves physical filename`() {
+        val record = interruptedDownloadRecord(
+            DownloadAttempt(
+                serverUrl = serverUrl,
+                fileId = "file-2",
+                bookId = "book-1",
+                title = "Sample Book",
+                filename = "Chapter 02.mp3",
+                targetPath = "/downloads/chapter-02.mp3",
+                mediaKind = MediaKind.AUDIO
+            )
+        )
+
+        assertEquals("Chapter 02.mp3", record.filename)
+    }
+
+    @Test
+    fun `reconciled download filename comes from matching detail file`() {
+        val titleOnlyBook = book.copy(fileId = "file-2", filename = null)
+        val detail = BookDetailInfo(
+            book = titleOnlyBook,
+            availableFiles = listOf(
+                BookFileOption(
+                    book = titleOnlyBook,
+                    filename = "Chapter 02.mp3"
+                )
+            )
+        )
+
+        assertEquals(
+            "Chapter 02.mp3",
+            recoveredDownloadFilename(titleOnlyBook, "file-2", detail)
+        )
+        assertNull(recoveredDownloadFilename(titleOnlyBook, "file-1", detail))
+    }
+
+    @Test
     fun `full audio player overlays current browser screen and dismisses without navigation`() = runTest {
         val audiobook = book.copy(
             id = "audio-1",
@@ -346,6 +383,22 @@ class AppCoordinatorTest {
         )
 
         coordinator.downloadBook(first)
+        advanceUntilIdle()
+
+        assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })
+    }
+
+    @Test
+    fun `single file download does not enqueue its whole multipart group`() = runTest {
+        val first = book.copy(fileId = "file-1", mediaKind = MediaKind.AUDIO)
+        val second = book.copy(fileId = "file-2", mediaKind = MediaKind.AUDIO)
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            audiobookDownloadFilesResult = listOf(first, second)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.downloadSingleFile(first)
         advanceUntilIdle()
 
         assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })

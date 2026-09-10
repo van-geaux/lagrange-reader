@@ -2,6 +2,10 @@
 
 This document records the BookOrbit API contract currently used by the Android client.
 
+## Android packaging contract
+
+The PDFium native dependency is JitPack `com.github.marain87:PdfiumAndroid:1.9.8`. Distributed APKs are `arm64-v8a`-only and must pass both ZIP alignment (`zipalign -P 16`) and native ELF alignment (`p_align=0x4000`) checks for Android 16 KB page-size compatibility. This packaging contract is independent of connected UI/instrumentation validation.
+
 ## Authentication
 
 ### Login
@@ -159,6 +163,10 @@ Important notes:
 ### Book detail files
 
 `GET /api/v1/books/{bookId}` returns every attached file in `files[]`, not only the server-primary file. The detail payload may provide the book's grouping directory as `folderPath`; file entries may provide `absolutePath` in addition to `id`, `format`, `role`, `filename`, `sizeBytes`, `durationSeconds`, and update metadata. The Android client retains the primary file as the normal `BookSummary` and exposes supported alternate media through the Book Detail `Available file` control and bottom-sheet picker. Each option retains its file metadata and file-specific `fileId`; the selected file ID is preferred during detail hydration so selecting an audiobook such as M4B does not fall back to the primary EPUB. Multipart audio options use the detail-level folder identity for one grouped picker row, with file-level path data as a compatibility fallback; child file IDs remain separate for download and playback.
+
+#### Available-file grouping contract
+
+The selectable-file grouping contract uses the BookOrbit grouping path plus media kind as the base identity. Exact audio format is part of the identity, separating MP3, M4A, M4B, FLAC, Opus, and other formats even when their server grouping path matches. EPUB and PDF units use normalized filename-stem identity where upstream does; the upstream release-plan evidence for this behavior is reflected by the release-stem normalization regression. Comics and unknown files remain scoped to their physical file. Mixed EPUB/PDF/comic/audio formats therefore cannot appear as one selectable group. If same-format files have identical server metadata, they remain one group because this API exposes no stable discriminator to separate them; that is the remaining ambiguity limitation.
 
 For audiobook downloads, the Android client treats the detail `files[]` response as the complete authoritative set for the selected BookOrbit book. It downloads every supported audio entry with a nonblank file ID, in the returned server order, using one per-file `/api/v1/books/files/{fileId}/download` operation. Supplement entries such as `metadata.json`, duplicate IDs, and files belonging to another book are excluded. The server-primary file identifies the default selection but does not limit the download to one file.
 

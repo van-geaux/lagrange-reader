@@ -1120,6 +1120,7 @@ class BookOrbitAppInstrumentedTest {
             id = "download-active",
             fileId = "download-active",
             title = "Active Download",
+            filename = "Chapter 02.mp3",
             mediaKind = MediaKind.EPUB
         )
         val failed = BookSummary(
@@ -1132,7 +1133,8 @@ class BookOrbitAppInstrumentedTest {
         val secondActive = active.copy(
             id = "download-active-2",
             fileId = "download-active-2",
-            title = "Second Active Download"
+            title = "Second Active Download",
+            filename = "Chapter 03.mp3"
         )
         val dataSource = InstrumentedFakeDataSource()
         composeRule.setContent {
@@ -1161,6 +1163,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("Downloads").assertIsDisplayed()
         composeRule.onNodeWithText("2 downloading").assertIsDisplayed()
         composeRule.onNodeWithText("Active Download").assertIsDisplayed()
+        composeRule.onNodeWithText("Chapter 02.mp3").assertIsDisplayed()
         composeRule.onNodeWithText("Downloading · 50%").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").assertIsDisplayed()
         composeRule.onNodeWithText("Failed Download").assertIsDisplayed()

@@ -29,6 +29,16 @@ internal fun shouldRefreshAfterDownloadOutcome(
     booksByFileId: Map<String, BookSummary>
 ): Boolean = activeFileIds.none { fileId -> booksByFileId[fileId]?.id == logicalBookId }
 
+internal fun recoveredDownloadFilename(
+    book: BookSummary,
+    fileId: String,
+    detail: BookDetailInfo?
+): String? = book.filename?.takeIf { it.isNotBlank() }
+    ?: detail?.availableFiles
+        ?.firstOrNull { it.fileId == fileId }
+        ?.filename
+        ?.takeIf { it.isNotBlank() }
+
 internal fun BrowserState.withQueuedDownloads(downloads: List<ScheduledDownload>): BrowserState {
     val fileIds = downloads.mapTo(linkedSetOf()) { it.fileId }
     val activeFileId = fileIds.firstOrNull()
@@ -671,7 +681,7 @@ class AppCoordinator internal constructor(
             restoredInterruptedDownloads = runCatching {
                 repository.loadInterruptedDownloads().associateBy { it.fileId }
             }.getOrDefault(emptyMap())
-            reconciledActiveDownloadsByFileId = runCatching {
+            val reconciledDownloads = runCatching {
                 downloadScheduler.reconcile(
                     scope = scope,
                     serverUrl = serverUrl,
@@ -680,6 +690,14 @@ class AppCoordinator internal constructor(
                     onOutcome = { fileId, outcome -> handleDownloadOutcome(fileId, findKnownBook(fileId), outcome) }
                 )
             }.getOrDefault(emptyMap())
+            reconciledActiveDownloadsByFileId = reconciledDownloads.mapValues { (fileId, book) ->
+                if (!book.filename.isNullOrBlank()) {
+                    book
+                } else {
+                    val detail = runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    book.copy(filename = recoveredDownloadFilename(book, fileId, detail))
+                }
+            }
             var previous = lastBrowserState
             if (previous == null) {
                 repository.loadCachedBrowserState()?.let { cached ->
@@ -1215,7 +1233,7 @@ class AppCoordinator internal constructor(
         }
     }
 
-    fun downloadBook(book: BookSummary) {
+    fun downloadBook(book: BookSummary, expandGroup: Boolean = true) {
         val requestedFileId = book.fileId ?: run {
             showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
             return
@@ -1224,7 +1242,7 @@ class AppCoordinator internal constructor(
             val serverUrl = repository.getServerUrl().orEmpty()
             val isPerFileRetry = requestedFileId in lastBrowserState?.failedDownloadFileIds.orEmpty()
             val files = runCatching {
-                if (isPerFileRetry) listOf(book) else repository.loadAudiobookDownloadFiles(book)
+                if (isPerFileRetry || !expandGroup) listOf(book) else repository.loadAudiobookDownloadFiles(book)
             }
                 .getOrElse { error ->
                     showBrowserMessage(userMessage(error, "Unable to inspect the audiobook files."))
@@ -1251,6 +1269,10 @@ class AppCoordinator internal constructor(
                     }
                 )
         }
+    }
+
+    fun downloadSingleFile(book: BookSummary) {
+        downloadBook(book, expandGroup = false)
     }
 
     fun downloadBookForEpubImageLibrary(book: BookSummary, onSuccess: (BookSummary) -> Unit) {
@@ -1415,6 +1437,19 @@ class AppCoordinator internal constructor(
                 it.forEach { fileId -> updateLocalFileState(fileId, null) }
             }.onFailure { error ->
                 showBrowserMessage(userMessage(error, "Unable to remove the local copy."))
+            }
+        }
+    }
+
+    fun deleteSingleLocalCopy(book: BookSummary) {
+        val fileId = book.fileId ?: return
+        scope.launch {
+            runCatching {
+                repository.deleteLocalCopy(book)
+            }.onSuccess {
+                updateLocalFileState(fileId, null)
+            }.onFailure { error ->
+                showBrowserMessage(userMessage(error, "Unable to remove the local file."))
             }
         }
     }
@@ -1897,6 +1932,7 @@ class AppCoordinator internal constructor(
             isLoadingLibraries = false,
             isLoadingBooks = false,
             downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
+            queuedDownloadFileIds = transient?.queuedDownloadFileIds.orEmpty(),
             downloadProgressByFileId = transient?.downloadProgressByFileId.orEmpty(),
             failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
             downloadBooksByFileId = transient?.downloadBooksByFileId.orEmpty(),

@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -981,10 +982,12 @@ internal fun NativeLibraryBrowserScreen(
     onBookOpen: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
+    onDownloadSingleFile: (BookSummary) -> Unit = onDownload,
     onCancelDownload: (BookSummary) -> Unit,
     onClearFailedDownload: (BookSummary) -> Unit,
     onClearAllFailedDownloads: () -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteSingleLocalCopy: (BookSummary) -> Unit = onDeleteLocalCopy,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onDismissMessage: () -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
@@ -1086,6 +1089,7 @@ internal fun NativeLibraryBrowserScreen(
     var pendingCellularBulkDownload by remember { mutableStateOf<PendingBulkDownload?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
+    var pendingSingleLocalDelete by remember { mutableStateOf(false) }
     var localBooksLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
     var showChangeServerEditor by rememberSaveable { mutableStateOf(false) }
     var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
@@ -1118,6 +1122,18 @@ internal fun NativeLibraryBrowserScreen(
             CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
         }
     }
+    val requestSingleFileDownload: (BookSummary) -> Unit = { book ->
+        when (
+            cellularDownloadDecision(
+                policy = appPreferences.cellularDownloadPolicy,
+                isCellularOrMetered = context.isActiveCellularOrMeteredNetwork()
+            )
+        ) {
+            CellularDownloadDecision.START -> onDownloadSingleFile(book)
+            CellularDownloadDecision.ASK -> pendingCellularDownload = book
+            CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
+        }
+    }
     val requestBulkDownload: (String, List<BookSummary>) -> Unit = { scopeLabel, books ->
         val frozen = seriesSelectableFiles(books)
         if (frozen.isNotEmpty()) {
@@ -1137,9 +1153,18 @@ internal fun NativeLibraryBrowserScreen(
     }
     val requestLocalDelete: (BookSummary) -> Unit = { book ->
         if (appPreferences.confirmDeleteLocalCopy) {
+            pendingSingleLocalDelete = false
             pendingLocalDelete = book
         } else {
             onDeleteLocalCopy(book)
+        }
+    }
+    val requestSingleLocalDelete: (BookSummary) -> Unit = { book ->
+        if (appPreferences.confirmDeleteLocalCopy) {
+            pendingSingleLocalDelete = true
+            pendingLocalDelete = book
+        } else {
+            onDeleteSingleLocalCopy(book)
         }
     }
     val openHomeSection: (HomeSection, BrowserDestination) -> Unit = { section, returnDestination ->
@@ -1379,7 +1404,12 @@ internal fun NativeLibraryBrowserScreen(
                 TextButton(
                     onClick = {
                         pendingLocalDelete = null
-                        onDeleteLocalCopy(book)
+                        if (pendingSingleLocalDelete) {
+                            onDeleteSingleLocalCopy(book)
+                        } else {
+                            onDeleteLocalCopy(book)
+                        }
+                        pendingSingleLocalDelete = false
                     },
                     modifier = Modifier.testTag("confirm-delete-local-copy")
                 ) { Text("Delete local") }
@@ -1770,8 +1800,10 @@ internal fun NativeLibraryBrowserScreen(
                     onRead = onBookOpen,
                     onPreview = onPreview,
                     onDownload = requestDownload,
+                    onDownloadSingleFile = requestSingleFileDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
+                    onDeleteSingleLocalCopy = requestSingleLocalDelete,
                     onMarkAsStatus = onMarkAsStatus,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
@@ -6443,7 +6475,8 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
         state.downloadingFileIds +
             state.queuedDownloadFileIds +
             state.failedDownloadFileIds +
-            state.downloadMetadataByFileId.keys
+            state.downloadMetadataByFileId.keys +
+            state.downloadBooksByFileId.keys
         ).toList().sorted()
     return fileIds.map { fileId ->
         val metadata = state.downloadMetadataByFileId[fileId]
@@ -6481,6 +6514,26 @@ internal fun downloadProgressLabel(isQueued: Boolean, progress: Float?): String 
         progress?.let { "Waiting · ${(it * 100).toInt()}%" } ?: "Waiting…"
     } else {
         progress?.let { "Downloading · ${(it * 100).toInt()}%" } ?: "Downloading…"
+    }
+
+internal fun localBookDownloadFilename(book: BookSummary, state: BrowserState): String? {
+    val candidateFileIds = state.downloadingFileIds.asSequence().sorted().filter { fileId ->
+        fileId == book.fileId ||
+            state.downloadBooksByFileId[fileId]?.id == book.id ||
+            state.downloadMetadataByFileId[fileId]?.bookId == book.id
+    }
+    return candidateFileIds.mapNotNull { fileId ->
+        state.downloadMetadataByFileId[fileId]?.filename
+            ?: state.downloadBooksByFileId[fileId]?.filename
+            ?: book.filename.takeIf { fileId == book.fileId }
+    }.firstOrNull { it.isNotBlank() }
+}
+
+internal fun localBookHasActiveDownload(book: BookSummary, state: BrowserState): Boolean =
+    state.downloadingFileIds.any { fileId ->
+        fileId == book.fileId ||
+            state.downloadBooksByFileId[fileId]?.id == book.id ||
+            state.downloadMetadataByFileId[fileId]?.bookId == book.id
     }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -6811,7 +6864,8 @@ private fun LibraryBookCard(
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)? = null
 ) {
     val fileId = book.fileId
-    val isDownloading = fileId != null && fileId in state.downloadingFileIds
+    val isDownloading = localBookHasActiveDownload(book, state)
+    val downloadFilename = localBookDownloadFilename(book, state)
     val failed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
     val hasActions = !state.isOfflineSnapshot
@@ -6840,6 +6894,18 @@ private fun LibraryBookCard(
                 verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Text(book.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                downloadFilename?.takeIf { it.isNotBlank() }?.let { filename ->
+                    Text(
+                        text = filename,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("local-book-${fileId}-downloading-filename"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 BookAvailableFormatsLabel(book)
                 Text(nativeBookStatus(book, state.isOfflineSnapshot), style = MaterialTheme.typography.bodySmall)
@@ -6952,8 +7018,10 @@ private fun BookDetails(
     onRead: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
+    onDownloadSingleFile: (BookSummary) -> Unit = onDownload,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteSingleLocalCopy: (BookSummary) -> Unit = onDeleteLocalCopy,
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onAuthorSelected: (String) -> Unit,
@@ -7028,6 +7096,7 @@ private fun BookDetails(
     var selectedFileId by remember(book.id, currentBook.fileId) { mutableStateOf(currentBook.fileId) }
     var hasAppliedInitialFileSelection by remember(book.id, currentBook.fileId) { mutableStateOf(false) }
     var showAvailableFileSheet by rememberSaveable(book.id, currentBook.fileId) { mutableStateOf(false) }
+    var fileDetailsGroupKey by rememberSaveable(book.id, currentBook.fileId) { mutableStateOf<String?>(null) }
     LaunchedEffect(book.id, currentBook.fileId, isInitialDetailLoadComplete, detail.availableFiles) {
         if (!hasAppliedInitialFileSelection && isInitialDetailLoadComplete) {
             hasAppliedInitialFileSelection = true
@@ -7038,7 +7107,17 @@ private fun BookDetails(
             )
         }
     }
-    val selectedFile = detail.availableFiles.firstOrNull { it.fileId == selectedFileId }
+    val availableFilesForPresentation = detail.availableFiles.map { option ->
+        option.fileId?.takeIf { it in state.localFilePathOverrides }?.let { fileId ->
+            option.copy(book = option.book.copy(localPath = state.localFilePathOverrides[fileId]))
+        } ?: option
+    }
+    val selectedFile = availableFilesForPresentation.firstOrNull { it.fileId == selectedFileId }
+    val selectedGroup = availableFileGroups(availableFilesForPresentation).firstOrNull { group ->
+        selectedFile?.fileId in group.options.map { it.fileId }
+    }
+    val selectedGroupIsMultipart = selectedGroup?.let(::availableFileGroupIsMultipart) == true
+    val selectedGroupProgress = selectedGroup?.let(::availableFileGroupDownloadProgress)
     val selectedBaseBook = selectedFile?.book ?: detail.book
     val selectedStateBook = if (selectedBaseBook.fileId == currentBook.fileId) currentBook else selectedBaseBook
     val selectedLocalPath = selectedBaseBook.fileId?.let { state.localFilePathOverrides[it] }
@@ -7132,7 +7211,28 @@ private fun BookDetails(
             isLoadingEpubImageLibrary = false
         }
     }
-    val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
+    val selectedGroupFileIds = selectedGroup?.options.orEmpty().mapNotNull { it.fileId }.toSet()
+    val isDownloading = selectedGroupFileIds.any {
+        it in state.downloadingFileIds || it in state.queuedDownloadFileIds
+    }
+    val groupDownloadFailed = selectedGroupFileIds.any { it in state.failedDownloadFileIds }
+    val groupPermissionDenied = selectedGroupFileIds.any { it in state.permissionDeniedDownloadFileIds }
+    fun cancelSelectedGroupDownloads() {
+        val fileIdsToCancel = selectedGroup?.let {
+            availableFileGroupFileIdsToCancel(
+                group = it,
+                downloadingFileIds = state.downloadingFileIds,
+                queuedFileIds = state.queuedDownloadFileIds
+            )
+        }.orEmpty()
+        if (fileIdsToCancel.isEmpty()) {
+            onCancelDownload(displayBook)
+        } else {
+            fileIdsToCancel.forEach { fileId ->
+                selectedGroup?.options?.firstOrNull { it.fileId == fileId }?.book?.let(onCancelDownload)
+            }
+        }
+    }
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
         mutableStateOf(openSessionHistory)
@@ -7339,9 +7439,22 @@ private fun BookDetails(
                         Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        bookDetailIdentityStatus(displayBook, state.isOfflineSnapshot),
+                        bookDetailIdentityStatus(
+                            displayBook,
+                            state.isOfflineSnapshot,
+                            selectedGroupProgress,
+                            isDownloading
+                        ),
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    selectedGroupProgress?.takeIf { selectedGroupIsMultipart }?.let { progress ->
+                        Text(
+                            bookDetailGroupProgressLabel(progress),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("book-detail-group-progress")
+                        )
+                    }
                 }
             }
         }
@@ -7356,10 +7469,12 @@ private fun BookDetails(
         }
         item {
             val actionState = bookDetailActionState(
-                isDownloaded = displayBook.isDownloaded,
+                isDownloaded = selectedGroupProgress?.state == AvailableFileGroupDownloadState.COMPLETE ||
+                    (selectedGroupProgress == null && displayBook.isDownloaded),
                 isDownloading = isDownloading,
-                downloadFailed = downloadFailed,
-                permissionDenied = permissionDenied,
+                downloadFailed = groupDownloadFailed || downloadFailed,
+                isPartial = selectedGroupProgress?.state == AvailableFileGroupDownloadState.PARTIAL,
+                permissionDenied = groupPermissionDenied || permissionDenied,
                 hasDownloadUpdate = displayBook.hasDownloadUpdate,
                 isOfflineSnapshot = state.isOfflineSnapshot,
                 isServerMissing = displayBook.isServerMissing
@@ -7459,7 +7574,7 @@ private fun BookDetails(
                                 applyDefaultSize = false,
                                 onClick = {
                                     if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
-                                        onCancelDownload(displayBook)
+                                        cancelSelectedGroupDownloads()
                                     } else {
                                         onDownload(displayBook)
                                     }
@@ -7518,7 +7633,7 @@ private fun BookDetails(
                                             onClick = {
                                                 showActionMenu = false
                                                 if (transferLabel.startsWith("Cancel")) {
-                                                    onCancelDownload(displayBook)
+                                                    cancelSelectedGroupDownloads()
                                                 } else {
                                                     onDownload(displayBook)
                                                 }
@@ -7577,8 +7692,8 @@ private fun BookDetails(
                 ) {
                     Text(
                         downloadProgress?.let {
-                            "${if (displayBook.isDownloaded) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
-                        } ?: if (displayBook.isDownloaded) "Updating local…" else "Downloading…",
+                            "${if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
+                        } ?: if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local…" else "Downloading…",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -7591,11 +7706,7 @@ private fun BookDetails(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                     Text(
-                        if (displayBook.isDownloaded) {
-                            "Use More > Cancel update to stop."
-                        } else {
-                            "Use the × action above to cancel."
-                        },
+                        "Use the × action above to cancel.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -7614,10 +7725,10 @@ private fun BookDetails(
                 )
             }
         }
-        if (detail.availableFiles.isNotEmpty()) {
+        if (availableFilesForPresentation.isNotEmpty()) {
             item {
                 BookDetailAvailableFileSummary(
-                    options = detail.availableFiles,
+                    options = availableFilesForPresentation,
                     selectedFileId = selectedFileId,
                     onOpenSheet = { showAvailableFileSheet = true },
                     onOpenEpubImageLibrary = if (shouldShowEpubImageLibrary(displayBook)) {
@@ -7741,16 +7852,32 @@ private fun BookDetails(
             )
         }
     }
-    if (showAvailableFileSheet && detail.availableFiles.size > 1) {
+    if (showAvailableFileSheet && availableFilesForPresentation.size > 1) {
         BookDetailAvailableFileSheet(
-            options = detail.availableFiles,
+            options = availableFilesForPresentation,
             selectedFileId = selectedFileId,
             onFileSelected = {
                 hasAppliedInitialFileSelection = true
                 selectedFileId = it
             },
+            onGroupLongPressed = { fileDetailsGroupKey = it.key },
             onDismissRequest = { showAvailableFileSheet = false }
         )
+    }
+    fileDetailsGroupKey?.let { key ->
+        availableFilesForPresentation.let { options ->
+            availableFileGroups(options).firstOrNull { it.key == key }?.let { group ->
+                BookDetailAvailableFileDetails(
+                    group = group,
+                    onDownload = onDownloadSingleFile,
+                    onDeleteLocalCopy = onDeleteSingleLocalCopy,
+                    downloadingFileIds = state.downloadingFileIds,
+                    queuedDownloadFileIds = state.queuedDownloadFileIds,
+                    isOffline = state.isOfflineSnapshot,
+                    onDismissRequest = { fileDetailsGroupKey = null }
+                )
+            }
+        }
     }
     if (showSessionHistory) {
         Dialog(
@@ -8219,12 +8346,13 @@ internal fun BookDetailAvailableFileSummary(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun BookDetailAvailableFileSheet(
     options: List<BookFileOption>,
     selectedFileId: String?,
     onFileSelected: (String?) -> Unit,
+    onGroupLongPressed: (AvailableFileGroup) -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
     val labels = availableFileDisplayLabels(options)
@@ -8261,7 +8389,12 @@ internal fun BookDetailAvailableFileSheet(
                 }
                 val metadata = buildList {
                     if (group.options.size > 1) {
-                        groupLabel.metadata.let(::add)
+                        add(
+                            listOf(
+                                groupLabel.metadata ?: group.groupName,
+                                bookDetailGroupProgressLabel(availableFileGroupDownloadProgress(group))
+                            ).joinToString(" · ")
+                        )
                     } else {
                         group.groupingPath?.let(::add)
                         availableFileMetadata(selectedFile, label).takeIf { it.isNotBlank() }?.let(::add)
@@ -8270,7 +8403,10 @@ internal fun BookDetailAvailableFileSheet(
                 ListItem(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onFileSelected(selectedFile.fileId) }
+                        .combinedClickable(
+                            onClick = { onFileSelected(selectedFile.fileId) },
+                            onLongClick = { onGroupLongPressed(group) }
+                        )
                         .testTag("book-detail-available-file-group-${group.key}"),
                     leadingContent = {
                         Text(
@@ -8298,10 +8434,17 @@ internal fun BookDetailAvailableFileSheet(
                             style = MaterialTheme.typography.bodySmall
                         )
                     },
-                    trailingContent = if (isSelected) {
-                        { Icon(Icons.Default.CheckCircle, contentDescription = "Selected") }
-                    } else {
-                        null
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (group.options.size > 1) {
+                                IconButton(onClick = { onGroupLongPressed(group) }) {
+                                    Icon(Icons.Default.Visibility, contentDescription = "View files")
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = "Selected")
+                            }
+                        }
                     }
                 )
                 if (index < groups.lastIndex) {
@@ -8310,6 +8453,105 @@ internal fun BookDetailAvailableFileSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+internal fun singleFileDownloadBook(option: BookFileOption): BookSummary =
+    option.book.copy(filename = option.filename ?: option.book.filename)
+
+internal enum class GroupedFileAction {
+    DOWNLOAD,
+    DOWNLOADING,
+    DELETE
+}
+
+internal fun groupedFileAction(
+    option: BookFileOption,
+    downloadingFileIds: Set<String>,
+    queuedDownloadFileIds: Set<String>
+): GroupedFileAction = when {
+    option.fileId in downloadingFileIds || option.fileId in queuedDownloadFileIds ->
+        GroupedFileAction.DOWNLOADING
+    !option.localPath.isNullOrBlank() -> GroupedFileAction.DELETE
+    else -> GroupedFileAction.DOWNLOAD
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BookDetailAvailableFileDetails(
+    group: AvailableFileGroup,
+    onDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    downloadingFileIds: Set<String>,
+    queuedDownloadFileIds: Set<String>,
+    isOffline: Boolean,
+    onDismissRequest: () -> Unit
+) {
+    val progress = availableFileGroupDownloadProgress(group)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text("${group.groupName} · ${group.options.size} files")
+        },
+        text = {
+            Column {
+                Text(bookDetailGroupProgressLabel(progress))
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    itemsIndexed(group.options, key = { index, option ->
+                        option.fileId ?: option.filename?.ifBlank { "file-$index" } ?: "file-$index"
+                    }) { _, option ->
+                        val action = groupedFileAction(
+                            option = option,
+                            downloadingFileIds = downloadingFileIds,
+                            queuedDownloadFileIds = queuedDownloadFileIds
+                        )
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    option.filename ?: option.fileId ?: "Unknown file",
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    listOfNotNull(
+                                        when (action) {
+                                            GroupedFileAction.DELETE -> "Downloaded"
+                                            GroupedFileAction.DOWNLOADING -> "Downloading"
+                                            GroupedFileAction.DOWNLOAD -> "Not downloaded"
+                                        },
+                                        option.sizeBytes?.let { size -> formatFileSize(size) }
+                                    ).joinToString(" · ")
+                                )
+                            },
+                            trailingContent = {
+                                when (action) {
+                                    GroupedFileAction.DOWNLOAD -> OutlinedButton(
+                                        onClick = { onDownload(singleFileDownloadBook(option)) },
+                                        enabled = !isOffline
+                                    ) { Text("Download") }
+                                    GroupedFileAction.DOWNLOADING -> Text(
+                                        "Downloading",
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    GroupedFileAction.DELETE -> OutlinedButton(
+                                        onClick = { onDeleteLocalCopy(singleFileDownloadBook(option)) },
+                                        enabled = !isOffline
+                                    ) { Text("Delete") }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) { Text("Close") }
+        },
+        modifier = Modifier.testTag("book-detail-available-file-details")
+    )
 }
 
 @Composable
@@ -8511,6 +8753,7 @@ private fun formatBookDetailProgressPercent(progress: Float): String =
 
 internal enum class BookDetailInlineTransfer(val contentDescription: String) {
     DOWNLOAD("Download"),
+    DOWNLOAD_REMAINING("Download remaining"),
     RETRY_DOWNLOAD("Retry download"),
     CANCEL_DOWNLOAD("Cancel download")
 }
@@ -8528,6 +8771,7 @@ internal fun bookDetailActionState(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadFailed: Boolean,
+    isPartial: Boolean = false,
     permissionDenied: Boolean = false,
     hasDownloadUpdate: Boolean,
     isOfflineSnapshot: Boolean,
@@ -8544,6 +8788,7 @@ internal fun bookDetailActionState(
             isDownloading -> BookDetailInlineTransfer.CANCEL_DOWNLOAD
             permissionDenied -> null
             downloadFailed -> BookDetailInlineTransfer.RETRY_DOWNLOAD
+            isPartial -> BookDetailInlineTransfer.DOWNLOAD_REMAINING
             else -> BookDetailInlineTransfer.DOWNLOAD
         },
         overflowTransferLabel = null,
@@ -9797,11 +10042,34 @@ private fun nativeBookStatus(book: BookSummary, offline: Boolean): String {
     }
 }
 
-private fun bookDetailIdentityStatus(book: BookSummary, offline: Boolean): String {
+internal fun bookDetailGroupProgressLabel(progress: AvailableFileGroupDownloadProgress): String {
+    val files = "${progress.downloadedFileCount}/${progress.totalFileCount} files"
+    val bytes = progress.totalKnownBytes?.let { total ->
+        "${formatFileSize(progress.downloadedKnownBytes ?: 0L)} / ${formatFileSize(total)}"
+    }
+    return listOfNotNull(files, bytes).joinToString(" · ")
+}
+
+private fun bookDetailIdentityStatus(
+    book: BookSummary,
+    offline: Boolean,
+    groupProgress: AvailableFileGroupDownloadProgress? = null,
+    isDownloading: Boolean = false
+): String {
+    val format = book.format?.takeIf { it.isNotBlank() }?.uppercase()
+        ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+    val downloadState = groupProgress?.state?.let {
+        when (it) {
+            AvailableFileGroupDownloadState.NOT_DOWNLOADED -> "Not downloaded"
+            AvailableFileGroupDownloadState.PARTIAL -> "Partially downloaded"
+            AvailableFileGroupDownloadState.COMPLETE -> "Downloaded"
+        }
+    }
     return when {
-        book.isDownloaded -> "Downloaded"
+        groupProgress != null && isDownloading -> "$format · Downloading"
+        downloadState != null -> "$format · $downloadState"
+        book.isDownloaded -> "$format · Downloaded"
         offline -> "Online only"
-        !book.format.isNullOrBlank() -> book.format.uppercase()
-        else -> book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+        else -> format
     }
 }
