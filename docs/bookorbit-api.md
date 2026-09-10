@@ -2,6 +2,10 @@
 
 This document records the BookOrbit API contract currently used by the Android client.
 
+## Android packaging contract
+
+The PDFium native dependency is JitPack `com.github.marain87:PdfiumAndroid:1.9.8`. Distributed APKs are `arm64-v8a`-only and must pass both ZIP alignment (`zipalign -P 16`) and native ELF alignment (`p_align=0x4000`) checks for Android 16 KB page-size compatibility. This packaging contract is independent of connected UI/instrumentation validation.
+
 ## Authentication
 
 ### Login

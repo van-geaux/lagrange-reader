@@ -139,13 +139,17 @@ class AudiobookTimelineTest {
             file("retail", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book (retail).epub")
                 .copy(groupingPath = "books/test/Pack"),
             file("v2", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book v2.epub")
+                .copy(groupingPath = "books/test/Pack"),
+            file("brackets", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book [fixed].epub")
+                .copy(groupingPath = "books/test/Pack"),
+            file("braces", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book {proper}.epub")
                 .copy(groupingPath = "books/test/Pack")
         )
 
         val groups = availableFileGroups(options)
 
         assertEquals(1, groups.size)
-        assertEquals(listOf("retail", "v2"), groups.single().options.map { it.fileId })
+        assertEquals(listOf("retail", "v2", "brackets", "braces"), groups.single().options.map { it.fileId })
     }
 
     @Test

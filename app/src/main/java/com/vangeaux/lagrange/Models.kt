@@ -296,16 +296,56 @@ private fun availableFileGroupStem(option: BookFileOption): String =
     option.filename
         ?.substringAfterLast('/')
         ?.substringBeforeLast('.', missingDelimiterValue = "")
-        ?.replace(Regex("\\.(retail|fixed|repack|proper|v\\d+)$"), "")
-        ?.replace(Regex("\\s*\\([^)]*\\)"), "")
-        ?.replace(Regex("\\s*\\[[^]]*]"), "")
-        ?.replace(Regex("\\s*\\{[^}]*}"), "")
-        ?.replace(Regex("[\\s._-]+(retail|fixed|repack|proper|unabridged|abridged|v\\d+)$"), "")
-        ?.replace(Regex("[\\s._-]+"), " ")
-        ?.trim()
-        ?.lowercase(Locale.US)
+        ?.let(::normalizeAvailableFileGroupStem)
         ?.takeIf { it.isNotBlank() }
         ?: option.fileId.orEmpty()
+
+private fun normalizeAvailableFileGroupStem(stem: String): String {
+    val withoutDelimitedSegments = removeDelimitedSegments(stem)
+    val tokens = withoutDelimitedSegments
+        .replace('.', ' ')
+        .replace('_', ' ')
+        .replace('-', ' ')
+        .split(' ')
+        .filter { it.isNotBlank() }
+    val suffixes = setOf("retail", "fixed", "repack", "proper", "unabridged", "abridged")
+    val withoutReleaseSuffix = tokens.dropLastWhile { token ->
+        val normalized = token.lowercase(Locale.US)
+        normalized in suffixes ||
+            (normalized.length > 1 && normalized[0] == 'v' && normalized.drop(1).all(Char::isDigit))
+    }
+    return withoutReleaseSuffix.joinToString(" ").lowercase(Locale.US)
+}
+
+private fun removeDelimitedSegments(value: String): String {
+    val openingToClosing = mapOf('(' to ')', '[' to ']', '{' to '}')
+    val result = StringBuilder(value.length)
+    var index = 0
+    while (index < value.length) {
+        val closing = openingToClosing[value[index]]
+        if (closing == null) {
+            result.append(value[index])
+            index += 1
+            continue
+        }
+        var depth = 1
+        var end = index + 1
+        while (end < value.length && depth > 0) {
+            when (value[end]) {
+                value[index] -> depth += 1
+                closing -> depth -= 1
+            }
+            end += 1
+        }
+        if (depth > 0) {
+            result.append(value[index])
+            index += 1
+        } else {
+            index = end
+        }
+    }
+    return result.toString()
+}
 
 data class AvailableFileLabel(
     val title: String,

@@ -26,6 +26,9 @@ android {
         applicationId = "com.vangeaux.lagrange"
         minSdk = 26
         targetSdk = 35
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
         versionCode = 22
@@ -102,8 +105,10 @@ dependencies {
     implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-navigator-media-audio:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-adapter-exoplayer-audio:3.0.2")
-    implementation("org.readium.kotlin-toolkit:readium-adapter-pdfium:3.0.2")
-    implementation("com.github.barteksc:pdfium-android:1.8.2")
+    implementation("org.readium.kotlin-toolkit:readium-adapter-pdfium:3.0.2") {
+        exclude(group = "com.github.barteksc", module = "pdfium-android")
+    }
+    implementation("com.github.marain87:PdfiumAndroid:1.9.8")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
 

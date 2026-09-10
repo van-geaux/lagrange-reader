@@ -66,6 +66,7 @@ This document contains current interaction contracts, design rules, and unresolv
 
 ## Current validation priorities
 
+- Android 16 KB compatibility is a packaging contract, not a UI contract: the arm64-v8a-only APK must pass ZIP alignment (`zipalign -P 16`) and native ELF alignment (`p_align=0x4000`) checks for the JitPack PDFium dependency; these checks do not replace connected UI/instrumentation validation.
 - Repeated orientation/fold recreation for issue #47 and the download lifecycle are user-confirmed on-device; retain both in the regression matrix.
 - Reconcile any additional device checks against [`docs/testing.md`](testing.md) before requesting a new APK.
 - Confirm any material new layout, accessibility, or interaction decision with the user before implementation.
