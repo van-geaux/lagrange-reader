@@ -8,6 +8,35 @@ import org.junit.Test
 
 class BookDetailActionRowTest {
     @Test
+    fun groupedFileActionReflectsPhysicalTransferState() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val option = BookFileOption(book = book, filename = "Chapter 01.mp3")
+
+        assertEquals(
+            GroupedFileAction.DOWNLOAD,
+            groupedFileAction(option, emptySet(), emptySet())
+        )
+        assertEquals(
+            GroupedFileAction.DOWNLOADING,
+            groupedFileAction(option, setOf("file-1"), emptySet())
+        )
+        assertEquals(
+            GroupedFileAction.DOWNLOADING,
+            groupedFileAction(option, emptySet(), setOf("file-1"))
+        )
+        assertEquals(
+            GroupedFileAction.DELETE,
+            groupedFileAction(option.copy(book = book.copy(localPath = "/downloads/part-1.mp3")), emptySet(), emptySet())
+        )
+    }
+
+    @Test
     fun groupedFileDownloadPayloadRetainsPhysicalFilename() {
         val book = BookSummary(
             libraryId = "library-1",

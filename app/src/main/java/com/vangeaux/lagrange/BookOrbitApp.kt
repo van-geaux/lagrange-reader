@@ -353,6 +353,7 @@ private fun BookOrbitDestination(
             onClearFailedDownload = coordinator::clearFailedDownload,
             onClearAllFailedDownloads = coordinator::clearAllFailedDownloads,
             onDeleteLocalCopy = coordinator::deleteLocalCopy,
+            onDeleteSingleLocalCopy = coordinator::deleteSingleLocalCopy,
             onDeleteLocalCopies = coordinator::deleteLocalCopies,
             onDismissMessage = coordinator::dismissBrowserMessage,
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,

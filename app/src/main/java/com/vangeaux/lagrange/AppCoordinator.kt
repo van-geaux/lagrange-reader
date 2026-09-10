@@ -1441,6 +1441,19 @@ class AppCoordinator internal constructor(
         }
     }
 
+    fun deleteSingleLocalCopy(book: BookSummary) {
+        val fileId = book.fileId ?: return
+        scope.launch {
+            runCatching {
+                repository.deleteLocalCopy(book)
+            }.onSuccess {
+                updateLocalFileState(fileId, null)
+            }.onFailure { error ->
+                showBrowserMessage(userMessage(error, "Unable to remove the local file."))
+            }
+        }
+    }
+
     fun deleteLocalCopies(books: List<BookSummary>) {
         if (books.isEmpty()) return
         scope.launch {

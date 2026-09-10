@@ -987,6 +987,7 @@ internal fun NativeLibraryBrowserScreen(
     onClearFailedDownload: (BookSummary) -> Unit,
     onClearAllFailedDownloads: () -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteSingleLocalCopy: (BookSummary) -> Unit = onDeleteLocalCopy,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onDismissMessage: () -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
@@ -1088,6 +1089,7 @@ internal fun NativeLibraryBrowserScreen(
     var pendingCellularBulkDownload by remember { mutableStateOf<PendingBulkDownload?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
+    var pendingSingleLocalDelete by remember { mutableStateOf(false) }
     var localBooksLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
     var showChangeServerEditor by rememberSaveable { mutableStateOf(false) }
     var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
@@ -1151,9 +1153,18 @@ internal fun NativeLibraryBrowserScreen(
     }
     val requestLocalDelete: (BookSummary) -> Unit = { book ->
         if (appPreferences.confirmDeleteLocalCopy) {
+            pendingSingleLocalDelete = false
             pendingLocalDelete = book
         } else {
             onDeleteLocalCopy(book)
+        }
+    }
+    val requestSingleLocalDelete: (BookSummary) -> Unit = { book ->
+        if (appPreferences.confirmDeleteLocalCopy) {
+            pendingSingleLocalDelete = true
+            pendingLocalDelete = book
+        } else {
+            onDeleteSingleLocalCopy(book)
         }
     }
     val openHomeSection: (HomeSection, BrowserDestination) -> Unit = { section, returnDestination ->
@@ -1393,7 +1404,12 @@ internal fun NativeLibraryBrowserScreen(
                 TextButton(
                     onClick = {
                         pendingLocalDelete = null
-                        onDeleteLocalCopy(book)
+                        if (pendingSingleLocalDelete) {
+                            onDeleteSingleLocalCopy(book)
+                        } else {
+                            onDeleteLocalCopy(book)
+                        }
+                        pendingSingleLocalDelete = false
                     },
                     modifier = Modifier.testTag("confirm-delete-local-copy")
                 ) { Text("Delete local") }
@@ -1787,6 +1803,7 @@ internal fun NativeLibraryBrowserScreen(
                     onDownloadSingleFile = requestSingleFileDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
+                    onDeleteSingleLocalCopy = requestSingleLocalDelete,
                     onMarkAsStatus = onMarkAsStatus,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
@@ -7004,6 +7021,7 @@ private fun BookDetails(
     onDownloadSingleFile: (BookSummary) -> Unit = onDownload,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
+    onDeleteSingleLocalCopy: (BookSummary) -> Unit = onDeleteLocalCopy,
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
     onSeriesSelected: (String) -> Unit,
     onAuthorSelected: (String) -> Unit,
@@ -7852,6 +7870,9 @@ private fun BookDetails(
                 BookDetailAvailableFileDetails(
                     group = group,
                     onDownload = onDownloadSingleFile,
+                    onDeleteLocalCopy = onDeleteSingleLocalCopy,
+                    downloadingFileIds = state.downloadingFileIds,
+                    queuedDownloadFileIds = state.queuedDownloadFileIds,
                     isOffline = state.isOfflineSnapshot,
                     onDismissRequest = { fileDetailsGroupKey = null }
                 )
@@ -8438,11 +8459,31 @@ internal fun BookDetailAvailableFileSheet(
 internal fun singleFileDownloadBook(option: BookFileOption): BookSummary =
     option.book.copy(filename = option.filename ?: option.book.filename)
 
+internal enum class GroupedFileAction {
+    DOWNLOAD,
+    DOWNLOADING,
+    DELETE
+}
+
+internal fun groupedFileAction(
+    option: BookFileOption,
+    downloadingFileIds: Set<String>,
+    queuedDownloadFileIds: Set<String>
+): GroupedFileAction = when {
+    option.fileId in downloadingFileIds || option.fileId in queuedDownloadFileIds ->
+        GroupedFileAction.DOWNLOADING
+    !option.localPath.isNullOrBlank() -> GroupedFileAction.DELETE
+    else -> GroupedFileAction.DOWNLOAD
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BookDetailAvailableFileDetails(
     group: AvailableFileGroup,
     onDownload: (BookSummary) -> Unit,
+    onDeleteLocalCopy: (BookSummary) -> Unit,
+    downloadingFileIds: Set<String>,
+    queuedDownloadFileIds: Set<String>,
     isOffline: Boolean,
     onDismissRequest: () -> Unit
 ) {
@@ -8460,7 +8501,11 @@ private fun BookDetailAvailableFileDetails(
                     itemsIndexed(group.options, key = { index, option ->
                         option.fileId ?: option.filename?.ifBlank { "file-$index" } ?: "file-$index"
                     }) { _, option ->
-                        val isDownloaded = !option.localPath.isNullOrBlank()
+                        val action = groupedFileAction(
+                            option = option,
+                            downloadingFileIds = downloadingFileIds,
+                            queuedDownloadFileIds = queuedDownloadFileIds
+                        )
                         ListItem(
                             headlineContent = {
                                 Text(
@@ -8472,19 +8517,29 @@ private fun BookDetailAvailableFileDetails(
                             supportingContent = {
                                 Text(
                                     listOfNotNull(
-                                        if (isDownloaded) "Downloaded" else "Not downloaded",
+                                        when (action) {
+                                            GroupedFileAction.DELETE -> "Downloaded"
+                                            GroupedFileAction.DOWNLOADING -> "Downloading"
+                                            GroupedFileAction.DOWNLOAD -> "Not downloaded"
+                                        },
                                         option.sizeBytes?.let { size -> formatFileSize(size) }
                                     ).joinToString(" · ")
                                 )
                             },
                             trailingContent = {
-                                if (!isDownloaded) {
-                                    OutlinedButton(
+                                when (action) {
+                                    GroupedFileAction.DOWNLOAD -> OutlinedButton(
                                         onClick = { onDownload(singleFileDownloadBook(option)) },
                                         enabled = !isOffline
-                                    ) {
-                                        Text("Download")
-                                    }
+                                    ) { Text("Download") }
+                                    GroupedFileAction.DOWNLOADING -> Text(
+                                        "Downloading",
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    GroupedFileAction.DELETE -> OutlinedButton(
+                                        onClick = { onDeleteLocalCopy(singleFileDownloadBook(option)) },
+                                        enabled = !isOffline
+                                    ) { Text("Delete") }
                                 }
                             }
                         )
