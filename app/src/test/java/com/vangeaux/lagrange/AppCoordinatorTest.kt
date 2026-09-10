@@ -49,6 +49,26 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `reconciled download filename comes from matching detail file`() {
+        val titleOnlyBook = book.copy(fileId = "file-2", filename = null)
+        val detail = BookDetailInfo(
+            book = titleOnlyBook,
+            availableFiles = listOf(
+                BookFileOption(
+                    book = titleOnlyBook,
+                    filename = "Chapter 02.mp3"
+                )
+            )
+        )
+
+        assertEquals(
+            "Chapter 02.mp3",
+            recoveredDownloadFilename(titleOnlyBook, "file-2", detail)
+        )
+        assertNull(recoveredDownloadFilename(titleOnlyBook, "file-1", detail))
+    }
+
+    @Test
     fun `full audio player overlays current browser screen and dismisses without navigation`() = runTest {
         val audiobook = book.copy(
             id = "audio-1",

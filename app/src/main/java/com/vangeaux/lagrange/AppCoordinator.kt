@@ -29,6 +29,16 @@ internal fun shouldRefreshAfterDownloadOutcome(
     booksByFileId: Map<String, BookSummary>
 ): Boolean = activeFileIds.none { fileId -> booksByFileId[fileId]?.id == logicalBookId }
 
+internal fun recoveredDownloadFilename(
+    book: BookSummary,
+    fileId: String,
+    detail: BookDetailInfo?
+): String? = book.filename?.takeIf { it.isNotBlank() }
+    ?: detail?.availableFiles
+        ?.firstOrNull { it.fileId == fileId }
+        ?.filename
+        ?.takeIf { it.isNotBlank() }
+
 internal fun BrowserState.withQueuedDownloads(downloads: List<ScheduledDownload>): BrowserState {
     val fileIds = downloads.mapTo(linkedSetOf()) { it.fileId }
     val activeFileId = fileIds.firstOrNull()
@@ -671,7 +681,7 @@ class AppCoordinator internal constructor(
             restoredInterruptedDownloads = runCatching {
                 repository.loadInterruptedDownloads().associateBy { it.fileId }
             }.getOrDefault(emptyMap())
-            reconciledActiveDownloadsByFileId = runCatching {
+            val reconciledDownloads = runCatching {
                 downloadScheduler.reconcile(
                     scope = scope,
                     serverUrl = serverUrl,
@@ -680,6 +690,14 @@ class AppCoordinator internal constructor(
                     onOutcome = { fileId, outcome -> handleDownloadOutcome(fileId, findKnownBook(fileId), outcome) }
                 )
             }.getOrDefault(emptyMap())
+            reconciledActiveDownloadsByFileId = reconciledDownloads.mapValues { (fileId, book) ->
+                if (!book.filename.isNullOrBlank()) {
+                    book
+                } else {
+                    val detail = runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    book.copy(filename = recoveredDownloadFilename(book, fileId, detail))
+                }
+            }
             var previous = lastBrowserState
             if (previous == null) {
                 repository.loadCachedBrowserState()?.let { cached ->
