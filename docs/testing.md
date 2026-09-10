@@ -82,6 +82,12 @@ After at least one file completes, verify the catalog does not fully reload whil
 
 After all files finish, enable Airplane Mode and open the audiobook from Local books. Verify every downloaded audio file appears in one ordered Media3 playlist, playback advances across file boundaries, and resuming from a later file preserves that file ID and position. Verify a partial local set opens only the available local files or reports the normal missing-local-content error, without attempting a remote stream. Cancel individual active rows and verify other files and completed files remain. Use `Delete local` and verify all local files for the selected multipart book are removed while the server book remains available for another download.
 
+### Book Detail format and grouped-download presentation (issue #159)
+
+On a connected device or emulator, open Book Detail for a book with multiple supported formats. Verify the selected format name remains visible after download and is followed by a separate state such as `Downloaded`, `Partially downloaded`, or `Not downloaded`; the state must not replace the format name. For a grouped format, cancel or fail one physical file and verify the group remains partial, reports downloaded/total files and downloaded/total bytes when sizes are known, and keeps a `Download remaining` action. Activate that action and verify only incomplete physical files are retried or queued; completed files are not duplicated. Finish the group and verify only then that it reports `Downloaded`.
+
+Open the grouped format picker and verify ordinary tap still selects the whole group. Long-press a grouped row, or use its `Files`/`View files` action, and verify a read-only list opens with every physical file in authoritative server order, its filename, size when known, and local downloaded/not-downloaded status. Verify inspection does not change selection or start a download. Repeat with EPUB, PDF, M4A, MP3, M4B, and a mixed-format book where available; formats must remain separate selectable groups.
+
 At the current checkpoint, focused issue #156 automated tests and the full JVM suite have passed. The final Gradle/lint/APK gate has passed; physical 199-file device testing remains pending. Android-test compilation or APK assembly does not replace that device validation.
 
 ### Local-open fallback

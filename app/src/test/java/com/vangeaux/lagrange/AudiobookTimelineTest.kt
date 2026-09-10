@@ -12,7 +12,9 @@ class AudiobookTimelineTest {
         mediaKind: MediaKind = MediaKind.AUDIO,
         role: String? = null,
         format: String? = null,
-        filename: String = "$id.mp3"
+        filename: String = "$id.mp3",
+        localPath: String? = null,
+        sizeBytes: Long? = null
     ): BookFileOption {
         val book = BookSummary(
             libraryId = "lib",
@@ -20,9 +22,16 @@ class AudiobookTimelineTest {
             fileId = id,
             title = "Book",
             format = format,
-            mediaKind = mediaKind
+            mediaKind = mediaKind,
+            localPath = localPath
         )
-        return BookFileOption(book = book, filename = filename, durationMs = durationMs, role = role)
+        return BookFileOption(
+            book = book,
+            filename = filename,
+            sizeBytes = sizeBytes,
+            durationMs = durationMs,
+            role = role
+        )
     }
 
     private val fiveTrackFiles = listOf(
@@ -150,6 +159,59 @@ class AudiobookTimelineTest {
 
         assertEquals(1, groups.size)
         assertEquals(listOf("retail", "v2", "brackets", "braces"), groups.single().options.map { it.fileId })
+    }
+
+    @Test
+    fun `availableFileGroupDownloadProgress reports partial physical file completion`() {
+        val group = AvailableFileGroup(
+            key = "audio-group",
+            options = listOf(
+                file("one", null, format = "mp3", localPath = "/downloads/one.mp3", sizeBytes = 200L),
+                file("two", null, format = "mp3", sizeBytes = 300L),
+                file("three", null, format = "mp3", localPath = "/downloads/three.mp3", sizeBytes = 210L)
+            )
+        )
+
+        val progress = availableFileGroupDownloadProgress(group)
+
+        assertEquals(3, progress.totalFileCount)
+        assertEquals(2, progress.downloadedFileCount)
+        assertEquals(710L, progress.totalKnownBytes)
+        assertEquals(410L, progress.downloadedKnownBytes)
+        assertEquals(AvailableFileGroupDownloadState.PARTIAL, progress.state)
+    }
+
+    @Test
+    fun `availableFileGroupDownloadProgress is complete only when every file is local`() {
+        val group = AvailableFileGroup(
+            key = "audio-group",
+            options = listOf(
+                file("one", null, format = "mp3", localPath = "/downloads/one.mp3", sizeBytes = 200L),
+                file("two", null, format = "mp3", localPath = "/downloads/two.mp3", sizeBytes = 300L)
+            )
+        )
+
+        val progress = availableFileGroupDownloadProgress(group)
+
+        assertEquals(AvailableFileGroupDownloadState.COMPLETE, progress.state)
+        assertEquals(500L, progress.downloadedKnownBytes)
+    }
+
+    @Test
+    fun `availableFileGroupDownloadProgress omits byte totals when any size is unknown`() {
+        val group = AvailableFileGroup(
+            key = "audio-group",
+            options = listOf(
+                file("one", null, format = "m4a", localPath = "/downloads/one.m4a"),
+                file("two", null, format = "m4a", sizeBytes = 300L)
+            )
+        )
+
+        val progress = availableFileGroupDownloadProgress(group)
+
+        assertEquals(AvailableFileGroupDownloadState.PARTIAL, progress.state)
+        assertNull(progress.totalKnownBytes)
+        assertNull(progress.downloadedKnownBytes)
     }
 
     @Test

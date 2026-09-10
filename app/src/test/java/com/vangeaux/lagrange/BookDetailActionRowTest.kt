@@ -66,6 +66,12 @@ class BookDetailActionRowTest {
     }
 
     @Test
+    fun partialGroupOffersDownloadRemaining() {
+        val partial = state(isDownloaded = false, isPartial = true)
+
+        assertEquals(BookDetailInlineTransfer.DOWNLOAD_REMAINING, partial.inlineTransfer)
+    }
+    @Test
     fun serverMissingBookHasNoFileActionsButCanCancelAnExistingTransfer() {
         val missing = state(isDownloaded = false, isServerMissing = true)
         assertNull(missing.inlineTransfer)
@@ -170,6 +176,7 @@ class BookDetailActionRowTest {
         isDownloaded: Boolean,
         isDownloading: Boolean = false,
         downloadFailed: Boolean = false,
+        isPartial: Boolean = false,
         permissionDenied: Boolean = false,
         hasDownloadUpdate: Boolean = false,
         isOfflineSnapshot: Boolean = false,
@@ -178,6 +185,7 @@ class BookDetailActionRowTest {
         isDownloaded = isDownloaded,
         isDownloading = isDownloading,
         downloadFailed = downloadFailed,
+        isPartial = isPartial,
         permissionDenied = permissionDenied,
         hasDownloadUpdate = hasDownloadUpdate,
         isOfflineSnapshot = isOfflineSnapshot,

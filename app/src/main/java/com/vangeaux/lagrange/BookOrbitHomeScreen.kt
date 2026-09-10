@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -7028,6 +7029,7 @@ private fun BookDetails(
     var selectedFileId by remember(book.id, currentBook.fileId) { mutableStateOf(currentBook.fileId) }
     var hasAppliedInitialFileSelection by remember(book.id, currentBook.fileId) { mutableStateOf(false) }
     var showAvailableFileSheet by rememberSaveable(book.id, currentBook.fileId) { mutableStateOf(false) }
+    var fileDetailsGroupKey by rememberSaveable(book.id, currentBook.fileId) { mutableStateOf<String?>(null) }
     LaunchedEffect(book.id, currentBook.fileId, isInitialDetailLoadComplete, detail.availableFiles) {
         if (!hasAppliedInitialFileSelection && isInitialDetailLoadComplete) {
             hasAppliedInitialFileSelection = true
@@ -7038,7 +7040,16 @@ private fun BookDetails(
             )
         }
     }
-    val selectedFile = detail.availableFiles.firstOrNull { it.fileId == selectedFileId }
+    val availableFilesForPresentation = detail.availableFiles.map { option ->
+        option.fileId?.takeIf { it in state.localFilePathOverrides }?.let { fileId ->
+            option.copy(book = option.book.copy(localPath = state.localFilePathOverrides[fileId]))
+        } ?: option
+    }
+    val selectedFile = availableFilesForPresentation.firstOrNull { it.fileId == selectedFileId }
+    val selectedGroup = availableFileGroups(availableFilesForPresentation).firstOrNull { group ->
+        selectedFile?.fileId in group.options.map { it.fileId }
+    }
+    val selectedGroupProgress = selectedGroup?.let(::availableFileGroupDownloadProgress)
     val selectedBaseBook = selectedFile?.book ?: detail.book
     val selectedStateBook = if (selectedBaseBook.fileId == currentBook.fileId) currentBook else selectedBaseBook
     val selectedLocalPath = selectedBaseBook.fileId?.let { state.localFilePathOverrides[it] }
@@ -7132,7 +7143,10 @@ private fun BookDetails(
             isLoadingEpubImageLibrary = false
         }
     }
-    val isDownloading = displayBook.fileId != null && displayBook.fileId in state.downloadingFileIds
+    val selectedGroupFileIds = selectedGroup?.options.orEmpty().mapNotNull { it.fileId }.toSet()
+    val isDownloading = selectedGroupFileIds.any { it in state.downloadingFileIds }
+    val groupDownloadFailed = selectedGroupFileIds.any { it in state.failedDownloadFileIds }
+    val groupPermissionDenied = selectedGroupFileIds.any { it in state.permissionDeniedDownloadFileIds }
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
         mutableStateOf(openSessionHistory)
@@ -7339,9 +7353,17 @@ private fun BookDetails(
                         Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        bookDetailIdentityStatus(displayBook, state.isOfflineSnapshot),
+                        bookDetailIdentityStatus(displayBook, state.isOfflineSnapshot, selectedGroupProgress),
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    selectedGroupProgress?.let { progress ->
+                        Text(
+                            bookDetailGroupProgressLabel(progress),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("book-detail-group-progress")
+                        )
+                    }
                 }
             }
         }
@@ -7356,10 +7378,12 @@ private fun BookDetails(
         }
         item {
             val actionState = bookDetailActionState(
-                isDownloaded = displayBook.isDownloaded,
+                isDownloaded = selectedGroupProgress?.state == AvailableFileGroupDownloadState.COMPLETE ||
+                    (selectedGroupProgress == null && displayBook.isDownloaded),
                 isDownloading = isDownloading,
-                downloadFailed = downloadFailed,
-                permissionDenied = permissionDenied,
+                downloadFailed = groupDownloadFailed || downloadFailed,
+                isPartial = selectedGroupProgress?.state == AvailableFileGroupDownloadState.PARTIAL,
+                permissionDenied = groupPermissionDenied || permissionDenied,
                 hasDownloadUpdate = displayBook.hasDownloadUpdate,
                 isOfflineSnapshot = state.isOfflineSnapshot,
                 isServerMissing = displayBook.isServerMissing
@@ -7614,12 +7638,13 @@ private fun BookDetails(
                 )
             }
         }
-        if (detail.availableFiles.isNotEmpty()) {
+        if (availableFilesForPresentation.isNotEmpty()) {
             item {
                 BookDetailAvailableFileSummary(
-                    options = detail.availableFiles,
+                    options = availableFilesForPresentation,
                     selectedFileId = selectedFileId,
                     onOpenSheet = { showAvailableFileSheet = true },
+                    onOpenGroupDetails = { fileDetailsGroupKey = it },
                     onOpenEpubImageLibrary = if (shouldShowEpubImageLibrary(displayBook)) {
                         { openEpubImageLibrary(allowRemoteCache = false) }
                     } else {
@@ -7741,16 +7766,27 @@ private fun BookDetails(
             )
         }
     }
-    if (showAvailableFileSheet && detail.availableFiles.size > 1) {
+    if (showAvailableFileSheet && availableFilesForPresentation.size > 1) {
         BookDetailAvailableFileSheet(
-            options = detail.availableFiles,
+            options = availableFilesForPresentation,
             selectedFileId = selectedFileId,
             onFileSelected = {
                 hasAppliedInitialFileSelection = true
                 selectedFileId = it
             },
+            onGroupLongPressed = { fileDetailsGroupKey = it.key },
             onDismissRequest = { showAvailableFileSheet = false }
         )
+    }
+    fileDetailsGroupKey?.let { key ->
+        availableFilesForPresentation.let { options ->
+            availableFileGroups(options).firstOrNull { it.key == key }?.let { group ->
+                BookDetailAvailableFileDetails(
+                    group = group,
+                    onDismissRequest = { fileDetailsGroupKey = null }
+                )
+            }
+        }
     }
     if (showSessionHistory) {
         Dialog(
@@ -8127,6 +8163,7 @@ internal fun BookDetailAvailableFileSummary(
     options: List<BookFileOption>,
     selectedFileId: String?,
     onOpenSheet: () -> Unit,
+    onOpenGroupDetails: (String) -> Unit = {},
     onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
     val labels = availableFileDisplayLabels(options)
@@ -8194,6 +8231,11 @@ internal fun BookDetailAvailableFileSummary(
                             modifier = Modifier.testTag("book-detail-available-file-metadata")
                         )
                     }
+                    selectedGroup?.takeIf { it.options.size > 1 }?.let { group ->
+                        TextButton(onClick = { onOpenGroupDetails(group.key) }) {
+                            Text("Files")
+                        }
+                    }
                 }
                 if (canChooseFile) {
                     Icon(
@@ -8219,12 +8261,13 @@ internal fun BookDetailAvailableFileSummary(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun BookDetailAvailableFileSheet(
     options: List<BookFileOption>,
     selectedFileId: String?,
     onFileSelected: (String?) -> Unit,
+    onGroupLongPressed: (AvailableFileGroup) -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
     val labels = availableFileDisplayLabels(options)
@@ -8261,7 +8304,12 @@ internal fun BookDetailAvailableFileSheet(
                 }
                 val metadata = buildList {
                     if (group.options.size > 1) {
-                        groupLabel.metadata.let(::add)
+                        add(
+                            listOf(
+                                groupLabel.metadata ?: group.groupName,
+                                bookDetailGroupProgressLabel(availableFileGroupDownloadProgress(group))
+                            ).joinToString(" · ")
+                        )
                     } else {
                         group.groupingPath?.let(::add)
                         availableFileMetadata(selectedFile, label).takeIf { it.isNotBlank() }?.let(::add)
@@ -8270,7 +8318,10 @@ internal fun BookDetailAvailableFileSheet(
                 ListItem(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onFileSelected(selectedFile.fileId) }
+                        .combinedClickable(
+                            onClick = { onFileSelected(selectedFile.fileId) },
+                            onLongClick = { onGroupLongPressed(group) }
+                        )
                         .testTag("book-detail-available-file-group-${group.key}"),
                     leadingContent = {
                         Text(
@@ -8298,10 +8349,17 @@ internal fun BookDetailAvailableFileSheet(
                             style = MaterialTheme.typography.bodySmall
                         )
                     },
-                    trailingContent = if (isSelected) {
-                        { Icon(Icons.Default.CheckCircle, contentDescription = "Selected") }
-                    } else {
-                        null
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (group.options.size > 1) {
+                                IconButton(onClick = { onGroupLongPressed(group) }) {
+                                    Icon(Icons.Default.Visibility, contentDescription = "View files")
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = "Selected")
+                            }
+                        }
                     }
                 )
                 if (index < groups.lastIndex) {
@@ -8310,6 +8368,54 @@ internal fun BookDetailAvailableFileSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BookDetailAvailableFileDetails(
+    group: AvailableFileGroup,
+    onDismissRequest: () -> Unit
+) {
+    val progress = availableFileGroupDownloadProgress(group)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text("${group.groupName} · ${group.options.size} files")
+        },
+        text = {
+            Column {
+                Text(bookDetailGroupProgressLabel(progress))
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    itemsIndexed(group.options, key = { index, option ->
+                        option.fileId ?: option.filename?.ifBlank { "file-$index" } ?: "file-$index"
+                    }) { _, option ->
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    option.filename ?: option.fileId ?: "Unknown file",
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    listOfNotNull(
+                                        if (option.localPath.isNullOrBlank()) "Not downloaded" else "Downloaded",
+                                        option.sizeBytes?.let { size -> formatFileSize(size) }
+                                    ).joinToString(" · ")
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) { Text("Close") }
+        },
+        modifier = Modifier.testTag("book-detail-available-file-details")
+    )
 }
 
 @Composable
@@ -8511,6 +8617,7 @@ private fun formatBookDetailProgressPercent(progress: Float): String =
 
 internal enum class BookDetailInlineTransfer(val contentDescription: String) {
     DOWNLOAD("Download"),
+    DOWNLOAD_REMAINING("Download remaining"),
     RETRY_DOWNLOAD("Retry download"),
     CANCEL_DOWNLOAD("Cancel download")
 }
@@ -8528,6 +8635,7 @@ internal fun bookDetailActionState(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadFailed: Boolean,
+    isPartial: Boolean = false,
     permissionDenied: Boolean = false,
     hasDownloadUpdate: Boolean,
     isOfflineSnapshot: Boolean,
@@ -8544,6 +8652,7 @@ internal fun bookDetailActionState(
             isDownloading -> BookDetailInlineTransfer.CANCEL_DOWNLOAD
             permissionDenied -> null
             downloadFailed -> BookDetailInlineTransfer.RETRY_DOWNLOAD
+            isPartial -> BookDetailInlineTransfer.DOWNLOAD_REMAINING
             else -> BookDetailInlineTransfer.DOWNLOAD
         },
         overflowTransferLabel = null,
@@ -9797,11 +9906,32 @@ private fun nativeBookStatus(book: BookSummary, offline: Boolean): String {
     }
 }
 
-private fun bookDetailIdentityStatus(book: BookSummary, offline: Boolean): String {
+internal fun bookDetailGroupProgressLabel(progress: AvailableFileGroupDownloadProgress): String {
+    val files = "${progress.downloadedFileCount}/${progress.totalFileCount} files"
+    val bytes = progress.totalKnownBytes?.let { total ->
+        "${formatFileSize(progress.downloadedKnownBytes ?: 0L)} / ${formatFileSize(total)}"
+    }
+    return listOfNotNull(files, bytes).joinToString(" · ")
+}
+
+private fun bookDetailIdentityStatus(
+    book: BookSummary,
+    offline: Boolean,
+    groupProgress: AvailableFileGroupDownloadProgress? = null
+): String {
+    val format = book.format?.takeIf { it.isNotBlank() }?.uppercase()
+        ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+    val downloadState = groupProgress?.state?.let {
+        when (it) {
+            AvailableFileGroupDownloadState.NOT_DOWNLOADED -> "Not downloaded"
+            AvailableFileGroupDownloadState.PARTIAL -> "Partially downloaded"
+            AvailableFileGroupDownloadState.COMPLETE -> "Downloaded"
+        }
+    }
     return when {
-        book.isDownloaded -> "Downloaded"
+        downloadState != null -> "$format · $downloadState"
+        book.isDownloaded -> "$format · Downloaded"
         offline -> "Online only"
-        !book.format.isNullOrBlank() -> book.format.uppercase()
-        else -> book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+        else -> format
     }
 }

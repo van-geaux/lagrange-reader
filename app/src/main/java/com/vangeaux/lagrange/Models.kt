@@ -243,6 +243,44 @@ data class AvailableFileGroup(
             ?.sumOf { it.sizeBytes ?: 0L }
 }
 
+internal enum class AvailableFileGroupDownloadState {
+    NOT_DOWNLOADED,
+    PARTIAL,
+    COMPLETE
+}
+
+internal data class AvailableFileGroupDownloadProgress(
+    val totalFileCount: Int,
+    val downloadedFileCount: Int,
+    val totalKnownBytes: Long?,
+    val downloadedKnownBytes: Long?,
+    val state: AvailableFileGroupDownloadState
+)
+
+internal fun availableFileGroupDownloadProgress(
+    group: AvailableFileGroup
+): AvailableFileGroupDownloadProgress {
+    val totalFileCount = group.options.size
+    val downloadedFiles = group.options.filter { !it.localPath.isNullOrBlank() }
+    val totalKnownBytes = group.options.takeIf { options -> options.all { it.sizeBytes != null } }
+        ?.sumOf { it.sizeBytes ?: 0L }
+    val downloadedKnownBytes = totalKnownBytes?.let {
+        downloadedFiles.sumOf { it.sizeBytes ?: 0L }
+    }
+    val state = when {
+        downloadedFiles.isEmpty() -> AvailableFileGroupDownloadState.NOT_DOWNLOADED
+        downloadedFiles.size == totalFileCount -> AvailableFileGroupDownloadState.COMPLETE
+        else -> AvailableFileGroupDownloadState.PARTIAL
+    }
+    return AvailableFileGroupDownloadProgress(
+        totalFileCount = totalFileCount,
+        downloadedFileCount = downloadedFiles.size,
+        totalKnownBytes = totalKnownBytes,
+        downloadedKnownBytes = downloadedKnownBytes,
+        state = state
+    )
+}
+
 internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableFileGroup> =
     options.fold(mutableListOf<AvailableFileGroup>()) { groups, option ->
         val groupingPath = option.groupingPath?.takeIf { it.isNotBlank() }
