@@ -8435,6 +8435,10 @@ internal fun BookDetailAvailableFileSheet(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
+internal fun singleFileDownloadBook(option: BookFileOption): BookSummary =
+    option.book.copy(filename = option.filename ?: option.book.filename)
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BookDetailAvailableFileDetails(
     group: AvailableFileGroup,
@@ -8476,7 +8480,7 @@ private fun BookDetailAvailableFileDetails(
                             trailingContent = {
                                 if (!isDownloaded) {
                                     OutlinedButton(
-                                        onClick = { onDownload(option.book) },
+                                        onClick = { onDownload(singleFileDownloadBook(option)) },
                                         enabled = !isOffline
                                     ) {
                                         Text("Download")

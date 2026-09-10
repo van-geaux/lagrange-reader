@@ -8,6 +8,20 @@ import org.junit.Test
 
 class BookDetailActionRowTest {
     @Test
+    fun groupedFileDownloadPayloadRetainsPhysicalFilename() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-4",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val option = BookFileOption(book = book, filename = "Chapter 04.mp3")
+
+        assertEquals("Chapter 04.mp3", singleFileDownloadBook(option).filename)
+    }
+
+    @Test
     fun nonlocalTransferSlotMapsIdleRetryAndCancelStates() {
         assertEquals(
             BookDetailInlineTransfer.DOWNLOAD,
