@@ -60,7 +60,7 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - failed transfers show `Retry` and `Clear`;
 - downloaded books show `Delete local`;
 - Local books shows active/failed Downloads rows only when needed;
-- Local books Downloads can be expanded and collapsed; expanded rows scroll inside a body no taller than half the available screen, long titles remain one line and marquee, and active-row `Cancel` is beside its progress bar;
+- Local books Downloads can be expanded and collapsed; expanded rows scroll inside a body no taller than half the available screen, long book titles remain one line and marquee, each row also shows its per-file filename/part label, and active-row `Cancel` is beside its progress bar;
 - `Clear` and `Clear all` remove failed state without cancelling active transfers;
 - force-closing during a download restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;
@@ -69,6 +69,16 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - ordinary failed downloads continue to offer `Retry` and `Clear` alongside the permission-denied case above.
 
 The user has confirmed this lifecycle works correctly. Keep the procedure for regression testing on future changes.
+
+### Multipart audiobook download and crash recovery (issue #156)
+
+On a connected device or emulator, use the authenticated `Test` library and open a multipart audiobook. Verify a grouped MP3 selector row shows the group name, `17` physical files, and the aggregate known size for a group of approximately `600 MB`; chapter MP3s remain hidden as child choices. Verify that selecting `Download local` records the complete server-ordered supported-file batch before the first transfer, creates one active transfer row per physical audio file, preserves `files[]`/`sort_order`, excludes `metadata.json` supplements, and runs only one physical transfer at a time while queued siblings remain visible. The active transfer row must say `Downloading`; later durable FIFO entries must say `Waiting`/`Queued`. Kill or force-stop the app during the batch, relaunch it, and verify the persisted queue reconciles and restarts its FIFO head without duplicating WorkManager observers or transfers. Complete, permanently fail, or explicitly cancel the head and verify the next sibling advances; completed files remain available and retry re-enters only the selected file. Verify progress and foreground notifications change only for changed percentages and no more often than every 500 ms, except terminal completion.
+
+After at least one file completes, verify the catalog does not fully reload while another sibling is active; after the logical batch has a completion and no active sibling remains, verify the normal catalog reload occurs. Corrupt the persisted queue JSON before startup and verify the app starts with an empty queue rather than entering a crash loop. Verify `Delete local` retains its ordinary semantics: it removes the selected multipart book's local files without treating delete as queue cancellation, and the explicit delete-versus-cancel product decision remains unimplemented.
+
+After all files finish, enable Airplane Mode and open the audiobook from Local books. Verify every downloaded audio file appears in one ordered Media3 playlist, playback advances across file boundaries, and resuming from a later file preserves that file ID and position. Verify a partial local set opens only the available local files or reports the normal missing-local-content error, without attempting a remote stream. Cancel individual active rows and verify other files and completed files remain. Use `Delete local` and verify all local files for the selected multipart book are removed while the server book remains available for another download.
+
+At the current checkpoint, focused issue #156 automated tests and the full JVM suite have passed. The final Gradle/lint/APK gate has passed; physical 199-file device testing remains pending. Android-test compilation or APK assembly does not replace that device validation.
 
 ### Local-open fallback
 

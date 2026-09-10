@@ -12,7 +12,8 @@ import kotlinx.coroutines.sync.withLock
 class DownloadStore private constructor(
     private val file: File,
     private val downloadDir: File,
-    private val attemptsFile: File
+    private val attemptsFile: File,
+    private val queueFile: File
 ) {
     private companion object {
         val mutex = Mutex()
@@ -21,13 +22,15 @@ class DownloadStore private constructor(
     constructor(context: Context) : this(
         file = File(context.filesDir, "downloads.json"),
         downloadDir = File(context.filesDir, "downloads"),
-        attemptsFile = File(context.filesDir, "download-attempts.json")
+        attemptsFile = File(context.filesDir, "download-attempts.json"),
+        queueFile = File(context.filesDir, "download-queue.json")
     )
 
     internal constructor(filesDir: File) : this(
         file = File(filesDir, "downloads.json"),
         downloadDir = File(filesDir, "downloads"),
-        attemptsFile = File(filesDir, "download-attempts.json")
+        attemptsFile = File(filesDir, "download-attempts.json"),
+        queueFile = File(filesDir, "download-queue.json")
     )
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
@@ -86,9 +89,52 @@ class DownloadStore private constructor(
         true
     }
 
+    suspend fun enqueueDownload(entry: DownloadQueueEntry) = enqueueDownloads(listOf(entry))
+
+    suspend fun enqueueDownloads(newEntries: List<DownloadQueueEntry>) = mutex.withLock {
+        if (newEntries.isEmpty()) return@withLock
+        val entries = readQueueUnlocked().toMutableList()
+        newEntries.forEach { entry ->
+            if (entries.none { it.serverUrl == entry.serverUrl && it.fileId == entry.fileId }) {
+                entries += entry
+            }
+        }
+        writeQueueUnlocked(entries)
+    }
+
+    suspend fun readDownloadQueue(serverUrl: String? = null): List<DownloadQueueEntry> = mutex.withLock {
+        readQueueUnlocked()
+            .filter { serverUrl == null || it.serverUrl == serverUrl }
+            .sortedBy { it.sequence }
+    }
+
+    suspend fun nextQueuedDownload(serverUrl: String): DownloadQueueEntry? = mutex.withLock {
+        readQueueUnlocked()
+            .asSequence()
+            .filter { it.serverUrl == serverUrl }
+            .minByOrNull { it.sequence }
+    }
+
+    suspend fun removeQueuedDownload(serverUrl: String, fileId: String): Boolean = mutex.withLock {
+        val entries = readQueueUnlocked()
+        val remaining = entries.filterNot { it.serverUrl == serverUrl && it.fileId == fileId }
+        if (remaining.size == entries.size) return@withLock false
+        writeQueueUnlocked(remaining)
+        true
+    }
+
+    suspend fun clearDownloadQueue(serverUrl: String? = null) = mutex.withLock {
+        if (serverUrl == null) {
+            if (queueFile.exists()) queueFile.delete()
+        } else {
+            writeQueueUnlocked(readQueueUnlocked().filterNot { it.serverUrl == serverUrl })
+        }
+    }
+
     suspend fun clear() = mutex.withLock {
         if (file.exists()) file.delete()
         if (attemptsFile.exists()) attemptsFile.delete()
+        if (queueFile.exists()) queueFile.delete()
     }
 
     fun downloadTarget(
@@ -114,6 +160,7 @@ class DownloadStore private constructor(
                         fileId = obj.optString("fileId"),
                         bookId = obj.optString("bookId"),
                         title = obj.optString("title"),
+                        filename = obj.optString("filename").takeIf { it.isNotBlank() },
                         localPath = obj.optString("localPath"),
                         mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
                         mimeType = obj.optString("mimeType"),
@@ -154,6 +201,7 @@ class DownloadStore private constructor(
                     put("fileId", record.fileId)
                     put("bookId", record.bookId)
                     put("title", record.title)
+                    put("filename", record.filename)
                     put("localPath", record.localPath)
                     put("mediaKind", record.mediaKind.name)
                     put("mimeType", record.mimeType)
@@ -178,6 +226,7 @@ class DownloadStore private constructor(
                         fileId = obj.optString("fileId"),
                         bookId = obj.optString("bookId"),
                         title = obj.optString("title"),
+                        filename = obj.optString("filename").takeIf { it.isNotBlank() },
                         targetPath = obj.optString("targetPath"),
                         existingLocalPath = obj.optString("existingLocalPath").takeIf { it.isNotBlank() },
                         mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
@@ -198,6 +247,7 @@ class DownloadStore private constructor(
                 put("fileId", attempt.fileId)
                 put("bookId", attempt.bookId)
                 put("title", attempt.title)
+                put("filename", attempt.filename)
                 put("targetPath", attempt.targetPath)
                 put("existingLocalPath", attempt.existingLocalPath)
                 put("mediaKind", attempt.mediaKind.name)
@@ -207,6 +257,61 @@ class DownloadStore private constructor(
             })
         }
         writeAtomically(attemptsFile, array.toString())
+    }
+
+    private fun readQueueUnlocked(): List<DownloadQueueEntry> {
+        if (!queueFile.exists()) return emptyList()
+        val array = runCatching { JSONArray(queueFile.readText()) }.getOrElse {
+            queueFile.delete()
+            return emptyList()
+        }
+        return buildList {
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val serverUrl = obj.optString("serverUrl").takeIf { it.isNotBlank() } ?: continue
+                val fileId = obj.optString("fileId").takeIf { it.isNotBlank() } ?: continue
+                val bookId = obj.optString("bookId").takeIf { it.isNotBlank() } ?: continue
+                add(
+                    DownloadQueueEntry(
+                        serverUrl = serverUrl,
+                        fileId = fileId,
+                        bookId = bookId,
+                        libraryId = obj.optString("libraryId"),
+                        title = obj.optString("title").ifBlank { "File $fileId" },
+                        filename = obj.optString("filename").takeIf { it.isNotBlank() },
+                        mediaKind = runCatching {
+                            MediaKind.valueOf(obj.optString("mediaKind"))
+                        }.getOrDefault(MediaKind.UNKNOWN),
+                        mimeType = obj.optString("mimeType").takeIf { it.isNotBlank() },
+                        sourceUpdatedAtMillis = if (
+                            obj.has("sourceUpdatedAtMillis") && !obj.isNull("sourceUpdatedAtMillis")
+                        ) obj.optLong("sourceUpdatedAtMillis") else null,
+                        cellularConsentGranted = obj.optBoolean("cellularConsentGranted"),
+                        sequence = obj.optLong("sequence")
+                    )
+                )
+            }
+        }
+    }
+
+    private fun writeQueueUnlocked(entries: List<DownloadQueueEntry>) {
+        val array = JSONArray()
+        entries.sortedBy { it.sequence }.forEach { entry ->
+            array.put(JSONObject().apply {
+                put("serverUrl", entry.serverUrl)
+                put("fileId", entry.fileId)
+                put("bookId", entry.bookId)
+                put("libraryId", entry.libraryId)
+                put("title", entry.title)
+                put("filename", entry.filename)
+                put("mediaKind", entry.mediaKind.name)
+                put("mimeType", entry.mimeType)
+                put("sourceUpdatedAtMillis", entry.sourceUpdatedAtMillis)
+                put("cellularConsentGranted", entry.cellularConsentGranted)
+                put("sequence", entry.sequence)
+            })
+        }
+        writeAtomically(queueFile, array.toString())
     }
 
     private fun writeAtomically(target: File, content: String) {

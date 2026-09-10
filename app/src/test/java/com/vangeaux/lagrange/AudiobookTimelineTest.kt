@@ -6,7 +6,12 @@ import org.junit.Test
 
 class AudiobookTimelineTest {
 
-    private fun file(id: String, durationMs: Long?, mediaKind: MediaKind = MediaKind.AUDIO): BookFileOption {
+    private fun file(
+        id: String,
+        durationMs: Long?,
+        mediaKind: MediaKind = MediaKind.AUDIO,
+        role: String? = null
+    ): BookFileOption {
         val book = BookSummary(
             libraryId = "lib",
             id = "book-1",
@@ -14,7 +19,7 @@ class AudiobookTimelineTest {
             title = "Book",
             mediaKind = mediaKind
         )
-        return BookFileOption(book = book, filename = "$id.mp3", durationMs = durationMs)
+        return BookFileOption(book = book, filename = "$id.mp3", durationMs = durationMs, role = role)
     }
 
     private val fiveTrackFiles = listOf(
@@ -33,6 +38,92 @@ class AudiobookTimelineTest {
         val result = AudiobookTimeline.playableAudioFiles(files)
 
         assertEquals(listOf(fiveTrackFiles[0], fiveTrackFiles[1]), result)
+    }
+
+    @Test
+    fun `downloadableAudioFiles preserves server order and excludes supplements`() {
+        val files = listOf(
+            file("chapter-2", 2_000L, role = "content"),
+            file("metadata", null, mediaKind = MediaKind.UNKNOWN, role = "supplement"),
+            file("chapter-1", 1_000L, role = "content")
+        )
+
+        assertEquals(
+            listOf("chapter-2", "chapter-1"),
+            AudiobookTimeline.downloadableAudioFiles(files).map { it.fileId }
+        )
+    }
+
+    @Test
+    fun `downloadableAudioFiles drops blank and duplicate identities`() {
+        val files = listOf(
+            file("first", 1_000L),
+            file("first", 2_000L),
+            file("", 3_000L),
+            file("m4b", 4_000L)
+        )
+
+        assertEquals(
+            listOf("first", "m4b"),
+            AudiobookTimeline.downloadableAudioFiles(files).map { it.fileId }
+        )
+    }
+
+    @Test
+    fun `availableFileGroups combines files by book and grouping path`() {
+        val grouped = listOf(
+            file("chapter-1", 1_000L).copy(groupingPath = "books/test/story"),
+            file("chapter-2", 1_000L).copy(groupingPath = "books/test/story"),
+            file("alternate", 1_000L).copy(groupingPath = "books/test/alternate")
+        )
+
+        val groups = availableFileGroups(grouped)
+
+        assertEquals(2, groups.size)
+        assertEquals(listOf("chapter-1", "chapter-2"), groups[0].options.map { it.fileId })
+        assertEquals("books/test/story", groups[0].groupingPath)
+        assertEquals(listOf("alternate"), groups[1].options.map { it.fileId })
+    }
+
+    @Test
+    fun `availableFileGroupDisplayLabel uses group name and total size`() {
+        val group = AvailableFileGroup(
+            key = "group",
+            options = listOf(
+                file("chapter-1", 1_000L).copy(
+                    filename = "Chapter 01.mp3",
+                    sizeBytes = 40L * 1024 * 1024,
+                    groupingPath = "books/test/Complete Audiobook"
+                ),
+                file("chapter-2", 1_000L).copy(
+                    filename = "Chapter 02.mp3",
+                    sizeBytes = 560L * 1024 * 1024,
+                    groupingPath = "books/test/Complete Audiobook"
+                )
+            )
+        )
+
+        val label = availableFileGroupDisplayLabel(group)
+
+        assertEquals("MP3 · Complete Audiobook", label.title)
+        assertEquals("2 files · 600 MB", label.metadata)
+    }
+
+    @Test
+    fun `closed grouped file summary uses group name instead of primary filename`() {
+        val option = file("chapter-1", 1_000L).copy(
+            filename = "Chapter 01.mp3",
+            groupingPath = "books/test/Complete Audiobook"
+        )
+        val group = AvailableFileGroup(
+            key = "group",
+            options = listOf(option, option.copy(book = option.book.copy(fileId = "chapter-2")))
+        )
+
+        assertEquals(
+            "Complete Audiobook",
+            availableFileSummaryName(option, availableFileDisplayLabels(listOf(option)).values.single(), group)
+        )
     }
 
     @Test

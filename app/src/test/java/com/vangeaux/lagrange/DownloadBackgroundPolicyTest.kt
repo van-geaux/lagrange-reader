@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import java.util.UUID
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -68,6 +69,39 @@ class DownloadBackgroundPolicyTest {
             downloadUniqueWorkName("https://one.example", "file-1")
                 .contains("bookorbit-download")
         )
+    }
+
+    @Test
+    fun `download queue sequence remains monotonic within the same millisecond`() {
+        val first = nextDownloadQueueSequence(nowMillis = 100L, previous = 0L)
+        val second = nextDownloadQueueSequence(nowMillis = 100L, previous = first)
+        val later = nextDownloadQueueSequence(nowMillis = 101L, previous = second)
+
+        assertEquals(100_000L, first)
+        assertEquals(100_001L, second)
+        assertEquals(101_000L, later)
+    }
+
+    @Test
+    fun `progress throttler emits bounded changes and terminal completion`() {
+        val throttler = DownloadProgressThrottler(minIntervalMillis = 500L)
+
+        assertEquals(true, throttler.shouldEmit(progress = 0.10f, nowMillis = 0L))
+        assertEquals(false, throttler.shouldEmit(progress = 0.11f, nowMillis = 100L))
+        assertEquals(true, throttler.shouldEmit(progress = 0.12f, nowMillis = 500L))
+        assertEquals(false, throttler.shouldEmit(progress = 0.12f, nowMillis = 1_000L))
+        assertEquals(true, throttler.shouldEmit(progress = 1f, nowMillis = 1_100L))
+    }
+
+    @Test
+    fun `observer registry deduplicates and retires work ids`() {
+        val registry = DownloadObserverRegistry()
+        val workId = UUID.randomUUID()
+
+        assertEquals(true, registry.register(workId))
+        assertEquals(false, registry.register(workId))
+        registry.retire(workId)
+        assertEquals(true, registry.register(workId))
     }
 
     @Test

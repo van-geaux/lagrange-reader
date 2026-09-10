@@ -182,6 +182,7 @@ private fun BookFileOption.toJson(): JSONObject = JSONObject().apply {
     putNullable("role", role)
     putNullable("updatedAtMillis", updatedAtMillis)
     putNullable("durationMs", durationMs)
+    putNullable("groupingPath", groupingPath)
 }
 
 private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
@@ -298,7 +299,8 @@ private fun JSONArray?.toBookFileOptions(): List<BookFileOption> {
                         ?: item.optionalDouble("durationSeconds")
                             ?.takeIf { it.isFinite() && it > 0.0 }
                             ?.times(1000.0)
-                            ?.roundToLong()
+                            ?.roundToLong(),
+                    groupingPath = item.optionalString("groupingPath")
                 )
             )
         }

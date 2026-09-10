@@ -293,7 +293,12 @@ interface BookOrbitDataSource {
     suspend fun markBookAsRead(book: BookSummary) = Unit
     suspend fun resetBookReadingState(book: BookSummary) = Unit
     suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
+    suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = listOf(book)
     suspend fun deleteLocalCopy(book: BookSummary)
+    suspend fun deleteLocalCopies(book: BookSummary): Set<String> {
+        deleteLocalCopy(book)
+        return setOfNotNull(book.fileId)
+    }
     suspend fun loadInterruptedDownloads(): List<DownloadRecord> = emptyList()
     suspend fun clearInterruptedDownload(fileId: String) = Unit
     suspend fun loadStorageUsage(): StorageUsage = StorageUsage()
@@ -768,6 +773,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     )
                 )
             }
+            .let(::logicalLocalBooks)
             .withCoverAspectRatios(libraryCoverAspectRatios)
     }
 
@@ -1650,6 +1656,50 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     )
                 }
             }
+        } else if (localOnly && savedBook.mediaKind == MediaKind.AUDIO) {
+            val records = downloadStore.readAll(serverUrl)
+                .filter { it.bookId == savedBook.id && it.mediaKind == MediaKind.AUDIO }
+            val localPathsByFileId = records.associate { it.fileId to it.localPath }
+            var cachedDetail: BookDetailInfo? = null
+            for (record in records) {
+                cachedDetail = bookDetailCacheStore.readLatest(serverUrl, savedBook.id, record.fileId)
+                if (cachedDetail != null) break
+            }
+            audioFiles = cachedDetail
+                ?.let { detail ->
+                    AudiobookTimeline.downloadableAudioFiles(detail.availableFiles).map { option ->
+                        option.copy(
+                            book = option.book.copy(
+                                localPath = localPathsByFileId[option.fileId],
+                                streamUrl = null
+                            )
+                        )
+                    }
+                }
+                .orEmpty()
+                .ifEmpty {
+                    records.map { record ->
+                        BookFileOption(
+                            book = savedBook.copy(
+                                fileId = record.fileId,
+                                localPath = record.localPath,
+                                format = record.mimeType,
+                                mediaKind = record.mediaKind
+                            ),
+                            filename = File(record.localPath).name
+                        )
+                    }
+                }
+            val selectedRecord = savedBook.fileId?.let { fileId -> records.firstOrNull { it.fileId == fileId } }
+            if (selectedRecord != null) {
+                bookForRestore = savedBook.copy(
+                    fileId = selectedRecord.fileId,
+                    localPath = selectedRecord.localPath,
+                    format = selectedRecord.mimeType,
+                    mediaKind = selectedRecord.mediaKind,
+                    streamUrl = null
+                )
+            }
         }
         val localResolution = resolveReadableFile(bookForRestore, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
@@ -1815,6 +1865,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 fileId = fileId,
                 bookId = book.id,
                 title = book.title,
+                filename = book.filename,
                 localPath = target.absolutePath,
                 mediaKind = book.mediaKind,
                 mimeType = book.format,
@@ -1834,6 +1885,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         target
     }
 
+    override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = withContext(Dispatchers.IO) {
+        if (book.mediaKind != MediaKind.AUDIO) return@withContext listOf(book)
+        val detail = loadBookDetail(book)
+        AudiobookTimeline.downloadableAudioFiles(detail.availableFiles).map { option ->
+            option.book.copy(
+                libraryId = book.libraryId,
+                id = book.id,
+                title = book.title,
+                filename = option.filename,
+                author = book.author ?: option.book.author,
+                coverUrl = book.coverUrl ?: option.book.coverUrl,
+                seriesName = book.seriesName ?: option.book.seriesName,
+                seriesIndex = book.seriesIndex ?: option.book.seriesIndex
+            )
+        }.ifEmpty { listOf(book) }
+    }
+
     override suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
         val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
         val serverUrl = getServerUrl().orEmpty()
@@ -1844,6 +1912,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
         bookDetailCacheStore.remove(serverUrl, book.id, fileId)
+    }
+
+    override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val records = downloadStore.readAll(serverUrl).filter { it.bookId == book.id }
+        if (records.isEmpty()) {
+            deleteLocalCopy(book)
+            return@withContext setOfNotNull(book.fileId)
+        }
+        val deleted = records.mapNotNull { record ->
+            if (downloadStore.delete(serverUrl, record.fileId)) record.fileId else null
+        }.toSet()
+        deleted.forEach { fileId -> bookDetailCacheStore.remove(serverUrl, book.id, fileId) }
+        libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
+        browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
+        deleted
     }
 
     override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = withContext(Dispatchers.IO) {
@@ -3155,6 +3239,10 @@ internal object BookOrbitPayloadParser {
             ?: obj.numberValue("publishedYear", "publicationYear")?.toInt()?.toString()
         val audioMetadata = obj.optJSONObject("audioMetadata")
         val audioChapters = audioMetadata.audioChapters()
+        val detailFolderPath = obj.stringValue("folderPath", "folder_path")
+            ?.replace('\\', '/')
+            ?.trimEnd('/')
+            ?.takeIf { it.isNotBlank() }
         val availableFiles = buildList {
             if (files != null) {
                 for (index in 0 until files.length()) {
@@ -3179,7 +3267,10 @@ internal object BookOrbitPayloadParser {
                                         emptyList()
                                     }
                                 ),
-                                filename = file.stringValue("filename", "fileName", "name", "path"),
+                                filename = file.stringValue("filename", "fileName", "name")
+                                    ?: file.stringValue("absolutePath", "absolute_path", "path")
+                                        ?.replace('\\', '/')
+                                        ?.substringAfterLast('/'),
                                 sizeBytes = file.numberValue("sizeBytes", "size")?.toLong(),
                                 role = file.stringValue("role"),
                                 updatedAtMillis = file.timestampValue(
@@ -3190,7 +3281,21 @@ internal object BookOrbitPayloadParser {
                                     ?.takeIf { it.isFinite() && it > 0.0 }
                                     ?.times(1000.0)
                                     ?.coerceAtMost(Long.MAX_VALUE.toDouble())
-                                    ?.roundToLong()
+                                    ?.roundToLong(),
+                                groupingPath = detailFolderPath
+                                    ?: file.stringValue("absolutePath", "absolute_path")
+                                        ?.replace('\\', '/')
+                                        ?.substringBeforeLast('/', "")
+                                        ?.trimEnd('/')
+                                        ?.takeIf { it.isNotBlank() }
+                                    ?: file.stringValue(
+                                        "groupingPath", "grouping_path", "folderPath", "folder_path",
+                                        "relativePath", "relative_path", "relPath", "path"
+                                    )
+                                        ?.replace('\\', '/')
+                                        ?.substringBeforeLast('/', "")
+                                        ?.trimEnd('/')
+                                        ?.takeIf { it.isNotBlank() }
                             )
                         )
                     }

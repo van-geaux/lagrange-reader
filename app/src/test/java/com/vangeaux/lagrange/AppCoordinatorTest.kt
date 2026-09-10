@@ -5,6 +5,9 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -148,7 +151,12 @@ class AppCoordinatorTest {
 
     @Test
     fun `download transfer rows include active and failed ids from catalog state`() {
-        val activeBook = book.copy(id = "book-active", fileId = "file-active", title = "Active Book")
+        val activeBook = book.copy(
+            id = "book-active",
+            fileId = "file-active",
+            title = "Active Book",
+            filename = "Chapter 02.mp3"
+        )
         val state = BrowserState(
             serverUrl = serverUrl,
             libraries = listOf(library),
@@ -166,6 +174,7 @@ class AppCoordinatorTest {
         assertTrue(rows.first { it.fileId == "file-1" }.isFailed)
         assertTrue(rows.first { it.fileId == "file-active" }.isActive)
         assertEquals(0.4f, rows.first { it.fileId == "file-active" }.progress)
+        assertEquals("Chapter 02.mp3", rows.first { it.fileId == "file-active" }.filename)
     }
 
     @Test
@@ -200,6 +209,219 @@ class AppCoordinatorTest {
         assertEquals(0, activeDownloadCount(emptyList()))
         assertEquals(1, activeDownloadCount(listOf(active)))
         assertEquals(2, activeDownloadCount(listOf(active, secondActive, failed)))
+    }
+
+    @Test
+    fun `in process scheduler executes downloads one at a time in submission order`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(downloadGate = gate)
+        val scheduler = InProcessDownloadScheduler(repository)
+        val first = book.copy(fileId = "file-1", filename = "Chapter 01.mp3")
+        val second = book.copy(fileId = "file-2", filename = "Chapter 02.mp3")
+        val outcomes = mutableListOf<String>()
+
+        scheduler.start(
+            scope = this,
+            serverUrl = serverUrl,
+            book = first,
+            fileId = requireNotNull(first.fileId),
+            cellularConsentGranted = true,
+            onProgress = {},
+            onOutcome = { outcomes += "file-1" }
+        )
+        scheduler.start(
+            scope = this,
+            serverUrl = serverUrl,
+            book = second,
+            fileId = requireNotNull(second.fileId),
+            cellularConsentGranted = true,
+            onProgress = {},
+            onOutcome = { outcomes += "file-2" }
+        )
+
+        runCurrent()
+        assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf("file-1", "file-2"), repository.downloadedBooks.map { it.fileId })
+        assertEquals(listOf("file-1", "file-2"), outcomes)
+    }
+
+    @Test
+    fun `physical transfer gate serializes legacy workers`() = runTest {
+        val gate = DownloadTransferGate()
+        var active = 0
+        var maximum = 0
+
+        coroutineScope {
+            repeat(50) {
+                launch {
+                    gate.withPermit {
+                        active += 1
+                        maximum = maxOf(maximum, active)
+                        yield()
+                        active -= 1
+                    }
+                }
+            }
+        }
+
+        assertEquals(1, maximum)
+    }
+
+    @Test
+    fun `in process scheduler keeps a 199 file batch serialized`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl, downloadGate = gate)
+        val scheduler = InProcessDownloadScheduler(repository)
+        val books = (1..199).map { index ->
+            BookSummary("library", "book-1", "file-$index", "Part $index", mediaKind = MediaKind.AUDIO)
+        }
+
+        scheduler.startBatch(
+            scope = this,
+            serverUrl = serverUrl,
+            downloads = books.map { ScheduledDownload(it, requireNotNull(it.fileId)) },
+            cellularConsentGranted = true,
+            onProgress = { _, _ -> },
+            onOutcome = { _, _ -> }
+        )
+
+        runCurrent()
+        assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals((1..199).map { "file-$it" }, repository.downloadedBooks.map { it.fileId })
+        assertEquals(1, repository.maxConcurrentDownloads)
+    }
+
+    @Test
+    fun `failed file does not block the next queued sibling`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            downloadErrorsByFileId = mapOf("file-1" to IllegalStateException("broken part"))
+        )
+        val scheduler = InProcessDownloadScheduler(repository)
+        val outcomes = mutableListOf<Pair<String, DownloadOutcome>>()
+        val books = (1..2).map { index ->
+            BookSummary("library", "book-1", "file-$index", "Part $index", mediaKind = MediaKind.AUDIO)
+        }
+
+        scheduler.startBatch(
+            scope = this,
+            serverUrl = serverUrl,
+            downloads = books.map { ScheduledDownload(it, requireNotNull(it.fileId)) },
+            cellularConsentGranted = true,
+            onProgress = { _, _ -> },
+            onOutcome = { fileId, outcome -> outcomes += fileId to outcome }
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("file-1", "file-2"), repository.downloadedBooks.map { it.fileId })
+        assertTrue(outcomes[0].second is DownloadOutcome.Failed)
+        assertTrue(outcomes[1].second is DownloadOutcome.Success)
+    }
+
+    @Test
+    fun `retrying a failed audio file does not enqueue its whole multipart group`() = runTest {
+        val first = book.copy(fileId = "file-1", mediaKind = MediaKind.AUDIO)
+        val second = book.copy(fileId = "file-2", mediaKind = MediaKind.AUDIO)
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            audiobookDownloadFilesResult = listOf(first, second)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(first),
+                failedDownloadFileIds = setOf("file-1"),
+                downloadBooksByFileId = mapOf("file-1" to first)
+            )
+        )
+
+        coordinator.downloadBook(first)
+        advanceUntilIdle()
+
+        assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })
+    }
+
+    @Test
+    fun `canceled file does not block the next queued sibling`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl, downloadGate = gate)
+        val scheduler = InProcessDownloadScheduler(repository)
+        val outcomes = mutableListOf<Pair<String, DownloadOutcome>>()
+        val books = (1..2).map { index ->
+            BookSummary("library", "book-1", "file-$index", "Part $index", mediaKind = MediaKind.AUDIO)
+        }
+        scheduler.startBatch(
+            scope = this,
+            serverUrl = serverUrl,
+            downloads = books.map { ScheduledDownload(it, requireNotNull(it.fileId)) },
+            cellularConsentGranted = true,
+            onProgress = { _, _ -> },
+            onOutcome = { fileId, outcome -> outcomes += fileId to outcome }
+        )
+
+        runCurrent()
+        scheduler.cancel(serverUrl, "file-1")
+        runCurrent()
+        assertEquals(listOf("file-1", "file-2"), repository.downloadedBooks.map { it.fileId })
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(outcomes[0].second is DownloadOutcome.Canceled)
+        assertTrue(outcomes[1].second is DownloadOutcome.Success)
+    }
+
+    @Test
+    fun `logical download refresh waits for the final sibling`() {
+        val books = mapOf(
+            "file-1" to BookSummary("library", "book-1", "file-1", "Part 1"),
+            "file-2" to BookSummary("library", "book-1", "file-2", "Part 2"),
+            "other" to BookSummary("library", "book-2", "other", "Other")
+        )
+
+        assertEquals(
+            false,
+            shouldRefreshAfterDownloadOutcome("book-1", setOf("file-2", "other"), books)
+        )
+        assertEquals(
+            true,
+            shouldRefreshAfterDownloadOutcome("book-1", setOf("other"), books)
+        )
+    }
+
+    @Test
+    fun `queued download batch projects active and waiting rows in one browser state`() {
+        val first = BookSummary("library", "book-1", "file-1", "Part 1")
+        val second = BookSummary("library", "book-1", "file-2", "Part 2")
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = emptyList(),
+            failedDownloadFileIds = setOf("file-1"),
+            permissionDeniedDownloadFileIds = setOf("file-2"),
+            downloadProgressByFileId = mapOf("file-1" to 0.4f)
+        )
+
+        val projected = state.withQueuedDownloads(
+            listOf(ScheduledDownload(first, "file-1"), ScheduledDownload(second, "file-2"))
+        )
+
+        assertEquals(setOf("file-1"), projected.downloadingFileIds)
+        assertEquals(setOf("file-2"), projected.queuedDownloadFileIds)
+        assertEquals(mapOf("file-1" to first, "file-2" to second), projected.downloadBooksByFileId)
+        assertTrue(projected.failedDownloadFileIds.isEmpty())
+        assertTrue(projected.permissionDeniedDownloadFileIds.isEmpty())
+        assertTrue(projected.downloadProgressByFileId.isEmpty())
     }
 
     @Test
@@ -2477,6 +2699,8 @@ private class FakeBookOrbitDataSource(
     var userRatingResult: BookDetailInfo? = null,
     var setBookUserRatingError: Throwable? = null,
     var downloadError: Throwable? = null,
+    var downloadErrorsByFileId: Map<String, Throwable> = emptyMap(),
+    var audiobookDownloadFilesResult: List<BookSummary>? = null,
     var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
@@ -2507,6 +2731,8 @@ private class FakeBookOrbitDataSource(
     val readerProgressBooks = mutableListOf<BookSummary>()
     val savedActiveReaders = mutableListOf<BookSummary>()
     val downloadedBooks = mutableListOf<BookSummary>()
+    var maxConcurrentDownloads = 0
+    private var concurrentDownloads = 0
     val queuedProgress = mutableListOf<BookSummary>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val resetReadingStateBooks = mutableListOf<BookSummary>()
@@ -2669,11 +2895,21 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
         downloadedBooks += book
-        onProgress(0.5f)
-        downloadGate?.await()
-        downloadError?.let { throw it }
-        return File("downloaded.bin")
+        concurrentDownloads += 1
+        maxConcurrentDownloads = maxOf(maxConcurrentDownloads, concurrentDownloads)
+        return try {
+            onProgress(0.5f)
+            downloadGate?.await()
+            downloadErrorsByFileId[book.fileId]?.let { throw it }
+            downloadError?.let { throw it }
+            File("downloaded.bin")
+        } finally {
+            concurrentDownloads -= 1
+        }
     }
+
+    override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> =
+        audiobookDownloadFilesResult ?: listOf(book)
 
     override suspend fun deleteLocalCopy(book: BookSummary) {
         deleteLocalErrorsByBookId[book.id]?.let { throw it }

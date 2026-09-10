@@ -6099,7 +6099,7 @@ private fun LibraryBooks(
                 Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        gridItems(displayedBooks, key = { (book, seriesKey) -> "library-book-${book.id}-${seriesKey ?: "single"}" }) { (book, seriesKey) ->
+        gridItems(displayedBooks, key = { (book, seriesKey) -> localBookItemKey(book, seriesKey) }) { (book, seriesKey) ->
             val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
             BookPosterCard(
                 book = book,
@@ -6427,8 +6427,13 @@ internal data class DownloadTransferRow(
     val fileId: String,
     val isActive: Boolean,
     val isFailed: Boolean,
-    val progress: Float?
+    val progress: Float?,
+    val isQueued: Boolean = false,
+    val filename: String? = null
 )
+
+internal fun downloadTransferItemKey(row: DownloadTransferRow): String =
+    "download-transfer-${row.fileId}"
 
 internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow> {
     val booksByFileId = (state.books + state.homeBooks)
@@ -6436,6 +6441,7 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
         .associateBy { it.fileId!! }
     val fileIds = (
         state.downloadingFileIds +
+            state.queuedDownloadFileIds +
             state.failedDownloadFileIds +
             state.downloadMetadataByFileId.keys
         ).toList().sorted()
@@ -6459,7 +6465,9 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
         DownloadTransferRow(
             book = book,
             fileId = fileId,
+            filename = metadata?.filename ?: book.filename,
             isActive = fileId in state.downloadingFileIds,
+            isQueued = fileId in state.queuedDownloadFileIds,
             isFailed = fileId in state.failedDownloadFileIds,
             progress = state.downloadProgressByFileId[fileId]
         )
@@ -6467,6 +6475,13 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
 }
 
 internal fun activeDownloadCount(rows: List<DownloadTransferRow>): Int = rows.count { it.isActive }
+
+internal fun downloadProgressLabel(isQueued: Boolean, progress: Float?): String =
+    if (isQueued) {
+        progress?.let { "Waiting · ${(it * 100).toInt()}%" } ?: "Waiting…"
+    } else {
+        progress?.let { "Downloading · ${(it * 100).toInt()}%" } ?: "Downloading…"
+    }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -6479,6 +6494,7 @@ private fun DownloadTransfersSection(
 ) {
     val failedRows = rows.filter { it.isFailed && !it.isActive }
     val activeCount = activeDownloadCount(rows)
+    val waitingCount = rows.count { it.isQueued }
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     BoxWithConstraints(
         modifier = Modifier
@@ -6498,9 +6514,12 @@ private fun DownloadTransfersSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Downloads", style = MaterialTheme.typography.titleLarge)
-                    if (activeCount > 0) {
+                    if (activeCount > 0 || waitingCount > 0) {
                         Text(
-                            text = "$activeCount downloading",
+                            text = buildList {
+                                if (activeCount > 0) add("$activeCount downloading")
+                                if (waitingCount > 0) add("$waitingCount waiting")
+                            }.joinToString(" · "),
                             modifier = Modifier.testTag("local-downloads-active-count"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -6523,26 +6542,23 @@ private fun DownloadTransfersSection(
                 }
             }
             if (isExpanded) {
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = sectionMaxHeight / 2)
-                        .verticalScroll(rememberScrollState()),
+                        .heightIn(max = sectionMaxHeight / 2),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    rows.filter { it.isActive }.forEach { row ->
+                    items(
+                        items = rows.filter { it.isActive || it.isQueued } + failedRows,
+                        key = ::downloadTransferItemKey
+                    ) { row ->
                         DownloadTransferRowItem(
                             row = row,
-                            onAction = { onCancelDownload(row.book) },
-                            actionLabel = "Cancel"
-                        )
-                    }
-                    failedRows.forEach { row ->
-                        DownloadTransferRowItem(
-                            row = row,
-                            onAction = { onDownload(row.book) },
-                            actionLabel = "Retry",
-                            onClear = { onClearFailedDownload(row.book) }
+                            onAction = {
+                                if (row.isActive || row.isQueued) onCancelDownload(row.book) else onDownload(row.book)
+                            },
+                            actionLabel = if (row.isActive || row.isQueued) "Cancel" else "Retry",
+                            onClear = if (row.isActive || row.isQueued) null else ({ onClearFailedDownload(row.book) })
                         )
                     }
                 }
@@ -6571,7 +6587,18 @@ private fun DownloadTransferRowItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (row.isActive) {
+            row.filename?.takeIf { it.isNotBlank() }?.let { filename ->
+                Text(
+                    text = filename,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("download-row-${row.fileId}-filename"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (row.isActive || row.isQueued) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -6579,13 +6606,13 @@ private fun DownloadTransferRowItem(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         row.progress?.let { progress ->
-                            Text("Downloading · ${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                            Text(downloadProgressLabel(row.isQueued, progress), style = MaterialTheme.typography.bodySmall)
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
                             )
                         } ?: run {
-                            Text("Downloading…", style = MaterialTheme.typography.bodySmall)
+                            Text(downloadProgressLabel(row.isQueued, null), style = MaterialTheme.typography.bodySmall)
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
                             )
@@ -6750,7 +6777,7 @@ private fun LibraryBookList(
         if (!isLoading && books.isEmpty()) {
             item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        items(books, key = { it.id }) { book ->
+        items(books, key = { localBookItemKey(it, null) }) { book ->
             LibraryBookCard(
                 book = book,
                 state = state,
@@ -8079,6 +8106,13 @@ private fun availableFilename(option: BookFileOption?, label: AvailableFileLabel
         ?: label?.title?.substringAfter(" · ", "Unknown file")
         ?: "Unknown file"
 
+internal fun availableFileSummaryName(
+    option: BookFileOption?,
+    label: AvailableFileLabel?,
+    group: AvailableFileGroup?
+): String = group?.takeIf { it.options.size > 1 }?.groupName
+    ?: availableFilename(option, label)
+
 private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileLabel?): String = buildList {
     label?.metadata?.takeIf { it.isNotBlank() }?.let { value ->
         val parts = value.split(" · ")
@@ -8096,8 +8130,15 @@ internal fun BookDetailAvailableFileSummary(
     onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
     val labels = availableFileDisplayLabels(options)
+    val groups = availableFileGroups(options)
     val selectedOption = options.firstOrNull { it.fileId == selectedFileId } ?: options.firstOrNull()
-    val selectedLabel = selectedOption?.fileId?.let(labels::get)
+    val selectedGroup = groups.firstOrNull { group ->
+        selectedOption?.fileId in group.options.map { it.fileId }
+    }
+    val selectedLabel = selectedGroup
+        ?.takeIf { it.options.size > 1 }
+        ?.let(::availableFileGroupDisplayLabel)
+        ?: selectedOption?.fileId?.let(labels::get)
     val canChooseFile = options.size > 1
 
     Row(
@@ -8134,7 +8175,7 @@ internal fun BookDetailAvailableFileSummary(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = availableFilename(selectedOption, selectedLabel),
+                        text = availableFileSummaryName(selectedOption, selectedLabel, selectedGroup),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -8187,6 +8228,7 @@ internal fun BookDetailAvailableFileSheet(
     onDismissRequest: () -> Unit
 ) {
     val labels = availableFileDisplayLabels(options)
+    val groups = availableFileGroups(options)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.testTag("book-detail-available-file-sheet")
@@ -8203,14 +8245,33 @@ internal fun BookDetailAvailableFileSheet(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             )
             HorizontalDivider()
-            options.forEachIndexed { index, option ->
-                val label = option.fileId?.let(labels::get)
-                val isSelected = option.fileId == selectedFileId
+            groups.forEachIndexed { index, group ->
+                val option = group.options.first()
+                val selectedOption = group.options.firstOrNull { it.fileId == selectedFileId }
+                val selectedFile = selectedOption
+                    ?: group.options.firstOrNull { it.role.equals("primary", ignoreCase = true) }
+                    ?: option
+                val label = selectedFile.fileId?.let(labels::get)
+                val groupLabel = availableFileGroupDisplayLabel(group)
+                val isSelected = selectedOption != null
+                val title = if (group.options.size > 1) {
+                    "${availableFileType(option, option.fileId?.let(labels::get))} · ${group.options.size} files · ${group.groupName}"
+                } else {
+                    availableFilename(option, option.fileId?.let(labels::get))
+                }
+                val metadata = buildList {
+                    if (group.options.size > 1) {
+                        groupLabel.metadata.let(::add)
+                    } else {
+                        group.groupingPath?.let(::add)
+                        availableFileMetadata(selectedFile, label).takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }.joinToString(" · ")
                 ListItem(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onFileSelected(option.fileId) }
-                        .testTag("book-detail-available-file-option-${option.fileId}"),
+                        .clickable { onFileSelected(selectedFile.fileId) }
+                        .testTag("book-detail-available-file-group-${group.key}"),
                     leadingContent = {
                         Text(
                             text = availableFileType(option, label),
@@ -8226,17 +8287,14 @@ internal fun BookDetailAvailableFileSheet(
                     },
                     headlineContent = {
                         Text(
-                            text = availableFilename(option, label),
-                            maxLines = if (isSelected) Int.MAX_VALUE else 1,
-                            overflow = if (isSelected) TextOverflow.Clip else TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag(
-                                "book-detail-available-file-option-name-${option.fileId}"
-                            )
+                            text = title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     },
                     supportingContent = {
                         Text(
-                            text = availableFileMetadata(option, label),
+                            text = metadata,
                             style = MaterialTheme.typography.bodySmall
                         )
                     },
@@ -8246,7 +8304,7 @@ internal fun BookDetailAvailableFileSheet(
                         null
                     }
                 )
-                if (index < options.lastIndex) {
+                if (index < groups.lastIndex) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
                 }
             }

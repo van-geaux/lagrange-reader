@@ -947,6 +947,7 @@ class BookOrbitPayloadParserTest {
                 {
                   "id": "book-36",
                   "title": "Gone Girl",
+                  "folderPath": "/books/test/Gone Girl",
                   "audioMetadata": {
                     "chapters": [
                       {"title": "Part One", "startMs": 0},
@@ -954,11 +955,11 @@ class BookOrbitPayloadParserTest {
                     ]
                   },
                   "files": [
-                    {"id": "mp3-1", "format": "mp3", "role": "primary", "filename": "01.mp3", "durationSeconds": 100.765},
-                    {"id": "mp3-2", "format": "mp3", "filename": "02.mp3", "durationSeconds": 200.5},
-                    {"id": "mp3-3", "format": "mp3", "filename": "03.mp3", "durationSeconds": 50},
-                    {"id": "mp3-4", "format": "mp3", "filename": "04.mp3", "durationSeconds": 300},
-                    {"id": "mp3-5", "format": "mp3", "filename": "05.mp3", "durationSeconds": 150}
+                    {"id": "mp3-1", "format": "mp3", "role": "primary", "filename": "01.mp3", "absolutePath": "/books/test/Gone Girl/01.mp3", "durationSeconds": 100.765},
+                    {"id": "mp3-2", "format": "mp3", "filename": "02.mp3", "absolutePath": "/books/test/Gone Girl/02.mp3", "durationSeconds": 200.5},
+                    {"id": "mp3-3", "format": "mp3", "filename": "03.mp3", "absolutePath": "/books/test/Gone Girl/03.mp3", "durationSeconds": 50},
+                    {"id": "mp3-4", "format": "mp3", "filename": "04.mp3", "absolutePath": "/books/test/Gone Girl/04.mp3", "durationSeconds": 300},
+                    {"id": "mp3-5", "format": "mp3", "filename": "05.mp3", "absolutePath": "/books/test/Gone Girl/05.mp3", "durationSeconds": 150}
                   ]
                 }
             """.trimIndent(),
@@ -974,6 +975,11 @@ class BookOrbitPayloadParserTest {
             listOf(100_765L, 200_500L, 50_000L, 300_000L, 150_000L),
             detail.availableFiles.map { it.durationMs }
         )
+        assertEquals(
+            listOf("/books/test/Gone Girl"),
+            detail.availableFiles.mapNotNull { it.groupingPath }.distinct()
+        )
+        assertEquals(1, availableFileGroups(detail.availableFiles).size)
         assertEquals(801L, detail.durationSeconds)
     }
 
