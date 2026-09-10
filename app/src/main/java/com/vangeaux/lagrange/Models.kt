@@ -281,6 +281,17 @@ internal fun availableFileGroupDownloadProgress(
     )
 }
 
+internal fun availableFileGroupIsMultipart(group: AvailableFileGroup): Boolean =
+    group.options.size > 1
+
+internal fun availableFileGroupFileIdsToCancel(
+    group: AvailableFileGroup,
+    downloadingFileIds: Set<String>,
+    queuedFileIds: Set<String>
+): List<String> = group.options.mapNotNull { option ->
+    option.fileId?.takeIf { it in downloadingFileIds || it in queuedFileIds }
+}
+
 internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableFileGroup> =
     options.fold(mutableListOf<AvailableFileGroup>()) { groups, option ->
         val groupingPath = option.groupingPath?.takeIf { it.isNotBlank() }

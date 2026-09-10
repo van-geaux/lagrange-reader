@@ -7049,6 +7049,7 @@ private fun BookDetails(
     val selectedGroup = availableFileGroups(availableFilesForPresentation).firstOrNull { group ->
         selectedFile?.fileId in group.options.map { it.fileId }
     }
+    val selectedGroupIsMultipart = selectedGroup?.let(::availableFileGroupIsMultipart) == true
     val selectedGroupProgress = selectedGroup?.let(::availableFileGroupDownloadProgress)
     val selectedBaseBook = selectedFile?.book ?: detail.book
     val selectedStateBook = if (selectedBaseBook.fileId == currentBook.fileId) currentBook else selectedBaseBook
@@ -7144,9 +7145,27 @@ private fun BookDetails(
         }
     }
     val selectedGroupFileIds = selectedGroup?.options.orEmpty().mapNotNull { it.fileId }.toSet()
-    val isDownloading = selectedGroupFileIds.any { it in state.downloadingFileIds }
+    val isDownloading = selectedGroupFileIds.any {
+        it in state.downloadingFileIds || it in state.queuedDownloadFileIds
+    }
     val groupDownloadFailed = selectedGroupFileIds.any { it in state.failedDownloadFileIds }
     val groupPermissionDenied = selectedGroupFileIds.any { it in state.permissionDeniedDownloadFileIds }
+    fun cancelSelectedGroupDownloads() {
+        val fileIdsToCancel = selectedGroup?.let {
+            availableFileGroupFileIdsToCancel(
+                group = it,
+                downloadingFileIds = state.downloadingFileIds,
+                queuedFileIds = state.queuedDownloadFileIds
+            )
+        }.orEmpty()
+        if (fileIdsToCancel.isEmpty()) {
+            onCancelDownload(displayBook)
+        } else {
+            fileIdsToCancel.forEach { fileId ->
+                selectedGroup?.options?.firstOrNull { it.fileId == fileId }?.book?.let(onCancelDownload)
+            }
+        }
+    }
     val showSessionHistoryButton = showAudiobookSessionHistoryButton(displayBook)
     var showSessionHistory by remember(displayBook.id, displayBook.fileId, openSessionHistory) {
         mutableStateOf(openSessionHistory)
@@ -7353,10 +7372,15 @@ private fun BookDetails(
                         Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        bookDetailIdentityStatus(displayBook, state.isOfflineSnapshot, selectedGroupProgress),
+                        bookDetailIdentityStatus(
+                            displayBook,
+                            state.isOfflineSnapshot,
+                            selectedGroupProgress,
+                            isDownloading
+                        ),
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    selectedGroupProgress?.let { progress ->
+                    selectedGroupProgress?.takeIf { selectedGroupIsMultipart }?.let { progress ->
                         Text(
                             bookDetailGroupProgressLabel(progress),
                             style = MaterialTheme.typography.bodySmall,
@@ -7483,7 +7507,7 @@ private fun BookDetails(
                                 applyDefaultSize = false,
                                 onClick = {
                                     if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
-                                        onCancelDownload(displayBook)
+                                        cancelSelectedGroupDownloads()
                                     } else {
                                         onDownload(displayBook)
                                     }
@@ -7542,7 +7566,7 @@ private fun BookDetails(
                                             onClick = {
                                                 showActionMenu = false
                                                 if (transferLabel.startsWith("Cancel")) {
-                                                    onCancelDownload(displayBook)
+                                                    cancelSelectedGroupDownloads()
                                                 } else {
                                                     onDownload(displayBook)
                                                 }
@@ -7644,7 +7668,6 @@ private fun BookDetails(
                     options = availableFilesForPresentation,
                     selectedFileId = selectedFileId,
                     onOpenSheet = { showAvailableFileSheet = true },
-                    onOpenGroupDetails = { fileDetailsGroupKey = it },
                     onOpenEpubImageLibrary = if (shouldShowEpubImageLibrary(displayBook)) {
                         { openEpubImageLibrary(allowRemoteCache = false) }
                     } else {
@@ -7783,6 +7806,8 @@ private fun BookDetails(
             availableFileGroups(options).firstOrNull { it.key == key }?.let { group ->
                 BookDetailAvailableFileDetails(
                     group = group,
+                    onDownload = onDownload,
+                    isOffline = state.isOfflineSnapshot,
                     onDismissRequest = { fileDetailsGroupKey = null }
                 )
             }
@@ -8163,7 +8188,6 @@ internal fun BookDetailAvailableFileSummary(
     options: List<BookFileOption>,
     selectedFileId: String?,
     onOpenSheet: () -> Unit,
-    onOpenGroupDetails: (String) -> Unit = {},
     onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
     val labels = availableFileDisplayLabels(options)
@@ -8230,11 +8254,6 @@ internal fun BookDetailAvailableFileSummary(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.testTag("book-detail-available-file-metadata")
                         )
-                    }
-                    selectedGroup?.takeIf { it.options.size > 1 }?.let { group ->
-                        TextButton(onClick = { onOpenGroupDetails(group.key) }) {
-                            Text("Files")
-                        }
                     }
                 }
                 if (canChooseFile) {
@@ -8374,6 +8393,8 @@ internal fun BookDetailAvailableFileSheet(
 @Composable
 private fun BookDetailAvailableFileDetails(
     group: AvailableFileGroup,
+    onDownload: (BookSummary) -> Unit,
+    isOffline: Boolean,
     onDismissRequest: () -> Unit
 ) {
     val progress = availableFileGroupDownloadProgress(group)
@@ -8390,6 +8411,7 @@ private fun BookDetailAvailableFileDetails(
                     itemsIndexed(group.options, key = { index, option ->
                         option.fileId ?: option.filename?.ifBlank { "file-$index" } ?: "file-$index"
                     }) { _, option ->
+                        val isDownloaded = !option.localPath.isNullOrBlank()
                         ListItem(
                             headlineContent = {
                                 Text(
@@ -8401,10 +8423,20 @@ private fun BookDetailAvailableFileDetails(
                             supportingContent = {
                                 Text(
                                     listOfNotNull(
-                                        if (option.localPath.isNullOrBlank()) "Not downloaded" else "Downloaded",
+                                        if (isDownloaded) "Downloaded" else "Not downloaded",
                                         option.sizeBytes?.let { size -> formatFileSize(size) }
                                     ).joinToString(" · ")
                                 )
+                            },
+                            trailingContent = {
+                                if (!isDownloaded) {
+                                    OutlinedButton(
+                                        onClick = { onDownload(option.book) },
+                                        enabled = !isOffline
+                                    ) {
+                                        Text("Download")
+                                    }
+                                }
                             }
                         )
                     }
@@ -9917,7 +9949,8 @@ internal fun bookDetailGroupProgressLabel(progress: AvailableFileGroupDownloadPr
 private fun bookDetailIdentityStatus(
     book: BookSummary,
     offline: Boolean,
-    groupProgress: AvailableFileGroupDownloadProgress? = null
+    groupProgress: AvailableFileGroupDownloadProgress? = null,
+    isDownloading: Boolean = false
 ): String {
     val format = book.format?.takeIf { it.isNotBlank() }?.uppercase()
         ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
@@ -9929,6 +9962,7 @@ private fun bookDetailIdentityStatus(
         }
     }
     return when {
+        groupProgress != null && isDownloading -> "$format · Downloading"
         downloadState != null -> "$format · $downloadState"
         book.isDownloaded -> "$format · Downloaded"
         offline -> "Online only"

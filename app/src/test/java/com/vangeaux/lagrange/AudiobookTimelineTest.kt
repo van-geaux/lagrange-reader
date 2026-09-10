@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -212,6 +213,30 @@ class AudiobookTimelineTest {
         assertEquals(AvailableFileGroupDownloadState.PARTIAL, progress.state)
         assertNull(progress.totalKnownBytes)
         assertNull(progress.downloadedKnownBytes)
+    }
+
+    @Test
+    fun `availableFileGroupIsMultipart hides progress for a single physical file`() {
+        val group = AvailableFileGroup("single", listOf(file("one", null, format = "m4b")))
+
+        assertFalse(availableFileGroupIsMultipart(group))
+    }
+
+    @Test
+    fun `availableFileGroupFileIdsToCancel includes active and queued files in server order`() {
+        val group = AvailableFileGroup(
+            "audio-group",
+            listOf(
+                file("one", null, format = "m4b"),
+                file("two", null, format = "m4b"),
+                file("three", null, format = "m4b")
+            )
+        )
+
+        assertEquals(
+            listOf("one", "three"),
+            availableFileGroupFileIdsToCancel(group, setOf("three"), setOf("one"))
+        )
     }
 
     @Test
