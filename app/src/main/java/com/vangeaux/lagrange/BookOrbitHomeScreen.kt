@@ -6498,6 +6498,13 @@ internal fun downloadProgressLabel(isQueued: Boolean, progress: Float?): String 
         progress?.let { "Downloading · ${(it * 100).toInt()}%" } ?: "Downloading…"
     }
 
+internal fun localBookDownloadFilename(book: BookSummary, state: BrowserState): String? {
+    val fileId = book.fileId ?: return null
+    return state.downloadMetadataByFileId[fileId]?.filename
+        ?: state.downloadBooksByFileId[fileId]?.filename
+        ?: book.filename
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadTransfersSection(
@@ -6827,6 +6834,7 @@ private fun LibraryBookCard(
 ) {
     val fileId = book.fileId
     val isDownloading = fileId != null && fileId in state.downloadingFileIds
+    val downloadFilename = if (isDownloading) localBookDownloadFilename(book, state) else null
     val failed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
     val hasActions = !state.isOfflineSnapshot
@@ -6855,6 +6863,18 @@ private fun LibraryBookCard(
                 verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Text(book.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                downloadFilename?.takeIf { it.isNotBlank() }?.let { filename ->
+                    Text(
+                        text = filename,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("local-book-${fileId}-downloading-filename"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 book.author?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 BookAvailableFormatsLabel(book)
                 Text(nativeBookStatus(book, state.isOfflineSnapshot), style = MaterialTheme.typography.bodySmall)

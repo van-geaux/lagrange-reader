@@ -91,4 +91,21 @@ class LocalBooksProjectionTest {
         assertEquals(listOf("file-1", "file-2", "file-3"), rows.map { it.fileId })
         assertEquals(listOf(false, true, true), rows.map { it.isQueued })
     }
+
+    @Test
+    fun `local book downloading filename comes from physical file state`() {
+        val cardBook = first.copy(filename = null)
+        val state = BrowserState(
+            serverUrl = "https://example.test",
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = emptyList(),
+            downloadingFileIds = setOf("file-1"),
+            downloadBooksByFileId = mapOf(
+                "file-1" to first.copy(filename = "Chapter 01.mp3")
+            )
+        )
+
+        assertEquals("Chapter 01.mp3", localBookDownloadFilename(cardBook, state))
+    }
 }
