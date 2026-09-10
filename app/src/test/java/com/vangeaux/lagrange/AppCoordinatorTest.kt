@@ -32,6 +32,23 @@ class AppCoordinatorTest {
     )
 
     @Test
+    fun `interrupted download record preserves physical filename`() {
+        val record = interruptedDownloadRecord(
+            DownloadAttempt(
+                serverUrl = serverUrl,
+                fileId = "file-2",
+                bookId = "book-1",
+                title = "Sample Book",
+                filename = "Chapter 02.mp3",
+                targetPath = "/downloads/chapter-02.mp3",
+                mediaKind = MediaKind.AUDIO
+            )
+        )
+
+        assertEquals("Chapter 02.mp3", record.filename)
+    }
+
+    @Test
     fun `full audio player overlays current browser screen and dismisses without navigation`() = runTest {
         val audiobook = book.copy(
             id = "audio-1",
