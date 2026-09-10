@@ -224,11 +224,20 @@ data class AvailableFileGroup(
     val fileId: String? get() = options.firstOrNull()?.fileId
     val groupingPath: String? get() = options.firstOrNull()?.groupingPath
     val groupName: String
-        get() = groupingPath
-            ?.trimEnd('/')
-            ?.substringAfterLast('/')
-            ?.takeIf { it.isNotBlank() }
-            ?: "Available files"
+        get() = when (options.firstOrNull()?.mediaKind) {
+            MediaKind.AUDIO -> groupingPath
+                ?.trimEnd('/')
+                ?.substringAfterLast('/')
+                ?.takeIf { it.isNotBlank() }
+            else -> options.firstOrNull()?.filename
+                ?.substringAfterLast('/')
+                ?.substringBeforeLast('.', missingDelimiterValue = "")
+                ?.takeIf { it.isNotBlank() }
+                ?: groupingPath
+                    ?.trimEnd('/')
+                    ?.substringAfterLast('/')
+                    ?.takeIf { it.isNotBlank() }
+        } ?: "Available files"
     val totalSizeBytes: Long?
         get() = options.takeIf { files -> files.all { it.sizeBytes != null } }
             ?.sumOf { it.sizeBytes ?: 0L }
@@ -237,10 +246,18 @@ data class AvailableFileGroup(
 internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableFileGroup> =
     options.fold(mutableListOf<AvailableFileGroup>()) { groups, option ->
         val groupingPath = option.groupingPath?.takeIf { it.isNotBlank() }
+        val format = availableFileGroupFormat(option)
+        val discriminator = when (option.mediaKind) {
+            MediaKind.AUDIO -> "format:$format"
+            MediaKind.EPUB,
+            MediaKind.PDF -> "stem:${availableFileGroupStem(option)}"
+            MediaKind.COMIC,
+            MediaKind.UNKNOWN -> "file:${option.fileId}"
+        }
         val key = if (groupingPath == null) {
-            "file:${option.fileId}"
+            "${option.book.id}:${option.mediaKind}:$discriminator"
         } else {
-            "book:${option.book.id}:path:$groupingPath"
+            "book:${option.book.id}:path:$groupingPath:${option.mediaKind}:$discriminator"
         }
         val existing = groups.indexOfFirst { it.key == key }
         if (existing >= 0) {
@@ -250,6 +267,45 @@ internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableF
         }
         groups
     }
+
+private fun availableFileGroupFormat(option: BookFileOption): String =
+    option.format
+            ?.substringAfterLast('/')
+            ?.substringBefore(';')
+            ?.trimStart('.')
+            ?.lowercase(Locale.US)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { serverFormat ->
+                if (serverFormat == "mp4") {
+                    option.filename
+                        ?.substringAfterLast('.', missingDelimiterValue = "")
+                        ?.lowercase(Locale.US)
+                        ?.takeIf { it == "m4a" || it == "m4b" }
+                        ?: serverFormat
+                } else {
+                    serverFormat
+                }
+            }
+        ?: option.filename
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.lowercase(Locale.US)
+            ?.takeIf { it.isNotBlank() }
+        ?: option.mediaKind.name.lowercase(Locale.US)
+
+private fun availableFileGroupStem(option: BookFileOption): String =
+    option.filename
+        ?.substringAfterLast('/')
+        ?.substringBeforeLast('.', missingDelimiterValue = "")
+        ?.replace(Regex("\\.(retail|fixed|repack|proper|v\\d+)$"), "")
+        ?.replace(Regex("\\s*\\([^)]*\\)"), "")
+        ?.replace(Regex("\\s*\\[[^]]*]"), "")
+        ?.replace(Regex("\\s*\\{[^}]*}"), "")
+        ?.replace(Regex("[\\s._-]+(retail|fixed|repack|proper|unabridged|abridged|v\\d+)$"), "")
+        ?.replace(Regex("[\\s._-]+"), " ")
+        ?.trim()
+        ?.lowercase(Locale.US)
+        ?.takeIf { it.isNotBlank() }
+        ?: option.fileId.orEmpty()
 
 data class AvailableFileLabel(
     val title: String,

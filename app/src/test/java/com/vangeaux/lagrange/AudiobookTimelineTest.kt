@@ -10,16 +10,19 @@ class AudiobookTimelineTest {
         id: String,
         durationMs: Long?,
         mediaKind: MediaKind = MediaKind.AUDIO,
-        role: String? = null
+        role: String? = null,
+        format: String? = null,
+        filename: String = "$id.mp3"
     ): BookFileOption {
         val book = BookSummary(
             libraryId = "lib",
             id = "book-1",
             fileId = id,
             title = "Book",
+            format = format,
             mediaKind = mediaKind
         )
-        return BookFileOption(book = book, filename = "$id.mp3", durationMs = durationMs, role = role)
+        return BookFileOption(book = book, filename = filename, durationMs = durationMs, role = role)
     }
 
     private val fiveTrackFiles = listOf(
@@ -70,7 +73,7 @@ class AudiobookTimelineTest {
     }
 
     @Test
-    fun `availableFileGroups combines files by book and grouping path`() {
+    fun `availableFileGroups combines same-format audio files by book and grouping path`() {
         val grouped = listOf(
             file("chapter-1", 1_000L).copy(groupingPath = "books/test/story"),
             file("chapter-2", 1_000L).copy(groupingPath = "books/test/story"),
@@ -83,6 +86,66 @@ class AudiobookTimelineTest {
         assertEquals(listOf("chapter-1", "chapter-2"), groups[0].options.map { it.fileId })
         assertEquals("books/test/story", groups[0].groupingPath)
         assertEquals(listOf("alternate"), groups[1].options.map { it.fileId })
+    }
+
+    @Test
+    fun `availableFileGroups separates mixed media and audio formats in one server folder`() {
+        val options = listOf(
+            file("epub", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book.epub")
+                .copy(groupingPath = "books/test/Book"),
+            file("pdf", null, mediaKind = MediaKind.PDF, format = "pdf", filename = "Book.pdf")
+                .copy(groupingPath = "books/test/Book"),
+            file("mp3", 1_000L, format = "mp3", filename = "Chapter 01.mp3")
+                .copy(groupingPath = "books/test/Book"),
+            file("mp3-2", 1_000L, format = "mp3", filename = "Chapter 02.mp3")
+                .copy(groupingPath = "books/test/Book"),
+            file("m4a", 1_000L, format = "m4a", filename = "Book.m4a")
+                .copy(groupingPath = "books/test/Book"),
+            file("m4a-2", 1_000L, format = "m4a", filename = "Book part 2.m4a")
+                .copy(groupingPath = "books/test/Book"),
+            file("m4b", 1_000L, format = "m4b", filename = "Book.m4b")
+                .copy(groupingPath = "books/test/Book")
+        )
+
+        val groups = availableFileGroups(options)
+
+        assertEquals(5, groups.size)
+        assertEquals(
+            listOf(MediaKind.EPUB, MediaKind.PDF, MediaKind.AUDIO, MediaKind.AUDIO, MediaKind.AUDIO),
+            groups.map { it.options.first().mediaKind }
+        )
+        assertEquals(listOf(1, 1, 2, 2, 1), groups.map { it.options.size })
+        assertEquals(listOf("epub", "pdf", "mp3", "m4a", "m4b"), groups.map { it.options.first().format })
+    }
+
+    @Test
+    fun `availableFileGroups separates ebook units with different stems in one folder`() {
+        val options = listOf(
+            file("one", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book One.epub")
+                .copy(groupingPath = "books/test/Pack"),
+            file("two", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book Two.epub")
+                .copy(groupingPath = "books/test/Pack")
+        )
+
+        val groups = availableFileGroups(options)
+
+        assertEquals(2, groups.size)
+        assertEquals(listOf("one", "two"), groups.map { it.options.single().fileId })
+    }
+
+    @Test
+    fun `availableFileGroups follows upstream ebook release stem normalization`() {
+        val options = listOf(
+            file("retail", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book (retail).epub")
+                .copy(groupingPath = "books/test/Pack"),
+            file("v2", null, mediaKind = MediaKind.EPUB, format = "epub", filename = "Book v2.epub")
+                .copy(groupingPath = "books/test/Pack")
+        )
+
+        val groups = availableFileGroups(options)
+
+        assertEquals(1, groups.size)
+        assertEquals(listOf("retail", "v2"), groups.single().options.map { it.fileId })
     }
 
     @Test
