@@ -12,6 +12,11 @@ object AudiobookTimeline {
     fun playableAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
         options.filter { it.mediaKind == MediaKind.AUDIO && !it.fileId.isNullOrBlank() }
 
+    fun downloadableAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
+        playableAudioFiles(options)
+            .filter { !it.role.equals("supplement", ignoreCase = true) }
+            .distinctBy { it.fileId }
+
     private fun durationMs(file: BookFileOption): Long? = file.durationMs?.takeIf { it > 0 }
 
     private fun addSaturating(a: Long, b: Long): Long =

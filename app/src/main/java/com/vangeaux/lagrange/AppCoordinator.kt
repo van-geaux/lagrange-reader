@@ -23,6 +23,27 @@ import javax.net.ssl.SSLException
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
 
+internal fun shouldRefreshAfterDownloadOutcome(
+    logicalBookId: String,
+    activeFileIds: Set<String>,
+    booksByFileId: Map<String, BookSummary>
+): Boolean = activeFileIds.none { fileId -> booksByFileId[fileId]?.id == logicalBookId }
+
+internal fun BrowserState.withQueuedDownloads(downloads: List<ScheduledDownload>): BrowserState {
+    val fileIds = downloads.mapTo(linkedSetOf()) { it.fileId }
+    val activeFileId = fileIds.firstOrNull()
+    return copy(
+        downloadingFileIds = downloadingFileIds + listOfNotNull(activeFileId),
+        queuedDownloadFileIds = queuedDownloadFileIds + fileIds.drop(1),
+        downloadProgressByFileId = downloadProgressByFileId - fileIds,
+        failedDownloadFileIds = failedDownloadFileIds - fileIds,
+        permissionDeniedDownloadFileIds = permissionDeniedDownloadFileIds - fileIds,
+        downloadBooksByFileId = downloadBooksByFileId - fileIds +
+            downloads.associate { it.fileId to it.book },
+        message = null
+    )
+}
+
 enum class ReleaseCheckStatus {
     IDLE,
     CHECKING,
@@ -49,6 +70,7 @@ class AppCoordinator internal constructor(
     // restoredInterruptedDownloads is merged in showBrowser().
     private var reconciledActiveDownloadsByFileId: Map<String, BookSummary> = emptyMap()
     private val epubImageLibraryDownloadCallbacks = mutableMapOf<String, (BookSummary) -> Unit>()
+    private val completedDownloadBookIdsAwaitingRefresh = mutableSetOf<String>()
     suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
         repository.searchBooks(query)
     }
@@ -1194,42 +1216,40 @@ class AppCoordinator internal constructor(
     }
 
     fun downloadBook(book: BookSummary) {
-        val fileId = book.fileId ?: run {
+        val requestedFileId = book.fileId ?: run {
             showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
             return
         }
-        if (fileId in (lastBrowserState?.downloadingFileIds ?: emptySet())) {
-            return
-        }
-        restoredInterruptedDownloads -= fileId
-        reconciledActiveDownloadsByFileId -= fileId
-        removeDownloadBook(fileId)
-
-        lastBrowserState?.let { current ->
-            showBrowser(
-                current.copy(
-                    downloadBooksByFileId = current.downloadBooksByFileId + (fileId to book)
-                )
-            )
-        }
-
-        updateDownloadState(
-            fileId = fileId,
-            isDownloading = true,
-            failed = false,
-            message = null
-        )
         scope.launch {
             val serverUrl = repository.getServerUrl().orEmpty()
-            downloadScheduler.start(
-                scope = scope,
-                serverUrl = serverUrl,
-                book = book,
-                fileId = fileId,
-                cellularConsentGranted = true,
-                onProgress = { progress -> updateDownloadProgress(fileId, progress) },
-                onOutcome = { outcome -> handleDownloadOutcome(fileId, book, outcome) }
-            )
+            val isPerFileRetry = requestedFileId in lastBrowserState?.failedDownloadFileIds.orEmpty()
+            val files = runCatching {
+                if (isPerFileRetry) listOf(book) else repository.loadAudiobookDownloadFiles(book)
+            }
+                .getOrElse { error ->
+                    showBrowserMessage(userMessage(error, "Unable to inspect the audiobook files."))
+                    return@launch
+                }
+            val downloads = mutableListOf<ScheduledDownload>()
+            files.distinctBy { it.fileId }.forEach { file ->
+                val fileId = file.fileId ?: return@forEach
+                if (fileId in (lastBrowserState?.downloadingFileIds ?: emptySet())) return@forEach
+                restoredInterruptedDownloads -= fileId
+                reconciledActiveDownloadsByFileId -= fileId
+                downloads += ScheduledDownload(book = file, fileId = fileId)
+            }
+            lastBrowserState?.let { current -> showBrowser(current.withQueuedDownloads(downloads)) }
+            val booksByFileId = downloads.associate { it.fileId to it.book }
+            downloadScheduler.startBatch(
+                    scope = scope,
+                    serverUrl = serverUrl,
+                    downloads = downloads,
+                    cellularConsentGranted = true,
+                    onProgress = { fileId, progress -> updateDownloadProgress(fileId, progress) },
+                    onOutcome = { fileId, outcome ->
+                        handleDownloadOutcome(fileId, booksByFileId[fileId], outcome)
+                    }
+                )
         }
     }
 
@@ -1255,6 +1275,7 @@ class AppCoordinator internal constructor(
                     message = null
                 )
                 if (book != null) {
+                    completedDownloadBookIdsAwaitingRefresh += book.id
                     updateLocalFileState(
                         fileId = fileId,
                         localPath = outcome.localFile.absolutePath,
@@ -1264,7 +1285,6 @@ class AppCoordinator internal constructor(
                         book.copy(localPath = outcome.localFile.absolutePath)
                     )
                 }
-                loadBrowser()
             }
             DownloadOutcome.Canceled -> {
                 epubImageLibraryDownloadCallbacks.remove(fileId)
@@ -1312,6 +1332,19 @@ class AppCoordinator internal constructor(
                     message = userMessage(outcome.error, "Download failed for $label.")
                 )
             }
+        }
+        if (
+            book != null &&
+            book.id in completedDownloadBookIdsAwaitingRefresh &&
+            shouldRefreshAfterDownloadOutcome(
+                logicalBookId = book.id,
+                activeFileIds = (lastBrowserState?.downloadingFileIds.orEmpty() +
+                    lastBrowserState?.queuedDownloadFileIds.orEmpty()),
+                booksByFileId = lastBrowserState?.downloadBooksByFileId.orEmpty()
+            )
+        ) {
+            completedDownloadBookIdsAwaitingRefresh -= book.id
+            loadBrowser()
         }
     }
 
@@ -1377,9 +1410,9 @@ class AppCoordinator internal constructor(
     fun deleteLocalCopy(book: BookSummary) {
         scope.launch {
             runCatching {
-                repository.deleteLocalCopy(book)
+                repository.deleteLocalCopies(book)
             }.onSuccess {
-                book.fileId?.let { fileId -> updateLocalFileState(fileId, null) }
+                it.forEach { fileId -> updateLocalFileState(fileId, null) }
             }.onFailure { error ->
                 showBrowserMessage(userMessage(error, "Unable to remove the local copy."))
             }
@@ -1572,13 +1605,22 @@ class AppCoordinator internal constructor(
     ) {
         val current = lastBrowserState ?: return
         val downloading = current.downloadingFileIds.toMutableSet()
+        val queued = current.queuedDownloadFileIds.toMutableSet()
         val progressByFile = current.downloadProgressByFileId.toMutableMap()
         val failedDownloads = current.failedDownloadFileIds.toMutableSet()
         val permissionDeniedDownloads = current.permissionDeniedDownloadFileIds.toMutableSet()
         if (isDownloading) {
             downloading += fileId
+            queued -= fileId
         } else {
             downloading -= fileId
+            queued -= fileId
+            if (downloading.isEmpty()) {
+                current.queuedDownloadFileIds.firstOrNull { it != fileId }?.let { next ->
+                    downloading += next
+                    queued -= next
+                }
+            }
             progressByFile -= fileId
         }
         if (failed) {
@@ -1594,6 +1636,7 @@ class AppCoordinator internal constructor(
         showBrowser(
             current.copy(
                 downloadingFileIds = downloading,
+                queuedDownloadFileIds = queued,
                 downloadProgressByFileId = progressByFile,
                 failedDownloadFileIds = failedDownloads,
                 permissionDeniedDownloadFileIds = permissionDeniedDownloads,

@@ -81,22 +81,55 @@ class BookDetailAvailableFilePickerInstrumentedTest {
         composeRule.onNodeWithTag("book-detail-available-file").performClick()
         composeRule.onNodeWithTag("book-detail-available-file-sheet").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Selected").assertIsDisplayed()
-        composeRule.onNodeWithTag("book-detail-available-file-option-name-file-1")
+        composeRule.onNodeWithTag("book-detail-available-file-group-file:file-1")
             .assertTextContains("primary-book.epub")
-        composeRule.onNodeWithTag("book-detail-available-file-option-name-file-3")
+        composeRule.onNodeWithTag("book-detail-available-file-group-file:file-3")
             .assertTextContains("illustrated-edition.cbz")
-        composeRule.onNodeWithTag("book-detail-available-file-option-file-3")
+        composeRule.onNodeWithTag("book-detail-available-file-group-file:file-3")
             .performClick()
 
         assertEquals("file-3", selectedFileId.value)
         composeRule.onNodeWithTag("book-detail-available-file-sheet").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Selected").assertIsDisplayed()
-        composeRule.onNodeWithTag("book-detail-available-file-option-name-file-3")
+        composeRule.onNodeWithTag("book-detail-available-file-group-file:file-3")
             .assertTextContains("illustrated-edition.cbz")
         composeRule.onNodeWithTag("book-detail-available-file-name")
             .assertTextContains("illustrated-edition.cbz")
         pressBack()
         composeRule.onNodeWithTag("book-detail-available-file-sheet").assertDoesNotExist()
+    }
+
+    @Test
+    fun multipartAudioShowsOneGroupedRowWithoutChapterChildren() {
+        val selectedFileId = mutableStateOf<String?>("audio-1")
+        val options = (1..4).map { chapter ->
+            fileOption(
+                fileId = "audio-$chapter",
+                format = "audio/mpeg",
+                filename = "Chapter 0$chapter.mp3",
+                sizeBytes = 10L * chapter,
+                role = if (chapter == 1) "primary" else "alternate",
+                groupingPath = "/books/test/Gone Girl"
+            )
+        }
+
+        composeRule.setContent {
+            var sheetVisible by remember { mutableStateOf(true) }
+            if (sheetVisible) {
+                BookDetailAvailableFileSheet(
+                    options = options,
+                    selectedFileId = selectedFileId.value,
+                    onFileSelected = { selectedFileId.value = it },
+                    onDismissRequest = { sheetVisible = false }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("MP3 · 4 files").assertIsDisplayed()
+        composeRule.onNodeWithText("/books/test/Gone Girl").assertIsDisplayed()
+        composeRule.onNodeWithText("Chapter 02.mp3").assertDoesNotExist()
+        composeRule.onNodeWithText("Chapter 03.mp3").assertDoesNotExist()
+        composeRule.onNodeWithText("Chapter 04.mp3").assertDoesNotExist()
     }
 
     @Test
@@ -133,7 +166,8 @@ class BookDetailAvailableFilePickerInstrumentedTest {
         filename: String,
         sizeBytes: Long,
         role: String,
-        localPath: String? = null
+        localPath: String? = null,
+        groupingPath: String? = null
     ): BookFileOption = BookFileOption(
         book = BookSummary(
             libraryId = "library",
@@ -145,6 +179,7 @@ class BookDetailAvailableFilePickerInstrumentedTest {
         ),
         filename = filename,
         sizeBytes = sizeBytes,
-        role = role
+        role = role,
+        groupingPath = groupingPath
     )
 }

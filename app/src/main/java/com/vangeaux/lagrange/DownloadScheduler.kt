@@ -19,6 +19,11 @@ internal sealed interface DownloadOutcome {
     data class Failed(val error: Throwable) : DownloadOutcome
 }
 
+internal data class ScheduledDownload(
+    val book: BookSummary,
+    val fileId: String
+)
+
 /**
  * Executes book downloads and reports their lifecycle back to [AppCoordinator]. The coordinator
  * treats implementations as the execution authority for a download: it only mutates its own UI
@@ -35,6 +40,28 @@ internal interface DownloadScheduler {
         onProgress: (Float?) -> Unit,
         onOutcome: suspend (DownloadOutcome) -> Unit
     )
+
+    /** Durably records an ordered group before allowing its first physical transfer to start. */
+    fun startBatch(
+        scope: CoroutineScope,
+        serverUrl: String,
+        downloads: List<ScheduledDownload>,
+        cellularConsentGranted: Boolean,
+        onProgress: (String, Float?) -> Unit,
+        onOutcome: suspend (String, DownloadOutcome) -> Unit
+    ) {
+        downloads.forEach { download ->
+            start(
+                scope = scope,
+                serverUrl = serverUrl,
+                book = download.book,
+                fileId = download.fileId,
+                cellularConsentGranted = cellularConsentGranted,
+                onProgress = { progress -> onProgress(download.fileId, progress) },
+                onOutcome = { outcome -> onOutcome(download.fileId, outcome) }
+            )
+        }
+    }
 
     /** Cancels an in-flight download for [fileId], if any. */
     fun cancel(serverUrl: String, fileId: String)
@@ -68,7 +95,17 @@ internal interface DownloadScheduler {
 internal class InProcessDownloadScheduler(
     private val repository: BookOrbitDataSource
 ) : DownloadScheduler {
-    private val activeJobs = mutableMapOf<String, Job>()
+    private data class PendingDownload(
+        val serverUrl: String,
+        val book: BookSummary,
+        val fileId: String,
+        val onProgress: (Float?) -> Unit,
+        val onOutcome: suspend (DownloadOutcome) -> Unit
+    )
+
+    private val pending = ArrayDeque<PendingDownload>()
+    private var activeFileId: String? = null
+    private var activeJob: Job? = null
 
     override fun start(
         scope: CoroutineScope,
@@ -79,38 +116,52 @@ internal class InProcessDownloadScheduler(
         onProgress: (Float?) -> Unit,
         onOutcome: suspend (DownloadOutcome) -> Unit
     ) {
-        if (activeJobs.containsKey(fileId)) return
+        if (activeFileId == fileId || pending.any { it.fileId == fileId }) return
+        pending.addLast(PendingDownload(serverUrl, book, fileId, onProgress, onOutcome))
+        startNext(scope)
+    }
+
+    private fun startNext(scope: CoroutineScope) {
+        if (activeJob != null) return
+        val next = pending.removeFirstOrNull() ?: return
+        activeFileId = next.fileId
         val job = scope.launch(start = CoroutineStart.LAZY) {
             val result = runCatching {
-                repository.downloadBook(book) { progress -> onProgress(progress) }
+                repository.downloadBook(next.book) { progress -> next.onProgress(progress) }
             }
-            activeJobs.remove(fileId)
             result
-                .onSuccess { onOutcome(DownloadOutcome.Success(it)) }
+                .onSuccess { next.onOutcome(DownloadOutcome.Success(it)) }
                 .onFailure { error ->
                     when (error) {
-                        is CancellationException -> onOutcome(DownloadOutcome.Canceled)
-                        is AuthenticationRequiredException -> onOutcome(DownloadOutcome.AuthRequired)
+                        is CancellationException -> next.onOutcome(DownloadOutcome.Canceled)
+                        is AuthenticationRequiredException -> next.onOutcome(DownloadOutcome.AuthRequired)
                         is HttpRequestException -> if (error.code == 403) {
-                            onOutcome(DownloadOutcome.PermissionDenied)
+                            next.onOutcome(DownloadOutcome.PermissionDenied)
                         } else {
-                            onOutcome(DownloadOutcome.Failed(error))
+                            next.onOutcome(DownloadOutcome.Failed(error))
                         }
-                        else -> onOutcome(DownloadOutcome.Failed(error))
+                        else -> next.onOutcome(DownloadOutcome.Failed(error))
                     }
                 }
+            activeFileId = null
+            activeJob = null
+            startNext(scope)
         }
-        activeJobs[fileId] = job
+        activeJob = job
         job.start()
     }
 
     override fun cancel(serverUrl: String, fileId: String) {
-        activeJobs.remove(fileId)?.cancel()
+        if (activeFileId == fileId) {
+            activeJob?.cancel()
+        } else {
+            pending.removeAll { it.serverUrl == serverUrl && it.fileId == fileId }
+        }
     }
 
     override fun cancelAll() {
-        activeJobs.values.forEach { it.cancel() }
-        activeJobs.clear()
+        pending.clear()
+        activeJob?.cancel()
     }
 
     override suspend fun reconcile(

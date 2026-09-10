@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -28,9 +29,9 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
+import java.io.File
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
@@ -224,20 +225,25 @@ internal data class AudiobookMediaItemSpec(
     val streamUrl: String,
     val mimeType: String,
     val title: String,
-    val artist: String?
+    val artist: String?,
+    val localPath: String? = null
 )
 
 internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<AudiobookMediaItemSpec> =
-    AudiobookTimeline.playableAudioFiles(files).mapNotNull { file ->
+    AudiobookTimeline.downloadableAudioFiles(files).mapNotNull { file ->
         val fileId = file.fileId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        val streamUrl = file.book.streamUrl?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val localPath = file.localPath?.takeIf { File(it).isFile }
+        val streamUrl = file.book.streamUrl?.takeIf { it.isNotBlank() }
+            ?: localPath
+            ?: return@mapNotNull null
         val mimeType = file.format?.let(::media3AudioMimeType) ?: return@mapNotNull null
         AudiobookMediaItemSpec(
             fileId = fileId,
             streamUrl = streamUrl,
             mimeType = mimeType,
             title = file.filename ?: file.book.title,
-            artist = file.book.author
+            artist = file.book.author,
+            localPath = localPath
         )
     }
 
@@ -245,7 +251,7 @@ internal fun buildAudiobookMediaItems(files: List<BookFileOption>): List<MediaIt
     buildAudiobookMediaItemSpecs(files).map { spec ->
         MediaItem.Builder()
             .setMediaId(spec.fileId)
-            .setUri(spec.streamUrl)
+            .setUri(spec.localPath?.let { Uri.parse(File(it).toURI().toString()) } ?: Uri.parse(spec.streamUrl))
             .setMimeType(spec.mimeType)
             .setMediaMetadata(
                 androidx.media3.common.MediaMetadata.Builder()

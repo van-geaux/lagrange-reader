@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.session.CommandButton
+import java.nio.file.Files
 import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -206,6 +207,33 @@ class ReadiumAudioPlaybackTest {
         assertEquals(MimeTypes.AUDIO_OGG, media3AudioMimeType("book.ogg"))
         assertEquals(MimeTypes.AUDIO_OPUS, media3AudioMimeType("book.opus"))
         assertNull(media3AudioMimeType("book.epub"))
+    }
+
+    @Test
+    fun localAudiobookFilesBuildMediaSpecsWithoutRemoteStreams() {
+        val localFile = Files.createTempFile("audiobook", ".mp3").toFile()
+        try {
+            val book = BookSummary(
+                libraryId = "library-1",
+                id = "book-1",
+                fileId = "file-1",
+                title = "Local audiobook",
+                format = "audio/mpeg",
+                mediaKind = MediaKind.AUDIO,
+                localPath = localFile.absolutePath,
+                streamUrl = null
+            )
+
+            val specs = buildAudiobookMediaItemSpecs(
+                listOf(BookFileOption(book = book, filename = "chapter.mp3", role = "content"))
+            )
+
+            assertEquals(1, specs.size)
+            assertEquals("file-1", specs.single().fileId)
+            assertEquals(localFile.absolutePath, specs.single().localPath)
+        } finally {
+            localFile.delete()
+        }
     }
 
     @Test

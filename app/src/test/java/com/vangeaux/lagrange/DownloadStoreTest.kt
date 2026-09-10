@@ -194,6 +194,7 @@ class DownloadStoreTest {
                 fileId = "file-update",
                 bookId = "book-update",
                 title = "Book update",
+                filename = "Chapter 01.mp3",
                 localPath = localFile.absolutePath,
                 mediaKind = MediaKind.EPUB
             )
@@ -211,6 +212,7 @@ class DownloadStoreTest {
         )
 
         assertEquals(localFile.absolutePath, store.find("https://example.test", "file-update")?.localPath)
+        assertEquals("Chapter 01.mp3", store.find("https://example.test", "file-update")?.filename)
         assertEquals(localFile.absolutePath, store.readAttempts("https://example.test").single().existingLocalPath)
         assertEquals(true, store.removeAttempt("https://example.test", "file-update"))
         assertEquals(emptyList<DownloadAttempt>(), store.readAttempts("https://example.test"))
@@ -228,6 +230,7 @@ class DownloadStoreTest {
                 fileId = "queued-file",
                 bookId = "queued-book",
                 title = "Queued title",
+                filename = "Chapter 02.mp3",
                 targetPath = target.absolutePath,
                 mediaKind = MediaKind.EPUB,
                 mimeType = "epub",
@@ -238,6 +241,7 @@ class DownloadStoreTest {
         val restored = DownloadStore(filesDir).readAttempts("https://example.test").single()
 
         assertEquals("Queued title", restored.title)
+        assertEquals("Chapter 02.mp3", restored.filename)
         assertEquals("queued-book", restored.bookId)
         assertEquals(target.absolutePath, restored.targetPath)
         assertEquals(42L, restored.sourceUpdatedAtMillis)
@@ -279,5 +283,73 @@ class DownloadStoreTest {
 
         val restored = DownloadStore(filesDir).readAttempts("https://example.test")
         assertEquals(iterations * 2, restored.size)
+    }
+
+    @Test
+    fun `durable download queue preserves authoritative sequence and deduplicates files`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-queue").toFile()
+        val store = DownloadStore(filesDir)
+        val later = DownloadQueueEntry(
+            serverUrl = "https://example.test",
+            fileId = "file-2",
+            bookId = "book-1",
+            libraryId = "library-1",
+            title = "Multipart",
+            filename = "Chapter 02.mp3",
+            mediaKind = MediaKind.AUDIO,
+            mimeType = "audio/mpeg",
+            sourceUpdatedAtMillis = 20L,
+            cellularConsentGranted = true,
+            sequence = 2L
+        )
+        val first = later.copy(
+            fileId = "file-1",
+            filename = "Chapter 01.mp3",
+            sourceUpdatedAtMillis = 10L,
+            sequence = 1L
+        )
+
+        store.enqueueDownloads(
+            listOf(later, first, first.copy(title = "Duplicate ignored"))
+        )
+
+        val restoredStore = DownloadStore(filesDir)
+        assertEquals(
+            listOf("file-1", "file-2"),
+            restoredStore.readDownloadQueue("https://example.test").map { it.fileId }
+        )
+        assertEquals("file-1", restoredStore.nextQueuedDownload("https://example.test")?.fileId)
+        assertEquals(true, restoredStore.removeQueuedDownload("https://example.test", "file-1"))
+        assertEquals("file-2", restoredStore.nextQueuedDownload("https://example.test")?.fileId)
+    }
+
+    @Test
+    fun `corrupt queue state is discarded instead of recreating a startup crash loop`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-queue-corrupt").toFile()
+        File(filesDir, "download-queue.json").writeText("not-json")
+
+        assertEquals(emptyList<DownloadQueueEntry>(), DownloadStore(filesDir).readDownloadQueue())
+    }
+
+    @Test
+    fun `durable download queue survives a fresh store instance`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-queue-reopen").toFile()
+        DownloadStore(filesDir).enqueueDownload(
+            DownloadQueueEntry(
+                serverUrl = "https://example.test",
+                fileId = "file-1",
+                bookId = "book-1",
+                libraryId = "library-1",
+                title = "Multipart",
+                filename = "Chapter 01.mp3",
+                mediaKind = MediaKind.AUDIO,
+                mimeType = "audio/mpeg",
+                sourceUpdatedAtMillis = 10L,
+                cellularConsentGranted = true,
+                sequence = 1L
+            )
+        )
+
+        assertEquals("file-1", DownloadStore(filesDir).nextQueuedDownload("https://example.test")?.fileId)
     }
 }

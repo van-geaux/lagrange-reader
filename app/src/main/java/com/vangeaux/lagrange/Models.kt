@@ -133,6 +133,7 @@ data class BookSummary(
     val id: String,
     val fileId: String?,
     val title: String,
+    val filename: String? = null,
     val author: String? = null,
     val format: String? = null,
     val mediaKind: MediaKind = MediaKind.UNKNOWN,
@@ -169,6 +170,21 @@ data class BookSummary(
             (downloadedSourceUpdatedAtMillis == null || updatedAtMillis > downloadedSourceUpdatedAtMillis)
 }
 
+/**
+ * Completed multipart audiobook files remain separate download records, but Local books exposes
+ * the BookOrbit book as one logical entry. Preserve input order so the repository can choose the
+ * authoritative/most useful representative before applying this projection.
+ */
+internal fun logicalLocalBooks(books: List<BookSummary>): List<BookSummary> {
+    val seenAudioBookIds = mutableSetOf<String>()
+    return books.filter { book ->
+        book.mediaKind != MediaKind.AUDIO || seenAudioBookIds.add(book.id)
+    }
+}
+
+internal fun localBookItemKey(book: BookSummary, seriesKey: String?): String =
+    "library-book-${book.id}-${book.fileId ?: "no-file"}-${seriesKey ?: "single"}"
+
 internal fun BookSummary.withReadingStateReset(): BookSummary = copy(
     progressLabel = null,
     progressPercent = null,
@@ -192,13 +208,48 @@ data class BookFileOption(
     val sizeBytes: Long? = null,
     val role: String? = null,
     val updatedAtMillis: Long? = null,
-    val durationMs: Long? = null
+    val durationMs: Long? = null,
+    val groupingPath: String? = null
 ) {
     val fileId: String? get() = book.fileId
     val format: String? get() = book.format
     val mediaKind: MediaKind get() = book.mediaKind
     val localPath: String? get() = book.localPath
 }
+
+data class AvailableFileGroup(
+    val key: String,
+    val options: List<BookFileOption>
+) {
+    val fileId: String? get() = options.firstOrNull()?.fileId
+    val groupingPath: String? get() = options.firstOrNull()?.groupingPath
+    val groupName: String
+        get() = groupingPath
+            ?.trimEnd('/')
+            ?.substringAfterLast('/')
+            ?.takeIf { it.isNotBlank() }
+            ?: "Available files"
+    val totalSizeBytes: Long?
+        get() = options.takeIf { files -> files.all { it.sizeBytes != null } }
+            ?.sumOf { it.sizeBytes ?: 0L }
+}
+
+internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableFileGroup> =
+    options.fold(mutableListOf<AvailableFileGroup>()) { groups, option ->
+        val groupingPath = option.groupingPath?.takeIf { it.isNotBlank() }
+        val key = if (groupingPath == null) {
+            "file:${option.fileId}"
+        } else {
+            "book:${option.book.id}:path:$groupingPath"
+        }
+        val existing = groups.indexOfFirst { it.key == key }
+        if (existing >= 0) {
+            groups[existing] = groups[existing].copy(options = groups[existing].options + option)
+        } else {
+            groups += AvailableFileGroup(key = key, options = listOf(option))
+        }
+        groups
+    }
 
 data class AvailableFileLabel(
     val title: String,
@@ -228,6 +279,25 @@ internal fun availableFileDisplayLabels(options: List<BookFileOption>): Map<Stri
         }
         fileId to label.copy(title = title)
     }.toMap()
+}
+
+internal fun availableFileGroupDisplayLabel(group: AvailableFileGroup): AvailableFileLabel {
+    val option = group.options.firstOrNull()
+    val format = option?.format
+        ?.substringAfterLast('/')
+        ?.uppercase(Locale.US)
+        ?: option?.filename
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.takeIf { it.isNotBlank() }
+            ?.uppercase(Locale.US)
+        ?: "Unknown"
+    val count = group.options.size
+    val countLabel = if (count == 1) "1 file" else "$count files"
+    val sizeLabel = group.totalSizeBytes?.let(::formatByteSize) ?: "Size unavailable"
+    return AvailableFileLabel(
+        title = "$format · ${group.groupName}",
+        metadata = "$countLabel · $sizeLabel"
+    )
 }
 
 data class BookDetailInfo(
@@ -468,6 +538,7 @@ data class BrowserState(
     val isLoadingLibraries: Boolean = false,
     val isLoadingBooks: Boolean = false,
     val downloadingFileIds: Set<String> = emptySet(),
+    val queuedDownloadFileIds: Set<String> = emptySet(),
     val downloadProgressByFileId: Map<String, Float> = emptyMap(),
     val failedDownloadFileIds: Set<String> = emptySet(),
     val permissionDeniedDownloadFileIds: Set<String> = emptySet(),
@@ -592,6 +663,7 @@ data class DownloadRecord(
     val fileId: String,
     val bookId: String,
     val title: String,
+    val filename: String? = null,
     val localPath: String,
     val mediaKind: MediaKind,
     val mimeType: String? = null,
@@ -611,10 +683,25 @@ data class DownloadAttempt(
     val fileId: String,
     val bookId: String,
     val title: String,
+    val filename: String? = null,
     val targetPath: String,
     val existingLocalPath: String? = null,
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
     val startedAtMillis: Long = System.currentTimeMillis()
+)
+
+data class DownloadQueueEntry(
+    val serverUrl: String,
+    val fileId: String,
+    val bookId: String,
+    val libraryId: String,
+    val title: String,
+    val filename: String? = null,
+    val mediaKind: MediaKind,
+    val mimeType: String? = null,
+    val sourceUpdatedAtMillis: Long? = null,
+    val cellularConsentGranted: Boolean,
+    val sequence: Long
 )
