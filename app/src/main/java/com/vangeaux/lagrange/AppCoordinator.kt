@@ -1919,6 +1919,7 @@ class AppCoordinator internal constructor(
             isLoadingLibraries = false,
             isLoadingBooks = false,
             downloadingFileIds = transient?.downloadingFileIds.orEmpty(),
+            queuedDownloadFileIds = transient?.queuedDownloadFileIds.orEmpty(),
             downloadProgressByFileId = transient?.downloadProgressByFileId.orEmpty(),
             failedDownloadFileIds = transient?.failedDownloadFileIds.orEmpty(),
             downloadBooksByFileId = transient?.downloadBooksByFileId.orEmpty(),

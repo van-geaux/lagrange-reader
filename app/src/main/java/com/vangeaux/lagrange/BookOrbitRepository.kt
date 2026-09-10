@@ -765,6 +765,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 ) ?: cachedDetailBook
                 metadataBook?.copy(
                     fileId = record.fileId,
+                    filename = record.filename ?: metadataBook.filename,
                     format = metadataBook.format.takeIf { metadataBook.fileId == record.fileId }
                         ?: record.mimeType
                         ?: metadataBook.format,
@@ -779,6 +780,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     id = record.bookId,
                     fileId = record.fileId,
                     title = record.title,
+                    filename = record.filename,
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
                     localPath = record.localPath,

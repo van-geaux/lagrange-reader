@@ -6458,7 +6458,8 @@ internal fun downloadTransferRows(state: BrowserState): List<DownloadTransferRow
         state.downloadingFileIds +
             state.queuedDownloadFileIds +
             state.failedDownloadFileIds +
-            state.downloadMetadataByFileId.keys
+            state.downloadMetadataByFileId.keys +
+            state.downloadBooksByFileId.keys
         ).toList().sorted()
     return fileIds.map { fileId ->
         val metadata = state.downloadMetadataByFileId[fileId]
@@ -6499,11 +6500,24 @@ internal fun downloadProgressLabel(isQueued: Boolean, progress: Float?): String 
     }
 
 internal fun localBookDownloadFilename(book: BookSummary, state: BrowserState): String? {
-    val fileId = book.fileId ?: return null
-    return state.downloadMetadataByFileId[fileId]?.filename
-        ?: state.downloadBooksByFileId[fileId]?.filename
-        ?: book.filename
+    val candidateFileIds = state.downloadingFileIds.asSequence().sorted().filter { fileId ->
+        fileId == book.fileId ||
+            state.downloadBooksByFileId[fileId]?.id == book.id ||
+            state.downloadMetadataByFileId[fileId]?.bookId == book.id
+    }
+    return candidateFileIds.mapNotNull { fileId ->
+        state.downloadMetadataByFileId[fileId]?.filename
+            ?: state.downloadBooksByFileId[fileId]?.filename
+            ?: book.filename.takeIf { fileId == book.fileId }
+    }.firstOrNull { it.isNotBlank() }
 }
+
+internal fun localBookHasActiveDownload(book: BookSummary, state: BrowserState): Boolean =
+    state.downloadingFileIds.any { fileId ->
+        fileId == book.fileId ||
+            state.downloadBooksByFileId[fileId]?.id == book.id ||
+            state.downloadMetadataByFileId[fileId]?.bookId == book.id
+    }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -6833,8 +6847,8 @@ private fun LibraryBookCard(
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)? = null
 ) {
     val fileId = book.fileId
-    val isDownloading = fileId != null && fileId in state.downloadingFileIds
-    val downloadFilename = if (isDownloading) localBookDownloadFilename(book, state) else null
+    val isDownloading = localBookHasActiveDownload(book, state)
+    val downloadFilename = localBookDownloadFilename(book, state)
     val failed = fileId != null && fileId in state.failedDownloadFileIds
     val unavailableOffline = state.isOfflineSnapshot && !book.isDownloaded
     val hasActions = !state.isOfflineSnapshot

@@ -108,4 +108,23 @@ class LocalBooksProjectionTest {
 
         assertEquals("Chapter 01.mp3", localBookDownloadFilename(cardBook, state))
     }
+
+    @Test
+    fun `local book downloading filename follows active sibling physical file`() {
+        val cardBook = first.copy(filename = "Chapter 01.mp3")
+        val activeSibling = first.copy(
+            fileId = "file-2",
+            filename = "Chapter 02.mp3"
+        )
+        val state = BrowserState(
+            serverUrl = "https://example.test",
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = emptyList(),
+            downloadingFileIds = setOf("file-2"),
+            downloadBooksByFileId = mapOf("file-2" to activeSibling)
+        )
+
+        assertEquals("Chapter 02.mp3", localBookDownloadFilename(cardBook, state))
+    }
 }
