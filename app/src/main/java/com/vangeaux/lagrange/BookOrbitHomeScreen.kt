@@ -982,6 +982,7 @@ internal fun NativeLibraryBrowserScreen(
     onBookOpen: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
+    onDownloadSingleFile: (BookSummary) -> Unit = onDownload,
     onCancelDownload: (BookSummary) -> Unit,
     onClearFailedDownload: (BookSummary) -> Unit,
     onClearAllFailedDownloads: () -> Unit,
@@ -1115,6 +1116,18 @@ internal fun NativeLibraryBrowserScreen(
             )
         ) {
             CellularDownloadDecision.START -> onDownload(book)
+            CellularDownloadDecision.ASK -> pendingCellularDownload = book
+            CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
+        }
+    }
+    val requestSingleFileDownload: (BookSummary) -> Unit = { book ->
+        when (
+            cellularDownloadDecision(
+                policy = appPreferences.cellularDownloadPolicy,
+                isCellularOrMetered = context.isActiveCellularOrMeteredNetwork()
+            )
+        ) {
+            CellularDownloadDecision.START -> onDownloadSingleFile(book)
             CellularDownloadDecision.ASK -> pendingCellularDownload = book
             CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
         }
@@ -1771,6 +1784,7 @@ internal fun NativeLibraryBrowserScreen(
                     onRead = onBookOpen,
                     onPreview = onPreview,
                     onDownload = requestDownload,
+                    onDownloadSingleFile = requestSingleFileDownload,
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
                     onMarkAsStatus = onMarkAsStatus,
@@ -6953,6 +6967,7 @@ private fun BookDetails(
     onRead: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
     onDownload: (BookSummary) -> Unit,
+    onDownloadSingleFile: (BookSummary) -> Unit = onDownload,
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
@@ -7625,8 +7640,8 @@ private fun BookDetails(
                 ) {
                     Text(
                         downloadProgress?.let {
-                            "${if (displayBook.isDownloaded) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
-                        } ?: if (displayBook.isDownloaded) "Updating local…" else "Downloading…",
+                            "${if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
+                        } ?: if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local…" else "Downloading…",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -7639,11 +7654,7 @@ private fun BookDetails(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                     Text(
-                        if (displayBook.isDownloaded) {
-                            "Use More > Cancel update to stop."
-                        } else {
-                            "Use the × action above to cancel."
-                        },
+                        "Use the × action above to cancel.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -7806,7 +7817,7 @@ private fun BookDetails(
             availableFileGroups(options).firstOrNull { it.key == key }?.let { group ->
                 BookDetailAvailableFileDetails(
                     group = group,
-                    onDownload = onDownload,
+                    onDownload = onDownloadSingleFile,
                     isOffline = state.isOfflineSnapshot,
                     onDismissRequest = { fileDetailsGroupKey = null }
                 )

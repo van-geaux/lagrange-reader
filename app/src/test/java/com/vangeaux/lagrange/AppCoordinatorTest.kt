@@ -352,6 +352,22 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `single file download does not enqueue its whole multipart group`() = runTest {
+        val first = book.copy(fileId = "file-1", mediaKind = MediaKind.AUDIO)
+        val second = book.copy(fileId = "file-2", mediaKind = MediaKind.AUDIO)
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            audiobookDownloadFilesResult = listOf(first, second)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.downloadSingleFile(first)
+        advanceUntilIdle()
+
+        assertEquals(listOf("file-1"), repository.downloadedBooks.map { it.fileId })
+    }
+
+    @Test
     fun `canceled file does not block the next queued sibling`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl, downloadGate = gate)

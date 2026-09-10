@@ -1215,7 +1215,7 @@ class AppCoordinator internal constructor(
         }
     }
 
-    fun downloadBook(book: BookSummary) {
+    fun downloadBook(book: BookSummary, expandGroup: Boolean = true) {
         val requestedFileId = book.fileId ?: run {
             showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
             return
@@ -1224,7 +1224,7 @@ class AppCoordinator internal constructor(
             val serverUrl = repository.getServerUrl().orEmpty()
             val isPerFileRetry = requestedFileId in lastBrowserState?.failedDownloadFileIds.orEmpty()
             val files = runCatching {
-                if (isPerFileRetry) listOf(book) else repository.loadAudiobookDownloadFiles(book)
+                if (isPerFileRetry || !expandGroup) listOf(book) else repository.loadAudiobookDownloadFiles(book)
             }
                 .getOrElse { error ->
                     showBrowserMessage(userMessage(error, "Unable to inspect the audiobook files."))
@@ -1251,6 +1251,10 @@ class AppCoordinator internal constructor(
                     }
                 )
         }
+    }
+
+    fun downloadSingleFile(book: BookSummary) {
+        downloadBook(book, expandGroup = false)
     }
 
     fun downloadBookForEpubImageLibrary(book: BookSummary, onSuccess: (BookSummary) -> Unit) {
