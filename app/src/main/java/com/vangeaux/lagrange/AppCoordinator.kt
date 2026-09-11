@@ -41,10 +41,12 @@ internal fun recoveredDownloadFilename(
 
 internal fun BrowserState.withQueuedDownloads(downloads: List<ScheduledDownload>): BrowserState {
     val fileIds = downloads.mapTo(linkedSetOf()) { it.fileId }
-    val activeFileId = fileIds.firstOrNull()
+    val hasActiveTransfer = downloadingFileIds.isNotEmpty()
+    val activeFileId = fileIds.firstOrNull().takeUnless { hasActiveTransfer }
+    val queuedFileIds = if (hasActiveTransfer) fileIds else fileIds.drop(1)
     return copy(
         downloadingFileIds = downloadingFileIds + listOfNotNull(activeFileId),
-        queuedDownloadFileIds = queuedDownloadFileIds + fileIds.drop(1),
+        queuedDownloadFileIds = queuedDownloadFileIds + queuedFileIds,
         downloadProgressByFileId = downloadProgressByFileId - fileIds,
         failedDownloadFileIds = failedDownloadFileIds - fileIds,
         permissionDeniedDownloadFileIds = permissionDeniedDownloadFileIds - fileIds,
