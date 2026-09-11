@@ -51,6 +51,50 @@ class BookDetailActionRowTest {
     }
 
     @Test
+    fun pendingCellularSingleFileConfirmationRoutesOnlyToSingleFileDownload() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val normalDownloads = mutableListOf<BookSummary>()
+        val singleFileDownloads = mutableListOf<BookSummary>()
+
+        routePendingCellularDownload(
+            pending = PendingCellularDownload(book, PendingCellularDownloadScope.SINGLE_FILE),
+            onDownload = normalDownloads::add,
+            onDownloadSingleFile = singleFileDownloads::add
+        )
+
+        assertTrue(normalDownloads.isEmpty())
+        assertEquals(listOf(book), singleFileDownloads)
+    }
+
+    @Test
+    fun pendingCellularGroupConfirmationRoutesOnlyToGroupDownload() {
+        val book = BookSummary(
+            libraryId = "library-1",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Chamber of Secrets",
+            mediaKind = MediaKind.AUDIO
+        )
+        val normalDownloads = mutableListOf<BookSummary>()
+        val singleFileDownloads = mutableListOf<BookSummary>()
+
+        routePendingCellularDownload(
+            pending = PendingCellularDownload(book, PendingCellularDownloadScope.GROUP),
+            onDownload = normalDownloads::add,
+            onDownloadSingleFile = singleFileDownloads::add
+        )
+
+        assertEquals(listOf(book), normalDownloads)
+        assertTrue(singleFileDownloads.isEmpty())
+    }
+
+    @Test
     fun nonlocalTransferSlotMapsIdleRetryAndCancelStates() {
         assertEquals(
             BookDetailInlineTransfer.DOWNLOAD,
