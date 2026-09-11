@@ -83,6 +83,71 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
+    fun preparedPlaylistUsesTheExactSameFilesForMediaItemsAndTimelineSeeking() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("missing-source", null, durationMs = 50_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        val playlist = prepareAudiobookPlaylist(files)
+        val target = resolveSeekTarget(playlist.files, 100_500L)
+
+        assertEquals(listOf("f1", "f2"), playlist.specs.map { it.fileId })
+        assertEquals(listOf("f1", "f2"), playlist.files.map { it.fileId })
+        assertEquals(1, target?.fileIndex)
+        assertEquals("f2", target?.fileId)
+        assertEquals(500L, target?.positionMs)
+    }
+
+    @Test
+    fun sameBookSessionReuseRequiresTheSameOrderedPhysicalFileManifest() {
+        val existing = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L)
+        )
+        val corrected = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        assertEquals(false, hasSameAudiobookPlaybackManifest(existing, corrected))
+        assertEquals(true, hasSameAudiobookPlaybackManifest(corrected, corrected))
+        assertEquals(false, hasSameAudiobookPlaybackManifest(corrected, corrected.reversed()))
+    }
+
+    @Test
+    fun restorationSelectsTheSavedLaterPhysicalFileByStableId() {
+        val mediaItemIds = listOf("f1", "f2", "f3")
+
+        assertEquals(2, resolveInitialAudiobookMediaItemIndex(mediaItemIds, "f3"))
+        assertEquals(0, resolveInitialAudiobookMediaItemIndex(mediaItemIds, "unknown"))
+    }
+
+    @Test
+    fun serverAggregateDurationIsAuthoritativeForMultipartSeekbar() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = null),
+            file("f2", "https://server/stream/f2", durationMs = null)
+        )
+
+        assertEquals(600_000L, resolveTotalDurationMs(files, 100_000L, 600_000L))
+    }
+
+    @Test
+    fun partiallyDownloadedMultipartAudiobookStillUsesThePlaylistEngine() {
+        assertEquals(false, shouldUseSingleFileAudioEngine(true, 3))
+        assertEquals(true, shouldUseSingleFileAudioEngine(true, 1))
+        assertEquals(false, shouldUseSingleFileAudioEngine(false, 3))
+    }
+
+    @Test
+    fun preparedLocalPlaylistUsesMedia3EvenWhenOnlyOneMultipartTrackIsAvailable() {
+        assertEquals(true, shouldUsePlaylistMedia3Audio(1))
+        assertEquals(true, shouldUsePlaylistMedia3Audio(2))
+        assertEquals(false, shouldUsePlaylistMedia3Audio(0))
+    }
+
+    @Test
     fun resolveAbsolutePositionMsMapsFileRelativePositionAcrossTracks() {
         val files = listOf(
             file("f1", "https://server/stream/f1", durationMs = 100_000L),
@@ -109,6 +174,63 @@ class ReadiumAudioPlaybackTest {
     fun resolveSeekTargetMapsAbsolutePositionToTrackAndOffset() {
         val files = listOf(
             file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        val target = resolveSeekTarget(files, 100_500L)
+
+        assertEquals(1, target?.fileIndex)
+        assertEquals("f2", target?.fileId)
+        assertEquals(500L, target?.positionMs)
+    }
+
+    @Test
+    fun playerSeekTargetResolvesTheFinalMedia3IndexByStableFileId() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L)
+        )
+
+        val target = resolvePlayerSeekTarget(files, listOf("f2", "f1"), 100_500L)
+
+        assertEquals(0, target?.fileIndex)
+        assertEquals("f2", target?.fileId)
+        assertEquals(500L, target?.positionMs)
+    }
+
+    @Test
+    fun playerSeekTargetsUseOneThreeFileBookTimelineAcrossBothBoundaries() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("f2", "https://server/stream/f2", durationMs = 200_000L),
+            file("f3", "https://server/stream/f3", durationMs = 300_000L)
+        )
+        val mediaItemIds = listOf("f1", "f2", "f3")
+
+        val endOfFirst = resolvePlayerSeekTarget(files, mediaItemIds, 99_999L)
+        val startOfSecond = resolvePlayerSeekTarget(files, mediaItemIds, 100_000L)
+        val chapterInSecond = resolvePlayerSeekTarget(files, mediaItemIds, 150_000L)
+        val startOfThird = resolvePlayerSeekTarget(files, mediaItemIds, 300_000L)
+        val chapterInThird = resolvePlayerSeekTarget(files, mediaItemIds, 450_000L)
+
+        assertEquals(0, endOfFirst?.fileIndex)
+        assertEquals(99_999L, endOfFirst?.positionMs)
+        assertEquals(1, startOfSecond?.fileIndex)
+        assertEquals(0L, startOfSecond?.positionMs)
+        assertEquals(1, chapterInSecond?.fileIndex)
+        assertEquals(50_000L, chapterInSecond?.positionMs)
+        assertEquals(2, startOfThird?.fileIndex)
+        assertEquals(0L, startOfThird?.positionMs)
+        assertEquals(2, chapterInThird?.fileIndex)
+        assertEquals(150_000L, chapterInThird?.positionMs)
+    }
+
+    @Test
+    fun resolveSeekTargetUsesTheSameTrackSetAsTheMedia3Playlist() {
+        val files = listOf(
+            file("f1", "https://server/stream/f1", durationMs = 100_000L),
+            file("supplement", "https://server/stream/supplement", durationMs = 50_000L)
+                .copy(role = "supplement"),
             file("f2", "https://server/stream/f2", durationMs = 200_000L)
         )
 

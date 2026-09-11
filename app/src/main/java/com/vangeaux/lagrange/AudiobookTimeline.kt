@@ -12,10 +12,39 @@ object AudiobookTimeline {
     fun playableAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
         options.filter { it.mediaKind == MediaKind.AUDIO && !it.fileId.isNullOrBlank() }
 
-    fun downloadableAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
+    fun playbackAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
         playableAudioFiles(options)
-            .filter { !it.role.equals("supplement", ignoreCase = true) }
+            .filter { file ->
+                file.role.isNullOrBlank() ||
+                    file.role.equals("content", ignoreCase = true) ||
+                    file.role.equals("primary", ignoreCase = true)
+            }
             .distinctBy { it.fileId }
+
+    fun selectedPlaybackAudioFiles(
+        options: List<BookFileOption>,
+        selectedFileId: String?
+    ): List<BookFileOption> {
+        val candidates = playbackAudioFiles(options)
+        val selectedFormat = candidates
+            .firstOrNull { it.fileId == selectedFileId }
+            ?.let(::availableFileGroupFormat)
+        if (selectedFormat != null) {
+            return candidates.filter { availableFileGroupFormat(it) == selectedFormat }
+        }
+        val formats = candidates.map(::availableFileGroupFormat).distinct()
+        return candidates.takeIf { formats.size == 1 }.orEmpty()
+    }
+
+    fun selectedLocalPlaybackAudioFiles(
+        options: List<BookFileOption>,
+        selectedFileId: String?
+    ): List<BookFileOption> = selectedPlaybackAudioFiles(options, selectedFileId).map { option ->
+        option.copy(book = option.book.copy(streamUrl = null))
+    }
+
+    fun downloadableAudioFiles(options: List<BookFileOption>): List<BookFileOption> =
+        playbackAudioFiles(options)
 
     private fun durationMs(file: BookFileOption): Long? = file.durationMs?.takeIf { it > 0 }
 

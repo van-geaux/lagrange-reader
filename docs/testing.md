@@ -90,6 +90,14 @@ Open the grouped format picker and verify ordinary tap still selects the whole g
 
 At the current checkpoint, focused issue #156 automated tests and the full JVM suite have passed. The final Gradle/lint/APK gate has passed with 706 JVM tests and 0 failures/errors/skips; the user confirmed the grouped inspector download-state and per-file deletion behavior works on-device. Android-test compilation or APK assembly does not replace that device validation.
 
+### Multipart audiobook timeline and local playback (issue #161)
+
+On a connected device or emulator, open a grouped audiobook with multiple physical files in one exact format. Verify the player receives the complete server-ordered content manifest, excludes alternate formats and supplements, and displays the server-provided aggregate duration even when only some files are downloaded locally. Chapter taps, seekbar jumps, fast-forward/skip controls, and automatic transitions must use the same book-global timeline and stable physical file IDs.
+
+With only the first physical file downloaded, open the audiobook online and verify the downloaded item uses its local path while the missing item can use its authenticated server stream. Enable Airplane Mode and reopen the fully or partially downloaded audiobook from Local books. Verify remote URLs are not attempted, valid local files are opened through the Media3 playlist even when only one local item is available, and an audiobook with no valid local item reports a local-availability error instead of closing silently. Resume from a later downloaded file and verify its physical file ID and in-file position are restored.
+
+Automated coverage includes server-authoritative aggregate duration, exact-format ordered membership, cached grouped-file propagation, stable Media3 IDs, one-item local playlist handling, scheme-aware local/HTTP Media3 data sources, cross-file seeking, transitions, stale-manifest replacement, and later-file restoration. The user confirmed the downloaded grouped-audiobook player opens and works; no assistant-side connected-device instrumentation was available.
+
 ### Local-open fallback
 
 On a connected device or emulator, complete a download, immediately enable Airplane Mode, open Local books, and tap the downloaded book before refreshing or restarting the app. Repeat for EPUB, PDF, CBZ/CBR/CB7, and audiobook files. Each valid completed local copy should open after the failed online/detail attempt. Also verify that an offline book with no local copy retains the normal network error, an invalid local file reports an integrity/preparation error, and a corrupt comic archive reports its extraction error rather than the network failure. Repeat one healthy online open to confirm the normal authoritative path remains preferred.
@@ -249,11 +257,15 @@ Disable the setting and verify the keys adjust system volume normally. With an a
 
 Automated verification for issue #95 passed 580 JVM tests with 0 failures, errors, or skips, plus main/unit/Android-test compilation, lint, debug assembly, and Android-test assembly. No connected device was available, so the checks above remain pending physical-device validation.
 
-### Multi-file streamed MP3 audiobook playback (issue #36)
+### Multipart audiobook chapter/seek and manifest regression (issues #36 and #161)
 
-The implementation and live-device validation are complete. The user confirmed that a BookOrbit audiobook composed of ordered MP3 files plays as one continuous streamed audiobook. Multi-file streamed MP3 support is included in the 1.5.0 release scope.
+On a connected device or emulator, open a multipart audiobook whose detail payload contains ordered content files in one exact audio format, including files whose `groupingPath` values differ. Select that format and verify playback prepares one playlist containing every ordered same-format content file for the selected edition. `groupingPath` must not split the playlist; an alternate audio format, a non-content audio attachment, and metadata/supplement files must not enter it or change its order. Reopen or refresh the detail and confirm the selected edition still uses the same ordered stable file IDs.
 
-For regression testing, verify chapter selection and automatic advancement across at least two file boundaries; compact-player elapsed/remaining time and slider position across the complete audiobook; ±10/30-second seeks around a boundary; and online relaunch/resume in a later file using the active file ID and in-file position. Recheck a single-file M4B and downloaded/local audio. Multi-file offline download/storage remains out of scope.
+In both the compact and full player, tap a chapter and move the overall seekbar to positions before and after at least one physical-file boundary. Verify each action reaches the corresponding book-global position, playback continues, and the displayed elapsed/remaining duration and progress reflect the complete prepared timeline. Also verify automatic advancement across at least two boundaries and ±10/30-second seeks around a boundary. Relaunch online at a later file and verify resume uses that file's stable ID and in-file position. Recheck a single-file M4B and downloaded/local audio. Multi-file offline download/storage lifecycle is covered by issue #156; this section verifies playback from those local files.
+
+Change the available-file manifest for the same book (for example, add or remove a content file or change its order), then reopen playback and verify the stale same-book session is not reused: the new ordered file-ID manifest is prepared and global seeks map against the new timeline.
+
+Focused JVM tests and the full Gradle/lint/APK gate for issue #161 pass. Physical-device validation remains outstanding; compiled Android-test sources do not constitute executed instrumentation.
 
 ### Authentication and OIDC
 

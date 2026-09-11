@@ -19,6 +19,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
@@ -229,15 +230,20 @@ internal data class AudiobookMediaItemSpec(
     val localPath: String? = null
 )
 
-internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<AudiobookMediaItemSpec> =
-    AudiobookTimeline.downloadableAudioFiles(files).mapNotNull { file ->
+internal data class PreparedAudiobookPlaylist(
+    val files: List<BookFileOption>,
+    val specs: List<AudiobookMediaItemSpec>
+)
+
+internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudiobookPlaylist {
+    val tracks = AudiobookTimeline.downloadableAudioFiles(files).mapNotNull { file ->
         val fileId = file.fileId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         val localPath = file.localPath?.takeIf { File(it).isFile }
         val streamUrl = file.book.streamUrl?.takeIf { it.isNotBlank() }
             ?: localPath
             ?: return@mapNotNull null
         val mimeType = file.format?.let(::media3AudioMimeType) ?: return@mapNotNull null
-        AudiobookMediaItemSpec(
+        file to AudiobookMediaItemSpec(
             fileId = fileId,
             streamUrl = streamUrl,
             mimeType = mimeType,
@@ -246,6 +252,14 @@ internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<Aud
             localPath = localPath
         )
     }
+    return PreparedAudiobookPlaylist(
+        files = tracks.map { it.first },
+        specs = tracks.map { it.second }
+    )
+}
+
+internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<AudiobookMediaItemSpec> =
+    prepareAudiobookPlaylist(files).specs
 
 internal fun buildAudiobookMediaItems(files: List<BookFileOption>): List<MediaItem> =
     buildAudiobookMediaItemSpecs(files).map { spec ->
@@ -267,14 +281,19 @@ internal fun resolveAbsolutePositionMs(
     currentFileId: String?,
     currentFilePositionMs: Long
 ): Long {
-    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+    val playableFiles = AudiobookTimeline.playbackAudioFiles(audioFiles)
     val fileId = currentFileId ?: return currentFilePositionMs.coerceAtLeast(0L)
     return AudiobookTimeline.fileRelativeToAbsolute(playableFiles, fileId, currentFilePositionMs)
         ?: currentFilePositionMs.coerceAtLeast(0L)
 }
 
-internal fun resolveTotalDurationMs(audioFiles: List<BookFileOption>, fallbackDurationMs: Long): Long {
-    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+internal fun resolveTotalDurationMs(
+    audioFiles: List<BookFileOption>,
+    fallbackDurationMs: Long,
+    serverAggregateDurationMs: Long? = null
+): Long {
+    serverAggregateDurationMs?.takeIf { it > 0L }?.let { return it }
+    val playableFiles = AudiobookTimeline.playbackAudioFiles(audioFiles)
     return AudiobookTimeline.totalDurationMs(playableFiles) ?: fallbackDurationMs.coerceAtLeast(0L)
 }
 
@@ -282,17 +301,47 @@ internal fun resolveSeekTarget(
     audioFiles: List<BookFileOption>,
     absolutePositionMs: Long
 ): AudiobookTimelinePosition? {
-    val playableFiles = AudiobookTimeline.playableAudioFiles(audioFiles)
+    val playableFiles = AudiobookTimeline.playbackAudioFiles(audioFiles)
     if (playableFiles.size < 2) return null
     return AudiobookTimeline.absoluteToPosition(playableFiles, absolutePositionMs)
 }
+
+internal fun resolvePlayerSeekTarget(
+    audioFiles: List<BookFileOption>,
+    mediaItemIds: List<String>,
+    absolutePositionMs: Long
+): AudiobookTimelinePosition? {
+    val target = resolveSeekTarget(audioFiles, absolutePositionMs) ?: return null
+    val mediaItemIndex = mediaItemIds.indexOf(target.fileId)
+    return target.takeIf { mediaItemIndex >= 0 }?.copy(fileIndex = mediaItemIndex)
+}
+
+internal fun hasSameAudiobookPlaybackManifest(
+    existing: List<BookFileOption>,
+    requested: List<BookFileOption>
+): Boolean = existing.map { it.fileId } == requested.map { it.fileId }
+
+internal fun resolveInitialAudiobookMediaItemIndex(
+    mediaItemIds: List<String>,
+    initialFileId: String?
+): Int = mediaItemIds.indexOf(initialFileId).let { index ->
+    if (index >= 0) index else 0
+}
+
+internal fun shouldUseSingleFileAudioEngine(
+    localFileAvailable: Boolean,
+    audiobookFileCount: Int
+): Boolean = localFileAvailable && audiobookFileCount < 2
+
+internal fun shouldUsePlaylistMedia3Audio(preparedAudioFileCount: Int): Boolean =
+    preparedAudioFileCount > 0
 
 internal fun activeBookSummaryForActiveFile(
     book: BookSummary,
     audioFiles: List<BookFileOption>,
     currentFileId: String?
 ): BookSummary {
-    val activeFile = AudiobookTimeline.playableAudioFiles(audioFiles)
+    val activeFile = AudiobookTimeline.playbackAudioFiles(audioFiles)
         .firstOrNull { it.fileId == currentFileId }
         ?: return book
     return book.copy(
@@ -323,7 +372,7 @@ internal suspend fun openDirectMedia3Audio(
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult {
     val playlistItems = buildAudiobookMediaItems(audioFiles)
-    if (playlistItems.size >= 2) {
+    if (shouldUsePlaylistMedia3Audio(playlistItems.size)) {
         return preparePlaylistMedia3Audio(
             application = application,
             mediaItems = playlistItems,
@@ -335,7 +384,9 @@ internal suspend fun openDirectMedia3Audio(
         )
     }
     val url = streamUrl?.takeIf { it.isNotBlank() }
-        ?: return ReadiumAudioOpenResult.Error("The audiobook has no valid BookOrbit stream.")
+        ?: return ReadiumAudioOpenResult.Error(
+            "No playable downloaded audiobook file is available locally."
+        )
     val mimeType = book.format?.let(::media3AudioMimeType)
         ?: return ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
     return prepareDirectMedia3Audio(
@@ -367,15 +418,20 @@ private suspend fun preparePlaylistMedia3Audio(
         .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(application).setDataSourceFactory(
-                AuthenticatedMedia3HttpDataSourceFactory(
-                    headersProvider = headersProvider,
-                    recoverAuthentication = recoverAuthentication
+                DefaultDataSource.Factory(
+                    application,
+                    AuthenticatedMedia3HttpDataSourceFactory(
+                        headersProvider = headersProvider,
+                        recoverAuthentication = recoverAuthentication
+                    )
                 )
             )
         )
         .build()
-    val initialIndex = mediaItems.indexOfFirst { it.mediaId == initialFileId }
-        .let { if (it >= 0) it else 0 }
+    val initialIndex = resolveInitialAudiobookMediaItemIndex(
+        mediaItems.map { it.mediaId },
+        initialFileId
+    )
     player.setMediaItems(mediaItems, initialIndex, initialPositionMs.coerceAtLeast(0L))
     player.prepare()
 
@@ -699,7 +755,8 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         val launchMode: ReaderLaunchMode,
         val engine: AudioPlaybackEngine,
         val mediaSession: MediaSession,
-        val audioFiles: List<BookFileOption> = emptyList()
+        val audioFiles: List<BookFileOption> = emptyList(),
+        val aggregateDurationMs: Long? = null
     ) {
         val player: Player
             get() = engine.player
@@ -712,16 +769,24 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun currentFilePositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
 
-        fun totalDurationMs(): Long = resolveTotalDurationMs(audioFiles, player.duration)
+        fun totalDurationMs(): Long = resolveTotalDurationMs(
+            audioFiles,
+            player.duration,
+            aggregateDurationMs
+        )
 
         fun absolutePositionMs(): Long =
             resolveAbsolutePositionMs(audioFiles, currentFileId(), currentFilePositionMs())
 
         fun seekToAbsolutePosition(ms: Long) {
-            val target = resolveSeekTarget(audioFiles, ms)
-            if (target == null) {
+            if (audioFiles.size < 2) {
                 player.seekTo(ms.coerceAtLeast(0L))
-            } else {
+                return
+            }
+            val mediaItemIds = (0 until player.mediaItemCount).map { index ->
+                player.getMediaItemAt(index).mediaId
+            }
+            resolvePlayerSeekTarget(audioFiles, mediaItemIds, ms)?.let { target ->
                 player.seekTo(target.fileIndex, target.positionMs)
             }
         }
@@ -737,7 +802,8 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             book: BookSummary,
             launchMode: ReaderLaunchMode,
             engine: AudioPlaybackEngine,
-            audioFiles: List<BookFileOption> = emptyList()
+            audioFiles: List<BookFileOption> = emptyList(),
+            aggregateDurationMs: Long? = null
         ): Session {
             closeSession()
             var mediaSession: MediaSession? = null
@@ -750,7 +816,14 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                     .build()
                 mediaSession = createdSession
                 addSession(createdSession)
-                return Session(book, launchMode, engine, createdSession, audioFiles).also { session ->
+                return Session(
+                    book,
+                    launchMode,
+                    engine,
+                    createdSession,
+                    audioFiles,
+                    aggregateDurationMs
+                ).also { session ->
                     mutableSession.value = session
                 }
             } catch (error: Throwable) {
@@ -1032,7 +1105,8 @@ class ReadiumAudioPlaybackController internal constructor(
         initialPositionMs: Long,
         launchMode: ReaderLaunchMode,
         playWhenReady: Boolean = true,
-        audioFiles: List<BookFileOption> = emptyList()
+        audioFiles: List<BookFileOption> = emptyList(),
+        aggregateDurationMs: Long? = null
     ): ReadiumAudioOpenResult {
         val generation = withContext(Dispatchers.Main.immediate) {
             openGeneration += 1L
@@ -1056,11 +1130,19 @@ class ReadiumAudioPlaybackController internal constructor(
             resetPreparationIfCurrent(generation)
             throw error
         }
+        val useSingleFileEngine = shouldUseSingleFileAudioEngine(file?.isFile == true, audioFiles.size)
+        val preparedAudioFiles = if (useSingleFileEngine) {
+            emptyList()
+        } else {
+            prepareAudiobookPlaylist(audioFiles).files
+        }
         val matchingSession = serviceBinder.session.value?.takeIf { current ->
             current.book.libraryId == book.libraryId &&
                 current.book.id == book.id &&
                 current.book.fileId == book.fileId &&
-                current.launchMode == launchMode
+                current.launchMode == launchMode &&
+                hasSameAudiobookPlaybackManifest(current.audioFiles, preparedAudioFiles) &&
+                current.aggregateDurationMs == aggregateDurationMs
         }
         if (matchingSession != null) {
             return try {
@@ -1084,7 +1166,7 @@ class ReadiumAudioPlaybackController internal constructor(
         val pauseForAudioInterruptions = preferencesStore.read().pauseAudiobookForAudioInterruptions
         val opened = try {
             withTimeoutOrNull(AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS) {
-                if (file?.isFile == true) {
+                if (useSingleFileEngine) {
                     openReadiumAudio(
                         application = application,
                         book = book,
@@ -1099,7 +1181,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         book = book,
                         streamUrl = streamUrl,
                         initialPositionMs = initialPositionMs,
-                        audioFiles = audioFiles,
+                        audioFiles = preparedAudioFiles,
                         pauseForAudioInterruptions = pauseForAudioInterruptions,
                         headersProvider = streamingHeadersProvider,
                         recoverAuthentication = streamingAuthenticationRecovery
@@ -1139,7 +1221,13 @@ class ReadiumAudioPlaybackController internal constructor(
                         } else {
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
                             endReadingSession(serviceBinder.session.value)
-                            val session = serviceBinder.openSession(book, launchMode, opened.engine, audioFiles)
+                            val session = serviceBinder.openSession(
+                                book,
+                                launchMode,
+                                opened.engine,
+                                preparedAudioFiles,
+                                aggregateDurationMs
+                            )
                             if (playWhenReady) opened.engine.player.play()
                             startProgressUpdates(session, recordInitialPlay = playWhenReady)
                             mutablePreparationState.value = AudioPlaybackPreparationState.IDLE

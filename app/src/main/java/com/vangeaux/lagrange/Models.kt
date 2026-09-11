@@ -317,7 +317,7 @@ internal fun availableFileGroups(options: List<BookFileOption>): List<AvailableF
         groups
     }
 
-private fun availableFileGroupFormat(option: BookFileOption): String =
+internal fun availableFileGroupFormat(option: BookFileOption): String =
     option.format
             ?.substringAfterLast('/')
             ?.substringBefore(';')
@@ -712,6 +712,7 @@ data class ReaderState(
     val progressPercent: Float? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,
     val audioFiles: List<BookFileOption> = emptyList(),
+    val audioTotalDurationMs: Long? = null,
     val initialCfi: String? = null,
     val annotationText: String? = null,
     val annotationChapterIndex: Int? = null,

@@ -265,6 +265,7 @@ interface BookOrbitDataSource {
     suspend fun loadBookCover(book: BookSummary): ByteArray? = null
     suspend fun loadCatalogImage(url: String): ByteArray? = null
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = null
+    suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = null
     suspend fun loadReaderProgress(
         book: BookSummary,
         availableFiles: List<BookFileOption> = emptyList()
@@ -1302,6 +1303,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
     }
 
+    override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = withContext(Dispatchers.IO) {
+        bookDetailCacheStore.readLatest(
+            serverUrl = getServerUrl().orEmpty(),
+            bookId = book.id,
+            fileId = book.fileId
+        )
+    }
+
     override suspend fun loadReaderProgress(
         book: BookSummary,
         availableFiles: List<BookFileOption>
@@ -1641,12 +1650,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         val savedBook = savedSession.book
         var bookForRestore = savedBook
         var audioFiles = emptyList<BookFileOption>()
+        var audioTotalDurationMs: Long? = null
         var queuedAudioProgress: ProgressUpdate? = null
         if (!localOnly && savedBook.mediaKind == MediaKind.AUDIO) {
             val detail = runCatching { loadBookDetail(savedBook) }.getOrNull()
+            audioTotalDurationMs = detail?.durationSeconds
+                ?.takeIf { it > 0L }
+                ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
             audioFiles = detail
                 ?.availableFiles
-                ?.let(AudiobookTimeline::playableAudioFiles)
+                ?.let { options ->
+                    AudiobookTimeline.selectedPlaybackAudioFiles(options, savedBook.fileId)
+                }
                 .orEmpty()
             if (audioFiles.isNotEmpty()) {
                 val detailBook = requireNotNull(detail).book
@@ -1682,9 +1697,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 cachedDetail = bookDetailCacheStore.readLatest(serverUrl, savedBook.id, record.fileId)
                 if (cachedDetail != null) break
             }
+            audioTotalDurationMs = cachedDetail?.durationSeconds
+                ?.takeIf { it > 0L }
+                ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
             audioFiles = cachedDetail
                 ?.let { detail ->
-                    AudiobookTimeline.downloadableAudioFiles(detail.availableFiles).map { option ->
+                    AudiobookTimeline.selectedPlaybackAudioFiles(
+                        detail.availableFiles,
+                        savedBook.fileId
+                    ).map { option ->
                         option.copy(
                             book = option.book.copy(
                                 localPath = localPathsByFileId[option.fileId],
@@ -1777,7 +1798,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
             launchMode = savedSession.launchMode,
-            audioFiles = audioFiles
+            audioFiles = audioFiles,
+            audioTotalDurationMs = audioTotalDurationMs
         )
     }
 
@@ -3306,7 +3328,12 @@ internal object BookOrbitPayloadParser {
             }
         }
         val summedAudioDurationSeconds = AudiobookTimeline
-            .totalDurationMs(AudiobookTimeline.playableAudioFiles(availableFiles))
+            .totalDurationMs(
+                AudiobookTimeline.selectedPlaybackAudioFiles(
+                    availableFiles,
+                    book.fileId
+                )
+            )
             ?.let { totalMs ->
                 totalMs / 1000L + if (totalMs % 1000L >= 500L) 1L else 0L
             }

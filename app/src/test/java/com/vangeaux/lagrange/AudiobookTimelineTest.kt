@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AudiobookTimelineTest {
@@ -68,6 +69,21 @@ class AudiobookTimelineTest {
     }
 
     @Test
+    fun `playbackAudioFiles excludes explicit non-content audio attachments`() {
+        val files = listOf(
+            file("content", 1_000L, role = "content"),
+            file("legacy", 2_000L, role = null),
+            file("metadata", 3_000L, role = "metadata"),
+            file("supplement", 4_000L, role = "supplement")
+        )
+
+        assertEquals(
+            listOf("content", "legacy"),
+            AudiobookTimeline.playbackAudioFiles(files).map { it.fileId }
+        )
+    }
+
+    @Test
     fun `downloadableAudioFiles drops blank and duplicate identities`() {
         val files = listOf(
             file("first", 1_000L),
@@ -126,6 +142,69 @@ class AudiobookTimelineTest {
         )
         assertEquals(listOf(1, 1, 2, 2, 1), groups.map { it.options.size })
         assertEquals(listOf("epub", "pdf", "mp3", "m4a", "m4b"), groups.map { it.options.first().format })
+    }
+
+    @Test
+    fun `selected playback files include ordered content files from selected exact format`() {
+        val options = listOf(
+            file("mp3-1", 100_000L, format = "mp3", filename = "Chapter 01.mp3")
+                .copy(groupingPath = "books/test/Book"),
+            file("mp3-2", 200_000L, format = "mp3", filename = "Chapter 02.mp3")
+                .copy(groupingPath = "books/test/Book"),
+            file("m4b", 300_000L, format = "m4b", filename = "Book.m4b")
+                .copy(groupingPath = "books/test/Book")
+        )
+
+        val selected = AudiobookTimeline.selectedPlaybackAudioFiles(options, "mp3-2")
+
+        assertEquals(listOf("mp3-1", "mp3-2"), selected.map { it.fileId })
+        assertEquals(
+            listOf("m4b"),
+            AudiobookTimeline.selectedPlaybackAudioFiles(options, "m4b").map { it.fileId }
+        )
+    }
+
+    @Test
+    fun `selected local playback files clear remote sources while preserving order`() {
+        val options = listOf(
+            file("mp3-1", 100_000L, format = "mp3").copy(
+                book = file("mp3-1", 100_000L, format = "mp3").book.copy(
+                    streamUrl = "https://server.example.test/mp3-1"
+                )
+            ),
+            file("mp3-2", 200_000L, format = "mp3").copy(
+                book = file("mp3-2", 200_000L, format = "mp3").book.copy(
+                    streamUrl = "https://server.example.test/mp3-2"
+                )
+            )
+        )
+
+        val selected = AudiobookTimeline.selectedLocalPlaybackAudioFiles(options, "mp3-2")
+
+        assertEquals(listOf("mp3-1", "mp3-2"), selected.map { it.fileId })
+        assertTrue(selected.all { it.book.streamUrl == null })
+    }
+
+    @Test
+    fun `selected playback files keep one upstream audiobook across disc paths`() {
+        val options = listOf(
+            file("disc-1-track-1", 100_000L, role = "content", format = "mp3", filename = "01.mp3")
+                .copy(groupingPath = "books/test/Book/CD 1"),
+            file("disc-1-track-2", 200_000L, role = "content", format = "mp3", filename = "02.mp3")
+                .copy(groupingPath = "books/test/Book/CD 1"),
+            file("disc-2-track-1", 300_000L, role = "content", format = "mp3", filename = "01.mp3")
+                .copy(groupingPath = "books/test/Book/CD 2"),
+            file("alternate", 600_000L, role = "content", format = "m4b", filename = "Book.m4b")
+                .copy(groupingPath = "books/test/Book")
+        )
+
+        val selected = AudiobookTimeline.selectedPlaybackAudioFiles(options, "disc-1-track-2")
+
+        assertEquals(
+            listOf("disc-1-track-1", "disc-1-track-2", "disc-2-track-1"),
+            selected.map { it.fileId }
+        )
+        assertEquals(600_000L, AudiobookTimeline.totalDurationMs(selected))
     }
 
     @Test
