@@ -581,6 +581,27 @@ private data class PendingBulkDownload(
     val books: List<BookSummary>
 )
 
+internal enum class PendingCellularDownloadScope {
+    GROUP,
+    SINGLE_FILE
+}
+
+internal data class PendingCellularDownload(
+    val book: BookSummary,
+    val scope: PendingCellularDownloadScope
+)
+
+internal fun routePendingCellularDownload(
+    pending: PendingCellularDownload,
+    onDownload: (BookSummary) -> Unit,
+    onDownloadSingleFile: (BookSummary) -> Unit
+) {
+    when (pending.scope) {
+        PendingCellularDownloadScope.GROUP -> onDownload(pending.book)
+        PendingCellularDownloadScope.SINGLE_FILE -> onDownloadSingleFile(pending.book)
+    }
+}
+
 internal fun bulkDownloadGroupKeys(
     books: List<BookSummary>,
     libraries: List<LibrarySummary>
@@ -1085,7 +1106,7 @@ internal fun NativeLibraryBrowserScreen(
         update = { browserRoute = browserRoute.copy(detailReturnDestination = it) }
     )
     var detailReturnDestination by detailReturnDestinationProperty
-    var pendingCellularDownload by remember { mutableStateOf<BookSummary?>(null) }
+    var pendingCellularDownload by remember { mutableStateOf<PendingCellularDownload?>(null) }
     var pendingCellularBulkDownload by remember { mutableStateOf<PendingBulkDownload?>(null) }
     var showCellularDownloadBlocked by remember { mutableStateOf(false) }
     var pendingLocalDelete by remember { mutableStateOf<BookSummary?>(null) }
@@ -1118,7 +1139,10 @@ internal fun NativeLibraryBrowserScreen(
             )
         ) {
             CellularDownloadDecision.START -> onDownload(book)
-            CellularDownloadDecision.ASK -> pendingCellularDownload = book
+            CellularDownloadDecision.ASK -> pendingCellularDownload = PendingCellularDownload(
+                book = book,
+                scope = PendingCellularDownloadScope.GROUP
+            )
             CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
         }
     }
@@ -1130,7 +1154,10 @@ internal fun NativeLibraryBrowserScreen(
             )
         ) {
             CellularDownloadDecision.START -> onDownloadSingleFile(book)
-            CellularDownloadDecision.ASK -> pendingCellularDownload = book
+            CellularDownloadDecision.ASK -> pendingCellularDownload = PendingCellularDownload(
+                book = book,
+                scope = PendingCellularDownloadScope.SINGLE_FILE
+            )
             CellularDownloadDecision.BLOCK -> showCellularDownloadBlocked = true
         }
     }
@@ -1340,7 +1367,8 @@ internal fun NativeLibraryBrowserScreen(
         }
     }
 
-    pendingCellularDownload?.let { book ->
+    pendingCellularDownload?.let { pending ->
+        val book = pending.book
         val isUpdate = book.hasDownloadUpdate
         AlertDialog(
             onDismissRequest = { pendingCellularDownload = null },
@@ -1353,7 +1381,11 @@ internal fun NativeLibraryBrowserScreen(
             confirmButton = {
                 TextButton(onClick = {
                     pendingCellularDownload = null
-                    onDownload(book)
+                    routePendingCellularDownload(
+                        pending = pending,
+                        onDownload = onDownload,
+                        onDownloadSingleFile = onDownloadSingleFile
+                    )
                 }) { Text(if (isUpdate) "Update local" else "Download") }
             },
             dismissButton = {

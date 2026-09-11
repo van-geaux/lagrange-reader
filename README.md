@@ -173,6 +173,8 @@ Useful verification commands are:
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
+Debug APKs are built for 64-bit ARM devices only (`arm64-v8a`); use the timestamped debug APK produced by `assembleDebug` for device handoff testing.
+
 For machine setup details and the manual test matrix, see [`docs/setup.md`](docs/setup.md) and [`docs/testing.md`](docs/testing.md).
 
 ## Design inspiration and attributions
