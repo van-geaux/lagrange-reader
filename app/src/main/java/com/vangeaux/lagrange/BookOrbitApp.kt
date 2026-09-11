@@ -951,7 +951,9 @@ private fun AudioReader(
                     file = file,
                     streamUrl = streamUrl,
                     initialPositionMs = state.lastKnownPosition,
-                    launchMode = state.launchMode
+                    launchMode = state.launchMode,
+                    audioFiles = state.audioFiles,
+                    aggregateDurationMs = state.audioTotalDurationMs
                 )
             } ?: ReadiumAudioOpenResult.Error(
                 "Audiobook preparation timed out. Try opening it again."

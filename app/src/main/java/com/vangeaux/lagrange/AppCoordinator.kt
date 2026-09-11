@@ -1137,10 +1137,14 @@ class AppCoordinator internal constructor(
                     null
                 }
                 val detailForOpen: BookDetailInfo? = when {
-                    launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
-                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    book.mediaKind == MediaKind.AUDIO && offlineOpen -> {
+                        repository.loadCachedBookDetail(book)
                     }
-                    book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty() -> {
+                    book.mediaKind == MediaKind.AUDIO -> {
+                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                            ?: repository.loadCachedBookDetail(book)
+                    }
+                    launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
                         runCatching { repository.loadBookDetail(book) }.getOrNull()
                     }
                     else -> null
@@ -1158,8 +1162,18 @@ class AppCoordinator internal constructor(
                         localPath = book.localPath ?: detailForOpen.book.localPath
                     ) ?: book
                 }
-                val audioFiles = if (book.mediaKind == MediaKind.AUDIO && !offlineOpen) {
-                    AudiobookTimeline.playableAudioFiles(detailForOpen?.availableFiles.orEmpty())
+                val audioFiles = if (book.mediaKind == MediaKind.AUDIO) {
+                    if (offlineOpen) {
+                        AudiobookTimeline.selectedLocalPlaybackAudioFiles(
+                            detailForOpen?.availableFiles.orEmpty(),
+                            book.fileId
+                        )
+                    } else {
+                        AudiobookTimeline.selectedPlaybackAudioFiles(
+                            detailForOpen?.availableFiles.orEmpty(),
+                            book.fileId
+                        )
+                    }
                 } else {
                     emptyList()
                 }
@@ -1176,8 +1190,15 @@ class AppCoordinator internal constructor(
                     book = progressBook,
                     localOnly = offlineOpen
                 )
+                val audioTotalDurationMs = detailForOpen
+                    ?.durationSeconds
+                    ?.takeIf { it > 0L }
+                    ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
                 presentationStarted = true
-                presentReaderState(preparedState, audioFiles)
+                presentReaderState(
+                    preparedState.copy(audioTotalDurationMs = audioTotalDurationMs),
+                    audioFiles
+                )
             }.onFailure { error ->
                 if (error.message == AUDIO_OPEN_CANCELLED_MESSAGE) {
                     return@onFailure

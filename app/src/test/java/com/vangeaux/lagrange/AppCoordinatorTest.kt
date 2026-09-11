@@ -104,6 +104,108 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `opening grouped audiobook passes complete selected format to playback`() = runTest {
+        val selectedBook = book.copy(
+            id = "audio-1",
+            fileId = "mp3-2",
+            title = "Sample Audiobook",
+            format = "mp3",
+            mediaKind = MediaKind.AUDIO,
+            streamUrl = "$serverUrl/api/v1/books/files/mp3-2/serve"
+        )
+        fun option(fileId: String, format: String, filename: String, groupingPath: String) = BookFileOption(
+            book = selectedBook.copy(
+                fileId = fileId,
+                format = format,
+                streamUrl = "$serverUrl/api/v1/books/files/$fileId/serve"
+            ),
+            filename = filename,
+            durationMs = 100_000L,
+            role = "content",
+            groupingPath = groupingPath
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(
+                book = selectedBook,
+                durationSeconds = 801L,
+                availableFiles = listOf(
+                    option("mp3-1", "mp3", "Chapter 01.mp3", "books/sample/CD 1"),
+                    option("mp3-2", "mp3", "Chapter 02.mp3", "books/sample/CD 1"),
+                    option("mp3-3", "mp3", "Chapter 01.mp3", "books/sample/CD 2"),
+                    option("m4b", "m4b", "Sample Audiobook.m4b", "books/sample")
+                )
+            ),
+            buildReaderResult = ReaderState(book = selectedBook, streamUrl = selectedBook.streamUrl)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        var openedState: ReaderState? = null
+        coordinator.setAudioPlaybackOpener { state, _ ->
+            openedState = state
+            true
+        }
+
+        coordinator.openBook(selectedBook)
+        advanceUntilIdle()
+
+        assertEquals(listOf("mp3-1", "mp3-2", "mp3-3"), openedState?.audioFiles?.map { it.fileId })
+        assertEquals(801_000L, openedState?.audioTotalDurationMs)
+    }
+
+    @Test
+    fun `cached grouped audiobook passes complete local-capable playlist to playback`() = runTest {
+        val selectedBook = book.copy(
+            id = "audio-1",
+            fileId = "mp3-2",
+            title = "Downloaded Audiobook",
+            format = "mp3",
+            mediaKind = MediaKind.AUDIO
+        )
+        fun option(fileId: String, filename: String) = BookFileOption(
+            book = selectedBook.copy(
+                fileId = fileId,
+                streamUrl = "https://server.example.test/files/$fileId"
+            ),
+            filename = filename,
+            durationMs = 100_000L,
+            role = "content"
+        )
+        val detail = BookDetailInfo(
+            book = selectedBook,
+            durationSeconds = 200L,
+            availableFiles = listOf(
+                option("mp3-1", "Chapter 01.mp3"),
+                option("mp3-2", "Chapter 02.mp3")
+            )
+        )
+        val repository = FakeBookOrbitDataSource(
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(selectedBook),
+                isOfflineSnapshot = true
+            ),
+            cachedBookDetailResult = detail,
+            buildReaderResult = ReaderState(book = selectedBook)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        var openedState: ReaderState? = null
+        coordinator.setAudioPlaybackOpener { state, _ ->
+            openedState = state
+            true
+        }
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        coordinator.openBook(selectedBook)
+        advanceUntilIdle()
+
+        assertEquals(listOf("mp3-1", "mp3-2"), openedState?.audioFiles?.map { it.fileId })
+        assertTrue(openedState?.audioFiles?.all { it.book.streamUrl != null } == true)
+        assertEquals(200_000L, openedState?.audioTotalDurationMs)
+    }
+
+    @Test
     fun `loadBrowser restores persisted interrupted download as failed metadata row`() = runTest {
         val interrupted = DownloadRecord(
             serverUrl = serverUrl,
@@ -2734,6 +2836,7 @@ private class FakeBookOrbitDataSource(
     var sessionStateSequence: List<SessionState> = emptyList(),
     var sessionStateGate: CompletableDeferred<Unit>? = null,
     var cachedBrowserState: BrowserState? = null,
+    var cachedBookDetailResult: BookDetailInfo? = null,
     var restoreActiveReaderLocalOnlyResult: ReaderState? = null,
     var restoreActiveReaderResult: ReaderState? = null,
     var buildReaderResult: ReaderState = ReaderState(
@@ -2892,6 +2995,8 @@ private class FakeBookOrbitDataSource(
     override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = interruptedDownloads
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = bookDetailResult
+
+    override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = cachedBookDetailResult
 
     override suspend fun loadReaderProgress(
         book: BookSummary,
