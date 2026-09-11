@@ -64,7 +64,7 @@ On a connected device or emulator, verify from Home, Library, Search, Series, Au
 - failed transfers show `Retry` and `Clear`;
 - downloaded books show `Delete local`;
 - Local books shows active/failed Downloads rows only when needed;
-- Local books Downloads can be expanded and collapsed; expanded rows scroll inside a body no taller than half the available screen, long book titles remain one line and marquee, each row shows the active physical filename beneath the shared title, the grouped logical Local book card shows the active sibling filename when it differs from the representative file, refresh the catalog and verify queued sibling rows survive, reload completed Local books and verify their physical filenames remain, and active-row `Cancel` is beside its progress bar;
+|- Local books Downloads can be expanded and collapsed; expanded rows scroll inside a body no taller than half the available screen, long book titles remain one line and marquee, each row shows the active physical filename beneath the shared title, the grouped logical Local book card shows the active sibling filename when it differs from the representative file, refresh the catalog and verify queued sibling rows survive, verify only the currently transferring row is labeled `Downloading` while queued rows are labeled `Waiting`, including when a second batch is added during an active transfer, reload completed Local books and verify their physical filenames remain, and active-row `Cancel` is beside its progress bar;
 - `Clear` and `Clear all` remove failed state without cancelling active transfers;
 - force-closing during a download restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;

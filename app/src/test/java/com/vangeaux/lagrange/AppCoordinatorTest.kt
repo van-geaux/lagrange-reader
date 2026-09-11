@@ -580,6 +580,26 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `queued batch preserves existing active file and queues every new file in order`() {
+        val first = BookSummary("library", "book-1", "file-1", "Part 1")
+        val second = BookSummary("library", "book-1", "file-2", "Part 2")
+        val state = BrowserState(
+            serverUrl = serverUrl,
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = emptyList(),
+            downloadingFileIds = setOf("file-active")
+        )
+
+        val projected = state.withQueuedDownloads(
+            listOf(ScheduledDownload(first, "file-1"), ScheduledDownload(second, "file-2"))
+        )
+
+        assertEquals(setOf("file-active"), projected.downloadingFileIds)
+        assertEquals(listOf("file-1", "file-2"), projected.queuedDownloadFileIds.toList())
+    }
+
+    @Test
     fun `download transfer rows prefer restored attempt metadata over unknown active files`() {
         val state = BrowserState(
             serverUrl = serverUrl,
