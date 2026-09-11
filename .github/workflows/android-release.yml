@@ -51,15 +51,20 @@ jobs:
           } > keystore.properties
 
       - name: Build signed release APK
-        run: ./gradlew assembleRelease --no-daemon --console=plain
+        run: ./gradlew assembleRelease -PreleaseAbiSplits --no-daemon --console=plain
 
-      - name: Prepare release asset
+      - name: Prepare release assets
         run: |
           release_version="${GITHUB_REF_NAME#v}"
-          release_apk="app/build/release-assets/Lagrange-${release_version}.apk"
-          mkdir -p "$(dirname "$release_apk")"
-          cp app/build/outputs/apk/release/app-release.apk "$release_apk"
-          echo "RELEASE_APK=$release_apk" >> "$GITHUB_ENV"
+          release_dir="app/build/release-assets"
+          output_dir="app/build/outputs/apk/release"
+          mkdir -p "$release_dir"
+          cp "$output_dir/app-universal-release.apk" "$release_dir/Lagrange-${release_version}.apk"
+          cp "$output_dir/app-arm64-v8a-release.apk" "$release_dir/Lagrange-${release_version}-arm.apk"
+          cp "$output_dir/app-x86-release.apk" "$release_dir/Lagrange-${release_version}-x86.apk"
+          cp "$output_dir/app-x86_64-release.apk" "$release_dir/Lagrange-${release_version}-x86_64.apk"
+          printf 'RELEASE_ASSETS=' >> "$GITHUB_ENV"
+          printf '%s\n' "$release_dir"/Lagrange-${release_version}.apk "$release_dir"/Lagrange-${release_version}-arm.apk "$release_dir"/Lagrange-${release_version}-x86.apk "$release_dir"/Lagrange-${release_version}-x86_64.apk | paste -sd ' ' - >> "$GITHUB_ENV"
 
       - name: Publish GitHub Release
         env:
@@ -68,4 +73,4 @@ jobs:
           release_version="${GITHUB_REF_NAME#v}"
           release_notes="docs/release-notes/v${release_version}.md"
           test -f "$release_notes" || { echo "Missing release notes: $release_notes" >&2; exit 1; }
-          gh release create "$GITHUB_REF_NAME" "$RELEASE_APK" --verify-tag --notes-file "$release_notes" --title "Lagrange ${release_version}"
+          gh release create "$GITHUB_REF_NAME" $RELEASE_ASSETS --verify-tag --notes-file "$release_notes" --title "Lagrange ${release_version}"

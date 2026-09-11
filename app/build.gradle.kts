@@ -26,13 +26,10 @@ android {
         applicationId = "com.vangeaux.lagrange"
         minSdk = 26
         targetSdk = 35
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 22
-        versionName = "1.5.1"
+        versionCode = 23
+        versionName = "1.5.2"
     }
 
     signingConfigs {
@@ -47,8 +44,24 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    val releaseAbiSplits = providers.gradleProperty("releaseAbiSplits").isPresent
+
+    splits {
+        abi {
+            isEnable = releaseAbiSplits
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 

@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
-[![Version 1.5.1](https://img.shields.io/badge/version-1.5.1-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.1)
+[![Version 1.5.2](https://img.shields.io/badge/version-1.5.2-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.2)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
@@ -161,7 +161,7 @@ The generated APK is:
 app/build/outputs/apk/release/app-release.apk
 ```
 
-For local builds, the signed APK is generated at `app/build/outputs/apk/release/app-release.apk`. Distributed APKs are published as GitHub Release assets. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
+For local builds, the signed APK is generated under `app/build/outputs/apk/release/`. Distributed APKs are published as GitHub Release assets. Starting with 1.5.2, releases provide `Lagrange-<version>.apk` as the normal combined download, plus `Lagrange-<version>-x86.apk`, `Lagrange-<version>-x86_64.apk`, and `Lagrange-<version>-arm.apk` for manual ABI selection. If you are unsure which ABI to use, download the plain `Lagrange-<version>.apk` file. Keep `release-key.jks` and `keystore.properties` backed up securely; they are intentionally ignored by Git.
 
 Useful verification commands are:
 

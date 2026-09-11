@@ -36,10 +36,19 @@ If a rename is required again in the future:
 
 ### Current version marker
 
-- current published release: `versionName 1.5.1`, `versionCode 22`
+- current published release: `versionName 1.5.2`, `versionCode 23`
 - update both values at the marked `versionCode`/`versionName` lines in [`app/build.gradle.kts`](../app/build.gradle.kts) when preparing a distributed build
 - the About screen reads `BuildConfig.VERSION_NAME`; do not hardcode a second version there
 - use the `1.x` minor-release line for additive feature releases and increment `versionCode` for every distributed build
+
+### Release APK assets
+
+- `Lagrange-<version>.apk`: combined APK for users who are unsure which ABI to choose
+- `Lagrange-<version>-x86.apk`: 32-bit x86 devices or emulators
+- `Lagrange-<version>-x86_64.apk`: 64-bit x86 devices or emulators
+- `Lagrange-<version>-arm.apk`: supported ARM devices
+
+Starting with Lagrange 1.5.2, the tag-triggered release workflow publishes these ABI-specific assets together. Keep the plain combined asset as the default download.
 
 ## Signing strategy
 
