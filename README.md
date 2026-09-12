@@ -14,9 +14,11 @@ An offline-first Android reader for BookOrbit.
 
 </div>
 
-Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It started with a simple personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
+Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It began with a personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
-Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. BookOrbit supplies the authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
+It is now for anyone who already uses a BookOrbit server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
+
+BookOrbit remains the server and source of truth for your library. Lagrange is the Android client: it lets you browse, download, read, listen, and keep working when your connection is unavailable. When you reconnect, queued progress and other supported changes synchronize back to BookOrbit.
 
 This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
@@ -26,14 +28,57 @@ The following screenshots show the main reading and library experience. More scr
 
 
 ![home, reader, and audiobook player](screenshots/03-05-09-combined.jpg)
+<!-- <p align="center">
+  <img src="screenshots/03-home-screen.jpg" alt="Lagrange Reader home screen" width="220">
+  <img src="screenshots/05-reader-options.jpg" alt="Reader options" width="220">
+  <img src="screenshots/09-audiobook-player.jpg" alt="Audiobook player" width="220">
+</p> -->
 
 <details>
 <summary>More screenshots</summary>
 
 ![server, detail, option, achievement](screenshots/01-04-06-07-combined.jpg)
 ![download, player, read along, big](screenshots/08-09-10-12-combined.jpg)
+<!-- <p align="center">
+  <img src="screenshots/01-server-input.jpg" alt="Image 1" width="200">
+  <img src="screenshots/02-login-screen.jpg" alt="Image 2" width="200">
+  <img src="screenshots/04-book-detail.jpg" alt="Image 3" width="200">
+  <img src="screenshots/08-download-local.jpg" alt="Image 4" width="200">
+</p>
+
+<p align="center">
+  <img src="screenshots/06-app-options.jpg" alt="Image 5" width="200">
+  <img src="screenshots/07-achievements.jpg" alt="Image 6" width="200">
+  <img src="screenshots/10-audiobook-read-along.jpg" alt="Image 7" width="200">
+  <img src="screenshots/11-light-mode-library.jpg" alt="Image 7" width="200">
+</p> -->
 
 </details>
+
+## Who this is for
+
+Use Lagrange if you have:
+
+- access to a BookOrbit server and an account on that server;
+- an Android phone or tablet running Android 8.0 (API 26) or newer;
+- books, comics, PDFs, or audiobooks that you want available away from the server.
+
+Lagrange is not a standalone ebook reader and does not provide a BookOrbit server. If you do not already have BookOrbit access, start with the [BookOrbit project](https://github.com/BookOrbit).
+
+## Get started
+
+1. Install the latest [Lagrange release](https://github.com/van-geaux/lagrange-reader/releases).
+2. Open the app and enter the URL of your BookOrbit server. Prefer HTTPS, especially outside your home network.
+3. Sign in with the account provided by your BookOrbit administrator.
+4. Browse your libraries, open a book, or download content from Book Detail for offline use.
+
+The current sign-in flow supports username/password and an interim server-hosted sign-in WebView. Native OIDC/AppAuth is not yet available because BookOrbit mobile-redirect support is still pending. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
+
+## How the client works
+
+Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, durable offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. BookOrbit supplies authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
+
+The important boundary is simple: BookOrbit stays authoritative, while Lagrange maintains useful local state so reading and listening can continue through unreliable connectivity. This also means Lagrange does not attempt to replace BookOrbit's administration, integrations, or web interface.
 
 ## Features
 
@@ -57,6 +102,12 @@ The following screenshots show the main reading and library experience. More scr
 | Audiobooks supported by BookOrbit | Yes | Yes | Readium audio playback with chapters, speed control, seeking, and resume. |
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
+
+## BookOrbit compatibility
+
+Lagrange targets the BookOrbit API used by the current 1.5.2 release. The implemented API behavior is documented in [`docs/bookorbit-api.md`](docs/bookorbit-api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
+
+There is not yet a published BookOrbit server-version compatibility range. Server administrators should review the release notes and API documentation before upgrading a production BookOrbit instance, and report incompatibilities through [GitHub Issues](https://github.com/van-geaux/lagrange-reader/issues). Native mobile OIDC redirects are a known upstream compatibility gap; the interim WebView sign-in remains the supported path for that scenario.
 
 ## Sync accuracy by format
 
