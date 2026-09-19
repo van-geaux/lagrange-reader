@@ -14,11 +14,7 @@ An offline-first Android reader for BookOrbit.
 
 </div>
 
-> **BookOrbit compatibility**
->
-> Lagrange Reader `v1.5.3` supports the dedicated audiobook streaming API introduced in BookOrbit `v2.10.0`, including remote single-file M4B and multipart MP3 playback.
->
-> The generic file-serving flow remains used for non-audio formats.
+> **BookOrbit compatibility:** Lagrange Reader `v1.5.3` supports BookOrbit servers from `v2.0.1` through the current `v2.10.0` API, including remote single-file M4B and multipart MP3 playback.
 
 Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It began with a personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
@@ -111,9 +107,17 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 ## BookOrbit compatibility
 
-Lagrange targets the BookOrbit API used by the current 1.5.3 release. The implemented API behavior is documented in [`docs/bookorbit-api.md`](docs/bookorbit-api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
+Lagrange targets the BookOrbit API used by the current `v1.5.3` release. The implemented API behavior is documented in [`docs/bookorbit-api.md`](docs/bookorbit-api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
 
-There is not yet a published BookOrbit server-version compatibility range. Server administrators should review the release notes and API documentation before upgrading a production BookOrbit instance, and report incompatibilities through [GitHub Issues](https://github.com/van-geaux/lagrange-reader/issues). Native mobile OIDC redirects are a known upstream compatibility gap; the interim WebView sign-in remains the supported path for that scenario.
+The compatibility table below is based on the tagged BookOrbit server history and the API change introduced in [BookOrbit's dedicated audiobook playback commit](https://github.com/BookOrbit/bookorbit/commit/ceda7428b0d1b8c43db59d266ca8318d9714c8b0). It describes the supported API boundary, not a complete end-to-end test matrix for every server release.
+
+| BookOrbit server | Lagrange capabilities |
+| --- | --- |
+| `v2.10.0+` | Library and book browsing, non-audio online content, downloads and offline reading, progress and status synchronization, reading sessions, achievements, statistics where supported, and remote audiobook playback through the dedicated manifest, asset-content, and playback-state APIs. |
+| `v2.0.1`–`v2.9.x` | Library and book browsing, generic online content serving, downloads and offline reading, progress and status synchronization, reading sessions, achievements, statistics where supported, and audiobook playback through the pre-`v2.10.0` generic file-serving API. |
+| Earlier than `v2.0.1` | Not verified. |
+
+Native mobile OIDC redirects are a known upstream compatibility gap; the interim WebView sign-in remains the supported path for that scenario. Server administrators should review the [BookOrbit release history](https://github.com/BookOrbit/bookorbit/releases) and API documentation before upgrading a production instance, and report incompatibilities through [GitHub Issues](https://github.com/van-geaux/lagrange-reader/issues).
 
 ## Sync accuracy by format
 
