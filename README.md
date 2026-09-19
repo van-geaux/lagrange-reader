@@ -14,8 +14,6 @@ An offline-first Android reader for BookOrbit.
 
 </div>
 
-> **BookOrbit compatibility:** Lagrange Reader `v1.5.3` supports BookOrbit servers from `v2.0.1` through the current `v2.10.0` API, including remote single-file M4B and multipart MP3 playback.
-
 Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It began with a personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
 
 It is now for anyone who already uses a BookOrbit server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
