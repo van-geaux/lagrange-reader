@@ -375,27 +375,44 @@ If this non-audio progress endpoint returns 404 for a queued event, the client t
 
 ### Audiobook progress
 
-Write endpoint:
+Audiobook media is served through the dedicated audiobook API. The generic file-serving endpoint remains the contract for EPUB, PDF, comic, and other non-audio files, but it returns 404 for audiobook assets on BookOrbit v2.10.0 and later.
+
+Manifest endpoint:
 
 ```text
-PATCH /api/v1/books/{id}/audio-progress
+GET /api/v1/audiobooks/{bookId}/manifest
 ```
 
-Authoritative reader-hydration endpoint:
+The manifest is authoritative for audiobook asset ordering, format, duration, and total duration. Each asset has an opaque `assetId`; it must not replace the stable BookOrbit `fileId` used by Lagrange for progress identity and local/downloaded state. Remote content is requested with:
 
 ```text
-GET /api/v1/books/{bookId}/audio-progress
+GET /api/v1/audiobooks/{bookId}/assets/{assetId}/content
 ```
 
-The response supplies `currentFileId`, `positionSeconds`, and `percentage`. The client applies the audio progress only when `currentFileId` matches the selected file; otherwise it preserves the selected file's existing progress. Incomplete responses preserve fields that were already present locally. Fractional `positionSeconds` values are converted to the reader's millisecond position, and this volatile progress remains outside the metadata detail cache.
+The Android client maps the manifest's ordered audio assets to the ordered audio files in the book detail response, then creates one Media3 playlist item per asset. This preserves single-file M4B playback and multipart MP3 ordering, next/previous transitions, aggregate duration, seeking, and resume. Local/downloaded audiobook playback continues to use its local file path and does not use these URLs.
+
+Playback-state endpoints:
+
+```text
+GET    /api/v1/audiobooks/{bookId}/playback-state
+PUT    /api/v1/audiobooks/{bookId}/playback-state
+DELETE /api/v1/audiobooks/{bookId}/playback-state
+```
+
+The PUT body contains the opaque `assetId`, `positionMs`, `capturedAt`, client-generated `operationId`, the server `baseRevision`, and the manifest `manifestRevision`. The server validates the manifest revision and asset identity, then returns the updated revision. Lagrange persists the asset ID and manifest revision with queued progress while retaining the physical file ID as the durable progress key.
+
+The GET response supplies `assetId`, `positionMs`, `percentage`, `revision`, and `manifestRevision`. Lagrange maps the returned asset back to the corresponding ordered audio file before restoring playback. A missing playback state is treated as no remote resume state. DELETE clears the book-scoped audiobook playback state.
 
 DTO shape:
 
 ```json
 {
-  "percentage": 50,
-  "currentFileId": 123,
-  "positionSeconds": 120.5
+  "assetId": "aud_opaque_asset_id",
+  "positionMs": 120500,
+  "capturedAt": "ISO-8601 timestamp",
+  "operationId": "client-generated UUID",
+  "baseRevision": 3,
+  "manifestRevision": "manifest revision hash"
 }
 ```
 
@@ -454,6 +471,5 @@ The Android client parses `summary` fields `trackedBooks`, `startedBooks`, `inPr
 
 ## Open items
 
-- Confirm multi-file audiobook handling in the Android client
 - Confirm whether session cookies alone are sufficient in all OIDC flows
 - Expand the Statistics screen with additional validated metrics such as heatmap, source distribution, and peak-hours when their UI requirements are prioritized

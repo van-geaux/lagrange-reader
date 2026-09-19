@@ -116,20 +116,26 @@ class ProgressPercentNormalizationTest {
     }
 
     @Test
-    fun `audio reset saves explicit zero progress`() {
+    fun `audio reset deletes dedicated audiobook playback state`() {
         val request = buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = "91"))
 
-        assertEquals("/api/v1/books/41/audio-progress", request?.path)
-        assertEquals("PATCH", request?.method)
-        assertEquals(0.0, request?.payload?.getDouble("percentage"))
-        assertEquals(91, request?.payload?.getInt("currentFileId"))
-        assertEquals(0.0, request?.payload?.getDouble("positionSeconds"))
+        assertEquals("/api/v1/audiobooks/41/playback-state", request?.path)
+        assertEquals("DELETE", request?.method)
+        assertEquals(null, request?.payload)
+    }
+
+    @Test
+    fun `audio reset is book scoped even without a selected file`() {
+        val request = buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = null))
+
+        assertEquals("/api/v1/audiobooks/41/playback-state", request?.path)
+        assertEquals("DELETE", request?.method)
     }
 
     @Test
     fun `reset requires a valid file id`() {
         assertEquals(null, buildProgressResetRequest(book(mediaKind = MediaKind.EPUB, fileId = null)))
-        assertEquals(null, buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = "not-a-number")))
+        assertEquals("/api/v1/audiobooks/41/playback-state", buildProgressResetRequest(book(mediaKind = MediaKind.AUDIO, fileId = "not-a-number"))?.path)
     }
 
     @Test
