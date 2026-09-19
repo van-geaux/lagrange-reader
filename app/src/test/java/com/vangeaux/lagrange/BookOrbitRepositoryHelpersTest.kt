@@ -9,6 +9,35 @@ import org.junit.Test
 
 class BookOrbitRepositoryHelpersTest {
     @Test
+    fun `audiobook manifest preserves asset ordering and metadata`() {
+        val manifest = BookOrbitPayloadParser.parseAudiobookManifest(
+            """{
+                "revision":"rev-1",
+                "assets":[
+                    {"assetId":"aud-b","sequence":1,"format":"mp3","durationMs":2000,"sizeBytes":20,"etag":"b"},
+                    {"assetId":"aud-a","sequence":0,"format":"mp3","durationMs":1000,"sizeBytes":10,"etag":"a"}
+                ],
+                "chapters":[{"title":"Intro","startMs":0}],
+                "totalDurationMs":3000
+            }"""
+        )
+
+        assertEquals("rev-1", manifest.revision)
+        assertEquals(listOf("aud-b", "aud-a"), manifest.assets.map { it.assetId })
+        assertEquals(2000L, manifest.assets[0].durationMs)
+        assertEquals("Intro", manifest.chapters.single().title)
+        assertEquals(3000L, manifest.totalDurationMs)
+    }
+
+    @Test
+    fun `audiobook content URL uses opaque asset identity`() {
+        assertEquals(
+            "https://bookorbit.example/api/v1/audiobooks/36463/assets/aud_public/content",
+            buildAudiobookAssetUrl("https://bookorbit.example/", "36463", "aud_public")
+        )
+    }
+
+    @Test
     fun `reading session payload matches the BookOrbit file session contract`() {
         val payload = ReadingSessionPayload(
             sessionId = "session-1",

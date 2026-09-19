@@ -121,6 +121,30 @@ data class AudiobookChapter(
     val startMs: Long
 )
 
+internal data class AudiobookManifestAsset(
+    val assetId: String,
+    val sequence: Int,
+    val format: String,
+    val durationMs: Long?,
+    val sizeBytes: Long?,
+    val etag: String?
+)
+
+internal data class AudiobookManifest(
+    val revision: String,
+    val assets: List<AudiobookManifestAsset>,
+    val chapters: List<AudiobookChapter> = emptyList(),
+    val totalDurationMs: Long = 0L
+)
+
+internal data class AudiobookPlaybackState(
+    val assetId: String,
+    val positionMs: Long,
+    val percentage: Float?,
+    val revision: Int,
+    val manifestRevision: String
+)
+
 data class LibrarySummary(
     val id: String,
     val name: String,
@@ -138,6 +162,8 @@ data class BookSummary(
     val format: String? = null,
     val mediaKind: MediaKind = MediaKind.UNKNOWN,
     val streamUrl: String? = null,
+    val audioAssetId: String? = null,
+    val audioManifestRevision: String? = null,
     val downloadUrl: String? = null,
     val coverUrl: String? = null,
     val localPath: String? = null,
@@ -209,7 +235,9 @@ data class BookFileOption(
     val role: String? = null,
     val updatedAtMillis: Long? = null,
     val durationMs: Long? = null,
-    val groupingPath: String? = null
+    val groupingPath: String? = null,
+    val audioAssetId: String? = null,
+    val audioManifestRevision: String? = null
 ) {
     val fileId: String? get() = book.fileId
     val format: String? get() = book.format
@@ -740,7 +768,9 @@ data class ProgressUpdate(
     val positionMs: Long,
     val pageIndex: Int,
     val progressPercent: Float?,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val audioAssetId: String? = null,
+    val audioManifestRevision: String? = null
 )
 
 enum class ServerReadingHistoryStatus {

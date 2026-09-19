@@ -1316,11 +1316,33 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         availableFiles: List<BookFileOption>
     ): BookSummary = withContext(Dispatchers.IO) {
         if (book.fileId == null) return@withContext book
-        val path = if (book.mediaKind == MediaKind.AUDIO) {
-            "/api/v1/books/${book.id}/audio-progress"
-        } else {
-            "/api/v1/books/${book.id}/progress"
+        if (book.mediaKind == MediaKind.AUDIO) {
+            val manifest = runCatching {
+                BookOrbitPayloadParser.parseAudiobookManifest(
+                    request("/api/v1/audiobooks/${book.id}/manifest", "GET", null)
+                )
+            }.getOrNull() ?: return@withContext book
+            val state = try {
+                BookOrbitPayloadParser.parseAudiobookPlaybackState(
+                    request("/api/v1/audiobooks/${book.id}/playback-state", "GET", null)
+                )
+            } catch (error: HttpRequestException) {
+                if (error.code == 404) return@withContext book
+                throw error
+            } ?: return@withContext book
+            val assetIndex = manifest.assets.sortedBy { it.sequence }
+                .indexOfFirst { it.assetId == state.assetId }
+            val matchedFile = availableFiles
+                .filter { it.mediaKind == MediaKind.AUDIO }
+                .getOrNull(assetIndex)
+                ?: return@withContext book
+            return@withContext matchedFile.book.copy(
+                audioChapters = book.audioChapters,
+                progressPositionMs = state.positionMs,
+                progressPercent = state.percentage
+            )
         }
+        val path = "/api/v1/books/${book.id}/progress"
         val payload = try {
             request(path, "GET", null)
         } catch (error: HttpRequestException) {
@@ -1332,14 +1354,68 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 
     private suspend fun fetchAuthoritativeBookDetail(book: BookSummary): BookDetailInfo {
         val serverUrl = getServerUrl().orEmpty()
-        val detail = BookOrbitPayloadParser.parseBookDetail(
+        val parsedDetail = BookOrbitPayloadParser.parseBookDetail(
             fallback = book,
             payload = request("/api/v1/books/${book.id}", "GET", null),
             downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId },
             serverBase = serverBase()
         )
+        val detail = if (parsedDetail.book.mediaKind == MediaKind.AUDIO) {
+            runCatching {
+                applyAudiobookManifest(
+                    detail = parsedDetail,
+                    manifest = BookOrbitPayloadParser.parseAudiobookManifest(
+                        request("/api/v1/audiobooks/${book.id}/manifest", "GET", null)
+                    ),
+                    serverBase = serverBase()
+                )
+            }.getOrElse { parsedDetail }
+        } else {
+            parsedDetail
+        }
         bookDetailCacheStore.save(serverUrl, book.id, book.fileId, detail, book.updatedAtMillis)
         return detail
+    }
+
+    private fun applyAudiobookManifest(
+        detail: BookDetailInfo,
+        manifest: AudiobookManifest,
+        serverBase: String
+    ): BookDetailInfo {
+        val audioOptions = detail.availableFiles.filter { it.mediaKind == MediaKind.AUDIO }
+        val assets = manifest.assets.sortedBy { it.sequence }
+        val options = detail.availableFiles.map { option ->
+            val audioIndex = audioOptions.indexOf(option)
+            val asset = assets.getOrNull(audioIndex)
+            if (asset == null) {
+                option
+            } else {
+                option.copy(
+                    durationMs = asset.durationMs ?: option.durationMs,
+                    audioAssetId = asset.assetId,
+                    audioManifestRevision = manifest.revision,
+                    book = option.book.copy(
+                        streamUrl = buildAudiobookAssetUrl(
+                            serverBase = serverBase,
+                            bookId = detail.book.id,
+                            assetId = asset.assetId
+                        ),
+                        audioAssetId = asset.assetId,
+                        audioManifestRevision = manifest.revision,
+                        audioChapters = manifest.chapters.ifEmpty { option.book.audioChapters }
+                    )
+                )
+            }
+        }
+        val selected = options.firstOrNull { it.fileId == detail.book.fileId }
+        return detail.copy(
+            book = selected?.book ?: detail.book.copy(
+                audioChapters = manifest.chapters.ifEmpty { detail.book.audioChapters }
+            ),
+            availableFiles = options,
+            durationSeconds = manifest.totalDurationMs.takeIf { it > 0L }?.div(1_000L)
+                ?: detail.durationSeconds
+        )
     }
 
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo = withContext(Dispatchers.IO) {
@@ -2028,7 +2104,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             positionMs = position,
             pageIndex = pageIndex,
             progressPercent = normalizeStoredProgressPercent(progressPercent ?: book.progressPercent),
-            updatedAtMillis = System.currentTimeMillis()
+            updatedAtMillis = System.currentTimeMillis(),
+            audioAssetId = book.audioAssetId,
+            audioManifestRevision = book.audioManifestRevision
         )
         val lastSynced = lastSyncedProgressStore.read(update.progressKey())
         if (lastSynced != null && update.isStaleComparedTo(lastSynced)) {
@@ -2188,12 +2266,19 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             return@withContext ProgressPostResult.ALREADY_SYNCED
         }
 
-        val path = if (item.mediaKind == MediaKind.AUDIO) {
-            "/api/v1/books/${item.bookId}/audio-progress"
-        } else {
-            val fileId = item.fileId ?: return@withContext ProgressPostResult.INVALID
-            "/api/v1/books/files/$fileId/progress"
+        if (item.mediaKind == MediaKind.AUDIO) {
+            postAudiobookProgress(item)
+            buildReadStatusPayload(item)?.let { statusPayload ->
+                request(
+                    "/api/v1/books/${item.bookId}/status",
+                    "PATCH",
+                    statusPayload.toString().toRequestBody(JSON)
+                )
+            }
+            return@withContext ProgressPostResult.ACCEPTED
         }
+        val fileId = item.fileId ?: return@withContext ProgressPostResult.INVALID
+        val path = "/api/v1/books/files/$fileId/progress"
 
         val payload = buildProgressPayload(item) ?: return@withContext ProgressPostResult.INVALID
         val readStatusPayload = buildReadStatusPayload(item) ?: return@withContext ProgressPostResult.INVALID
@@ -2216,6 +2301,33 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             readStatusPayload.toString().toRequestBody(JSON)
         )
         ProgressPostResult.ACCEPTED
+    }
+
+    private suspend fun postAudiobookProgress(item: ProgressUpdate) {
+        val assetId = item.audioAssetId
+            ?: throw IllegalStateException("Audiobook progress is missing its manifest asset identity")
+        val manifestRevision = item.audioManifestRevision
+            ?: throw IllegalStateException("Audiobook progress is missing its manifest revision")
+        val state = try {
+            BookOrbitPayloadParser.parseAudiobookPlaybackState(
+                request("/api/v1/audiobooks/${item.bookId}/playback-state", "GET", null)
+            )
+        } catch (error: HttpRequestException) {
+            if (error.code == 404) null else throw error
+        }
+        val payload = JSONObject().apply {
+            put("assetId", assetId)
+            put("positionMs", item.positionMs)
+            put("capturedAt", Instant.ofEpochMilli(item.updatedAtMillis).toString())
+            put("operationId", item.id)
+            put("baseRevision", state?.revision ?: 0)
+            put("manifestRevision", manifestRevision)
+        }
+        request(
+            "/api/v1/audiobooks/${item.bookId}/playback-state",
+            "PUT",
+            payload.toString().toRequestBody(JSON)
+        )
     }
 
     private suspend fun postAnnotationMutation(item: AnnotationMutationPayload): AnnotationMutationPostResult =
@@ -3183,6 +3295,58 @@ internal object BookOrbitPayloadParser {
             }
         }
         return book.mergeReaderProgress(progress)
+    }
+
+    fun parseAudiobookManifest(payload: String): AudiobookManifest {
+        val root = extractObject(payload, "load audiobook manifest")
+        val assets = root.optJSONArray("assets")?.let { array ->
+            buildList {
+                for (index in 0 until array.length()) {
+                    val asset = array.optJSONObject(index) ?: continue
+                    val assetId = asset.stringValue("assetId", "asset_id") ?: continue
+                    val format = asset.stringValue("format") ?: continue
+                    add(
+                        AudiobookManifestAsset(
+                            assetId = assetId,
+                            sequence = asset.numberValue("sequence")?.toInt() ?: index,
+                            format = format,
+                            durationMs = asset.numberValue("durationMs", "duration_ms")?.toLong(),
+                            sizeBytes = asset.numberValue("sizeBytes", "size_bytes")?.toLong(),
+                            etag = asset.stringValue("etag")
+                        )
+                    )
+                }
+            }
+        }.orEmpty()
+        val chapters = root.optJSONArray("chapters")?.let { array ->
+            buildList {
+                for (index in 0 until array.length()) {
+                    val chapter = array.optJSONObject(index) ?: continue
+                    val title = chapter.stringValue("title") ?: continue
+                    val startMs = chapter.numberValue("startMs", "start_ms")?.toLong() ?: continue
+                    add(AudiobookChapter(title = title, startMs = startMs))
+                }
+            }
+        }.orEmpty()
+        return AudiobookManifest(
+            revision = root.stringValue("revision") ?: "",
+            assets = assets,
+            chapters = chapters,
+            totalDurationMs = root.numberValue("totalDurationMs", "total_duration_ms")?.toLong() ?: 0L
+        )
+    }
+
+    fun parseAudiobookPlaybackState(payload: String): AudiobookPlaybackState? {
+        if (payload.trim() == "null") return null
+        val root = extractObject(payload, "load audiobook playback state")
+        return AudiobookPlaybackState(
+            assetId = root.stringValue("assetId", "asset_id")
+                ?: throw UserFacingException("BookOrbit returned no audiobook asset identity."),
+            positionMs = root.numberValue("positionMs", "position_ms")?.toLong() ?: 0L,
+            percentage = root.numberValue("percentage")?.toFloat()?.coerceIn(0f, 100f),
+            revision = root.numberValue("revision")?.toInt() ?: 0,
+            manifestRevision = root.stringValue("manifestRevision", "manifest_revision").orEmpty()
+        )
     }
 
     fun parseLibraryBooksPage(
@@ -4439,23 +4603,16 @@ internal data class ProgressResetRequest(
 )
 
 internal fun buildProgressResetRequest(book: BookSummary): ProgressResetRequest? {
-    val fileId = book.fileId ?: return null
-    if (book.mediaKind != MediaKind.AUDIO) {
+    if (book.mediaKind == MediaKind.AUDIO) {
         return ProgressResetRequest(
-            path = "/api/v1/books/files/$fileId/progress",
+            path = "/api/v1/audiobooks/${book.id}/playback-state",
             method = "DELETE"
         )
     }
-
-    val numericFileId = fileId.toIntOrNull() ?: return null
+    val fileId = book.fileId ?: return null
     return ProgressResetRequest(
-        path = "/api/v1/books/${book.id}/audio-progress",
-        method = "PATCH",
-        payload = JSONObject().apply {
-            put("percentage", 0.0)
-            put("currentFileId", numericFileId)
-            put("positionSeconds", 0.0)
-        }
+        path = "/api/v1/books/files/$fileId/progress",
+        method = "DELETE"
     )
 }
 
@@ -4486,6 +4643,13 @@ internal fun buildReaderStreamUrl(
     }
     return "${serverBase.trimEnd('/')}/api/v1/books/files/$fileId/serve"
 }
+
+internal fun buildAudiobookAssetUrl(
+    serverBase: String,
+    bookId: String,
+    assetId: String
+): String =
+    "${serverBase.trimEnd('/')}/api/v1/audiobooks/$bookId/assets/$assetId/content"
 
 internal fun buildComicPagesUrl(
     fileId: String?,

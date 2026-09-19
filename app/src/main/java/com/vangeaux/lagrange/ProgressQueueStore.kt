@@ -114,6 +114,8 @@ class ProgressQueueStore private constructor(
                     put("pageIndex", item.pageIndex)
                     put("progressPercent", normalizeStoredProgressPercent(item.progressPercent))
                     put("updatedAtMillis", item.updatedAtMillis)
+                    put("audioAssetId", item.audioAssetId)
+                    put("audioManifestRevision", item.audioManifestRevision)
                 }
             )
         }
@@ -139,7 +141,9 @@ class ProgressQueueStore private constructor(
             positionMs = optLong("positionMs"),
             pageIndex = optInt("pageIndex"),
             progressPercent = if (has("progressPercent") && !isNull("progressPercent")) normalizeStoredProgressPercent(optDouble("progressPercent").toFloat()) else null,
-            updatedAtMillis = optLong("updatedAtMillis")
+            updatedAtMillis = optLong("updatedAtMillis"),
+            audioAssetId = optString("audioAssetId").takeIf { it.isNotBlank() },
+            audioManifestRevision = optString("audioManifestRevision").takeIf { it.isNotBlank() }
         )
     }
 
