@@ -443,8 +443,6 @@ internal fun ReadiumCompactAudioPlayer(
 
 internal fun formatPlaybackSpeed(speed: Double): String =
     String.format(Locale.US, "%.2f", speed)
-        .trimEnd('0')
-        .trimEnd('.')
 
 @Composable
 internal fun AudiobookPlaybackSpeedOverlay(
@@ -503,15 +501,17 @@ internal fun AudiobookPlaybackSpeedOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PlaybackSpeedAdjustmentButton(
-                            label = "<<",
+                            label = "−0.10",
                             description = "Decrease playback speed by 0.10",
+                            modifier = Modifier.weight(1f),
                             enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS >=
                                 AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
                             onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
                         )
                         PlaybackSpeedAdjustmentButton(
-                            label = "<",
+                            label = "−0.05",
                             description = "Decrease playback speed by 0.05",
+                            modifier = Modifier.weight(1f),
                             enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS >=
                                 AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
                             onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
@@ -522,15 +522,17 @@ internal fun AudiobookPlaybackSpeedOverlay(
                             style = MaterialTheme.typography.headlineSmall
                         )
                         PlaybackSpeedAdjustmentButton(
-                            label = ">",
+                            label = "+0.05",
                             description = "Increase playback speed by 0.05",
+                            modifier = Modifier.weight(1f),
                             enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS <=
                                 AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
                             onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
                         )
                         PlaybackSpeedAdjustmentButton(
-                            label = ">>",
+                            label = "+0.10",
                             description = "Increase playback speed by 0.10",
+                            modifier = Modifier.weight(1f),
                             enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS <=
                                 AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
                             onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
@@ -547,13 +549,14 @@ private fun PlaybackSpeedAdjustmentButton(
     label: String,
     description: String,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
-            .size(52.dp)
+        modifier = modifier
+            .height(52.dp)
             .semantics { contentDescription = description }
     ) {
         Text(label, style = MaterialTheme.typography.titleMedium)

@@ -33,12 +33,13 @@ class AppPreferencesStoreTest {
 
     @Test
     fun playbackSpeedLabelsAvoidFloatPrecisionNoise() {
-        assertEquals("1", formatPlaybackSpeed(1.0))
+        assertEquals("1.00", formatPlaybackSpeed(1.0))
         assertEquals("1.05", formatPlaybackSpeed(1.0499999523162842))
-        assertEquals("1.1", formatPlaybackSpeed(1.100000023841858))
+        assertEquals("1.10", formatPlaybackSpeed(1.100000023841858))
         assertEquals("1.15", formatPlaybackSpeed(1.149999976158142))
-        assertEquals("1.2", formatPlaybackSpeed(1.2000000476837158))
-        assertEquals("2", formatPlaybackSpeed(2.0))
+        assertEquals("1.20", formatPlaybackSpeed(1.2000000476837158))
+        assertEquals("2.00", formatPlaybackSpeed(2.0))
+        assertEquals("3.00", formatPlaybackSpeed(3.0))
     }
 
     @Test
