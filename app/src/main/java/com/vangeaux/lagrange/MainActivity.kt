@@ -127,8 +127,16 @@ class MainActivity : ComponentActivity() {
                                     persisted.offlineCacheCoversEnabled != appPreferences.offlineCacheCoversEnabled ||
                                     persisted.offlineCacheAutoRefreshEnabled !=
                                     appPreferences.offlineCacheAutoRefreshEnabled
+                            val audioInterruptionPolicyChanged =
+                                persisted.pauseAudiobookForAudioInterruptions !=
+                                    appPreferences.pauseAudiobookForAudioInterruptions
                             preferencesStore.save(persisted)
                             appPreferences = persisted
+                            if (audioInterruptionPolicyChanged) {
+                                audioPlaybackController.updateAudioInterruptionPolicy(
+                                    persisted.pauseAudiobookForAudioInterruptions
+                                )
+                            }
                             if (refreshPolicyChanged) {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }

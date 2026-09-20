@@ -28,6 +28,29 @@ class ReadiumAudioPlaybackTest {
         assertEquals(C.AUDIO_CONTENT_TYPE_SPEECH, attributes.contentType)
     }
 
+    @Test
+    fun audiobookAudioFocusPolicyUsesTheCurrentPreference() {
+        var pauseForAudioInterruptions: Boolean? = null
+
+        configureAudiobookAudioFocus(
+            setAudioAttributes = { _, shouldPause ->
+                pauseForAudioInterruptions = shouldPause
+            },
+            pauseForAudioInterruptions = false
+        )
+
+        assertEquals(false, pauseForAudioInterruptions)
+
+        configureAudiobookAudioFocus(
+            setAudioAttributes = { _, shouldPause ->
+                pauseForAudioInterruptions = shouldPause
+            },
+            pauseForAudioInterruptions = true
+        )
+
+        assertEquals(true, pauseForAudioInterruptions)
+    }
+
     private fun file(
         id: String,
         streamUrl: String?,
