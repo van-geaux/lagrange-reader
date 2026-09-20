@@ -235,7 +235,7 @@ internal fun ReadiumFullAudioPlayer(
     var intervalDirection by remember { mutableStateOf<SkipDirection?>(null) }
     var sleepMenuExpanded by remember { mutableStateOf(false) }
     var chapterMenuExpanded by remember { mutableStateOf(false) }
-    var speedMenuExpanded by remember { mutableStateOf(false) }
+    var speedOverlayVisible by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
     var showSessionHistory by remember { mutableStateOf(false) }
     var sessionHistory by remember(current.book.id, current.book.fileId) { mutableStateOf(emptyList<AudiobookSessionEvent>()) }
@@ -537,7 +537,7 @@ internal fun ReadiumFullAudioPlayer(
                 }
                 Box {
                     TextButton(
-                        onClick = { speedMenuExpanded = true },
+                        onClick = { speedOverlayVisible = true },
                         modifier = Modifier.width((104f * groupScale).coerceAtLeast(88f).dp).height(secondaryControlSize),
                         contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
@@ -550,14 +550,6 @@ internal fun ReadiumFullAudioPlayer(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text("Speed", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    DropdownMenu(expanded = speedMenuExpanded, onDismissRequest = { speedMenuExpanded = false }) {
-                        AUDIO_PLAYBACK_SPEED_OPTIONS.forEach { speed ->
-                            DropdownMenuItem(
-                                text = { Text("${formatPlaybackSpeed(speed.toDouble())}×") },
-                                onClick = { speedMenuExpanded = false; controller.setPlaybackSpeed(current.player, speed) }
-                            )
                         }
                     }
                 }
@@ -601,6 +593,13 @@ internal fun ReadiumFullAudioPlayer(
         }
     }
 
+    if (speedOverlayVisible) {
+        AudiobookPlaybackSpeedOverlay(
+            speed = playback.speed,
+            onSpeedChange = { speed -> controller.setPlaybackSpeed(current.player, speed) },
+            onDismiss = { speedOverlayVisible = false }
+        )
+    }
     if (showSessionHistory) {
         FullPlayerSessionHistoryDialog(
             bookTitle = current.book.title,
@@ -839,7 +838,7 @@ private fun FullPlayerLandscape(
     val sleepTimer by controller.sleepTimer.collectAsState()
     var showCoverViewer by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var chapterMenuExpanded by remember { mutableStateOf(false) }
-    var speedMenuExpanded by remember { mutableStateOf(false) }
+    var speedOverlayVisible by remember { mutableStateOf(false) }
     var sleepMenuExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
     var showSessionHistory by remember { mutableStateOf(false) }
@@ -1127,7 +1126,7 @@ private fun FullPlayerLandscape(
                         }
                     }
                     Box {
-                        TextButton(onClick = { speedMenuExpanded = true }, modifier = Modifier.width((96f * groupScale).coerceAtLeast(88f).dp).height(secondaryControlSize), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                        TextButton(onClick = { speedOverlayVisible = true }, modifier = Modifier.width((96f * groupScale).coerceAtLeast(88f).dp).height(secondaryControlSize), contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
@@ -1137,14 +1136,6 @@ private fun FullPlayerLandscape(
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Text("Speed", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                        DropdownMenu(expanded = speedMenuExpanded, onDismissRequest = { speedMenuExpanded = false }) {
-                            AUDIO_PLAYBACK_SPEED_OPTIONS.forEach { speed ->
-                                DropdownMenuItem(
-                                    text = { Text("${formatPlaybackSpeed(speed.toDouble())}×") },
-                                    onClick = { speedMenuExpanded = false; controller.setPlaybackSpeed(current.player, speed) }
-                                )
                             }
                         }
                     }
@@ -1177,6 +1168,13 @@ private fun FullPlayerLandscape(
             }
         }
         }
+    }
+    if (speedOverlayVisible) {
+        AudiobookPlaybackSpeedOverlay(
+            speed = playback.speed,
+            onSpeedChange = { speed -> controller.setPlaybackSpeed(current.player, speed) },
+            onDismiss = { speedOverlayVisible = false }
+        )
     }
     if (showSessionHistory) {
         FullPlayerSessionHistoryDialog(
