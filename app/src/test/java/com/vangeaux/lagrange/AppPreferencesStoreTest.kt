@@ -18,18 +18,17 @@ class AppPreferencesStoreTest {
     }
 
     @Test
-    fun audioPlaybackSpeedStaysWithinTheSupportedGlobalOptions() {
-        assertEquals(
-            listOf(0.75f, 1f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f, 1.5f, 2f),
-            AUDIO_PLAYBACK_SPEED_OPTIONS
-        )
-        assertEquals(1.5f, normalizeAudioPlaybackSpeed(1.5f))
-        assertEquals(0.75f, normalizeAudioPlaybackSpeed(0.6f))
-        assertEquals(1.05f, normalizeAudioPlaybackSpeed(1.04f))
-        assertEquals(1.10f, normalizeAudioPlaybackSpeed(1.08f))
-        assertEquals(1.15f, normalizeAudioPlaybackSpeed(1.13f))
-        assertEquals(1.20f, normalizeAudioPlaybackSpeed(1.18f))
-        assertEquals(2f, normalizeAudioPlaybackSpeed(2.5f))
+    fun audioPlaybackSpeedClampsAndAdjustsInHundredths() {
+        assertEquals(0.25f, normalizeAudioPlaybackSpeed(0.1f))
+        assertEquals(3f, normalizeAudioPlaybackSpeed(3.5f))
+        assertEquals(1.05f, normalizeAudioPlaybackSpeed(1.0499999f))
+        assertEquals(2.5f, normalizeAudioPlaybackSpeed(2.5f))
+        assertEquals(0.95f, adjustAudioPlaybackSpeed(1f, -AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS))
+        assertEquals(0.9f, adjustAudioPlaybackSpeed(1f, -AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS))
+        assertEquals(1.05f, adjustAudioPlaybackSpeed(1f, AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS))
+        assertEquals(1.1f, adjustAudioPlaybackSpeed(1f, AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS))
+        assertEquals(0.25f, adjustAudioPlaybackSpeed(0.25f, -10))
+        assertEquals(3f, adjustAudioPlaybackSpeed(3f, 10))
     }
 
     @Test

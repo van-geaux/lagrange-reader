@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -58,6 +60,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -190,7 +194,7 @@ internal fun ReadiumCompactAudioPlayer(
     val durationMs = playback.durationMs
     val scope = rememberCoroutineScope()
     var showChapterList by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
-    var speedMenuExpanded by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
+    var speedOverlayVisible by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var isSeeking by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var seekPositionMs by remember(current.book.id, current.book.fileId) {
         mutableStateOf(positionMs.toFloat())
@@ -386,27 +390,13 @@ internal fun ReadiumCompactAudioPlayer(
                     }
                     Box {
                         TextButton(
-                            onClick = { speedMenuExpanded = true },
+                            onClick = { speedOverlayVisible = true },
                             modifier = Modifier
                                 .height(40.dp)
                                 .semantics { contentDescription = "Select playback speed" },
                             contentPadding = PaddingValues(horizontal = 6.dp)
                         ) {
                             Text("${formatPlaybackSpeed(playback.speed.toDouble())}×")
-                        }
-                        DropdownMenu(
-                            expanded = speedMenuExpanded,
-                            onDismissRequest = { speedMenuExpanded = false }
-                        ) {
-                            AUDIO_PLAYBACK_SPEED_OPTIONS.forEach { speed ->
-                                DropdownMenuItem(
-                                    text = { Text("${formatPlaybackSpeed(speed.toDouble())}×") },
-                                    onClick = {
-                                        speedMenuExpanded = false
-                                        controller.setPlaybackSpeed(current.player, speed)
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -430,6 +420,14 @@ internal fun ReadiumCompactAudioPlayer(
         }
     }
 
+    if (speedOverlayVisible) {
+        AudiobookPlaybackSpeedOverlay(
+            speed = playback.speed,
+            onSpeedChange = { speed -> controller.setPlaybackSpeed(current.player, speed) },
+            onDismiss = { speedOverlayVisible = false }
+        )
+    }
+
     if (showChapterList) {
         FullPlayerChapterListSheet(
             chapters = chapters,
@@ -447,6 +445,120 @@ internal fun formatPlaybackSpeed(speed: Double): String =
     String.format(Locale.US, "%.2f", speed)
         .trimEnd('0')
         .trimEnd('.')
+
+@Composable
+internal fun AudiobookPlaybackSpeedOverlay(
+    speed: Float,
+    onSpeedChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedSpeed by remember { mutableFloatStateOf(normalizeAudioPlaybackSpeed(speed)) }
+    val speedHundredths = audioPlaybackSpeedHundredths(selectedSpeed)
+    val applyAdjustment: (Int) -> Unit = { deltaHundredths ->
+        val adjustedSpeed = adjustAudioPlaybackSpeed(selectedSpeed, deltaHundredths)
+        selectedSpeed = adjustedSpeed
+        onSpeedChange(adjustedSpeed)
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.62f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clickable(onClick = {}),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 8.dp,
+                shadowElevation = 16.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Playback speed",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close playback speed controls")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PlaybackSpeedAdjustmentButton(
+                            label = "<<",
+                            description = "Decrease playback speed by 0.10",
+                            enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS >=
+                                AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+                            onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
+                        )
+                        PlaybackSpeedAdjustmentButton(
+                            label = "<",
+                            description = "Decrease playback speed by 0.05",
+                            enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS >=
+                                AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+                            onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
+                        )
+                        Text(
+                            text = "${formatPlaybackSpeed(selectedSpeed.toDouble())}×",
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        PlaybackSpeedAdjustmentButton(
+                            label = ">",
+                            description = "Increase playback speed by 0.05",
+                            enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS <=
+                                AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
+                            onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
+                        )
+                        PlaybackSpeedAdjustmentButton(
+                            label = ">>",
+                            description = "Increase playback speed by 0.10",
+                            enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS <=
+                                AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
+                            onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackSpeedAdjustmentButton(
+    label: String,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(52.dp)
+            .semantics { contentDescription = description }
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
 
 internal fun formatPlaybackTime(millis: Long): String {
     val totalSeconds = (millis / 1000L).coerceAtLeast(0L)

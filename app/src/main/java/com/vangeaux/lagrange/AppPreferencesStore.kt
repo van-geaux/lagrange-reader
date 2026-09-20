@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.content.Context
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 enum class AppThemeMode(val displayName: String) {
     FOLLOW_SYSTEM("Follow system"),
@@ -281,24 +282,28 @@ internal fun libraryBrowseOptionsExpandedFromStorage(value: String?): Map<String
     }.getOrDefault(emptyMap())
 }
 
+internal const val AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS = 25
+internal const val AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS = 300
+internal const val AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS = 5
+internal const val AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS = 10
+
+internal fun audioPlaybackSpeedHundredths(value: Float): Int {
+    val safeValue = value.takeIf(Float::isFinite) ?: 1f
+    return (safeValue * 100f).roundToInt().coerceIn(
+        AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+        AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS
+    )
+}
+
 internal fun normalizeAudioPlaybackSpeed(value: Float): Float =
-    AUDIO_PLAYBACK_SPEED_OPTIONS
-        .minByOrNull { option -> kotlin.math.abs(option - value) }
-        ?: 1f
+    audioPlaybackSpeedHundredths(value) / 100f
+
+internal fun adjustAudioPlaybackSpeed(value: Float, deltaHundredths: Int): Float =
+    (audioPlaybackSpeedHundredths(value) + deltaHundredths)
+        .coerceIn(AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS, AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS)
+        .toFloat() / 100f
 
 internal fun audiobookAudioInterruptionPauseFromStorage(value: Boolean?): Boolean = value ?: true
-
-internal val AUDIO_PLAYBACK_SPEED_OPTIONS = listOf(
-    0.75f,
-    1f,
-    1.05f,
-    1.10f,
-    1.15f,
-    1.20f,
-    1.25f,
-    1.5f,
-    2f
-)
 
 internal val AUDIO_SKIP_SECONDS_OPTIONS = listOf(5, 10, 15, 30, 60)
 
