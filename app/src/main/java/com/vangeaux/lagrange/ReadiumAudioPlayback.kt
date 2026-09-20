@@ -92,6 +92,28 @@ internal fun audiobookMedia3AudioAttributes(): AudioAttributes =
         .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
         .build()
 
+internal fun configureAudiobookAudioFocus(
+    setAudioAttributes: (AudioAttributes, Boolean) -> Unit,
+    pauseForAudioInterruptions: Boolean
+) {
+    setAudioAttributes(
+        audiobookMedia3AudioAttributes(),
+        pauseForAudioInterruptions
+    )
+}
+
+internal fun applyAudiobookAudioFocusPolicy(
+    player: Player,
+    pauseForAudioInterruptions: Boolean
+) {
+    (player as? ExoPlayer)?.let { exoPlayer ->
+        configureAudiobookAudioFocus(
+            setAudioAttributes = exoPlayer::setAudioAttributes,
+            pauseForAudioInterruptions = pauseForAudioInterruptions
+        )
+    }
+}
+
 internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuration =
     ExoPlayerEngine.Configuration(
         seekBackwardIncrement = 10.seconds,
@@ -723,10 +745,7 @@ internal suspend fun openReadiumAudio(
                 }
             val player = navigator.asMedia3Player()
             (player as? ExoPlayer)?.apply {
-                setAudioAttributes(
-                    audiobookMedia3AudioAttributes(),
-                    pauseForAudioInterruptions
-                )
+                applyAudiobookAudioFocusPolicy(this, pauseForAudioInterruptions)
                 setHandleAudioBecomingNoisy(true)
             }
             ReadiumAudioOpenResult.Opened(
@@ -1083,6 +1102,14 @@ class ReadiumAudioPlaybackController internal constructor(
 
     internal fun hasActiveAudiobookSession(): Boolean = activeAudiobookSession
 
+    internal fun updateAudioInterruptionPolicy(pauseForAudioInterruptions: Boolean) {
+        scope.launch {
+            binder().session.value?.player?.let { player ->
+                applyAudiobookAudioFocusPolicy(player, pauseForAudioInterruptions)
+            }
+        }
+    }
+
     internal fun pause() {
         scope.launch {
             binder().session.value?.player?.pause()
@@ -1136,6 +1163,7 @@ class ReadiumAudioPlaybackController internal constructor(
         } else {
             prepareAudiobookPlaylist(audioFiles).files
         }
+        val pauseForAudioInterruptions = preferencesStore.read().pauseAudiobookForAudioInterruptions
         val matchingSession = serviceBinder.session.value?.takeIf { current ->
             current.book.libraryId == book.libraryId &&
                 current.book.id == book.id &&
@@ -1147,6 +1175,10 @@ class ReadiumAudioPlaybackController internal constructor(
         if (matchingSession != null) {
             return try {
                 withContext(Dispatchers.Main.immediate) {
+                    applyAudiobookAudioFocusPolicy(
+                        matchingSession.player,
+                        pauseForAudioInterruptions
+                    )
                     applyPersistedAudioPlaybackSpeed(matchingSession.player)
                     if (playWhenReady) matchingSession.player.play()
                     startProgressUpdates(matchingSession, recordInitialPlay = playWhenReady)
@@ -1163,7 +1195,6 @@ class ReadiumAudioPlaybackController internal constructor(
                 ReadiumAudioOpenResult.Error("Could not resume audiobook playback.")
             }
         }
-        val pauseForAudioInterruptions = preferencesStore.read().pauseAudiobookForAudioInterruptions
         val opened = try {
             withTimeoutOrNull(AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS) {
                 if (useSingleFileEngine) {
