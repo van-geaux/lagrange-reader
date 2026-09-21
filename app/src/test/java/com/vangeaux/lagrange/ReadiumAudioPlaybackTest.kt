@@ -319,6 +319,13 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
+    fun chapterProgressPercentUsesTheCurrentChapterDuration() {
+        assertEquals(25.0f, chapterProgressPercent(30_000L, 120_000L))
+        assertEquals(100.0f, chapterProgressPercent(150_000L, 120_000L))
+        assertNull(chapterProgressPercent(30_000L, 0L))
+    }
+
+    @Test
     fun supportedAudioExtensionsMapToReadiumMediaTypes() {
         assertEquals(MediaType.MP4, readiumAudioMediaType("book.m4b"))
         assertEquals(MediaType.MP4, readiumAudioMediaType("BOOK.M4A"))
