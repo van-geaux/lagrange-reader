@@ -256,6 +256,7 @@ class AppCoordinator internal constructor(
     private var loginRefreshInFlight = false
     private var loginSubmitInFlight = false
     private var serverSignInVerificationJob: Job? = null
+    private var oidcJob: Job? = null
     private var catalogLoadJob: Job? = null
     private var manualBrowserRefreshInFlight = false
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
@@ -462,6 +463,8 @@ class AppCoordinator internal constructor(
     fun clearServer() {
         scope.launch {
             acceptAudioProgress = false
+            oidcJob?.cancel()
+            oidcJob = null
             val oldServerUrl = repository.getServerUrl().orEmpty()
             _fullAudioPlayerBook.value = null
             runCatching { audioPlaybackCloser?.invoke() }
@@ -559,6 +562,113 @@ class AppCoordinator internal constructor(
         }
     }
 
+    fun openOidcSignIn() {
+        val current = _screen.value as? AppScreen.Login ?: return
+        if (current.oidcSignIn != null || current.isSubmitting) return
+        oidcJob?.cancel()
+        _screen.value = current.copy(
+            serverSignIn = null,
+            oidcSignIn = OidcSignInState(isLoading = true)
+        )
+        oidcJob = scope.launch {
+            try {
+                val providers = repository.loadOidcProviders()
+                updateOidcState { it.copy(providers = providers, isLoading = false) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                updateOidcState {
+                    it.copy(isLoading = false, error = userMessage(error, "Unable to load SSO providers."))
+                }
+            }
+        }
+    }
+
+    fun retryOidcSignIn() {
+        closeOidcSignIn()
+        openOidcSignIn()
+    }
+
+    fun closeOidcSignIn() {
+        oidcJob?.cancel()
+        oidcJob = null
+        val current = _screen.value as? AppScreen.Login ?: return
+        _screen.value = current.copy(oidcSignIn = null)
+    }
+
+    fun selectOidcProvider(provider: BookOrbitOidcProvider) {
+        val current = _screen.value as? AppScreen.Login ?: return
+        val state = current.oidcSignIn ?: return
+        if (state.isLoading || state.isExchanging) return
+        oidcJob?.cancel()
+        _screen.value = current.copy(
+            oidcSignIn = state.copy(isLoading = true, error = null, transaction = null)
+        )
+        oidcJob = scope.launch {
+            try {
+                val serverUrl = repository.getServerUrl().orEmpty()
+                val serverState = repository.requestOidcState(provider.slug)
+                val transaction = BookOrbitOidc.buildTransaction(
+                    provider = provider,
+                    serverUrl = serverUrl,
+                    state = serverState
+                ) ?: throw BookOrbitOidcException("The SSO server did not provide an authorization endpoint.")
+                updateOidcState { it.copy(isLoading = false, transaction = transaction) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                updateOidcState {
+                    it.copy(
+                        isLoading = false,
+                        transaction = null,
+                        error = userMessage(error, "Unable to start SSO sign-in.")
+                    )
+                }
+            }
+        }
+    }
+
+    fun handleOidcCallback(callbackUrl: String) {
+        val current = _screen.value as? AppScreen.Login ?: return
+        val state = current.oidcSignIn ?: return
+        val transaction = state.transaction ?: return
+        if (state.isExchanging) return
+        oidcJob?.cancel()
+        _screen.value = current.copy(
+            oidcSignIn = state.copy(transaction = null, isExchanging = true, error = null)
+        )
+        oidcJob = scope.launch {
+            try {
+                val callback = BookOrbitOidc.parseAndValidateCallback(
+                    callbackUrl = callbackUrl,
+                    expectedRedirectUri = transaction.redirectUri,
+                    expectedState = transaction.state
+                ).getOrThrow()
+                repository.exchangeOidcCallback(transaction, callback)
+                when (repository.getSessionState()) {
+                    SessionState.Authenticated -> {
+                        allowCachedLoginFallback = true
+                        resumeAfterLogin()
+                    }
+                    SessionState.Unauthenticated,
+                    SessionState.Unavailable -> throw LoginVerificationException()
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                updateOidcState {
+                    it.copy(isExchanging = false, error = userMessage(error, "Unable to complete SSO sign-in."))
+                }
+            }
+        }
+    }
+
+    private fun updateOidcState(transform: (OidcSignInState) -> OidcSignInState) {
+        val current = _screen.value as? AppScreen.Login ?: return
+        val state = current.oidcSignIn ?: return
+        _screen.value = current.copy(oidcSignIn = transform(state))
+    }
+
     fun onBrowserSessionAction() {
         scope.launch {
             val current = lastBrowserState
@@ -587,6 +697,8 @@ class AppCoordinator internal constructor(
     fun signOut() {
         scope.launch {
             acceptAudioProgress = false
+            oidcJob?.cancel()
+            oidcJob = null
             val serverUrl = repository.getServerUrl().orEmpty()
             _fullAudioPlayerBook.value = null
             runCatching { audioPlaybackCloser?.invoke() }
@@ -604,6 +716,8 @@ class AppCoordinator internal constructor(
     fun openServerSignIn() {
         scope.launch {
             val current = _screen.value as? AppScreen.Login ?: return@launch
+            oidcJob?.cancel()
+            oidcJob = null
             _screen.value = current.copy(serverSignIn = ServerSignInState())
             startServerSignInWatcher()
         }

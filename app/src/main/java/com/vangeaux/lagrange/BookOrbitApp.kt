@@ -287,7 +287,16 @@ private fun BookOrbitDestination(
             message = screen.message,
             onContinue = coordinator::saveServer
         )
-        is AppScreen.Login -> if (screen.serverSignIn != null) {
+        is AppScreen.Login -> if (screen.oidcSignIn != null) {
+            OidcSignInDialog(
+                serverUrl = screen.serverUrl,
+                state = screen.oidcSignIn,
+                onClose = coordinator::closeOidcSignIn,
+                onRetry = coordinator::retryOidcSignIn,
+                onProviderSelected = coordinator::selectOidcProvider,
+                onCallback = coordinator::handleOidcCallback
+            )
+        } else if (screen.serverSignIn != null) {
             ServerSignInDialog(
                 serverUrl = screen.serverUrl,
                 state = screen.serverSignIn,
@@ -302,7 +311,7 @@ private fun BookOrbitDestination(
                 isSubmitting = screen.isSubmitting,
                 onChangeServer = coordinator::clearServer,
                 onSubmit = coordinator::submitLogin,
-                onOpenServerSignIn = coordinator::openServerSignIn
+                onOpenOidcSignIn = coordinator::openOidcSignIn
             )
         }
         is AppScreen.Browser -> CompositionLocalProvider(

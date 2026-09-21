@@ -72,7 +72,7 @@ Lagrange is not a standalone ebook reader and does not provide a BookOrbit serve
 3. Sign in with the account provided by your BookOrbit administrator.
 4. Browse your libraries, open a book, or download content from Book Detail for offline use.
 
-The current sign-in flow supports username/password and an interim server-hosted sign-in WebView. Native OIDC/AppAuth is not yet available because BookOrbit mobile-redirect support is still pending. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
+The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and a generic server-hosted sign-in fallback. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
 
 ## How the client works
 
@@ -173,7 +173,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 
 | Capability | BookOrbit server/web platform | Lagrange Android client |
 | --- | --- | --- |
-| Authentication | Provides authenticated accounts, server sessions, configured OIDC providers, and public state/callback APIs; current stock server releases accept only the web callback. | Uses native username/password plus the implemented interim Open server sign-in WebView. Native AppAuth remains deferred until mobile redirect support is deployed; see [OIDC / SSO Authentication](docs/oidc-authentication.md). |
+| Authentication | Provides authenticated accounts, server sessions, configured OIDC providers, public state/callback APIs, and the HTTPS callback used by the WebView OIDC flow. | Uses username/password, explicit BookOrbit OIDC WebView sign-in, and generic Open server sign-in fallback. Native AppAuth remains deferred. |
 | Library and catalog | Owns libraries, books, authors, series, metadata, scanning, and catalog APIs. | Browses BookOrbit libraries and caches catalog data for offline fallback. |
 | Reading and listening | Serves book files, reader data, progress APIs, and audiobook media. | Provides native EPUB, PDF, comic, and audiobook readers with resume, themes, navigation, and playback controls. |
 | Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline, including CBR/CB7 files via client-side RAR4/RAR5/7z extraction into a cached CBZ. |
@@ -190,7 +190,7 @@ BookOrbit is the server and web platform; Lagrange is an independent Android cli
 Remaining follow-up work includes but is not limited to:
 
 - Support for additional book formats; MOBI, AZW, AZW3, and FB2 remain unsupported.
-- Implemented and user-validated the interim Open server sign-in WebView. Native AppAuth follows after BookOrbit mobile-redirect support from upstream PR #554 or an equivalent server change is deployed; see [OIDC / SSO Authentication](docs/oidc-authentication.md).
+- Implemented the explicit BookOrbit OIDC WebView flow and retained the generic Open server sign-in fallback. Real-provider/device validation remains required; native AppAuth is separate follow-up work.
 - Broader bulk actions for Local books beyond the implemented multi-select `Delete local` flow.
 
 More details are in the [Roadmap](docs/roadmap.md)

@@ -13,7 +13,8 @@ sealed interface AppScreen {
         val serverUrl: String,
         val message: String? = null,
         val isSubmitting: Boolean = false,
-        val serverSignIn: ServerSignInState? = null
+        val serverSignIn: ServerSignInState? = null,
+        val oidcSignIn: OidcSignInState? = null
     ) : AppScreen
 
     data class Browser(
@@ -32,5 +33,13 @@ sealed interface AppScreen {
 
 data class ServerSignInState(
     val isVerifying: Boolean = false,
+    val error: String? = null
+)
+
+data class OidcSignInState(
+    val providers: List<BookOrbitOidcProvider> = emptyList(),
+    val isLoading: Boolean = false,
+    val isExchanging: Boolean = false,
+    val transaction: BookOrbitOidcTransaction? = null,
     val error: String? = null
 )

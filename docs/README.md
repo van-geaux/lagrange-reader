@@ -12,7 +12,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [Testing](./testing.md) — current automated gate and manual validation procedures.
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
-- [OIDC / SSO Authentication](./oidc-authentication.md) — current interim flow and native AppAuth blocker.
+- [OIDC / SSO Authentication](./oidc-authentication.md) — explicit BookOrbit OIDC WebView flow, generic fallback, and native AppAuth status.
 - [Security Policy](../SECURITY.md) — responsible-disclosure guidance for security reports.
 
 ## Local operator documents
