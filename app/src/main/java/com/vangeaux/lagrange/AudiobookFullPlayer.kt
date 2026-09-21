@@ -91,6 +91,7 @@ import android.content.res.Configuration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -441,7 +442,10 @@ internal fun ReadiumFullAudioPlayer(
                 onSeekFinished = { requestSeek(overallSeekPosition.toLong()); isSeekingOverall = false },
                 leading = formatPlaybackTime(overallSeekPosition.toLong()),
                 trailing = "−${formatPlaybackTime((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L))}",
-                label = "Book progress",
+                label = formatFullPlayerProgressLabel(
+                    "Book progress",
+                    absoluteProgressPercent(overallSeekPosition.toLong(), playback.durationMs)
+                ),
                 layoutScale = groupScale,
                 description = "Seek through audiobook"
             )
@@ -455,7 +459,13 @@ internal fun ReadiumFullAudioPlayer(
                 },
                 leading = formatPlaybackTime(chapterSeekPosition.toLong()),
                 trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterSeekPosition).toLong().coerceAtLeast(0L))}",
-                label = "Chapter progress",
+                label = formatFullPlayerProgressLabel(
+                    "Chapter progress",
+                    chapterProgressPercent(
+                        chapterSeekPosition.toLong(),
+                        (chapterEndMs - chapterStartMs).coerceAtLeast(0L)
+                    )
+                ),
                 layoutScale = groupScale,
                 description = "Seek through current chapter",
                 enabled = bounds != null
@@ -1043,7 +1053,10 @@ private fun FullPlayerLandscape(
                     onSeekFinished = { requestSeek(overallPosition.toLong()); isSeekingOverall = false },
                     leading = formatPlaybackTime(overallPosition.toLong()),
                     trailing = "−${formatPlaybackTime((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L))}",
-                    label = "Book progress",
+                    label = formatFullPlayerProgressLabel(
+                        "Book progress",
+                        absoluteProgressPercent(overallPosition.toLong(), playback.durationMs)
+                    ),
                     layoutScale = groupScale,
                     description = "Seek through audiobook"
                 )
@@ -1057,7 +1070,13 @@ private fun FullPlayerLandscape(
                     },
                     leading = formatPlaybackTime(chapterPosition.toLong()),
                     trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterPosition).toLong().coerceAtLeast(0L))}",
-                    label = "Chapter progress",
+                    label = formatFullPlayerProgressLabel(
+                        "Chapter progress",
+                        chapterProgressPercent(
+                            chapterPosition.toLong(),
+                            (chapterEndMs - chapterStartMs).coerceAtLeast(0L)
+                        )
+                    ),
                     layoutScale = groupScale,
                     description = "Seek through current chapter",
                     enabled = chapterBoundsAvailable
@@ -1249,6 +1268,11 @@ internal fun fullPlayerGroupScale(availableHeightDp: Float, landscape: Boolean):
 
 internal fun formatFullPlayerSeriesIndex(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
+
+internal fun formatFullPlayerProgressLabel(label: String, percent: Float?): String =
+    percent?.let {
+        "$label · ${String.format(Locale.US, "%.0f", it.coerceIn(0f, 100f))}%"
+    } ?: label
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

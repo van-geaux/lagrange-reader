@@ -382,6 +382,9 @@ internal fun absoluteProgressPercent(absolutePositionMs: Long, totalDurationMs: 
         .toFloat()
 }
 
+internal fun chapterProgressPercent(positionMs: Long, chapterDurationMs: Long): Float? =
+    absoluteProgressPercent(positionMs, chapterDurationMs)
+
 @UnstableApi
 internal suspend fun openDirectMedia3Audio(
     application: Application,
