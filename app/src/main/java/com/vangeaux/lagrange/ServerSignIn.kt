@@ -1,8 +1,12 @@
 package com.vangeaux.lagrange
 
+import android.graphics.Bitmap
 import android.net.http.SslError
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -196,6 +200,224 @@ internal fun ServerSignInDialog(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.padding(bottom = 8.dp))
                             Text("Checking your sign-in with the server…")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun OidcSignInDialog(
+    serverUrl: String,
+    state: OidcSignInState,
+    onClose: () -> Unit,
+    onRetry: () -> Unit,
+    onProviderSelected: (BookOrbitOidcProvider) -> Unit,
+    onCallback: (String) -> Unit
+) {
+    val transaction = state.transaction
+    val currentOnCallback by rememberUpdatedState(onCallback)
+    var isLoading by remember(transaction?.authorizationUrl) { mutableStateOf(transaction != null) }
+    var loadError by remember(transaction?.authorizationUrl) { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                BookOrbitTopBar(
+                    title = "SSO sign-in",
+                    showBrand = false,
+                    actions = { TextButton(onClick = onClose) { Text("Close") } }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+            ) {
+                if (transaction == null) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        when {
+                            state.isExchanging -> {
+                                CircularProgressIndicator()
+                                Text("Completing sign-in…")
+                            }
+                            state.isLoading -> {
+                                CircularProgressIndicator()
+                                Text("Loading available sign-in providers…")
+                            }
+                            state.providers.isNotEmpty() -> {
+                                Text("Choose a sign-in provider.")
+                                state.providers.forEach { provider ->
+                                    Button(
+                                        onClick = { onProviderSelected(provider) },
+                                        enabled = !state.isExchanging,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Sign in with ${provider.label}")
+                                    }
+                                }
+                            }
+                            else -> {
+                                OrbitMessage(
+                                    state.error ?: "No SSO provider is enabled on this server.",
+                                    tone = OrbitMessageTone.ERROR
+                                )
+                                Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            val container = FrameLayout(context)
+                            var callbackHandled = false
+                            lateinit var chromeClient: WebChromeClient
+
+                            fun interceptCallback(url: String): Boolean {
+                                if (callbackHandled) return true
+                                if (!BookOrbitOidc.isExactCallbackUrl(url, transaction.redirectUri)) {
+                                    return false
+                                }
+                                callbackHandled = true
+                                currentOnCallback(url)
+                                return true
+                            }
+
+                            fun createWebView(): WebView = WebView(context).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.javaScriptCanOpenWindowsAutomatically = true
+                                settings.setSupportMultipleWindows(true)
+                                CookieManager.getInstance().setAcceptCookie(true)
+                                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                webChromeClient = chromeClient
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView,
+                                        request: WebResourceRequest
+                                    ): Boolean = interceptCallback(request.url.toString())
+
+                                    override fun onPageStarted(
+                                        view: WebView,
+                                        url: String,
+                                        favicon: Bitmap?
+                                    ) {
+                                        super.onPageStarted(view, url, favicon)
+                                        if (interceptCallback(url)) view.stopLoading()
+                                    }
+
+                                    override fun onPageFinished(view: WebView, url: String) {
+                                        super.onPageFinished(view, url)
+                                        isLoading = false
+                                        if (isSameOrigin(url, serverUrl)) {
+                                            CookieManager.getInstance().flush()
+                                        }
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView,
+                                        request: WebResourceRequest,
+                                        error: WebResourceError
+                                    ) {
+                                        super.onReceivedError(view, request, error)
+                                        if (request.isForMainFrame) {
+                                            isLoading = false
+                                            loadError = "The SSO sign-in page could not be loaded. Check your connection and try again."
+                                        }
+                                    }
+
+                                    override fun onReceivedSslError(
+                                        view: WebView,
+                                        handler: SslErrorHandler,
+                                        error: SslError
+                                    ) {
+                                        handler.cancel()
+                                        isLoading = false
+                                        loadError = "The server's TLS certificate could not be validated."
+                                    }
+                                }
+                            }
+
+                            chromeClient = object : WebChromeClient() {
+                                override fun onCreateWindow(
+                                    view: WebView,
+                                    isDialog: Boolean,
+                                    isUserGesture: Boolean,
+                                    resultMsg: android.os.Message
+                                ): Boolean {
+                                    val popup = createWebView()
+                                    container.addView(
+                                        popup,
+                                        FrameLayout.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                    )
+                                    val transport = resultMsg.obj as WebView.WebViewTransport
+                                    transport.webView = popup
+                                    resultMsg.sendToTarget()
+                                    return true
+                                }
+
+                                override fun onCloseWindow(window: WebView) {
+                                    container.removeView(window)
+                                    window.destroy()
+                                }
+                            }
+
+                            val mainWebView = createWebView()
+                            container.addView(
+                                mainWebView,
+                                FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            )
+                            mainWebView.loadUrl(transaction.authorizationUrl)
+                            container
+                        }
+                    )
+                    if (isLoading || state.isExchanging) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator()
+                            if (state.isExchanging) {
+                                Text("Completing sign-in…", modifier = Modifier.padding(top = 8.dp))
+                            }
+                        }
+                    }
+                    val message = loadError ?: state.error
+                    if (message != null) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OrbitMessage(message, tone = OrbitMessageTone.ERROR)
+                            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                                Text("Retry")
+                            }
                         }
                     }
                 }

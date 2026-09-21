@@ -210,6 +210,16 @@ interface BookOrbitDataSource {
     suspend fun setSelectedLibraryId(libraryId: String)
     suspend fun getSessionState(): SessionState
     suspend fun login(username: String, password: String)
+    suspend fun loadOidcProviders(): List<BookOrbitOidcProvider> = emptyList()
+    suspend fun requestOidcState(providerSlug: String): BookOrbitOidcState {
+        throw BookOrbitOidcException("SSO is not available on this server.")
+    }
+    suspend fun exchangeOidcCallback(
+        transaction: BookOrbitOidcTransaction,
+        callback: BookOrbitOidcCallback
+    ) {
+        throw BookOrbitOidcException("SSO is not available on this server.")
+    }
     suspend fun loadLibraries(): List<LibrarySummary>
     suspend fun loadBooks(libraryId: String): List<BookSummary>
     suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
@@ -488,6 +498,49 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             .toString()
             .toRequestBody(JSON)
         requestLogin(body)
+    }
+
+    override suspend fun loadOidcProviders(): List<BookOrbitOidcProvider> = withContext(Dispatchers.IO) {
+        val payload = requestUnauthenticated("/api/v1/app-settings/oidc/providers/public", "GET", null)
+        BookOrbitOidc.parseProviders(payload).filter { it.enabled }
+    }
+
+    override suspend fun requestOidcState(providerSlug: String): BookOrbitOidcState = withContext(Dispatchers.IO) {
+        if (providerSlug.isBlank()) throw BookOrbitOidcException("The SSO provider is invalid.")
+        val payload = requestUnauthenticated(
+            path = buildOidcProviderStatePath(providerSlug),
+            method = "POST",
+            body = ByteArray(0).toRequestBody(JSON)
+        )
+        BookOrbitOidc.parseState(payload)
+            ?: throw BookOrbitOidcException("The SSO server returned an invalid state.")
+    }
+
+    override suspend fun exchangeOidcCallback(
+        transaction: BookOrbitOidcTransaction,
+        callback: BookOrbitOidcCallback
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("code", callback.code)
+            .put("codeVerifier", transaction.codeVerifier)
+            .put("redirectUri", transaction.redirectUri)
+            .put("nonce", transaction.nonce)
+            .put("state", transaction.state)
+            .toString()
+            .toRequestBody(JSON)
+        val payload = requestUnauthenticated(
+            path = "/api/v1/auth/oidc/callback",
+            method = "POST",
+            body = body
+        )
+        val accessToken = extractAccessToken(payload)
+        context.dataStore.edit { prefs ->
+            if (accessToken.isNullOrBlank()) {
+                prefs.remove(Keys.ACCESS_TOKEN)
+            } else {
+                prefs[Keys.ACCESS_TOKEN] = accessToken
+            }
+        }
     }
 
     override suspend fun loadAchievements(): AchievementCatalogue = withContext(Dispatchers.IO) {
@@ -2740,6 +2793,29 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                     }
                 }
             }
+        }
+    }
+
+    private fun buildOidcProviderStatePath(providerSlug: String): String {
+        if (!providerSlug.matches(Regex("^[A-Za-z0-9._~-]+$"))) {
+            throw BookOrbitOidcException("The SSO provider is invalid.")
+        }
+        return "/api/v1/auth/oidc/$providerSlug/state"
+    }
+
+    private fun requestUnauthenticated(path: String, method: String, body: RequestBody?): String {
+        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val request = Request.Builder()
+            .url(base.trimEnd('/') + path)
+            .method(method, body)
+            .header("Accept", "application/json")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw HttpRequestException(response.code, "complete server sign-in")
+            }
+            return responseBody
         }
     }
 

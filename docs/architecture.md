@@ -9,7 +9,7 @@ Lagrange is a native Android client for BookOrbit focused on reading, listening,
 ## App flow
 
 1. The user enters a BookOrbit server URL.
-2. The app authenticates with native credentials or the interim server-hosted sign-in WebView.
+2. The app authenticates with native credentials, explicit BookOrbit OIDC in a server-hosted WebView, or the generic server-hosted sign-in WebView fallback.
 3. The coordinator confirms `GET /api/v1/auth/me` and resumes the pending destination.
 4. Libraries and catalog data load into browser state, with cached/offline fallback where allowed.
 5. Readers and the audiobook player open from selected catalog/download identity and preserve format-specific state.

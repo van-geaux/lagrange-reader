@@ -3,7 +3,6 @@ package com.vangeaux.lagrange
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -13,11 +12,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -132,13 +129,12 @@ internal fun LoginScreen(
     isSubmitting: Boolean,
     onChangeServer: () -> Unit,
     onSubmit: (String, String) -> Unit,
-    onOpenServerSignIn: () -> Unit
+    onOpenOidcSignIn: () -> Unit
 ) {
     var username by remember(serverUrl) { mutableStateOf("") }
     var password by remember(serverUrl) { mutableStateOf("") }
     var passwordVisible by remember(serverUrl) { mutableStateOf(false) }
     var validationMessage by remember(serverUrl) { mutableStateOf<String?>(null) }
-    var showServerSignInInfo by remember(serverUrl) { mutableStateOf(false) }
     val submit = {
         when {
             username.isBlank() -> validationMessage = "Enter your username."
@@ -269,49 +265,17 @@ internal fun LoginScreen(
                             Text("Sign in")
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        text = "BookOrbit controls which server sign-in options are available.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    OutlinedButton(
+                        onClick = onOpenOidcSignIn,
+                        enabled = !isSubmitting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = onOpenServerSignIn,
-                            enabled = !isSubmitting,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                        ) {
-                            Text("Open server sign-in")
-                        }
-                        TextButton(onClick = { showServerSignInInfo = true }) {
-                            Text("Why?")
-                        }
+                        Text("Sign in with SSO")
                     }
                 }
             }
         }
-    }
-    if (showServerSignInInfo) {
-        AlertDialog(
-            onDismissRequest = { showServerSignInInfo = false },
-            confirmButton = {
-                TextButton(onClick = { showServerSignInInfo = false }) { Text("Got it") }
-            },
-            title = { Text("About server sign-in") },
-            text = {
-                Text(
-                    "BookOrbit controls the available server sign-in options. " +
-                        "Open server sign-in uses the server's own sign-in page and whichever " +
-                        "local or OIDC methods it is configured with. It runs in an embedded " +
-                        "browser inside the app, and some identity providers may block sign-in " +
-                        "from an embedded browser."
-                )
-            }
-        )
     }
 }
