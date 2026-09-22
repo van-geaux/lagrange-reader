@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
+
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -85,7 +86,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                 ReaderConfigurationControls(
                     value = LibraryReaderPreferences(),
                     onPreferencesChange = {},
-                    isEpub = true
+                    format = ReaderConfigurationFormat.EPUB
                 )
             }
         }
@@ -100,6 +101,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .boundsInRoot
 
         assertTrue("Theme choices should wrap onto another row", darkBounds.top > lightBounds.top)
+        composeRule.onAllNodesWithText("PDF layout").assertCountEquals(0)
+        composeRule.onAllNodesWithText("CBR/CBZ layout").assertCountEquals(0)
     }
 
     @Test

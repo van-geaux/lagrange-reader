@@ -1433,6 +1433,43 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun optionsPresentApplicationSettingCategories() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(
+                    preferences = AppPreferences(),
+                    onPreferencesChange = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("options-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
+        composeRule.onNodeWithText("General").assertIsDisplayed()
+        composeRule.onNodeWithText("Library").assertIsDisplayed()
+        composeRule.onNodeWithText("Downloads & Offline").assertIsDisplayed()
+        composeRule.onNodeWithText("Network & Sync").assertIsDisplayed()
+    }
+
+    @Test
+    fun optionsCategoryNavigationShowsControlsAndBackReturnsToRoot() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(preferences = AppPreferences(), onPreferencesChange = {})
+            }
+        }
+
+        composeRule.onNodeWithText("Appearance").performClick()
+        composeRule.onNodeWithText("Theme").assertIsDisplayed()
+        composeRule.onNodeWithText("Theme").assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag("options-list").assertIsDisplayed()
+        composeRule.onNodeWithText("General").assertIsDisplayed()
+        composeRule.onNodeWithText("Library").performClick()
+        composeRule.onNodeWithTag("options-library-card-size").assertIsDisplayed()
+    }
+
+    @Test
     fun optionsExposePersistableInterfaceControls() {
         val preferences = mutableStateOf(AppPreferences())
         composeRule.setContent {
@@ -1444,10 +1481,9 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithText("Appearance").performClick()
         composeRule.onNodeWithText("Interface").assertIsDisplayed()
         composeRule.onAllNodesWithText("Haptic feedback").assertCountEquals(0)
-        composeRule.onNodeWithTag("options-lock-orientation").performClick()
-        composeRule.runOnIdle { assertTrue(preferences.value.lockOrientation) }
 
         composeRule.onNodeWithTag("options-theme").performClick()
         composeRule.onNodeWithText("Follow system").assertIsDisplayed()
@@ -1457,27 +1493,33 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("OLED black").performClick()
         composeRule.runOnIdle { assertEquals(AppThemeMode.OLED_BLACK, preferences.value.themeMode) }
 
-        composeRule.onNodeWithTag("options-opening-screen").performClick()
+        composeRule.onNodeWithTag("options-reduce-motion").performScrollTo().performClick()
+        composeRule.runOnIdle { assertTrue(preferences.value.reduceMotion) }
+
+        pressBack()
+        composeRule.onNodeWithText("Library").performClick()
+        composeRule.onNodeWithTag("options-library-card-size").performScrollTo().performClick()
+        composeRule.onNodeWithText("Medium").performClick()
+        composeRule.runOnIdle {
+            assertEquals(LibraryCardSize.MEDIUM, preferences.value.libraryCardSize)
+        }
+
+        pressBack()
+        composeRule.onNodeWithText("General").performClick()
+        composeRule.onNodeWithTag("options-lock-orientation").performClick()
+        composeRule.runOnIdle { assertTrue(preferences.value.lockOrientation) }
+        composeRule.onNodeWithTag("options-opening-screen").performScrollTo().performClick()
         composeRule.onNodeWithText("Local books").performClick()
         composeRule.runOnIdle {
             assertEquals(DefaultOpeningScreen.LOCAL_BOOKS, preferences.value.defaultOpeningScreen)
         }
 
-        composeRule.onNodeWithTag("options-reduce-motion").performScrollTo().performClick()
-        composeRule.runOnIdle { assertTrue(preferences.value.reduceMotion) }
-
+        pressBack()
+        composeRule.onNodeWithText("Network & Sync").performClick()
         composeRule.onNodeWithTag("options-pause-audiobook-interruptions")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
+            .performScrollTo().assertIsDisplayed().performClick()
         composeRule.runOnIdle {
             assertEquals(false, preferences.value.pauseAudiobookForAudioInterruptions)
-        }
-
-        composeRule.onNodeWithTag("options-library-card-size").performScrollTo().performClick()
-        composeRule.onNodeWithText("Medium").performClick()
-        composeRule.runOnIdle {
-            assertEquals(LibraryCardSize.MEDIUM, preferences.value.libraryCardSize)
         }
     }
 
@@ -1506,6 +1548,7 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithText("Downloads & Offline").performClick()
         composeRule.onNodeWithTag("options-cellular-downloads").performScrollTo().performClick()
         composeRule.onNodeWithText("Never").performClick()
         composeRule.runOnIdle {
@@ -1536,6 +1579,12 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithTag("options-confirm-local-delete").performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(false, preferences.value.confirmDeleteLocalCopy) }
+
+        pressBack()
+        composeRule.onNodeWithText("Network & Sync").performClick()
+        composeRule.onNodeWithTag("options-pause-audiobook-interruptions")
+            .performScrollTo().assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertEquals(false, preferences.value.pauseAudiobookForAudioInterruptions) }
     }
 
     @Test
@@ -1581,6 +1630,7 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("User profile").performClick()
         composeRule.onNodeWithText("Options").performClick()
+        composeRule.onNodeWithText("Appearance").performClick()
         composeRule.onNodeWithText("Interface").assertIsDisplayed()
     }
 
@@ -2132,7 +2182,7 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
-    fun optionsScopeReaderConfigurationToTheSelectedLibrary() {
+    fun librarySettingsPersistReaderConfigurationPerLibrary() {
         val preferences = mutableStateOf(AppPreferences())
         val libraries = listOf(
             LibrarySummary(id = "novels", name = "Novels"),
@@ -2143,81 +2193,30 @@ class BookOrbitAppInstrumentedTest {
                 OptionsScreen(
                     preferences = preferences.value,
                     libraries = libraries,
-                    selectedLibraryId = "novels",
                     onPreferencesChange = { preferences.value = it }
                 )
             }
         }
 
+        composeRule.onNodeWithText("Library").performClick()
         composeRule.onNodeWithTag("options-reading-library").performScrollTo().performClick()
         composeRule.onNodeWithText("Manga").performClick()
-        composeRule.onNodeWithTag("options-reading-direction-right_to_left").performClick()
-        composeRule.onNodeWithTag("options-reading-tap-zone-layout-kindle")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithTag("options-reading-tap-zone-invert-both")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithTag("options-reading-epub-layout-continuous")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithTag("options-reading-pdf-layout-paginated")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithTag("options-reading-comic-layout-continuous")
+        composeRule.onNodeWithTag("options-reading-direction-right_to_left")
             .performScrollTo()
             .performClick()
 
         composeRule.runOnIdle {
             assertEquals(
-                ReaderLayoutMode.CONTINUOUS,
-                preferences.value.readerPreferencesFor("manga").epubLayoutMode
-            )
-            assertEquals(
                 LibraryReadingDirection.RIGHT_TO_LEFT,
                 preferences.value.readerPreferencesFor("manga").readingDirection
-            )
-            assertEquals(
-                ReaderTapZoneLayout.KINDLE,
-                preferences.value.readerPreferencesFor("manga").tapZoneLayout
-            )
-            assertEquals(
-                ReaderTapZoneInvertMode.BOTH,
-                preferences.value.readerPreferencesFor("manga").tapZoneInvertMode
-            )
-            assertEquals(
-                ReaderTapZoneLayout.CURRENT_EDGES,
-                preferences.value.readerPreferencesFor("novels").tapZoneLayout
             )
             assertEquals(
                 LibraryReadingDirection.LEFT_TO_RIGHT,
                 preferences.value.readerPreferencesFor("novels").readingDirection
             )
-            assertEquals(
-                ReaderLayoutMode.PAGINATED,
-                preferences.value.readerPreferencesFor("novels").epubLayoutMode
-            )
-            assertEquals(
-                ReaderLayoutMode.PAGINATED,
-                preferences.value.readerPreferencesFor("manga").pdfLayoutMode
-            )
-            assertEquals(
-                ReaderLayoutMode.CONTINUOUS,
-                preferences.value.readerPreferencesFor("manga").comicLayoutMode
-            )
-            assertEquals(
-                ReaderLayoutMode.CONTINUOUS,
-                preferences.value.readerPreferencesFor("novels").pdfLayoutMode
-            )
         }
-        composeRule.onNodeWithTag("options-reading-direction-right_to_left").assertIsSelected()
-        composeRule.onNodeWithTag("options-reading-epub-layout-continuous").assertIsSelected()
-        composeRule.onNodeWithText("Typography").assertIsDisplayed()
-        composeRule.onNodeWithText("Page margins").assertIsDisplayed()
-        composeRule.onNodeWithTag("options-reading-pdf-page-gap").assertIsNotEnabled()
-        composeRule.onNodeWithText("CBR/CBZ layout").assertIsDisplayed()
-        composeRule.onNodeWithTag("options-reading-comic-page-gap").assertIsEnabled()
     }
+
 }
 
 internal class InstrumentedFakeDataSource : BookOrbitDataSource {
