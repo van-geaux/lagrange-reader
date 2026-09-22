@@ -1864,7 +1864,7 @@ internal fun EpubReaderOptionsBottomSheet(
                         ReaderConfigurationControls(
                             value = preferences,
                             onPreferencesChange = onPreferencesChange,
-                            isEpub = true,
+                            format = ReaderConfigurationFormat.EPUB,
                             onCustomFontRequest = onCustomFontRequest,
                             onCustomFontRemove = onCustomFontRemove
                         )
@@ -1957,6 +1957,7 @@ internal fun ComicReaderOptionsBottomSheet(
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    format: ReaderConfigurationFormat = ReaderConfigurationFormat.COMIC,
     modifier: Modifier = Modifier
 ) {
     val parentTypography = MaterialTheme.typography
@@ -2042,7 +2043,7 @@ internal fun ComicReaderOptionsBottomSheet(
                 ReaderConfigurationControls(
                     value = preferences,
                     onPreferencesChange = onPreferencesChange,
-                    isEpub = false
+                    format = format
                 )
             }
         }

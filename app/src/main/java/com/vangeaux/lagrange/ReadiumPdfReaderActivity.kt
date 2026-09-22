@@ -364,6 +364,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
+                            format = ReaderConfigurationFormat.PDF,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }

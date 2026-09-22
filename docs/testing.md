@@ -15,6 +15,19 @@ For release work, also run the approved release assembly and release workflow ch
 
 Compiled Android instrumentation is not executed instrumentation. If `adb devices -l` does not enumerate a usable target, report connected tests as unexecuted.
 
+## Settings and format-specific reader options
+
+In Settings, verify the root shows Appearance, General, Library, Downloads
+& Offline, and Network & Sync. Verify About and Account & Server are not
+duplicated there. Open Library, switch between two libraries, change a
+reader preference, and verify the selected library retains its own profile.
+
+Open reader options for an EPUB, PDF, and comic. EPUB must show only EPUB
+typography, margins, and layout controls. PDF must show only PDF layout and
+page-gap controls. Comics must show only CBR/CBZ layout and page-gap
+controls. Verify that changing a control remains live and persists after
+closing and reopening the reader options surface.
+
 ### Android 16 KB native packaging
 
 For the PDFium packaging gate, verify the APK is `arm64-v8a`-only and run both checks against the built artifact: `zipalign -P 16 -c` for ZIP alignment and an ELF inspection confirming each packaged native library has `p_align=0x4000`. The current PDFium dependency is JitPack `com.github.marain87:PdfiumAndroid:1.9.8`. These ZIP/ELF checks verify Android 16 KB compatibility; they do not execute or replace connected UI/instrumentation tests.

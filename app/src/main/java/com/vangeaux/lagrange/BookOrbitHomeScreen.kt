@@ -311,6 +311,20 @@ private enum class OptionsDialog {
     BACKGROUND_REFRESH,
     CLEAR_CACHE
 }
+
+private enum class OptionsCategory(val title: String, val summary: String) {
+    APPEARANCE("Appearance", "Theme, motion, and browsing presentation"),
+    GENERAL("General", "Opening behavior, orientation, and general preferences"),
+    LIBRARY("Library", "Browsing and library presentation"),
+    DOWNLOADS_OFFLINE("Downloads & Offline", "Downloads, storage, and offline library data"),
+    NETWORK_SYNC("Network & Sync", "Background network and playback behavior")
+}
+
+internal enum class ReaderConfigurationFormat {
+    EPUB,
+    PDF,
+    COMIC
+}
 private val CATALOG_GRID_PADDING = 16.dp
 private val CATALOG_JUMP_RAIL_END_PADDING = 32.dp
 
@@ -1978,7 +1992,6 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
                     libraries = state.libraries,
-                    selectedLibraryId = state.selectedLibraryId,
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
@@ -3355,7 +3368,6 @@ private fun BookPosterCard(
 internal fun OptionsScreen(
     preferences: AppPreferences,
     libraries: List<LibrarySummary> = emptyList(),
-    selectedLibraryId: String? = null,
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
@@ -3366,19 +3378,20 @@ internal fun OptionsScreen(
     modifier: Modifier = Modifier
 ) {
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
+    var selectedCategory by rememberSaveable { mutableStateOf<OptionsCategory?>(null) }
+    BackHandler(enabled = selectedCategory != null) { selectedCategory = null }
+    var readingLibraryId by rememberSaveable {
+        mutableStateOf(libraries.firstOrNull()?.id)
+    }
+    LaunchedEffect(libraries) {
+        if (readingLibraryId !in libraries.map { it.id }) {
+            readingLibraryId = libraries.firstOrNull()?.id
+        }
+    }
     var storageRefreshKey by rememberSaveable { mutableStateOf(0) }
     var isClearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
     var offlineCacheRefreshKey by rememberSaveable { mutableIntStateOf(0) }
-    var readingLibraryId by rememberSaveable {
-        mutableStateOf(selectedLibraryId ?: libraries.firstOrNull()?.id)
-    }
-    LaunchedEffect(libraries, selectedLibraryId) {
-        if (readingLibraryId !in libraries.map { it.id }) {
-            readingLibraryId = selectedLibraryId?.takeIf { id -> libraries.any { it.id == id } }
-                ?: libraries.firstOrNull()?.id
-        }
-    }
     val scope = rememberCoroutineScope()
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
         value = runCatching { storageUsageLoader() }.getOrNull()
@@ -3402,16 +3415,47 @@ internal fun OptionsScreen(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (selectedCategory != null) {
+                    IconButton(
+                        onClick = { selectedCategory = null },
+                        modifier = Modifier.testTag("options-back")
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to settings")
+                    }
+                }
                 OrbitEyebrow("Options")
-                Text("Interface", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Choose how Lagrange looks and responds.",
+                    when (selectedCategory) {
+                        OptionsCategory.APPEARANCE -> "Interface"
+                        null -> "Settings"
+                        else -> selectedCategory?.title ?: "Settings"
+                    },
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    selectedCategory?.summary ?: "Choose a category to change application settings.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
-        item(key = "lock-orientation") {
+        if (selectedCategory == null) {
+            OptionsCategory.values().forEach { category ->
+                item(key = "category-${category.name}") {
+                    ListItem(
+                        headlineContent = { Text(category.title) },
+                        supportingContent = { Text(category.summary) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, category.title) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedCategory = category }
+                            .testTag("options-category-${category.name.lowercase()}")
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+        }
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "lock-orientation") {
             AppPreferenceSwitchRow(
                 title = "Lock orientation",
                 summary = "Keep the orientation currently in use",
@@ -3422,7 +3466,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "theme") {
+        if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "theme") {
             AppPreferenceSelectionRow(
                 title = "Theme",
                 value = preferences.themeMode.displayName,
@@ -3430,7 +3474,7 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.THEME }
             )
         }
-        item(key = "opening-screen") {
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "opening-screen") {
             AppPreferenceSelectionRow(
                 title = "Default opening screen",
                 value = preferences.defaultOpeningScreen.displayName,
@@ -3439,7 +3483,7 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.OPENING_SCREEN }
             )
         }
-        item(key = "reduce-motion") {
+        if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "reduce-motion") {
             AppPreferenceSwitchRow(
                 title = "Reduce motion",
                 summary = "Use immediate catalog jumps instead of animated scrolling",
@@ -3450,7 +3494,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "library-card-size") {
+        if (selectedCategory == OptionsCategory.LIBRARY) item(key = "library-card-size") {
             AppPreferenceSelectionRow(
                 title = "Library card size",
                 value = preferences.libraryCardSize.displayName,
@@ -3459,7 +3503,7 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.LIBRARY_CARD_SIZE }
             )
         }
-        item(key = "epub-image-minimum-size") {
+        if (selectedCategory == OptionsCategory.LIBRARY) item(key = "epub-image-minimum-size") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3503,7 +3547,7 @@ internal fun OptionsScreen(
                 )
             }
         }
-        item(key = "reading-configuration") {
+        if (selectedCategory == OptionsCategory.LIBRARY) item(key = "reading-configuration") {
             LibraryReaderConfiguration(
                 libraries = libraries,
                 selectedLibraryId = readingLibraryId,
@@ -3516,7 +3560,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "data-heading") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "data-heading") {
             Column(
                 modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -3530,7 +3574,7 @@ internal fun OptionsScreen(
                 )
             }
         }
-        item(key = "cellular-downloads") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "cellular-downloads") {
             AppPreferenceSelectionRow(
                 title = "Downloads over cellular",
                 value = preferences.cellularDownloadPolicy.displayName,
@@ -3539,7 +3583,7 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.CELLULAR_DOWNLOADS }
             )
         }
-        item(key = "storage") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "storage") {
             ListItem(
                 headlineContent = { Text("Storage") },
                 supportingContent = {
@@ -3575,7 +3619,7 @@ internal fun OptionsScreen(
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-        item(key = "offline-library-cache") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "offline-library-cache") {
             OfflineLibraryCacheConfiguration(
                 preferences = preferences,
                 libraries = libraries,
@@ -3604,7 +3648,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "confirm-local-delete") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "confirm-local-delete") {
             AppPreferenceSwitchRow(
                 title = "Confirm before deleting local copy",
                 summary = "Ask before removing a downloaded file from this device",
@@ -3615,7 +3659,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "confirm-audiobook-seek") {
+        if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "confirm-audiobook-seek") {
             AppPreferenceSwitchRow(
                 title = "Confirm audiobook seek jumps",
                 summary = "Ask before keeping a new position after tapping a seek bar",
@@ -3626,7 +3670,16 @@ internal fun OptionsScreen(
                 }
             )
         }
-        item(key = "pause-audiobook-interruptions") {
+        if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "background-refresh") {
+            AppPreferenceSelectionRow(
+                title = "Background metadata and covers",
+                value = preferences.backgroundRefreshNetworkPolicy.displayName,
+                summary = "Choose which networks may refresh metadata and covers",
+                testTag = "options-background-refresh",
+                onClick = { openDialog = OptionsDialog.BACKGROUND_REFRESH }
+            )
+        }
+        if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "pause-audiobook-interruptions") {
             AppPreferenceSwitchRow(
                 title = "Pause audiobook for audio interruptions",
                 summary = "Pause briefly when another app or system sound takes audio focus",
@@ -4177,7 +4230,7 @@ internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     testTagPrefix: String = "reader-options-reading",
-    isEpub: Boolean = true,
+    format: ReaderConfigurationFormat = ReaderConfigurationFormat.EPUB,
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {}
 ) {
@@ -4237,7 +4290,7 @@ internal fun ReaderConfigurationControls(
             )
         }
     }
-    if (isEpub) {
+    if (format == ReaderConfigurationFormat.EPUB) {
         var fontMenuExpanded by remember { mutableStateOf(false) }
         val selectedFontLabel = value.customFont
             ?.takeIf { value.fontFamily == EpubReaderFontFamily.CUSTOM }
@@ -4367,56 +4420,58 @@ internal fun ReaderConfigurationControls(
         ) { Text("A+") }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    ReaderLayoutModeSettings(
-        formatLabel = "EPUB",
-        layoutMode = value.epubLayoutMode,
-        testTagPrefix = "$testTagPrefix-epub",
-        onLayoutModeChange = { onPreferencesChange(value.copy(epubLayoutMode = it)) }
-    )
-    Text("Page margins", style = MaterialTheme.typography.titleMedium)
-    listOf(
-        "Top" to value.padding.top,
-        "Bottom" to value.padding.bottom,
-        "Left" to value.padding.left,
-        "Right" to value.padding.right
-    ).forEach { (label, margin) ->
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = margin,
-                onValueChange = { next ->
-                    val padding = when (label) {
-                        "Top" -> value.padding.copy(top = next)
-                        "Bottom" -> value.padding.copy(bottom = next)
-                        "Left" -> value.padding.copy(left = next)
-                        else -> value.padding.copy(right = next)
-                    }
-                    onPreferencesChange(value.copy(padding = padding))
-                },
-                valueRange = 0f..100f,
-                steps = 19,
-                modifier = Modifier.testTag("$testTagPrefix-margin-${label.lowercase()}")
+    when (format) {
+        ReaderConfigurationFormat.EPUB -> {
+            ReaderLayoutModeSettings(
+                formatLabel = "EPUB",
+                layoutMode = value.epubLayoutMode,
+                testTagPrefix = "$testTagPrefix-epub",
+                onLayoutModeChange = { onPreferencesChange(value.copy(epubLayoutMode = it)) }
             )
+            Text("Page margins", style = MaterialTheme.typography.titleMedium)
+            listOf(
+                "Top" to value.padding.top,
+                "Bottom" to value.padding.bottom,
+                "Left" to value.padding.left,
+                "Right" to value.padding.right
+            ).forEach { (label, margin) ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = margin,
+                        onValueChange = { next ->
+                            val padding = when (label) {
+                                "Top" -> value.padding.copy(top = next)
+                                "Bottom" -> value.padding.copy(bottom = next)
+                                "Left" -> value.padding.copy(left = next)
+                                else -> value.padding.copy(right = next)
+                            }
+                            onPreferencesChange(value.copy(padding = padding))
+                        },
+                        valueRange = 0f..100f,
+                        steps = 19,
+                        modifier = Modifier.testTag("$testTagPrefix-margin-${label.lowercase()}")
+                    )
+                }
+            }
         }
+        ReaderConfigurationFormat.PDF -> ReaderFormatLayoutSettings(
+            formatLabel = "PDF",
+            layoutMode = value.pdfLayoutMode,
+            pageGapDp = value.pdfPageGapDp,
+            testTagPrefix = "$testTagPrefix-pdf",
+            onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
+            onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) }
+        )
+        ReaderConfigurationFormat.COMIC -> ReaderFormatLayoutSettings(
+            formatLabel = "CBR/CBZ",
+            layoutMode = value.comicLayoutMode,
+            pageGapDp = value.comicPageGapDp,
+            testTagPrefix = "$testTagPrefix-comic",
+            onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
+            onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
+        )
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    ReaderFormatLayoutSettings(
-        formatLabel = "PDF",
-        layoutMode = value.pdfLayoutMode,
-        pageGapDp = value.pdfPageGapDp,
-        testTagPrefix = "$testTagPrefix-pdf",
-        onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
-        onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) }
-    )
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    ReaderFormatLayoutSettings(
-        formatLabel = "CBR/CBZ",
-        layoutMode = value.comicLayoutMode,
-        pageGapDp = value.comicPageGapDp,
-        testTagPrefix = "$testTagPrefix-comic",
-        onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
-        onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
-    )
 }
 
 @Composable
