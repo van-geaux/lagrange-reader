@@ -28,6 +28,17 @@ page-gap controls. Comics must show only CBR/CBZ layout and page-gap
 controls. Verify that changing a control remains live and persists after
 closing and reopening the reader options surface.
 
+In General options, verify `Immersive reading: hide navigation bar` starts
+enabled and its value persists after leaving and reopening Options. On a
+device or emulator, verify the global default hides Android navigation in
+EPUB, PDF, and comic readers across libraries; turning it off shows the bar
+and keeps reader content above its inset in all three reader groups.
+In EPUB specifically, verify the progress row sits directly above the system
+navigation bar and open the reader menu/options to confirm its bottom controls
+are not covered by the bar. Toggle back on and verify the immersive layout
+returns without reserving extra bottom space.
+Audiobook behavior is unchanged.
+
 ### Android 16 KB native packaging
 
 For the PDFium packaging gate, verify the APK is `arm64-v8a`-only and run both checks against the built artifact: `zipalign -P 16 -c` for ZIP alignment and an ELF inspection confirming each packaged native library has `p_align=0x4000`. The current PDFium dependency is JitPack `com.github.marain87:PdfiumAndroid:1.9.8`. These ZIP/ELF checks verify Android 16 KB compatibility; they do not execute or replace connected UI/instrumentation tests.

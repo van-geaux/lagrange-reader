@@ -17,6 +17,14 @@ private fun settleAnnotationReanchor(state: AnnotationReanchorState): Annotation
 
 class ReadiumEpubReaderRoutingTest {
     @Test
+    fun `EPUB viewport reserves navigation inset only when bar is visible`() {
+        assertEquals(0, readerViewportBottomInset(72, hideNavigationBar = true))
+        assertEquals(72, readerViewportBottomInset(72, hideNavigationBar = false))
+        assertEquals(0, readerViewportBottomInset(0, hideNavigationBar = false))
+        assertEquals(0, readerViewportBottomInset(-1, hideNavigationBar = false))
+    }
+
+    @Test
     fun previewLabelsUsePreviewModeTerminologyForReadingAndListening() {
         assertEquals("Preview mode · Tap to enable reading progress", BOOK_PREVIEW_MODE_LABEL)
         assertEquals("Preview mode · Tap to enable listening progress", AUDIOBOOK_PREVIEW_MODE_LABEL)

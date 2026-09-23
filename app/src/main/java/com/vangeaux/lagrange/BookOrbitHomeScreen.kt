@@ -3466,6 +3466,17 @@ internal fun OptionsScreen(
                 }
             )
         }
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "immersive-reading-navigation") {
+            AppPreferenceSwitchRow(
+                title = "Immersive reading: hide navigation bar",
+                summary = "Apply this setting to EPUB, PDF, and comic readers across all libraries.",
+                checked = preferences.hideNavigationBarWhileReading,
+                testTag = "options-hide-navigation-bar-reading",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(hideNavigationBarWhileReading = it))
+                }
+            )
+        }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "theme") {
             AppPreferenceSelectionRow(
                 title = "Theme",

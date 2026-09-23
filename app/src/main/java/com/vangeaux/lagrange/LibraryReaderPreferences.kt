@@ -75,6 +75,19 @@ data class LibraryReaderPreferences(
     )
 }
 
+internal data class ReaderSystemBarsPolicy(
+    val showStatusBar: Boolean = true,
+    val showNavigationBar: Boolean
+)
+
+internal fun readerSystemBarsPolicy(globalHide: Boolean): ReaderSystemBarsPolicy =
+    ReaderSystemBarsPolicy(showNavigationBar = !globalHide)
+
+internal fun readerViewportBottomInset(
+    navigationBarBottomInset: Int,
+    hideNavigationBar: Boolean
+): Int = if (hideNavigationBar) 0 else navigationBarBottomInset.coerceAtLeast(0)
+
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
     libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
 

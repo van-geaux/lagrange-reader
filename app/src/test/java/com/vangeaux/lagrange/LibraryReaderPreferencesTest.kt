@@ -133,6 +133,13 @@ class LibraryReaderPreferencesTest {
     }
 
     @Test
+    fun `global navigation bar policy applies uniformly to supported readers`() {
+        assertTrue(AppPreferences().hideNavigationBarWhileReading)
+        assertFalse(readerSystemBarsPolicy(true).showNavigationBar)
+        assertTrue(readerSystemBarsPolicy(false).showNavigationBar)
+    }
+
+    @Test
     fun `volume button navigation preference persists independently per library`() {
         val decoded = libraryReaderPreferencesFromStorage(
             libraryReaderPreferencesStorageValue(
