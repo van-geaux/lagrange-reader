@@ -3469,7 +3469,7 @@ internal fun OptionsScreen(
         if (selectedCategory == OptionsCategory.GENERAL) item(key = "immersive-reading-navigation") {
             AppPreferenceSwitchRow(
                 title = "Immersive reading: hide navigation bar",
-                summary = "Per-library format settings can override this global default.",
+                summary = "Apply this setting to EPUB, PDF, and comic readers across all libraries.",
                 checked = preferences.hideNavigationBarWhileReading,
                 testTag = "options-hide-navigation-bar-reading",
                 onCheckedChange = {
@@ -4127,15 +4127,6 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            ReaderNavigationBarOverrideSettings("EPUB navigation bar", value.epubNavigationBarOverride, "options-reading-epub-navigation-bar") {
-                onPreferencesChange(selectedLibrary.id, value.copy(epubNavigationBarOverride = it))
-            }
-            ReaderNavigationBarOverrideSettings("PDF navigation bar", value.pdfNavigationBarOverride, "options-reading-pdf-navigation-bar") {
-                onPreferencesChange(selectedLibrary.id, value.copy(pdfNavigationBarOverride = it))
-            }
-            ReaderNavigationBarOverrideSettings("Comic navigation bar", value.comicNavigationBarOverride, "options-reading-comic-navigation-bar") {
-                onPreferencesChange(selectedLibrary.id, value.copy(comicNavigationBarOverride = it))
-            }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
@@ -4254,19 +4245,6 @@ internal fun ReaderConfigurationControls(
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {}
 ) {
-    val navigationOverride = readerNavigationBarOverride(format, value)
-    ReaderNavigationBarOverrideSettings(
-        formatLabel = "Android navigation bar",
-        value = navigationOverride,
-        testTag = "$testTagPrefix-navigation-bar",
-        onChange = { override ->
-            onPreferencesChange(when (format) {
-                ReaderConfigurationFormat.EPUB -> value.copy(epubNavigationBarOverride = override)
-                ReaderConfigurationFormat.PDF -> value.copy(pdfNavigationBarOverride = override)
-                ReaderConfigurationFormat.COMIC -> value.copy(comicNavigationBarOverride = override)
-            })
-        }
-    )
     AppPreferenceSwitchRow(
         title = "Turn pages with volume buttons",
         summary = "Use Volume Up and Volume Down for reader navigation instead of changing volume.",
@@ -4504,35 +4482,6 @@ internal fun ReaderConfigurationControls(
             onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
             onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
         )
-    }
-}
-
-@Composable
-private fun ReaderNavigationBarOverrideSettings(
-    formatLabel: String,
-    value: ReaderNavigationBarOverride,
-    testTag: String,
-    onChange: (ReaderNavigationBarOverride) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Text(formatLabel, style = MaterialTheme.typography.titleMedium)
-    Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth().testTag(testTag)
-        ) {
-            Text(value.displayName, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ReaderNavigationBarOverride.values().forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.displayName) },
-                    onClick = { expanded = false; onChange(option) },
-                    modifier = Modifier.testTag("$testTag-${option.name.lowercase()}")
-                )
-            }
-        }
     }
 }
 

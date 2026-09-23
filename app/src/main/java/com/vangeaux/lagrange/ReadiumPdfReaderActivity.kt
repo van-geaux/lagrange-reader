@@ -690,11 +690,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun configureSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         val preferences = AppPreferencesStore(this).read()
-        val policy = readerSystemBarsPolicy(
-            ReaderConfigurationFormat.PDF,
-            readerPreferences,
-            preferences.hideNavigationBarWhileReading
-        )
+        val policy = readerSystemBarsPolicy(preferences.hideNavigationBarWhileReading)
         WindowCompat.getInsetsController(window, window.decorView).apply {
             show(WindowInsetsCompat.Type.statusBars())
             if (policy.showNavigationBar) show(WindowInsetsCompat.Type.navigationBars())

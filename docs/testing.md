@@ -29,14 +29,11 @@ controls. Verify that changing a control remains live and persists after
 closing and reopening the reader options surface.
 
 In General options, verify `Immersive reading: hide navigation bar` starts
-enabled and its value persists after leaving and reopening Options. In each
-library's reader profile, verify EPUB, PDF, and comic can independently use
-Follow global setting, Hide navigation bar, or Show navigation bar. On a
-device or emulator, verify the global default hides Android navigation in all
-three reader groups; turning it off shows the bar and keeps the reader content
-above its inset. Verify each explicit format override takes precedence over
-the global value, and Follow global setting tracks it. Audiobook behavior is
-unchanged.
+enabled and its value persists after leaving and reopening Options. On a
+device or emulator, verify the global default hides Android navigation in
+EPUB, PDF, and comic readers across libraries; turning it off shows the bar
+and keeps reader content above its inset in all three reader groups.
+Audiobook behavior is unchanged.
 
 ### Android 16 KB native packaging
 

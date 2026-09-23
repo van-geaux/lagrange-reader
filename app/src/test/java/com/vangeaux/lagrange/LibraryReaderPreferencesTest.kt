@@ -16,9 +16,6 @@ class LibraryReaderPreferencesTest {
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
             volumeButtonPageNavigation = true,
             reverseVolumeButtonNavigation = true,
-            epubNavigationBarOverride = ReaderNavigationBarOverride.HIDE,
-            pdfNavigationBarOverride = ReaderNavigationBarOverride.SHOW,
-            comicNavigationBarOverride = ReaderNavigationBarOverride.FOLLOW_GLOBAL,
             theme = EpubReaderTheme.Dark,
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
@@ -133,29 +130,13 @@ class LibraryReaderPreferencesTest {
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
         assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
         assertFalse(decoded.volumeButtonPageNavigation)
-        assertEquals(ReaderNavigationBarOverride.FOLLOW_GLOBAL, decoded.epubNavigationBarOverride)
-        assertEquals(ReaderNavigationBarOverride.FOLLOW_GLOBAL, decoded.pdfNavigationBarOverride)
-        assertEquals(ReaderNavigationBarOverride.FOLLOW_GLOBAL, decoded.comicNavigationBarOverride)
     }
 
     @Test
-    fun `format navigation overrides inherit global default and take precedence independently`() {
-        val defaults = LibraryReaderPreferences()
-
+    fun `global navigation bar policy applies uniformly to supported readers`() {
         assertTrue(AppPreferences().hideNavigationBarWhileReading)
-        ReaderConfigurationFormat.values().forEach { format ->
-            assertTrue(readerNavigationBarHidden(format, defaults, globalHide = true))
-            assertFalse(readerNavigationBarHidden(format, defaults, globalHide = false))
-        }
-
-        val mixed = defaults.copy(
-            epubNavigationBarOverride = ReaderNavigationBarOverride.HIDE,
-            pdfNavigationBarOverride = ReaderNavigationBarOverride.SHOW
-        )
-        assertTrue(readerNavigationBarHidden(ReaderConfigurationFormat.EPUB, mixed, globalHide = false))
-        assertFalse(readerNavigationBarHidden(ReaderConfigurationFormat.PDF, mixed, globalHide = true))
-        assertTrue(readerNavigationBarHidden(ReaderConfigurationFormat.COMIC, mixed, globalHide = true))
-        assertFalse(readerNavigationBarHidden(ReaderConfigurationFormat.COMIC, mixed, globalHide = false))
+        assertFalse(readerSystemBarsPolicy(true).showNavigationBar)
+        assertTrue(readerSystemBarsPolicy(false).showNavigationBar)
     }
 
     @Test

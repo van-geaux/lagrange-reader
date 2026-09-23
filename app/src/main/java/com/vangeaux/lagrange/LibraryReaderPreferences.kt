@@ -12,12 +12,6 @@ enum class ReaderLayoutMode(val displayName: String) {
     CONTINUOUS("Continuous")
 }
 
-enum class ReaderNavigationBarOverride(val displayName: String) {
-    FOLLOW_GLOBAL("Follow global setting"),
-    HIDE("Hide navigation bar"),
-    SHOW("Show navigation bar")
-}
-
 enum class EpubReaderFontFamily(val displayName: String) {
     PUBLISHER_DEFAULT("Publisher default"),
     SYSTEM_SERIF("System serif"),
@@ -54,9 +48,6 @@ private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
-    val epubNavigationBarOverride: ReaderNavigationBarOverride = ReaderNavigationBarOverride.FOLLOW_GLOBAL,
-    val pdfNavigationBarOverride: ReaderNavigationBarOverride = ReaderNavigationBarOverride.FOLLOW_GLOBAL,
-    val comicNavigationBarOverride: ReaderNavigationBarOverride = ReaderNavigationBarOverride.FOLLOW_GLOBAL,
     val volumeButtonPageNavigation: Boolean = false,
     val reverseVolumeButtonNavigation: Boolean = false,
     val tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
@@ -84,37 +75,13 @@ data class LibraryReaderPreferences(
     )
 }
 
-internal fun readerNavigationBarOverride(
-    format: ReaderConfigurationFormat,
-    preferences: LibraryReaderPreferences
-): ReaderNavigationBarOverride = when (format) {
-    ReaderConfigurationFormat.EPUB -> preferences.epubNavigationBarOverride
-    ReaderConfigurationFormat.PDF -> preferences.pdfNavigationBarOverride
-    ReaderConfigurationFormat.COMIC -> preferences.comicNavigationBarOverride
-}
-
-internal fun readerNavigationBarHidden(
-    format: ReaderConfigurationFormat,
-    preferences: LibraryReaderPreferences,
-    globalHide: Boolean
-): Boolean = when (readerNavigationBarOverride(format, preferences)) {
-    ReaderNavigationBarOverride.FOLLOW_GLOBAL -> globalHide
-    ReaderNavigationBarOverride.HIDE -> true
-    ReaderNavigationBarOverride.SHOW -> false
-}
-
 internal data class ReaderSystemBarsPolicy(
     val showStatusBar: Boolean = true,
     val showNavigationBar: Boolean
 )
 
-internal fun readerSystemBarsPolicy(
-    format: ReaderConfigurationFormat,
-    preferences: LibraryReaderPreferences,
-    globalHide: Boolean
-): ReaderSystemBarsPolicy = ReaderSystemBarsPolicy(
-    showNavigationBar = !readerNavigationBarHidden(format, preferences, globalHide)
-)
+internal fun readerSystemBarsPolicy(globalHide: Boolean): ReaderSystemBarsPolicy =
+    ReaderSystemBarsPolicy(showNavigationBar = !globalHide)
 
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
     libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
@@ -182,9 +149,6 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("readingDirection", libraryReadingDirectionStorageValue(normalized.readingDirection))
             put("volumeButtonPageNavigation", normalized.volumeButtonPageNavigation)
             put("reverseVolumeButtonNavigation", normalized.reverseVolumeButtonNavigation)
-            put("epubNavigationBarOverride", normalized.epubNavigationBarOverride.name)
-            put("pdfNavigationBarOverride", normalized.pdfNavigationBarOverride.name)
-            put("comicNavigationBarOverride", normalized.comicNavigationBarOverride.name)
             put("tapZoneLayout", readerTapZoneLayoutStorageValue(normalized.tapZoneLayout))
             put("tapZoneInvertMode", readerTapZoneInvertModeStorageValue(normalized.tapZoneInvertMode))
             put("theme", epubReaderThemeStorageValue(normalized.theme))
@@ -219,9 +183,6 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         volumeButtonPageNavigation = item.optBoolean("volumeButtonPageNavigation", false),
                         reverseVolumeButtonNavigation = item.optBoolean("reverseVolumeButtonNavigation", false),
-                        epubNavigationBarOverride = runCatching { ReaderNavigationBarOverride.valueOf(item.optString("epubNavigationBarOverride")) }.getOrDefault(ReaderNavigationBarOverride.FOLLOW_GLOBAL),
-                        pdfNavigationBarOverride = runCatching { ReaderNavigationBarOverride.valueOf(item.optString("pdfNavigationBarOverride")) }.getOrDefault(ReaderNavigationBarOverride.FOLLOW_GLOBAL),
-                        comicNavigationBarOverride = runCatching { ReaderNavigationBarOverride.valueOf(item.optString("comicNavigationBarOverride")) }.getOrDefault(ReaderNavigationBarOverride.FOLLOW_GLOBAL),
                         tapZoneLayout = readerTapZoneLayoutFromStorage(item.optString("tapZoneLayout")),
                         tapZoneInvertMode = readerTapZoneInvertModeFromStorage(item.optString("tapZoneInvertMode")),
                         theme = epubReaderThemeFromStorage(item.optString("theme")),
