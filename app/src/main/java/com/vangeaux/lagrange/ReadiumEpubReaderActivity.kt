@@ -50,7 +50,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
+import java.net.URI
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -300,20 +306,33 @@ internal fun epubHighlightChoices() = listOf(
     HighlightChoice("Yellow underline", "yellow", "underline", 0xFFFFEB3B.toInt())
 )
 
-internal data class EpubSelectionAction(val label: String)
+internal enum class EpubSelectionActionPresentation {
+    ALWAYS,
+    IF_ROOM,
+    OVERFLOW
+}
+
+internal data class EpubSelectionAction(
+    val label: String,
+    val presentation: EpubSelectionActionPresentation = EpubSelectionActionPresentation.IF_ROOM
+)
 
 internal data class CapturedEpubSelection(
     val selection: Selection,
-    val cfi: String?
+    val cfi: String?,
+    val mediaOverlayTextFragment: String? = null
 )
 
-internal fun epubSelectionActions() = listOf(
-    EpubSelectionAction("Copy"),
-    EpubSelectionAction("Share"),
-    EpubSelectionAction("Web search"),
-    EpubSelectionAction("Highlight"),
-    EpubSelectionAction("Highlight + Note")
-)
+internal fun epubSelectionActions(mediaOverlayAvailable: Boolean = false): List<EpubSelectionAction> = buildList {
+    add(EpubSelectionAction("Copy"))
+    add(EpubSelectionAction("Share"))
+    if (mediaOverlayAvailable) {
+        add(EpubSelectionAction("Play narration", EpubSelectionActionPresentation.ALWAYS))
+    }
+    add(EpubSelectionAction("Web search", EpubSelectionActionPresentation.OVERFLOW))
+    add(EpubSelectionAction("Highlight"))
+    add(EpubSelectionAction("Highlight + Note", EpubSelectionActionPresentation.OVERFLOW))
+}
 
 internal suspend fun <T> captureSelectionBeforeAction(
     capture: suspend () -> T?,
@@ -516,6 +535,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
     private lateinit var tapZoneTutorialView: ComposeView
+    private lateinit var mediaOverlayView: ComposeView
+    private var updateReaderViewportOverlaySpace: (() -> Unit)? = null
 
     private lateinit var readerKey: String
     private lateinit var libraryId: String
@@ -550,6 +571,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var readingSessionEnded = false
     private var epubImageGestureJob: Job? = null
     private var epubImageViewer by mutableStateOf<Pair<Int, Bitmap>?>(null)
+    private lateinit var mediaOverlayPlayback: EpubMediaOverlayPlaybackViewModel
+    private var mediaOverlayPlaylist by mutableStateOf(emptyList<EpubMediaOverlayClip>())
+    private var mediaOverlayPlayerListener: Player.Listener? = null
+    private var mediaOverlayStartupNavigationPending = false
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
@@ -613,6 +638,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             supportFragmentManager.fragmentFactory = EpubNavigatorFragment.createDummyFactory()
         }
         super.onCreate(savedInstanceState)
+        mediaOverlayPlayback = ViewModelProvider(this)[EpubMediaOverlayPlaybackViewModel::class.java]
+        mediaOverlayPlaylist = mediaOverlayPlayback.playableClips.map { it.clip }
         restoredLocator = savedInstanceState?.readReaderLocator()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         AppPreferencesStore(this).read().let { preferences ->
@@ -669,6 +696,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, readerFile)) {
                 is ReadiumEpubOpenResult.Error -> showError(result.message)
                 is ReadiumEpubOpenResult.Opened -> {
+                    mediaOverlayPlaylist = withContext(Dispatchers.IO) {
+                        EpubMediaOverlayParser.parse(readerFile).items
+                    }
                     bookPositions = withContext(Dispatchers.IO) { result.publication.positions() }
                     bookPositionCount = bookPositions.size.takeIf { it > 0 }
                     showPublication(result.publication, restoredLocator)
@@ -694,6 +724,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
             if (view.paddingBottom != bottomInset) {
                 view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bottomInset)
+                updateReaderViewportOverlaySpace?.invoke()
             }
             insets
         }
@@ -794,6 +825,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         secondaryCurrentPosition = currentChapter,
                         secondaryPositionCount = chapterTitles.size,
                         onSecondaryPositionSelected = ::goToChapter,
+                        onListenToNarration = if (!isPreview && mediaOverlayPlaylist.isNotEmpty()) {
+                            {
+                                hideChrome()
+                                startMediaOverlayPlayback()
+                            }
+                        } else null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -879,7 +916,46 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         optionsView.bringToFront()
-        addReadiumAudioPlayerOverlay(rootView, readerViewport)
+        val audioPlayerOverlay = addReadiumAudioPlayerOverlay(
+            rootView,
+            readerViewport,
+            bindViewportSpace = false
+        )
+        mediaOverlayView = ComposeView(this).apply {
+            visibility = if (mediaOverlayPlayback.player == null) View.GONE else View.VISIBLE
+            setContent {
+                BookOrbitTheme {
+                    val clip = mediaOverlayPlayback.activeClip
+                    if (clip != null) {
+                        EpubMediaOverlayControls(
+                            speed = mediaOverlayPlayback.speed,
+                            isPlaying = mediaOverlayPlayback.isPlaying,
+                            canGoPrevious = (mediaOverlayPlayback.player?.currentMediaItemIndex ?: 0) > 0,
+                            canGoNext = mediaOverlayPlayback.player?.let {
+                                it.currentMediaItemIndex < it.mediaItemCount - 1
+                            } == true,
+                            onPlayPause = ::toggleMediaOverlayPlayback,
+                            onPrevious = { seekMediaOverlayClip(-1) },
+                            onNext = { seekMediaOverlayClip(1) },
+                            onSpeedChange = ::setMediaOverlaySpeed,
+                            onClose = ::closeMediaOverlayPlayback
+                        )
+                    }
+                }
+            }
+        }
+        rootView.addView(
+            mediaOverlayView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            )
+        )
+        updateReaderViewportOverlaySpace = bindReaderViewportAboveOverlays(
+            readerViewport,
+            listOf(audioPlayerOverlay, mediaOverlayView)
+        )
         setContentView(rootView)
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
         ViewCompat.requestApplyInsets(readerViewport)
@@ -964,7 +1040,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
                 shouldApplyInsetsPadding = false,
-                selectionActionModeCallback = if (epubAnnotationFeaturesEnabled(intent)) {
+                selectionActionModeCallback = if (
+                    epubAnnotationFeaturesEnabled(intent) ||
+                    (!isPreview && mediaOverlayPlaylist.isNotEmpty())
+                ) {
                     highlightActionModeCallback()
                 } else null
             )
@@ -987,6 +1066,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         navigator = fragment
+        restoreRetainedMediaOverlayPlayback()
         if (epubAnnotationFeaturesEnabled(intent)) {
             fragment.addDecorationListener(HIGHLIGHT_DECORATION_GROUP, highlightDecorationListener)
             loadHighlights(openedPublication)
@@ -1011,6 +1091,282 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         progressView?.visibility = View.GONE
         applyReaderPadding()
         if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+    }
+
+    private fun startMediaOverlayPlayback(targetClipIndex: Int? = null) {
+        mediaOverlayPlayback.player?.let { retainedPlayer ->
+            val targetIndex = targetClipIndex?.let { requested ->
+                mediaOverlayPlayback.playableClips.indexOfFirst { it.clip.index == requested }
+            }
+            if (targetIndex != null && targetIndex < 0) {
+                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                return
+            }
+            retainedPlayer.pause()
+            mediaOverlayStartupNavigationPending = true
+            if (targetIndex != null) retainedPlayer.seekTo(targetIndex, 0L)
+            val activeIndex = targetIndex ?: retainedPlayer.currentMediaItemIndex
+            val clip = mediaOverlayPlayback.playableClips.getOrNull(activeIndex)?.clip
+            if (clip == null) {
+                mediaOverlayStartupNavigationPending = false
+                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                return
+            }
+            mediaOverlayPlayback.updateClip(clip)
+            EpubMediaOverlayPositionStore(this).write(readerKey, clip.textHref, clip.textFragment)
+            mediaOverlayView.visibility = View.VISIBLE
+            updateReaderViewportOverlaySpace?.invoke()
+            lifecycleScope.launch {
+                try {
+                    if (navigateToAndHighlightMediaOverlayClip(clip)) {
+                        if (mediaOverlayPlayback.player === retainedPlayer && !isFinishing && !isDestroyed) {
+                            retainedPlayer.play()
+                        }
+                    } else {
+                        Toast.makeText(
+                            this@ReadiumEpubReaderActivity,
+                            "Unable to open the narration location.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                } finally {
+                    mediaOverlayStartupNavigationPending = false
+                }
+            }
+            return
+        }
+        val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
+        val source = file?.takeIf(File::isFile)
+        if (source == null || mediaOverlayPlaylist.isEmpty()) {
+            Toast.makeText(this, "No EPUB narration is available.", Toast.LENGTH_LONG).show()
+            return
+        }
+        lifecycleScope.launch {
+            val playable = runCatching {
+                EpubMediaOverlayResources.extract(
+                    epubFile = source,
+                    playlist = EpubMediaOverlayPlaylist(mediaOverlayPlaylist),
+                    cacheDir = cacheDir,
+                    readerKey = readerKey
+                )
+            }.getOrDefault(emptyList())
+            if (playable.isEmpty() || isFinishing || isDestroyed) {
+                Toast.makeText(this@ReadiumEpubReaderActivity, "Unable to prepare EPUB narration.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val resumeIndex = epubMediaOverlayStartIndex(
+                playable,
+                EpubMediaOverlayPositionStore(this@ReadiumEpubReaderActivity).read(readerKey)
+            )
+            val requestedIndex = targetClipIndex?.let { target ->
+                playable.indexOfFirst { it.clip.index == target }.takeIf { it >= 0 }
+            }
+            if (targetClipIndex != null && requestedIndex == null) {
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "Narration is unavailable for this sentence.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            val startIndex = requestedIndex ?: resumeIndex
+            val player = createEpubMediaOverlayPlayer(this@ReadiumEpubReaderActivity)
+            val sessionBook = BookSummary(
+                libraryId = libraryId,
+                id = bookId.orEmpty(),
+                fileId = intent.getStringExtra(EXTRA_FILE_ID),
+                title = displayTitle,
+                mediaKind = MediaKind.EPUB,
+                localPath = source.absolutePath
+            )
+            val sessionBinder = (application as BookOrbitApplication)
+                .audioPlaybackController
+                .openEpubMediaOverlaySession(sessionBook, player)
+            if (sessionBinder == null) {
+                player.release()
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "EPUB narration controls are unavailable.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            val playbackController = (application as BookOrbitApplication).audioPlaybackController
+            val savedSpeed = AppPreferencesStore(this@ReadiumEpubReaderActivity).readAudioPlaybackSpeed()
+            playbackController.setPlaybackSpeed(player, savedSpeed)
+            player.setMediaItems(
+                playable.map { epubMediaOverlayMediaItem(it, displayTitle) },
+                startIndex,
+                0L
+            )
+            val activeClip = playable.getOrNull(startIndex)?.clip
+            mediaOverlayStartupNavigationPending = true
+            mediaOverlayPlayback.attach(player, sessionBinder, playable, activeClip)
+            attachMediaOverlayPlayerListener(player)
+            activeClip?.let { clip ->
+                EpubMediaOverlayPositionStore(this@ReadiumEpubReaderActivity)
+                    .write(readerKey, clip.textHref, clip.textFragment)
+            }
+            mediaOverlayView.visibility = View.VISIBLE
+            updateReaderViewportOverlaySpace?.invoke()
+            try {
+                prepareEpubMediaOverlayThenNavigateAndPlay(
+                    prepare = player::prepare,
+                    navigate = {
+                        try {
+                            val clip = activeClip
+                                ?: throw IllegalStateException("The active narration clip is unavailable.")
+                            if (!navigateToAndHighlightMediaOverlayClip(clip)) {
+                                throw IllegalStateException("The narration location could not be opened.")
+                            }
+                        } finally {
+                            mediaOverlayStartupNavigationPending = false
+                        }
+                    },
+                    play = {
+                        if (mediaOverlayPlayback.player === player && !isFinishing && !isDestroyed) {
+                            player.play()
+                        }
+                    }
+                )
+            } catch (_: Exception) {
+                closeMediaOverlayPlayback()
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "Unable to open the narration location.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun attachMediaOverlayPlayerListener(player: ExoPlayer) {
+        mediaOverlayPlayerListener?.let(player::removeListener)
+        mediaOverlayPlayerListener = object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val index = mediaItem?.mediaId?.toIntOrNull()
+                val active = mediaOverlayPlayback.playableClips.firstOrNull {
+                    it.clip.index == index
+                }?.clip ?: return
+                mediaOverlayPlayback.updateClip(active)
+                EpubMediaOverlayPositionStore(this@ReadiumEpubReaderActivity)
+                    .write(readerKey, active.textHref, active.textFragment)
+                if (!mediaOverlayStartupNavigationPending) applyMediaOverlayHighlight(active)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                mediaOverlayPlayback.updatePlaying(isPlaying)
+            }
+
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                mediaOverlayPlayback.updateSpeed(playbackParameters.speed)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                mediaOverlayPlayback.updatePlaying(false)
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "Unable to play this EPUB narration.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }.also(player::addListener)
+    }
+
+    private fun restoreRetainedMediaOverlayPlayback() {
+        val player = mediaOverlayPlayback.player ?: return
+        if (mediaOverlayPlayback.playableClips.isEmpty()) return
+        attachMediaOverlayPlayerListener(player)
+        val active = mediaOverlayPlayback.playableClips.firstOrNull {
+            it.clip.index == player.currentMediaItem?.mediaId?.toIntOrNull()
+        }?.clip
+        active?.let {
+            mediaOverlayPlayback.updateClip(it)
+            applyMediaOverlayHighlight(it)
+        }
+        mediaOverlayPlayback.updatePlaying(player.isPlaying)
+        mediaOverlayPlayback.updateSpeed(player.playbackParameters.speed)
+        mediaOverlayView.visibility = View.VISIBLE
+        updateReaderViewportOverlaySpace?.invoke()
+    }
+
+    private fun setMediaOverlaySpeed(speed: Float) {
+        val player = mediaOverlayPlayback.player ?: return
+        (application as BookOrbitApplication).audioPlaybackController.setPlaybackSpeed(player, speed)
+        mediaOverlayPlayback.updateSpeed(player.playbackParameters.speed)
+    }
+
+    private fun closeMediaOverlayPlayback() {
+        mediaOverlayPlayerListener?.let { listener ->
+            mediaOverlayPlayback.player?.removeListener(listener)
+        }
+        mediaOverlayPlayerListener = null
+        mediaOverlayStartupNavigationPending = false
+        mediaOverlayPlayback.closePlayback()
+        mediaOverlayView.visibility = View.GONE
+        updateReaderViewportOverlaySpace?.invoke()
+        lifecycleScope.launch {
+            runCatching {
+                navigator?.applyDecorations(emptyList(), EPUB_MEDIA_OVERLAY_DECORATION_GROUP)
+            }
+        }
+    }
+
+    private fun applyMediaOverlayHighlight(clip: EpubMediaOverlayClip) {
+        lifecycleScope.launch { navigateToAndHighlightMediaOverlayClip(clip) }
+    }
+
+    private suspend fun navigateToAndHighlightMediaOverlayClip(clip: EpubMediaOverlayClip): Boolean {
+        val activeNavigator = navigator ?: return false
+        val openedPublication = publication ?: return false
+        val expectedHref = clip.textHref.removePrefix("/")
+        val link = openedPublication.readingOrder.firstOrNull { candidate ->
+            runCatching { URI(candidate.url().toString()).path.orEmpty() }
+                .getOrDefault(candidate.url().toString())
+                .removePrefix("/")
+                .endsWith(expectedHref)
+        } ?: openedPublication.readingOrder.getOrNull(clip.sectionIndex)
+            ?: return false
+        val locatorJson = JSONObject().apply {
+            put("href", link.url().toString())
+            put("type", MediaType.XHTML.toString())
+            put("locations", JSONObject())
+            clip.textFragment?.takeIf(String::isNotBlank)?.let { fragmentId ->
+                put("locations", JSONObject().put("fragments", org.json.JSONArray().put(fragmentId)))
+            }
+        }
+        val locator = runCatching { Locator.fromJSON(locatorJson) }.getOrNull() ?: return false
+        return try {
+            activeNavigator.applyDecorations(
+                listOf(
+                    Decoration(
+                        id = "epub-media-overlay-current",
+                        locator = locator,
+                        style = Decoration.Style.Highlight(
+                            tint = highlightTintForColor("yellow"),
+                            isActive = true
+                        )
+                    )
+                ),
+                EPUB_MEDIA_OVERLAY_DECORATION_GROUP
+            )
+            activeNavigator.go(locator)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun toggleMediaOverlayPlayback() {
+        val player = mediaOverlayPlayback.player ?: return
+        if (player.isPlaying) player.pause() else startMediaOverlayPlayback()
+    }
+
+    private fun seekMediaOverlayClip(direction: Int) {
+        val player = mediaOverlayPlayback.player ?: return
+        val target = (player.currentMediaItemIndex + direction).coerceIn(0, player.mediaItemCount - 1)
+        val targetClip = mediaOverlayPlayback.playableClips.getOrNull(target)?.clip ?: return
+        startMediaOverlayPlayback(targetClip.index)
     }
 
     private fun startEpubImageGestureBridge(fragment: EpubNavigatorFragment) {
@@ -1147,11 +1503,25 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun highlightActionModeCallback(): ActionMode.Callback = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-            menu?.add(0, ACTION_COPY, 0, "Copy")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu?.add(0, ACTION_SHARE, 1, "Share")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu?.add(0, ACTION_WEB_SEARCH, 2, "Web search")
-            menu?.add(0, ACTION_HIGHLIGHT, 3, "Highlight")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu?.add(0, ACTION_HIGHLIGHT_WITH_NOTE, 4, "Highlight + Note")
+            epubSelectionActions(
+                mediaOverlayAvailable = !isPreview && mediaOverlayPlaylist.isNotEmpty()
+            ).forEachIndexed { order, action ->
+                val actionId = when (action.label) {
+                    "Copy" -> ACTION_COPY
+                    "Share" -> ACTION_SHARE
+                    "Play narration" -> ACTION_PLAY_NARRATION
+                    "Web search" -> ACTION_WEB_SEARCH
+                    "Highlight" -> ACTION_HIGHLIGHT
+                    else -> ACTION_HIGHLIGHT_WITH_NOTE
+                }
+                val menuItem = menu?.add(0, actionId, order, action.label) ?: return@forEachIndexed
+                val showAsAction = when (action.presentation) {
+                    EpubSelectionActionPresentation.ALWAYS -> MenuItem.SHOW_AS_ACTION_ALWAYS
+                    EpubSelectionActionPresentation.IF_ROOM -> MenuItem.SHOW_AS_ACTION_IF_ROOM
+                    EpubSelectionActionPresentation.OVERFLOW -> MenuItem.SHOW_AS_ACTION_NEVER
+                }
+                menuItem.setShowAsAction(showAsAction)
+            }
             return true
         }
 
@@ -1162,12 +1532,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (action !in SELECTION_ACTIONS) return false
             captureCurrentSelection(
                 mode = mode,
-                requireCfi = action == ACTION_HIGHLIGHT || action == ACTION_HIGHLIGHT_WITH_NOTE
+                requireCfi = action == ACTION_HIGHLIGHT || action == ACTION_HIGHLIGHT_WITH_NOTE,
+                captureMediaOverlayFragment = action == ACTION_PLAY_NARRATION
             ) { selection ->
                 when (action) {
                     ACTION_COPY -> copySelection(selection)
                     ACTION_SHARE -> shareSelection(selection)
                     ACTION_WEB_SEARCH -> searchSelection(selection)
+                    ACTION_PLAY_NARRATION -> playNarrationForSelection(selection)
                     ACTION_HIGHLIGHT -> showHighlightChoiceDialog(selection, note = null)
                     ACTION_HIGHLIGHT_WITH_NOTE -> promptForNote(existingNote = null) { note ->
                         showHighlightChoiceDialog(selection, note)
@@ -1183,6 +1555,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun captureCurrentSelection(
         mode: ActionMode?,
         requireCfi: Boolean,
+        captureMediaOverlayFragment: Boolean = false,
         action: (CapturedEpubSelection) -> Unit
     ) {
         val fragment = navigator ?: return
@@ -1194,7 +1567,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             ?: return@captureSelectionBeforeAction null
                         val cfi = if (requireCfi) generateSelectionCfi(fragment, selection) else null
                         if (requireCfi && cfi == null) return@captureSelectionBeforeAction null
-                        CapturedEpubSelection(selection, cfi)
+                        val textFragment = if (captureMediaOverlayFragment) {
+                            selectedMediaOverlayFragmentId(fragment)
+                        } else null
+                        CapturedEpubSelection(selection, cfi, textFragment)
                     },
                     action = action
                 )
@@ -1229,6 +1605,45 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val script = assets.open(FOLIATE_SELECTION_CFI_ASSET).bufferedReader().use { it.readText() }
         val innerCfi = decodeJavascriptString(fragment.evaluateJavascript(script))
         return combineEpubCfi(spineIndex, innerCfi)
+    }
+
+    private suspend fun selectedMediaOverlayFragmentId(fragment: EpubNavigatorFragment): String? =
+        decodeJavascriptString(
+            fragment.evaluateJavascript(
+                """(() => {
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0) return null;
+                    const idFor = node => {
+                        const element = node?.nodeType === 1 ? node : node?.parentElement;
+                        return element?.closest('[id]')?.id || null;
+                    };
+                    const startId = idFor(selection.anchorNode);
+                    const endId = idFor(selection.focusNode);
+                    return startId && startId === endId ? startId : idFor(selection.getRangeAt(0).commonAncestorContainer);
+                })()"""
+            )
+        )
+
+    private fun playNarrationForSelection(selection: CapturedEpubSelection) {
+        val openedPublication = publication ?: return
+        val sectionIndex = selectedSpineIndex(
+            selectedHref = selection.selection.locator.href.toString(),
+            readingOrderHrefs = openedPublication.readingOrder.map { it.url().toString() }
+        ) ?: return showNarrationSelectionUnavailable()
+        val clipIndex = epubMediaOverlayClipIndexForSelection(
+            playlist = mediaOverlayPlaylist,
+            sectionIndex = sectionIndex,
+            textFragment = selection.mediaOverlayTextFragment
+        ) ?: return showNarrationSelectionUnavailable()
+        startMediaOverlayPlayback(clipIndex)
+    }
+
+    private fun showNarrationSelectionUnavailable() {
+        Toast.makeText(
+            this,
+            "No narration sentence matches this text selection.",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun selectedText(selection: Selection): String? =
@@ -1791,6 +2206,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        mediaOverlayPlayerListener?.let { listener ->
+            mediaOverlayPlayback.player?.removeListener(listener)
+        }
+        mediaOverlayPlayerListener = null
         if (isFinishing && !isChangingConfigurations) endReadingSession()
         super.onDestroy()
         publication?.close()
@@ -1816,6 +2235,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_INITIAL_ANNOTATION_ID = "readium_epub_initial_annotation_id"
         private const val EXTRA_INITIAL_ANNOTATION_COLOR = "readium_epub_initial_annotation_color"
         private const val EXTRA_INITIAL_ANNOTATION_STYLE = "readium_epub_initial_annotation_style"
+        private const val EPUB_MEDIA_OVERLAY_DECORATION_GROUP = "epub-media-overlay"
         private const val EXTRA_RESULT_CHAPTER = "readium_epub_result_chapter"
         private const val EXTRA_RESULT_PAGE = "readium_epub_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_epub_result_page_count"
@@ -1826,12 +2246,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val ACTION_COPY = 1000
         private const val ACTION_HIGHLIGHT = 1001
         private const val ACTION_HIGHLIGHT_WITH_NOTE = 1002
+        private const val ACTION_PLAY_NARRATION = 1005
         private const val ACTION_SHARE = 1003
         private const val ACTION_WEB_SEARCH = 1004
         private val SELECTION_ACTIONS = setOf(
             ACTION_COPY,
             ACTION_SHARE,
             ACTION_WEB_SEARCH,
+            ACTION_PLAY_NARRATION,
             ACTION_HIGHLIGHT,
             ACTION_HIGHLIGHT_WITH_NOTE
         )

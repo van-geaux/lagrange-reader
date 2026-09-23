@@ -42,9 +42,18 @@ class EpubAnnotationSelectionTest {
     @Test
     fun `selection menu retains common phone actions and annotation actions`() {
         assertEquals(
-            listOf("Copy", "Share", "Web search", "Highlight", "Highlight + Note"),
-            epubSelectionActions().map { it.label }
+            listOf("Copy", "Share", "Play narration", "Web search", "Highlight", "Highlight + Note"),
+            epubSelectionActions(mediaOverlayAvailable = true).map { it.label }
         )
+    }
+
+    @Test
+    fun `play narration is always visible while web search stays in overflow`() {
+        val actions = epubSelectionActions(mediaOverlayAvailable = true).associateBy { it.label }
+
+        assertEquals(EpubSelectionActionPresentation.ALWAYS, actions.getValue("Play narration").presentation)
+        assertEquals(EpubSelectionActionPresentation.OVERFLOW, actions.getValue("Web search").presentation)
+        assertFalse(epubSelectionActions(mediaOverlayAvailable = false).any { it.label == "Play narration" })
     }
 
     @Test

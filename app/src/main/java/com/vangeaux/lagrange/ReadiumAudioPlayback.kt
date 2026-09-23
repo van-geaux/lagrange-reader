@@ -819,6 +819,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
     internal inner class Binder : android.os.Binder() {
         private val mutableSession = MutableStateFlow<Session?>(null)
         val session: StateFlow<Session?> = mutableSession.asStateFlow()
+        private var mediaOverlaySession: MediaSession? = null
 
         fun openSession(
             book: BookSummary,
@@ -863,6 +864,30 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             }
         }
 
+        fun openMediaOverlaySession(book: BookSummary, player: Player) {
+            closeMediaOverlaySession(stopServiceIfIdle = false)
+            val createdSession = MediaSession.Builder(applicationContext, player)
+                .setId("epub-readalong:${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
+                .setSessionActivity(createSessionActivityIntent())
+                .build()
+            addSession(createdSession)
+            mediaOverlaySession = createdSession
+        }
+
+        fun closeMediaOverlaySession(stopServiceIfIdle: Boolean = true) {
+            mediaOverlaySession?.release()
+            mediaOverlaySession = null
+            if (stopServiceIfIdle && mutableSession.value == null) {
+                ServiceCompat.stopForeground(
+                    this@ReadiumAudioPlaybackService,
+                    ServiceCompat.STOP_FOREGROUND_REMOVE
+                )
+                this@ReadiumAudioPlaybackService.stopSelf()
+            }
+        }
+
+        fun activeMediaSession(): MediaSession? = mediaOverlaySession ?: mutableSession.value?.mediaSession
+
         fun promotePreviewSession(): Session? {
             val current = mutableSession.value ?: return null
             if (current.launchMode != ReaderLaunchMode.PREVIEW) return current
@@ -873,6 +898,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun stop() {
             closeSession()
+            closeMediaOverlaySession(stopServiceIfIdle = false)
             ServiceCompat.stopForeground(
                 this@ReadiumAudioPlaybackService,
                 ServiceCompat.STOP_FOREGROUND_REMOVE
@@ -905,7 +931,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        binder.session.value?.mediaSession
+        binder.activeMediaSession()
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
@@ -914,6 +940,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         binder.closeSession()
+        binder.closeMediaOverlaySession()
         super.onDestroy()
     }
 
@@ -1032,6 +1059,26 @@ class ReadiumAudioPlaybackController internal constructor(
     ) {
         streamingHeadersProvider = headersProvider
         streamingAuthenticationRecovery = recoverAuthentication
+    }
+
+    internal suspend fun openEpubMediaOverlaySession(
+        book: BookSummary,
+        player: Player
+    ): ReadiumAudioPlaybackService.Binder? {
+        val serviceBinder = try {
+            ReadiumAudioPlaybackService.start(application)
+            withTimeoutOrNull(AUDIO_SERVICE_BIND_TIMEOUT_MILLIS) { binder() } ?: return null
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return null
+        }
+        return withContext(Dispatchers.Main.immediate) {
+            runCatching {
+                serviceBinder.openMediaOverlaySession(book, player)
+                serviceBinder
+            }.getOrNull()
+        }
     }
 
     internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)

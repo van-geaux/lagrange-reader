@@ -1339,6 +1339,7 @@ internal fun ReaderLightweightChrome(
     secondaryCurrentPosition: Int = 0,
     secondaryPositionCount: Int = 0,
     onSecondaryPositionSelected: ((Int) -> Unit)? = null,
+    onListenToNarration: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val entries = positionTitles.ifEmpty { listOf(positionKind) }
@@ -1582,6 +1583,18 @@ internal fun ReaderLightweightChrome(
                             text = if (listPositionKind == "Chapter") "Chapters" else "Pages",
                             modifier = Modifier.padding(start = 8.dp)
                         )
+                    }
+                    if (onListenToNarration != null) {
+                        OutlinedButton(
+                            onClick = { onListenToNarration() },
+                            modifier = Modifier
+                                .testTag("reader-lightweight-listen")
+                                .semantics { contentDescription = "Listen to narration" },
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Text("Listen", modifier = Modifier.padding(start = 4.dp))
+                        }
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Reader settings")

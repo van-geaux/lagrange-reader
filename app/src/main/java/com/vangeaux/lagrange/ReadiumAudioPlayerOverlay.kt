@@ -13,8 +13,9 @@ import kotlinx.coroutines.launch
 /** Keeps the compact audiobook controls visible above Readium's separate reader activities. */
 internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
     root: FrameLayout,
-    readerViewport: View
-) {
+    readerViewport: View,
+    bindViewportSpace: Boolean = true
+): View {
     val controller = (application as BookOrbitApplication).audioPlaybackController
     val preferenceStore = AppPreferencesStore(this)
     val storedPreferences = preferenceStore.read()
@@ -50,7 +51,10 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
             Gravity.BOTTOM
         )
     )
-    bindReaderViewportAboveOverlay(readerViewport, playerView)
+    if (bindViewportSpace) {
+        bindReaderViewportAboveOverlay(readerViewport, playerView)
+    }
+    return playerView
 }
 
 internal fun bindReaderViewportAboveOverlay(readerViewport: View, overlay: View) {
@@ -64,4 +68,40 @@ internal fun bindReaderViewportAboveOverlay(readerViewport: View, overlay: View)
             readerViewport.layoutParams = layoutParams
         }
     }
+}
+
+internal fun readerViewportOverlayBottomMargin(
+    visibleOverlayHeights: List<Int>,
+    viewportBottomInset: Int
+): Int = (
+    (visibleOverlayHeights.maxOfOrNull { it.coerceAtLeast(0) } ?: 0) - viewportBottomInset.coerceAtLeast(0)
+).coerceAtLeast(0)
+
+internal fun bindReaderViewportAboveOverlays(
+    readerViewport: View,
+    overlays: List<View>
+): () -> Unit {
+    val update: () -> Unit = {
+        val visibleOverlayHeights = overlays
+            .filter { it.visibility == View.VISIBLE }
+            .map(View::getHeight)
+        val layoutParams = readerViewport.layoutParams as? FrameLayout.LayoutParams
+        if (layoutParams == null) {
+            Unit
+        } else {
+            val bottomMargin = readerViewportOverlayBottomMargin(
+                visibleOverlayHeights = visibleOverlayHeights,
+                viewportBottomInset = readerViewport.paddingBottom
+            )
+            if (layoutParams.bottomMargin != bottomMargin) {
+                layoutParams.bottomMargin = bottomMargin
+                readerViewport.layoutParams = layoutParams
+            }
+        }
+    }
+    overlays.forEach { overlay ->
+        overlay.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> update() }
+    }
+    update()
+    return update
 }
