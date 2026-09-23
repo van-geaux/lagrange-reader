@@ -33,6 +33,10 @@ enabled and its value persists after leaving and reopening Options. On a
 device or emulator, verify the global default hides Android navigation in
 EPUB, PDF, and comic readers across libraries; turning it off shows the bar
 and keeps reader content above its inset in all three reader groups.
+In EPUB specifically, verify the progress row sits directly above the system
+navigation bar and open the reader menu/options to confirm its bottom controls
+are not covered by the bar. Toggle back on and verify the immersive layout
+returns without reserving extra bottom space.
 Audiobook behavior is unchanged.
 
 ### Android 16 KB native packaging

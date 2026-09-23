@@ -684,6 +684,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerViewport = FrameLayout(this).apply {
             setBackgroundColor(selectedTheme.backgroundColor)
         }
+        ViewCompat.setOnApplyWindowInsetsListener(readerViewport) { view, insets ->
+            val navigationBarBottom = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.navigationBars()
+            ).bottom
+            val bottomInset = readerViewportBottomInset(
+                navigationBarBottom,
+                hideNavigationBar = appPreferencesStore.read().hideNavigationBarWhileReading
+            )
+            if (view.paddingBottom != bottomInset) {
+                view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bottomInset)
+            }
+            insets
+        }
 
         rootView.addView(
             readerViewport,
@@ -869,6 +882,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
+        ViewCompat.requestApplyInsets(readerViewport)
     }
 
     private fun restoreReaderUi(savedInstanceState: Bundle?) {
