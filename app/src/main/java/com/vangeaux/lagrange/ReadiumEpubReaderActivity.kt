@@ -1726,9 +1726,15 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     @Suppress("DEPRECATION")
     private fun configureSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
+        val policy = readerSystemBarsPolicy(
+            ReaderConfigurationFormat.EPUB,
+            readerPreferences,
+            appPreferencesStore.read().hideNavigationBarWhileReading
+        )
         WindowCompat.getInsetsController(window, window.decorView).apply {
             show(WindowInsetsCompat.Type.statusBars())
-            hide(WindowInsetsCompat.Type.navigationBars())
+            if (policy.showNavigationBar) show(WindowInsetsCompat.Type.navigationBars())
+            else hide(WindowInsetsCompat.Type.navigationBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             isAppearanceLightStatusBars = selectedTheme.usesDarkStatusBarIcons()
         }

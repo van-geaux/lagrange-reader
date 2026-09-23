@@ -8,6 +8,11 @@ import org.junit.Test
 
 class AppPreferencesStoreTest {
     @Test
+    fun `navigation bar hiding defaults to enabled`() {
+        assertEquals(true, AppPreferences().hideNavigationBarWhileReading)
+    }
+
+    @Test
     fun `EPUB image minimum dimension defaults to 250 and normalizes to 25 pixel steps`() {
         assertEquals(250, AppPreferences().epubImageMinimumDimensionPx)
         assertEquals(0, normalizeEpubImageMinimumDimensionPx(-1))
