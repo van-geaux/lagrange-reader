@@ -84,7 +84,7 @@ The important boundary is simple: BookOrbit stays authoritative, while Lagrange 
 
 - **Offline-first library:** browse cached books and reopen downloaded EPUB, PDF, CBZ, and supported audiobook files without a connection.
 - **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
-- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, and per-library font selection through grouped normal/accessibility menus, plus one imported custom `.ttf`/`.otf` font.
+- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, per-library font selection through grouped normal/accessibility menus, one imported custom `.ttf`/`.otf` font, and read-along narration for local EPUB 3 media overlays with sentence highlighting and resume.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
 - **Audiobook playback:** compact and full players with seeking, chapter selection, previous/next chapter controls, playback speed, sleep timer, resume, responsive portrait/landscape layouts, session history, read-along support, and optional pausing/resuming when Android reports competing audio focus (enabled by default).
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.

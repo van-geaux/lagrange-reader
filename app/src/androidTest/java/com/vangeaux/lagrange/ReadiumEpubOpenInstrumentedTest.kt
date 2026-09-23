@@ -11,6 +11,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.ViewModelProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.CRC32
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -313,12 +315,20 @@ class ReadiumEpubOpenInstrumentedTest {
             )
         ).use { scenario ->
             val expected = awaitEpubLocator(scenario, context, readerKey)
+            var playbackOwner: EpubMediaOverlayPlaybackViewModel? = null
+            scenario.onActivity { activity ->
+                playbackOwner = ViewModelProvider(activity)[EpubMediaOverlayPlaybackViewModel::class.java]
+            }
             repeat(2) {
                 scenario.recreate()
                 val restored = awaitEpubLocator(scenario, context, readerKey)
                 assertEquals(expected.href, restored.href)
                 assertEquals(expected.locations.progression, restored.locations.progression)
                 scenario.onActivity { activity ->
+                    assertSame(
+                        playbackOwner,
+                        ViewModelProvider(activity)[EpubMediaOverlayPlaybackViewModel::class.java]
+                    )
                     assertEquals(
                         1,
                         activity.supportFragmentManager.fragments.count { fragment ->

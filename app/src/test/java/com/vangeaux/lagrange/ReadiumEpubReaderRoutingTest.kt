@@ -25,6 +25,14 @@ class ReadiumEpubReaderRoutingTest {
     }
 
     @Test
+    fun `bottom overlay reservation subtracts viewport inset once and uses tallest visible overlay`() {
+        assertEquals(348, readerViewportOverlayBottomMargin(listOf(240, 420), viewportBottomInset = 72))
+        assertEquals(168, readerViewportOverlayBottomMargin(listOf(240), viewportBottomInset = 72))
+        assertEquals(0, readerViewportOverlayBottomMargin(emptyList(), viewportBottomInset = 72))
+        assertEquals(0, readerViewportOverlayBottomMargin(listOf(24), viewportBottomInset = 72))
+    }
+
+    @Test
     fun previewLabelsUsePreviewModeTerminologyForReadingAndListening() {
         assertEquals("Preview mode · Tap to enable reading progress", BOOK_PREVIEW_MODE_LABEL)
         assertEquals("Preview mode · Tap to enable listening progress", AUDIOBOOK_PREVIEW_MODE_LABEL)

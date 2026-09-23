@@ -124,6 +124,31 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithContentDescription("Previous page").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Next page").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Page jump bar").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-lightweight-listen").assertCountEquals(0)
+    }
+
+    @Test
+    fun epubChromeShowsNarrationActionWhenAvailable() {
+        val listenCount = mutableIntStateOf(0)
+        composeRule.setContent {
+            ReaderLightweightChrome(
+                title = "Narrated EPUB",
+                theme = EpubReaderTheme.Sepia,
+                positionKind = "Page",
+                positionTitles = listOf("Page 1"),
+                currentPosition = 0,
+                onBackToReading = {},
+                onCloseBook = {},
+                onOpenSettings = {},
+                onPositionSelected = {},
+                onListenToNarration = { listenCount.intValue++ }
+            )
+        }
+
+        composeRule.onNodeWithTag("reader-lightweight-listen").assertIsDisplayed()
+        composeRule.onNodeWithText("Listen").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Listen to narration").performClick()
+        composeRule.runOnIdle { assertEquals(1, listenCount.intValue) }
     }
 
     @Test
