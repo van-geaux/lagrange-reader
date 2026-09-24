@@ -268,6 +268,8 @@ private class ReadAlongMediaNotificationProvider(
             .setContentIntent(mediaSession.sessionActivity)
             .setCustomContentView(views)
             .setCustomBigContentView(views)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setOnlyAlertOnce(true)
             .setOngoing(player.isPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
