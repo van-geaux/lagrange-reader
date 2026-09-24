@@ -8,11 +8,24 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpubMediaOverlayPlaybackTest {
+    @Test
+    fun `read-along audio focus policy follows the shared audiobook preference`() {
+        assertTrue(
+            AppPreferences(pauseAudiobookForAudioInterruptions = true)
+                .pauseAudiobookForAudioInterruptions
+        )
+        assertFalse(
+            AppPreferences(pauseAudiobookForAudioInterruptions = false)
+                .pauseAudiobookForAudioInterruptions
+        )
+    }
+
     @Test
     fun `selection resolves to the media overlay sentence containing its fragment`() {
         val clips = listOf(

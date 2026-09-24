@@ -888,6 +888,8 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun activeMediaSession(): MediaSession? = mediaOverlaySession ?: mutableSession.value?.mediaSession
 
+        fun mediaOverlayPlayer(): Player? = mediaOverlaySession?.player
+
         fun promotePreviewSession(): Session? {
             val current = mutableSession.value ?: return null
             if (current.launchMode != ReaderLaunchMode.PREVIEW) return current
@@ -1154,7 +1156,11 @@ class ReadiumAudioPlaybackController internal constructor(
 
     internal fun updateAudioInterruptionPolicy(pauseForAudioInterruptions: Boolean) {
         scope.launch {
-            binder().session.value?.player?.let { player ->
+            val serviceBinder = binder()
+            serviceBinder.session.value?.player?.let { player ->
+                applyAudiobookAudioFocusPolicy(player, pauseForAudioInterruptions)
+            }
+            serviceBinder.mediaOverlayPlayer()?.let { player ->
                 applyAudiobookAudioFocusPolicy(player, pauseForAudioInterruptions)
             }
         }

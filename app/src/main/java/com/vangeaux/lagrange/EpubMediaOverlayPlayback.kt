@@ -235,13 +235,16 @@ internal fun epubMediaOverlayClippingConfiguration(clip: EpubMediaOverlayClip): 
         }
         .build()
 
-internal fun createEpubMediaOverlayPlayer(context: Context): ExoPlayer = ExoPlayer.Builder(context)
+internal fun createEpubMediaOverlayPlayer(
+    context: Context,
+    pauseForAudioInterruptions: Boolean
+): ExoPlayer = ExoPlayer.Builder(context)
     .setAudioAttributes(
         AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
             .build(),
-        true
+        pauseForAudioInterruptions
     )
     .setHandleAudioBecomingNoisy(true)
     .build()
