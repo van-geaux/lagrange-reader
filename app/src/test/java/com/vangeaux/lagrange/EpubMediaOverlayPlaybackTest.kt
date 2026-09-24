@@ -91,7 +91,7 @@ class EpubMediaOverlayPlaybackTest {
         val cache = Files.createTempDirectory("overlay-cache").toFile()
         ZipOutputStream(epub.outputStream()).use { zip ->
             zip.putNextEntry(ZipEntry("OPS/chapter.xhtml"))
-            zip.write("<html><body><p id=\"sentence-a\">Hello <b>world</b>.</p></body></html>".toByteArray())
+            zip.write("<html><body><p id=\"sentence-a\">Hello <b>world</b>.</p><p id=\"sentence-b\">Second sentence.</p></body></html>".toByteArray())
             zip.closeEntry()
             zip.putNextEntry(ZipEntry("OPS/audio/voice.mp3"))
             zip.write(byteArrayOf(1, 2, 3, 4))
@@ -107,19 +107,20 @@ class EpubMediaOverlayPlaybackTest {
             clipEndSeconds = 1.5,
             durationSeconds = 1.25
         )
+        val secondClip = clip.copy(index = 1, textFragment = "sentence-b")
 
         val extracted = EpubMediaOverlayResources.extract(
             epubFile = epub,
-            playlist = EpubMediaOverlayPlaylist(listOf(clip)),
+            playlist = EpubMediaOverlayPlaylist(listOf(clip, secondClip)),
             cacheDir = cache,
             readerKey = "book|file"
         )
 
-        assertEquals(1, extracted.size)
-        assertTrue(extracted.single().audioFile.isFile)
-        assertEquals("Hello world.", extracted.single().sentenceText)
-        assertEquals("1, 2, 3, 4", extracted.single().audioFile.readBytes().joinToString(", "))
-        assertTrue(extracted.single().audioFile.canonicalPath.startsWith(cache.canonicalPath))
+        assertEquals(2, extracted.size)
+        assertTrue(extracted.all { it.audioFile.isFile })
+        assertEquals(listOf("Hello world.", "Second sentence."), extracted.map { it.sentenceText })
+        assertEquals("1, 2, 3, 4", extracted.first().audioFile.readBytes().joinToString(", "))
+        assertTrue(extracted.all { it.audioFile.canonicalPath.startsWith(cache.canonicalPath) })
     }
 
     private fun playableClip(index: Int, href: String, fragment: String) = EpubMediaOverlayPlayableClip(

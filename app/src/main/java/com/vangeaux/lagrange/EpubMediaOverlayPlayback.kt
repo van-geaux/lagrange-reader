@@ -127,6 +127,7 @@ internal object EpubMediaOverlayResources {
         if (!targetDir.isDirectory && !targetDir.mkdirs()) return@withContext emptyList()
         ZipFile(epubFile).use { zip ->
             val extracted = mutableMapOf<String, File>()
+            val sentenceReader = EpubMediaOverlaySentenceReader(zip)
             var totalBytes = 0L
             playlist.items.mapNotNull { clip ->
                 val audio = extracted[clip.audioHref] ?: run {
@@ -161,19 +162,15 @@ internal object EpubMediaOverlayResources {
                 EpubMediaOverlayPlayableClip(
                     clip = clip,
                     audioFile = audio,
-                    sentenceText = readEpubMediaOverlaySentence(zip, clip)
+                    sentenceText = sentenceReader.read(clip)
                 )
             }
         }
     }
 
-    private fun readEpubMediaOverlaySentence(
-        zip: ZipFile,
-        clip: EpubMediaOverlayClip
-    ): String? {
-        val entry = zip.getEntry(clip.textHref) ?: return null
-        val fragment = clip.textFragment?.takeIf(String::isNotBlank) ?: return null
-        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+    private class EpubMediaOverlaySentenceReader(private val zip: ZipFile) {
+        private val documents = mutableMapOf<String, org.w3c.dom.Document?>()
+        private val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
             isExpandEntityReferences = false
             runCatching { setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true) }
@@ -181,19 +178,26 @@ internal object EpubMediaOverlayResources {
             runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
             runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
         }
-        val document = runCatching {
-            zip.getInputStream(entry).use { factory.newDocumentBuilder().parse(it) }
-        }.getOrNull() ?: return null
-        val elements = document.getElementsByTagName("*")
-        val sentenceElement = (0 until elements.length)
-            .asSequence()
-            .mapNotNull { elements.item(it) as? org.w3c.dom.Element }
-            .firstOrNull { it.getAttribute("id") == fragment }
-            ?: return null
-        return sentenceElement.textContent
-            .replace(Regex("\\s+"), " ")
-            .trim()
-            .takeIf(String::isNotBlank)
+
+        fun read(clip: EpubMediaOverlayClip): String? {
+            val fragment = clip.textFragment?.takeIf(String::isNotBlank) ?: return null
+            val document = documents.getOrPut(clip.textHref) {
+                val entry = zip.getEntry(clip.textHref) ?: return@getOrPut null
+                runCatching {
+                    zip.getInputStream(entry).use { factory.newDocumentBuilder().parse(it) }
+                }.getOrNull()
+            } ?: return null
+            val elements = document.getElementsByTagName("*")
+            val sentenceElement = (0 until elements.length)
+                .asSequence()
+                .mapNotNull { elements.item(it) as? org.w3c.dom.Element }
+                .firstOrNull { it.getAttribute("id") == fragment }
+                ?: return null
+            return sentenceElement.textContent
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .takeIf(String::isNotBlank)
+        }
     }
 }
 

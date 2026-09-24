@@ -263,8 +263,8 @@ private class ReadAlongMediaNotificationProvider(
         }
         val builder = NotificationCompat.Builder(context, READALONG_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(metadata.title ?: "Read-along")
-            .setContentText(metadata.artist ?: "EPUB narration")
+            .setContentTitle("Read-along")
+            .setContentText(null)
             .setContentIntent(mediaSession.sessionActivity)
             .setCustomContentView(views)
             .setCustomBigContentView(views)
