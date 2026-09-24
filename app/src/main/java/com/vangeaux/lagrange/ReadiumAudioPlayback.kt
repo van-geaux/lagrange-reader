@@ -31,7 +31,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaStyleNotificationHelper
+
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
@@ -268,7 +268,6 @@ private class ReadAlongMediaNotificationProvider(
             .setContentIntent(mediaSession.sessionActivity)
             .setCustomContentView(views)
             .setCustomBigContentView(views)
-            .setStyle(MediaStyleNotificationHelper.MediaStyle(mediaSession))
             .setOnlyAlertOnce(true)
             .setOngoing(player.isPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
