@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -11,7 +13,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
+import android.widget.RemoteViews
+import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -24,7 +29,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
@@ -76,6 +83,9 @@ internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO
 internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_FORWARD_30"
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
+private const val READALONG_NOTIFICATION_ID = 4102
+private const val READALONG_NOTIFICATION_CHANNEL_ID = "readalong_playback"
+private const val READALONG_SESSION_PREFIX = "epub-readalong:"
 
 internal val audiobookSeekBackSessionCommand = SessionCommand(
     AUDIO_SEEK_BACK_SESSION_ACTION,
@@ -206,6 +216,124 @@ private class AudiobookMediaNotificationProvider(context: Context) :
         )
     )
 }
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private class ReadAlongMediaNotificationProvider(
+    private val context: Context
+) : MediaNotification.Provider {
+    private val audiobookProvider = AudiobookMediaNotificationProvider(context)
+    private val notificationManager = context.getSystemService(NotificationManager::class.java)
+
+    init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    READALONG_NOTIFICATION_CHANNEL_ID,
+                    "Read-along playback",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Shows the sentence currently narrated in an EPUB."
+                }
+            )
+        }
+    }
+
+    override fun createNotification(
+        mediaSession: MediaSession,
+        customLayout: ImmutableList<CommandButton>,
+        actionFactory: MediaNotification.ActionFactory,
+        onNotificationCommitted: MediaNotification.Provider.Callback
+    ): MediaNotification {
+        if (!mediaSession.id.startsWith(READALONG_SESSION_PREFIX)) {
+            return audiobookProvider.createNotification(
+                mediaSession,
+                customLayout,
+                actionFactory,
+                onNotificationCommitted
+            )
+        }
+
+        val player = mediaSession.player
+        val metadata = player.mediaMetadata
+        val views = RemoteViews(context.packageName, R.layout.notification_readalong).apply {
+            setTextViewText(
+                R.id.readalong_sentence,
+                metadata.artist ?: metadata.title ?: "Read-along"
+            )
+        }
+        val builder = NotificationCompat.Builder(context, READALONG_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(metadata.title ?: "Read-along")
+            .setContentText(metadata.artist ?: "EPUB narration")
+            .setContentIntent(mediaSession.sessionActivity)
+            .setCustomContentView(views)
+            .setCustomBigContentView(views)
+            .setStyle(MediaStyleNotificationHelper.MediaStyle(mediaSession))
+            .setOnlyAlertOnce(true)
+            .setOngoing(player.isPlaying)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+        addAction(
+            builder,
+            views,
+            mediaSession,
+            actionFactory,
+            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+            android.R.drawable.ic_media_previous,
+            "Previous narration sentence",
+            R.id.readalong_previous
+        )
+        addAction(
+            builder,
+            views,
+            mediaSession,
+            actionFactory,
+            Player.COMMAND_PLAY_PAUSE,
+            if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+            if (player.isPlaying) "Pause narration" else "Play narration",
+            R.id.readalong_play_pause
+        )
+        addAction(
+            builder,
+            views,
+            mediaSession,
+            actionFactory,
+            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+            android.R.drawable.ic_media_next,
+            "Next narration sentence",
+            R.id.readalong_next
+        )
+        return MediaNotification(READALONG_NOTIFICATION_ID, builder.build())
+    }
+
+    private fun addAction(
+        builder: NotificationCompat.Builder,
+        views: RemoteViews,
+        mediaSession: MediaSession,
+        actionFactory: MediaNotification.ActionFactory,
+        command: Int,
+        iconRes: Int,
+        label: String,
+        viewId: Int
+    ) {
+        if (!mediaSession.player.isCommandAvailable(command)) return
+        val action = actionFactory.createMediaAction(
+            mediaSession,
+            IconCompat.createWithResource(context, iconRes),
+            label,
+            command
+        )
+        builder.addAction(action)
+        views.setOnClickPendingIntent(viewId, action.actionIntent)
+    }
+
+    override fun handleCustomCommand(
+        mediaSession: MediaSession,
+        action: String,
+        extras: Bundle
+    ): Boolean = audiobookProvider.handleCustomCommand(mediaSession, action, extras)
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class AudiobookMediaSessionCallback : MediaSession.Callback {
     override fun onConnect(
@@ -921,7 +1049,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        setMediaNotificationProvider(AudiobookMediaNotificationProvider(this))
+        setMediaNotificationProvider(ReadAlongMediaNotificationProvider(this))
     }
 
     override fun onBind(intent: Intent?): IBinder? =

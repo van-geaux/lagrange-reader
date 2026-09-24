@@ -90,6 +90,9 @@ class EpubMediaOverlayPlaybackTest {
         val epub = Files.createTempFile("overlay-resource", ".epub").toFile()
         val cache = Files.createTempDirectory("overlay-cache").toFile()
         ZipOutputStream(epub.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("OPS/chapter.xhtml"))
+            zip.write("<html><body><p id=\"sentence-a\">Hello <b>world</b>.</p></body></html>".toByteArray())
+            zip.closeEntry()
             zip.putNextEntry(ZipEntry("OPS/audio/voice.mp3"))
             zip.write(byteArrayOf(1, 2, 3, 4))
             zip.closeEntry()
@@ -114,6 +117,7 @@ class EpubMediaOverlayPlaybackTest {
 
         assertEquals(1, extracted.size)
         assertTrue(extracted.single().audioFile.isFile)
+        assertEquals("Hello world.", extracted.single().sentenceText)
         assertEquals("1, 2, 3, 4", extracted.single().audioFile.readBytes().joinToString(", "))
         assertTrue(extracted.single().audioFile.canonicalPath.startsWith(cache.canonicalPath))
     }

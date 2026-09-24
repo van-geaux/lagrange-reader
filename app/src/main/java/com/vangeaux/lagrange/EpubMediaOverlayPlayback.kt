@@ -46,7 +46,8 @@ import kotlinx.coroutines.withContext
 
 internal data class EpubMediaOverlayPlayableClip(
     val clip: EpubMediaOverlayClip,
-    val audioFile: File
+    val audioFile: File,
+    val sentenceText: String? = null
 )
 
 /** Retains narration ownership while the reader Activity is recreated for configuration changes. */
@@ -157,9 +158,42 @@ internal object EpubMediaOverlayResources {
                     extracted[clip.audioHref] = destination
                     destination
                 }
-                EpubMediaOverlayPlayableClip(clip, audio)
+                EpubMediaOverlayPlayableClip(
+                    clip = clip,
+                    audioFile = audio,
+                    sentenceText = readEpubMediaOverlaySentence(zip, clip)
+                )
             }
         }
+    }
+
+    private fun readEpubMediaOverlaySentence(
+        zip: ZipFile,
+        clip: EpubMediaOverlayClip
+    ): String? {
+        val entry = zip.getEntry(clip.textHref) ?: return null
+        val fragment = clip.textFragment?.takeIf(String::isNotBlank) ?: return null
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = true
+            isExpandEntityReferences = false
+            runCatching { setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+            runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
+            runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+        }
+        val document = runCatching {
+            zip.getInputStream(entry).use { factory.newDocumentBuilder().parse(it) }
+        }.getOrNull() ?: return null
+        val elements = document.getElementsByTagName("*")
+        val sentenceElement = (0 until elements.length)
+            .asSequence()
+            .mapNotNull { elements.item(it) as? org.w3c.dom.Element }
+            .firstOrNull { it.getAttribute("id") == fragment }
+            ?: return null
+        return sentenceElement.textContent
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .takeIf(String::isNotBlank)
     }
 }
 
@@ -218,7 +252,7 @@ internal fun epubMediaOverlayMediaItem(
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle("Read-along · $bookTitle")
-                .setArtist("EPUB narration")
+                .setArtist(clip.sentenceText ?: "EPUB narration")
                 .build()
         )
         .setClippingConfiguration(epubMediaOverlayClippingConfiguration(clip.clip))
