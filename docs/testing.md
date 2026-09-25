@@ -55,7 +55,7 @@ Open an online EPUB that is not downloaded. Verify the first action shows no dow
 
 Focused JVM and build verification:
 
-For read-along notification validation on a connected device, open an EPUB with EPUB 3 media overlays and start narration. Confirm the notification card shows the currently narrated sentence across up to two wrapped lines, without the book title or a seek bar, and that previous, play/pause, and next actions control narration. Lock the device and open another app, then return to the EPUB reader menu; narration and the notification must remain active. Close the EPUB explicitly and confirm narration and its notification stop. Verify an audiobook still uses its existing notification layout and seek behavior.
+For read-along notification validation on a connected device, open an EPUB with EPUB 3 media overlays and start narration. Confirm the paired notification design: the native MediaStyle media notification is present for system media controls, and the custom sentence card shows the currently narrated sentence across up to two wrapped lines, without the book title or a seek bar. Verify previous, play/pause, and next actions control narration. Lock the device and open another app, then return to the EPUB reader menu; narration and the notification must remain active. Close the EPUB explicitly and confirm narration and its notification stop. Verify an audiobook still uses its existing notification layout and seek behavior.
 
 ```text
 ./gradlew --no-daemon --console=plain :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug
