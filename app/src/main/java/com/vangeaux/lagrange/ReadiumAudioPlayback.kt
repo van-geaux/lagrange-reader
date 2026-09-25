@@ -390,6 +390,29 @@ private class ReadAlongMediaNotificationProvider(
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+private class ReadAlongMediaSessionCallback : MediaSession.Callback {
+    override fun onConnect(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo
+    ): MediaSession.ConnectionResult {
+        val commands = session.player.availableCommands.buildUpon()
+            .remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+            .remove(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_TO_NEXT)
+            .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_BACK)
+            .remove(Player.COMMAND_SEEK_FORWARD)
+            .build()
+        return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            .setAvailablePlayerCommands(commands)
+            .build()
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal class AudiobookMediaSessionCallback : MediaSession.Callback {
     override fun onConnect(
         session: MediaSession,
@@ -1052,6 +1075,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             val createdSession = MediaSession.Builder(applicationContext, player)
                 .setId("epub-readalong:${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
                 .setSessionActivity(createSessionActivityIntent())
+                .setCallback(ReadAlongMediaSessionCallback())
                 .build()
             addSession(createdSession)
             mediaOverlaySession = createdSession
