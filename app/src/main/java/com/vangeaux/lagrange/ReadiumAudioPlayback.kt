@@ -278,7 +278,7 @@ private class ReadAlongMediaNotificationProvider(
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_PREVIOUS,
+            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
             android.R.drawable.ic_media_previous,
             "Previous narration sentence",
             R.id.readalong_previous
@@ -298,7 +298,7 @@ private class ReadAlongMediaNotificationProvider(
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_NEXT,
+            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
             android.R.drawable.ic_media_next,
             "Next narration sentence",
             R.id.readalong_next
