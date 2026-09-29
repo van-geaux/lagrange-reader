@@ -411,11 +411,12 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
             )
         }
         val player = session.player
+        val wasPlaying = player.isPlaying
         val targetIndex = (player.currentMediaItemIndex + direction)
             .takeIf { it in 0 until player.mediaItemCount }
         if (targetIndex != null) {
             player.seekTo(targetIndex, 0L)
-            player.play()
+            if (wasPlaying) player.play() else player.pause()
         }
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
