@@ -35,6 +35,7 @@ import androidx.media3.session.MediaSessionService
 
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import java.io.File
@@ -86,6 +87,8 @@ private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
 private const val READALONG_NOTIFICATION_ID = 4102
 private const val READALONG_NOTIFICATION_CHANNEL_ID = "readalong_playback"
 private const val READALONG_SESSION_PREFIX = "epub-readalong:"
+private const val READALONG_PREVIOUS_ACTION = "com.vangeaux.lagrange.READALONG_PREVIOUS"
+private const val READALONG_NEXT_ACTION = "com.vangeaux.lagrange.READALONG_NEXT"
 
 internal val audiobookSeekBackSessionCommand = SessionCommand(
     AUDIO_SEEK_BACK_SESSION_ACTION,
@@ -95,6 +98,9 @@ internal val audiobookSeekForwardSessionCommand = SessionCommand(
     AUDIO_SEEK_FORWARD_SESSION_ACTION,
     Bundle()
 )
+
+private val readAlongPreviousSessionCommand = SessionCommand(READALONG_PREVIOUS_ACTION, Bundle())
+private val readAlongNextSessionCommand = SessionCommand(READALONG_NEXT_ACTION, Bundle())
 
 internal fun audiobookMedia3AudioAttributes(): AudioAttributes =
     AudioAttributes.Builder()
@@ -273,12 +279,12 @@ private class ReadAlongMediaNotificationProvider(
             .setOngoing(player.isPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
-        addAction(
+        addCustomAction(
             cardBuilder,
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+            readAlongPreviousSessionCommand,
             android.R.drawable.ic_media_previous,
             "Previous narration sentence",
             R.id.readalong_previous
@@ -293,12 +299,12 @@ private class ReadAlongMediaNotificationProvider(
             if (player.isPlaying) "Pause narration" else "Play narration",
             R.id.readalong_play_pause
         )
-        addAction(
+        addCustomAction(
             cardBuilder,
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+            readAlongNextSessionCommand,
             android.R.drawable.ic_media_next,
             "Next narration sentence",
             R.id.readalong_next
@@ -330,6 +336,28 @@ private class ReadAlongMediaNotificationProvider(
         }
     }
 
+    private fun addCustomAction(
+        builder: NotificationCompat.Builder,
+        views: RemoteViews,
+        mediaSession: MediaSession,
+        actionFactory: MediaNotification.ActionFactory,
+        command: SessionCommand,
+        iconRes: Int,
+        label: String,
+        viewId: Int
+    ) {
+        val action = actionFactory.createCustomAction(
+            mediaSession,
+            IconCompat.createWithResource(context, iconRes),
+            label,
+            command.customAction,
+            command.customExtras
+        )
+        builder.addAction(action)
+        views.setImageViewResource(viewId, iconRes)
+        views.setOnClickPendingIntent(viewId, action.actionIntent)
+    }
+
     companion object {
         fun cancelSentenceNotification(context: Context) {
             context.getSystemService(NotificationManager::class.java)
@@ -359,8 +387,37 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
             .remove(Player.COMMAND_SEEK_FORWARD)
             .build()
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            .setAvailableSessionCommands(
+                SessionCommands.Builder()
+                    .add(readAlongPreviousSessionCommand)
+                    .add(readAlongNextSessionCommand)
+                    .build()
+            )
             .setAvailablePlayerCommands(commands)
             .build()
+    }
+
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle
+    ): ListenableFuture<SessionResult> {
+        val direction = when (customCommand.customAction) {
+            READALONG_PREVIOUS_ACTION -> -1
+            READALONG_NEXT_ACTION -> 1
+            else -> return Futures.immediateFuture(
+                SessionResult(SessionError(SessionError.ERROR_BAD_VALUE, "Unknown read-along action"))
+            )
+        }
+        val player = session.player
+        val targetIndex = (player.currentMediaItemIndex + direction)
+            .takeIf { it in 0 until player.mediaItemCount }
+        if (targetIndex != null) {
+            player.seekTo(targetIndex, 0L)
+            player.play()
+        }
+        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
 }
 
