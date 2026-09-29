@@ -278,7 +278,7 @@ private class ReadAlongMediaNotificationProvider(
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+            Player.COMMAND_SEEK_TO_PREVIOUS,
             android.R.drawable.ic_media_previous,
             "Previous narration sentence",
             R.id.readalong_previous
@@ -298,7 +298,7 @@ private class ReadAlongMediaNotificationProvider(
             views,
             mediaSession,
             actionFactory,
-            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+            Player.COMMAND_SEEK_TO_NEXT,
             android.R.drawable.ic_media_next,
             "Next narration sentence",
             R.id.readalong_next
@@ -324,7 +324,10 @@ private class ReadAlongMediaNotificationProvider(
             command
         )
         builder.addAction(action)
-        views?.setOnClickPendingIntent(viewId, action.actionIntent)
+        views?.apply {
+            setImageViewResource(viewId, iconRes)
+            setOnClickPendingIntent(viewId, action.actionIntent)
+        }
     }
 
     companion object {
@@ -352,8 +355,6 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
             .remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
             .remove(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
-            .remove(Player.COMMAND_SEEK_TO_NEXT)
-            .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
             .remove(Player.COMMAND_SEEK_BACK)
             .remove(Player.COMMAND_SEEK_FORWARD)
             .build()
