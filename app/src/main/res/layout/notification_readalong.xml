@@ -13,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
 
-        android:maxLines="2"
+        android:maxLines="5"
         android:singleLine="false"
         android:scrollHorizontally="false"
         android:textColor="@android:color/white"
