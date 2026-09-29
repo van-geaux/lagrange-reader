@@ -607,9 +607,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         val audioPlaybackController =
             (application as BookOrbitApplication).audioPlaybackController
+        val readAlongSessionActive = mediaOverlayPlayback.player != null
         if (action == null || !volumeButtonNavigationEnabled(
                 readerEnabled = readerPreferences.volumeButtonPageNavigation,
-                audiobookSessionActive = audioPlaybackController.hasActiveAudiobookSession()
+                audiobookSessionActive = audioPlaybackController.hasActiveAudiobookSession(),
+                readAlongSessionActive = readAlongSessionActive
             )
         ) {
             return super.dispatchKeyEvent(event)

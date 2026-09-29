@@ -41,6 +41,17 @@ class VolumeButtonNavigationTest {
     }
 
     @Test
+    fun `active read-along session disables volume page navigation`() {
+        assertFalse(
+            volumeButtonNavigationEnabled(
+                readerEnabled = true,
+                audiobookSessionActive = false,
+                readAlongSessionActive = true
+            )
+        )
+    }
+
+    @Test
     fun `navigation target clamps at reader boundaries`() {
         assertNull(
             volumeButtonNavigationTarget(
