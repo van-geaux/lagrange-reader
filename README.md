@@ -8,7 +8,7 @@
 
 An offline-first Android reader for BookOrbit.
 
-[![License: Personal and Non-Commercial](https://img.shields.io/badge/license-personal--non--commercial-orange)](LICENSE)
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 [![Version 1.5.3](https://img.shields.io/badge/version-1.5.3-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.3)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
@@ -246,8 +246,8 @@ I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to dist
 
 ## License and acknowledgements
 
-The project uses the custom [`LICENSE`](LICENSE), which allows free personal and non-commercial use, modification, building, and redistribution. Commercial rights are reserved to the project owner. This is source-available, but it is not an OSI-approved open-source license.
+Lagrange Reader is licensed under the [GNU General Public License, version 3](LICENSE). The project may be distributed through both free GitHub releases and paid Google Play releases. A paid release remains subject to GPLv3: recipients receive the corresponding source and may redistribute the GPL-covered application under the license terms.
 
-See [`docs/privacy.md`](docs/privacy.md) for the app's local-data and network behavior. The project builds on BookOrbit, Readium, AndroidX, Jetpack Compose, Kotlin, Media3, OkHttp, Room, and other open-source libraries; their respective licenses and notices remain authoritative.
+Third-party libraries and embedded assets remain under their respective licenses. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency and attribution inventory. See [`docs/privacy.md`](docs/privacy.md) for the app's local-data and network behavior.
 
 Thank you to the BookOrbit maintainers and contributors for the server and library experience that inspired this app, to the Readium Foundation and open-source library authors whose work makes the reader possible, and to everyone who tests Lagrange and reports issues.

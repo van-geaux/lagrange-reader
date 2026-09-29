@@ -4678,7 +4678,10 @@ private fun AboutScreen(
                     Text("Readium Foundation")
                 }
                 TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader/blob/main/LICENSE") }) {
-                    Text("License and notices")
+                    Text("GPLv3 license")
+                }
+                TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader/blob/main/THIRD_PARTY_NOTICES.md") }) {
+                    Text("Third-party notices")
                 }
             }
         }
