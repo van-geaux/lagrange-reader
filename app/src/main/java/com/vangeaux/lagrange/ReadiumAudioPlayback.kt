@@ -32,7 +32,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.MediaStyleNotificationHelper
+
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
@@ -84,9 +84,7 @@ internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.vangeaux.lagrange.AU
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
 private const val READALONG_NOTIFICATION_ID = 4102
-private const val READALONG_MEDIA_NOTIFICATION_ID = 4103
 private const val READALONG_NOTIFICATION_CHANNEL_ID = "readalong_playback"
-private const val READALONG_NOTIFICATION_GROUP = "readalong_playback_group"
 private const val READALONG_SESSION_PREFIX = "epub-readalong:"
 
 internal val audiobookSeekBackSessionCommand = SessionCommand(
@@ -263,19 +261,6 @@ private class ReadAlongMediaNotificationProvider(
                 metadata.artist ?: "Read-along"
             )
         }
-        val mediaBuilder = NotificationCompat.Builder(context, READALONG_NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Read-along")
-            .setContentText(null)
-            .setContentIntent(mediaSession.sessionActivity)
-            .setStyle(
-                MediaStyleNotificationHelper.MediaStyle(mediaSession)
-                    .setShowActionsInCompactView(0, 1, 2)
-            )
-            .setGroup(READALONG_NOTIFICATION_GROUP)
-            .setOnlyAlertOnce(true)
-            .setOngoing(player.isPlaying)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         val cardBuilder = NotificationCompat.Builder(context, READALONG_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(null)
@@ -289,36 +274,6 @@ private class ReadAlongMediaNotificationProvider(
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
         addAction(
-            mediaBuilder,
-            null,
-            mediaSession,
-            actionFactory,
-            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-            android.R.drawable.ic_media_previous,
-            "Previous narration sentence",
-            R.id.readalong_previous
-        )
-        addAction(
-            mediaBuilder,
-            null,
-            mediaSession,
-            actionFactory,
-            Player.COMMAND_PLAY_PAUSE,
-            if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            if (player.isPlaying) "Pause narration" else "Play narration",
-            R.id.readalong_play_pause
-        )
-        addAction(
-            mediaBuilder,
-            null,
-            mediaSession,
-            actionFactory,
-            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
-            android.R.drawable.ic_media_next,
-            "Next narration sentence",
-            R.id.readalong_next
-        )
-        addAction(
             cardBuilder,
             views,
             mediaSession,
@@ -348,8 +303,7 @@ private class ReadAlongMediaNotificationProvider(
             "Next narration sentence",
             R.id.readalong_next
         )
-        notificationManager?.notify(READALONG_NOTIFICATION_ID, cardBuilder.build())
-        return MediaNotification(READALONG_MEDIA_NOTIFICATION_ID, mediaBuilder.build())
+        return MediaNotification(READALONG_NOTIFICATION_ID, cardBuilder.build())
     }
 
     private fun addAction(

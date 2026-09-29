@@ -2,8 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:paddingStart="8dp"
     android:paddingTop="4dp"
     android:paddingEnd="8dp"
@@ -11,36 +10,43 @@
 
     <TextView
         android:id="@+id/readalong_sentence"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
+
         android:maxLines="2"
         android:singleLine="false"
         android:scrollHorizontally="false"
         android:textColor="@android:color/white"
         android:textSize="14sp" />
 
-    <ImageButton
-        android:id="@+id/readalong_previous"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="Previous narration sentence"
-        android:src="@android:drawable/ic_media_previous" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal">
 
-    <ImageButton
-        android:id="@+id/readalong_play_pause"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="Play or pause narration"
-        android:src="@android:drawable/ic_media_pause" />
+        <ImageButton
+            android:id="@+id/readalong_previous"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Previous narration sentence"
+            android:src="@android:drawable/ic_media_previous" />
 
-    <ImageButton
-        android:id="@+id/readalong_next"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="Next narration sentence"
-        android:src="@android:drawable/ic_media_next" />
+        <ImageButton
+            android:id="@+id/readalong_play_pause"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Play or pause narration"
+            android:src="@android:drawable/ic_media_pause" />
+
+        <ImageButton
+            android:id="@+id/readalong_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Next narration sentence"
+            android:src="@android:drawable/ic_media_next" />
+    </LinearLayout>
 </LinearLayout>
