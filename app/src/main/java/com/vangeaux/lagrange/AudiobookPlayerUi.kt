@@ -451,12 +451,6 @@ internal fun AudiobookPlaybackSpeedOverlay(
     onDismiss: () -> Unit
 ) {
     var selectedSpeed by remember { mutableFloatStateOf(normalizeAudioPlaybackSpeed(speed)) }
-    val speedHundredths = audioPlaybackSpeedHundredths(selectedSpeed)
-    val applyAdjustment: (Int) -> Unit = { deltaHundredths ->
-        val adjustedSpeed = adjustAudioPlaybackSpeed(selectedSpeed, deltaHundredths)
-        selectedSpeed = adjustedSpeed
-        onSpeedChange(adjustedSpeed)
-    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -495,71 +489,19 @@ internal fun AudiobookPlaybackSpeedOverlay(
                             Icon(Icons.Default.Close, contentDescription = "Close playback speed controls")
                         }
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        PlaybackSpeedAdjustmentButton(
-                            label = "−0.10",
-                            description = "Decrease playback speed by 0.10",
-                            modifier = Modifier.weight(1f),
-                            enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS >=
-                                AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
-                            onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
-                        )
-                        PlaybackSpeedAdjustmentButton(
-                            label = "−0.05",
-                            description = "Decrease playback speed by 0.05",
-                            modifier = Modifier.weight(1f),
-                            enabled = speedHundredths - AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS >=
-                                AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
-                            onClick = { applyAdjustment(-AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
-                        )
-                        Text(
-                            text = "${formatPlaybackSpeed(selectedSpeed.toDouble())}×",
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                        PlaybackSpeedAdjustmentButton(
-                            label = "+0.05",
-                            description = "Increase playback speed by 0.05",
-                            modifier = Modifier.weight(1f),
-                            enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS <=
-                                AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
-                            onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_FINE_STEP_HUNDREDTHS) }
-                        )
-                        PlaybackSpeedAdjustmentButton(
-                            label = "+0.10",
-                            description = "Increase playback speed by 0.10",
-                            modifier = Modifier.weight(1f),
-                            enabled = speedHundredths + AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS <=
-                                AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
-                            onClick = { applyAdjustment(AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS) }
-                        )
-                    }
+                    PlaybackRateAdjustmentRow(
+                        value = selectedSpeed,
+                        minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+                        maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
+                        rateDescription = "playback speed",
+                        onValueChange = { adjustedSpeed ->
+                            selectedSpeed = adjustedSpeed
+                            onSpeedChange(adjustedSpeed)
+                        }
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PlaybackSpeedAdjustmentButton(
-    label: String,
-    description: String,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
-            .height(52.dp)
-            .semantics { contentDescription = description }
-    ) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
     }
 }
 

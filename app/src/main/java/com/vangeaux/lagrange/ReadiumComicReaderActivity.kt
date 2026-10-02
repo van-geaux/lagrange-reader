@@ -318,11 +318,16 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             }
             when (result) {
                 is ReadiumComicOpenResult.Error -> showError(result.message)
-                is ReadiumComicOpenResult.Opened -> showPublication(
-                    result.publication,
-                    requestedLocator = restoredLocator,
-                    showTutorial = !tapZoneTutorialHasShown
-                )
+                is ReadiumComicOpenResult.Opened -> prepareAndAttachPublicationWhenResumed(
+                    publication = result.publication,
+                    prepare = { Unit }
+                ) {
+                    showPublication(
+                        result.publication,
+                        requestedLocator = restoredLocator,
+                        showTutorial = !tapZoneTutorialHasShown
+                    )
+                }
             }
         }
     }

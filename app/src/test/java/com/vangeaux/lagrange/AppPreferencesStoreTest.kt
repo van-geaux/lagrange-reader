@@ -34,6 +34,18 @@ class AppPreferencesStoreTest {
         assertEquals(1.1f, adjustAudioPlaybackSpeed(1f, AUDIO_PLAYBACK_SPEED_COARSE_STEP_HUNDREDTHS))
         assertEquals(0.25f, adjustAudioPlaybackSpeed(0.25f, -10))
         assertEquals(3f, adjustAudioPlaybackSpeed(3f, 10))
+        assertEquals(
+            1.05f,
+            adjustPlaybackRate(
+                value = 1f,
+                deltaHundredths = PLAYBACK_RATE_FINE_STEP_HUNDREDTHS,
+                minHundredths = 50,
+                maxHundredths = 200
+            )
+        )
+        assertEquals(0.5f, parsePlaybackRate("0,50", 50, 200))
+        assertEquals(null, parsePlaybackRate("0.499", 50, 200))
+        assertEquals(null, parsePlaybackRate("2.001", 50, 200))
     }
 
     @Test
@@ -45,6 +57,88 @@ class AppPreferencesStoreTest {
         assertEquals("1.20", formatPlaybackSpeed(1.2000000476837158))
         assertEquals("2.00", formatPlaybackSpeed(2.0))
         assertEquals("3.00", formatPlaybackSpeed(3.0))
+    }
+
+    @Test
+    fun epubTtsRatesSupportPresetsCustomHundredthsAndSafeBounds() {
+        assertEquals(
+            listOf(0.5f, 0.75f, 0.9f, 0.95f, 1f, 1.05f, 1.1f, 1.25f, 1.5f, 1.75f, 2f),
+            EPUB_TTS_PLAYBACK_SPEED_OPTIONS
+        )
+        assertEquals(0.5f, normalizeEpubTtsPlaybackSpeed(0.1f))
+        assertEquals(2f, normalizeEpubTtsPlaybackSpeed(3f))
+        assertEquals(0.97f, normalizeEpubTtsPlaybackSpeed(0.97f))
+        assertEquals(1f, normalizeEpubTtsPlaybackSpeed(Float.NaN))
+        assertEquals(1.13f, normalizeEpubTtsPitch(1.126f))
+        assertEquals(0.97f, parseEpubTtsRate(" 0.97 "))
+        assertEquals(1.05f, parseEpubTtsRate("1,05"))
+        assertEquals(null, parseEpubTtsRate("0.49"))
+        assertEquals(null, parseEpubTtsRate("fast"))
+        assertEquals(0, parseEpubTtsPauseMillis("0"))
+        assertEquals(2000, parseEpubTtsPauseMillis("2000"))
+        assertEquals(null, parseEpubTtsPauseMillis("2001"))
+        assertEquals(
+            EpubTtsPauseSettings(
+                commaMillis = 0,
+                semicolonMillis = 2000,
+                colonMillis = 175,
+                emDashMillis = 200,
+                ellipsisMillis = 250,
+                parenthesesMillis = 100
+            ),
+            EpubTtsPauseSettings(commaMillis = -1, semicolonMillis = 3000).normalized()
+        )
+        assertEquals("0.5", formatEpubTtsPlaybackSpeed(0.5f))
+        assertEquals("1.05", formatEpubTtsPlaybackSpeed(1.05f))
+        assertEquals("2", formatEpubTtsPlaybackSpeed(2f))
+    }
+
+    @Test
+    fun `EPUB TTS punctuation defaults use the tested device overrides`() {
+        assertEquals(
+            EpubTtsPauseSettings(
+                enabled = true,
+                commaMillis = 0,
+                semicolonMillis = 200,
+                colonMillis = 175,
+                emDashMillis = 200,
+                ellipsisMillis = 250,
+                parenthesesMillis = 100
+            ),
+            EpubTtsPauseSettings()
+        )
+    }
+
+    @Test
+    fun epubListenChoicesOfferIndependentStartAndResumeActions() {
+        assertEquals(
+            listOf(EpubListenChoice.TTS_FROM_HERE),
+            epubListenChoices(
+                hasPublisherNarration = false,
+                hasTextToSpeech = true,
+                canKeepListening = false
+            )
+        )
+        assertEquals(
+            listOf(EpubListenChoice.TTS_FROM_HERE, EpubListenChoice.TTS_KEEP_LISTENING),
+            epubListenChoices(
+                hasPublisherNarration = false,
+                hasTextToSpeech = true,
+                canKeepListening = true
+            )
+        )
+        assertEquals(
+            listOf(
+                EpubListenChoice.PUBLISHER_NARRATION,
+                EpubListenChoice.TTS_FROM_HERE,
+                EpubListenChoice.TTS_KEEP_LISTENING
+            ),
+            epubListenChoices(
+                hasPublisherNarration = true,
+                hasTextToSpeech = true,
+                canKeepListening = true
+            )
+        )
     }
 
     @Test

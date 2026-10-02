@@ -266,6 +266,7 @@ class AppCoordinator internal constructor(
     private var acceptAudioProgress = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
     private var audioPlaybackCloser: (suspend () -> Unit)? = null
+    private var epubTtsPlaybackCloser: (suspend () -> Unit)? = null
     private var audioSessionHistoryOpener: ((BookSummary, Long) -> Unit)? = null
     private var releaseCheckInFlight = false
     private var dismissedReleaseTag: String? = null
@@ -277,6 +278,16 @@ class AppCoordinator internal constructor(
 
     internal fun setAudioPlaybackCloser(closer: suspend () -> Unit) {
         audioPlaybackCloser = closer
+    }
+
+    internal fun setEpubTtsPlaybackCloser(closer: suspend () -> Unit) {
+        epubTtsPlaybackCloser = closer
+    }
+
+    private suspend fun closeAccountBoundPlayback() {
+        runCatching { audioPlaybackCloser?.invoke() }
+        EpubTtsAccountSession.invalidate()
+        runCatching { epubTtsPlaybackCloser?.invoke() }
     }
 
     internal fun setSessionHistoryStore(store: AudiobookSessionHistoryStore) {
@@ -443,7 +454,7 @@ class AppCoordinator internal constructor(
             acceptAudioProgress = false
             val oldServerUrl = repository.getServerUrl().orEmpty()
             _fullAudioPlayerBook.value = null
-            runCatching { audioPlaybackCloser?.invoke() }
+            closeAccountBoundPlayback()
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
             sessionHistoryStore?.clearServer(oldServerUrl)
@@ -467,7 +478,7 @@ class AppCoordinator internal constructor(
             oidcJob = null
             val oldServerUrl = repository.getServerUrl().orEmpty()
             _fullAudioPlayerBook.value = null
-            runCatching { audioPlaybackCloser?.invoke() }
+            closeAccountBoundPlayback()
             resetTransientState(clearBrowserState = true)
             sessionHistoryStore?.clearServer(oldServerUrl)
             repository.clearServer()
@@ -701,7 +712,7 @@ class AppCoordinator internal constructor(
             oidcJob = null
             val serverUrl = repository.getServerUrl().orEmpty()
             _fullAudioPlayerBook.value = null
-            runCatching { audioPlaybackCloser?.invoke() }
+            closeAccountBoundPlayback()
             sessionHistoryStore?.clearServer(serverUrl)
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 
@@ -26,7 +27,7 @@ class EpubMediaOverlayControlsInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun playerShowsSpeedAndRightmostCloseWithoutClipCounter() {
+    fun playerShowsSettingsAndRightmostCloseWithoutClipCounter() {
         val closeCount = mutableIntStateOf(0)
         val speed = mutableFloatStateOf(1f)
         composeRule.setContent {
@@ -48,7 +49,7 @@ class EpubMediaOverlayControlsInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Read-along").assertIsDisplayed()
-        composeRule.onNodeWithText("1.00×").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Read-along settings").assertIsDisplayed()
         composeRule.onNodeWithText("63/5245").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Close read-along").assertIsDisplayed()
         val closeBounds = composeRule.onNodeWithContentDescription("Close read-along")
@@ -62,7 +63,7 @@ class EpubMediaOverlayControlsInstrumentedTest {
     }
 
     @Test
-    fun speedButtonUsesAudiobookSpeedOverlayAndAdjustmentSteps() {
+    fun readAlongSettingsUseSharedAdjustmentStepsAndApplyExplicitly() {
         val speed = mutableFloatStateOf(1f)
         composeRule.setContent {
             BookOrbitTheme {
@@ -80,10 +81,46 @@ class EpubMediaOverlayControlsInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Select read-along speed").performClick()
-        composeRule.onNodeWithText("Playback speed").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Increase playback speed by 0.05").performClick()
+        composeRule.onNodeWithContentDescription("Read-along settings").performClick()
+        composeRule.onNodeWithText("Read-along settings").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Increase read-along speed by 0.05").performClick()
+        composeRule.runOnIdle { assertEquals(1f, speed.floatValue, 0.0001f) }
+        composeRule.onNodeWithText("Apply").performClick()
         composeRule.runOnIdle { assertEquals(1.05f, speed.floatValue, 0.0001f) }
+    }
+
+    @Test
+    fun ttsSettingsUseTheSameFineAndCoarseAdjustmentPatternForSpeedAndPitch() {
+        val settings = mutableStateOf(EpubTtsSettings())
+        composeRule.setContent {
+            BookOrbitTheme {
+                EpubTtsControls(
+                    settings = settings.value,
+                    isPlaying = false,
+                    canGoPrevious = false,
+                    canGoNext = true,
+                    onPlayPause = {},
+                    onPrevious = {},
+                    onNext = {},
+                    onSettingsChange = { settings.value = it },
+                    onClose = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Text-to-speech settings").performClick()
+        composeRule.onNodeWithContentDescription(
+            "Increase text-to-speech speed by 0.05"
+        ).performClick()
+        composeRule.onNodeWithContentDescription(
+            "Increase text-to-speech pitch by 0.10"
+        ).performClick()
+        composeRule.onNodeWithText("Apply").performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(1.05f, settings.value.speed, 0.0001f)
+            assertEquals(1.1f, settings.value.pitch, 0.0001f)
+        }
     }
 
     @Test

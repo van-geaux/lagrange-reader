@@ -117,6 +117,7 @@ dependencies {
     implementation("org.readium.kotlin-toolkit:readium-streamer:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-navigator-media-audio:3.0.2")
+    implementation("org.readium.kotlin-toolkit:readium-navigator-media-tts:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-adapter-exoplayer-audio:3.0.2")
     implementation("org.readium.kotlin-toolkit:readium-adapter-pdfium:3.0.2") {
         exclude(group = "com.github.barteksc", module = "pdfium-android")
@@ -145,6 +146,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
+    implementation("androidx.media:media:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

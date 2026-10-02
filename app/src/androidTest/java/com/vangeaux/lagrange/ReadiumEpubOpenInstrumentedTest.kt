@@ -11,6 +11,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -20,14 +21,21 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.readium.navigator.media.tts.AndroidTtsNavigatorFactory
+import org.readium.navigator.media.tts.TtsNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.preferences.FontFamily
@@ -42,6 +50,211 @@ import org.readium.r2.shared.publication.services.positions
 
 @RunWith(AndroidJUnit4::class)
 class ReadiumEpubOpenInstrumentedTest {
+    @Test
+    fun NewerTtsStartRejectsAnOlderResolvedRequestAndClaimsService() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-stacked-tts.epub")
+        writeMultiResourceEpub(epub)
+        val connected = CompletableDeferred<EpubTtsPlaybackService.PlaybackBinder>()
+        val connection = EpubTtsServiceConnection(
+            context = context,
+            onConnected = { connected.complete(it) },
+            onDisconnected = {}
+        )
+        connection.bind()
+        var service: EpubTtsPlaybackService.PlaybackBinder? = null
+        try {
+            val activeService = withTimeout(5_000L) { connected.await() }
+            service = activeService
+            val firstRequest = EpubTtsRequestSession.begin()
+            val secondRequest = EpubTtsRequestSession.begin()
+            val epoch = EpubTtsAccountSession.currentEpoch()
+            val first = EpubTtsSessionSpec(
+                ownerToken = "older-reader",
+                requestId = firstRequest,
+                accountEpoch = epoch,
+                readerKey = "older-book",
+                libraryId = "",
+                bookId = null,
+                fileId = null,
+                filePath = epub.absolutePath,
+                title = "Older request",
+                initialLocator = null,
+                settings = EpubTtsSettings(),
+                playWhenReady = false
+            )
+            val second = first.copy(
+                ownerToken = "newer-reader",
+                requestId = secondRequest,
+                readerKey = "newer-book",
+                title = "Newer request"
+            )
+
+            withContext(Dispatchers.Main.immediate) {
+                assertTrue(!activeService.open(first))
+                EpubTtsPlaybackService.start(
+                    context = context,
+                    ownerToken = second.ownerToken,
+                    requestId = second.requestId,
+                    accountEpoch = second.accountEpoch,
+                    readerKey = second.readerKey,
+                    title = second.title
+                )
+                assertTrue(activeService.open(second))
+            }
+            delay(250L)
+            EpubTtsPlaybackService.start(
+                context = context,
+                ownerToken = first.ownerToken,
+                requestId = first.requestId,
+                accountEpoch = first.accountEpoch,
+                readerKey = first.readerKey,
+                title = first.title
+            )
+            delay(250L)
+            withContext(Dispatchers.Main.immediate) {
+                assertEquals("newer-reader", activeService.state.value.ownerToken)
+                assertEquals("newer-book", activeService.state.value.readerKey)
+            }
+        } finally {
+            withContext(Dispatchers.Main.immediate) { service?.stop("newer-reader") }
+            connection.unbind()
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun EpubOpeningWhileStoppedAttachesAfterResumeWithoutStateLoss() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-stopped-open.epub")
+        val readerKey = "instrumented-stopped-open-${System.nanoTime()}"
+        writeMultiResourceEpub(epub)
+        try {
+            ActivityScenario.launch<ReadiumEpubReaderActivity>(
+                ReadiumEpubReaderActivity.createIntent(
+                    context = context,
+                    file = epub,
+                    title = "Stopped open regression",
+                    readerKey = readerKey,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    initialChapter = 0,
+                    initialPage = 0,
+                    initialPageCount = 1,
+                    initialPercent = null
+                )
+            ).use { scenario ->
+                scenario.moveToState(Lifecycle.State.CREATED)
+                delay(750L)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                awaitEpubLocator(scenario, context, readerKey)
+            }
+        } finally {
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun AndroidBackStopsAnActiveTtsServiceSession() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-close-tts.epub")
+        val readerKey = "instrumented-close-tts-${System.nanoTime()}"
+        writeMultiResourceEpub(epub)
+        val connected = CompletableDeferred<EpubTtsPlaybackService.PlaybackBinder>()
+        val connection = EpubTtsServiceConnection(
+            context = context,
+            onConnected = { connected.complete(it) },
+            onDisconnected = {}
+        )
+        var binder: EpubTtsPlaybackService.PlaybackBinder? = null
+        connection.bind()
+        try {
+            val service = withTimeout(5_000L) { connected.await() }
+            binder = service
+            val readerIntent = ReadiumEpubReaderActivity.createIntent(
+                context = context,
+                file = epub,
+                title = "TTS close regression",
+                readerKey = readerKey,
+                launchMode = ReaderLaunchMode.NORMAL,
+                initialChapter = 0,
+                initialPage = 0,
+                initialPageCount = 1,
+                initialPercent = null
+            )
+            val ownerToken = readerIntent.getStringExtra(
+                ReadiumEpubReaderActivity.EXTRA_TTS_OWNER_TOKEN
+            )!!
+            ActivityScenario.launch<ReadiumEpubReaderActivity>(readerIntent).use { scenario ->
+                val locator = awaitEpubLocator(scenario, context, readerKey)
+                withContext(Dispatchers.Main.immediate) {
+                    val requestId = EpubTtsRequestSession.begin()
+                    service.open(
+                        EpubTtsSessionSpec(
+                            ownerToken = ownerToken,
+                            requestId = requestId,
+                            accountEpoch = EpubTtsAccountSession.currentEpoch(),
+                            readerKey = readerKey,
+                            libraryId = "",
+                            bookId = null,
+                            fileId = null,
+                            filePath = epub.absolutePath,
+                            title = "TTS close regression",
+                            initialLocator = locator,
+                            settings = EpubTtsSettings(),
+                            playWhenReady = false
+                        )
+                    )
+                    assertTrue(service.state.value.hasSession)
+                }
+
+                scenario.onActivity { activity ->
+                    activity.onBackPressedDispatcher.onBackPressed()
+                    if (!activity.isFinishing) {
+                        activity.onBackPressedDispatcher.onBackPressed()
+                    }
+                    assertTrue("Android Back did not finish the EPUB reader", activity.isFinishing)
+                }
+                assertEquals(EpubTtsServiceState(), service.state.value)
+            }
+        } finally {
+            withContext(Dispatchers.Main.immediate) { binder?.stop() }
+            connection.unbind()
+            epub.delete()
+        }
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun readiumTtsInitializesForTextualEpubWhenDeviceHasSpeechEngine() = runBlocking {
+        val application = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val epub = File(application.cacheDir, "readium-tts-probe.epub")
+        writeMultiResourceEpub(epub)
+        val opened = openReadiumEpub(application, epub) as ReadiumEpubOpenResult.Opened
+        try {
+            val factory = AndroidTtsNavigatorFactory(application, opened.publication)
+            assertNotNull(factory)
+            val speech = withTimeout(15_000L) {
+                withContext(Dispatchers.Main.immediate) {
+                    factory?.createNavigator(
+                        listener = object : TtsNavigator.Listener {
+                            override fun onStopRequested() = Unit
+                        }
+                    )?.getOrNull()
+                }
+            }
+            // Android images are allowed to omit a TTS engine; a real device with one must
+            // initialize the navigator and expose a text locator without speaking aloud.
+            assumeNotNull(speech)
+            requireNotNull(speech).useForTest {
+                assertTrue(currentLocator.value.text.highlight.orEmpty().isNotBlank())
+            }
+            delay(500L)
+        } finally {
+            opened.publication.close()
+            epub.delete()
+        }
+    }
+
     @Test
     fun readerIntentEnablesNormalAnnotationFeaturesForItsBook() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -485,6 +698,14 @@ class ReadiumEpubOpenInstrumentedTest {
                 )
             }
         }
+    }
+
+    private inline fun <T> org.readium.navigator.media.tts.AndroidTtsNavigator.useForTest(
+        block: org.readium.navigator.media.tts.AndroidTtsNavigator.() -> T
+    ): T = try {
+        block()
+    } finally {
+        close()
     }
 
     private fun writeSvgCoverEpub(target: File) {

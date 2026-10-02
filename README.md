@@ -84,7 +84,7 @@ The important boundary is simple: BookOrbit stays authoritative, while Lagrange 
 
 - **Offline-first library:** browse cached books and reopen downloaded EPUB, PDF, CBZ, and supported audiobook files without a connection.
 - **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
-- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, per-library font selection through grouped normal/accessibility menus, one imported custom `.ttf`/`.otf` font, and read-along narration for local EPUB 3 media overlays with sentence highlighting and resume.
+- **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, per-library font selection through grouped normal/accessibility menus, one imported custom `.ttf`/`.otf` font, read-along narration for local EPUB 3 media overlays, and service-owned Android text to speech with sentence highlighting, preset or custom 0.5×–2× speed and pitch, optional speed-scaled punctuation pauses, uninterrupted rotation/screen-lock playback, media controls, background progress persistence, and separate **Listen from here**/**Keep listening** actions.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
 - **Audiobook playback:** compact and full players with seeking, chapter selection, previous/next chapter controls, playback speed, sleep timer, resume, responsive portrait/landscape layouts, session history, read-along support, and optional pausing/resuming when Android reports competing audio focus (enabled by default).
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.
@@ -95,7 +95,7 @@ The important boundary is simple: BookOrbit stays authoritative, while Lagrange 
 
 | Format | Online | Offline | Notes |
 | --- | :---: | :---: | --- |
-| EPUB / KEPUB | Yes | Yes | Full paginated reader with themes, margins, chapters, and resume. |
+| EPUB / KEPUB | Yes | Yes | Full paginated reader with themes, margins, chapters, resume, publisher narration, and foreground-service Android text to speech that continues through rotation and screen lock. |
 | PDF | Yes | Yes | Readium PDF reader with page navigation and resume. |
 | CBZ | Yes | Yes | Image-based comic reader. |
 | CBR / CB7 | Yes | Yes | Online page extraction is supported; offline reading uses client-side RAR4/RAR5/7z extraction into a cached CBZ. User-confirmed offline opening works. |
@@ -136,7 +136,7 @@ Lagrange separately records active reading/listening intervals through BookOrbit
 
 | Format | Session starts | Pause/close behavior | Progress and timing |
 | --- | --- | --- | --- |
-| EPUB / KEPUB | When usable publication content opens | Lifecycle pause finalizes the active interval; resume starts a new interval; reader close finalizes it | Percentage/chapter fallback; active foreground time only |
+| EPUB / KEPUB | When usable publication content opens | Ordinary backgrounding pauses the interval unless foreground TTS is actively reading; pausing TTS or closing the reader finalizes it | Percentage/chapter fallback; visible reading plus active foreground-service TTS time |
 | PDF | When usable pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; active foreground time only |
 | CBZ / CBR / CB7 | When usable comic pages open | Same pause/resume and close behavior as EPUB | Page-based percentage; CBR/CB7 may be normalized to a cached CBZ locally, while the original BookOrbit file ID is retained |
 | Audiobooks | When actual playback begins | Tapping pause finalizes the active listening interval; play starts a new interval; player close also finalizes it | Wall-clock active listening duration and periodic position/percentage; playback speed does not multiply session duration |

@@ -2030,11 +2030,14 @@ class AppCoordinatorTest {
         val replacement = "https://replacement.example.test"
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        var ttsPlaybackClosed = false
+        coordinator.setEpubTtsPlaybackCloser { ttsPlaybackClosed = true }
 
         coordinator.changeServer(replacement)
         advanceUntilIdle()
 
         assertEquals(1, repository.clearServerCalls)
+        assertTrue(ttsPlaybackClosed)
         assertEquals(replacement, repository.serverUrl)
         val login = coordinator.screen.value as AppScreen.Login
         assertEquals(replacement, login.serverUrl)
@@ -2756,13 +2759,19 @@ class AppCoordinatorTest {
         )
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
         var playbackClosed = false
+        var ttsPlaybackClosed = false
         coordinator.setAudioPlaybackCloser { playbackClosed = true }
+        coordinator.setEpubTtsPlaybackCloser {
+            assertEquals(0, repository.clearSessionCalls)
+            ttsPlaybackClosed = true
+        }
         coordinator.openAudioPlayer(book.copy(mediaKind = MediaKind.AUDIO))
 
         coordinator.signOut()
         advanceUntilIdle()
 
         assertTrue(playbackClosed)
+        assertTrue(ttsPlaybackClosed)
         assertNull(coordinator.fullAudioPlayerBook.value)
         assertTrue(coordinator.screen.value is AppScreen.Login)
 

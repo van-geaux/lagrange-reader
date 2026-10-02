@@ -3,7 +3,6 @@ package com.vangeaux.lagrange
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -12,8 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,8 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.AudioAttributes
@@ -300,7 +299,7 @@ internal fun EpubMediaOverlayControls(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var speedOverlayVisible by remember { mutableStateOf(false) }
+    var settingsVisible by remember { mutableStateOf(false) }
     Box(modifier = modifier.fillMaxWidth()) {
         Card(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(
@@ -309,14 +308,11 @@ internal fun EpubMediaOverlayControls(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Read-along", modifier = Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
-                TextButton(
-                    onClick = { speedOverlayVisible = true },
-                    modifier = Modifier
-                        .testTag("epub-readalong-speed")
-                        .semantics { contentDescription = "Select read-along speed" },
-                    contentPadding = PaddingValues(horizontal = 4.dp)
+                IconButton(
+                    onClick = { settingsVisible = true },
+                    modifier = Modifier.testTag("epub-readalong-settings")
                 ) {
-                    Text("${formatPlaybackSpeed(speed.toDouble())}×")
+                    Icon(Icons.Default.Settings, contentDescription = "Read-along settings")
                 }
                 IconButton(onClick = onPrevious, enabled = canGoPrevious) {
                     Icon(Icons.Default.SkipPrevious, contentDescription = "Previous narration sentence")
@@ -341,12 +337,62 @@ internal fun EpubMediaOverlayControls(
                 }
             }
         }
-        if (speedOverlayVisible) {
-            AudiobookPlaybackSpeedOverlay(
+        if (settingsVisible) {
+            EpubMediaOverlaySettingsDialog(
                 speed = speed,
-                onSpeedChange = onSpeedChange,
-                onDismiss = { speedOverlayVisible = false }
+                onApply = onSpeedChange,
+                onDismiss = { settingsVisible = false }
             )
         }
     }
+}
+
+@Composable
+private fun EpubMediaOverlaySettingsDialog(
+    speed: Float,
+    onApply: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val normalized = normalizeAudioPlaybackSpeed(speed)
+    var speedText by remember(normalized) {
+        mutableStateOf(formatEditablePlaybackRate(normalized))
+    }
+    var showValidationError by remember { mutableStateOf(false) }
+    val parsedSpeed = parsePlaybackRate(
+        value = speedText,
+        minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+        maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Read-along settings") },
+        text = {
+            PlaybackRateSetting(
+                title = "Speed",
+                value = speedText,
+                minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
+                maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
+                isError = showValidationError && parsedSpeed == null,
+                rateDescription = "read-along speed",
+                presets = EPUB_TTS_PLAYBACK_SPEED_OPTIONS,
+                onValueChange = { speedText = it }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val value = parsedSpeed
+                    if (value == null) {
+                        showValidationError = true
+                    } else {
+                        onApply(value)
+                        onDismiss()
+                    }
+                }
+            ) { Text("Apply") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

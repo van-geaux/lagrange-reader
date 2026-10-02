@@ -57,19 +57,26 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
 import java.net.URI
+import java.util.UUID
 import kotlin.math.abs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.readium.navigator.media.tts.AndroidTtsNavigatorFactory
+import org.readium.navigator.media.tts.android.AndroidTtsEngine
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.Selection
+import org.readium.r2.navigator.VisualNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
@@ -536,9 +543,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var footerView: ComposeView
     private lateinit var tapZoneTutorialView: ComposeView
     private lateinit var mediaOverlayView: ComposeView
+    private lateinit var ttsView: ComposeView
     private var updateReaderViewportOverlaySpace: (() -> Unit)? = null
 
     private lateinit var readerKey: String
+    private lateinit var ttsOwnerToken: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
@@ -569,17 +578,35 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
     private var readingSessionEnded = false
+    private var readerExitPlaybackClosed = false
     private var epubImageGestureJob: Job? = null
     private var epubImageViewer by mutableStateOf<Pair<Int, Bitmap>?>(null)
     private lateinit var mediaOverlayPlayback: EpubMediaOverlayPlaybackViewModel
     private var mediaOverlayPlaylist by mutableStateOf(emptyList<EpubMediaOverlayClip>())
     private var mediaOverlayPlayerListener: Player.Listener? = null
     private var mediaOverlayStartupNavigationPending = false
+    private var ttsServiceBinder: EpubTtsPlaybackService.PlaybackBinder? = null
+    private var ttsServiceConnection: EpubTtsServiceConnection? = null
+    private var ttsServiceStateJob: Job? = null
+    private var ttsStartJob: Job? = null
+    private var ttsStartRequestId: Long? = null
+    private var pendingTtsSpec: EpubTtsSessionSpec? = null
+    private var lastHandledTtsLocator: Locator? = null
+    private var lastTtsFailureSerial = 0L
+    private var lastTtsCompletionSerial = 0L
+    private var ttsAvailable by mutableStateOf(false)
+    private var ttsIsPlaying by mutableStateOf(false)
+    private var ttsCanGoPrevious by mutableStateOf(false)
+    private var ttsCanGoNext by mutableStateOf(false)
+    private var ttsSettings by mutableStateOf(EpubTtsSettings())
+    private var lastTtsLocator: Locator? = null
+    private var restoredTtsLocator: Locator? = null
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
     private val paddingStore by lazy { EpubReaderPaddingStore(this) }
     private val appPreferencesStore by lazy { AppPreferencesStore(this) }
     private val locatorStore by lazy { ReadiumEpubLocatorStore(this) }
+    private val ttsPositionStore by lazy { ReadiumEpubTtsPositionStore(this) }
     private val customFontStore by lazy { CustomFontStore(this) }
     private val customFontPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -608,7 +635,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val audioPlaybackController =
             (application as BookOrbitApplication).audioPlaybackController
         val readAlongSessionActive = mediaOverlayPlayback.player != null
-        if (action == null || !volumeButtonNavigationEnabled(
+        if (hasActiveTtsSession() || action == null || !volumeButtonNavigationEnabled(
                 readerEnabled = readerPreferences.volumeButtonPageNavigation,
                 audiobookSessionActive = audioPlaybackController.hasActiveAudiobookSession(),
                 readAlongSessionActive = readAlongSessionActive
@@ -653,7 +680,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
+        ttsOwnerToken = intent.getStringExtra(EXTRA_TTS_OWNER_TOKEN)
+            ?: UUID.randomUUID().toString().also {
+                intent.putExtra(EXTRA_TTS_OWNER_TOKEN, it)
+            }
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
+        restoredTtsLocator = savedInstanceState?.readEpubTtsLocator()
+        lastTtsLocator = restoredTtsLocator ?: ttsPositionStore.read(readerKey)
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         bookId = epubAnnotationBookId(intent)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
@@ -673,11 +706,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         fontScale = readerPreferences.fontScale
         readingDirection = readerPreferences.readingDirection
         epubLayoutMode = readerPreferences.epubLayoutMode
+        ttsSettings = appPreferencesStore.readEpubTtsSettings()
         appPreferencesStore.save(
             appPreferences.withReaderPreferences(libraryId, readerPreferences)
         )
         configureSystemBars()
         createReaderViews()
+        bindTtsService()
         restoreReaderUi(savedInstanceState)
         discardRestoredNavigatorIfNeeded(savedInstanceState)
         installBackHandler()
@@ -698,12 +733,23 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, readerFile)) {
                 is ReadiumEpubOpenResult.Error -> showError(result.message)
                 is ReadiumEpubOpenResult.Opened -> {
-                    mediaOverlayPlaylist = withContext(Dispatchers.IO) {
-                        EpubMediaOverlayParser.parse(readerFile).items
+                    prepareAndAttachPublicationWhenResumed(
+                        publication = result.publication,
+                        prepare = {
+                            val playlist = withContext(Dispatchers.IO) {
+                                EpubMediaOverlayParser.parse(readerFile).items
+                            }
+                            val positions = withContext(Dispatchers.IO) {
+                                result.publication.positions()
+                            }
+                            playlist to positions
+                        }
+                    ) { (playlist, positions) ->
+                        mediaOverlayPlaylist = playlist
+                        bookPositions = positions
+                        bookPositionCount = positions.size.takeIf { it > 0 }
+                        showPublication(result.publication, restoredLocator)
                     }
-                    bookPositions = withContext(Dispatchers.IO) { result.publication.positions() }
-                    bookPositionCount = bookPositions.size.takeIf { it > 0 }
-                    showPublication(result.publication, restoredLocator)
                 }
             }
         }
@@ -827,10 +873,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         secondaryCurrentPosition = currentChapter,
                         secondaryPositionCount = chapterTitles.size,
                         onSecondaryPositionSelected = ::goToChapter,
-                        onListenToNarration = if (!isPreview && mediaOverlayPlaylist.isNotEmpty()) {
+                        onListenToNarration = if (
+                            !isPreview && (mediaOverlayPlaylist.isNotEmpty() || ttsAvailable)
+                        ) {
                             {
                                 hideChrome()
-                                startMediaOverlayPlayback()
+                                showListenChoices()
                             }
                         } else null,
                         modifier = Modifier.fillMaxSize()
@@ -954,9 +1002,35 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 Gravity.BOTTOM
             )
         )
+        ttsView = ComposeView(this).apply {
+            visibility = View.GONE
+            setContent {
+                BookOrbitTheme {
+                    EpubTtsControls(
+                        settings = ttsSettings,
+                        isPlaying = ttsIsPlaying,
+                        canGoPrevious = ttsCanGoPrevious,
+                        canGoNext = ttsCanGoNext,
+                        onPlayPause = ::toggleTtsPlayback,
+                        onPrevious = ::previousTtsUtterance,
+                        onNext = ::nextTtsUtterance,
+                        onSettingsChange = ::applyTtsSettings,
+                        onClose = ::closeTtsPlayback
+                    )
+                }
+            }
+        }
+        rootView.addView(
+            ttsView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            )
+        )
         updateReaderViewportOverlaySpace = bindReaderViewportAboveOverlays(
             readerViewport,
-            listOf(audioPlayerOverlay, mediaOverlayView)
+            listOf(audioPlayerOverlay, mediaOverlayView, ttsView)
         )
         setContentView(rootView)
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
@@ -1007,6 +1081,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         publication = openedPublication
+        ttsAvailable = !isPreview && AndroidTtsNavigatorFactory(application, openedPublication) != null
         readingSessionReporter.start(
             intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
         )
@@ -1093,9 +1168,383 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         progressView?.visibility = View.GONE
         applyReaderPadding()
         if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+        restoreTtsPositionAfterRecreation(openedPublication)
+    }
+
+    private fun showListenChoices() {
+        val hasPublisherNarration = mediaOverlayPlaylist.isNotEmpty()
+        val hasTextToSpeech = ttsAvailable
+        val canKeepListening = validTtsLocator(lastTtsLocator) != null
+        val choices = epubListenChoices(
+            hasPublisherNarration = hasPublisherNarration,
+            hasTextToSpeech = hasTextToSpeech,
+            canKeepListening = canKeepListening
+        )
+        if (choices.isEmpty()) {
+            Toast.makeText(this, "No readable text or narration is available.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (choices.size == 1) {
+            performListenChoice(choices.single())
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Listen")
+            .setItems(choices.map(::listenChoiceLabel).toTypedArray()) { _, index ->
+                performListenChoice(choices[index])
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun listenChoiceLabel(choice: EpubListenChoice): String = when (choice) {
+        EpubListenChoice.PUBLISHER_NARRATION -> "Publisher narration"
+        EpubListenChoice.TTS_FROM_HERE -> "Listen from here"
+        EpubListenChoice.TTS_KEEP_LISTENING -> "Keep listening"
+    }
+
+    private fun performListenChoice(choice: EpubListenChoice) {
+        when (choice) {
+            EpubListenChoice.PUBLISHER_NARRATION -> startMediaOverlayPlayback()
+            EpubListenChoice.TTS_FROM_HERE,
+            EpubListenChoice.TTS_KEEP_LISTENING -> requestTtsPlayback(choice)
+        }
+    }
+
+    private fun requestTtsPlayback(choice: EpubListenChoice) {
+        if (isPreview) return
+        val preferences = getSharedPreferences(TTS_PRIVACY_PREFERENCES, MODE_PRIVATE)
+        if (preferences.getBoolean(TTS_PRIVACY_ACKNOWLEDGED, false)) {
+            startTtsPlayback(choice)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Text-to-speech privacy")
+            .setMessage(
+                "Lagrange uses the Android text-to-speech engine selected on this device. " +
+                    "Some voices use a network service and may send the book text they speak to that provider."
+            )
+            .setPositiveButton("Continue") { _, _ ->
+                preferences.edit().putBoolean(TTS_PRIVACY_ACKNOWLEDGED, true).apply()
+                startTtsPlayback(choice)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startTtsPlayback(
+        choice: EpubListenChoice,
+        restoredLocator: Locator? = null,
+        playWhenReady: Boolean = true
+    ) {
+        ttsServiceBinder?.state?.value?.takeIf {
+            it.ownerToken == ttsOwnerToken && it.readerKey == readerKey && it.hasSession &&
+                choice == EpubListenChoice.TTS_KEEP_LISTENING && restoredLocator == null &&
+                ttsStartJob == null && pendingTtsSpec == null
+        }?.let {
+            closeMediaOverlayPlayback()
+            ttsView.visibility = View.VISIBLE
+            updateReaderViewportOverlaySpace?.invoke()
+            ttsServiceBinder?.play(ttsOwnerToken)
+            return
+        }
+        val visualNavigator = navigator
+        if (!ttsAvailable || visualNavigator == null) {
+            Toast.makeText(this, "Text to speech is unavailable for this EPUB.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val requestedLocator = restoredLocator ?: when (choice) {
+            EpubListenChoice.TTS_KEEP_LISTENING -> validTtsLocator(lastTtsLocator)
+            EpubListenChoice.TTS_FROM_HERE -> null
+            EpubListenChoice.PUBLISHER_NARRATION -> null
+        }
+        (application as BookOrbitApplication).audioPlaybackController.pause()
+        closeMediaOverlayPlayback()
+        cancelPendingTtsStart()
+        EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken)
+        val requestAccountEpoch = EpubTtsAccountSession.currentEpoch()
+        val requestId = EpubTtsRequestSession.begin()
+        ttsStartRequestId = requestId
+        EpubTtsPlaybackService.start(
+            applicationContext,
+            ownerToken = ttsOwnerToken,
+            requestId = requestId,
+            accountEpoch = requestAccountEpoch,
+            readerKey = readerKey,
+            title = displayTitle
+        )
+        ttsServiceConnection?.bind()
+        lateinit var startJob: Job
+        startJob = lifecycleScope.launch(start = CoroutineStart.LAZY) {
+            var handedOffToService = false
+            try {
+                val initialLocator = requestedLocator ?: if (
+                    choice == EpubListenChoice.TTS_FROM_HERE
+                ) {
+                    (visualNavigator as? VisualNavigator)?.firstVisibleElementLocator()
+                } else {
+                    null
+                }
+                if (ttsStartRequestId != requestId ||
+                    !EpubTtsRequestSession.isCurrent(requestId) ||
+                    !EpubTtsAccountSession.isCurrent(requestAccountEpoch)
+                ) return@launch
+                val filePath = intent.getStringExtra(EXTRA_FILE_PATH).orEmpty()
+                if (!File(filePath).isFile || isFinishing || isDestroyed) return@launch
+                val spec = EpubTtsSessionSpec(
+                    ownerToken = ttsOwnerToken,
+                    requestId = requestId,
+                    accountEpoch = requestAccountEpoch,
+                    readerKey = readerKey,
+                    libraryId = libraryId,
+                    bookId = bookId,
+                    fileId = intent.getStringExtra(EXTRA_FILE_ID),
+                    filePath = filePath,
+                    title = displayTitle,
+                    initialLocator = initialLocator,
+                    settings = ttsSettings,
+                    playWhenReady = playWhenReady
+                )
+                if (ttsStartRequestId != requestId ||
+                    !EpubTtsRequestSession.isCurrent(requestId) ||
+                    !EpubTtsAccountSession.isCurrent(requestAccountEpoch)
+                ) return@launch
+                pendingTtsSpec = spec
+                ttsView.visibility = View.VISIBLE
+                updateReaderViewportOverlaySpace?.invoke()
+                openPendingTtsSession()
+                handedOffToService = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    "Unable to find a readable position in this EPUB.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                if (!handedOffToService) {
+                    EpubTtsRequestSession.cancel(requestId)
+                    EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken, requestId)
+                    if (ttsStartRequestId == requestId) ttsStartRequestId = null
+                }
+            }
+        }
+        ttsStartJob = startJob
+        startJob.invokeOnCompletion {
+            if (ttsStartJob === startJob) ttsStartJob = null
+        }
+        startJob.start()
+    }
+
+    private fun restoreTtsPositionAfterRecreation(openedPublication: Publication) {
+        val locator = ttsServiceBinder?.state?.value
+            ?.takeIf { it.ownerToken == ttsOwnerToken && it.readerKey == readerKey }
+            ?.locator
+            ?: restoredTtsLocator
+        restoredTtsLocator = null
+        locator?.takeIf { candidate ->
+            openedPublication.readingOrder.any { link ->
+                link.url().isEquivalent(candidate.href.removeFragment())
+            }
+        }?.let(::handleTtsLocation)
+    }
+
+    private fun validTtsLocator(locator: Locator?): Locator? {
+        val candidate = locator ?: return null
+        val openedPublication = publication ?: return null
+        return candidate.takeIf {
+            openedPublication.readingOrder.any { link ->
+                link.url().isEquivalent(candidate.href.removeFragment())
+            }
+        }
+    }
+
+    private fun bindTtsService() {
+        if (ttsServiceConnection != null) return
+        ttsServiceConnection = EpubTtsServiceConnection(
+            context = applicationContext,
+            onConnected = { service ->
+                ttsServiceBinder = service
+                observeTtsService(service)
+                openPendingTtsSession()
+            },
+            onDisconnected = {
+                ttsServiceBinder = null
+                ttsServiceStateJob?.cancel()
+                ttsServiceStateJob = null
+            }
+        ).also(EpubTtsServiceConnection::bind)
+    }
+
+    private fun openPendingTtsSession() {
+        val service = ttsServiceBinder ?: return
+        val spec = pendingTtsSpec ?: return
+        pendingTtsSpec = null
+        if (!service.open(spec) && ttsStartRequestId == spec.requestId) {
+            ttsStartRequestId = null
+        }
+    }
+
+    private fun observeTtsService(service: EpubTtsPlaybackService.PlaybackBinder) {
+        ttsServiceStateJob?.cancel()
+        ttsServiceStateJob = lifecycleScope.launch {
+            service.state.collect { state ->
+                if (state.completedOwnerToken == ttsOwnerToken &&
+                    state.completionSerial > lastTtsCompletionSerial
+                ) {
+                    lastTtsCompletionSerial = state.completionSerial
+                    lastTtsLocator = null
+                }
+                if (state.ownerToken != ttsOwnerToken) {
+                    hideInactiveTtsControls()
+                    return@collect
+                }
+                if (state.failure != null && state.failureSerial > lastTtsFailureSerial) {
+                    lastTtsFailureSerial = state.failureSerial
+                    showTtsFailure(state.failure)
+                    return@collect
+                }
+                if (state.readerKey != readerKey || !state.hasSession) {
+                    hideInactiveTtsControls()
+                    return@collect
+                }
+                val wasPlaying = ttsIsPlaying
+                ttsSettings = state.settings.normalized()
+                ttsIsPlaying = state.isPlaying
+                ttsCanGoPrevious = state.canGoPrevious
+                ttsCanGoNext = state.canGoNext
+                ttsView.visibility = View.VISIBLE
+                updateReaderViewportOverlaySpace?.invoke()
+                if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    when {
+                        state.isPlaying && !wasPlaying -> readingSessionReporter.resume(currentPercent)
+                        !state.isPlaying && wasPlaying -> readingSessionReporter.pause(currentPercent)
+                    }
+                }
+                state.locator?.takeIf { it != lastHandledTtsLocator }?.let(::handleTtsLocation)
+            }
+        }
+    }
+
+    private fun hideInactiveTtsControls() {
+        val wasPlaying = ttsIsPlaying
+        ttsIsPlaying = false
+        ttsCanGoPrevious = false
+        ttsCanGoNext = false
+        if (wasPlaying && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            readingSessionReporter.pause(currentPercent)
+        }
+        if (::ttsView.isInitialized) {
+            ttsView.visibility = View.GONE
+            updateReaderViewportOverlaySpace?.invoke()
+        }
+    }
+
+    private fun handleTtsLocation(locator: Locator) {
+        lastHandledTtsLocator = locator
+        lastTtsLocator = locator
+        val visual = navigator ?: return
+        updateLocation(locator)
+        lifecycleScope.launch {
+            runCatching {
+                visual.applyDecorations(
+                    listOf(
+                        Decoration(
+                            id = "epub-tts-current",
+                            locator = locator,
+                            style = Decoration.Style.Highlight(
+                                tint = highlightTintForColor("yellow"),
+                                isActive = true
+                            )
+                        )
+                    ),
+                    EPUB_TTS_DECORATION_GROUP
+                )
+                visual.go(locator, animated = false)
+            }
+        }
+    }
+
+    private fun hasActiveTtsSession(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
+        state.ownerToken == ttsOwnerToken && state.readerKey == readerKey && state.hasSession
+    } == true
+
+    private fun toggleTtsPlayback() {
+        val active = ttsServiceBinder ?: return
+        if (ttsIsPlaying) {
+            active.pause(ttsOwnerToken)
+        } else {
+            active.play(ttsOwnerToken)
+        }
+    }
+
+    private fun previousTtsUtterance() {
+        ttsServiceBinder?.previous(ttsOwnerToken)
+    }
+
+    private fun nextTtsUtterance() {
+        ttsServiceBinder?.next(ttsOwnerToken)
+    }
+
+    private fun applyTtsSettings(settings: EpubTtsSettings) {
+        val normalized = settings.normalized()
+        ttsSettings = normalized
+        appPreferencesStore.saveEpubTtsSettings(normalized)
+        ttsServiceBinder?.setSettings(normalized, ttsOwnerToken)
+    }
+
+    private fun showTtsFailure(error: EpubTtsFailureKind) {
+        closeTtsPlayback()
+        if (error == EpubTtsFailureKind.LANGUAGE_DATA) {
+            AlertDialog.Builder(this)
+                .setTitle("Voice data is missing")
+                .setMessage("Android needs voice data for this book's language before it can read aloud.")
+                .setPositiveButton("Install voice") { _, _ ->
+                    AndroidTtsEngine.requestInstallVoice(applicationContext)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            val message = if (error == EpubTtsFailureKind.NETWORK) {
+                "The selected text-to-speech voice could not reach its network service."
+            } else {
+                "Text to speech stopped because the book text or Android speech engine could not be read."
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun closeTtsPlayback() {
+        cancelPendingTtsStart()
+        ttsServiceBinder?.stop(ttsOwnerToken)
+        EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken)
+        ttsIsPlaying = false
+        ttsCanGoPrevious = false
+        ttsCanGoNext = false
+        if (::ttsView.isInitialized) {
+            ttsView.visibility = View.GONE
+            updateReaderViewportOverlaySpace?.invoke()
+        }
+        val visual = navigator
+        if (visual != null && !isDestroyed) {
+            lifecycleScope.launch {
+                runCatching { visual.applyDecorations(emptyList(), EPUB_TTS_DECORATION_GROUP) }
+            }
+        }
+    }
+
+    private fun cancelPendingTtsStart() {
+        val requestId = ttsStartRequestId
+        ttsStartJob?.cancel()
+        ttsStartJob = null
+        pendingTtsSpec = null
+        ttsStartRequestId = null
+        requestId?.let(EpubTtsRequestSession::cancel)
     }
 
     private fun startMediaOverlayPlayback(targetClipIndex: Int? = null) {
+        closeTtsPlayback()
         mediaOverlayPlayback.player?.let { retainedPlayer ->
             val targetIndex = targetClipIndex?.let { requested ->
                 mediaOverlayPlayback.playableClips.indexOfFirst { it.clip.index == requested }
@@ -2127,10 +2576,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun finishReader() {
-        closeMediaOverlayPlayback()
+        closePlaybackForReaderExit()
         endReadingSession()
         updateResult(ReaderCompletionReason.USER_CLOSED)
         finish()
+    }
+
+    private fun closePlaybackForReaderExit() {
+        if (readerExitPlaybackClosed) return
+        readerExitPlaybackClosed = true
+        closeEpubReaderPlayback(
+            closeMediaOverlayPlayback = ::closeMediaOverlayPlayback,
+            closeTtsPlayback = ::closeTtsPlayback
+        )
     }
 
     private fun endReadingSession() {
@@ -2189,7 +2647,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     override fun onStop() {
         if (
-            shouldPauseReadingSession(isChangingConfigurations) &&
+            shouldPauseEpubReadingSessionOnStop(
+                isChangingConfigurations = isChangingConfigurations,
+                ttsPlayingInForeground = hasActiveTtsSession() && ttsIsPlaying
+            ) &&
             ::readingSessionReporter.isInitialized
         ) {
             readingSessionReporter.pause(currentPercent)
@@ -2206,6 +2667,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putReaderLocator(navigator?.currentLocator?.value ?: restoredLocator)
+        outState.putEpubTtsLocator(
+            ttsServiceBinder?.state?.value
+                ?.takeIf { it.ownerToken == ttsOwnerToken && it.readerKey == readerKey }
+                ?.locator
+                ?: lastTtsLocator
+        )
         outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
         outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
         outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
@@ -2213,14 +2680,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing && !isChangingConfigurations) {
+            closePlaybackForReaderExit()
+            endReadingSession()
+        }
+        ttsServiceStateJob?.cancel()
+        ttsServiceStateJob = null
+        ttsServiceConnection?.unbind()
+        ttsServiceConnection = null
+        ttsServiceBinder = null
         mediaOverlayPlayerListener?.let { listener ->
             mediaOverlayPlayback.player?.removeListener(listener)
         }
         mediaOverlayPlayerListener = null
-        if (isFinishing && !isChangingConfigurations) {
-            mediaOverlayPlayback.closePlayback()
-            endReadingSession()
-        }
         super.onDestroy()
         publication?.close()
         publication = null
@@ -2231,6 +2703,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_FILE_PATH = "readium_epub_file_path"
         private const val EXTRA_TITLE = "readium_epub_title"
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
+        internal const val EXTRA_TTS_OWNER_TOKEN = "readium_epub_tts_owner_token"
         private const val EXTRA_LIBRARY_ID = "readium_epub_library_id"
         private const val EXTRA_FILE_ID = "readium_epub_file_id"
         internal const val EXTRA_BOOK_ID = "readium_epub_book_id"
@@ -2246,6 +2719,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_INITIAL_ANNOTATION_COLOR = "readium_epub_initial_annotation_color"
         private const val EXTRA_INITIAL_ANNOTATION_STYLE = "readium_epub_initial_annotation_style"
         private const val EPUB_MEDIA_OVERLAY_DECORATION_GROUP = "epub-media-overlay"
+        private const val EPUB_TTS_DECORATION_GROUP = "epub-tts"
+        private const val TTS_PRIVACY_PREFERENCES = "epub_tts_privacy"
+        private const val TTS_PRIVACY_ACKNOWLEDGED = "network_voice_notice_acknowledged"
         private const val EXTRA_RESULT_CHAPTER = "readium_epub_result_chapter"
         private const val EXTRA_RESULT_PAGE = "readium_epub_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_epub_result_page_count"
@@ -2293,6 +2769,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_BOOK_ID, bookId)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_READER_KEY, readerKey)
+            .putExtra(EXTRA_TTS_OWNER_TOKEN, UUID.randomUUID().toString())
             .putExtra(EXTRA_LIBRARY_ID, libraryId)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
             .putExtra(EXTRA_INITIAL_CHAPTER, initialChapter)
@@ -2320,6 +2797,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 }
 
+internal fun closeEpubReaderPlayback(
+    closeMediaOverlayPlayback: () -> Unit,
+    closeTtsPlayback: () -> Unit
+) {
+    closeMediaOverlayPlayback()
+    closeTtsPlayback()
+}
+
 internal class ReadiumEpubLocatorStore(context: Context) {
     private val preferences = context.getSharedPreferences(
         "readium_epub_locations",
@@ -2335,5 +2820,36 @@ internal class ReadiumEpubLocatorStore(context: Context) {
     fun save(readerKey: String, locator: Locator) {
         if (readerKey.isBlank()) return
         preferences.edit().putString(readerKey, locator.toJSON().toString()).apply()
+    }
+
+    fun clear() {
+        preferences.edit().clear().apply()
+    }
+}
+
+internal class ReadiumEpubTtsPositionStore(context: Context) {
+    private val preferences = context.getSharedPreferences(
+        "readium_epub_tts_locations",
+        Context.MODE_PRIVATE
+    )
+
+    fun read(readerKey: String): Locator? {
+        if (readerKey.isBlank()) return null
+        val json = preferences.getString(readerKey, null) ?: return null
+        return runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
+    }
+
+    fun save(readerKey: String, locator: Locator) {
+        if (readerKey.isBlank()) return
+        preferences.edit().putString(readerKey, locator.toJSON().toString()).apply()
+    }
+
+    fun remove(readerKey: String) {
+        if (readerKey.isBlank()) return
+        preferences.edit().remove(readerKey).apply()
+    }
+
+    fun clear() {
+        preferences.edit().clear().apply()
     }
 }

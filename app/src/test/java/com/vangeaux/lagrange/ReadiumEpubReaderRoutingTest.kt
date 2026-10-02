@@ -17,6 +17,18 @@ private fun settleAnnotationReanchor(state: AnnotationReanchorState): Annotation
 
 class ReadiumEpubReaderRoutingTest {
     @Test
+    fun `closing EPUB reader closes publisher narration and text to speech`() {
+        val closed = mutableListOf<String>()
+
+        closeEpubReaderPlayback(
+            closeMediaOverlayPlayback = { closed += "publisher" },
+            closeTtsPlayback = { closed += "tts" }
+        )
+
+        assertEquals(listOf("publisher", "tts"), closed)
+    }
+
+    @Test
     fun `EPUB viewport reserves navigation inset only when bar is visible`() {
         assertEquals(0, readerViewportBottomInset(72, hideNavigationBar = true))
         assertEquals(72, readerViewportBottomInset(72, hideNavigationBar = false))

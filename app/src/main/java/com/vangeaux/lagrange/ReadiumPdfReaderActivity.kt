@@ -448,60 +448,65 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             showError("This PDF has no readable pages.")
             return
         }
-        publication = openedPublication
-        readingSessionReporter.start(
-            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
-        )
-        pageLocators = withContext(Dispatchers.IO) { openedPublication.positions() }
-        currentPageCount = pageLocators.size.coerceAtLeast(1)
-        val initialLocator = requestedLocator
-            ?.takeIf { saved ->
-                openedPublication.readingOrder.any { link ->
-                    link.url().isEquivalent(saved.href.removeFragment())
+        prepareAndAttachPublicationWhenResumed(
+            publication = openedPublication,
+            prepare = { withContext(Dispatchers.IO) { openedPublication.positions() } }
+        ) { loadedPageLocators ->
+            publication = openedPublication
+            readingSessionReporter.start(
+                intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+            )
+            pageLocators = loadedPageLocators
+            currentPageCount = pageLocators.size.coerceAtLeast(1)
+            val initialLocator = requestedLocator
+                ?.takeIf { saved ->
+                    openedPublication.readingOrder.any { link ->
+                        link.url().isEquivalent(saved.href.removeFragment())
+                    }
+                }
+                ?: initialLocator(openedPublication)
+            val fragmentFactory = PdfNavigatorFragment.createFactory(
+                publication = openedPublication,
+                initialLocator = initialLocator,
+                preferences = pdfiumPreferencesFor(readerPreferences),
+                pdfEngineProvider = PdfiumEngineProvider()
+            )
+            supportFragmentManager.fragmentFactory = fragmentFactory
+            @Suppress("UNCHECKED_CAST")
+            val fragment = fragmentFactory.instantiate(
+                classLoader,
+                "org.readium.r2.navigator.pdf.PdfNavigatorFragment"
+            ) as PdfiumNavigatorFragment
+            supportFragmentManager.beginTransaction()
+                .replace(readerContainerId, fragment, NAVIGATOR_TAG)
+                .commitNow()
+            fragment.publicationView.layoutDirection = if (
+                readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
+            ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            val directionalNavigation = LibraryDirectionalNavigationAdapter(
+                navigator = fragment,
+                readingDirection = { readingDirection },
+                tapZoneLayout = { readerPreferences.tapZoneLayout },
+                tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
+                onMenu = ::toggleChrome
+            )
+            fragment.addInputListener(
+                PdfHyperlinkTapHandler(
+                    navigator = fragment,
+                    onExternalLink = ::openPdfExternalLink,
+                    onInternalLink = ::openPdfInternalLink,
+                    fallback = directionalNavigation
+                )
+            )
+            navigator = fragment
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    fragment.currentLocator.collect(::updateLocation)
                 }
             }
-            ?: initialLocator(openedPublication)
-        val fragmentFactory = PdfNavigatorFragment.createFactory(
-            publication = openedPublication,
-            initialLocator = initialLocator,
-            preferences = pdfiumPreferencesFor(readerPreferences),
-            pdfEngineProvider = PdfiumEngineProvider()
-        )
-        supportFragmentManager.fragmentFactory = fragmentFactory
-        @Suppress("UNCHECKED_CAST")
-        val fragment = fragmentFactory.instantiate(
-            classLoader,
-            "org.readium.r2.navigator.pdf.PdfNavigatorFragment"
-        ) as PdfiumNavigatorFragment
-        supportFragmentManager.beginTransaction()
-            .replace(readerContainerId, fragment, NAVIGATOR_TAG)
-            .commitNow()
-        fragment.publicationView.layoutDirection = if (
-            readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
-        ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
-        val directionalNavigation = LibraryDirectionalNavigationAdapter(
-            navigator = fragment,
-            readingDirection = { readingDirection },
-            tapZoneLayout = { readerPreferences.tapZoneLayout },
-            tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
-            onMenu = ::toggleChrome
-        )
-        fragment.addInputListener(
-            PdfHyperlinkTapHandler(
-                navigator = fragment,
-                onExternalLink = ::openPdfExternalLink,
-                onInternalLink = ::openPdfInternalLink,
-                fallback = directionalNavigation
-            )
-        )
-        navigator = fragment
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                fragment.currentLocator.collect(::updateLocation)
-            }
+            progressView?.visibility = View.GONE
+            if (!tapZoneTutorialHasShown) showTapZoneTutorial()
         }
-        progressView?.visibility = View.GONE
-        if (!tapZoneTutorialHasShown) showTapZoneTutorial()
     }
 
     private fun openPdfExternalLink(uri: String): Boolean {

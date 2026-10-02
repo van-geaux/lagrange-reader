@@ -12,6 +12,7 @@
 - authenticated reader-cache copies for EPUB, PDF, and CBZ open flows before full download
 - active reader state used to reopen the last book after restart
 - queued and last-synced reading/listening progress markers
+- a one-bit acknowledgement of the Android text-to-speech privacy notice
 
 ## Storage location
 
@@ -28,6 +29,7 @@
 - sign-out clears account-owned progress, reading-session events, annotations, catalog/detail/browser/reader state, and queued account-owned progress; downloaded media is preserved on-device as device-shared Local books and remains available to any account on the same device
 - downloaded files remain on disk until the user removes them from the browser UI
 - queued progress may remain on disk until it is successfully synced or superseded
+- EPUB text to speech uses the Android speech engine selected on the device; some installed voices require a network service and may send spoken book text to that engine's provider, so the app displays a one-time disclosure before first use
 
 ## Current gaps
 

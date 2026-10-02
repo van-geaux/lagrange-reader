@@ -194,6 +194,80 @@ internal class AppPreferencesStore(context: Context) {
             .apply()
     }
 
+    fun readEpubTtsPlaybackSpeed(): Float {
+        val stored = if (preferences.contains(EPUB_TTS_PLAYBACK_SPEED_KEY)) {
+            preferences.getFloat(EPUB_TTS_PLAYBACK_SPEED_KEY, 1f)
+        } else {
+            // Preserve the speed selected before EPUB TTS received its own preference.
+            preferences.getFloat(AUDIO_PLAYBACK_SPEED_KEY, 1f)
+        }
+        return normalizeEpubTtsPlaybackSpeed(stored)
+    }
+
+    fun saveEpubTtsPlaybackSpeed(value: Float) {
+        preferences.edit()
+            .putFloat(EPUB_TTS_PLAYBACK_SPEED_KEY, normalizeEpubTtsPlaybackSpeed(value))
+            .apply()
+    }
+
+    fun readEpubTtsSettings(): EpubTtsSettings = EpubTtsSettings(
+        speed = readEpubTtsPlaybackSpeed(),
+        pitch = preferences.getFloat(EPUB_TTS_PITCH_KEY, 1f),
+        pauses = EpubTtsPauseSettings(
+            enabled = preferences.getBoolean(EPUB_TTS_CUSTOM_PAUSES_ENABLED_KEY, true),
+            commaMillis = preferences.getInt(
+                EPUB_TTS_COMMA_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().commaMillis
+            ),
+            semicolonMillis = preferences.getInt(
+                EPUB_TTS_SEMICOLON_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().semicolonMillis
+            ),
+            colonMillis = preferences.getInt(
+                EPUB_TTS_COLON_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().colonMillis
+            ),
+            emDashMillis = preferences.getInt(
+                EPUB_TTS_EM_DASH_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().emDashMillis
+            ),
+            ellipsisMillis = preferences.getInt(
+                EPUB_TTS_ELLIPSIS_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().ellipsisMillis
+            ),
+            parenthesesMillis = preferences.getInt(
+                EPUB_TTS_PARENTHESES_PAUSE_MILLIS_KEY,
+                EpubTtsPauseSettings().parenthesesMillis
+            )
+        ),
+        showBookTitleOnLockScreen = preferences.getBoolean(
+            EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY,
+            true
+        )
+    ).normalized()
+
+    fun saveEpubTtsSettings(value: EpubTtsSettings) {
+        val normalized = value.normalized()
+        preferences.edit()
+            .putFloat(EPUB_TTS_PLAYBACK_SPEED_KEY, normalized.speed)
+            .putFloat(EPUB_TTS_PITCH_KEY, normalized.pitch)
+            .putBoolean(EPUB_TTS_CUSTOM_PAUSES_ENABLED_KEY, normalized.pauses.enabled)
+            .putInt(EPUB_TTS_COMMA_PAUSE_MILLIS_KEY, normalized.pauses.commaMillis)
+            .putInt(EPUB_TTS_SEMICOLON_PAUSE_MILLIS_KEY, normalized.pauses.semicolonMillis)
+            .putInt(EPUB_TTS_COLON_PAUSE_MILLIS_KEY, normalized.pauses.colonMillis)
+            .putInt(EPUB_TTS_EM_DASH_PAUSE_MILLIS_KEY, normalized.pauses.emDashMillis)
+            .putInt(EPUB_TTS_ELLIPSIS_PAUSE_MILLIS_KEY, normalized.pauses.ellipsisMillis)
+            .putInt(
+                EPUB_TTS_PARENTHESES_PAUSE_MILLIS_KEY,
+                normalized.pauses.parenthesesMillis
+            )
+            .putBoolean(
+                EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY,
+                normalized.showBookTitleOnLockScreen
+            )
+            .apply()
+    }
+
     fun readAudioSkipBackSeconds(): Int = normalizeAudioSkipSeconds(
         preferences.getInt(AUDIO_SKIP_BACK_SECONDS_KEY, DEFAULT_AUDIO_SKIP_SECONDS)
     )
@@ -246,6 +320,18 @@ internal class AppPreferencesStore(context: Context) {
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
         const val LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY = "library_browse_options_expanded"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
+        const val EPUB_TTS_PLAYBACK_SPEED_KEY = "epub_tts_playback_speed"
+        const val EPUB_TTS_PITCH_KEY = "epub_tts_pitch"
+        const val EPUB_TTS_CUSTOM_PAUSES_ENABLED_KEY = "epub_tts_custom_pauses_enabled"
+        const val EPUB_TTS_COMMA_PAUSE_MILLIS_KEY = "epub_tts_comma_pause_millis"
+        const val EPUB_TTS_SEMICOLON_PAUSE_MILLIS_KEY = "epub_tts_semicolon_pause_millis"
+        const val EPUB_TTS_COLON_PAUSE_MILLIS_KEY = "epub_tts_colon_pause_millis"
+        const val EPUB_TTS_EM_DASH_PAUSE_MILLIS_KEY = "epub_tts_em_dash_pause_millis"
+        const val EPUB_TTS_ELLIPSIS_PAUSE_MILLIS_KEY = "epub_tts_ellipsis_pause_millis"
+        const val EPUB_TTS_PARENTHESES_PAUSE_MILLIS_KEY =
+            "epub_tts_parentheses_pause_millis"
+        const val EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY =
+            "epub_tts_show_book_title_on_lock_screen"
         const val AUDIO_SKIP_BACK_SECONDS_KEY = "audio_skip_back_seconds"
         const val AUDIO_SKIP_FORWARD_SECONDS_KEY = "audio_skip_forward_seconds"
         const val DEFAULT_AUDIO_SKIP_SECONDS = 10

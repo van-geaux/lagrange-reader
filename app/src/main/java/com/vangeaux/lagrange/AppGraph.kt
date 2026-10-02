@@ -55,7 +55,12 @@ class AppGraph private constructor(
                 readIgnoredReleaseTag = preferencesStore::readIgnoredReleaseTag,
                 saveIgnoredReleaseTag = preferencesStore::saveIgnoredReleaseTag,
                 schedulerOverride = WorkManagerDownloadScheduler(context)
-            ).also { it.setSessionHistoryStore(sessionHistoryStore) }
+            ).also {
+                it.setSessionHistoryStore(sessionHistoryStore)
+                it.setEpubTtsPlaybackCloser {
+                    EpubTtsPlaybackService.stopAndAwait(context)
+                }
+            }
             return Dependencies(repository, sessionHistoryStore, coordinator)
         }
     }

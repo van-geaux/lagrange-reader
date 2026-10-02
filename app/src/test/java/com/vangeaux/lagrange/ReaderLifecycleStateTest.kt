@@ -43,4 +43,26 @@ class ReaderLifecycleStateTest {
         assertFalse(shouldPauseReadingSession(isChangingConfigurations = true))
         assertTrue(shouldPauseReadingSession(isChangingConfigurations = false))
     }
+
+    @Test
+    fun `reading session stays active only while foreground TTS is actually playing`() {
+        assertFalse(
+            shouldPauseEpubReadingSessionOnStop(
+                isChangingConfigurations = false,
+                ttsPlayingInForeground = true
+            )
+        )
+        assertTrue(
+            shouldPauseEpubReadingSessionOnStop(
+                isChangingConfigurations = false,
+                ttsPlayingInForeground = false
+            )
+        )
+        assertFalse(
+            shouldPauseEpubReadingSessionOnStop(
+                isChangingConfigurations = true,
+                ttsPlayingInForeground = false
+            )
+        )
+    }
 }
