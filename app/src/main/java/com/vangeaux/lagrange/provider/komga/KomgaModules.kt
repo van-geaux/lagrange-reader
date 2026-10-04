@@ -678,7 +678,7 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
                 runCatching {
                     val progressionRequest = Request.Builder()
                         .url("$base/api/v1/books/${book.id}/progression")
-                        .header("Accept", "application/json")
+                        .header("Accept", "application/vnd.readium.progression+json")
                         .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
                         .build()
                     client.newCall(progressionRequest).execute().use { progressionResponse ->
