@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -10,9 +12,10 @@ internal class AnnotationMutationSyncWorker(
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
         return runCatching {
-            when (BookOrbitRepository(applicationContext).syncPendingAnnotationMutations()) {
+            when (resolveActiveProviderAnnotationModule(applicationContext).syncPendingMutations()) {
                 SyncAttemptResult.Success,
-                SyncAttemptResult.AuthenticationBlocked -> Result.success()
+                SyncAttemptResult.AuthenticationBlocked,
+                SyncAttemptResult.Unsupported -> Result.success()
                 SyncAttemptResult.TransientFailure -> Result.retry()
             }
         }.getOrElse { Result.retry() }

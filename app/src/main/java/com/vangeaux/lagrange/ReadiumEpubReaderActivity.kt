@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.SearchManager
@@ -72,6 +74,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.readium.navigator.media.tts.AndroidTtsNavigatorFactory
 import org.readium.navigator.media.tts.android.AndroidTtsEngine
+import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
@@ -247,7 +250,8 @@ internal data class ReadiumEpubProgressResult(
     val chapterIndex: Int,
     val pageIndex: Int,
     val pageCount: Int,
-    val percent: Float?
+    val percent: Float?,
+    val locatorJson: String?
 )
 
 internal const val DEFAULT_HIGHLIGHT_COLOR = "yellow"
@@ -553,7 +557,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var bookId: String? = null
-    private val annotationRepository by lazy { BookOrbitRepository(applicationContext) }
+    private val annotationRepository by lazy { resolveProviderAnnotationModule(
+        resolveProviderRepository(
+            applicationContext,
+            ServerProfileStore(applicationContext).active()?.serverUrl.orEmpty()
+        )
+    ) }
     private val highlightAnnotations = mutableMapOf<String, BookAnnotation>()
     private val highlightLocators = mutableMapOf<String, Locator>()
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
@@ -1261,11 +1270,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         (application as BookOrbitApplication).audioPlaybackController.pause()
         closeMediaOverlayPlayback()
         cancelPendingTtsStart()
-        EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken)
-        val requestAccountEpoch = EpubTtsAccountSession.currentEpoch()
-        val requestId = EpubTtsRequestSession.begin()
+        EpubTtsModuleImpl.stop(applicationContext, ttsOwnerToken)
+        val requestAccountEpoch = EpubTtsModuleImpl.currentAccountEpoch()
+        val requestId = EpubTtsModuleImpl.beginRequest()
         ttsStartRequestId = requestId
-        EpubTtsPlaybackService.start(
+        EpubTtsModuleImpl.start(
             applicationContext,
             ownerToken = ttsOwnerToken,
             requestId = requestId,
@@ -1286,8 +1295,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     null
                 }
                 if (ttsStartRequestId != requestId ||
-                    !EpubTtsRequestSession.isCurrent(requestId) ||
-                    !EpubTtsAccountSession.isCurrent(requestAccountEpoch)
+                    !EpubTtsModuleImpl.isCurrentRequest(requestId) ||
+                    !EpubTtsModuleImpl.isCurrentAccount(requestAccountEpoch)
                 ) return@launch
                 val filePath = intent.getStringExtra(EXTRA_FILE_PATH).orEmpty()
                 if (!File(filePath).isFile || isFinishing || isDestroyed) return@launch
@@ -1306,8 +1315,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     playWhenReady = playWhenReady
                 )
                 if (ttsStartRequestId != requestId ||
-                    !EpubTtsRequestSession.isCurrent(requestId) ||
-                    !EpubTtsAccountSession.isCurrent(requestAccountEpoch)
+                    !EpubTtsModuleImpl.isCurrentRequest(requestId) ||
+                    !EpubTtsModuleImpl.isCurrentAccount(requestAccountEpoch)
                 ) return@launch
                 pendingTtsSpec = spec
                 ttsView.visibility = View.VISIBLE
@@ -1324,8 +1333,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ).show()
             } finally {
                 if (!handedOffToService) {
-                    EpubTtsRequestSession.cancel(requestId)
-                    EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken, requestId)
+                    EpubTtsModuleImpl.cancelRequest(requestId)
+                    EpubTtsModuleImpl.stop(applicationContext, ttsOwnerToken, requestId)
                     if (ttsStartRequestId == requestId) ttsStartRequestId = null
                 }
             }
@@ -1518,7 +1527,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun closeTtsPlayback() {
         cancelPendingTtsStart()
         ttsServiceBinder?.stop(ttsOwnerToken)
-        EpubTtsPlaybackService.stop(applicationContext, ttsOwnerToken)
+        EpubTtsModuleImpl.stop(applicationContext, ttsOwnerToken)
         ttsIsPlaying = false
         ttsCanGoPrevious = false
         ttsCanGoNext = false
@@ -1540,7 +1549,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsStartJob = null
         pendingTtsSpec = null
         ttsStartRequestId = null
-        requestId?.let(EpubTtsRequestSession::cancel)
+        requestId?.let(EpubTtsModuleImpl::cancelRequest)
     }
 
     private fun startMediaOverlayPlayback(targetClipIndex: Int? = null) {
@@ -2570,6 +2579,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 putExtra(EXTRA_RESULT_PAGE, currentPage)
                 putExtra(EXTRA_RESULT_PAGE_COUNT, currentPageCount)
                 putExtra(EXTRA_RESULT_PERCENT, currentPercent)
+                navigator?.currentLocator?.value?.toJSON()?.toString()?.let {
+                    putExtra(EXTRA_RESULT_LOCATOR_JSON, it)
+                }
             }
         }
         setResult(Activity.RESULT_OK, data)
@@ -2726,6 +2738,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_RESULT_PAGE = "readium_epub_result_page"
         private const val EXTRA_RESULT_PAGE_COUNT = "readium_epub_result_page_count"
         private const val EXTRA_RESULT_PERCENT = "readium_epub_result_percent"
+        private const val EXTRA_RESULT_LOCATOR_JSON = "readium_epub_result_locator_json"
         private const val NAVIGATOR_TAG = "readium_epub_navigator"
         private const val TAG = "ReadiumEpubReader"
         private const val FOLIATE_SELECTION_CFI_ASSET = "foliate-selection-cfi.js"
@@ -2791,7 +2804,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 chapterIndex = data.getIntExtra(EXTRA_RESULT_CHAPTER, 0).coerceAtLeast(0),
                 pageIndex = data.getIntExtra(EXTRA_RESULT_PAGE, 0).coerceAtLeast(0),
                 pageCount = data.getIntExtra(EXTRA_RESULT_PAGE_COUNT, 1).coerceAtLeast(1),
-                percent = data.getFloatExtra(EXTRA_RESULT_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+                percent = data.getFloatExtra(EXTRA_RESULT_PERCENT, Float.NaN).takeUnless(Float::isNaN),
+                locatorJson = data.getStringExtra(EXTRA_RESULT_LOCATOR_JSON)
             )
         }
     }

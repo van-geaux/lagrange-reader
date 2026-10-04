@@ -197,6 +197,9 @@ internal fun aggregateBooksToSeriesCatalog(books: List<BookSummary>): SeriesCata
     return SeriesCatalogPage(items = items, total = items.size, page = 0, size = items.size)
 }
 
+internal fun filterBooksForSeriesCatalog(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
+    books.filter { libraryId.isNullOrBlank() || it.libraryId == libraryId }
+
 internal fun enrichSeriesAvailableFormats(
     series: List<SeriesSummary>,
     books: List<BookSummary>

@@ -37,4 +37,12 @@ class BookDetailReadingStatusActionTest {
             BOOK_READ_STATUS_OPTIONS.map(BookReadStatus::displayLabel)
         )
     }
+
+    @Test
+    fun komgaExposesOnlyReadAndUnreadStatuses() {
+        assertEquals(
+            listOf(BookReadStatus.UNREAD, BookReadStatus.READ),
+            KOMGA_READ_STATUS_OPTIONS
+        )
+    }
 }

@@ -12,6 +12,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import com.vangeaux.lagrange.core.ActiveReaderSession
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -62,6 +63,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToLong
 import javax.net.ssl.SSLException
+import com.vangeaux.lagrange.provider.bookorbit.BookOrbitModuleSet
 
 private val Context.dataStore by preferencesDataStore(name = "lagrange_prefs")
 private const val LIBRARY_PAGE_SIZE = 100
@@ -300,6 +302,8 @@ interface BookOrbitDataSource {
     )
     suspend fun clearActiveReader()
     suspend fun restoreActiveReaderState(localOnly: Boolean = false): ReaderState?
+    suspend fun restoreActiveReaderState(session: com.vangeaux.lagrange.core.ActiveReaderSession, localOnly: Boolean = false): ReaderState? =
+        restoreActiveReaderState(localOnly)
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
     suspend fun markBookAsRead(book: BookSummary) = Unit
     suspend fun resetBookReadingState(book: BookSummary) = Unit
@@ -324,7 +328,7 @@ interface BookOrbitDataSource {
     suspend fun syncPendingProgress(): SyncAttemptResult
     suspend fun queueReadingSession(payload: ReadingSessionPayload) = Unit
     suspend fun pendingReadingSessionCount(): Int = 0
-    suspend fun syncPendingReadingSessions(): SyncAttemptResult = SyncAttemptResult.Success
+    suspend fun syncPendingReadingSessions(): SyncAttemptResult = SyncAttemptResult.Unsupported
     suspend fun createAnnotation(
         bookId: String,
         cfi: String?,
@@ -352,7 +356,7 @@ interface BookOrbitDataSource {
      */
     suspend fun purgeAnnotation(annotationId: String) = Unit
     suspend fun pendingAnnotationMutationCount(): Int = 0
-    suspend fun syncPendingAnnotationMutations(): SyncAttemptResult = SyncAttemptResult.Success
+    suspend fun syncPendingAnnotationMutations(): SyncAttemptResult = SyncAttemptResult.Unsupported
     suspend fun canReachServer(serverUrl: String): Boolean
     suspend fun checkServer(serverUrl: String): ServerCheckResult
 }
@@ -372,7 +376,14 @@ internal fun interruptedDownloadRecord(attempt: DownloadAttempt): DownloadRecord
     hasExistingLocalCopy = attempt.existingLocalPath?.let(::File)?.exists() == true
 )
 
-class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
+class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, ProfileSessionAware {
+    /**
+     * Feature modules are composed around the existing BookOrbit implementation.
+     * The legacy data-source surface remains temporarily for compatibility while
+     * callers migrate one feature boundary at a time.
+     */
+    internal val featureModules by lazy { BookOrbitModuleSet(this).modules }
+
     private val queueStore = ProgressQueueStore(context)
     private val readingSessionQueueStore = ReadingSessionQueueStore(context)
     private val annotationMutationQueueStore = AnnotationMutationQueueStore(context)
@@ -382,6 +393,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
     private val libraryCatalogStore = LibraryCatalogStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
     private val coverCacheStore = CoverCacheStore(context)
+    private val profileSessionStore = ProfileSessionStore(context)
     private val bookDetailCacheStore = BookDetailCacheStore(context)
     private val activeReaderStore = ActiveReaderStore(context)
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
@@ -440,10 +452,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         }
         coverCacheStore.clear()
         bookDetailCacheStore.clear()
-        clearSession()
+        clearRuntimeSession()
     }
 
     override suspend fun clearSession() {
+        clearRuntimeSession()
+        currentProfileId()?.let(profileSessionStore::clear)
+    }
+
+    private suspend fun clearRuntimeSession() {
         val workManager = WorkManager.getInstance(context)
         workManager.cancelUniqueWork("bookorbit-progress-sync")
         workManager.cancelUniqueWork("bookorbit-reading-session-sync")
@@ -469,6 +486,30 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
         ReadiumEpubTtsPositionStore(context).clear()
         clearCookies()
     }
+
+    override suspend fun saveCurrentProfileSession() {
+        val profileId = currentProfileId() ?: return
+        val token = context.dataStore.data.first()[Keys.ACCESS_TOKEN]
+        if (token.isNullOrBlank()) {
+            profileSessionStore.clear(profileId)
+        } else {
+            profileSessionStore.write(profileId, token)
+        }
+    }
+
+    override suspend fun restoreCurrentProfileSession(): Boolean {
+        val profileId = currentProfileId() ?: return false
+        val token = profileSessionStore.read(profileId)
+        context.dataStore.edit { prefs ->
+            if (token.isNullOrBlank()) prefs.remove(Keys.ACCESS_TOKEN)
+            else prefs[Keys.ACCESS_TOKEN] = token
+        }
+        return !token.isNullOrBlank()
+    }
+
+    private suspend fun currentProfileId(): String? =
+        ServerProfileStore(context).active()?.id
+            ?: getServerUrl()?.let(::serverProfileId)
 
     override suspend fun getSelectedLibraryId(): String? = context.dataStore.data.first()[Keys.SELECTED_LIBRARY_ID]
 
@@ -1619,19 +1660,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             book = book,
             latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
         )
-        val epubPosition = if (book.mediaKind == MediaKind.EPUB) {
-            epubReaderPositionStore.read(serverUrl, book.id, book.fileId)
-        } else {
-            null
-        }
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
             lastKnownPosition = restoredProgress.positionMs,
-            pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
-            readerPageIndex = epubPosition?.pageIndex ?: 0,
+            pageIndex = restoredProgress.pageIndex,
+            readerPageIndex = 0,
             progressPercent = restoredProgress.progressPercent
         )
     }
@@ -1778,7 +1814,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             return@withContext null
         }
         val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
-        val savedBook = savedSession.book
+        restoreActiveReaderState(savedSession, localOnly)
+    }
+
+    override suspend fun restoreActiveReaderState(
+        session: com.vangeaux.lagrange.core.ActiveReaderSession,
+        localOnly: Boolean
+    ): ReaderState? = withContext(Dispatchers.IO) {
+        val serverUrl = session.serverUrl
+        val savedBook = session.book
         var bookForRestore = savedBook
         var audioFiles = emptyList<BookFileOption>()
         var audioTotalDurationMs: Long? = null
@@ -1910,11 +1954,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
                 bookForRestore.mediaKind
             )
         )
-        val epubPosition = if (bookForRestore.mediaKind == MediaKind.EPUB) {
-            epubReaderPositionStore.read(serverUrl, bookForRestore.id, bookForRestore.fileId)
-        } else {
-            null
-        }
         ReaderState(
             book = if (localFile != null) {
                 bookForRestore.copy(localPath = localFile.absolutePath)
@@ -1925,10 +1964,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
             lastKnownPosition = restoredProgress.positionMs,
-            pageIndex = epubPosition?.chapterIndex ?: restoredProgress.pageIndex,
-            readerPageIndex = epubPosition?.pageIndex ?: savedBook.readerPageIndex ?: 0,
+            pageIndex = restoredProgress.pageIndex,
+            readerPageIndex = savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
-            launchMode = savedSession.launchMode,
+            launchMode = session.launchMode,
             audioFiles = audioFiles,
             audioTotalDurationMs = audioTotalDurationMs
         )
@@ -3031,7 +3070,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource {
 enum class SyncAttemptResult {
     Success,
     AuthenticationBlocked,
-    TransientFailure
+    TransientFailure,
+    Unsupported
 }
 
 enum class SessionState {

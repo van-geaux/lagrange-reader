@@ -52,6 +52,7 @@ class BrowserOrientationStateTest {
                     BrowserDestination.ON_DECK,
                     BrowserDestination.WANT_TO_READ,
                     BrowserDestination.RECENTLY_ADDED_BOOKS,
+                    BrowserDestination.RECENTLY_RELEASED_BOOKS,
                     BrowserDestination.RECENTLY_ADDED_SERIES,
                     BrowserDestination.RECENTLY_UPDATED_SERIES,
                     BrowserDestination.RECENTLY_READ

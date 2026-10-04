@@ -1,14 +1,65 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.komga.komgaReadState
+import com.vangeaux.lagrange.provider.komga.komgaProgressEndpoint
+import com.vangeaux.lagrange.provider.komga.komgaDownloadedEpubFile
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class HomeShelfTest {
     @Test
+    fun `komga image library resolves an existing downloaded file before book fallback`() {
+        val downloaded = File.createTempFile("komga-image-library", ".epub")
+        try {
+            val record = DownloadRecord(
+                serverUrl = "https://komga.test",
+                fileId = "file-1",
+                bookId = "book-1",
+                title = "Book",
+                localPath = downloaded.absolutePath,
+                mediaKind = MediaKind.EPUB
+            )
+
+            assertEquals(downloaded.absolutePath, komgaDownloadedEpubFile(record, null)?.absolutePath)
+        } finally {
+            downloaded.delete()
+        }
+    }
+
+    @Test
+    fun `komga epub progress uses progression only when a locator is available`() {
+        assertEquals(
+            "https://komga.test/api/v1/books/book-1/progression",
+            komgaProgressEndpoint("https://komga.test", "book-1", hasLocator = true)
+        )
+        assertEquals(
+            "https://komga.test/api/v1/books/book-1/read-progress",
+            komgaProgressEndpoint("https://komga.test", "book-1", hasLocator = false)
+        )
+    }
+
+    @Test
+    fun `komga catalog read progress preserves completed series books`() {
+        val completed = komgaReadState(JSONObject("{\"completed\":true,\"page\":12}"))
+        val inProgress = komgaReadState(JSONObject("{\"completed\":false,\"page\":3}"))
+        val unread = komgaReadState(null)
+
+        assertEquals(BookReadStatus.READ, completed.status)
+        assertTrue(completed.isRead)
+        assertEquals(BookReadStatus.READING, inProgress.status)
+        assertFalse(inProgress.isRead)
+        assertEquals(BookReadStatus.UNREAD, unread.status)
+        assertFalse(unread.isRead)
+    }
+
+    @Test
     fun `recent home sections use server sort filters`() {
         assertEquals(BookSortOption.ADDED, HomeSection.RECENTLY_ADDED_BOOKS.recentBooksFilter().sort)
+        assertEquals("Recently released books", HomeSection.RECENTLY_RELEASED_BOOKS.title)
         assertEquals(BookSortOption.UPDATED, HomeSection.RECENTLY_UPDATED_SERIES.recentBooksFilter().sort)
         assertEquals(BookSortOption.LAST_READ, HomeSection.RECENTLY_READ.recentBooksFilter().sort)
         assertEquals(SortDirection.DESCENDING, HomeSection.RECENTLY_READ.recentBooksFilter().direction)
@@ -17,6 +68,17 @@ class HomeShelfTest {
             sort = SeriesSortOption.LAST_ADDED,
             direction = SortDirection.DESCENDING
         ).direction)
+    }
+
+    @Test
+    fun `series catalog library filter applies after all libraries are loaded`() {
+        val books = listOf(
+            BookSummary("library-a", "book-a", "file-a", "A", seriesId = "series", seriesName = "Saga"),
+            BookSummary("library-b", "book-b", "file-b", "B", seriesId = "series", seriesName = "Saga")
+        )
+
+        assertEquals(2, aggregateBooksToSeriesCatalog(filterBooksForSeriesCatalog(books, null)).items.single().bookCount)
+        assertEquals(1, aggregateBooksToSeriesCatalog(filterBooksForSeriesCatalog(books, "library-a")).items.single().bookCount)
     }
 
     @Test
@@ -35,7 +97,7 @@ class HomeShelfTest {
     @Test
     fun `recent series shelf items preserve enriched formats through shelf projection`() {
         val items = homeSeriesShelfItems(
-            series = listOf(SeriesSummary(id = "series", name = "Saga")),
+            series = listOf(SeriesSummary(id = "series", name = "Saga", coverUrl = "https://example.test/series/cover")),
             books = listOf(
                 BookSummary("lib", "book-1", "file-1", "One", seriesId = "series", seriesName = "Saga", format = "pdf", addedAtMillis = 1L),
                 BookSummary("lib", "book-2", "file-2", "Two", seriesId = "series", seriesName = "Saga", availableFormats = listOf("EPUB"), addedAtMillis = 2L)
@@ -43,6 +105,7 @@ class HomeShelfTest {
         )
 
         assertEquals(listOf("EPUB", "PDF"), items.single().second.availableFormats)
+        assertEquals("https://example.test/series/cover", items.single().second.coverUrl)
     }
 
     @Test

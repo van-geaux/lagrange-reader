@@ -14,11 +14,39 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import android.util.Log
 import kotlinx.coroutines.coroutineScope
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+import com.vangeaux.lagrange.core.ReaderLifecycleModule
+import com.vangeaux.lagrange.core.DownloadModule
+import com.vangeaux.lagrange.core.LocalBooksModule
+import com.vangeaux.lagrange.core.ReadingStatusModule
+import com.vangeaux.lagrange.core.ReadingProgressModule
+import com.vangeaux.lagrange.core.ReadingSessionModule
+import com.vangeaux.lagrange.core.AnnotationModule
+import com.vangeaux.lagrange.core.AchievementModule
+import com.vangeaux.lagrange.core.StatisticsModule
+import com.vangeaux.lagrange.core.SmartScopeModule
+import com.vangeaux.lagrange.core.AuthorModule
+import com.vangeaux.lagrange.core.BookDetailModule
+import com.vangeaux.lagrange.core.BookCoverModule
+import com.vangeaux.lagrange.core.BookCatalogModule
+import com.vangeaux.lagrange.core.ReaderModule
+import com.vangeaux.lagrange.core.SeriesCatalogModule
+import com.vangeaux.lagrange.core.HomeShelfModule
+import com.vangeaux.lagrange.core.LibraryModule
+import com.vangeaux.lagrange.core.LoginModule
+import com.vangeaux.lagrange.core.ServerDetectionModule
+import com.vangeaux.lagrange.core.ServerSelectionModule
+import com.vangeaux.lagrange.core.CacheModule
+import com.vangeaux.lagrange.core.ProviderFeatureAvailability
+import com.vangeaux.lagrange.core.ProviderSessionModule
+import com.vangeaux.lagrange.provider.*
+import com.vangeaux.lagrange.provider.bookorbit.BookOrbitOidcModule
+import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
 
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
@@ -65,17 +93,79 @@ enum class ReleaseCheckStatus {
 }
 
 class AppCoordinator internal constructor(
-    private val repository: BookOrbitDataSource,
+    private var repository: BookOrbitDataSource,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     private val releaseChecker: suspend (String) -> ReleaseUpdate? = { null },
     private val readIgnoredReleaseTag: () -> String? = { null },
     private val saveIgnoredReleaseTag: (String) -> Unit = {},
-    private val schedulerOverride: DownloadScheduler? = null
+    private val schedulerOverride: DownloadScheduler? = null,
+    private val serverProfileStore: ServerProfileStore? = null,
+    private val repositoryResolver: (suspend (String, String, BookOrbitDataSource) -> BookOrbitDataSource)? = null,
+    private val readerLifecycleModule: ReaderLifecycleModule? = null,
+    private val downloadModuleResolver: ((BookOrbitDataSource) -> DownloadModule)? = null,
+    private val localBooksModuleResolver: ((BookOrbitDataSource) -> LocalBooksModule)? = null
+    , private val readingStatusModuleResolver: ((BookOrbitDataSource) -> ReadingStatusModule)? = null,
+    private val readingProgressModuleResolver: ((BookOrbitDataSource) -> ReadingProgressModule)? = null
+    , private val readingSessionModuleResolver: ((BookOrbitDataSource) -> ReadingSessionModule)? = null
+    , private val annotationModuleResolver: ((BookOrbitDataSource) -> AnnotationModule)? = null
+    , private val achievementModuleResolver: ((BookOrbitDataSource) -> AchievementModule)? = null
+    , private val statisticsModuleResolver: ((BookOrbitDataSource) -> StatisticsModule)? = null
+    , private val smartScopeModuleResolver: ((BookOrbitDataSource) -> SmartScopeModule)? = null
+    , private val authorModuleResolver: ((BookOrbitDataSource) -> AuthorModule)? = null
+    , private val bookDetailModuleResolver: ((BookOrbitDataSource) -> BookDetailModule)? = null
+    , private val bookCoverModuleResolver: ((BookOrbitDataSource) -> BookCoverModule)? = null
+    , private val bookCatalogModuleResolver: ((BookOrbitDataSource) -> BookCatalogModule)? = null
+    , private val homeShelfModuleResolver: ((BookOrbitDataSource) -> HomeShelfModule)? = null
+    , private val libraryModuleResolver: ((BookOrbitDataSource) -> LibraryModule)? = null
+    , private val loginModuleResolver: ((BookOrbitDataSource) -> LoginModule)? = null
+    , private val serverDetectionModuleResolver: ((BookOrbitDataSource) -> ServerDetectionModule)? = null
+    , private val readerModuleResolver: ((BookOrbitDataSource) -> ReaderModule)? = null
+    , private val seriesCatalogModuleResolver: ((BookOrbitDataSource) -> SeriesCatalogModule)? = null
+    , private val serverSelectionModuleResolver: ((BookOrbitDataSource) -> ServerSelectionModule)? = null
+    , private val cacheModuleResolver: ((BookOrbitDataSource) -> CacheModule)? = null
+    , private val featureAvailabilityResolver: ((BookOrbitDataSource) -> ProviderFeatureAvailability)? = null
+    , private val providerSessionModuleResolver: ((BookOrbitDataSource) -> ProviderSessionModule)? = null
+    , private val bookOrbitOidcModuleResolver: ((BookOrbitDataSource) -> BookOrbitOidcModule?)? = null
 ) {
     // WorkManager (or any other durable executor) is the execution authority for downloads.
     // AppCoordinator only mutates its BrowserState UI projection from scheduler callbacks; the
     // default in-process scheduler preserves the historical in-memory behavior used by tests.
-    private val downloadScheduler: DownloadScheduler = schedulerOverride ?: InProcessDownloadScheduler(repository)
+    private val downloadScheduler: DownloadScheduler = schedulerOverride ?: InProcessDownloadScheduler(
+        downloadModule() ?: resolveProviderDownloadModule(repository)
+    )
+
+    private fun downloadModule(): DownloadModule? = downloadModuleResolver?.invoke(repository)
+    private fun localBooksModule(): LocalBooksModule? = localBooksModuleResolver?.invoke(repository)
+    private fun readingStatusModule(): ReadingStatusModule? = readingStatusModuleResolver?.invoke(repository)
+    private fun readingProgressModule(): ReadingProgressModule? = readingProgressModuleResolver?.invoke(repository)
+    private fun readingSessionModule(): ReadingSessionModule? = readingSessionModuleResolver?.invoke(repository)
+    private fun annotationModule(): AnnotationModule? = annotationModuleResolver?.invoke(repository)
+    private fun achievementModule(): AchievementModule? = achievementModuleResolver?.invoke(repository)
+    private fun statisticsModule(): StatisticsModule? = statisticsModuleResolver?.invoke(repository)
+    private fun smartScopeModule(): SmartScopeModule? = smartScopeModuleResolver?.invoke(repository)
+    private fun authorModule(): AuthorModule? = authorModuleResolver?.invoke(repository)
+    private fun bookDetailModule(): BookDetailModule? = bookDetailModuleResolver?.invoke(repository)
+    private fun bookCoverModule(): BookCoverModule? = bookCoverModuleResolver?.invoke(repository)
+    private fun bookCatalogModule(): BookCatalogModule? = bookCatalogModuleResolver?.invoke(repository)
+    private fun homeShelfModule(): HomeShelfModule? = homeShelfModuleResolver?.invoke(repository)
+    private fun libraryModule(): LibraryModule? = libraryModuleResolver?.invoke(repository)
+    private fun loginModule(): LoginModule? = loginModuleResolver?.invoke(repository)
+    private fun serverDetectionModule(): ServerDetectionModule? = serverDetectionModuleResolver?.invoke(repository)
+    private fun readerModule(): ReaderModule? = readerModuleResolver?.invoke(repository)
+    private fun seriesCatalogModule(): SeriesCatalogModule? = seriesCatalogModuleResolver?.invoke(repository)
+    private fun serverSelectionModule(): ServerSelectionModule? = serverSelectionModuleResolver?.invoke(repository)
+    private fun cacheModule(): CacheModule? = cacheModuleResolver?.invoke(repository)
+    private fun featureAvailability(): ProviderFeatureAvailability =
+        featureAvailabilityResolver?.invoke(repository) ?: ProviderFeatureAvailability()
+    private fun providerSessionModule(): ProviderSessionModule? = providerSessionModuleResolver?.invoke(repository)
+    private fun bookOrbitOidcModule(): BookOrbitOidcModule? = bookOrbitOidcModuleResolver?.invoke(repository)
+    fun achievementsAvailable(): Boolean = featureAvailability().achievements
+    fun statisticsAvailable(): Boolean = featureAvailability().statistics
+    fun smartScopesAvailable(): Boolean = featureAvailability().smartScopes
+    fun authorsAvailable(): Boolean = featureAvailability().authors
+    fun userRatingAvailable(): Boolean = featureAvailability().userRating
+    fun extendedReadingStatusesAvailable(): Boolean = featureAvailability().extendedReadingStatuses
+    fun readingStatusOptions(): List<BookReadStatus> = featureAvailability().readingStatusOptions
 
     // fileIds this coordinator has re-attached to via DownloadScheduler.reconcile() (e.g. after
     // process death). Merged into every BrowserState until each fileId resolves, mirroring how
@@ -83,12 +173,46 @@ class AppCoordinator internal constructor(
     private var reconciledActiveDownloadsByFileId: Map<String, BookSummary> = emptyMap()
     private val epubImageLibraryDownloadCallbacks = mutableMapOf<String, (BookSummary) -> Unit>()
     private val completedDownloadBookIdsAwaitingRefresh = mutableSetOf<String>()
+
+    private suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL) {
+        val module = readerLifecycleModule
+        if (module == null) {
+            repository.saveActiveReader(book, launchMode)
+        } else {
+            module.saveActiveReader((serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(), book, launchMode)
+        }
+    }
+
+    private suspend fun clearActiveReader() {
+        val module = readerLifecycleModule
+        if (module == null) {
+            repository.clearActiveReader()
+        } else {
+            module.clearActiveReader()
+        }
+    }
+
+    private suspend fun restoreSharedReaderPosition(state: ReaderState): ReaderState {
+        return readerLifecycleModule?.restoreEpubReaderPosition(
+            (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
+            state
+        ) ?: state
+    }
+
+    private suspend fun restoreActiveReaderStateThroughSharedLifecycle(localOnly: Boolean): ReaderState? {
+        val lifecycle = readerLifecycleModule ?: return repository.restoreActiveReaderState(localOnly)
+        val session = lifecycle.readActiveReaderSession((serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()) ?: return null
+        val state = readerModule()?.restoreActiveReaderState(session, localOnly)
+            ?: repository.restoreActiveReaderState(session, localOnly)
+            ?: return null
+        return restoreSharedReaderPosition(state)
+    }
     suspend fun searchBooks(query: String): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
-        repository.searchBooks(query)
+        bookCatalogModule()?.searchBooks(query) ?: repository.searchBooks(query)
     }
 
     suspend fun loadBookCover(book: BookSummary): ByteArray? = loadWithSessionRecovery(null) {
-        repository.loadBookCover(book)
+        bookCoverModule()?.loadBookCover(book) ?: repository.loadBookCover(book)
     }
 
     suspend fun prepareEpubImageLibrarySource(
@@ -97,16 +221,17 @@ class AppCoordinator internal constructor(
     ): EpubImageLibrarySourceResult = loadWithSessionRecovery(
         EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
     ) {
-        repository.prepareEpubImageLibrarySource(book, allowRemoteCache)
+        readerModule()?.prepareEpubImageLibrarySource(book, allowRemoteCache)
+            ?: repository.prepareEpubImageLibrarySource(book, allowRemoteCache)
     }
 
     suspend fun loadLocalBooks(): List<BookSummary> = loadWithSessionRecovery(emptyList()) {
-        repository.loadLocalBooks()
+        localBooksModule()?.loadLocalBooks() ?: repository.loadLocalBooks()
     }
 
     suspend fun loadLibraryBooksPage(libraryId: String, page: Int): LibraryBooksPage =
         loadWithSessionRecovery(LibraryBooksPage(page = page)) {
-            repository.loadBooksPage(libraryId, page)
+            bookCatalogModule()?.loadBooksPage(libraryId, page) ?: repository.loadBooksPage(libraryId, page)
         }
 
     suspend fun loadLibraryBooksPage(
@@ -114,7 +239,7 @@ class AppCoordinator internal constructor(
         page: Int,
         filter: BookBrowseFilter
     ): LibraryBooksPage = loadWithSessionRecovery(LibraryBooksPage(page = page)) {
-        repository.loadBooksPage(libraryId, page, filter)
+        bookCatalogModule()?.loadBooksPage(libraryId, page, filter) ?: repository.loadBooksPage(libraryId, page, filter)
     }
 
     internal suspend fun loadRecentBooksPage(
@@ -122,28 +247,28 @@ class AppCoordinator internal constructor(
         section: HomeSection,
         page: Int
     ): LibraryBooksPage = loadWithSessionRecovery(LibraryBooksPage(page = page)) {
-        repository.loadRecentBooksPage(libraryId, section, page)
+        bookCatalogModule()?.loadRecentBooksPage(libraryId, section, page) ?: repository.loadRecentBooksPage(libraryId, section, page)
     }
 
     suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = loadWithSessionRecovery(null) {
-        repository.loadBookDetail(book)
+        bookDetailModule()?.loadBookDetail(book) ?: repository.loadBookDetail(book)
     }
 
     internal suspend fun loadAudiobookSessionHistory(book: BookSummary): List<AudiobookSessionEvent> {
-        val serverUrl = repository.getServerUrl().orEmpty()
+        val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
         return sessionHistoryStore?.read(serverUrl, book).orEmpty()
     }
 
     internal fun clearAudiobookSessionHistory(book: BookSummary) {
         scope.launch {
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             sessionHistoryStore?.clearBook(serverUrl, book)
         }
     }
 
     suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo? {
         return try {
-            repository.setBookUserRating(book, rating)
+            bookDetailModule()?.setBookUserRating(book, rating) ?: repository.setBookUserRating(book, rating)
         } catch (error: CancellationException) {
             throw error
         } catch (_: AuthenticationRequiredException) {
@@ -156,90 +281,96 @@ class AppCoordinator internal constructor(
     }
 
     suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = loadWithSessionRecovery(null) {
-        repository.loadSeriesDetail(seriesId)
+        seriesCatalogModule()?.loadSeriesDetail(seriesId) ?: repository.loadSeriesDetail(seriesId)
     }
 
     suspend fun loadSeriesCatalog(query: String?, page: Int): SeriesCatalogPage =
         loadWithSessionRecovery(SeriesCatalogPage()) {
-            repository.loadSeriesCatalog(query, page)
+            seriesCatalogModule()?.loadSeriesCatalog(SeriesCatalogFilter(query = query), page)
+                ?: repository.loadSeriesCatalog(query, page)
         }
 
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         loadWithSessionRecovery(SeriesCatalogPage()) {
-            repository.loadSeriesCatalog(filter, page)
+            seriesCatalogModule()?.loadSeriesCatalog(filter, page)
+                ?: repository.loadSeriesCatalog(filter, page)
         }
 
     suspend fun loadSmartScopes(): List<SmartScope> = loadWithSessionRecovery(emptyList()) {
-        repository.loadSmartScopes()
+        smartScopeModule()?.loadSmartScopes() ?: repository.loadSmartScopes()
     }
 
     suspend fun loadSmartScopeSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         loadWithSessionRecovery(SeriesCatalogPage()) {
-            repository.loadSmartScopeSeriesCatalog(scopeId, filter, page)
+            smartScopeModule()?.loadSeriesCatalog(scopeId, filter, page)
+                ?: repository.loadSmartScopeSeriesCatalog(scopeId, filter, page)
         }
 
     suspend fun loadSmartScopeSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? =
-        loadWithSessionRecovery(null) { repository.loadSmartScopeSeriesDetail(scopeId, seriesId) }
+        loadWithSessionRecovery(null) {
+            smartScopeModule()?.loadSeriesDetail(scopeId, seriesId)
+                ?: repository.loadSmartScopeSeriesDetail(scopeId, seriesId)
+        }
 
     suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage =
         loadWithSessionRecovery(AuthorCatalogPage()) {
-            repository.loadAuthorsCatalog(query, page)
+            authorModule()?.loadAuthorsCatalog(query, page) ?: repository.loadAuthorsCatalog(query, page)
         }
 
     suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage? =
         loadWithSessionRecovery(null) {
-            repository.loadAuthorBooks(authorId, page)
+            authorModule()?.loadAuthorBooks(authorId, page) ?: repository.loadAuthorBooks(authorId, page)
         }
 
     suspend fun loadAnnotations(filter: AnnotationsFilter, page: Int): BookAnnotationsPage =
         loadWithSessionRecovery(BookAnnotationsPage()) {
-            repository.loadAnnotations(filter, page)
+            annotationModule()?.loadAnnotations(filter, page) ?: repository.loadAnnotations(filter, page)
         }
 
     suspend fun loadAchievements(): AchievementCatalogue = loadWithSessionRecovery(
         AchievementCatalogue(status = AchievementCatalogueStatus.ERROR)
     ) {
-        repository.loadAchievements()
+        achievementModule()?.loadAchievements() ?: repository.loadAchievements()
     }
 
     suspend fun loadUserStatistics(): UserStatistics = loadWithSessionRecovery(
         UserStatistics(status = UserStatisticsStatus.ERROR)
     ) {
-        repository.loadUserStatistics()
+        statisticsModule()?.loadUserStatistics() ?: repository.loadUserStatistics()
     }
 
     suspend fun loadBookReadingSessions(bookId: String): BookReadingSessionsResult = loadWithSessionRecovery(
         BookReadingSessionsResult(status = ServerReadingHistoryStatus.ERROR)
     ) {
-        repository.loadBookReadingSessions(bookId)
+        readingSessionModule()?.loadBookReadingSessions(bookId) ?: repository.loadBookReadingSessions(bookId)
     }
 
     suspend fun loadBookReadingAttempts(bookId: String): ReadingAttemptsResult = loadWithSessionRecovery(
         ReadingAttemptsResult(status = ServerReadingHistoryStatus.ERROR)
     ) {
-        repository.loadBookReadingAttempts(bookId)
+        readingSessionModule()?.loadBookReadingAttempts(bookId) ?: repository.loadBookReadingAttempts(bookId)
     }
 
     suspend fun loadCatalogImage(url: String): ByteArray? = loadWithSessionRecovery(null) {
-        repository.loadCatalogImage(url)
+        bookCoverModule()?.loadCatalogImage(url) ?: repository.loadCatalogImage(url)
     }
 
-    suspend fun loadStorageUsage(): StorageUsage = repository.loadStorageUsage()
+    suspend fun loadStorageUsage(): StorageUsage = cacheModule()?.loadStorageUsage() ?: repository.loadStorageUsage()
 
     suspend fun clearAppCache() {
-        repository.clearAppCache()
+        cacheModule()?.clearAppCache() ?: repository.clearAppCache()
     }
 
-    suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = repository.loadOfflineCacheStatus()
+    suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = cacheModule()?.loadOfflineCacheStatus() ?: repository.loadOfflineCacheStatus()
 
-    suspend fun startOfflineCacheUpdate(): Boolean = repository.startOfflineCacheUpdate()
+    suspend fun startOfflineCacheUpdate(): Boolean = cacheModule()?.startOfflineCacheUpdate() ?: repository.startOfflineCacheUpdate()
 
-    suspend fun cancelOfflineCacheUpdate() = repository.cancelOfflineCacheUpdate()
+    suspend fun cancelOfflineCacheUpdate() = cacheModule()?.cancelOfflineCacheUpdate() ?: repository.cancelOfflineCacheUpdate()
 
-    suspend fun clearOfflineCache() = repository.clearOfflineCache()
+    suspend fun clearOfflineCache() = cacheModule()?.clearOfflineCache() ?: repository.clearOfflineCache()
 
     fun reconfigureBackgroundRefresh() {
-        scope.launch { repository.reconfigureBackgroundRefresh() }
+        scope.launch { cacheModule()?.reconfigureBackgroundRefresh() ?: repository.reconfigureBackgroundRefresh() }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -272,6 +403,17 @@ class AppCoordinator internal constructor(
     private var dismissedReleaseTag: String? = null
     private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
 
+    fun configuredServerProfiles(): List<ServerProfile> = serverProfileStore?.readAll().orEmpty()
+
+    fun switchToServerProfile(profileId: String) {
+        val profile = serverProfileStore?.readAll()?.firstOrNull { it.id == profileId } ?: return
+        changeServer(profile.serverUrl, profile.providerId, profile.displayName)
+    }
+
+    fun removeServerProfile(profileId: String) {
+        serverProfileStore?.remove(profileId)
+    }
+
     fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
         audioPlaybackOpener = opener
     }
@@ -286,7 +428,7 @@ class AppCoordinator internal constructor(
 
     private suspend fun closeAccountBoundPlayback() {
         runCatching { audioPlaybackCloser?.invoke() }
-        EpubTtsAccountSession.invalidate()
+        EpubTtsModuleImpl.invalidateAccount()
         runCatching { epubTtsPlaybackCloser?.invoke() }
     }
 
@@ -352,13 +494,24 @@ class AppCoordinator internal constructor(
         checkForAppUpdate()
         scope.launch {
             _screen.value = AppScreen.Loading
-            val serverUrl = repository.getServerUrl()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl())
             if (serverUrl.isNullOrBlank()) {
                 _screen.value = AppScreen.ServerSetup()
                 return@launch
             }
 
-            val localAudioState = repository.restoreActiveReaderState(localOnly = true)?.let { readerState ->
+            if (serverProfileStore?.active() == null) {
+                serverProfileStore?.upsert(
+                    ServerProfile(
+                        id = serverProfileId(serverUrl),
+                        serverUrl = serverUrl,
+                        displayName = serverUrl,
+                        lastUsedAtMillis = System.currentTimeMillis()
+                    )
+                )
+            }
+
+            val localAudioState = restoreActiveReaderStateThroughSharedLifecycle(localOnly = true)?.let { readerState ->
                 if (readerState.book.mediaKind != MediaKind.AUDIO) {
                     _screen.value = AppScreen.Reader(readerState)
                     return@launch
@@ -366,7 +519,7 @@ class AppCoordinator internal constructor(
                 readerState
             }
 
-            val startupCache = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
+            val startupCache = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
             if (startupCache != null) {
                 showBrowser(
                     startupCache.copy(
@@ -385,7 +538,7 @@ class AppCoordinator internal constructor(
             if (startupCache == null) {
                 _screen.value = AppScreen.Startup("Connecting to BookOrbit…")
             }
-            val sessionState = repository.getSessionState()
+            val sessionState = loginModule()?.getSessionState() ?: repository.getSessionState()
             if (startupCache != null) {
                 val currentBrowser = (_screen.value as? AppScreen.Browser)?.browserState
                     ?: return@launch
@@ -398,7 +551,7 @@ class AppCoordinator internal constructor(
             when (sessionState) {
                 SessionState.Authenticated -> {
                     allowCachedLoginFallback = true
-                    repository.restoreActiveReaderState()?.let { readerState ->
+                    restoreActiveReaderStateThroughSharedLifecycle(localOnly = false)?.let { readerState ->
                         if (readerState.book.mediaKind != MediaKind.AUDIO) {
                             _screen.value = AppScreen.Reader(readerState)
                             return@launch
@@ -416,7 +569,7 @@ class AppCoordinator internal constructor(
                 }
                 SessionState.Unavailable -> {
                     localAudioState?.let(::restoreAudioInBackground)
-                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
+                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -435,13 +588,24 @@ class AppCoordinator internal constructor(
         }
     }
 
-    fun saveServer(serverUrl: String) {
+    fun saveServer(serverUrl: String, serverName: String = "", providerId: String = PROVIDER_BOOKORBIT) {
         scope.launch {
-            serverSetupFailure(serverUrl, repository.checkServer(serverUrl))?.let { failure ->
+            val targetRepository = repositoryResolver?.invoke(serverUrl, providerId, repository) ?: repository
+            serverSetupFailure(serverUrl, targetRepository.checkServer(serverUrl), providerId, serverName)?.let { failure ->
                 _screen.value = failure
                 return@launch
             }
-            repository.setServerUrl(serverUrl)
+            repository = targetRepository
+            serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            serverProfileStore?.upsert(
+                ServerProfile(
+                    id = serverProfileId(serverUrl),
+                    serverUrl = serverUrl,
+                    providerId = providerId,
+                    displayName = serverName.trim().ifBlank { serverUrl },
+                    lastUsedAtMillis = System.currentTimeMillis()
+                )
+            )
             showLogin(
                 message = "Connect to the server and complete sign in.",
                 destination = PostLoginDestination.Browser
@@ -449,25 +613,60 @@ class AppCoordinator internal constructor(
         }
     }
 
-    fun changeServer(serverUrl: String) {
+    fun changeServer(serverUrl: String, providerId: String = PROVIDER_BOOKORBIT, serverName: String = "") {
         scope.launch {
             acceptAudioProgress = false
-            val oldServerUrl = repository.getServerUrl().orEmpty()
+            // Remove the old provider's browser composition immediately. Keeping the
+            // old Browser screen mounted while the target is validated lets stale
+            // catalog/local-book state remain visible during the switch.
+            _screen.value = AppScreen.Startup("Switching server…")
+            val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
+            providerSessionModule()?.saveCurrentProfileSession()
             _fullAudioPlayerBook.value = null
             closeAccountBoundPlayback()
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
             sessionHistoryStore?.clearServer(oldServerUrl)
-            repository.clearServer()
-            serverSetupFailure(serverUrl, repository.checkServer(serverUrl))?.let { failure ->
+            serverSelectionModule()?.clearServer() ?: repository.clearServer()
+            val targetRepository = repositoryResolver?.invoke(serverUrl, providerId, repository) ?: repository
+            serverSetupFailure(serverUrl, targetRepository.checkServer(serverUrl), providerId, serverName)?.let { failure ->
                 _screen.value = failure
                 return@launch
             }
-            repository.setServerUrl(serverUrl)
-            showLogin(
-                message = "Server changed. Sign in to access your libraries.",
-                destination = PostLoginDestination.Browser
+            repository = targetRepository
+            serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            serverProfileStore?.upsert(
+                ServerProfile(
+                    id = serverProfileId(serverUrl),
+                    serverUrl = serverUrl,
+                    providerId = providerId,
+                    displayName = serverName.trim().ifBlank { serverUrl },
+                    lastUsedAtMillis = System.currentTimeMillis()
+                )
             )
+            val restoredProfileSession = providerSessionModule()?.restoreCurrentProfileSession() == true
+            val restoredSessionState = if (restoredProfileSession) {
+                repository.getSessionState()
+            } else {
+                SessionState.Unauthenticated
+            }
+            when (restoredSessionState) {
+                SessionState.Authenticated -> {
+                    allowCachedLoginFallback = true
+                    resumeAfterLogin()
+                }
+                SessionState.Unauthenticated -> {
+                    if (restoredProfileSession) loginModule()?.clearSession() ?: repository.clearSession()
+                    showLogin(
+                        message = "Server changed. Sign in to access your libraries.",
+                        destination = PostLoginDestination.Browser
+                    )
+                }
+                SessionState.Unavailable -> showLogin(
+                    message = "Server changed. Sign in to access your libraries.",
+                    destination = PostLoginDestination.Browser
+                )
+            }
         }
     }
 
@@ -476,12 +675,27 @@ class AppCoordinator internal constructor(
             acceptAudioProgress = false
             oidcJob?.cancel()
             oidcJob = null
-            val oldServerUrl = repository.getServerUrl().orEmpty()
+            val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             _fullAudioPlayerBook.value = null
             closeAccountBoundPlayback()
             resetTransientState(clearBrowserState = true)
+            if (oldServerUrl.isNotBlank() && serverProfileStore?.readAll()?.none {
+                    serverUrlsMatch(it.serverUrl, oldServerUrl)
+                } == true
+            ) {
+                serverProfileStore?.upsert(
+                    ServerProfile(
+                        id = serverProfileId(oldServerUrl),
+                        serverUrl = oldServerUrl,
+                        providerId = serverProfileStore.active()?.providerId ?: PROVIDER_BOOKORBIT,
+                        displayName = oldServerUrl,
+                        lastUsedAtMillis = System.currentTimeMillis()
+                    ),
+                    makeActive = true
+                )
+            }
             sessionHistoryStore?.clearServer(oldServerUrl)
-            repository.clearServer()
+            serverSelectionModule()?.clearServer() ?: repository.clearServer()
             _screen.value = AppScreen.ServerSetup()
         }
     }
@@ -493,18 +707,18 @@ class AppCoordinator internal constructor(
             }
             loginRefreshInFlight = true
             try {
-            val serverUrl = repository.getServerUrl()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl())
             if (serverUrl.isNullOrBlank()) {
                 _screen.value = AppScreen.ServerSetup()
                 return@launch
             }
-            when (repository.getSessionState()) {
+            when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
                 SessionState.Authenticated -> {
                     allowCachedLoginFallback = true
                     resumeAfterLogin()
                 }
                 SessionState.Unauthenticated -> {
-                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
+                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -520,7 +734,7 @@ class AppCoordinator internal constructor(
                     }
                 }
                 SessionState.Unavailable -> {
-                    val cached = repository.loadCachedBrowserState().takeIf { allowCachedLoginFallback }
+                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -551,8 +765,9 @@ class AppCoordinator internal constructor(
             loginSubmitInFlight = true
             _screen.value = current.copy(isSubmitting = true, message = null)
             try {
-                repository.login(username = username, password = password)
-                when (repository.getSessionState()) {
+                loginModule()?.login(username, password) ?: repository.login(username = username, password = password)
+                providerSessionModule()?.saveCurrentProfileSession()
+                when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
                     SessionState.Authenticated -> {
                         allowCachedLoginFallback = true
                         resumeAfterLogin()
@@ -583,7 +798,8 @@ class AppCoordinator internal constructor(
         )
         oidcJob = scope.launch {
             try {
-                val providers = repository.loadOidcProviders()
+                val providers = bookOrbitOidcModule()?.loadProviders()
+                    ?: throw UserFacingException("SSO is not available for this provider.")
                 updateOidcState { it.copy(providers = providers, isLoading = false) }
             } catch (error: CancellationException) {
                 throw error
@@ -617,8 +833,9 @@ class AppCoordinator internal constructor(
         )
         oidcJob = scope.launch {
             try {
-                val serverUrl = repository.getServerUrl().orEmpty()
-                val serverState = repository.requestOidcState(provider.slug)
+                val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
+                val serverState = bookOrbitOidcModule()?.requestState(provider.slug)
+                    ?: throw UserFacingException("SSO is not available for this provider.")
                 val transaction = BookOrbitOidc.buildTransaction(
                     provider = provider,
                     serverUrl = serverUrl,
@@ -655,8 +872,10 @@ class AppCoordinator internal constructor(
                     expectedRedirectUri = transaction.redirectUri,
                     expectedState = transaction.state
                 ).getOrThrow()
-                repository.exchangeOidcCallback(transaction, callback)
-                when (repository.getSessionState()) {
+                bookOrbitOidcModule()?.exchangeCallback(transaction, callback)
+                    ?: throw UserFacingException("SSO is not available for this provider.")
+                providerSessionModule()?.saveCurrentProfileSession()
+                when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
                     SessionState.Authenticated -> {
                         allowCachedLoginFallback = true
                         resumeAfterLogin()
@@ -710,13 +929,13 @@ class AppCoordinator internal constructor(
             acceptAudioProgress = false
             oidcJob?.cancel()
             oidcJob = null
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             _fullAudioPlayerBook.value = null
             closeAccountBoundPlayback()
             sessionHistoryStore?.clearServer(serverUrl)
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
-            repository.clearSession()
+            loginModule()?.clearSession() ?: repository.clearSession()
             showLogin(
                 message = "Signed out. Sign in to access your libraries.",
                 destination = PostLoginDestination.Browser
@@ -772,7 +991,7 @@ class AppCoordinator internal constructor(
                     if (latest.serverSignIn == null) {
                         break
                     }
-                    if (repository.getSessionState() == SessionState.Authenticated) {
+                    if ((loginModule()?.getSessionState() ?: repository.getSessionState()) == SessionState.Authenticated) {
                         allowCachedLoginFallback = true
                         resumeAfterLogin()
                         break
@@ -802,7 +1021,7 @@ class AppCoordinator internal constructor(
     private fun loadBrowser(userInitiated: Boolean) {
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             acceptAudioProgress = true
             showStartup("Loading libraries…")
             restoredInterruptedDownloads = runCatching {
@@ -821,13 +1040,13 @@ class AppCoordinator internal constructor(
                 if (!book.filename.isNullOrBlank()) {
                     book
                 } else {
-                    val detail = runCatching { repository.loadBookDetail(book) }.getOrNull()
+                    val detail = runCatching { bookDetailModule()?.loadBookDetail(book) ?: repository.loadBookDetail(book) }.getOrNull()
                     book.copy(filename = recoveredDownloadFilename(book, fileId, detail))
                 }
             }
             var previous = lastBrowserState
             if (previous == null) {
-                repository.loadCachedBrowserState()?.let { cached ->
+                (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState())?.let { cached ->
                     previous = cached
                 }
             }
@@ -843,18 +1062,32 @@ class AppCoordinator internal constructor(
                 )
             }
             runCatching {
-                val libraries = repository.loadLibraries()
+                val libraries = libraryModule()?.loadLibraries() ?: repository.loadLibraries()
                 val selectedLibrary = resolveSelectedLibraryId(
-                    preferredId = repository.getSelectedLibraryId(),
+                    preferredId = serverSelectionModule()?.getSelectedLibraryId() ?: repository.getSelectedLibraryId(),
                     libraries = libraries
                 )
+
                 // Flush queued reader progress before loading the first page. This makes
                 // the first Home render reflect progress that was created in an earlier
                 // session instead of showing Continue reading only after a second open.
                 showStartup("Syncing reading progress…")
-                val progressSyncResult = repository.syncPendingProgress()
-                val pendingProgressCount = repository.pendingProgressCount()
+                val progressSyncResult = runCatching {
+                    readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress()
+                }.getOrElse { error ->
+                    if (error is UserFacingException && error.message?.contains("not available") == true) {
+                        SyncAttemptResult.TransientFailure
+                    } else {
+                        throw error
+                    }
+                }
+                val pendingProgressCount = runCatching {
+                    readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount()
+                }.getOrElse { error ->
+                    if (error is UserFacingException && error.message?.contains("not available") == true) 0 else throw error
+                }
                 if (selectedLibrary == null) {
+
                     showBrowser(
                         BrowserState(
                             serverUrl = serverUrl,
@@ -871,12 +1104,16 @@ class AppCoordinator internal constructor(
                     return@runCatching
                 }
 
-                repository.setSelectedLibraryId(selectedLibrary)
-                var homeBooks = repository.loadCachedHomeBooks()
+                serverSelectionModule()?.setSelectedLibraryId(selectedLibrary) ?: repository.setSelectedLibraryId(selectedLibrary)
+                val homeShelves = runCatching {
+                    homeShelfModule()?.loadHomeShelves()
+                }.getOrNull() ?: HomeShelfData()
+                var homeBooks = homeShelfModule()?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
                 showStartup("Loading your library…")
-                val firstPage = cachedCatalog ?: repository.loadBooksPage(selectedLibrary, 0)
+                val firstPage = cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
+
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
                 showBrowser(
                     catalogBrowserState(
@@ -885,6 +1122,7 @@ class AppCoordinator internal constructor(
                         libraryId = selectedLibrary,
                         page = firstPage,
                         homeBooks = homeBooks,
+                        homeShelves = homeShelves,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated,
                         isCatalogSyncing = true
@@ -909,6 +1147,7 @@ class AppCoordinator internal constructor(
                         libraryId = selectedLibrary,
                         page = refreshedCatalog,
                         homeBooks = homeBooks,
+                        homeShelves = homeShelves,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated && libraries.size > 1,
                         isCatalogSyncing = false
@@ -959,6 +1198,7 @@ class AppCoordinator internal constructor(
                     )
                 }
             }.onFailure { error ->
+
                 if (error is AuthenticationRequiredException) {
                     showLogin(
                         message = "Your session expired. Sign in again to continue browsing.",
@@ -979,7 +1219,7 @@ class AppCoordinator internal constructor(
                     )
                     return@onFailure
                 }
-                val cached = repository.loadCachedBrowserState()
+                val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState())
                 if (cached != null) {
                     showBrowser(
                         cached.copy(
@@ -1023,7 +1263,7 @@ class AppCoordinator internal constructor(
     fun selectLibrary(libraryId: String) {
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             val currentBrowser = _screen.value as? AppScreen.Browser
             val loadingState = currentBrowser?.browserState?.copy(
                 selectedLibraryId = libraryId,
@@ -1037,11 +1277,15 @@ class AppCoordinator internal constructor(
                 showBrowser(loadingState)
             }
             runCatching {
-                repository.setSelectedLibraryId(libraryId)
-                val libraries = currentBrowser?.browserState?.libraries ?: repository.loadLibraries()
-                val pendingProgressCount = repository.pendingProgressCount()
+                serverSelectionModule()?.setSelectedLibraryId(libraryId) ?: repository.setSelectedLibraryId(libraryId)
+                serverProfileStore?.activeId()?.let { profileId ->
+                    serverProfileStore.updateSelectedLibrary(profileId, libraryId)
+                }
+                val libraries = currentBrowser?.browserState?.libraries
+                    ?: (libraryModule()?.loadLibraries() ?: repository.loadLibraries())
+                val pendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount()
                 val cachedCatalog = repository.loadCachedLibraryCatalog(libraryId)
-                val firstPage = cachedCatalog ?: repository.loadBooksPage(libraryId, 0)
+                val firstPage = cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(libraryId, 0) ?: repository.loadBooksPage(libraryId, 0))
                 val initialHomeBooks = currentBrowser?.browserState?.homeBooks
                     .orEmpty()
                     .replaceLibrary(libraryId, firstPage.items)
@@ -1151,7 +1395,8 @@ class AppCoordinator internal constructor(
         color: String?,
         style: String?
     ): Boolean = try {
-        repository.updateAnnotation(annotation.bookId, annotation.id, note = note, color = color, style = style)
+        (annotationModule()?.updateAnnotation(annotation.bookId, annotation.id, note = note, color = color, style = style)
+            ?: repository.updateAnnotation(annotation.bookId, annotation.id, note = note, color = color, style = style))
         true
     } catch (error: CancellationException) {
         throw error
@@ -1167,7 +1412,8 @@ class AppCoordinator internal constructor(
      * (soft delete via the book-scoped endpoint), so the change survives offline use.
      */
     suspend fun trashAnnotation(annotation: BookAnnotation): Boolean = try {
-        repository.deleteAnnotation(annotation.bookId, annotation.id)
+        annotationModule()?.deleteAnnotation(annotation.bookId, annotation.id)
+            ?: repository.deleteAnnotation(annotation.bookId, annotation.id)
         true
     } catch (error: CancellationException) {
         throw error
@@ -1183,7 +1429,7 @@ class AppCoordinator internal constructor(
      * is not queued, so a failure here is surfaced as `false` instead of a fake success.
      */
     suspend fun restoreAnnotation(annotation: BookAnnotation): Boolean = try {
-        repository.restoreAnnotation(annotation.id)
+        annotationModule()?.restoreAnnotation(annotation.id) ?: repository.restoreAnnotation(annotation.id)
         true
     } catch (error: CancellationException) {
         throw error
@@ -1199,7 +1445,7 @@ class AppCoordinator internal constructor(
      * conflicts (e.g. purging an annotation that is not trashed) surface as `false`.
      */
     suspend fun purgeAnnotation(annotation: BookAnnotation): Boolean = try {
-        repository.purgeAnnotation(annotation.id)
+        annotationModule()?.purgeAnnotation(annotation.id) ?: repository.purgeAnnotation(annotation.id)
         true
     } catch (error: CancellationException) {
         throw error
@@ -1244,14 +1490,14 @@ class AppCoordinator internal constructor(
                 if (book.mediaKind == MediaKind.AUDIO) {
                     val opener = audioPlaybackOpener
                         ?: throw UserFacingException("Audiobook playback is unavailable.")
-                    repository.saveActiveReader(readerState.book, launchMode)
+                    saveActiveReader(readerState.book, launchMode)
                     if (!opener(readerState, true)) {
-                        repository.clearActiveReader()
+                        clearActiveReader()
                         throw UserFacingException(AUDIO_OPEN_CANCELLED_MESSAGE)
                     }
                 } else {
                     if (launchMode == ReaderLaunchMode.NORMAL) {
-                        repository.saveActiveReader(readerState.book)
+                        saveActiveReader(readerState.book)
                     }
                     _screen.value = AppScreen.Reader(readerState)
                 }
@@ -1259,20 +1505,20 @@ class AppCoordinator internal constructor(
             runCatching {
                 val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
                 val syncResult = if (launchMode == ReaderLaunchMode.NORMAL && !offlineOpen) {
-                    repository.syncPendingProgress()
+                    readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress()
                 } else {
                     null
                 }
                 val detailForOpen: BookDetailInfo? = when {
                     book.mediaKind == MediaKind.AUDIO && offlineOpen -> {
-                        repository.loadCachedBookDetail(book)
+                        bookDetailModule()?.loadCachedBookDetail(book) ?: repository.loadCachedBookDetail(book)
                     }
                     book.mediaKind == MediaKind.AUDIO -> {
-                        runCatching { repository.loadBookDetail(book) }.getOrNull()
-                            ?: repository.loadCachedBookDetail(book)
+                        runCatching { bookDetailModule()?.loadBookDetail(book) ?: repository.loadBookDetail(book) }.getOrNull()
+                            ?: (bookDetailModule()?.loadCachedBookDetail(book) ?: repository.loadCachedBookDetail(book))
                     }
                     launchMode == ReaderLaunchMode.NORMAL && !offlineOpen -> {
-                        runCatching { repository.loadBookDetail(book) }.getOrNull()
+                        runCatching { bookDetailModule()?.loadBookDetail(book) ?: repository.loadBookDetail(book) }.getOrNull()
                     }
                     else -> null
                 }
@@ -1309,11 +1555,15 @@ class AppCoordinator internal constructor(
                     !offlineOpen &&
                     syncResult == SyncAttemptResult.Success
                 ) {
-                    repository.loadReaderProgress(readerBook, audioFiles)
+                    readerModule()?.loadReaderProgress(readerBook, audioFiles)
+                        ?: repository.loadReaderProgress(readerBook, audioFiles)
                 } else {
                     readerBook
                 }
-                val preparedState = repository.buildReaderState(
+                val preparedState = readerModule()?.buildReaderState(
+                    book = progressBook,
+                    localOnly = offlineOpen
+                ) ?: repository.buildReaderState(
                     book = progressBook,
                     localOnly = offlineOpen
                 )
@@ -1321,9 +1571,10 @@ class AppCoordinator internal constructor(
                     ?.durationSeconds
                     ?.takeIf { it > 0L }
                     ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
+                val sharedState = restoreSharedReaderPosition(preparedState)
                 presentationStarted = true
                 presentReaderState(
-                    preparedState.copy(audioTotalDurationMs = audioTotalDurationMs),
+                    sharedState.copy(audioTotalDurationMs = audioTotalDurationMs),
                     audioFiles
                 )
             }.onFailure { error ->
@@ -1340,8 +1591,14 @@ class AppCoordinator internal constructor(
                 val offlineOpen = lastBrowserState?.isOfflineSnapshot == true
                 val canRetryLocal = launchMode == ReaderLaunchMode.NORMAL && !offlineOpen && !presentationStarted
                 val finalError = if (canRetryLocal) {
-                    val localAttempt = runCatching { repository.buildReaderState(book = book, localOnly = true) }
-                        .mapCatching { state -> presentReaderState(state, emptyList()) }
+                    val localAttempt = try {
+                        val state = repository.buildReaderState(book = book, localOnly = true)
+                        val sharedState = restoreSharedReaderPosition(state)
+                        presentReaderState(sharedState, emptyList())
+                        Result.success(Unit)
+                    } catch (error: Throwable) {
+                        Result.failure(error)
+                    }
                     if (localAttempt.isSuccess) {
                         return@onFailure
                     }
@@ -1376,7 +1633,7 @@ class AppCoordinator internal constructor(
         val opener = audioPlaybackOpener ?: return
         scope.launch {
             if (!opener(readerState, false)) {
-                repository.clearActiveReader()
+                clearActiveReader()
             }
         }
     }
@@ -1387,10 +1644,13 @@ class AppCoordinator internal constructor(
             return
         }
         scope.launch {
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             val isPerFileRetry = requestedFileId in lastBrowserState?.failedDownloadFileIds.orEmpty()
             val files = runCatching {
-                if (isPerFileRetry || !expandGroup) listOf(book) else repository.loadAudiobookDownloadFiles(book)
+                if (isPerFileRetry || !expandGroup) listOf(book) else {
+                    downloadModule()?.loadAudiobookDownloadFiles(book)
+                        ?: repository.loadAudiobookDownloadFiles(book)
+                }
             }
                 .getOrElse { error ->
                     showBrowserMessage(userMessage(error, "Unable to inspect the audiobook files."))
@@ -1406,6 +1666,32 @@ class AppCoordinator internal constructor(
             }
             lastBrowserState?.let { current -> showBrowser(current.withQueuedDownloads(downloads)) }
             val booksByFileId = downloads.associate { it.fileId to it.book }
+            if (downloadModule()?.handlesDownloadsDirectly == true) {
+                downloads.forEach { download ->
+                    launch {
+                        val outcome = runCatching {
+                            downloadModule()!!.downloadBook(download.book) { progress ->
+                                updateDownloadProgress(download.fileId, progress)
+                            }
+                        }.fold(
+                            onSuccess = { DownloadOutcome.Success(it) },
+                            onFailure = { error ->
+                                if (error is CancellationException) {
+                                    DownloadOutcome.Canceled
+                                } else if (error is AuthenticationRequiredException) {
+                                    DownloadOutcome.AuthRequired
+                                } else if (error is HttpRequestException && error.code == 403) {
+                                    DownloadOutcome.PermissionDenied
+                                } else {
+                                    DownloadOutcome.Failed(error)
+                                }
+                            }
+                        )
+                        handleDownloadOutcome(download.fileId, booksByFileId[download.fileId], outcome)
+                    }
+                }
+                return@launch
+            }
             downloadScheduler.startBatch(
                     scope = scope,
                     serverUrl = serverUrl,
@@ -1530,7 +1816,7 @@ class AppCoordinator internal constructor(
             message = "Download canceled."
         )
         scope.launch {
-            val serverUrl = repository.getServerUrl().orEmpty()
+            val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             downloadScheduler.cancel(serverUrl, fileId)
             repository.clearInterruptedDownload(fileId)
         }
@@ -1580,7 +1866,7 @@ class AppCoordinator internal constructor(
     fun deleteLocalCopy(book: BookSummary) {
         scope.launch {
             runCatching {
-                repository.deleteLocalCopies(book)
+                downloadModule()?.deleteLocalCopies(book) ?: repository.deleteLocalCopies(book)
             }.onSuccess {
                 it.forEach { fileId -> updateLocalFileState(fileId, null) }
             }.onFailure { error ->
@@ -1593,7 +1879,7 @@ class AppCoordinator internal constructor(
         val fileId = book.fileId ?: return
         scope.launch {
             runCatching {
-                repository.deleteLocalCopy(book)
+                downloadModule()?.deleteLocalCopy(book) ?: repository.deleteLocalCopy(book)
             }.onSuccess {
                 updateLocalFileState(fileId, null)
             }.onFailure { error ->
@@ -1609,7 +1895,7 @@ class AppCoordinator internal constructor(
             var failureCount = 0
             books.forEach { book ->
                 try {
-                    repository.deleteLocalCopy(book)
+                    downloadModule()?.deleteLocalCopy(book) ?: repository.deleteLocalCopy(book)
                     book.fileId?.let(deletedFileIds::add)
                 } catch (error: CancellationException) {
                     throw error
@@ -1645,7 +1931,7 @@ class AppCoordinator internal constructor(
             BookReadStatus.UNREAD -> markBookAsUnread(book)
             else -> scope.launch {
                 try {
-                    repository.setBookReadingStatus(book, status)
+                    readingStatusModule()?.setBookReadingStatus(book, status) ?: repository.setBookReadingStatus(book, status)
                     latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                     queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                     val current = lastBrowserState ?: return@launch
@@ -1669,7 +1955,7 @@ class AppCoordinator internal constructor(
                         current.copy(
                             books = current.books.map(updatedBook),
                             homeBooks = current.homeBooks.map(updatedBook),
-                            debugPendingProgressCount = repository.pendingProgressCount(),
+                            debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
                             message = "Marked ${book.title} as ${status.displayLabel()}."
                         )
                     )
@@ -1686,7 +1972,7 @@ class AppCoordinator internal constructor(
     fun markBookAsRead(book: BookSummary) {
         scope.launch {
             try {
-                repository.markBookAsRead(book)
+                readingStatusModule()?.markBookAsRead(book) ?: repository.markBookAsRead(book)
                 latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 val current = lastBrowserState ?: return@launch
@@ -1715,10 +2001,11 @@ class AppCoordinator internal constructor(
                                 currentBook
                             }
                         },
-                        debugPendingProgressCount = repository.pendingProgressCount(),
+                        debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
                         message = "Marked ${book.title} as read."
                     )
                 )
+                refreshKomgaHomeShelves()
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
@@ -1742,7 +2029,7 @@ class AppCoordinator internal constructor(
     ) {
         scope.launch {
             try {
-                repository.resetBookReadingState(book)
+                readingStatusModule()?.resetBookReadingState(book) ?: repository.resetBookReadingState(book)
                 latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 val current = lastBrowserState ?: return@launch
@@ -1754,16 +2041,24 @@ class AppCoordinator internal constructor(
                         homeBooks = current.homeBooks.map { currentBook ->
                             if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
                         },
-                        debugPendingProgressCount = repository.pendingProgressCount(),
+                        debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
                         message = successMessage
                     )
                 )
+                refreshKomgaHomeShelves()
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
                 showBrowserMessage(userMessage(error, failureMessage))
             }
         }
+    }
+
+    private suspend fun refreshKomgaHomeShelves() {
+        val shelves = runCatching { homeShelfModule()?.loadHomeShelves() }.getOrNull() ?: return
+        if (!shelves.isServerProvided) return
+        val current = lastBrowserState ?: return
+        showBrowser(current.copy(homeShelves = shelves))
     }
 
     private fun findKnownBook(fileId: String): BookSummary? {
@@ -1920,7 +2215,7 @@ class AppCoordinator internal constructor(
         // after a page callback, and closeReader must still be able to flush this update.
         latestProgressByTarget[key] = progress
         scope.launch {
-            repository.saveActiveReader(
+            saveActiveReader(
                 book.copy(
                     progressPositionMs = position.takeIf { it > 0L } ?: book.progressPositionMs,
                     progressPageIndex = if (book.mediaKind == MediaKind.EPUB) pageIndex else {
@@ -1937,19 +2232,24 @@ class AppCoordinator internal constructor(
                 )
             }
             if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
-                repository.saveEpubReaderPosition(
+                readerLifecycleModule?.saveEpubReaderPosition((serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
                     book.copy(
                         progressPageIndex = pageIndex,
                         readerPageIndex = book.readerPageIndex,
                         readerPageCount = book.readerPageCount
                     )
-                )
+                ) ?: repository.saveEpubReaderPosition(book.copy(
+                    progressPageIndex = pageIndex,
+                    readerPageIndex = book.readerPageIndex,
+                    readerPageCount = book.readerPageCount
+                ))
             }
             if (
                 acceptAudioProgress &&
                     ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())
             ) {
-                queueProgress(key, progress)
+                runCatching { queueProgress(key, progress) }
+                    .onFailure { error -> Log.w("ProgressSync", "Unable to queue reading progress", error) }
             }
         }
     }
@@ -1998,15 +2298,15 @@ class AppCoordinator internal constructor(
                         queueProgress(key, progress)
                     }
                 }
-                runCatching { repository.syncPendingProgress() }
+                runCatching { readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress() }
             }
-            repository.clearActiveReader()
+            clearActiveReader()
         }
     }
 
     fun onAudioPlaybackFailed(book: BookSummary, message: String) {
         scope.launch {
-            repository.clearActiveReader()
+            clearActiveReader()
             val browser = lastBrowserState
             if (browser != null) {
                 navigateToBrowser(
@@ -2044,8 +2344,8 @@ class AppCoordinator internal constructor(
                 flushReaderProgress(reader)
                 // Try to publish before clearing the active reader. WorkManager remains
                 // the fallback for offline/transient failures.
-                runCatching { repository.syncPendingProgress() }
-                repository.clearActiveReader()
+                runCatching { readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress() }
+                clearActiveReader()
             }
             loadBrowser()
         }
@@ -2057,6 +2357,7 @@ class AppCoordinator internal constructor(
         libraryId: String,
         page: LibraryBooksPage,
         homeBooks: List<BookSummary>? = null,
+        homeShelves: HomeShelfData? = null,
         pendingProgressCount: Int,
         isRefreshing: Boolean,
         isCatalogSyncing: Boolean
@@ -2068,6 +2369,7 @@ class AppCoordinator internal constructor(
             selectedLibraryId = libraryId,
             books = mergeKnownProgress(page.items, libraryId),
             homeBooks = mergeKnownProgress(homeBooks ?: transient?.homeBooks.orEmpty(), null),
+            homeShelves = homeShelves ?: transient?.homeShelves ?: HomeShelfData(),
             booksTotal = page.total,
             booksSeriesTotal = page.seriesTotal,
             booksPage = page.page ?: 0,
@@ -2107,6 +2409,7 @@ class AppCoordinator internal constructor(
             )
         }
         lastBrowserState = next
+
         if (
             _screen.value is AppScreen.ReaderLoading ||
             _screen.value is AppScreen.Reader
@@ -2251,7 +2554,7 @@ class AppCoordinator internal constructor(
     private suspend fun showLogin(message: String, destination: PostLoginDestination) {
         pendingPostLoginDestination = destination
         _screen.value = AppScreen.Login(
-            serverUrl = repository.getServerUrl().orEmpty(),
+            serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
             message = message
         )
     }
@@ -2264,7 +2567,9 @@ class AppCoordinator internal constructor(
 
     private fun serverSetupFailure(
         serverUrl: String,
-        result: ServerCheckResult
+        result: ServerCheckResult,
+        providerId: String = PROVIDER_BOOKORBIT,
+        serverName: String = ""
     ): AppScreen.ServerSetup? {
         val message = when (result) {
             ServerCheckResult.Reachable -> return null
@@ -2276,7 +2581,12 @@ class AppCoordinator internal constructor(
             ServerCheckResult.HttpFailure -> "The server responded, but the base URL did not open correctly."
             ServerCheckResult.NetworkFailure -> "Unable to reach that server. Check the URL and try again."
         }
-        return AppScreen.ServerSetup(serverUrl = serverUrl, message = message)
+        return AppScreen.ServerSetup(
+            serverUrl = serverUrl,
+            serverName = serverName,
+            message = message,
+            providerId = providerId
+        )
     }
 
     private fun resumeAfterLogin() {
@@ -2300,7 +2610,7 @@ class AppCoordinator internal constructor(
     }
 
     private suspend fun queueProgress(key: BookProgressKey, progress: PendingProgress) {
-        repository.queueProgress(
+        (readingProgressModule() ?: resolveProviderReadingProgressModule(repository)).queueProgress(
             book = progress.book,
             position = progress.position,
             pageIndex = progress.pageIndex,

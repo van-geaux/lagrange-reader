@@ -1,6 +1,9 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +19,7 @@ internal class ReadingSessionReporter(
 ) {
     private val fileId = fileId?.trim().orEmpty()
     private var enabled = enabled && this.fileId.isNotBlank()
-    private val repository = BookOrbitRepository(context.applicationContext)
+    private val readingSessionModule = resolveActiveProviderReadingSessionModule(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start(progressPercent: Float?, atMillis: Long = System.currentTimeMillis()) {
@@ -66,7 +69,13 @@ internal class ReadingSessionReporter(
 
     private fun enqueue(payload: ReadingSessionPayload) {
         scope.launch {
-            repository.queueReadingSession(payload.copy(fileId = fileId))
+            runCatching {
+                readingSessionModule.queueReadingSession(payload.copy(fileId = fileId))
+            }.onFailure { error ->
+                if (error !is UserFacingException) {
+                    Log.w("ReadingSession", "Unable to report reading session", error)
+                }
+            }
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -190,7 +192,8 @@ class BookDownloadWorker(
             updatedAtMillis = inputData.getLong(KEY_UPDATED_AT, -1L).takeIf { it >= 0L }
         )
 
-        val repository = BookOrbitRepository(applicationContext)
+        val repository = resolveProviderRepository(applicationContext, serverUrl)
+        val downloadModule = resolveProviderDownloadModule(repository)
         val progressThrottler = DownloadProgressThrottler(minIntervalMillis = 500L)
 
         // The session may have changed servers between enqueue and execution.
@@ -224,7 +227,7 @@ class BookDownloadWorker(
         return try {
             coroutineScope {
                 val localFile = physicalDownloadGate.withPermit {
-                    repository.downloadBook(book) { progress ->
+                    downloadModule.downloadBook(book) { progress ->
                         if (!progressThrottler.shouldEmit(progress, System.currentTimeMillis())) {
                             return@downloadBook
                         }

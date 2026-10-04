@@ -212,6 +212,7 @@ internal enum class BrowserDestination {
     ON_DECK,
     WANT_TO_READ,
     RECENTLY_ADDED_BOOKS,
+    RECENTLY_RELEASED_BOOKS,
     RECENTLY_ADDED_SERIES,
     RECENTLY_UPDATED_SERIES,
     RECENTLY_READ,
@@ -225,6 +226,7 @@ enum class HomeSection(val title: String) {
     ON_DECK("On deck"),
     WANT_TO_READ("Want to read"),
     RECENTLY_ADDED_BOOKS("Recently added books"),
+    RECENTLY_RELEASED_BOOKS("Recently released books"),
     RECENTLY_ADDED_SERIES("Recently added series"),
     RECENTLY_UPDATED_SERIES("Recently updated series"),
     RECENTLY_READ("Recently read books")
@@ -232,6 +234,7 @@ enum class HomeSection(val title: String) {
 
 internal fun HomeSection.recentBooksFilter(): BookBrowseFilter = when (this) {
     HomeSection.RECENTLY_ADDED_BOOKS,
+    HomeSection.RECENTLY_RELEASED_BOOKS,
     HomeSection.RECENTLY_ADDED_SERIES -> BookBrowseFilter(
         sort = BookSortOption.ADDED,
         direction = SortDirection.DESCENDING
@@ -255,6 +258,7 @@ private fun HomeSection.toBrowserDestination(): BrowserDestination = when (this)
     HomeSection.ON_DECK -> BrowserDestination.ON_DECK
     HomeSection.WANT_TO_READ -> BrowserDestination.WANT_TO_READ
     HomeSection.RECENTLY_ADDED_BOOKS -> BrowserDestination.RECENTLY_ADDED_BOOKS
+    HomeSection.RECENTLY_RELEASED_BOOKS -> BrowserDestination.RECENTLY_RELEASED_BOOKS
     HomeSection.RECENTLY_ADDED_SERIES -> BrowserDestination.RECENTLY_ADDED_SERIES
     HomeSection.RECENTLY_UPDATED_SERIES -> BrowserDestination.RECENTLY_UPDATED_SERIES
     HomeSection.RECENTLY_READ -> BrowserDestination.RECENTLY_READ
@@ -265,6 +269,7 @@ private fun BrowserDestination.toHomeSection(): HomeSection? = when (this) {
     BrowserDestination.ON_DECK -> HomeSection.ON_DECK
     BrowserDestination.WANT_TO_READ -> HomeSection.WANT_TO_READ
     BrowserDestination.RECENTLY_ADDED_BOOKS -> HomeSection.RECENTLY_ADDED_BOOKS
+    BrowserDestination.RECENTLY_RELEASED_BOOKS -> HomeSection.RECENTLY_RELEASED_BOOKS
     BrowserDestination.RECENTLY_ADDED_SERIES -> HomeSection.RECENTLY_ADDED_SERIES
     BrowserDestination.RECENTLY_UPDATED_SERIES -> HomeSection.RECENTLY_UPDATED_SERIES
     BrowserDestination.RECENTLY_READ -> HomeSection.RECENTLY_READ
@@ -278,6 +283,7 @@ internal fun browserRootBackDestination(destination: BrowserDestination): Browse
     BrowserDestination.ON_DECK,
     BrowserDestination.WANT_TO_READ,
     BrowserDestination.RECENTLY_ADDED_BOOKS,
+    BrowserDestination.RECENTLY_RELEASED_BOOKS,
     BrowserDestination.RECENTLY_ADDED_SERIES,
     BrowserDestination.RECENTLY_UPDATED_SERIES,
     BrowserDestination.RECENTLY_READ -> null
@@ -975,7 +981,10 @@ internal fun NativeLibraryBrowserScreen(
     onRefresh: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onChangeServer: (String) -> Unit,
+    onNewServer: () -> Unit = {},
+    serverProfilesLoader: () -> List<ServerProfile> = { emptyList() },
+    onSwitchServer: (String) -> Unit = {},
+    onRemoveServer: (String) -> Unit = {},
     onLibrarySelected: (String) -> Unit,
     searchBooks: suspend (String) -> List<BookSummary>,
     localBooksLoader: suspend () -> List<BookSummary>,
@@ -996,12 +1005,15 @@ internal fun NativeLibraryBrowserScreen(
         ReadingAttemptsResult(status = ServerReadingHistoryStatus.UNSUPPORTED)
     },
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
+    userRatingAvailable: Boolean = true,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     smartScopesLoader: suspend () -> List<SmartScope> = { emptyList() },
+    smartScopesAvailable: Boolean = true,
     smartScopeSeriesCatalogLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
     smartScopeSeriesDetailLoader: suspend (Long, String) -> SeriesDetailInfo? = { _, _ -> null },
     authorsCatalogLoader: suspend (String?, Int) -> AuthorCatalogPage,
+    authorsAvailable: Boolean = true,
     authorBooksLoader: suspend (String, Int) -> AuthorBooksPage?,
     annotationsLoader: suspend (AnnotationsFilter, Int) -> BookAnnotationsPage,
     onAnnotationSelected: (BookAnnotation) -> Unit = {},
@@ -1012,7 +1024,9 @@ internal fun NativeLibraryBrowserScreen(
     onRestoreAnnotation: suspend (BookAnnotation) -> Boolean = { false },
     onPurgeAnnotation: suspend (BookAnnotation) -> Boolean = { false },
     achievementsLoader: suspend () -> AchievementCatalogue,
+    achievementsAvailable: Boolean = true,
     statisticsLoader: suspend () -> UserStatistics,
+    statisticsAvailable: Boolean = true,
     catalogImageLoader: suspend (String) -> ByteArray?,
     onBookOpen: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
@@ -1028,7 +1042,8 @@ internal fun NativeLibraryBrowserScreen(
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
-    onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
+    onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
+    readingStatusOptions: List<BookReadStatus> = BOOK_READ_STATUS_OPTIONS,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     releaseCheckStatus: ReleaseCheckStatus = ReleaseCheckStatus.IDLE,
@@ -1052,6 +1067,26 @@ internal fun NativeLibraryBrowserScreen(
     }
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
+    }
+    LaunchedEffect(achievementsAvailable) {
+        if (!achievementsAvailable && destination == BrowserDestination.ACHIEVEMENTS) {
+            destination = BrowserDestination.HOME
+        }
+    }
+    LaunchedEffect(statisticsAvailable) {
+        if (!statisticsAvailable && destination == BrowserDestination.STATISTICS) {
+            destination = BrowserDestination.HOME
+        }
+    }
+    LaunchedEffect(smartScopesAvailable) {
+        if (!smartScopesAvailable && destination == BrowserDestination.SMART_SCOPES) {
+            destination = BrowserDestination.HOME
+        }
+    }
+    LaunchedEffect(authorsAvailable) {
+        if (!authorsAvailable && destination == BrowserDestination.AUTHORS) {
+            destination = BrowserDestination.HOME
+        }
     }
     var query by rememberSaveable { mutableStateOf("") }
     val remoteSearchResults by produceState<List<BookSummary>?>(initialValue = null, query) {
@@ -1127,9 +1162,10 @@ internal fun NativeLibraryBrowserScreen(
     var pendingSingleLocalDelete by remember { mutableStateOf(false) }
     var localBooksLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
     var showChangeServerEditor by rememberSaveable { mutableStateOf(false) }
-    var changeServerUrl by rememberSaveable { mutableStateOf(state.serverUrl) }
-    var changeServerError by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingServerChange by rememberSaveable { mutableStateOf<String?>(null) }
+
+    var serverProfilesRevision by rememberSaveable { mutableIntStateOf(0) }
+    var pendingServerRemoval by remember { mutableStateOf<ServerProfile?>(null) }
+    val configuredServerProfiles = remember(state.serverUrl, serverProfilesRevision) { serverProfilesLoader() }
     val browserScope = rememberCoroutineScope()
 
     LaunchedEffect(bookDetailRequest?.sequence) {
@@ -1279,8 +1315,6 @@ internal fun NativeLibraryBrowserScreen(
     }
     val openChangeServerEditor = {
         showProfileMenu = false
-        changeServerUrl = state.serverUrl
-        changeServerError = null
         showChangeServerEditor = true
     }
 
@@ -1337,6 +1371,8 @@ internal fun NativeLibraryBrowserScreen(
             windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             MoreMenu(
+                smartScopesAvailable = smartScopesAvailable,
+                authorsAvailable = authorsAvailable,
                 onSeries = {
                     showMoreMenu = false
                     selectedBook = null
@@ -1471,69 +1507,52 @@ internal fun NativeLibraryBrowserScreen(
             title = { Text("Change server") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter the BookOrbit server you want to use.")
-                    OutlinedTextField(
-                        value = changeServerUrl,
-                        onValueChange = {
-                            changeServerUrl = it
-                            changeServerError = null
+                    Text("Choose a configured server or add a new one.")
+                    Button(
+                        onClick = {
+                            showChangeServerEditor = false
+                            onNewServer()
                         },
-                        label = { Text("Server URL") },
-                        singleLine = true,
-                        isError = changeServerError != null,
-                        supportingText = changeServerError?.let { message ->
-                            { Text(message) }
-                        }
-                    )
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("New server") }
+                    configuredServerProfiles.forEach { profile ->
+                            val isCurrent = serverUrlsMatch(profile.serverUrl, state.serverUrl)
+                            ConfiguredServerCard(
+                                profile = profile,
+                                isCurrent = isCurrent,
+                                enabled = !isCurrent,
+                                onClick = {
+                                    showChangeServerEditor = false
+                                    onSwitchServer(profile.id)
+                                },
+                                onRemove = if (isCurrent) null else { { pendingServerRemoval = profile } }
+                            )
+                    }
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val normalized = normalizeServerUrl(changeServerUrl)
-                        if (normalized == null) {
-                            changeServerError = invalidServerUrlMessage()
-                        } else if (serverUrlsMatch(state.serverUrl, normalized)) {
-                            changeServerUrl = normalized
-                            showChangeServerEditor = false
-                        } else {
-                            changeServerUrl = normalized
-                            showChangeServerEditor = false
-                            pendingServerChange = normalized
-                        }
-                    },
-                    modifier = Modifier.testTag("submit-server-change")
-                ) { Text("Change server") }
-            },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showChangeServerEditor = false }) { Text("Cancel") }
             }
         )
     }
-    pendingServerChange?.let { serverUrl ->
-        val returnToEditor = {
-            pendingServerChange = null
-            showChangeServerEditor = true
-        }
+    pendingServerRemoval?.let { profile ->
         AlertDialog(
-            onDismissRequest = returnToEditor,
-            title = { Text("Change server?") },
-            text = {
-                Text(
-                    "Changing to $serverUrl will log you out of the current server and cancel active downloads."
-                )
-            },
+            onDismissRequest = { pendingServerRemoval = null },
+            title = { Text("Remove configured server?") },
+            text = { Text("Remove ${profile.displayName} from the configured server list?") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        pendingServerChange = null
-                        onChangeServer(serverUrl)
+                        pendingServerRemoval = null
+                        onRemoveServer(profile.id)
+                        serverProfilesRevision += 1
                     },
-                    modifier = Modifier.testTag("confirm-server-change")
-                ) { Text("Continue") }
+                    modifier = Modifier.testTag("confirm-remove-server")
+                ) { Text("Remove") }
             },
             dismissButton = {
-                TextButton(onClick = returnToEditor) { Text("Cancel") }
+                TextButton(onClick = { pendingServerRemoval = null }) { Text("Cancel") }
             }
         )
     }
@@ -1566,8 +1585,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1588,8 +1609,10 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1610,8 +1633,10 @@ internal fun NativeLibraryBrowserScreen(
                     onSessionAction = { showProfileMenu = false; if (state.isOfflineSnapshot) onSignIn() else onSignOut() },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1631,8 +1656,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1650,8 +1677,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1669,8 +1698,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1688,8 +1719,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1728,8 +1761,10 @@ internal fun NativeLibraryBrowserScreen(
                     },
                     sessionActionLabel = sessionActionLabel,
                     onOptions = openOptions,
-                    onStatistics = openStatistics,
-                    onAchievements = openAchievements,
+                    onStatistics = if (statisticsAvailable) openStatistics else ({}),
+                    showStatistics = statisticsAvailable,
+                    onAchievements = if (achievementsAvailable) openAchievements else ({}),
+                    showAchievements = achievementsAvailable,
                     onFaq = openFaq,
                     onAbout = openAbout,
                     onChangeServer = openChangeServerEditor
@@ -1842,6 +1877,7 @@ internal fun NativeLibraryBrowserScreen(
                     serverReadingSessionsLoader = serverReadingSessionsLoader,
                     serverReadingAttemptsLoader = serverReadingAttemptsLoader,
                     onBookUserRatingChange = onBookUserRatingChange,
+                    userRatingAvailable = userRatingAvailable,
                     seriesDetailLoader = seriesDetailLoader,
                     onRead = onBookOpen,
                     onPreview = onPreview,
@@ -1850,7 +1886,14 @@ internal fun NativeLibraryBrowserScreen(
                     onCancelDownload = onCancelDownload,
                     onDeleteLocalCopy = requestLocalDelete,
                     onDeleteSingleLocalCopy = requestSingleLocalDelete,
-                    onMarkAsStatus = onMarkAsStatus,
+                    onMarkAsStatus = onMarkAsStatus ?: { detailBook, status ->
+                        when (status) {
+                            BookReadStatus.READ -> onMarkAsRead(detailBook)
+                            BookReadStatus.UNREAD -> onMarkAsUnread(detailBook)
+                            else -> Unit
+                        }
+                    },
+                    readingStatusOptions = readingStatusOptions,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
                         selectedBook = null
@@ -2197,7 +2240,9 @@ private fun BrowserTopBar(
     sessionActionLabel: String,
     onOptions: () -> Unit = {},
     onStatistics: () -> Unit = {},
+    showStatistics: Boolean = true,
     onAchievements: () -> Unit = {},
+    showAchievements: Boolean = true,
     onFaq: () -> Unit = {},
     onAbout: () -> Unit = {},
     onChangeServer: () -> Unit = {},
@@ -2224,22 +2269,26 @@ private fun BrowserTopBar(
                     expanded = profileExpanded,
                     onDismissRequest = onDismissProfile
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Statistics") },
-                        leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
-                        onClick = {
-                            onDismissProfile()
-                            onStatistics()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Achievements") },
-                        leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
-                        onClick = {
-                            onDismissProfile()
-                            onAchievements()
-                        }
-                    )
+                    if (showStatistics) {
+                        DropdownMenuItem(
+                            text = { Text("Statistics") },
+                            leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
+                            onClick = {
+                                onDismissProfile()
+                                onStatistics()
+                            }
+                        )
+                    }
+                    if (showAchievements) {
+                        DropdownMenuItem(
+                            text = { Text("Achievements") },
+                            leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
+                            onClick = {
+                                onDismissProfile()
+                                onAchievements()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("FAQ") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null) },
@@ -2325,6 +2374,8 @@ private fun BrowserBottomNavigation(
 
 @Composable
 private fun MoreMenu(
+    smartScopesAvailable: Boolean = true,
+    authorsAvailable: Boolean = true,
     onSeries: () -> Unit,
     onSmartScopes: () -> Unit,
     onAuthors: () -> Unit,
@@ -2346,16 +2397,20 @@ private fun MoreMenu(
             leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Series icon") },
             modifier = Modifier.clickable(onClick = onSeries)
         )
-        ListItem(
-            headlineContent = { Text("Smart scopes") },
-            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Smart scopes icon") },
-            modifier = Modifier.clickable(onClick = onSmartScopes)
-        )
-        ListItem(
-            headlineContent = { Text("Authors") },
-            leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
-            modifier = Modifier.clickable(onClick = onAuthors)
-        )
+        if (smartScopesAvailable) {
+            ListItem(
+                headlineContent = { Text("Smart scopes") },
+                leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Smart scopes icon") },
+                modifier = Modifier.clickable(onClick = onSmartScopes)
+            )
+        }
+        if (authorsAvailable) {
+            ListItem(
+                headlineContent = { Text("Authors") },
+                leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
+                modifier = Modifier.clickable(onClick = onAuthors)
+            )
+        }
         ListItem(
             headlineContent = { Text("Annotations") },
             leadingContent = { Icon(Icons.Default.Highlight, contentDescription = "Annotations icon") },
@@ -4770,6 +4825,7 @@ private fun RefreshableHomeFeed(
 ) {
     val downloadedLocalBooks by produceState<List<BookSummary>?>(
         initialValue = null,
+        state.serverUrl,
         state.localBooksRevision
     ) {
         value = runCatching { localBooksLoader() }.getOrNull()
@@ -4827,23 +4883,38 @@ private fun HomeFeed(
     localBooksLibraryId: String? = null,
     showHeader: Boolean = false
 ) {
-    val currentlyReadingAll = remember(books) { currentlyReadingBooks(books, limit = null) }
-    val onDeckAll = remember(books) { onDeckBooks(books, limit = null) }
-    val wantToReadAll = remember(books) { wantToReadBooks(books, limit = null) }
+    val serverShelves = state.homeShelves
+    val currentlyReadingAll = remember(books, serverShelves) {
+        if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
+        else currentlyReadingBooks(books, limit = null)
+    }
+    val onDeckAll = remember(books, serverShelves) {
+        if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
+        else onDeckBooks(books, limit = null)
+    }
+    val wantToReadAll = remember(books, serverShelves) {
+        if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.WANT_TO_READ].orEmpty()
+        else wantToReadBooks(books, limit = null)
+    }
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
     val wantToRead = wantToReadAll.take(HOME_PREVIEW_LIMIT)
-    val recentlyAddedBooksAll = books.sortedWith(
-        compareByDescending<BookSummary> { it.addedAtMillis != null }
-            .thenByDescending { it.addedAtMillis ?: 0L }
-    )
+    val recentlyAddedBooksAll = if (serverShelves.isServerProvided) {
+        serverShelves.booksBySection[HomeSection.RECENTLY_ADDED_BOOKS].orEmpty()
+    } else {
+        books.sortedWith(
+            compareByDescending<BookSummary> { it.addedAtMillis != null }
+                .thenByDescending { it.addedAtMillis ?: 0L }
+        )
+    }
     val fallbackRecentSeries = remember(books) { homeSeriesSummaries(books, useUpdatedAt = false) }
     val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
         initialValue = null,
         books,
-        seriesCatalogLoader
+        seriesCatalogLoader,
+        serverShelves.isServerProvided
     ) {
-        value = seriesCatalogLoader?.let { loader ->
+        value = if (serverShelves.isServerProvided) null else seriesCatalogLoader?.let { loader ->
             runCatching {
                 loadCompleteSeriesCatalog { page ->
                     loader(
@@ -4857,16 +4928,37 @@ private fun HomeFeed(
             }.getOrNull()
         }
     }
-    val recentSeriesAll = remember(fallbackRecentSeries, authoritativeRecentSeries, books) {
+    val recentlyReleasedBooksAll = if (serverShelves.isServerProvided) {
+        serverShelves.booksBySection[HomeSection.RECENTLY_RELEASED_BOOKS].orEmpty()
+    } else emptyList()
+    val recentSeriesAll = if (serverShelves.isServerProvided) {
+        val seriesBooks = serverShelves.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES].orEmpty()
+        homeSeriesShelfItems(
+            series = seriesBooks.mapNotNull { book ->
+                book.seriesId?.let {
+                    SeriesSummary(
+                        id = it,
+                        name = book.seriesName ?: book.title,
+                        coverUrl = book.coverUrl
+                    )
+                }
+            }.distinctBy { it.id },
+            books = seriesBooks,
+            limit = Int.MAX_VALUE
+        )
+    } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
             books = books,
             limit = Int.MAX_VALUE
         )
     }
-    val updatedSeriesAll = remember(books) { recentSeries(books, useUpdatedAt = true, limit = null) }
-    val recentlyReadAll = remember(books) { recentlyReadBooks(books, limit = null) }
+    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(books, useUpdatedAt = true, limit = null)
+    val recentlyReadAll = if (serverShelves.isServerProvided) {
+        serverShelves.booksBySection[HomeSection.RECENTLY_READ].orEmpty()
+    } else recentlyReadBooks(books, limit = null)
     val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
+    val recentlyReleasedBooks = recentlyReleasedBooksAll.take(HOME_PREVIEW_LIMIT)
     val recentSeries = recentSeriesAll.take(HOME_PREVIEW_LIMIT)
     val updatedSeries = updatedSeriesAll.take(HOME_PREVIEW_LIMIT)
     val recentlyRead = recentlyReadAll.take(HOME_PREVIEW_LIMIT)
@@ -4903,7 +4995,7 @@ private fun HomeFeed(
         if (currentlyReading.isNotEmpty()) {
             item {
                 BookShelf(
-                    title = "Currently reading",
+                    title = if (serverShelves.isServerProvided) "Continue reading" else "Currently reading",
                     books = currentlyReading,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
@@ -4930,6 +5022,9 @@ private fun HomeFeed(
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
             BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) })
+        }
+        if (recentlyReleasedBooks.isNotEmpty()) item {
+            BookShelf("Recently released books", recentlyReleasedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_RELEASED_BOOKS) })
         }
         if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) }) }
         if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) }) }
@@ -5848,6 +5943,7 @@ private fun HomeSectionScreen(
                 compareByDescending<BookSummary> { it.addedAtMillis != null }
                     .thenByDescending { it.addedAtMillis ?: 0L }
             )
+            HomeSection.RECENTLY_RELEASED_BOOKS -> emptyList()
             HomeSection.RECENTLY_READ -> recentlyReadBooks(books, limit = null)
             HomeSection.RECENTLY_ADDED_SERIES,
             HomeSection.RECENTLY_UPDATED_SERIES -> emptyList()
@@ -7115,6 +7211,7 @@ private fun BookDetails(
     serverReadingSessionsLoader: suspend (String) -> BookReadingSessionsResult,
     serverReadingAttemptsLoader: suspend (String) -> ReadingAttemptsResult,
     onBookUserRatingChange: suspend (BookSummary, Int?) -> BookDetailInfo?,
+    userRatingAvailable: Boolean = true,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     onRead: (BookSummary) -> Unit,
     onPreview: (BookSummary) -> Unit,
@@ -7123,7 +7220,8 @@ private fun BookDetails(
     onCancelDownload: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onDeleteSingleLocalCopy: (BookSummary) -> Unit = onDeleteLocalCopy,
-    onMarkAsStatus: (BookSummary, BookReadStatus) -> Unit,
+    onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
+    readingStatusOptions: List<BookReadStatus> = BOOK_READ_STATUS_OPTIONS,
     onSeriesSelected: (String) -> Unit,
     onAuthorSelected: (String) -> Unit,
     onBookSelected: (BookSummary) -> Unit,
@@ -7472,8 +7570,8 @@ private fun BookDetails(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                    BookUserRatingStars(
-                        rating = displayedUserRating,
+                    if (userRatingAvailable) BookUserRatingStars(
+                                            rating = displayedUserRating,
                         enabled = !state.isOfflineSnapshot && !isUserRatingUpdating,
                         onRatingSelected = { selectedRating ->
                             val previousRating = displayedUserRating
@@ -7699,10 +7797,11 @@ private fun BookDetails(
                                     BookDetailReadingStatusMenu(
                                     expanded = showStatusMenu,
                                     currentStatus = displayBook.readStatus,
+                                    options = readingStatusOptions,
                                     onDismissRequest = { showStatusMenu = false },
                                     onStatusSelected = { status ->
                                         showStatusMenu = false
-                                        onMarkAsStatus(displayBook, status)
+                                        onMarkAsStatus?.invoke(displayBook, status)
                                     }
                                     )
                                 }
@@ -7769,10 +7868,11 @@ private fun BookDetails(
                                     BookDetailReadingStatusMenu(
                                         expanded = showStatusMenu,
                                         currentStatus = displayBook.readStatus,
+                                        options = readingStatusOptions,
                                         onDismissRequest = { showStatusMenu = false },
                                         onStatusSelected = { status ->
                                             showStatusMenu = false
-                                            onMarkAsStatus(displayBook, status)
+                                            onMarkAsStatus?.invoke(displayBook, status)
                                         }
                                     )
                                 }
@@ -8803,6 +8903,7 @@ private fun SeriesNeighborButton(
 private fun BookDetailReadingStatusMenu(
     expanded: Boolean,
     currentStatus: BookReadStatus?,
+    options: List<BookReadStatus> = BOOK_READ_STATUS_OPTIONS,
     onDismissRequest: () -> Unit,
     onStatusSelected: (BookReadStatus) -> Unit
 ) {
@@ -8811,7 +8912,7 @@ private fun BookDetailReadingStatusMenu(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.testTag("book-detail-status-menu")
     ) {
-        BOOK_READ_STATUS_OPTIONS.forEach { status ->
+        options.forEach { status ->
             DropdownMenuItem(
                 text = { Text(status.displayLabel()) },
                 leadingIcon = {
