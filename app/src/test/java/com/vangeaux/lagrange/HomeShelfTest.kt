@@ -5,6 +5,9 @@ import com.vangeaux.lagrange.provider.komga.komgaProgressEndpoint
 import com.vangeaux.lagrange.provider.komga.komgaDownloadedEpubFile
 import com.vangeaux.lagrange.provider.komga.komgaLocalReaderBook
 import com.vangeaux.lagrange.provider.komga.komgaOfflineBrowserState
+import com.vangeaux.lagrange.provider.komga.komgaMergeDownloadedBooks
+import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesCatalogFromBooks
+import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesDetailFromBooks
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -95,6 +98,33 @@ class HomeShelfTest {
         assertEquals(listOf(book), state?.books)
         assertTrue(state?.libraries?.isEmpty() == true)
         assertTrue(state?.isCatalogComplete == true)
+    }
+
+    @Test
+    fun `komga cached catalog keeps server books and downloaded local overlays`() {
+        val cached = BookSummary("library-1", "book-1", "file-1", "Cached book", seriesId = "series-1", seriesName = "Saga")
+        val local = cached.copy(libraryId = "", localPath = "/downloads/book.epub")
+
+        val merged = komgaMergeDownloadedBooks(listOf(cached), listOf(local))
+
+        assertEquals(1, merged.size)
+        assertEquals("/downloads/book.epub", merged.single().localPath)
+        assertEquals("library-1", merged.single().libraryId)
+    }
+
+    @Test
+    fun `komga cached catalog derives series and series detail from cached books`() {
+        val books = listOf(
+            BookSummary("library-1", "book-1", "file-1", "One", seriesId = "series-1", seriesName = "Saga", seriesIndex = 1.0),
+            BookSummary("library-1", "book-2", "file-2", "Two", seriesId = "series-1", seriesName = "Saga", seriesIndex = 2.0)
+        )
+
+        val catalog = komgaCachedSeriesCatalogFromBooks(books, SeriesCatalogFilter(), page = 0)
+        val detail = komgaCachedSeriesDetailFromBooks(books, "series-1")
+
+        assertEquals(1, catalog.total)
+        assertEquals("series-1", catalog.items.single().id)
+        assertEquals(listOf("book-1", "book-2"), detail?.books?.map { it.id })
     }
 
     @Test

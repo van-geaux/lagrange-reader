@@ -16,7 +16,7 @@ class BrowserSnapshotStore(context: Context) {
         selectedLibraryId: String?,
         libraries: List<LibrarySummary>
     ) = mutex.withLock {
-        val current = readUnlocked()
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl }
         writeUnlocked(
             BrowserSnapshot(
                 serverUrl = serverUrl,
@@ -33,7 +33,7 @@ class BrowserSnapshotStore(context: Context) {
         libraryId: String,
         books: List<BookSummary>
     ) = mutex.withLock {
-        val current = readUnlocked()
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl }
         val nextBooks = current?.booksByLibraryId.orEmpty().toMutableMap()
         nextBooks[libraryId] = books
         writeUnlocked(
