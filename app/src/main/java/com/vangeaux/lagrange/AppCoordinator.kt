@@ -193,6 +193,7 @@ class AppCoordinator internal constructor(
     }
 
     private suspend fun restoreSharedReaderPosition(state: ReaderState): ReaderState {
+        if (state.serverProgressAuthoritative) return state
         return readerLifecycleModule?.restoreEpubReaderPosition(
             (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
             state
@@ -1558,7 +1559,8 @@ class AppCoordinator internal constructor(
                 val progressBook = if (
                     launchMode == ReaderLaunchMode.NORMAL &&
                     !offlineOpen &&
-                    syncResult == SyncAttemptResult.Success
+                    syncResult != SyncAttemptResult.TransientFailure &&
+                    syncResult != SyncAttemptResult.AuthenticationBlocked
                 ) {
                     readerModule()?.loadReaderProgress(readerBook, audioFiles)
                         ?: repository.loadReaderProgress(readerBook, audioFiles)

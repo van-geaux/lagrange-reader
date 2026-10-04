@@ -20,6 +20,9 @@ internal fun komgaLocalReaderBook(book: BookSummary, record: DownloadRecord?): B
         book.copy(localPath = file.absolutePath)
     }
 
+internal fun komgaReaderPageIndex(book: BookSummary): Int =
+    if (book.mediaKind == MediaKind.EPUB) 0 else book.progressPageIndex ?: 0
+
 internal fun komgaOfflineBrowserState(serverUrl: String, books: List<BookSummary>): BrowserState? =
     books.takeIf { it.isNotEmpty() }?.let { localBooks ->
         BrowserState(
@@ -289,6 +292,11 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun syncPendingProgress(): SyncAttemptResult = SyncAttemptResult.Unsupported
 
+    override suspend fun loadReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
+    ): BookSummary = detailModule.loadBookDetail(getServerUrl().orEmpty(), book).book
+
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
         val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
             ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
@@ -296,7 +304,11 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         if (localBook != null) {
             return ReaderState(
                 book = localBook,
-                localFile = File(localBook.localPath!!)
+                localFile = File(localBook.localPath!!),
+                pageIndex = komgaReaderPageIndex(localBook),
+                progressPercent = localBook.progressPercent,
+                serverProgressAuthoritative = !localOnly,
+                initialLocatorJson = localBook.readerLocatorJson
             )
         }
         if (localOnly) {
@@ -305,7 +317,15 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         val detail = loadBookDetail(book)
         val resolvedBook = detail.book
         val localFile = downloadBook(resolvedBook) { }
-        return ReaderState(book = resolvedBook.copy(localPath = localFile.absolutePath), localFile = localFile)
+        val readerBook = resolvedBook.copy(localPath = localFile.absolutePath)
+        return ReaderState(
+            book = readerBook,
+            localFile = localFile,
+            pageIndex = komgaReaderPageIndex(readerBook),
+            progressPercent = readerBook.progressPercent,
+            serverProgressAuthoritative = !localOnly,
+            initialLocatorJson = readerBook.readerLocatorJson
+        )
     }
 
     override suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode) {

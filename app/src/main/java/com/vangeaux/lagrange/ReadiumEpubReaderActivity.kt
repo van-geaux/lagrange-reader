@@ -2308,6 +2308,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun initialLocator(openedPublication: Publication): Locator {
+        intent.getStringExtra(EXTRA_INITIAL_LOCATOR_JSON)?.takeIf { it.isNotBlank() }?.let { json ->
+            runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()?.let { return it }
+        }
         intent.getStringExtra(EXTRA_INITIAL_CFI)?.takeIf { it.isNotBlank() }?.let { cfi ->
             val explicitChapterIndex = intent.getIntExtra(EXTRA_INITIAL_ANNOTATION_CHAPTER, -1)
                 .takeIf { it >= 0 }
@@ -2725,6 +2728,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_INITIAL_PAGE_COUNT = "readium_epub_initial_page_count"
         private const val EXTRA_INITIAL_PERCENT = "readium_epub_initial_percent"
         private const val EXTRA_INITIAL_CFI = "readium_epub_initial_cfi"
+        private const val EXTRA_INITIAL_LOCATOR_JSON = "readium_epub_initial_locator_json"
         private const val EXTRA_INITIAL_ANNOTATION_TEXT = "readium_epub_initial_annotation_text"
         private const val EXTRA_INITIAL_ANNOTATION_CHAPTER = "readium_epub_initial_annotation_chapter"
         private const val EXTRA_INITIAL_ANNOTATION_ID = "readium_epub_initial_annotation_id"
@@ -2768,8 +2772,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             launchMode: ReaderLaunchMode,
             initialChapter: Int,
             initialPage: Int,
-            initialPageCount: Int,
-            initialPercent: Float?,
+            initialPageCount: Int = 1,
+            initialPercent: Float? = null,
+            initialLocatorJson: String? = null,
             initialCfi: String? = null,
             initialAnnotationText: String? = null,
             initialAnnotationChapterIndex: Int? = null,
@@ -2790,6 +2795,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_INITIAL_PAGE_COUNT, initialPageCount)
             .apply {
                 initialPercent?.let { putExtra(EXTRA_INITIAL_PERCENT, it) }
+                initialLocatorJson?.let { putExtra(EXTRA_INITIAL_LOCATOR_JSON, it) }
                 initialCfi?.let { putExtra(EXTRA_INITIAL_CFI, it) }
                 initialAnnotationText?.let { putExtra(EXTRA_INITIAL_ANNOTATION_TEXT, it) }
                 initialAnnotationChapterIndex?.let { putExtra(EXTRA_INITIAL_ANNOTATION_CHAPTER, it) }
