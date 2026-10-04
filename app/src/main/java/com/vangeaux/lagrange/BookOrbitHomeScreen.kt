@@ -5963,11 +5963,12 @@ private fun HomeSectionScreen(
             val libraryIds = state.libraries.map { it.id }.ifEmpty {
                 listOfNotNull(state.selectedLibraryId)
             }
-            val firstPages = libraryIds.mapNotNull { libraryId ->
-                runCatching { recentBooksPageLoader(libraryId, section, 0) }.getOrNull()
-            }
-            val loaded = firstPages.flatMap { it.items }.distinctBy { it.id to it.fileId }
-            canLoadMore = firstPages.any { page -> page.total == null || (page.page ?: 0) * (page.size ?: page.items.size) + page.items.size < page.total }
+            val loaded = loadCompleteRecentBooks(
+                libraryIds = libraryIds,
+                section = section,
+                pageLoader = recentBooksPageLoader
+            )
+            canLoadMore = false
             nextPage = 1
             sectionBooks = when (section) {
                 HomeSection.RECENTLY_ADDED_BOOKS -> loaded.sortedByDescending { it.addedAtMillis ?: 0L }
@@ -6023,6 +6024,34 @@ private fun HomeSectionScreen(
             }
         } else null
     )
+}
+
+internal suspend fun loadCompleteRecentBooks(
+    libraryIds: List<String>,
+    section: HomeSection,
+    pageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage
+): List<BookSummary> {
+    val loaded = buildList {
+        libraryIds.forEach { libraryId ->
+            var pageNumber = 0
+            var pagesLoaded = 0
+            while (pagesLoaded++ < 1_000) {
+                val page = runCatching { pageLoader(libraryId, section, pageNumber) }.getOrNull() ?: break
+                addAll(page.items)
+                val currentPage = page.page ?: pageNumber
+                val pageSize = page.size ?: page.items.size
+                val hasMore = when {
+                    page.items.isEmpty() -> false
+                    page.total != null && pageSize > 0 ->
+                        (currentPage * pageSize) + page.items.size < page.total
+                    else -> pageSize > 0 && page.items.size >= pageSize
+                }
+                if (!hasMore) break
+                pageNumber = currentPage + 1
+            }
+        }
+    }
+    return loaded.distinctBy { it.id to it.fileId }
 }
 
 @Composable
