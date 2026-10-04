@@ -53,6 +53,25 @@ internal fun komgaReadState(progress: JSONObject?): KomgaReadState {
     )
 }
 
+internal fun komgaReaderProgressBook(book: BookSummary, payload: String): BookSummary {
+    val root = JSONObject(payload)
+    val progress = root.optJSONObject("readProgress") ?: root
+    val page = progress.optInt("page", 0).takeIf { it > 0 }
+    val completed = progress.optBoolean("completed", false)
+    return book.copy(
+        progressLabel = page?.let { "Page $it" } ?: book.progressLabel,
+        progressPageIndex = page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
+        readStatus = if (completed) BookReadStatus.READ else BookReadStatus.READING,
+        isRead = completed,
+        lastReadAtMillis = progress.optString("readDate")
+            .takeIf { it.isNotBlank() }
+            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+            ?: book.lastReadAtMillis
+    )
+}
+
+internal fun komgaProgressionLocatorJson(payload: String): String? =
+    JSONObject(payload).optJSONObject("locator")?.toString()
 
 internal fun komgaProgressEndpoint(base: String, bookId: String, hasLocator: Boolean): String =
     if (hasLocator) "$base/api/v1/books/$bookId/progression"
@@ -654,11 +673,32 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
             val format = primaryFile?.optString("mediaType")?.takeIf { it.isNotBlank() }
                 ?: media.optString("mediaType").takeIf { it.isNotBlank() }
                 ?: filename?.substringAfterLast('.', "")
+            val mediaKind = komgaMediaKind(format, filename)
+            val progressionLocatorJson = if (mediaKind == MediaKind.EPUB) {
+                runCatching {
+                    val progressionRequest = Request.Builder()
+                        .url("$base/api/v1/books/${book.id}/progression")
+                        .header("Accept", "application/vnd.readium.progression+json")
+                        .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+                        .build()
+                    client.newCall(progressionRequest).execute().use { progressionResponse ->
+                        if (progressionResponse.isSuccessful) {
+                            komgaProgressionLocatorJson(progressionResponse.body?.string().orEmpty())
+                        } else {
+                            null
+                        }
+                    }
+                }.getOrNull()
+            } else {
+                null
+            }
+            val readProgress = komgaReadState(root.optJSONObject("readProgress"))
+            val readProgressDate = root.optJSONObject("readProgress")?.optString("readDate")
             val resolvedBook = book.copy(
                 title = metadata.optString("title", book.title),
                 filename = filename ?: book.filename,
                 format = komgaFormat(format, filename) ?: book.format,
-                mediaKind = komgaMediaKind(format, filename),
+                mediaKind = mediaKind,
                 streamUrl = "$base/api/v1/books/${book.id}/file",
                 downloadUrl = "$base/api/v1/books/${book.id}/file",
                 coverUrl = "$base/api/v1/books/${book.id}/thumbnail",
@@ -671,7 +711,16 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
                     ?: book.seriesId,
                 seriesIndex = root.optDouble("number", Double.NaN).takeIf { !it.isNaN() }
                     ?: book.seriesIndex,
-                readerPageCount = media.optInt("pagesCount").takeIf { it > 0 }
+                readerPageCount = media.optInt("pagesCount").takeIf { it > 0 },
+                progressLabel = readProgress.page?.let { "Page $it" } ?: book.progressLabel,
+                progressPageIndex = readProgress.page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
+                readStatus = readProgress.status,
+                isRead = readProgress.isRead,
+                lastReadAtMillis = readProgressDate
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                    ?: book.lastReadAtMillis,
+                readerLocatorJson = progressionLocatorJson ?: book.readerLocatorJson
             )
             val fileOption = BookFileOption(
                 book = resolvedBook,

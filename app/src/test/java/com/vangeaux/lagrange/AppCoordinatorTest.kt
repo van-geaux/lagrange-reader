@@ -1697,7 +1697,8 @@ class AppCoordinatorTest {
         val repository = FakeBookOrbitDataSource(
             bookDetailResult = BookDetailInfo(book = freshBook),
             readerProgressResult = serverBook,
-            buildReaderResult = ReaderState(book = serverBook)
+            buildReaderResult = ReaderState(book = serverBook),
+            syncPendingProgressResult = SyncAttemptResult.Unsupported
         )
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
         coordinator.bootstrapIntoBrowser(

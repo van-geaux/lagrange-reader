@@ -751,6 +751,8 @@ data class ReaderState(
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
+    val serverProgressAuthoritative: Boolean = false,
+    val initialLocatorJson: String? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,
     val audioFiles: List<BookFileOption> = emptyList(),
     val audioTotalDurationMs: Long? = null,

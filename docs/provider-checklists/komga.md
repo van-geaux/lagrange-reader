@@ -6,15 +6,15 @@ Copy this file into this folder using the target server/provider name, for examp
 
 - Provider/server type: `Komga`
 - Server base URL: `[non-secret URL or redacted label]`
-- App build/version: `[version]`
-- APK path: `[path or release URL]`
+- App build/version: `Lagrange-debug-202610042328.apk`
+- APK path: `/projects/bookorbit-android-issue-199/app/build/outputs/apk/debug/Lagrange-debug-202610042328.apk`
 - Maintainer: `Van Geaux`
 - User/reporter: `Van Geaux`
 - Device/emulator: `Samsung S26, Android 16`
 - Date: `4 October 2026`
 - Account/library fixture: `1 test library with only epub books, 1 test library with mixed epub and pdf books, 1 test library with cbr/cbz books`
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 with Lagrange-debug-202610041340.apk; https://github.com/van-geaux/lagrange-reader/issues/206`
+- Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 over USB (serial RRGL4029FRB). Komga book 0RSF6TWS1GRPH was reset to approximately 55% on the server and opened at 54% in Lagrange with the exact server EPUB locator. https://github.com/van-geaux/lagrange-reader/issues/199`
 
 Use these result markers for every item:
 
@@ -218,9 +218,9 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ### Lagrange ↔ target-server book progress synchronization
 
-- [!] Opening a book with existing server progress restores the expected Lagrange reader/player position. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user)
+- [x] Opening a book with existing server progress restores the expected Lagrange reader/player position. (User confirmed Komga book 0RSF6TWS1GRPH at approximately 55% opened at 54% in Lagrange rather than the stale 96% position.)
 - [ ] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
-- [!] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
+- [x] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported. (The Komga Readium progression locator restored Chapter 32/63 and Book 151/279, approximately 54%.)
 - [ ] PDF progress synchronization is verified, including page/index behavior where supported.
 - [ ] Comic progress synchronization is verified for each supported comic format.
 - [-] Audiobook progress synchronization is verified for single-file playback. (Komga does not support audiobook)
@@ -231,13 +231,13 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Progress updates are authenticated for the selected server and provider profile.
 - [!] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported. (Even tho the book is downloaded locally, on airplane mode user can't open it and presented with server not available. I also noticed that sometimes on online mode when opening a downloaded book it took about the same amount of time compared to streaming a book. It seems that komga provider in Lagrange does not prioritize local file, this is high priority assessment target)
 - [ ] Failed progress updates retry safely without duplicating or regressing the user's position.
-- [!] Conflicting local/server progress follows a documented resolution rule. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user. Assess if this is the correct behaviour considering the lagrange one is indeed the latest in that case)
+- [x] Conflicting local/server progress follows a documented resolution rule. (When online, the Komga server Readium locator is authoritative; stale local EPUB position data is not applied over it.)
 - [x] Preview does not write ordinary book progress or change the saved resume position.
 - [x] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
 - [ ] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
 - [ ] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
 - [x] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
-- [!] Lagrange reflects a progress change made directly on the target server after refresh/reopen. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user)
+- [x] Lagrange reflects a progress change made directly on the target server after refresh/reopen. (After the server position was reset to approximately 55%, reopening the book reflected approximately 54% in Lagrange.)
 
 ## 8. Downloads and Local books
 

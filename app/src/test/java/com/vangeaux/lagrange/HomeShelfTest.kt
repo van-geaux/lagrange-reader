@@ -1,6 +1,9 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.komga.komgaReadState
+import com.vangeaux.lagrange.provider.komga.komgaReaderProgressBook
+import com.vangeaux.lagrange.provider.komga.komgaReaderPageIndex
+import com.vangeaux.lagrange.provider.komga.komgaProgressionLocatorJson
 import com.vangeaux.lagrange.provider.komga.komgaProgressEndpoint
 import com.vangeaux.lagrange.provider.komga.komgaDownloadedEpubFile
 import com.vangeaux.lagrange.provider.komga.komgaLocalReaderBook
@@ -151,6 +154,39 @@ class HomeShelfTest {
         assertFalse(inProgress.isRead)
         assertEquals(BookReadStatus.UNREAD, unread.status)
         assertFalse(unread.isRead)
+    }
+
+    @Test
+    fun `komga reader progress hydrates server page over stale cached progress`() {
+        val cached = BookSummary(
+            "library-1", "book-1", "file-1", "Book",
+            mediaKind = MediaKind.PDF,
+            progressPageIndex = 0,
+            progressLabel = "Page 1"
+        )
+
+        val hydrated = komgaReaderProgressBook(
+            cached,
+            "{\"page\":9,\"completed\":false,\"readDate\":\"2026-10-04T12:00:00Z\"}"
+        )
+
+        assertEquals(8, hydrated.progressPageIndex)
+        assertEquals("Page 9", hydrated.progressLabel)
+        assertEquals(BookReadStatus.READING, hydrated.readStatus)
+        assertFalse(hydrated.isRead)
+        assertEquals(1_791_115_200_000L, hydrated.lastReadAtMillis)
+        assertEquals(8, komgaReaderPageIndex(hydrated))
+    }
+
+    @Test
+    fun `komga epub progression keeps the server Readium locator`() {
+        val locator = komgaProgressionLocatorJson(
+            "{\"locator\":{\"href\":\"chapter.xhtml\",\"type\":\"application/xhtml+xml\",\"locations\":{\"progression\":0.6}}}"
+        )
+
+        val parsed = JSONObject(requireNotNull(locator))
+        assertEquals("chapter.xhtml", parsed.getString("href"))
+        assertEquals(0.6, parsed.getJSONObject("locations").getDouble("progression"), 0.001)
     }
 
     @Test
