@@ -207,7 +207,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [ ] Stream/listen to a supported audiobook online.
 - [ ] Authentication headers/session handling work for every supported media type.
 - [ ] Preview opens without writing normal progress or incorrectly marking the book read.
-- [ ] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.
+- [ ] Closing a Preview session resets its temporary location and does not overwrite the normal reading/listening resume position.
 - [ ] Go to read from Preview opens the normal reader at the expected location.
 - [ ] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
 - [ ] Unsupported formats show an honest unavailable state.

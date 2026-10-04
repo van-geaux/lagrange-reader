@@ -208,7 +208,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [-] Stream/listen to a supported audiobook online. (Komga does not support audiobook)
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
-- [!] Preview preserves the exact intended location when leaving and returning. (Why is this here as test? Preview should be reset when closed, current behaviour works as intended)
+- [x] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.
 - [!] Go to read from Preview opens the normal reader at the expected location. (Moving from read mode to preview mode does open the reader at the correct location. But when the read screen is closed it does not update the progress to the book, as effect the book also does not appear in continue reading section)
 - [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
 - [ ] Unsupported formats show an honest unavailable state.
