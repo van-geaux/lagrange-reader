@@ -168,9 +168,9 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 - [x] Home section More/See all uses the correct applicable filter set.
 - [x] Library book list exposes the applicable book-list filters. (User-confirmed on device; see #206.)
-- [!] Search exposes the applicable search/book-list filters.
+- [x] Search exposes the applicable search/book-list filters. (User-confirmed on device; see #206.)
 - [x] Series screen exposes the applicable Series filters. (User-confirmed on device; see #206.)
-- [!] Smart Scope screen, if supported, exposes and applies the documented filters.
+- [x] Smart Scope screen, if supported, exposes and applies the documented filters. (User-confirmed on device; see #206.)
 - [x] Author screen, if supported, exposes and applies the documented filters. (User-confirmed on device; see #206.)
 - [x] Local books screen exposes only filters that make sense for local content. (User-confirmed on device; see #206.)
 - [x] Filters never leak between screens, libraries, providers, or server profiles.
@@ -207,7 +207,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Stream/listen to a supported audiobook online.
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
-- [!] Preview preserves the exact intended location when leaving and returning. (Why is this here as test? Preview should be reset when closed, current behaviour works as intended)
+- [x] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.
 - [x] Go to read from Preview opens the normal reader at the expected location.
 - [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
 - [x] Unsupported formats show an honest unavailable state.
