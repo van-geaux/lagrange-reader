@@ -84,7 +84,7 @@ For every Home section above:
 - [x] Cards open the correct book or Series destination.
 - [x] The section preview limit and ordering are correct.
 - [x] The More/See all button is visible when the section has a complete destination.
-- [!] More/See all opens the matching full section, not a different library or provider. (For recently read books section, the books in ome screen appears correct but when see all is opened some of the book is gone after less than 1 seconds)
+- [x] More/See all opens the matching full section, not a different library or provider. (Recently Read See all was user-confirmed working on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610041939.apk`; see #204.)
 - [x] More/See all preserves the originating context when Back is pressed.
 - [x] Paging or Load more works where present.
 - [x] Refresh updates the section without duplicating or mixing records.
