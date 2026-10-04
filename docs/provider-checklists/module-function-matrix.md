@@ -4,6 +4,10 @@ Use this matrix to compare target servers before implementing or manually valida
 
 This matrix is separate from the per-provider manual checklist. The matrix answers “does this target server provide this module/function?” The checklist answers “does the implementation work correctly for this target server?”
 
+## Latest manual validation
+
+On 2026-10-04, the user confirmed the shared filter-surface behavior for BookOrbit and Komga on a Samsung SM-S931B running Android 16 with `Lagrange-debug-202610041340.apk`. Library, Series, Author, and Local Books filter-surface behavior was validated under issue [#206](https://github.com/van-geaux/lagrange-reader/issues/206). Provider capabilities that remain unsupported or partial are still represented as `U` or `P`; this confirmation records correct handling of exposed controls and unavailable provider-specific controls, not new provider capabilities.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.

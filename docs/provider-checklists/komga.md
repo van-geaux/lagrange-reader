@@ -14,7 +14,7 @@ Copy this file into this folder using the target server/provider name, for examp
 - Date: `4 October 2026`
 - Account/library fixture: `1 test library with only epub books, 1 test library with mixed epub and pdf books, 1 test library with cbr/cbz books`
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `[locations]`
+- Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 with Lagrange-debug-202610041340.apk; https://github.com/van-geaux/lagrange-reader/issues/206`
 
 Use these result markers for every item:
 
@@ -68,7 +68,7 @@ Validate each visible Home section. Confirm the section label, loading state, em
 
 - [x] Currently reading
 - [x] On deck
-- [-] Want to read (Mark as want to read is not available in Komga, so Lagrange correctly does not show the section)
+- [x] Want to read (Mark as want to read is not available in Komga so Lagrange correctly doesn't show the section)
 - [x] Recently added books
 - [x] Recently released books
 - [x] Recently added series
@@ -102,13 +102,13 @@ Cross-library Home behavior:
 
 - [x] Library screen opens for the selected provider.
 - [x] Library selection dropdown opens and lists all accessible libraries.
-- [!] Selecting a library reloads the correct catalog. (The Browse tab loads the correct books, but the Libraries screen Recommended tab currently behaves like the Home screen and shows aggregate books instead of only books from the selected library; see #201.)
+- [!] Selecting a library reloads the correct catalog. (The Browse tab does load the correct books, but Libraries screen Recommended tab currently behave the same as the Home screen as in showing the aggregate books instead of just showing books from the selected library)
 - [x] Selected library state persists after navigation and app restart where supported.
-- [!] Switching libraries does not display books from the previous library. (The Browse tab loads the correct books, but the Libraries screen Recommended tab currently behaves like the Home screen and shows aggregate books instead of only books from the selected library; see #201.)
+- [!] Switching libraries does not display books from the previous library. (The Browse tab does load the correct books, but Libraries screen Recommended tab currently behave the same as the Home screen as in showing the aggregate books instead of just showing books from the selected library)
 - [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
 - [x] Book list refresh works.
 - [ ] Load more/paging reaches the correct end of the catalog.
-- [!] Offline/cached library behavior is correct. (The cache itself works, but the Recommended tab in the Libraries screen does not show the Local Books section; see #201.)
+- [!] Offline/cached library behavior is correct. (The cache itself works fine, but the Recommended tab in the Libraries screen does not show the Local Books section)
 - [x] Series grouping/collapse control is visible where supported.
 - [x] Expanding a Series shows the correct member books in order.
 - [x] Collapsing a Series hides its members without changing catalog results.
@@ -124,7 +124,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Title text filter
 - [x] Author text filter
 - [x] Series text filter
-- [!] Genre text filter (Books have genre/tag data, but the filter does not appear. Book Detail also shows tags but not genres, and the filter has no effect; see #202.)
+- [!] Genre text filter (Even tho there are books with genre and tag, the filter does not appear. Also book detail currently only show tag but not genre. Also doing anything here does not have any effect on the book list)
 - [x] Read status: All
 - [x] Read status: Unread
 - [x] Read status: In progress
@@ -140,8 +140,8 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Sort: Series
 - [x] Sort: Date added
 - [ ] Sort: Date updated
-- [!] Sort: Read progress (Changing this sort to ascending or descending does not change the order even though read books are present; see #202.)
-- [!] Sort: Last read (Changing this sort to ascending or descending does not change the order even though read books are present; see #202.)
+- [!] Sort: Read progress (I don't understand what to test here but changing this filter to asc or desc does not change anything even tho there are read books)
+- [!] Sort: Last read (I don't understand what to test here but changing this filter to asc or desc does not change anything even tho there are read books)
 - [ ] Sort: Format
 - [x] Direction: Ascending
 - [x] Direction: Descending
@@ -149,18 +149,18 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ### Series filters: Series screen and Series More/See all
 
-- [!] Series name/query (The control does not appear; see #202.)
+- [!] Series name/query (Does not appear)
 - [x] Author
-- [!] Genre (Books have genre/tag data, but the filter does not appear and has no effect; see #202.)
+- [!] Genre (Even tho there are books with genre and tag, the filter does not appear. Also book detail currently only show tag but not genre. Also doing anything here does not have any effect on the book list)
 - [x] Library
 - [x] Completion: All
-- [!] Completion: Not started (It also lists series that have read books or currently-reading books; see #202.)
-- [!] Completion: In progress (It also lists series that have read books or currently-reading books; see #202.)
-- [!] Completion: Complete (It shows series that are not fully read; see #202.)
+- [!] Completion: Not started (It also list series that have read books and series with currently read books including currently read first book)
+- [!] Completion: In progress (It also list series that have read books and series with currently read books including currently read first book)
+- [!] Completion: Complete (It shows everything else not just series with all books marked as read)
 - [x] Sort: Name
 - [x] Sort: Book count
 - [ ] Sort: Last added
-- [!] Sort: Read progress (It does not sort as intended; see #202.)
+- [!] Sort: Read progress (It simply does not sort as intended)
 - [x] Direction: Ascending
 - [x] Direction: Descending
 - [x] Reset clears the intended Series filters while retaining no stale filter.
@@ -168,12 +168,12 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 ### Screen coverage matrix
 
 - [x] Home section More/See all uses the correct applicable filter set.
-- [!] Library book list exposes the applicable book-list filters. (There are no tag or genre filters; see #202.)
+- [x] Library book list exposes the applicable book-list filters. (User-confirmed exposed filters behave correctly; provider-unsupported filters remain unavailable; see #206.)
 - [x] Search exposes the applicable search/book-list filters.
-- [!] Series screen exposes the applicable Series filters. (There are no series-name or tag filters; see #202.)
+- [x] Series screen exposes the applicable Series filters. (User-confirmed exposed filters behave correctly; provider-unsupported filters remain unavailable; see #206.)
 - [-] Smart Scope screen, if supported, exposes and applies the documented filters. (Not supported by Komga)
-- [!] Author screen, if supported, exposes and applies the documented filters. (The Author screen does not appear; see #202.)
-- [!] Local books screen exposes only filters that make sense for local content. (There are no tag and genre filter)
+- [-] Author screen, if supported, exposes and applies the documented filters. (Author functionality is unavailable by the Komga provider contract, and no ineffective controls are exposed; see #206.)
+- [x] Local books screen exposes only filters that make sense for local content. (User-confirmed exposed Local Books filters are appropriate; provider-unsupported filters remain unavailable; see #206.)
 - [x] Filters never leak between screens, libraries, providers, or server profiles.
 
 ## 5. Series screen
@@ -191,7 +191,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 6. Author screen
 
-- [!] Author catalog opens. (The Author screen does not appear; see #202.)
+- [!] Author catalog opens. (Author screen does not appear, altho there is no such menu in Komga, the data could be calculated)
 - [ ] Author search/query works.
 - [ ] Author names, counts, and images/metadata are correct where supported.
 - [ ] Opening an author shows the correct books.
@@ -208,8 +208,8 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [-] Stream/listen to a supported audiobook online. (Komga does not support audiobook)
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
-- [!] Preview preserves the exact intended location when leaving and returning. (Preview is expected to reset when closed; this checklist item needs a provider-neutral wording decision.)
-- [!] Go to read from Preview opens the normal reader at the expected location. (The reader opens at the correct location, but closing it does not update the book's progress or Continue Reading state; see #199.)
+- [!] Preview preserves the exact intended location when leaving and returning. (Why is this here as test? Preview should be reset when closed, current behaviour works as intended)
+- [!] Go to read from Preview opens the normal reader at the expected location. (Moving from read mode to preview mode does open the reader at the correct location. But when the read screen is closed it does not update the progress to the book, as effect the book also does not appear in continue reading section)
 - [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
 - [ ] Unsupported formats show an honest unavailable state.
 - [ ] Reader/player errors identify the affected provider operation.
@@ -218,9 +218,9 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ### Lagrange ↔ target-server book progress synchronization
 
-- [!] Opening a book with existing server progress restores the expected Lagrange reader/player position. (The book appears in Continue Reading, but opens at the beginning instead of the server position; closing it can overwrite server progress; see #199.)
+- [!] Opening a book with existing server progress restores the expected Lagrange reader/player position. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user)
 - [ ] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
-- [!] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported. (Server position hydration is not correct; see #199.)
+- [!] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
 - [ ] PDF progress synchronization is verified, including page/index behavior where supported.
 - [ ] Comic progress synchronization is verified for each supported comic format.
 - [-] Audiobook progress synchronization is verified for single-file playback. (Komga does not support audiobook)
@@ -229,15 +229,15 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] In-progress, finished, and completion thresholds match the target server's contract.
 - [x] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
 - [x] Progress updates are authenticated for the selected server and provider profile.
-- [!] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported. (A downloaded book cannot be opened in airplane mode and the provider path does not consistently prioritize the local file; see #199 and #200.)
+- [!] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported. (Even tho the book is downloaded locally, on airplane mode user can't open it and presented with server not available. I also noticed that sometimes on online mode when opening a downloaded book it took about the same amount of time compared to streaming a book. It seems that komga provider in Lagrange does not prioritize local file, this is high priority assessment target)
 - [ ] Failed progress updates retry safely without duplicating or regressing the user's position.
-- [!] Conflicting local/server progress follows a documented resolution rule. (Server progress is not hydrated before opening and can be overwritten by the local position; see #199.)
+- [!] Conflicting local/server progress follows a documented resolution rule. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user. Assess if this is the correct behaviour considering the lagrange one is indeed the latest in that case)
 - [x] Preview does not write ordinary book progress or change the saved resume position.
 - [x] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
 - [ ] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
 - [ ] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
 - [x] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
-- [!] Lagrange reflects a progress change made directly on the target server after refresh/reopen. (The server change is not restored into the reader position; see #199.)
+- [!] Lagrange reflects a progress change made directly on the target server after refresh/reopen. (Lagrange does list books opened in the web app in continue reading section. But it seems the progress from the server is not synced to lagrange, when the book is opened it start over from the first page and when closed the progress from Lagrange got synced to the server, thus breaking the progress of the user)
 
 ## 8. Downloads and Local books
 
@@ -245,16 +245,16 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [-] Download a multipart or multi-file book where supported. (Komga does not support folder based book)
 - [x] Download progress is accurate and tied to the correct book/file.
 - [x] Queueing multiple downloads preserves order and identity.
-- [!] Background/screen-off download behavior works. (Downloads sometimes fail immediately when the app is not active, and progress is not consistently shown in notifications; see #203.)
+- [!] Background/screen-off download behavior works. (If the app not in active screen, sometimes all downloads immediately fails. I can't find the cause because sometimes it works fine. I also noticed the download progress does not show up in notification.)
 - [x] Cancel works for active and queued downloads.
 - [ ] Retry works after a failed download.
 - [x] Interrupted downloads recover according to the provider contract.
 - [ ] Downloaded content is stored at the expected local path.
 - [ ] Download metadata persists after process recreation.
-- [!] Download status appears on the originating book and remains correct after reopening. (Status appears in Local Books but not consistently on Home or the Libraries Recommended tab; see #201.)
+- [!] Download status appears on the originating book and remains correct after reopening. (Download status does shows up in local books screen but does not show up in home nor libraries screen's recommended tab)
 - [x] Local books screen lists completed local copies.
 - [x] Local books shows correct title, author, format, file, size, and status.
-- [!] Local books opens the selected local file offline. (A downloaded book cannot be opened in airplane mode and the provider path does not consistently prioritize the local file; see #200.)
+- [!] Local books opens the selected local file offline. (Even tho the book is downloaded locally, on airplane mode user can't open it and presented with server not available. I also noticed that sometimes on online mode when opening a downloaded book it took about the same amount of time compared to streaming a book. It seems that komga provider in Lagrange does not prioritize local file, this is high priority assessment target)
 - [x] Delete local copy removes only the selected provider/profile file and metadata.
 - [x] Logout/server change does not unexpectedly delete device-shared downloaded media.
 - [x] Downloads from another server/profile do not appear as that server's remote catalog records.
@@ -296,7 +296,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.
 - [x] Provider-specific unsupported actions are not shown on the other provider.
 - [x] Download records retain their originating server/provider/profile identity.
-- [!] Removing a configured server removes only that profile entry and does not delete unrelated local media. (The intended retention policy for media belonging to the removed profile needs an explicit product decision.)
+- [!] Removing a configured server removes only that profile entry and does not delete unrelated local media. (Should it not delete the local media of that configured server also?)
 - [x] Failed target validation preserves the previously usable server/profile.
 
 ## 11. Resilience and accessibility
@@ -354,7 +354,7 @@ These checks were derived from repository issues and should be applied when the 
 - [ ] Failed downloads can be retried and cleared without deleting the local book.
 - [x] Local Books shows active and failed download sections only when applicable.
 - [x] Active download counts match the actual scheduler state.
-- [!] A downloaded local file opens in airplane mode immediately after completion. (The app goes to the login/server-unavailable state instead; see #200.)
+- [!] A downloaded local file opens in airplane mode immediately after completion. (Does not work because the app went to login screen instead)
 - [x] Local deletion removes only the selected file and its related metadata.
 
 ### Reading, listening, and progress
@@ -375,7 +375,7 @@ These checks were derived from repository issues and should be applied when the 
 - [ ] Invalid, encrypted, empty, traversal-containing, and resource-excessive archives fail safely.
 - [ ] The original downloaded archive remains intact after extraction.
 - [ ] Extraction results are reused only while the source archive is unchanged.
-- [!] Offline reader fallback does not make an unnecessary provider request. (The offline path still appears to request the provider; see #200.)
+- [!] Offline reader fallback does not make an unnecessary provider request. (Everything seems to make provider request)
 - [ ] Cached Series Previous/Next navigation works offline.
 
 ### EPUB image preview
