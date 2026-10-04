@@ -4,6 +4,7 @@ import com.vangeaux.lagrange.provider.komga.komgaReadState
 import com.vangeaux.lagrange.provider.komga.komgaProgressEndpoint
 import com.vangeaux.lagrange.provider.komga.komgaDownloadedEpubFile
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,6 +12,23 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HomeShelfTest {
+    @Test
+    fun `recently read see all keeps every page in the complete projection`() = runBlocking {
+        val books = (1..3).map { index ->
+            seriesBook("recent-page-$index", index.toDouble(), status = BookReadStatus.READ, isRead = true)
+        }
+        val pages = mapOf(
+            0 to LibraryBooksPage(items = books.take(2), total = 3, page = 0, size = 2),
+            1 to LibraryBooksPage(items = books.drop(2), total = 3, page = 1, size = 2)
+        )
+
+        val loaded = loadCompleteRecentBooks(listOf("library-1"), HomeSection.RECENTLY_READ) { _, _, page ->
+            pages[page] ?: LibraryBooksPage(page = page, size = 2)
+        }
+
+        assertEquals(books, loaded)
+    }
+
     @Test
     fun `komga image library resolves an existing downloaded file before book fallback`() {
         val downloaded = File.createTempFile("komga-image-library", ".epub")
