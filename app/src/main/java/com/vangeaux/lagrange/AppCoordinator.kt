@@ -511,6 +511,11 @@ class AppCoordinator internal constructor(
                 )
             }
 
+            // Provider sessions may keep credentials in runtime-only state. Restore the
+            // active profile before validating the session so a process restart can use
+            // the same offline fallback path as a warm process.
+            providerSessionModule()?.restoreCurrentProfileSession()
+
             val localAudioState = restoreActiveReaderStateThroughSharedLifecycle(localOnly = true)?.let { readerState ->
                 if (readerState.book.mediaKind != MediaKind.AUDIO) {
                     _screen.value = AppScreen.Reader(readerState)
