@@ -108,7 +108,7 @@ Cross-library Home behavior:
 - [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
 - [x] Book list refresh works.
 - [ ] Load more/paging reaches the correct end of the catalog.
-- [!] Offline/cached library behavior is correct. (The cache itself works fine, but the Recommended tab in the Libraries screen does not show the Local Books section)
+- [x] Offline/cached library behavior is correct. (Validated by user on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042205.apk`, Samsung SM-S931B `RRGL4029FRB` over USB, after online catalog population followed by force-stop, airplane mode, and Wi-Fi disabled. Library, See all, and Series retained cached content.)
 - [x] Series grouping/collapse control is visible where supported.
 - [x] Expanding a Series shows the correct member books in order.
 - [x] Collapsing a Series hides its members without changing catalog results.
@@ -264,7 +264,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Book detail opens from Home, Library, Search, Series, Author, Local books, and direct navigation.
 - [x] Title, subtitle, author, series, number, description, publisher, language, release date, and other provider metadata are correct.
 - [x] Book cover loads and uses the correct provider authentication.
-- [!] Metadata remains stable after refresh and offline fallback. (On no connection state, when Lagrange opened it open to login screen instead of showing cached state)
+- [x] Metadata remains stable after refresh and offline fallback. (Validated by user on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042205.apk`, Samsung SM-S931B `RRGL4029FRB` over USB, after online catalog population followed by force-stop, airplane mode, and Wi-Fi disabled. Cached Library, See all, and Series content remained available instead of returning Login or zero books.)
 - [-] Multi-file book/file selector opens when applicable. (Not supported by Komga)
 - [x] Every physical file has the correct filename, identity, format, size, and availability state.
 - [-] Selecting a file changes the intended reader/download target without losing the selection unexpectedly. (Not supported by Komga)
