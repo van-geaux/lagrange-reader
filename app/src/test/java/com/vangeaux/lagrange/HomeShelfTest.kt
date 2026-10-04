@@ -3,6 +3,8 @@ package com.vangeaux.lagrange
 import com.vangeaux.lagrange.provider.komga.komgaReadState
 import com.vangeaux.lagrange.provider.komga.komgaProgressEndpoint
 import com.vangeaux.lagrange.provider.komga.komgaDownloadedEpubFile
+import com.vangeaux.lagrange.provider.komga.komgaLocalReaderBook
+import com.vangeaux.lagrange.provider.komga.komgaOfflineBrowserState
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -46,6 +48,53 @@ class HomeShelfTest {
         } finally {
             downloaded.delete()
         }
+    }
+
+    @Test
+    fun `komga local reader book uses the verified local file before remote detail`() {
+        val downloaded = File.createTempFile("komga-reader", ".epub")
+        try {
+            val book = BookSummary(
+                libraryId = "library-1",
+                id = "book-1",
+                fileId = "file-1",
+                title = "Book",
+                filename = "book.epub",
+                format = "application/epub+zip",
+                mediaKind = MediaKind.EPUB
+            )
+            val record = DownloadRecord(
+                serverUrl = "https://komga.test",
+                fileId = "file-1",
+                bookId = "book-1",
+                title = "Book",
+                localPath = downloaded.absolutePath,
+                mediaKind = MediaKind.EPUB,
+                status = DownloadRecordStatus.COMPLETE
+            )
+
+            assertEquals(downloaded.absolutePath, komgaLocalReaderBook(book, record)?.localPath)
+        } finally {
+            downloaded.delete()
+        }
+    }
+
+    @Test
+    fun `komga offline browser exposes downloaded books without a library snapshot`() {
+        val book = BookSummary(
+            libraryId = "",
+            id = "book-1",
+            fileId = "file-1",
+            title = "Downloaded Book",
+            localPath = "/downloads/book.epub",
+            mediaKind = MediaKind.EPUB
+        )
+
+        val state = komgaOfflineBrowserState("https://komga.test", listOf(book))
+
+        assertEquals(listOf(book), state?.books)
+        assertTrue(state?.libraries?.isEmpty() == true)
+        assertTrue(state?.isCatalogComplete == true)
     }
 
     @Test

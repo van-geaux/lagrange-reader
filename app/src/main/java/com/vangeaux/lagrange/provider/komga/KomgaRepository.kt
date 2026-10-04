@@ -9,11 +9,31 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-internal fun komgaDownloadedEpubFile(record: DownloadRecord?, fallbackPath: String?): File? =
+internal fun komgaDownloadedLocalFile(record: DownloadRecord?, fallbackPath: String?): File? =
     listOfNotNull(record?.localPath, fallbackPath)
         .asSequence()
         .map(::File)
         .firstOrNull(File::isFile)
+
+internal fun komgaLocalReaderBook(book: BookSummary, record: DownloadRecord?): BookSummary? =
+    komgaDownloadedLocalFile(record, book.localPath)?.let { file ->
+        book.copy(localPath = file.absolutePath)
+    }
+
+internal fun komgaOfflineBrowserState(serverUrl: String, books: List<BookSummary>): BrowserState? =
+    books.takeIf { it.isNotEmpty() }?.let { localBooks ->
+        BrowserState(
+            serverUrl = serverUrl,
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = localBooks,
+            homeBooks = localBooks,
+            isCatalogComplete = true
+        )
+    }
+
+internal fun komgaDownloadedEpubFile(record: DownloadRecord?, fallbackPath: String?): File? =
+    komgaDownloadedLocalFile(record, fallbackPath)
 
 class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
     private val appContext = context.applicationContext
@@ -171,13 +191,21 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun syncPendingProgress(): SyncAttemptResult = SyncAttemptResult.Unsupported
 
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
-        val detail = loadBookDetail(book)
-        val resolvedBook = detail.book
-        val localFile = resolvedBook.localPath?.let(::File)?.takeIf(File::exists)
-            ?: if (localOnly) null else downloadBook(resolvedBook) { }
-        if (localFile == null) {
+        val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
+            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
+        val localBook = komgaLocalReaderBook(book, record)
+        if (localBook != null) {
+            return ReaderState(
+                book = localBook,
+                localFile = File(localBook.localPath!!)
+            )
+        }
+        if (localOnly) {
             throw UserFacingException("This Komga book is not downloaded for offline reading.")
         }
+        val detail = loadBookDetail(book)
+        val resolvedBook = detail.book
+        val localFile = downloadBook(resolvedBook) { }
         return ReaderState(book = resolvedBook.copy(localPath = localFile.absolutePath), localFile = localFile)
     }
 
@@ -205,7 +233,9 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
 
-    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
+    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
+        komgaOfflineBrowserState(getServerUrl().orEmpty(), loadLocalBooks())
+    }
 
     override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
         val serverUrl = getServerUrl().orEmpty()

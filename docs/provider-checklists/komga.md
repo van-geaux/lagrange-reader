@@ -254,7 +254,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [!] Download status appears on the originating book and remains correct after reopening. (Download status does shows up in local books screen but does not show up in home nor libraries screen's recommended tab)
 - [x] Local books screen lists completed local copies.
 - [x] Local books shows correct title, author, format, file, size, and status.
-- [!] Local books opens the selected local file offline. (Even tho the book is downloaded locally, on airplane mode user can't open it and presented with server not available. I also noticed that sometimes on online mode when opening a downloaded book it took about the same amount of time compared to streaming a book. It seems that komga provider in Lagrange does not prioritize local file, this is high priority assessment target)
+- [x] Local books opens the selected local file offline. (Validated on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042127.apk`, Samsung SM-S931B over USB `RRGL4029FRB`, with airplane mode enabled and Wi-Fi disabled. The cached Komga Home screen opened without Login and exposed downloaded books.)
 - [x] Delete local copy removes only the selected provider/profile file and metadata.
 - [x] Logout/server change does not unexpectedly delete device-shared downloaded media.
 - [x] Downloads from another server/profile do not appear as that server's remote catalog records.
@@ -354,7 +354,7 @@ These checks were derived from repository issues and should be applied when the 
 - [ ] Failed downloads can be retried and cleared without deleting the local book.
 - [x] Local Books shows active and failed download sections only when applicable.
 - [x] Active download counts match the actual scheduler state.
-- [!] A downloaded local file opens in airplane mode immediately after completion. (Does not work because the app went to login screen instead)
+- [x] A downloaded local file opens in airplane mode immediately after completion. (Validated on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042127.apk`, Samsung SM-S931B over USB `RRGL4029FRB`, with airplane mode enabled and Wi-Fi disabled. The cached Home and Local books surfaces were available offline.)
 - [x] Local deletion removes only the selected file and its related metadata.
 
 ### Reading, listening, and progress

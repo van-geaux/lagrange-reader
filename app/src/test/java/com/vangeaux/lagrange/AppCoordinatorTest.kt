@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.core.ProviderSessionModule
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -674,6 +675,43 @@ class AppCoordinatorTest {
 
         assertFalse(coordinator.screen.value is AppScreen.Loading)
         sessionGate.complete(Unit)
+    }
+
+    @Test
+    fun `bootstrap restores provider session before offline session validation`() = runTest {
+        val cached = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = emptyList()
+        )
+        var restored = false
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unavailable,
+            cachedBrowserState = cached
+        )
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = true
+
+                    override suspend fun restoreCurrentProfileSession(): Boolean {
+                        restored = true
+                        return true
+                    }
+                }
+            }
+        )
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertTrue(restored)
+        assertTrue(coordinator.screen.value is AppScreen.Browser)
+        assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isOfflineSnapshot)
     }
 
     @Test
