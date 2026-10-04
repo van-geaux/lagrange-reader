@@ -14,7 +14,7 @@ Copy this file into this folder using the target server/provider name, for examp
 - Date: `4 October 2026`
 - Account/library fixture: `2 library of cbr/cbz, 2 library with epub/pdf/audiobook, 1 library with only epub`
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `[locations]`
+- Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 with Lagrange-debug-202610041340.apk; https://github.com/van-geaux/lagrange-reader/issues/206`
 
 Use these result markers for every item:
 
@@ -84,7 +84,7 @@ For every Home section above:
 - [x] Cards open the correct book or Series destination.
 - [x] The section preview limit and ordering are correct.
 - [x] The More/See all button is visible when the section has a complete destination.
-- [!] More/See all opens the matching full section, not a different library or provider. (For Recently Read, the Home preview initially appears correct, but some books disappear from the See all destination shortly after opening; see #204.)
+- [!] More/See all opens the matching full section, not a different library or provider. (For recently read books section, the books in ome screen appears correct but when see all is opened some of the book is gone after less than 1 seconds)
 - [x] More/See all preserves the originating context when Back is pressed.
 - [x] Paging or Load more works where present.
 - [x] Refresh updates the section without duplicating or mixing records.
@@ -167,12 +167,12 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 ### Screen coverage matrix
 
 - [x] Home section More/See all uses the correct applicable filter set.
-- [!] Library book list exposes the applicable book-list filters.
+- [x] Library book list exposes the applicable book-list filters. (User-confirmed on device; see #206.)
 - [!] Search exposes the applicable search/book-list filters.
-- [!] Series screen exposes the applicable Series filters.
+- [x] Series screen exposes the applicable Series filters. (User-confirmed on device; see #206.)
 - [!] Smart Scope screen, if supported, exposes and applies the documented filters.
-- [!] Author screen, if supported, exposes and applies the documented filters.
-- [!] Local books screen exposes only filters that make sense for local content.
+- [x] Author screen, if supported, exposes and applies the documented filters. (User-confirmed on device; see #206.)
+- [x] Local books screen exposes only filters that make sense for local content. (User-confirmed on device; see #206.)
 - [x] Filters never leak between screens, libraries, providers, or server profiles.
 
 ## 5. Series screen
@@ -190,124 +190,124 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 6. Author screen
 
-- [ ] Author catalog opens.
-- [ ] Author search/query works.
-- [ ] Author names, counts, and images/metadata are correct where supported.
-- [ ] Opening an author shows the correct books.
-- [ ] Author book paging/Load more works.
-- [ ] Author filters/sorting work where exposed.
-- [ ] Author navigation does not mix providers or libraries unexpectedly.
-- [ ] Unsupported author functionality is absent or clearly unavailable.
+- [x] Author catalog opens.
+- [x] Author search/query works.
+- [x] Author names, counts, and images/metadata are correct where supported.
+- [x] Opening an author shows the correct books.
+- [x] Author book paging/Load more works.
+- [x] Author filters/sorting work where exposed.
+- [x] Author navigation does not mix providers or libraries unexpectedly.
+- [x] Unsupported author functionality is absent or clearly unavailable.
 
 ## 7. Reading, listening, preview, and navigation
 
-- [ ] Stream/open a supported EPUB online.
+- [x] Stream/open a supported EPUB online.
 - [ ] Stream/open a supported PDF online.
-- [ ] Stream/open a supported comic online.
-- [ ] Stream/listen to a supported audiobook online.
-- [ ] Authentication headers/session handling work for every supported media type.
-- [ ] Preview opens without writing normal progress or incorrectly marking the book read.
-- [ ] Preview preserves the exact intended location when leaving and returning.
-- [ ] Go to read from Preview opens the normal reader at the expected location.
-- [ ] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
-- [ ] Unsupported formats show an honest unavailable state.
-- [ ] Reader/player errors identify the affected provider operation.
-- [ ] Read/listen progress behavior matches the provider capability contract.
-- [ ] Provider-specific unsupported progress/session behavior is not represented as a false success.
+- [x] Stream/open a supported comic online.
+- [x] Stream/listen to a supported audiobook online.
+- [x] Authentication headers/session handling work for every supported media type.
+- [x] Preview opens without writing normal progress or incorrectly marking the book read.
+- [!] Preview preserves the exact intended location when leaving and returning. (Why is this here as test? Preview should be reset when closed, current behaviour works as intended)
+- [x] Go to read from Preview opens the normal reader at the expected location.
+- [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
+- [x] Unsupported formats show an honest unavailable state.
+- [x] Reader/player errors identify the affected provider operation.
+- [x] Read/listen progress behavior matches the provider capability contract.
+- [x] Provider-specific unsupported progress/session behavior is not represented as a false success.
 
 ### Lagrange ↔ target-server book progress synchronization
 
-- [ ] Opening a book with existing server progress restores the expected Lagrange reader/player position.
-- [ ] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
-- [ ] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
+- [x] Opening a book with existing server progress restores the expected Lagrange reader/player position.
+- [x] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
+- [x] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
 - [ ] PDF progress synchronization is verified, including page/index behavior where supported.
-- [ ] Comic progress synchronization is verified for each supported comic format.
-- [ ] Audiobook progress synchronization is verified for single-file playback.
-- [ ] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position.
-- [ ] Read and unread state synchronization is verified independently from exact position synchronization.
-- [ ] In-progress, finished, and completion thresholds match the target server's contract.
-- [ ] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
-- [ ] Progress updates are authenticated for the selected server and provider profile.
-- [ ] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported.
-- [ ] Failed progress updates retry safely without duplicating or regressing the user's position.
-- [ ] Conflicting local/server progress follows a documented resolution rule.
-- [ ] Preview does not write ordinary book progress or change the saved resume position.
-- [ ] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
-- [ ] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
-- [ ] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
-- [ ] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
-- [ ] Lagrange reflects a progress change made directly on the target server after refresh/reopen.
+- [x] Comic progress synchronization is verified for each supported comic format.
+- [x] Audiobook progress synchronization is verified for single-file playback.
+- [x] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position.
+- [x] Read and unread state synchronization is verified independently from exact position synchronization.
+- [x] In-progress, finished, and completion thresholds match the target server's contract.
+- [x] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
+- [x] Progress updates are authenticated for the selected server and provider profile.
+- [x] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported.
+- [x] Failed progress updates retry safely without duplicating or regressing the user's position.
+- [x] Conflicting local/server progress follows a documented resolution rule.
+- [x] Preview does not write ordinary book progress or change the saved resume position.
+- [x] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
+- [x] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
+- [x] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
+- [x] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
+- [x] Lagrange reflects a progress change made directly on the target server after refresh/reopen.
 
 ## 8. Downloads and Local books
 
-- [ ] Download a single supported book/file.
-- [ ] Download a multipart or multi-file book where supported.
-- [ ] Download progress is accurate and tied to the correct book/file.
-- [ ] Queueing multiple downloads preserves order and identity.
-- [ ] Background/screen-off download behavior works.
-- [ ] Cancel works for active and queued downloads.
-- [ ] Retry works after a failed download.
-- [ ] Interrupted downloads recover according to the provider contract.
+- [!] Download a single supported book/file. (I cant find the trigger but sometimes tapping the download button crashes the app)
+- [x] Download a multipart or multi-file book where supported.
+- [x] Download progress is accurate and tied to the correct book/file.
+- [x] Queueing multiple downloads preserves order and identity.
+- [x] Background/screen-off download behavior works.
+- [x] Cancel works for active and queued downloads.
+- [x] Retry works after a failed download.
+- [x] Interrupted downloads recover according to the provider contract.
 - [ ] Downloaded content is stored at the expected local path.
-- [ ] Download metadata persists after process recreation.
-- [ ] Download status appears on the originating book and remains correct after reopening.
-- [ ] Local books screen lists completed local copies.
-- [ ] Local books shows correct title, author, format, file, size, and status.
-- [ ] Local books opens the selected local file offline.
-- [ ] Delete local copy removes only the selected provider/profile file and metadata.
-- [ ] Logout/server change does not unexpectedly delete device-shared downloaded media.
-- [ ] Downloads from another server/profile do not appear as that server's remote catalog records.
+- [x] Download metadata persists after process recreation.
+- [x] Download status appears on the originating book and remains correct after reopening.
+- [x] Local books screen lists completed local copies.
+- [x] Local books shows correct title, author, format, file, size, and status.
+- [x] Local books opens the selected local file offline.
+- [x] Delete local copy removes only the selected provider/profile file and metadata.
+- [x] Logout/server change does not unexpectedly delete device-shared downloaded media.
+- [x] Downloads from another server/profile do not appear as that server's remote catalog records.
 
 ## 9. Book detail
 
-- [ ] Book detail opens from Home, Library, Search, Series, Author, Local books, and direct navigation.
-- [ ] Title, subtitle, author, series, number, description, publisher, language, release date, and other provider metadata are correct.
-- [ ] Book cover loads and uses the correct provider authentication.
-- [ ] Metadata remains stable after refresh and offline fallback.
-- [ ] Multi-file book/file selector opens when applicable.
-- [ ] Every physical file has the correct filename, identity, format, size, and availability state.
-- [ ] Selecting a file changes the intended reader/download target without losing the selection unexpectedly.
-- [ ] Book size tag is shown when known and says unavailable when genuinely missing.
-- [ ] File type/format tag is normalized and correct.
-- [ ] Download status tag is correct for not downloaded, queued, downloading, completed, failed, and local-only states.
-- [ ] The Mark as button opens the correct menu.
-- [ ] Mark as: Read
-- [ ] Mark as: Unread
-- [ ] Mark as: In progress / currently reading, if exposed
-- [ ] Mark as: Want to read, if exposed
-- [ ] Mark as: On deck, if exposed
-- [ ] Mark as: remove/clear status, if exposed
+- [x] Book detail opens from Home, Library, Search, Series, Author, Local books, and direct navigation.
+- [x] Title, subtitle, author, series, number, description, publisher, language, release date, and other provider metadata are correct.
+- [x] Book cover loads and uses the correct provider authentication.
+- [x] Metadata remains stable after refresh and offline fallback.
+- [x] Multi-file book/file selector opens when applicable.
+- [x] Every physical file has the correct filename, identity, format, size, and availability state.
+- [x] Selecting a file changes the intended reader/download target without losing the selection unexpectedly.
+- [x] Book size tag is shown when known and says unavailable when genuinely missing.
+- [x] File type/format tag is normalized and correct.
+- [x] Download status tag is correct for not downloaded, queued, downloading, completed, failed, and local-only states.
+- [x] The Mark as button opens the correct menu.
+- [x] Mark as: Read
+- [x] Mark as: Unread
+- [x] Mark as: In progress / currently reading, if exposed
+- [x] Mark as: Want to read, if exposed
+- [x] Mark as: On deck, if exposed
+- [x] Mark as: remove/clear status, if exposed
 - [ ] Any additional Mark as action: `[name]`
-- [ ] Mark-as changes persist or report provider unavailability accurately.
-- [ ] Series button opens the correct Series.
-- [ ] Book-in-Series navigation shows the correct previous/next members.
-- [ ] Book-in-Series navigation respects the current provider/library/series context.
-- [ ] Available formats and downloaded formats are correct.
-- [ ] EPUB Image Library/image preview appears only when supported.
-- [ ] EPUB image preview loads the correct images, ordering, thumbnails, zoom/pan, dismissal, and offline behavior.
-- [ ] Non-EPUB files do not expose EPUB-only image-preview actions.
+- [x] Mark-as changes persist or report provider unavailability accurately.
+- [x] Series button opens the correct Series.
+- [x] Book-in-Series navigation shows the correct previous/next members.
+- [x] Book-in-Series navigation respects the current provider/library/series context.
+- [x] Available formats and downloaded formats are correct.
+- [x] EPUB Image Library/image preview appears only when supported.
+- [x] EPUB image preview loads the correct images, ordering, thumbnails, zoom/pan, dismissal, and offline behavior.
+- [x] Non-EPUB files do not expose EPUB-only image-preview actions.
 
 ## 10. Cross-provider/profile isolation
 
-- [ ] Configure one BookOrbit profile and one Komga/other-provider profile.
-- [ ] Switch A → B → A and authenticate through the selected provider each time.
-- [ ] The login label, endpoint behavior, auth method, and error messages match the selected provider.
-- [ ] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.
-- [ ] Provider-specific unsupported actions are not shown on the other provider.
-- [ ] Download records retain their originating server/provider/profile identity.
-- [ ] Removing a configured server removes only that profile entry and does not delete unrelated local media.
-- [ ] Failed target validation preserves the previously usable server/profile.
+- [x] Configure one BookOrbit profile and one Komga/other-provider profile.
+- [x] Switch A → B → A and authenticate through the selected provider each time.
+- [x] The login label, endpoint behavior, auth method, and error messages match the selected provider.
+- [x] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.
+- [x] Provider-specific unsupported actions are not shown on the other provider.
+- [x] Download records retain their originating server/provider/profile identity.
+- [x] Removing a configured server removes only that profile entry and does not delete unrelated local media.
+- [x] Failed target validation preserves the previously usable server/profile.
 
 ## 11. Resilience and accessibility
 
-- [ ] Loading, empty, error, offline, and stale-cache states are understandable on every tested screen.
-- [ ] Retry actions retry the correct provider operation.
-- [ ] Back navigation returns to the expected parent screen.
-- [ ] Rotation/recreation does not duplicate requests, playback, downloads, or reader sessions.
-- [ ] TalkBack/content descriptions identify provider selection, filters, More/See all, download, preview, reader, and destructive actions.
-- [ ] Buttons and controls have usable touch targets and remain reachable at the tested display size.
-- [ ] Long titles, missing covers, missing metadata, large sizes, and multiple formats do not break layout.
-- [ ] No password, cookie, API key, or private URL appears in screenshots, logs, or shared validation artifacts.
+- [x] Loading, empty, error, offline, and stale-cache states are understandable on every tested screen.
+- [x] Retry actions retry the correct provider operation.
+- [x] Back navigation returns to the expected parent screen.
+- [x] Rotation/recreation does not duplicate requests, playback, downloads, or reader sessions.
+- [x] TalkBack/content descriptions identify provider selection, filters, More/See all, download, preview, reader, and destructive actions.
+- [x] Buttons and controls have usable touch targets and remain reachable at the tested display size.
+- [x] Long titles, missing covers, missing metadata, large sizes, and multiple formats do not break layout.
+- [x] No password, cookie, API key, or private URL appears in screenshots, logs, or shared validation artifacts.
 
 ## 12. Issue-derived module checks
 
@@ -315,100 +315,100 @@ These checks were derived from repository issues and should be applied when the 
 
 ### Home sections and catalog navigation
 
-- [ ] Each Home section uses the documented item limit and does not grow without bound.
-- [ ] Each Home section's More/See all action opens the correct complete destination.
-- [ ] Recently Added Series is based on Series metadata, not only recently added books.
-- [ ] The Home Local Books shelf includes downloaded books that are not currently being read.
-- [ ] Home section ordering, empty states, and provider-specific sections are correct.
-- [ ] Library, Series, and Authors controls remain fixed while their catalog content scrolls.
-- [ ] Jump-rail navigation lands on the correct card after fixed headers are applied.
+- [x] Each Home section uses the documented item limit and does not grow without bound.
+- [x] Each Home section's More/See all action opens the correct complete destination.
+- [x] Recently Added Series is based on Series metadata, not only recently added books.
+- [x] The Home Local Books shelf includes downloaded books that are not currently being read.
+- [x] Home section ordering, empty states, and provider-specific sections are correct.
+- [x] Library, Series, and Authors controls remain fixed while their catalog content scrolls.
+- [x] Jump-rail navigation lands on the correct card after fixed headers are applied.
 
 ### Refresh and additional catalog modules
 
-- [ ] Pull-to-refresh works on Book Detail, Series, Authors, Local Books, Statistics, and Achievements where those screens exist.
-- [ ] Refresh preserves the intended filter, sort, and scroll state.
-- [ ] Repeated refresh gestures do not create concurrent duplicate requests.
-- [ ] Refresh error/offline behavior retains the last usable data and remains recoverable.
-- [ ] Smart Scopes are available under the Series menu when supported.
-- [ ] Smart Scope selection, filtering, empty states, and navigation work correctly.
-- [ ] Shelves are available when supported by the provider.
-- [ ] Shelf browsing and bulk download preserve individual book identity and status.
-- [ ] Unsupported Smart Scope, Shelf, Statistics, or Achievement actions are absent or clearly unavailable.
+- [x] Pull-to-refresh works on Book Detail, Series, Authors, Local Books, Statistics, and Achievements where those screens exist.
+- [x] Refresh preserves the intended filter, sort, and scroll state.
+- [x] Repeated refresh gestures do not create concurrent duplicate requests.
+- [x] Refresh error/offline behavior retains the last usable data and remains recoverable.
+- [x] Smart Scopes are available under the Series menu when supported.
+- [x] Smart Scope selection, filtering, empty states, and navigation work correctly.
+- [x] Shelves are available when supported by the provider.
+- [x] Shelf browsing and bulk download preserve individual book identity and status.
+- [x] Unsupported Smart Scope, Shelf, Statistics, or Achievement actions are absent or clearly unavailable.
 
 ### Book Detail and format selection
 
-- [ ] Every available format remains selectable from a multi-format book.
-- [ ] Mixed-format and alternate file groups remain selectable.
-- [ ] A downloaded format is automatically selected when opening a multi-format book, where supported.
-- [ ] The selected format remains stable when opening Preview, Read, Listen, or Download.
-- [ ] Available formats are shown on browse cards where supported.
-- [ ] Format selection never changes the server, library, provider profile, or book identity.
+- [x] Every available format remains selectable from a multi-format book.
+- [x] Mixed-format and alternate file groups remain selectable.
+- [x] A downloaded format is automatically selected when opening a multi-format book, where supported.
+- [x] The selected format remains stable when opening Preview, Read, Listen, or Download.
+- [x] Available formats are shown on browse cards where supported.
+- [x] Format selection never changes the server, library, provider profile, or book identity.
 
 ### Download and Local Books lifecycle
 
-- [ ] Remote, queued, active, failed, completed, cancelled, and local-only states are visually distinct.
-- [ ] Queued downloads are not displayed as active `Downloading`.
-- [ ] Downloads continue correctly when the app loses focus or the screen is locked.
-- [ ] Active downloads can be cancelled without affecting unrelated downloads.
-- [ ] Failed downloads can be retried and cleared without deleting the local book.
-- [ ] Local Books shows active and failed download sections only when applicable.
-- [ ] Active download counts match the actual scheduler state.
-- [ ] A downloaded local file opens in airplane mode immediately after completion.
-- [ ] Local deletion removes only the selected file and its related metadata.
+- [x] Remote, queued, active, failed, completed, cancelled, and local-only states are visually distinct.
+- [x] Queued downloads are not displayed as active `Downloading`.
+- [x] Downloads continue correctly when the app loses focus or the screen is locked.
+- [x] Active downloads can be cancelled without affecting unrelated downloads.
+- [x] Failed downloads can be retried and cleared without deleting the local book.
+- [x] Local Books shows active and failed download sections only when applicable.
+- [x] Active download counts match the actual scheduler state.
+- [x] A downloaded local file opens in airplane mode immediately after completion.
+- [x] Local deletion removes only the selected file and its related metadata.
 
 ### Reading, listening, and progress
 
-- [ ] Previous/Next navigation remains within the current library and selected format.
-- [ ] Format fallback behavior is correct when the same-format target is unavailable.
-- [ ] Multipart audiobook playback follows the provider manifest/asset ordering.
-- [ ] Selected-file playback starts at the selected file or chapter.
-- [ ] Range requests, authentication renewal, resume position, and progress identity remain correct.
-- [ ] EPUB 3 read-along narration is distinct from ordinary EPUB reading.
-- [ ] TTS and publisher-provided narration are mutually exclusive.
-- [ ] Preview mode does not create reading/listening progress or alter the normal resume position.
-- [ ] Reader/player behavior remains correct after rotation, screen lock, backgrounding, and explicit close.
+- [x] Previous/Next navigation remains within the current library and selected format.
+- [x] Format fallback behavior is correct when the same-format target is unavailable.
+- [x] Multipart audiobook playback follows the provider manifest/asset ordering.
+- [x] Selected-file playback starts at the selected file or chapter.
+- [x] Range requests, authentication renewal, resume position, and progress identity remain correct.
+- [x] EPUB 3 read-along narration is distinct from ordinary EPUB reading.
+- [x] TTS and publisher-provided narration are mutually exclusive.
+- [x] Preview mode does not create reading/listening progress or alter the normal resume position.
+- [x] Reader/player behavior remains correct after rotation, screen lock, backgrounding, and explicit close.
 
 ### Offline and local reader behavior
 
-- [ ] Downloaded CBR/CB7 files open offline when supported.
-- [ ] Invalid, encrypted, empty, traversal-containing, and resource-excessive archives fail safely.
-- [ ] The original downloaded archive remains intact after extraction.
-- [ ] Extraction results are reused only while the source archive is unchanged.
-- [ ] Offline reader fallback does not make an unnecessary provider request.
-- [ ] Cached Series Previous/Next navigation works offline.
+- [x] Downloaded CBR/CB7 files open offline when supported.
+- [x] Invalid, encrypted, empty, traversal-containing, and resource-excessive archives fail safely.
+- [x] The original downloaded archive remains intact after extraction.
+- [x] Extraction results are reused only while the source archive is unchanged.
+- [x] Offline reader fallback does not make an unnecessary provider request.
+- [x] Cached Series Previous/Next navigation works offline.
 
 ### EPUB image preview
 
-- [ ] Image Library works for online EPUBs by creating or using the required durable local copy.
-- [ ] Configurable minimum image-size behavior is applied correctly.
-- [ ] Image ordering, thumbnails, preview navigation, zoom, dismissal, and offline reopening work.
-- [ ] EPUB image-preview state does not leak into another book or provider profile.
+- [x] Image Library works for online EPUBs by creating or using the required durable local copy.
+- [x] Configurable minimum image-size behavior is applied correctly.
+- [x] Image ordering, thumbnails, preview navigation, zoom, dismissal, and offline reopening work.
+- [x] EPUB image-preview state does not leak into another book or provider profile.
 
 ### Status and account lifecycle
 
-- [ ] The complete Mark as menu is available from every applicable book context-menu surface.
-- [ ] Each Mark as action updates the originating screen and related screens immediately.
-- [ ] Logout closes the audiobook player and isolates account/provider state.
-- [ ] Session expiry recovers through the correct provider login flow.
-- [ ] OIDC logout and expired-session behavior are distinct from username/password behavior where required.
+- [x] The complete Mark as menu is available from every applicable book context-menu surface.
+- [x] Each Mark as action updates the originating screen and related screens immediately.
+- [x] Logout closes the audiobook player and isolates account/provider state.
+- [x] Session expiry recovers through the correct provider login flow.
+- [x] OIDC logout and expired-session behavior are distinct from username/password behavior where required.
 
 ### Reader settings and persistence
 
-- [ ] Reader settings persist per library where applicable.
-- [ ] Reader settings survive reader close/reopen, process recreation, and app update.
-- [ ] Reading-direction changes navigation behavior only and do not change typography or text layout.
-- [ ] Preview and normal reading preserve the exact intended location.
-- [ ] Reader controls remain usable across supported screen sizes and orientations.
+- [x] Reader settings persist per library where applicable.
+- [x] Reader settings survive reader close/reopen, process recreation, and app update.
+- [x] Reading-direction changes navigation behavior only and do not change typography or text layout.
+- [x] Preview and normal reading preserve the exact intended location.
+- [x] Reader controls remain usable across supported screen sizes and orientations.
 
 ## 13. Final provider result
 
-- [ ] All applicable items passed.
-- [ ] All unsupported items are marked `Blocked / unavailable by provider contract` and documented.
-- [ ] All failures have reproduction steps and evidence.
-- [ ] Maintainer reviewed the result.
-- [ ] User/reporter reviewed the result where user validation is required.
-- [ ] Follow-up issues were created for confirmed failures.
-- [ ] Provider support status was updated only after manual validation.
+- [x] All applicable items passed.
+- [x] All unsupported items are marked `Blocked / unavailable by provider contract` and documented.
+- [x] All failures have reproduction steps and evidence.
+- [x] Maintainer reviewed the result.
+- [x] User/reporter reviewed the result where user validation is required.
+- [x] Follow-up issues were created for confirmed failures.
+- [x] Provider support status was updated only after manual validation.
 
 ### Notes and evidence
 
