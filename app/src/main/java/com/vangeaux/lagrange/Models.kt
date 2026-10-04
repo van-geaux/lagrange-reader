@@ -92,6 +92,11 @@ internal val BOOK_READ_STATUS_OPTIONS: List<BookReadStatus> = listOf(
     BookReadStatus.SKIMMED
 )
 
+internal val KOMGA_READ_STATUS_OPTIONS: List<BookReadStatus> = listOf(
+    BookReadStatus.UNREAD,
+    BookReadStatus.READ
+)
+
 internal fun BookReadStatus.displayLabel(): String = when (this) {
     BookReadStatus.UNREAD -> "Unread"
     BookReadStatus.WANT_TO_READ -> "Want to read"
@@ -182,6 +187,7 @@ data class BookSummary(
     val lastReadAtMillis: Long? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
+    val readerLocatorJson: String? = null,
     val audioChapters: List<AudiobookChapter> = emptyList(),
     val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT,
     val isServerMissing: Boolean = false,
@@ -699,6 +705,7 @@ data class BrowserState(
     val selectedLibraryId: String?,
     val books: List<BookSummary>,
     val homeBooks: List<BookSummary> = books,
+    val homeShelves: HomeShelfData = HomeShelfData(),
     val booksTotal: Int? = null,
     val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,
@@ -722,6 +729,12 @@ data class BrowserState(
     val debugPendingProgressCount: Int = 0,
     val isOfflineSnapshot: Boolean = false,
     val message: String? = null
+)
+
+data class HomeShelfData(
+    val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
+    val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
+    val isServerProvided: Boolean = false
 )
 
 enum class ReaderLaunchMode {

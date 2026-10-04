@@ -284,7 +284,11 @@ private fun BookOrbitDestination(
         is AppScreen.Startup -> StartupScreen(screen.message)
         is AppScreen.ServerSetup -> ServerSetupScreen(
             initialServerUrl = screen.serverUrl,
+            initialServerName = screen.serverName,
+            initialProviderId = screen.providerId,
+            configuredServerProfiles = coordinator.configuredServerProfiles(),
             message = screen.message,
+            onSwitchServer = coordinator::switchToServerProfile,
             onContinue = coordinator::saveServer
         )
         is AppScreen.Login -> if (screen.oidcSignIn != null) {
@@ -307,9 +311,11 @@ private fun BookOrbitDestination(
         } else {
             LoginScreen(
                 serverUrl = screen.serverUrl,
+                configuredServerProfiles = coordinator.configuredServerProfiles(),
                 message = screen.message,
                 isSubmitting = screen.isSubmitting,
-                onChangeServer = coordinator::clearServer,
+                onSwitchServer = coordinator::switchToServerProfile,
+                onNewServer = coordinator::clearServer,
                 onSubmit = coordinator::submitLogin,
                 onOpenOidcSignIn = coordinator::openOidcSignIn
             )
@@ -322,7 +328,10 @@ private fun BookOrbitDestination(
             onRefresh = coordinator::refreshBrowser,
             onSignIn = coordinator::beginSignIn,
             onSignOut = coordinator::signOut,
-            onChangeServer = coordinator::changeServer,
+            onNewServer = coordinator::clearServer,
+            serverProfilesLoader = coordinator::configuredServerProfiles,
+            onSwitchServer = coordinator::switchToServerProfile,
+            onRemoveServer = coordinator::removeServerProfile,
             onLibrarySelected = coordinator::selectLibrary,
             searchBooks = coordinator::searchBooks,
             localBooksLoader = coordinator::loadLocalBooks,
@@ -337,12 +346,15 @@ private fun BookOrbitDestination(
             serverReadingSessionsLoader = coordinator::loadBookReadingSessions,
             serverReadingAttemptsLoader = coordinator::loadBookReadingAttempts,
             onBookUserRatingChange = coordinator::setBookUserRating,
+            userRatingAvailable = coordinator.userRatingAvailable(),
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
             smartScopesLoader = coordinator::loadSmartScopes,
+            smartScopesAvailable = coordinator.smartScopesAvailable(),
             smartScopeSeriesCatalogLoader = coordinator::loadSmartScopeSeriesCatalog,
             smartScopeSeriesDetailLoader = coordinator::loadSmartScopeSeriesDetail,
             authorsCatalogLoader = coordinator::loadAuthorsCatalog,
+            authorsAvailable = coordinator.authorsAvailable(),
             authorBooksLoader = coordinator::loadAuthorBooks,
             annotationsLoader = coordinator::loadAnnotations,
             onAnnotationSelected = coordinator::openAnnotation,
@@ -351,7 +363,9 @@ private fun BookOrbitDestination(
             onRestoreAnnotation = coordinator::restoreAnnotation,
             onPurgeAnnotation = coordinator::purgeAnnotation,
             achievementsLoader = coordinator::loadAchievements,
+            achievementsAvailable = coordinator.achievementsAvailable(),
             statisticsLoader = coordinator::loadUserStatistics,
+            statisticsAvailable = coordinator.statisticsAvailable(),
             catalogImageLoader = coordinator::loadCatalogImage,
             onBookOpen = coordinator::openBook,
             onPreview = coordinator::previewBook,
@@ -368,7 +382,8 @@ private fun BookOrbitDestination(
             onRemoveFromCurrentlyReading = coordinator::removeFromCurrentlyReading,
             onMarkAsRead = coordinator::markBookAsRead,
             onMarkAsUnread = coordinator::markBookAsUnread,
-            onMarkAsStatus = coordinator::setBookReadingStatus,
+            onMarkAsStatus = coordinator::setBookReadingStatus.takeIf { coordinator.extendedReadingStatusesAvailable() },
+            readingStatusOptions = coordinator.readingStatusOptions(),
             appPreferences = appPreferences,
             onAppPreferencesChange = onAppPreferencesChange,
             releaseCheckStatus = releaseCheckStatus,
@@ -738,11 +753,12 @@ private fun ReaderScreen(
                 initialAnnotationId = state.annotationId,
                 initialAnnotationColor = state.annotationColor,
                 initialAnnotationStyle = state.annotationStyle,
-                onProgress = { chapterIndex, pageIndex, pageCount, percent ->
+                onProgress = { chapterIndex, pageIndex, pageCount, percent, locatorJson ->
                     readerProgress(
                         state.book.copy(
                             readerPageIndex = pageIndex,
-                            readerPageCount = pageCount
+                            readerPageCount = pageCount,
+                            readerLocatorJson = locatorJson
                         ),
                         0L,
                         chapterIndex,

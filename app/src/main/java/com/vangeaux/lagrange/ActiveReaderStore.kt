@@ -1,16 +1,12 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import com.vangeaux.lagrange.core.ActiveReaderSession
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-
-internal data class ActiveReaderSession(
-    val book: BookSummary,
-    val launchMode: ReaderLaunchMode
-)
 
 class ActiveReaderStore private constructor(
     private val file: File,
@@ -129,6 +125,7 @@ class ActiveReaderStore private constructor(
             }.orEmpty()
         )
         ActiveReaderSession(
+            serverUrl = serverUrl,
             book = restoredBook,
             launchMode = runCatching {
                 ReaderLaunchMode.valueOf(root.optString("launchMode"))

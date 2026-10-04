@@ -1,5 +1,8 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
+import com.vangeaux.lagrange.core.DownloadModule
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -93,8 +96,10 @@ internal interface DownloadScheduler {
  * `activeDownloads` map behavior.
  */
 internal class InProcessDownloadScheduler(
-    private val repository: BookOrbitDataSource
+    private val downloadModule: DownloadModule
 ) : DownloadScheduler {
+    constructor(repository: BookOrbitDataSource) : this(resolveProviderDownloadModule(repository))
+
     private data class PendingDownload(
         val serverUrl: String,
         val book: BookSummary,
@@ -127,7 +132,7 @@ internal class InProcessDownloadScheduler(
         activeFileId = next.fileId
         val job = scope.launch(start = CoroutineStart.LAZY) {
             val result = runCatching {
-                repository.downloadBook(next.book) { progress -> next.onProgress(progress) }
+                downloadModule.downloadBook(next.book) { progress -> next.onProgress(progress) }
             }
             result
                 .onSuccess { next.onOutcome(DownloadOutcome.Success(it)) }

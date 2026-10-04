@@ -7,10 +7,13 @@ sealed interface AppScreen {
     ) : AppScreen
     data class ServerSetup(
         val serverUrl: String = "",
-        val message: String? = null
+        val serverName: String = "",
+        val message: String? = null,
+        val providerId: String = PROVIDER_BOOKORBIT
     ) : AppScreen
     data class Login(
         val serverUrl: String,
+        val providerId: String = PROVIDER_BOOKORBIT,
         val message: String? = null,
         val isSubmitting: Boolean = false,
         val serverSignIn: ServerSignInState? = null,

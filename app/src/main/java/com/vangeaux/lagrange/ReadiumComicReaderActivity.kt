@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+
+
 import android.app.Activity
 import android.content.ComponentCallbacks2
 import android.content.Context
@@ -71,6 +73,7 @@ import org.readium.r2.shared.util.http.HttpContainer
 import org.readium.r2.shared.util.mediatype.MediaType
 import org.readium.r2.shared.util.resource.Resource
 import org.readium.r2.streamer.PublicationOpener
+import com.vangeaux.lagrange.provider.resolveActiveProviderAuthenticatedMediaModule
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
@@ -142,11 +145,11 @@ internal suspend fun openReadiumRemoteComic(
     if (pageUrls.size != pageCount) {
         return@withContext ReadiumComicOpenResult.Error("A comic page URL is invalid.")
     }
-    val client = httpClient ?: BookOrbitRepository(context.applicationContext).let { repository ->
+    val client = httpClient ?: resolveActiveProviderAuthenticatedMediaModule(context.applicationContext).let { media ->
         AuthenticatedReadiumHttpClient(
             delegate = DefaultHttpClient(),
-            headersProvider = { url -> repository.streamingRequestHeaders(url.toString()) },
-            recoverAuthentication = repository::recoverStreamingAuthentication
+            headersProvider = { url -> media.requestHeaders(url.toString()) },
+            recoverAuthentication = media::recoverAuthentication
         )
     }
     val manifest = Manifest(

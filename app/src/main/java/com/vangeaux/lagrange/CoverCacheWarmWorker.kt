@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+
+
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -11,6 +13,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.vangeaux.lagrange.provider.resolveProviderBackgroundCacheModule
+import com.vangeaux.lagrange.provider.resolveProviderRepository
 
 class CoverCacheWarmWorker(
     context: Context,
@@ -29,7 +33,11 @@ class CoverCacheWarmWorker(
         if (serverUrl.isBlank() || libraryId.isBlank()) return Result.success()
 
         return try {
-            val nextIndex = BookOrbitRepository(applicationContext).warmCoverCacheBatch(
+            val cacheModule = resolveProviderBackgroundCacheModule(
+                resolveProviderRepository(applicationContext, serverUrl)
+            )
+            if (!cacheModule.isAvailable) return Result.success()
+            val nextIndex = cacheModule.warmCoverCacheBatch(
                 expectedServerUrl = serverUrl,
                 libraryId = libraryId,
                 startIndex = startIndex,

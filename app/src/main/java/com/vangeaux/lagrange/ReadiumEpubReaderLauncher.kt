@@ -39,7 +39,7 @@ internal fun ReadiumEpubReaderLauncher(
     initialAnnotationId: String? = null,
     initialAnnotationColor: String? = null,
     initialAnnotationStyle: String? = null,
-    onProgress: (chapterIndex: Int, pageIndex: Int, pageCount: Int, percent: Float?) -> Unit,
+    onProgress: (chapterIndex: Int, pageIndex: Int, pageCount: Int, percent: Float?, locatorJson: String?) -> Unit,
     onFinished: () -> Unit
 ) {
     val context = LocalContext.current
@@ -56,7 +56,8 @@ internal fun ReadiumEpubReaderLauncher(
                 progress.chapterIndex,
                 progress.pageIndex,
                 progress.pageCount,
-                progress.percent
+                progress.percent,
+                progress.locatorJson
             )
         }
         val reason = readerCompletionReason(

@@ -32,7 +32,7 @@ internal fun FragmentActivity.addReadiumAudioPlayerOverlay(
                     },
                     onClosed = { _, _ ->
                         lifecycleScope.launch {
-                            BookOrbitRepository(applicationContext).clearActiveReader()
+                            ReaderLifecycleModuleImpl(applicationContext).clearActiveReader()
                         }
                     },
                     onCoverClick = { book ->

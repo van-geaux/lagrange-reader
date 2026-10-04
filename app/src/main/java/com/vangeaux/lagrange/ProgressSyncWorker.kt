@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -10,9 +12,10 @@ class ProgressSyncWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         return runCatching {
-            when (BookOrbitRepository(applicationContext).syncPendingProgress()) {
+            when (resolveActiveProviderReadingProgressModule(applicationContext).syncPendingProgress()) {
                 SyncAttemptResult.Success,
-                SyncAttemptResult.AuthenticationBlocked -> Result.success()
+                SyncAttemptResult.AuthenticationBlocked,
+                SyncAttemptResult.Unsupported -> Result.success()
                 SyncAttemptResult.TransientFailure -> Result.retry()
             }
         }.getOrElse {

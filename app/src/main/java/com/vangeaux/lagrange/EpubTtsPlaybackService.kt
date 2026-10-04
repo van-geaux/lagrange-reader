@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.*
+
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -566,20 +568,27 @@ class EpubTtsPlaybackService : Service() {
         lastQueuedChapter = chapter
         val job = scope.launch(Dispatchers.IO) {
             if (!isSpecCurrent(spec)) return@launch
-            BookOrbitRepository(applicationContext).queueProgress(
-                book = BookSummary(
-                    libraryId = spec.libraryId,
-                    id = currentBookId,
-                    fileId = currentFileId,
-                    title = spec.title,
-                    format = "epub",
-                    mediaKind = MediaKind.EPUB,
-                    localPath = spec.filePath
-                ),
-                position = 0L,
-                pageIndex = chapter,
-                progressPercent = percent
-            )
+            runCatching {
+                resolveActiveProviderReadingProgressModule(applicationContext).queueProgress(
+                    book = BookSummary(
+                        libraryId = spec.libraryId,
+                        id = currentBookId,
+                        fileId = currentFileId,
+                        title = spec.title,
+                        format = "epub",
+                        mediaKind = MediaKind.EPUB,
+                        localPath = spec.filePath,
+                        readerLocatorJson = locator.toJSON().toString()
+                    ),
+                    position = 0L,
+                    pageIndex = chapter,
+                    progressPercent = percent
+                )
+            }.onFailure { error ->
+                if (error !is kotlinx.coroutines.CancellationException) {
+                    android.util.Log.w("EpubTts", "Komga progress synchronization failed", error)
+                }
+            }
         }
         progressJobs += job
         job.invokeOnCompletion { progressJobs -= job }

@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+
+
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -13,8 +15,11 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.vangeaux.lagrange.provider.resolveProviderBackgroundCacheModule
+import com.vangeaux.lagrange.provider.resolveProviderBookCatalogModule
+import com.vangeaux.lagrange.provider.resolveProviderRepository
 
-internal data class OfflineCacheBatchResult(
+data class OfflineCacheBatchResult(
     val nextIndex: Int?,
     val processed: Int,
     val downloaded: Int,
@@ -109,18 +114,23 @@ class OfflineCacheSyncWorker(
             fail(applicationContext, "Select Book details, Cover thumbnails, or both.")
             return Result.success()
         }
-
-        val repository = BookOrbitRepository(applicationContext)
+        val repository = resolveProviderRepository(applicationContext, serverUrl)
+        val catalogModule = resolveProviderBookCatalogModule(repository)
+        val cacheModule = resolveProviderBackgroundCacheModule(repository)
+        if (!cacheModule.isAvailable) {
+            finish(applicationContext)
+            return Result.success()
+        }
         val statusStore = OfflineCacheStatusStore(applicationContext)
         val libraryId = libraryIds[libraryIndex]
         return try {
             if (startIndex == 0) {
-                val catalog = repository.refreshLibraryCatalog(libraryId)
+                val catalog = catalogModule.refreshLibraryCatalog(libraryId)
                 statusStore.update {
                     it.copy(total = maxOf(it.total, it.processed + catalog.items.size))
                 }
             }
-            val batch = repository.warmOfflineCacheBatch(
+            val batch = cacheModule.warmOfflineCacheBatch(
                 expectedServerUrl = serverUrl,
                 libraryId = libraryId,
                 startIndex = startIndex,
@@ -300,7 +310,7 @@ class OfflineCacheAutoRefreshWorker(
     override suspend fun doWork(): Result {
         val preferences = AppPreferencesStore(applicationContext).read()
         if (!preferences.offlineCacheAutoRefreshEnabled) return Result.success()
-        val serverUrl = BookOrbitRepository(applicationContext).getServerUrl().orEmpty()
+        val serverUrl = ServerProfileStore(applicationContext).active()?.serverUrl.orEmpty()
         OfflineCacheSyncWorker.enqueueAutomatic(applicationContext, serverUrl, preferences)
         return Result.success()
     }
