@@ -103,9 +103,9 @@ Cross-library Home behavior:
 
 - [x] Library screen opens for the selected provider.
 - [x] Library selection dropdown opens and lists all accessible libraries.
-- [ ] Selecting a library reloads the correct catalog. The implementation now scopes Libraries → Recommended to the selected library; manual validation remains pending for issue #201.
+- [x] Selecting a library reloads the correct catalog. The user confirmed Libraries → Recommended now scopes Currently reading, Recently added books, Recently added series, Recently read books, and Local books to the selected library after issue #201; device/build identifiers were not supplied.
 - [x] Selected library state persists after navigation and app restart where supported.
-- [ ] Switching libraries does not display books from the previous library. The implementation now scopes Libraries → Recommended to the selected library; manual validation remains pending for issue #201.
+- [x] Switching libraries does not display books from the previous library. The user confirmed switching Libraries → Recommended replaces the previous library's shelf content after issue #201; device/build identifiers were not supplied.
 - [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
 - [x] Book list refresh works.
 - [ ] Load more/paging reaches the correct end of the catalog.
