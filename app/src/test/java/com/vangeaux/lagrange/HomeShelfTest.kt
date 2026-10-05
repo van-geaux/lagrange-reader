@@ -11,6 +11,7 @@ import com.vangeaux.lagrange.provider.komga.komgaOfflineBrowserState
 import com.vangeaux.lagrange.provider.komga.komgaMergeDownloadedBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesCatalogFromBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesDetailFromBooks
+import com.vangeaux.lagrange.provider.komga.komgaBookProjection
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -20,6 +21,28 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HomeShelfTest {
+    @Test
+    fun `komga home payload exposes format and page progress when media files are omitted`() {
+        val projection = komgaBookProjection(
+            JSONObject(
+                """
+                {
+                  "id": "book-1",
+                  "libraryId": "library-1",
+                  "metadata": {"title": "Book"},
+                  "media": {"mediaType": "application/pdf", "pagesCount": 40},
+                  "readProgress": {"page": 10, "completed": false}
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals("pdf", projection.format)
+        assertEquals(MediaKind.PDF, projection.mediaKind)
+        assertEquals(listOf("PDF"), projection.availableFormats)
+        assertEquals(25f, projection.readState.progressPercent)
+    }
+
     @Test
     fun `recently read see all keeps every page in the complete projection`() = runBlocking {
         val books = (1..3).map { index ->

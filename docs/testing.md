@@ -86,6 +86,8 @@ On Home and Library → Recommended, verify Currently reading, On deck, Want to 
 
 For any browse surface containing a multi-format book or series, verify the card shows readable available formats beneath the cover in the order `EPUB`, `KEPUB`, `PDF`, comic formats, then `AUDIO`, with duplicates removed and unsupported formats omitted. Verify a short label remains stationary, a long label stays on one line and marquee-scrolls, Reduce motion keeps it stationary, the format text uses the theme primary color, and no format label appears when supported format data is absent. Verify every book-card surface marks completed downloaded formats that are present in the book's available-format list immediately before the matching label with the Material check-circle icon, bold text, and primary color. Specifically test a primary EPUB record with a completed M4B download, which must mark `AUDIO`; also test completed PDF and CBZ downloads, including multiple formats. Verify series-level cards show no downloaded markers, while books inside a series do. Verify accessibility announcements identify downloaded formats. Confirm Book Detail remains unchanged.
 
+For Komga, repeat the check on Home and Libraries → Recommended with a book whose media payload supplies `mediaType`, `pagesCount`, and `readProgress` but omits `media.files`. Confirm the format label still appears, a completed local download shows its check mark, and a non-zero page position produces the yellow cover progress bar. This requires manual provider/device validation; the automated regression covers the payload projection and download enrichment boundaries.
+
 ### Download lifecycle
 
 On a connected device or emulator, verify from Home, Library, Search, Series, Authors, Genre, and Local books:
