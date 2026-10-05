@@ -322,6 +322,16 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         }
         val detail = loadBookDetail(book)
         val resolvedBook = detail.book
+        if (resolvedBook.mediaKind == MediaKind.COMIC) {
+            return ReaderState(
+                book = resolvedBook,
+                comicPagesUrl = "${getServerUrl().orEmpty().trimEnd('/')}/api/v1/books/${resolvedBook.id}/pages?zero_based=true",
+                pageIndex = komgaReaderPageIndex(resolvedBook),
+                progressPercent = resolvedBook.progressPercent,
+                serverProgressAuthoritative = true,
+                initialLocatorJson = resolvedBook.readerLocatorJson
+            )
+        }
         val localFile = downloadBook(resolvedBook) { }
         val readerBook = resolvedBook.copy(localPath = localFile.absolutePath)
         return ReaderState(

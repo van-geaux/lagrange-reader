@@ -137,10 +137,10 @@ internal suspend fun openReadiumRemoteComic(
         return@withContext ReadiumComicOpenResult.Error("BookOrbit reported no comic pages.")
     }
     val normalizedPagesUrl = pagesUrl.trimEnd('/')
-    val baseUrl = AbsoluteUrl(normalizedPagesUrl + "/")
+    val baseUrl = AbsoluteUrl(normalizedPagesUrl.substringBefore('?') + "/")
         ?: return@withContext ReadiumComicOpenResult.Error("The comic page URL is invalid.")
     val pageUrls = (0 until pageCount).mapNotNull { pageIndex ->
-        AbsoluteUrl(normalizedPagesUrl + "/" + pageIndex)
+        AbsoluteUrl(comicPageUrl(normalizedPagesUrl, pageIndex))
     }
     if (pageUrls.size != pageCount) {
         return@withContext ReadiumComicOpenResult.Error("A comic page URL is invalid.")
@@ -173,6 +173,16 @@ internal suspend fun openReadiumRemoteComic(
         )
     }
     ReadiumComicOpenResult.Opened(publication)
+}
+
+internal fun comicPageUrl(pagesUrl: String, pageIndex: Int): String {
+    val normalized = pagesUrl.trimEnd('/')
+    val queryIndex = normalized.indexOf('?')
+    return if (queryIndex < 0) {
+        "$normalized/$pageIndex"
+    } else {
+        normalized.substring(0, queryIndex) + "/$pageIndex" + normalized.substring(queryIndex)
+    }
 }
 
 internal data class ReadiumComicProgressResult(

@@ -69,4 +69,19 @@ class KomgaDownloadContractTest {
         assertTrue(cbz.mediaKind == MediaKind.COMIC)
         assertTrue(cbr.mediaKind == MediaKind.COMIC)
     }
+
+    @Test
+    fun `filename extensions preserve EPUB and PDF format routing`() {
+        val epub = komgaBookProjection(
+            JSONObject("""{"name":"Novel.epub","media":{"mediaType":"application/octet-stream"}}""")
+        )
+        val pdf = komgaBookProjection(
+            JSONObject("""{"name":"Manual.pdf","media":{"mediaType":"application/octet-stream"}}""")
+        )
+
+        assertEquals("epub", epub.format)
+        assertEquals(MediaKind.EPUB, epub.mediaKind)
+        assertEquals("pdf", pdf.format)
+        assertEquals(MediaKind.PDF, pdf.mediaKind)
+    }
 }

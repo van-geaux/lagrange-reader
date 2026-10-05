@@ -144,7 +144,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.io.File
 import java.net.URI
 import java.util.Locale
@@ -2106,8 +2108,11 @@ private sealed interface ComicPageImage {
 
 internal fun parseComicPageCount(payload: ByteArray): Int? {
     return runCatching {
-        JSONObject(payload.toString(Charsets.UTF_8)).optInt("pageCount")
-            .takeIf { it > 0 }
+        when (val root = JSONTokener(payload.toString(Charsets.UTF_8)).nextValue()) {
+            is JSONObject -> root.optInt("pageCount").takeIf { it > 0 }
+            is JSONArray -> root.length().takeIf { it > 0 }
+            else -> null
+        }
     }.getOrNull()
 }
 
