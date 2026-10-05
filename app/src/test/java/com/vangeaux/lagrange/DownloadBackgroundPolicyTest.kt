@@ -134,6 +134,16 @@ class DownloadBackgroundPolicyTest {
         )
         assertEquals("com.vangeaux.lagrange.CANCEL_DOWNLOAD", DOWNLOAD_NOTIFICATION_CANCEL_ACTION)
     }
+
+    @Test
+    fun `server failures that can recover are retried`() {
+        assertTrue(isRetryableDownloadHttpCode(408))
+        assertTrue(isRetryableDownloadHttpCode(429))
+        assertTrue(isRetryableDownloadHttpCode(500))
+        assertTrue(isRetryableDownloadHttpCode(503))
+        assertFalse(isRetryableDownloadHttpCode(400))
+        assertFalse(isRetryableDownloadHttpCode(403))
+    }
     @Test
     fun `persisted attempt restores active download identity`() {
         val book = downloadAttemptBookSummary(

@@ -11,6 +11,8 @@ import android.util.Base64
 
 import com.vangeaux.lagrange.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -822,40 +824,94 @@ class KomgaDownloadModuleImpl(
     private val auth: KomgaAuthModuleImpl
 ) : KomgaDownloadModule {
     private val client = KomgaHttpClient().client
+    private val downloadStore = DownloadStore(context)
 
     override suspend fun downloadBook(serverUrl: String, book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        if (auth.authorizationHeader().isNullOrBlank()) {
+            auth.restoreCurrentProfileSession()
+        }
+        if (auth.authorizationHeader().isNullOrBlank()) {
+            throw AuthenticationRequiredException()
+        }
+        val fileId = book.fileId ?: book.id
+        val existingRecord = downloadStore.find(serverUrl, fileId)
         val target = DownloadStore(context).downloadTarget(
-            fileId = book.fileId ?: book.id,
+            fileId = fileId,
             title = book.title,
             mediaKind = book.mediaKind,
             formatHint = book.format
+        ).let { fallback -> existingRecord?.localPath?.let(::File) ?: fallback }
+        val hadUsableExisting = existingRecord != null && downloadedFilePassesIntegrity(book, target)
+        val canReuseExisting = existingRecord != null &&
+            !downloadUpdateAvailable(book, existingRecord) &&
+            hadUsableExisting
+        downloadStore.saveAttempt(
+            DownloadAttempt(
+                serverUrl = serverUrl,
+                fileId = fileId,
+                bookId = book.id,
+                title = book.title,
+                filename = book.filename,
+                targetPath = target.absolutePath,
+                existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
+                mediaKind = book.mediaKind,
+                mimeType = book.format,
+                sourceUpdatedAtMillis = book.updatedAtMillis
+            )
         )
+        if (canReuseExisting) {
+            downloadStore.removeAttempt(serverUrl, fileId)
+            onProgress(1f)
+            return@withContext target
+        }
         target.parentFile?.mkdirs()
-        val temporary = File(target.path + ".part")
+        val temporary = File(target.parentFile, ".${target.name}.${fileId}.part")
+        if (temporary.exists() && !temporary.delete()) {
+            throw UserFacingException("Unable to clear an interrupted Komga download before retrying.")
+        }
         val request = Request.Builder().url("$base/api/v1/books/${book.id}/file").get()
             .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
             .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to download the Komga book (HTTP ${response.code}).")
-            val body = response.body ?: throw UserFacingException("Komga returned an empty book file.")
-            val total = body.contentLength()
-            var copied = 0L
-            body.byteStream().use { input ->
-                FileOutputStream(temporary).use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        copied += count
-                        onProgress(total.takeIf { it > 0 }?.let { copied.toFloat() / it })
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw HttpRequestException(response.code, "download the Komga book")
+                val body = response.body ?: throw UserFacingException("Komga returned an empty book file.")
+                val total = body.contentLength().takeIf { it > 0L }
+                var copied = 0L
+                onProgress(0f.takeIf { total != null })
+                body.byteStream().use { input ->
+                    FileOutputStream(temporary).use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            copied += count
+                            onProgress(komgaDownloadProgress(copied, total))
+                        }
                     }
                 }
+                if (!temporary.isFile || temporary.length() <= 0L) {
+                    throw UserFacingException("Komga returned an empty book file.")
+                }
+                if (!downloadedFilePassesIntegrity(book, temporary)) {
+                    val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
+                    throw UserFacingException("The downloaded Komga file did not pass integrity checks.$suffix")
+                }
+                onProgress(1f)
             }
+            atomicReplaceDownloadedFile(temporary, target)
+            downloadStore.removeAttempt(serverUrl, fileId)
+        } finally {
+            if (temporary.exists()) temporary.delete()
         }
-        if (target.exists()) target.delete()
-        check(temporary.renameTo(target)) { "Unable to finalize the Komga download." }
         target
     }
 }
+
+internal fun komgaDownloadProgress(copiedBytes: Long, totalBytes: Long?): Float? =
+    totalBytes?.takeIf { it > 0L }?.let { total ->
+        (copiedBytes.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+    }
