@@ -4883,18 +4883,23 @@ private fun HomeFeed(
     localBooksLibraryId: String? = null,
     showHeader: Boolean = false
 ) {
-    val serverShelves = state.homeShelves
-    val currentlyReadingAll = remember(books, serverShelves) {
+    val libraryScopedBooks = remember(books, localBooksLibraryId) {
+        homeFeedBooks(books, localBooksLibraryId)
+    }
+    // Provider Home shelves are server-wide. Library → Recommended must derive
+    // its shelves from the selected library catalog instead of reusing them.
+    val serverShelves = if (localBooksLibraryId == null) state.homeShelves else HomeShelfData()
+    val currentlyReadingAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
-        else currentlyReadingBooks(books, limit = null)
+        else currentlyReadingBooks(libraryScopedBooks, limit = null)
     }
-    val onDeckAll = remember(books, serverShelves) {
+    val onDeckAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
-        else onDeckBooks(books, limit = null)
+        else onDeckBooks(libraryScopedBooks, limit = null)
     }
-    val wantToReadAll = remember(books, serverShelves) {
+    val wantToReadAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.WANT_TO_READ].orEmpty()
-        else wantToReadBooks(books, limit = null)
+        else wantToReadBooks(libraryScopedBooks, limit = null)
     }
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
@@ -4902,15 +4907,15 @@ private fun HomeFeed(
     val recentlyAddedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_ADDED_BOOKS].orEmpty()
     } else {
-        books.sortedWith(
+        libraryScopedBooks.sortedWith(
             compareByDescending<BookSummary> { it.addedAtMillis != null }
                 .thenByDescending { it.addedAtMillis ?: 0L }
         )
     }
-    val fallbackRecentSeries = remember(books) { homeSeriesSummaries(books, useUpdatedAt = false) }
+    val fallbackRecentSeries = remember(libraryScopedBooks) { homeSeriesSummaries(libraryScopedBooks, useUpdatedAt = false) }
     val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
         initialValue = null,
-        books,
+        libraryScopedBooks,
         seriesCatalogLoader,
         serverShelves.isServerProvided
     ) {
@@ -4949,22 +4954,22 @@ private fun HomeFeed(
     } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
-            books = books,
+            books = libraryScopedBooks,
             limit = Int.MAX_VALUE
         )
     }
-    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(books, useUpdatedAt = true, limit = null)
+    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
     val recentlyReadAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_READ].orEmpty()
-    } else recentlyReadBooks(books, limit = null)
+    } else recentlyReadBooks(libraryScopedBooks, limit = null)
     val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
     val recentlyReleasedBooks = recentlyReleasedBooksAll.take(HOME_PREVIEW_LIMIT)
     val recentSeries = recentSeriesAll.take(HOME_PREVIEW_LIMIT)
     val updatedSeries = updatedSeriesAll.take(HOME_PREVIEW_LIMIT)
     val recentlyRead = recentlyReadAll.take(HOME_PREVIEW_LIMIT)
-    val localBooks = remember(books, downloadedLocalBooks, localBooksLibraryId) {
+    val localBooks = remember(libraryScopedBooks, downloadedLocalBooks, localBooksLibraryId) {
         homeLocalBooksPreview(
-            catalogHomeBooks = books,
+            catalogHomeBooks = libraryScopedBooks,
             downloadedBooks = downloadedLocalBooks,
             libraryId = localBooksLibraryId
         )
@@ -5925,6 +5930,9 @@ internal fun homeSectionLibraryIds(
 } else {
     listOfNotNull(selectedLibraryId)
 }
+
+internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
+    libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
 
 @Composable
 private fun HomeSectionScreen(

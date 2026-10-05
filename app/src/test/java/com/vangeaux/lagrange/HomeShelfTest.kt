@@ -40,6 +40,18 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `library recommended feed filters every shelf to the selected library`() {
+        val books = listOf(
+            BookSummary("library-one", "book-1", "file-1", "One"),
+            BookSummary("library-two", "book-2", "file-2", "Two"),
+            BookSummary("manga", "book-3", "file-3", "Manga")
+        )
+
+        assertEquals(listOf("book-1"), homeFeedBooks(books, "library-one").map { it.id })
+        assertEquals(books.map { it.id }, homeFeedBooks(books, null).map { it.id })
+    }
+
+    @Test
     fun `komga home payload exposes format and page progress when media files are omitted`() {
         val projection = komgaBookProjection(
             JSONObject(
