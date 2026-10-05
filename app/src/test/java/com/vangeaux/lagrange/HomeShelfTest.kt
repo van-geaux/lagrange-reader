@@ -52,6 +52,26 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `library recommended filters server shelves and resolves local books to catalog libraries`() {
+        val libraryBook = BookSummary("library-one", "book-1", "file-1", "One", seriesName = "Saga")
+        val otherBook = BookSummary("library-two", "book-2", "file-2", "Two", seriesName = "Other")
+        val shelves = HomeShelfData(
+            booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(libraryBook, otherBook)),
+            seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(libraryBook, otherBook)),
+            isServerProvided = true
+        )
+        val localBook = BookSummary("", "book-1", "file-1", "One", localPath = "/books/one.epub")
+
+        val filtered = homeFeedShelves(shelves, "library-one")
+        assertEquals(listOf("book-1"), filtered.booksBySection[HomeSection.CURRENTLY_READING]?.map { it.id })
+        assertEquals(listOf("book-1"), filtered.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES]?.map { it.id })
+        assertEquals(
+            listOf("book-1"),
+            homeLocalBooksPreview(listOf(libraryBook), listOf(localBook), "library-one").map { it.id }
+        )
+    }
+
+    @Test
     fun `komga home payload exposes format and page progress when media files are omitted`() {
         val projection = komgaBookProjection(
             JSONObject(

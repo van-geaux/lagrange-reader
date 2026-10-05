@@ -805,11 +805,41 @@ internal fun homeLocalBooksPreview(
     downloadedBooks: List<BookSummary>?,
     libraryId: String? = null,
     limit: Int = 12
-): List<BookSummary> = localBooksShelf(
-    books = downloadedBooks ?: catalogHomeBooks,
-    libraryId = libraryId,
-    limit = limit
-)
+): List<BookSummary> {
+    val scopedCatalog = catalogHomeBooks.filter { libraryId == null || it.libraryId == libraryId }
+    val sourceBooks = if (downloadedBooks == null || libraryId == null) {
+        downloadedBooks ?: scopedCatalog
+    } else {
+        downloadedBooks.mapNotNull { localBook ->
+            val catalogBook = scopedCatalog.firstOrNull { catalog ->
+                catalog.id == localBook.id ||
+                    (catalog.fileId != null && catalog.fileId == localBook.fileId)
+            }
+            catalogBook?.copy(
+                localPath = localBook.localPath,
+                updatedAtMillis = localBook.updatedAtMillis ?: catalogBook.updatedAtMillis
+            )
+        }
+    }
+    return localBooksShelf(
+        books = sourceBooks,
+        libraryId = libraryId,
+        limit = limit
+    )
+}
+
+internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeShelfData {
+    if (libraryId == null) return shelves
+    fun scoped(source: Map<HomeSection, List<BookSummary>>): Map<HomeSection, List<BookSummary>> =
+        source.mapValues { (_, books) -> books.filter { it.libraryId == libraryId } }
+    return shelves.copy(
+        booksBySection = scoped(shelves.booksBySection),
+        seriesBySection = scoped(shelves.seriesBySection)
+    )
+}
+
+internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
+    libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
 
 internal fun bookAvailableFormatsForDisplay(
     book: BookSummary
@@ -4886,9 +4916,9 @@ private fun HomeFeed(
     val libraryScopedBooks = remember(books, localBooksLibraryId) {
         homeFeedBooks(books, localBooksLibraryId)
     }
-    // Provider Home shelves are server-wide. Library → Recommended must derive
-    // its shelves from the selected library catalog instead of reusing them.
-    val serverShelves = if (localBooksLibraryId == null) state.homeShelves else HomeShelfData()
+    // Provider Home shelves are server-wide; filter them before rendering a
+    // library Recommended feed instead of reusing aggregate contents.
+    val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
     val currentlyReadingAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
         else currentlyReadingBooks(libraryScopedBooks, limit = null)
@@ -5930,9 +5960,6 @@ internal fun homeSectionLibraryIds(
 } else {
     listOfNotNull(selectedLibraryId)
 }
-
-internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
-    libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
 
 @Composable
 private fun HomeSectionScreen(
