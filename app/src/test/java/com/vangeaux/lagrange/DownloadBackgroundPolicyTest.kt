@@ -125,6 +125,13 @@ class DownloadBackgroundPolicyTest {
     }
 
     @Test
+    fun `notification progress clamps to a visible percentage`() {
+        assertEquals(0, (downloadNotificationProgress(-1f) as DownloadNotificationProgress.Determinate).percent)
+        assertEquals(42, (downloadNotificationProgress(0.425f) as DownloadNotificationProgress.Determinate).percent)
+        assertEquals(100, (downloadNotificationProgress(2f) as DownloadNotificationProgress.Determinate).percent)
+    }
+
+    @Test
     fun `cancel action uses the existing per-file unique work identity`() {
         val serverUrl = "https://example.test"
         val fileId = "file-1"

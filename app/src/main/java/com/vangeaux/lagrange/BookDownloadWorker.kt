@@ -234,6 +234,13 @@ class BookDownloadWorker(
                         if (!progressThrottler.shouldEmit(progress, System.currentTimeMillis())) {
                             return@downloadBook
                         }
+                        updateDownloadNotification(
+                            context = applicationContext,
+                            title = title,
+                            fileId = fileId,
+                            serverUrl = serverUrl,
+                            progress = progress
+                        )
                         launch {
                             val percent = progress?.let { (it * 100f).toInt().coerceIn(0, 100) }
                             setProgress(workDataOf(KEY_PROGRESS to (progress ?: -1f)))

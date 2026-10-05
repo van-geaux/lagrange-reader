@@ -246,7 +246,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [-] Download a multipart or multi-file book where supported. (Komga does not support folder based book)
 - [x] Download progress is accurate and tied to the correct book/file.
 - [x] Queueing multiple downloads preserves order and identity.
-- [!] Background/screen-off download behavior works. (If the app not in active screen, sometimes all downloads immediately fails. I can't find the cause because sometimes it works fine. I also noticed the download progress does not show up in notification.)
+- [!] Background/screen-off download behavior works. (Background and screen-off continuation is now confirmed, but Komga download progress still does not appear in the notification. Keep this item failed until notification progress is confirmed.)
 - [x] Cancel works for active and queued downloads.
 - [ ] Retry works after a failed download.
 - [x] Interrupted downloads recover according to the provider contract.
@@ -350,7 +350,7 @@ These checks were derived from repository issues and should be applied when the 
 
 - [x] Remote, queued, active, failed, completed, cancelled, and local-only states are visually distinct.
 - [x] Queued downloads are not displayed as active `Downloading`.
-- [x] Downloads continue correctly when the app loses focus or the screen is locked.
+- [x] Downloads continue correctly when the app loses focus or the screen is locked. (User-confirmed for the current issue-203 build; notification progress remains a separate failure in the item above.)
 - [x] Active downloads can be cancelled without affecting unrelated downloads.
 - [ ] Failed downloads can be retried and cleared without deleting the local book.
 - [x] Local Books shows active and failed download sections only when applicable.

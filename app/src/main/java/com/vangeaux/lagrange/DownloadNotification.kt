@@ -67,11 +67,35 @@ internal fun buildDownloadNotification(
         .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelIntent)
         .apply {
             when (val presentation = downloadNotificationProgress(progress)) {
-                DownloadNotificationProgress.Indeterminate -> setProgress(0, 0, true)
-                is DownloadNotificationProgress.Determinate -> setProgress(100, presentation.percent, false)
+                DownloadNotificationProgress.Indeterminate -> {
+                    setContentText("Downloading")
+                    setProgress(0, 0, true)
+                }
+                is DownloadNotificationProgress.Determinate -> {
+                    setContentText("${presentation.percent}%")
+                    setProgress(100, presentation.percent, false)
+                }
             }
         }
         .build()
+}
+
+/** Publishes progress directly because WorkManager does not always redraw its foreground card. */
+internal fun updateDownloadNotification(
+    context: Context,
+    title: String,
+    fileId: String,
+    serverUrl: String,
+    progress: Float?
+) {
+    try {
+        context.getSystemService(NotificationManager::class.java)?.notify(
+            downloadNotificationId(fileId),
+            buildDownloadNotification(context, title, fileId, serverUrl, progress)
+        )
+    } catch (_: SecurityException) {
+        // POST_NOTIFICATIONS can be denied. Notifications are optional UI.
+    }
 }
 
 /** Rebuilds the group summary from WorkManager's authoritative active work list. */
