@@ -125,6 +125,13 @@ class DownloadBackgroundPolicyTest {
     }
 
     @Test
+    fun `notification progress clamps to a visible percentage`() {
+        assertEquals(0, (downloadNotificationProgress(-1f) as DownloadNotificationProgress.Determinate).percent)
+        assertEquals(42, (downloadNotificationProgress(0.425f) as DownloadNotificationProgress.Determinate).percent)
+        assertEquals(100, (downloadNotificationProgress(2f) as DownloadNotificationProgress.Determinate).percent)
+    }
+
+    @Test
     fun `cancel action uses the existing per-file unique work identity`() {
         val serverUrl = "https://example.test"
         val fileId = "file-1"
@@ -133,6 +140,16 @@ class DownloadBackgroundPolicyTest {
             downloadUniqueWorkName(serverUrl, fileId)
         )
         assertEquals("com.vangeaux.lagrange.CANCEL_DOWNLOAD", DOWNLOAD_NOTIFICATION_CANCEL_ACTION)
+    }
+
+    @Test
+    fun `server failures that can recover are retried`() {
+        assertTrue(isRetryableDownloadHttpCode(408))
+        assertTrue(isRetryableDownloadHttpCode(429))
+        assertTrue(isRetryableDownloadHttpCode(500))
+        assertTrue(isRetryableDownloadHttpCode(503))
+        assertFalse(isRetryableDownloadHttpCode(400))
+        assertFalse(isRetryableDownloadHttpCode(403))
     }
     @Test
     fun `persisted attempt restores active download identity`() {

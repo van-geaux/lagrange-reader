@@ -125,6 +125,9 @@ internal const val OUTCOME_POLICY_BLOCKED = "policy_blocked"
 internal const val OUTCOME_PERMISSION_DENIED = "permission_denied"
 internal const val OUTCOME_FAILED = "failed"
 
+internal fun isRetryableDownloadHttpCode(code: Int): Boolean =
+    code >= 500 || code == 408 || code == 429
+
 /**
  * Builds the input [androidx.work.Data] and [OneTimeWorkRequest] for downloading a single book.
  * Kept separate from enqueueing so it can be unit tested without touching a real WorkManager.
@@ -192,6 +195,8 @@ class BookDownloadWorker(
             updatedAtMillis = inputData.getLong(KEY_UPDATED_AT, -1L).takeIf { it >= 0L }
         )
 
+        setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
+
         val repository = resolveProviderRepository(applicationContext, serverUrl)
         val downloadModule = resolveProviderDownloadModule(repository)
         val progressThrottler = DownloadProgressThrottler(minIntervalMillis = 500L)
@@ -222,8 +227,6 @@ class BookDownloadWorker(
             )
         }
 
-        setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
-
         return try {
             coroutineScope {
                 val localFile = physicalDownloadGate.withPermit {
@@ -231,6 +234,13 @@ class BookDownloadWorker(
                         if (!progressThrottler.shouldEmit(progress, System.currentTimeMillis())) {
                             return@downloadBook
                         }
+                        updateDownloadNotification(
+                            context = applicationContext,
+                            title = title,
+                            fileId = fileId,
+                            serverUrl = serverUrl,
+                            progress = progress
+                        )
                         launch {
                             val percent = progress?.let { (it * 100f).toInt().coerceIn(0, 100) }
                             setProgress(workDataOf(KEY_PROGRESS to (progress ?: -1f)))
@@ -260,7 +270,7 @@ class BookDownloadWorker(
             if (http.code == 403) {
                 finishQueueEntry(serverUrl, fileId)
                 Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_PERMISSION_DENIED))
-            } else if (http.code >= 500 || http.code == 408 || http.code == 429) {
+            } else if (isRetryableDownloadHttpCode(http.code)) {
                 Result.retry()
             } else {
                 finishQueueEntry(serverUrl, fileId)
