@@ -15,6 +15,11 @@ For release work, also run the approved release assembly and release workflow ch
 
 Compiled Android instrumentation is not executed instrumentation. If `adb devices -l` does not enumerate a usable target, report connected tests as unexecuted.
 
+### Audiobook playback after provider switching (issue #216)
+
+On a connected device, start with a Komga server active, switch to a configured BookOrbit server without restarting the app, authenticate if required, and open a supported audiobook. Verify the audiobook opens and plays without the `Audiobook playback is unavailable.` message. Repeat the inverse switch and verify that providers without audiobook support retain an explicit unavailable state rather than using stale BookOrbit playback callbacks. This manual check is separate from the `AppCoordinatorTest` regression coverage for runtime playback rebinding.
+
+
 ## Settings and format-specific reader options
 
 In Settings, verify the root shows Appearance, General, Library, Downloads
