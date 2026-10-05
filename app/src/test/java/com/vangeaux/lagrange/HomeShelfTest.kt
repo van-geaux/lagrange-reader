@@ -22,6 +22,24 @@ import org.json.JSONObject
 
 class HomeShelfTest {
     @Test
+    fun `home section library scope uses all libraries only for server-wide surfaces`() {
+        val libraries = listOf(
+            LibrarySummary("library-a", "Library A"),
+            LibrarySummary("library-b", "Library B")
+        )
+
+        assertEquals(
+            listOf("library-a", "library-b"),
+            homeSectionLibraryIds(serverWide = true, libraries = libraries, selectedLibraryId = "library-a")
+        )
+        assertEquals(
+            listOf("library-b"),
+            homeSectionLibraryIds(serverWide = false, libraries = libraries, selectedLibraryId = "library-b")
+        )
+        assertTrue(homeSectionLibraryIds(serverWide = false, libraries = libraries, selectedLibraryId = null).isEmpty())
+    }
+
+    @Test
     fun `komga home payload exposes format and page progress when media files are omitted`() {
         val projection = komgaBookProjection(
             JSONObject(

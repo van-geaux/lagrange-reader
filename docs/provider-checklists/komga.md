@@ -103,9 +103,9 @@ Cross-library Home behavior:
 
 - [x] Library screen opens for the selected provider.
 - [x] Library selection dropdown opens and lists all accessible libraries.
-- [!] Selecting a library reloads the correct catalog. (The Browse tab does load the correct books, but Libraries screen Recommended tab currently behave the same as the Home screen as in showing the aggregate books instead of just showing books from the selected library)
+- [ ] Selecting a library reloads the correct catalog. The implementation now scopes Libraries → Recommended to the selected library; manual validation remains pending for issue #201.
 - [x] Selected library state persists after navigation and app restart where supported.
-- [!] Switching libraries does not display books from the previous library. (The Browse tab does load the correct books, but Libraries screen Recommended tab currently behave the same as the Home screen as in showing the aggregate books instead of just showing books from the selected library)
+- [ ] Switching libraries does not display books from the previous library. The implementation now scopes Libraries → Recommended to the selected library; manual validation remains pending for issue #201.
 - [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
 - [x] Book list refresh works.
 - [ ] Load more/paging reaches the correct end of the catalog.

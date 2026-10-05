@@ -5916,6 +5916,16 @@ private fun HomeSeriesSectionScreen(
     }
 }
 
+internal fun homeSectionLibraryIds(
+    serverWide: Boolean,
+    libraries: List<LibrarySummary>,
+    selectedLibraryId: String?
+): List<String> = if (serverWide) {
+    libraries.map { it.id }.ifEmpty { listOfNotNull(selectedLibraryId) }
+} else {
+    listOfNotNull(selectedLibraryId)
+}
+
 @Composable
 private fun HomeSectionScreen(
     section: HomeSection,
@@ -5960,9 +5970,11 @@ private fun HomeSectionScreen(
                 HomeSection.RECENTLY_READ
             )
         ) {
-            val libraryIds = state.libraries.map { it.id }.ifEmpty {
-                listOfNotNull(state.selectedLibraryId)
-            }
+            val libraryIds = homeSectionLibraryIds(
+                serverWide = serverWide,
+                libraries = state.libraries,
+                selectedLibraryId = state.selectedLibraryId
+            )
             val loaded = loadCompleteRecentBooks(
                 libraryIds = libraryIds,
                 section = section,
