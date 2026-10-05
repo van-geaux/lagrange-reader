@@ -103,7 +103,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Sessions | Reading sessions/attempts | History/detail | S | U | Komga server-session synchronization unsupported. |
 | Downloads | Authenticated file download | Download action | S | S | Komga provider-specific download module. |
 | Downloads | Multipart audiobook download | Download/file selector | S | P | Verify all asset/file ordering and identity. |
-| Downloads | Queue/cancel/retry/status | Downloads section | S | P | Shared local lifecycle; provider runtime needs manual validation. |
+| Downloads | Queue/cancel/retry/status | Downloads section | S | S | User confirmed Komga background/screen-off download completion and visible notification progress for issue #203. |
 | Downloads | Downloaded status tag | Cards/detail/local | S | S | Shared DownloadStore metadata is used. |
 | Local books | Local book discovery | Local Books | S | S | Komga downloads use shared local metadata. |
 | Local books | Offline reopen | Local Books/reader | S | P | Verify all supported formats without network. |
