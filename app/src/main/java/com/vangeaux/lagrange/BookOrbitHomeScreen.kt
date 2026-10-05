@@ -805,11 +805,41 @@ internal fun homeLocalBooksPreview(
     downloadedBooks: List<BookSummary>?,
     libraryId: String? = null,
     limit: Int = 12
-): List<BookSummary> = localBooksShelf(
-    books = downloadedBooks ?: catalogHomeBooks,
-    libraryId = libraryId,
-    limit = limit
-)
+): List<BookSummary> {
+    val scopedCatalog = catalogHomeBooks.filter { libraryId == null || it.libraryId == libraryId }
+    val sourceBooks = if (downloadedBooks == null || libraryId == null) {
+        downloadedBooks ?: scopedCatalog
+    } else {
+        downloadedBooks.mapNotNull { localBook ->
+            val catalogBook = scopedCatalog.firstOrNull { catalog ->
+                catalog.id == localBook.id ||
+                    (catalog.fileId != null && catalog.fileId == localBook.fileId)
+            }
+            catalogBook?.copy(
+                localPath = localBook.localPath,
+                updatedAtMillis = localBook.updatedAtMillis ?: catalogBook.updatedAtMillis
+            )
+        }
+    }
+    return localBooksShelf(
+        books = sourceBooks,
+        libraryId = libraryId,
+        limit = limit
+    )
+}
+
+internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeShelfData {
+    if (libraryId == null) return shelves
+    fun scoped(source: Map<HomeSection, List<BookSummary>>): Map<HomeSection, List<BookSummary>> =
+        source.mapValues { (_, books) -> books.filter { it.libraryId == libraryId } }
+    return shelves.copy(
+        booksBySection = scoped(shelves.booksBySection),
+        seriesBySection = scoped(shelves.seriesBySection)
+    )
+}
+
+internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
+    libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
 
 internal fun bookAvailableFormatsForDisplay(
     book: BookSummary
@@ -4883,18 +4913,23 @@ private fun HomeFeed(
     localBooksLibraryId: String? = null,
     showHeader: Boolean = false
 ) {
-    val serverShelves = state.homeShelves
-    val currentlyReadingAll = remember(books, serverShelves) {
+    val libraryScopedBooks = remember(books, localBooksLibraryId) {
+        homeFeedBooks(books, localBooksLibraryId)
+    }
+    // Provider Home shelves are server-wide; filter them before rendering a
+    // library Recommended feed instead of reusing aggregate contents.
+    val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
+    val currentlyReadingAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
-        else currentlyReadingBooks(books, limit = null)
+        else currentlyReadingBooks(libraryScopedBooks, limit = null)
     }
-    val onDeckAll = remember(books, serverShelves) {
+    val onDeckAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
-        else onDeckBooks(books, limit = null)
+        else onDeckBooks(libraryScopedBooks, limit = null)
     }
-    val wantToReadAll = remember(books, serverShelves) {
+    val wantToReadAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.WANT_TO_READ].orEmpty()
-        else wantToReadBooks(books, limit = null)
+        else wantToReadBooks(libraryScopedBooks, limit = null)
     }
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
@@ -4902,15 +4937,15 @@ private fun HomeFeed(
     val recentlyAddedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_ADDED_BOOKS].orEmpty()
     } else {
-        books.sortedWith(
+        libraryScopedBooks.sortedWith(
             compareByDescending<BookSummary> { it.addedAtMillis != null }
                 .thenByDescending { it.addedAtMillis ?: 0L }
         )
     }
-    val fallbackRecentSeries = remember(books) { homeSeriesSummaries(books, useUpdatedAt = false) }
+    val fallbackRecentSeries = remember(libraryScopedBooks) { homeSeriesSummaries(libraryScopedBooks, useUpdatedAt = false) }
     val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
         initialValue = null,
-        books,
+        libraryScopedBooks,
         seriesCatalogLoader,
         serverShelves.isServerProvided
     ) {
@@ -4949,22 +4984,22 @@ private fun HomeFeed(
     } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
-            books = books,
+            books = libraryScopedBooks,
             limit = Int.MAX_VALUE
         )
     }
-    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(books, useUpdatedAt = true, limit = null)
+    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
     val recentlyReadAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_READ].orEmpty()
-    } else recentlyReadBooks(books, limit = null)
+    } else recentlyReadBooks(libraryScopedBooks, limit = null)
     val recentlyAddedBooks = recentlyAddedBooksAll.take(HOME_PREVIEW_LIMIT)
     val recentlyReleasedBooks = recentlyReleasedBooksAll.take(HOME_PREVIEW_LIMIT)
     val recentSeries = recentSeriesAll.take(HOME_PREVIEW_LIMIT)
     val updatedSeries = updatedSeriesAll.take(HOME_PREVIEW_LIMIT)
     val recentlyRead = recentlyReadAll.take(HOME_PREVIEW_LIMIT)
-    val localBooks = remember(books, downloadedLocalBooks, localBooksLibraryId) {
+    val localBooks = remember(libraryScopedBooks, downloadedLocalBooks, localBooksLibraryId) {
         homeLocalBooksPreview(
-            catalogHomeBooks = books,
+            catalogHomeBooks = libraryScopedBooks,
             downloadedBooks = downloadedLocalBooks,
             libraryId = localBooksLibraryId
         )
@@ -5916,6 +5951,16 @@ private fun HomeSeriesSectionScreen(
     }
 }
 
+internal fun homeSectionLibraryIds(
+    serverWide: Boolean,
+    libraries: List<LibrarySummary>,
+    selectedLibraryId: String?
+): List<String> = if (serverWide) {
+    libraries.map { it.id }.ifEmpty { listOfNotNull(selectedLibraryId) }
+} else {
+    listOfNotNull(selectedLibraryId)
+}
+
 @Composable
 private fun HomeSectionScreen(
     section: HomeSection,
@@ -5960,9 +6005,11 @@ private fun HomeSectionScreen(
                 HomeSection.RECENTLY_READ
             )
         ) {
-            val libraryIds = state.libraries.map { it.id }.ifEmpty {
-                listOfNotNull(state.selectedLibraryId)
-            }
+            val libraryIds = homeSectionLibraryIds(
+                serverWide = serverWide,
+                libraries = state.libraries,
+                selectedLibraryId = state.selectedLibraryId
+            )
             val loaded = loadCompleteRecentBooks(
                 libraryIds = libraryIds,
                 section = section,

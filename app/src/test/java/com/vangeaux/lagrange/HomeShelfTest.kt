@@ -22,6 +22,56 @@ import org.json.JSONObject
 
 class HomeShelfTest {
     @Test
+    fun `home section library scope uses all libraries only for server-wide surfaces`() {
+        val libraries = listOf(
+            LibrarySummary("library-a", "Library A"),
+            LibrarySummary("library-b", "Library B")
+        )
+
+        assertEquals(
+            listOf("library-a", "library-b"),
+            homeSectionLibraryIds(serverWide = true, libraries = libraries, selectedLibraryId = "library-a")
+        )
+        assertEquals(
+            listOf("library-b"),
+            homeSectionLibraryIds(serverWide = false, libraries = libraries, selectedLibraryId = "library-b")
+        )
+        assertTrue(homeSectionLibraryIds(serverWide = false, libraries = libraries, selectedLibraryId = null).isEmpty())
+    }
+
+    @Test
+    fun `library recommended feed filters every shelf to the selected library`() {
+        val books = listOf(
+            BookSummary("library-one", "book-1", "file-1", "One"),
+            BookSummary("library-two", "book-2", "file-2", "Two"),
+            BookSummary("manga", "book-3", "file-3", "Manga")
+        )
+
+        assertEquals(listOf("book-1"), homeFeedBooks(books, "library-one").map { it.id })
+        assertEquals(books.map { it.id }, homeFeedBooks(books, null).map { it.id })
+    }
+
+    @Test
+    fun `library recommended filters server shelves and resolves local books to catalog libraries`() {
+        val libraryBook = BookSummary("library-one", "book-1", "file-1", "One", seriesName = "Saga")
+        val otherBook = BookSummary("library-two", "book-2", "file-2", "Two", seriesName = "Other")
+        val shelves = HomeShelfData(
+            booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(libraryBook, otherBook)),
+            seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(libraryBook, otherBook)),
+            isServerProvided = true
+        )
+        val localBook = BookSummary("", "book-1", "file-1", "One", localPath = "/books/one.epub")
+
+        val filtered = homeFeedShelves(shelves, "library-one")
+        assertEquals(listOf("book-1"), filtered.booksBySection[HomeSection.CURRENTLY_READING]?.map { it.id })
+        assertEquals(listOf("book-1"), filtered.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES]?.map { it.id })
+        assertEquals(
+            listOf("book-1"),
+            homeLocalBooksPreview(listOf(libraryBook), listOf(localBook), "library-one").map { it.id }
+        )
+    }
+
+    @Test
     fun `komga home payload exposes format and page progress when media files are omitted`() {
         val projection = komgaBookProjection(
             JSONObject(
