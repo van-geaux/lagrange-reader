@@ -82,6 +82,7 @@ For every Home section above:
 - [x] The section loads data from the selected provider.
 - [x] The section handles empty, loading, error, offline, and stale-cache states.
 - [x] Cards show the correct title, author/series metadata, format, cover, and reading/download state.
+- [ ] Home and Libraries → Recommended cards show Komga media-level format labels, completed-download check marks, and the yellow read-progress bar when `media.files` is omitted but `mediaType`, `pagesCount`, and `readProgress` are present.
 - [x] Cards open the correct book or Series destination.
 - [x] The section preview limit and ordering are correct.
 - [x] The More/See all button is visible when the section has a complete destination.

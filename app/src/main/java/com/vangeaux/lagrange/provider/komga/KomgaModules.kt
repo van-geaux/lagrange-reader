@@ -37,11 +37,13 @@ private const val PAGE_SIZE = 100
 internal data class KomgaReadState(
     val status: BookReadStatus,
     val isRead: Boolean,
-    val page: Int?
+    val page: Int?,
+    val progressPercent: Float?
 )
 
-internal fun komgaReadState(progress: JSONObject?): KomgaReadState {
+internal fun komgaReadState(progress: JSONObject?, pageCount: Int? = null): KomgaReadState {
     val completed = progress?.optBoolean("completed", false) == true
+    val page = progress?.optInt("page", 0)?.takeIf { it > 0 }
     return KomgaReadState(
         status = when {
             completed -> BookReadStatus.READ
@@ -49,7 +51,13 @@ internal fun komgaReadState(progress: JSONObject?): KomgaReadState {
             else -> BookReadStatus.UNREAD
         },
         isRead = completed,
-        page = progress?.optInt("page", 0)?.takeIf { it > 0 }
+        page = page,
+        progressPercent = when {
+            completed -> 100f
+            page != null && pageCount != null && pageCount > 0 ->
+                (page.toFloat() / pageCount * 100f).coerceIn(0f, 100f)
+            else -> null
+        }
     )
 }
 
@@ -94,6 +102,38 @@ private fun komgaFormat(format: String?, filename: String?): String? {
         value.contains("wav") -> "wav"
         else -> filename?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() }
     }
+}
+
+internal data class KomgaBookProjection(
+    val filename: String?,
+    val format: String?,
+    val mediaKind: MediaKind,
+    val readState: KomgaReadState,
+    val availableFormats: List<String>
+)
+
+internal fun komgaBookProjection(item: JSONObject): KomgaBookProjection {
+    val media = item.optJSONObject("media") ?: JSONObject()
+    val primaryFile = media.optJSONArray("files")?.optJSONObject(0)
+    val filename = primaryFile?.optString("fileName")?.takeIf { it.isNotBlank() }
+        ?: media.optString("fileName").takeIf { it.isNotBlank() }
+    val format = komgaFormat(
+        primaryFile?.optString("mediaType")?.takeIf { it.isNotBlank() }
+            ?: media.optString("mediaType").takeIf { it.isNotBlank() },
+        filename
+    )
+    val mediaKind = komgaMediaKind(format, filename)
+    val readState = komgaReadState(
+        item.optJSONObject("readProgress"),
+        media.optInt("pagesCount", 0).takeIf { it > 0 }
+    )
+    return KomgaBookProjection(
+        filename = filename,
+        format = format,
+        mediaKind = mediaKind,
+        readState = readState,
+        availableFormats = normalizedAvailableFormats(listOf(format to mediaKind))
+    )
 }
 
 private class KomgaHttpClient {
@@ -300,16 +340,9 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                 for (index in 0 until content.length()) {
                     val item = content.optJSONObject(index) ?: continue
                     val metadata = item.optJSONObject("metadata") ?: JSONObject()
-                    val media = item.optJSONObject("media") ?: JSONObject()
-                    val primaryFile = media.optJSONArray("files")?.optJSONObject(0)
-                    val filename = primaryFile?.optString("fileName")?.takeIf { it.isNotBlank() }
-                        ?: media.optString("fileName").takeIf { it.isNotBlank() }
-                    val format = komgaFormat(
-                        primaryFile?.optString("mediaType") ?: media.optString("mediaType"),
-                        filename
-                    )
+                    val projection = komgaBookProjection(item)
                     val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
-                    val readState = komgaReadState(item.optJSONObject("readProgress"))
+                    val readState = projection.readState
                     add(
                         BookSummary(
                             libraryId = libraryId,
@@ -317,9 +350,10 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                             fileId = item.optString("id").takeIf { it.isNotBlank() },
                             title = metadata.optString("title", id),
                             author = metadata.optJSONArray("authors")?.optJSONObject(0)?.optString("name"),
-                            filename = filename,
-                            format = format,
-                            mediaKind = komgaMediaKind(format, filename),
+                            filename = projection.filename,
+                            format = projection.format,
+                            mediaKind = projection.mediaKind,
+                            availableFormats = projection.availableFormats,
                             coverUrl = "$base/api/v1/books/$id/thumbnail",
                             seriesId = item.optString("seriesId").takeIf { it.isNotBlank() }
                                 ?: metadata.optString("seriesId").takeIf { it.isNotBlank() },
@@ -328,6 +362,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                                 ?: metadata.optJSONObject("series")?.optString("name")?.takeIf { it.isNotBlank() },
                             seriesIndex = item.optDouble("number", Double.NaN).takeIf { !it.isNaN() },
                             progressLabel = readState.page?.let { "Page $it" },
+                            progressPercent = readState.progressPercent,
                             progressPageIndex = readState.page,
                             readStatus = readState.status,
                             isRead = readState.isRead
@@ -460,27 +495,25 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
     private fun parseBook(item: JSONObject, base: String): BookSummary? {
         val id = item.optString("id").takeIf { it.isNotBlank() } ?: return null
         val metadata = item.optJSONObject("metadata") ?: JSONObject()
-        val media = item.optJSONObject("media") ?: JSONObject()
-        val file = media.optJSONArray("files")?.optJSONObject(0)
-        val filename = file?.optString("fileName")?.takeIf { it.isNotBlank() }
-        val format = komgaFormat(file?.optString("mediaType"), filename)
-        val progress = item.optJSONObject("readProgress")
-        val readState = komgaReadState(progress)
+        val projection = komgaBookProjection(item)
+        val readState = projection.readState
         return BookSummary(
             libraryId = item.optString("libraryId"), id = id, fileId = id,
-            title = metadata.optString("title", item.optString("name", id)), filename = filename,
+            title = metadata.optString("title", item.optString("name", id)), filename = projection.filename,
             author = metadata.optJSONArray("authors")?.optJSONObject(0)?.optString("name"),
-            format = format, mediaKind = komgaMediaKind(format, filename),
+            format = projection.format, mediaKind = projection.mediaKind,
+            availableFormats = projection.availableFormats,
             coverUrl = "$base/api/v1/books/$id/thumbnail",
             seriesId = item.optString("seriesId").takeIf { it.isNotBlank() },
             seriesName = item.optString("seriesTitle").takeIf { it.isNotBlank() },
             seriesIndex = item.optDouble("number", Double.NaN).takeIf { !it.isNaN() },
-            progressLabel = readState.page?.let { "Page $it" }, progressPageIndex = readState.page,
+            progressLabel = readState.page?.let { "Page $it" }, progressPercent = readState.progressPercent,
+            progressPageIndex = readState.page,
             readStatus = readState.status,
             isRead = readState.isRead,
             addedAtMillis = parseInstantMillis(item.optString("created")),
             updatedAtMillis = parseInstantMillis(item.optString("lastModified")),
-            lastReadAtMillis = parseInstantMillis(progress?.optString("readDate").orEmpty())
+            lastReadAtMillis = parseInstantMillis(item.optJSONObject("readProgress")?.optString("readDate").orEmpty())
         )
     }
 

@@ -146,8 +146,14 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             }
     }
 
-    suspend fun loadHomeShelves(): HomeShelfData =
-        homeModule.loadHomeShelves(getServerUrl().orEmpty())
+    suspend fun loadHomeShelves(): HomeShelfData {
+        val shelves = homeModule.loadHomeShelves(getServerUrl().orEmpty())
+        val downloads = downloadStore.readAll(getServerUrl().orEmpty()).associateBy { it.fileId }
+        return shelves.copy(
+            booksBySection = shelves.booksBySection.mapValues { (_, books) -> books.withCurrentDownloads(downloads) },
+            seriesBySection = shelves.seriesBySection.mapValues { (_, books) -> books.withCurrentDownloads(downloads) }
+        )
+    }
 
     override suspend fun loadBooks(libraryId: String): List<BookSummary> =
         loadBooksPage(libraryId, 0).items
@@ -382,7 +388,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         val records = downloadStore.readAll(serverUrl)
             .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
             .associateBy { it.fileId }
-        return books.map { book -> records[book.fileId]?.let { book.copy(localPath = it.localPath) } ?: book }
+        return books.withCurrentDownloads(records)
     }
 
     private suspend fun cachedLibraryPage(serverUrl: String, libraryId: String): LibraryBooksPage? {
