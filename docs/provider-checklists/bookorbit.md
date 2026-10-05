@@ -205,6 +205,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [ ] Stream/open a supported PDF online.
 - [x] Stream/open a supported comic online.
 - [x] Stream/listen to a supported audiobook online.
+- [x] After switching from another provider to BookOrbit without restarting the app, opening a supported audiobook installs the BookOrbit playback configuration and starts playback.
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
 - [x] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.

@@ -11,44 +11,52 @@ import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
 class AppGraph private constructor(
     private val dependencies: Dependencies
 ) {
-    private val bookOrbitRepository = dependencies.bookOrbitRepository
+    private val repository = dependencies.repository
     private val sessionHistoryStore = dependencies.sessionHistoryStore
     val coordinator = dependencies.coordinator
 
     constructor(context: Context) : this(createDependencies(context.applicationContext))
 
     internal constructor(coordinator: AppCoordinator) : this(
-        Dependencies(repository = null, sessionHistoryStore = null, coordinator = coordinator, bookOrbitRepository = null)
+        Dependencies(repository = null, sessionHistoryStore = null, coordinator = coordinator)
     )
 
     fun configureAudioPlayback(controller: ReadiumAudioPlaybackController) {
-        val repository = bookOrbitRepository ?: return
         val sessionHistoryStore = sessionHistoryStore ?: return
-        controller.setStreamingAuthentication(
-            headersProvider = { url ->
-                repository.streamingRequestHeaders(url.toString())
-            },
-            recoverAuthentication = repository::recoverStreamingAuthentication
-        )
-        controller.setSessionHistoryStore(
-            store = sessionHistoryStore,
-            serverUrlProvider = repository::getServerUrl
-        )
-        coordinator.setAudioPlaybackOpener { state, playWhenReady ->
-            controller.restorePersistedSession(state, playWhenReady)
+        val reconfigure: (BookOrbitDataSource) -> Unit = { source ->
+            val bookOrbitRepository = source as? BookOrbitRepository
+            if (bookOrbitRepository == null) {
+                coordinator.setAudioPlaybackOpener(null)
+                coordinator.setAudioSessionHistoryOpener(null)
+            } else {
+                controller.setStreamingAuthentication(
+                    headersProvider = { url ->
+                        bookOrbitRepository.streamingRequestHeaders(url.toString())
+                    },
+                    recoverAuthentication = bookOrbitRepository::recoverStreamingAuthentication
+                )
+                controller.setSessionHistoryStore(
+                    store = sessionHistoryStore,
+                    serverUrlProvider = bookOrbitRepository::getServerUrl
+                )
+                coordinator.setAudioPlaybackOpener { state, playWhenReady ->
+                    controller.restorePersistedSession(state, playWhenReady)
+                }
+                coordinator.setAudioSessionHistoryOpener(controller::openFromSessionHistory)
+            }
         }
+        coordinator.setAudioPlaybackReconfigurer(reconfigure)
+        repository?.let(reconfigure)
         coordinator.setAudioPlaybackCloser {
             controller.discardPendingOutboundSession()
             controller.close()
         }
-        coordinator.setAudioSessionHistoryOpener(controller::openFromSessionHistory)
     }
 
     private data class Dependencies(
         val repository: BookOrbitDataSource?,
         val sessionHistoryStore: AudiobookSessionHistoryStore?,
-        val coordinator: AppCoordinator,
-        val bookOrbitRepository: BookOrbitRepository?
+        val coordinator: AppCoordinator
     )
 
     companion object {
@@ -60,7 +68,6 @@ class AppGraph private constructor(
             } else {
                 BookOrbitRepository(context)
             }
-            val bookOrbitRepository = repository as? BookOrbitRepository
             val sessionHistoryStore = AudiobookSessionHistoryStore(context)
             val preferencesStore = AppPreferencesStore(context)
             val repositoryResolver = ProviderRepositoryResolver(context)
@@ -103,7 +110,7 @@ class AppGraph private constructor(
                     EpubTtsModuleImpl.stopAndAwait(context)
                 }
             }
-            return Dependencies(repository, sessionHistoryStore, coordinator, bookOrbitRepository)
+            return Dependencies(repository, sessionHistoryStore, coordinator)
         }
     }
 }

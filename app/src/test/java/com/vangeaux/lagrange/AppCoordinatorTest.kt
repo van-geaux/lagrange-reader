@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -2081,6 +2082,25 @@ class AppCoordinatorTest {
         val login = coordinator.screen.value as AppScreen.Login
         assertEquals(replacement, login.serverUrl)
         assertTrue(login.message.orEmpty().contains("Server changed"))
+    }
+
+    @Test
+    fun `change server reconfigures audiobook playback for the replacement repository`() = runTest {
+        val replacement = "https://replacement.example.test"
+        val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacementRepository = FakeBookOrbitDataSource(serverUrl = replacement)
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacementRepository }
+        )
+        var reconfiguredRepository: BookOrbitDataSource? = null
+        coordinator.setAudioPlaybackReconfigurer { reconfiguredRepository = it }
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertSame(replacementRepository, reconfiguredRepository)
     }
 
     @Test

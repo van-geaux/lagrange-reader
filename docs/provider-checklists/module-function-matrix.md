@@ -88,7 +88,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Reader | EPUB reading | Read/Preview | S | S | Verify authenticated file preparation and local reopen. |
 | Reader | PDF reading | Read/Preview | S | S | Verify provider file mapping. |
 | Reader | Comic reading | Read/Preview | S | S | Verify supported comic formats. |
-| Reader | Audiobook streaming/listening | Listen/player | S | P | Komga audio file access exists; progress/session behavior is unsupported. |
+| Reader | Audiobook streaming/listening | Listen/player | S | P | BookOrbit runtime playback rebinding after provider/server switch was user-confirmed under issue [#216](https://github.com/van-geaux/lagrange-reader/issues/216); Komga audio file access exists, while progress/session behavior is unsupported. |
 | Reader | EPUB image library | Book Detail/reader | S | P | Verify durable local preparation and authenticated source access. |
 | Reader | Preview isolation | Preview/Go to read | S | P | Verify no progress mutation for Komga. |
 | Reader | Previous/Next navigation | Reader | S | P | Verify library and format scoping for each provider. |

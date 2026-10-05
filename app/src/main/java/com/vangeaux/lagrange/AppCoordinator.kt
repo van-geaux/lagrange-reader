@@ -397,6 +397,7 @@ class AppCoordinator internal constructor(
     private var allowCachedLoginFallback = true
     private var acceptAudioProgress = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
+    private var audioPlaybackReconfigurer: ((BookOrbitDataSource) -> Unit)? = null
     private var audioPlaybackCloser: (suspend () -> Unit)? = null
     private var epubTtsPlaybackCloser: (suspend () -> Unit)? = null
     private var audioSessionHistoryOpener: ((BookSummary, Long) -> Unit)? = null
@@ -415,8 +416,12 @@ class AppCoordinator internal constructor(
         serverProfileStore?.remove(profileId)
     }
 
-    fun setAudioPlaybackOpener(opener: suspend (ReaderState, Boolean) -> Boolean) {
+    fun setAudioPlaybackOpener(opener: (suspend (ReaderState, Boolean) -> Boolean)?) {
         audioPlaybackOpener = opener
+    }
+
+    internal fun setAudioPlaybackReconfigurer(reconfigurer: (BookOrbitDataSource) -> Unit) {
+        audioPlaybackReconfigurer = reconfigurer
     }
 
     internal fun setAudioPlaybackCloser(closer: suspend () -> Unit) {
@@ -437,7 +442,7 @@ class AppCoordinator internal constructor(
         sessionHistoryStore = store
     }
 
-    fun setAudioSessionHistoryOpener(opener: (BookSummary, Long) -> Unit) {
+    fun setAudioSessionHistoryOpener(opener: ((BookSummary, Long) -> Unit)?) {
         audioSessionHistoryOpener = opener
     }
 
@@ -603,6 +608,7 @@ class AppCoordinator internal constructor(
             }
             repository = targetRepository
             serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(
                     id = serverProfileId(serverUrl),
@@ -641,6 +647,7 @@ class AppCoordinator internal constructor(
             }
             repository = targetRepository
             serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(
                     id = serverProfileId(serverUrl),
