@@ -80,6 +80,13 @@ internal fun paginatedComicPageIndex(
         pageHref.substringBefore('?').substringBefore('#')
 }.takeIf { it >= 0 }
 
+internal fun comicPageIndexFromLocator(
+    pageHref: String,
+    readingOrderHrefs: List<String>,
+    locatorPosition: Int?
+): Int? = paginatedComicPageIndex(pageHref, readingOrderHrefs)
+    ?: locatorPosition?.minus(1)?.takeIf { it in readingOrderHrefs.indices }
+
 internal fun fittedReaderImageSize(
     containerWidth: Float,
     containerHeight: Float,

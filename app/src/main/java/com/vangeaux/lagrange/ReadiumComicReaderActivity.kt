@@ -834,9 +834,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             link.url().isEquivalent(locator.href.removeFragment())
         }
         val index = directIndex.takeIf { it >= 0 }
-            ?: paginatedComicPageIndex(
+            ?: comicPageIndexFromLocator(
                 pageHref = locator.href.toString(),
-                readingOrderHrefs = openedPublication.readingOrder.map { link -> link.url().toString() }
+                readingOrderHrefs = openedPublication.readingOrder.map { link -> link.url().toString() },
+                locatorPosition = locator.locations.position
             )
             ?: currentPage
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)

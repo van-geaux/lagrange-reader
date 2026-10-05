@@ -59,6 +59,18 @@ class ComicPageImageViewerTest {
     }
 
     @Test
+    fun `comic locator position resolves page when remote href is normalized`() {
+        assertEquals(
+            5,
+            comicPageIndexFromLocator(
+                pageHref = "1",
+                readingOrderHrefs = listOf("page-0", "page-1", "page-2", "page-3", "page-4", "page-5"),
+                locatorPosition = 6
+            )
+        )
+    }
+
+    @Test
     fun `portrait image is fitted to its painted bounds`() {
         assertEquals(
             Size(width = 400f, height = 800f),
