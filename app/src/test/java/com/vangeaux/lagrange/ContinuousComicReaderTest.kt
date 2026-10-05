@@ -90,4 +90,31 @@ class ContinuousComicReaderTest {
         assertEquals(2, continuousComicSampleSize(1000, 40000, 1000))
         assertEquals(1, continuousComicSampleSize(0, 0, 1000))
     }
+
+    @Test
+    fun `continuous progress selects the page with the greatest visible area`() {
+        assertEquals(
+            2,
+            continuousComicVisiblePageIndex(
+                visibleItems = listOf(
+                    ContinuousComicVisibleItem(index = 1, offset = -700, size = 1000),
+                    ContinuousComicVisibleItem(index = 2, offset = 300, size = 1200)
+                ),
+                viewportStart = 0,
+                viewportEnd = 1000
+            )
+        )
+    }
+
+    @Test
+    fun `continuous progress falls back to no page when visible items do not intersect`() {
+        assertEquals(
+            null,
+            continuousComicVisiblePageIndex(
+                visibleItems = listOf(ContinuousComicVisibleItem(index = 4, offset = 1200, size = 300)),
+                viewportStart = 0,
+                viewportEnd = 1000
+            )
+        )
+    }
 }

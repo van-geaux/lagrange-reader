@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,31 @@ internal enum class ContinuousComicTapAction {
 
 internal const val MAX_CONTINUOUS_COMIC_BITMAP_PIXELS = 16_000_000L
 internal const val CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT = 2
+private const val CONTINUOUS_COMIC_PROGRESS_TAG = "ComicProgress223"
+
+internal data class ContinuousComicVisibleItem(
+    val index: Int,
+    val offset: Int,
+    val size: Int
+)
+
+internal fun continuousComicVisiblePageIndex(
+    visibleItems: List<ContinuousComicVisibleItem>,
+    viewportStart: Int,
+    viewportEnd: Int
+): Int? = visibleItems
+    .map { item ->
+        val visibleStart = maxOf(item.offset, viewportStart)
+        val visibleEnd = minOf(item.offset + item.size, viewportEnd)
+        item to (visibleEnd - visibleStart).coerceAtLeast(0)
+    }
+    .filter { (_, visiblePixels) -> visiblePixels > 0 }
+    .maxWithOrNull(
+        compareBy<Pair<ContinuousComicVisibleItem, Int>> { it.second }
+            .thenByDescending { it.first.index }
+    )
+    ?.first
+    ?.index
 
 internal fun continuousComicTapAction(
     x: Float,
@@ -165,8 +191,21 @@ internal fun ContinuousComicReader(
         onDispose { onListStateAvailable(null) }
     }
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .collect(onPageChanged)
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            continuousComicVisiblePageIndex(
+                visibleItems = layout.visibleItemsInfo.map { item ->
+                    ContinuousComicVisibleItem(item.index, item.offset, item.size)
+                },
+                viewportStart = layout.viewportStartOffset,
+                viewportEnd = layout.viewportEndOffset
+            ) ?: listState.firstVisibleItemIndex
+        }
+            .distinctUntilChanged()
+            .collect { pageIndex ->
+                Log.d(CONTINUOUS_COMIC_PROGRESS_TAG, "visiblePage=$pageIndex")
+                onPageChanged(pageIndex)
+            }
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val targetWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
