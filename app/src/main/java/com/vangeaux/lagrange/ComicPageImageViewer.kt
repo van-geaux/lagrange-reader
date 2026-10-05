@@ -75,7 +75,9 @@ internal fun paginatedComicPageIndex(
     pageHref: String,
     readingOrderHrefs: List<String>
 ): Int? = readingOrderHrefs.indexOfFirst { href ->
-    href.substringBefore('#') == pageHref.substringBefore('#')
+    href.substringBefore('#') == pageHref.substringBefore('#') ||
+        href.substringBefore('?').substringBefore('#') ==
+        pageHref.substringBefore('?').substringBefore('#')
 }.takeIf { it >= 0 }
 
 internal fun fittedReaderImageSize(

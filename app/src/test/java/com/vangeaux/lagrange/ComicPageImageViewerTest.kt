@@ -46,6 +46,19 @@ class ComicPageImageViewerTest {
     }
 
     @Test
+    fun `paginated page link ignores remote query differences`() {
+        val readingOrder = listOf(
+            "https://komga.example/pages/0?zero_based=true",
+            "https://komga.example/pages/1?zero_based=true"
+        )
+
+        assertEquals(
+            1,
+            paginatedComicPageIndex("https://komga.example/pages/1", readingOrder)
+        )
+    }
+
+    @Test
     fun `portrait image is fitted to its painted bounds`() {
         assertEquals(
             Size(width = 400f, height = 800f),

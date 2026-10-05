@@ -830,9 +830,15 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun updateLocation(locator: Locator) {
         val openedPublication = publication ?: return
-        val index = openedPublication.readingOrder.indexOfFirst { link ->
+        val directIndex = openedPublication.readingOrder.indexOfFirst { link ->
             link.url().isEquivalent(locator.href.removeFragment())
-        }.takeIf { it >= 0 } ?: currentPage
+        }
+        val index = directIndex.takeIf { it >= 0 }
+            ?: paginatedComicPageIndex(
+                pageHref = locator.href.toString(),
+                readingOrderHrefs = openedPublication.readingOrder.map { link -> link.url().toString() }
+            )
+            ?: currentPage
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)
         if (!isPreview) locatorStore.save(readerKey, locator)
         readingSessionReporter.activity(currentProgressPercent())
