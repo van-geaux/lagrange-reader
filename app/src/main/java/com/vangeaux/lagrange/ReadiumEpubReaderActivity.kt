@@ -1234,11 +1234,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
     }
 
-    private fun requestTtsPlayback(choice: EpubListenChoice, restoredLocator: Locator? = null) {
+    private fun requestTtsPlayback(
+        choice: EpubListenChoice,
+        restoredLocator: Locator? = null,
+        selectionText: String? = null
+    ) {
         if (isPreview) return
         val preferences = getSharedPreferences(TTS_PRIVACY_PREFERENCES, MODE_PRIVATE)
         if (preferences.getBoolean(TTS_PRIVACY_ACKNOWLEDGED, false)) {
-            startTtsPlayback(choice, restoredLocator = restoredLocator)
+            startTtsPlayback(
+                choice,
+                restoredLocator = restoredLocator,
+                selectionText = selectionText
+            )
             return
         }
         AlertDialog.Builder(this)
@@ -1249,7 +1257,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
             .setPositiveButton("Continue") { _, _ ->
                 preferences.edit().putBoolean(TTS_PRIVACY_ACKNOWLEDGED, true).apply()
-                startTtsPlayback(choice, restoredLocator = restoredLocator)
+                startTtsPlayback(
+                    choice,
+                    restoredLocator = restoredLocator,
+                    selectionText = selectionText
+                )
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -1258,6 +1270,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun startTtsPlayback(
         choice: EpubListenChoice,
         restoredLocator: Locator? = null,
+        selectionText: String? = null,
         playWhenReady: Boolean = true
     ) {
         ttsServiceBinder?.state?.value?.takeIf {
@@ -1325,6 +1338,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     filePath = filePath,
                     title = displayTitle,
                     initialLocator = initialLocator,
+                    selectionText = selectionText,
                     settings = ttsSettings,
                     playWhenReady = playWhenReady
                 )
@@ -2023,7 +2037,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     ACTION_PLAY_NARRATION -> playNarrationForSelection(selection)
                     ACTION_TTS_FROM_SELECTION -> requestTtsPlayback(
                         EpubListenChoice.TTS_FROM_HERE,
-                        restoredLocator = selection.ttsLocator ?: selection.selection.locator
+                        restoredLocator = selection.ttsLocator ?: selection.selection.locator,
+                        selectionText = selectedText(selection.selection)
                     )
                     ACTION_HIGHLIGHT -> showHighlightChoiceDialog(selection, note = null)
                     ACTION_HIGHLIGHT_WITH_NOTE -> promptForNote(existingNote = null) { note ->
