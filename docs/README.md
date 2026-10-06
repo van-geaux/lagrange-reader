@@ -6,20 +6,18 @@ This folder contains focused public engineering documentation for Lagrange Reade
 
 - [Architecture](./architecture.md) — current components, data flow, storage, synchronization, and guardrails.
 - [Provider Module Separation](./modules.md) — provider-neutral feature contracts, composition rules, and migration boundaries.
-- [BookOrbit Modules](./bookorbit-modules.md) — the BookOrbit module composition and compatibility seam.
-- [Komga Modules](./komga-modules.md) — implemented Komga modules, endpoint ownership, and unsupported capabilities.
+- [Provider documentation](./providers/README.md) — provider-specific API, module, authentication, integration, and capability notes.
 - [EPUB Text-to-Speech Module](./epub-tts-module.md) — TTS boundaries, lifecycle isolation, persistence, and implementation pieces.
 - [Local Setup](./setup.md) — machine prerequisites and local build setup.
 - [Privacy Notes](./privacy.md) — local storage, network behavior, and current privacy gaps.
 - [Release Policy](./release.md) — versioning, signing, naming, and publishing rules.
-- [BookOrbit API Contract](./bookorbit-api.md) — server endpoints and payload contracts used by the client.
-- [Komga Integration](./komga-integration.md) — verified Komga authentication, library, and catalog endpoints for the current integration checkpoint.
+- Provider-specific API and integration contracts are indexed in [Provider documentation](./providers/README.md).
 - [Testing](./testing.md) — current automated gate and manual validation procedures.
 - [Provider Module/Function Matrix](./provider-checklists/module-function-matrix.md) — compare supported, unsupported, partial, and unverified functions across target servers.
 - [Provider Manual Validation Checklist](./provider-checklists/provider-checklist-template.md) — copyable maintainer/user checklist for validating each target server/provider.
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
-- [OIDC / SSO Authentication](./oidc-authentication.md) — explicit BookOrbit OIDC WebView flow, generic fallback, and native AppAuth status.
+- BookOrbit OIDC / SSO authentication is documented in [Provider documentation](./providers/bookorbit/oidc-authentication.md).
 - [Security Policy](../SECURITY.md) — responsible-disclosure guidance for security reports.
 
 ## Local operator documents

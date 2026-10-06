@@ -23,6 +23,6 @@ This document contains current project direction only. Historical work orders an
 
 - Use [`CHECKLIST.md`](../CHECKLIST.md) for active completion and validation status.
 - Use [`docs/testing.md`](testing.md) for reusable automated and manual procedures.
-- Use [`docs/architecture.md`](architecture.md), [`docs/bookorbit-api.md`](bookorbit-api.md), and [`docs/ui-ux.md`](ui-ux.md) for current contracts and guardrails.
+- Use [`docs/architecture.md`](architecture.md), [`docs/providers/bookorbit/api.md`](providers/bookorbit/api.md), and [`docs/ui-ux.md`](ui-ux.md) for current contracts and guardrails.
 - Record historical implementation detail in [`docs/roadmap-archive.md`](roadmap-archive.md), not in this active roadmap.
 - Before changing roadmap priorities, confirm the product decision and update only the current sections.
