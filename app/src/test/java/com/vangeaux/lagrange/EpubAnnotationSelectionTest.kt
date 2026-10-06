@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+
 class EpubAnnotationSelectionTest {
     @Test
     fun `selection is captured before annotation UI opens`() = runBlocking {
@@ -60,6 +61,7 @@ class EpubAnnotationSelectionTest {
             actions.first { it.label == "Listen from here" }.presentation
         )
     }
+
 
     @Test
     fun `selection menu exposes both narration and TTS when both are available`() {

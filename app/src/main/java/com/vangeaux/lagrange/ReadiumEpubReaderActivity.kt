@@ -331,8 +331,16 @@ internal data class EpubSelectionAction(
 internal data class CapturedEpubSelection(
     val selection: Selection,
     val cfi: String?,
-    val mediaOverlayTextFragment: String? = null
+    val mediaOverlayTextFragment: String? = null,
+    val ttsLocator: Locator? = null
 )
+
+internal fun locatorForTtsSelection(locator: Locator, cssSelector: String?): Locator {
+    val selector = cssSelector?.takeIf { it.isNotBlank() } ?: return locator
+    return locator.copyWithLocations(
+        otherLocations = locator.locations.otherLocations + ("cssSelector" to selector)
+    )
+}
 
 internal fun epubSelectionActions(
     mediaOverlayAvailable: Boolean = false,
@@ -2005,7 +2013,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             captureCurrentSelection(
                 mode = mode,
                 requireCfi = action == ACTION_HIGHLIGHT || action == ACTION_HIGHLIGHT_WITH_NOTE,
-                captureMediaOverlayFragment = action == ACTION_PLAY_NARRATION
+                captureMediaOverlayFragment = action == ACTION_PLAY_NARRATION,
+                captureTtsSelection = action == ACTION_TTS_FROM_SELECTION
             ) { selection ->
                 when (action) {
                     ACTION_COPY -> copySelection(selection)
@@ -2014,7 +2023,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     ACTION_PLAY_NARRATION -> playNarrationForSelection(selection)
                     ACTION_TTS_FROM_SELECTION -> requestTtsPlayback(
                         EpubListenChoice.TTS_FROM_HERE,
-                        restoredLocator = selection.selection.locator
+                        restoredLocator = selection.ttsLocator ?: selection.selection.locator
                     )
                     ACTION_HIGHLIGHT -> showHighlightChoiceDialog(selection, note = null)
                     ACTION_HIGHLIGHT_WITH_NOTE -> promptForNote(existingNote = null) { note ->
@@ -2032,6 +2041,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         mode: ActionMode?,
         requireCfi: Boolean,
         captureMediaOverlayFragment: Boolean = false,
+        captureTtsSelection: Boolean = false,
         action: (CapturedEpubSelection) -> Unit
     ) {
         val fragment = navigator ?: return
@@ -2046,7 +2056,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         val textFragment = if (captureMediaOverlayFragment) {
                             selectedMediaOverlayFragmentId(fragment)
                         } else null
-                        CapturedEpubSelection(selection, cfi, textFragment)
+                        val ttsLocator = if (captureTtsSelection) {
+                            locatorForTtsSelection(
+                                selection.locator,
+                                selectedTtsCssSelector(fragment)
+                            )
+                        } else null
+                        CapturedEpubSelection(selection, cfi, textFragment, ttsLocator)
                     },
                     action = action
                 )
@@ -2096,6 +2112,37 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     const startId = idFor(selection.anchorNode);
                     const endId = idFor(selection.focusNode);
                     return startId && startId === endId ? startId : idFor(selection.getRangeAt(0).commonAncestorContainer);
+                })()"""
+            )
+        )
+
+    private suspend fun selectedTtsCssSelector(fragment: EpubNavigatorFragment): String? =
+        decodeJavascriptString(
+            fragment.evaluateJavascript(
+                """(() => {
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0) return null;
+                    let element = selection.anchorNode?.nodeType === Node.ELEMENT_NODE
+                        ? selection.anchorNode
+                        : selection.anchorNode?.parentElement;
+                    if (!element) return null;
+                    element = element.closest(
+                        'p,li,blockquote,pre,h1,h2,h3,h4,h5,h6,section,article,div'
+                    ) || element;
+                    const parts = [];
+                    while (element && element !== document.body) {
+                        let index = 1;
+                        let sibling = element.previousElementSibling;
+                        while (sibling) {
+                            if (sibling.tagName === element.tagName) index++;
+                            sibling = sibling.previousElementSibling;
+                        }
+                        parts.unshift(
+                            element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
+                        );
+                        element = element.parentElement;
+                    }
+                    return parts.length ? 'body > ' + parts.join(' > ') : null;
                 })()"""
             )
         )
