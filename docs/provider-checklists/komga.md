@@ -20,6 +20,10 @@ Copy this file into this folder using the target server/provider name, for examp
 
 - User-confirmed on 6 October 2026 with `Lagrange-debug-202610060853.apk` on Samsung SM-S931B / Android 16 over Tailscale ADB (`100.90.237.107:32927`). An online Komga comic opened in paginated mode, the visible page counter advanced from page 1 while navigating forward and backward, and the streamed book did not become a durable local download. The validation covers the online CBZ/CBR reader/progress path; no PDF sample was available and no separate CB7 validation is claimed.
 
+### Latest Komga web OIDC validation
+
+- User-confirmed on 6 October 2026 with `Lagrange-debug-202610061026.apk` on Samsung SM-S931B / Android 16 using Komga at `https://komga.alredho.com`. The Komga login screen opened in Lagrange, the server's OIDC button opened the configured identity-provider flow inside the WebView, and authentication returned to Lagrange successfully. This validates the server web-session path, including the WebView popup handling and Komga session-cookie reuse; it does not claim native AppAuth/Custom Tabs support.
+
 Use these result markers for every item:
 
 - `[x] Pass`
@@ -44,10 +48,10 @@ For every failure or blocked item, record the observed behavior, expected behavi
 - [x] Invalid username/password produces a provider-appropriate error without crashing or logging out another profile.
 - [x] Login loading, retry, cancellation, and Back behavior are correct.
 - [x] Credentials are not visible in the URL, profile list, logs, screenshots, or ordinary local profile data.
-- [!] OIDC/SSO entry point is present when supported by this provider. (Lagrange says OIDC not available even tho it is in the Komga web app)
-- [!] OIDC provider discovery loads the expected providers. (Lagrange says OIDC not available even tho it is in the Komga web app)
-- [!] OIDC provider selection, browser/WebView handoff, callback, cancellation, failure, and successful return work. (Lagrange says OIDC not available even tho it is in the Komga web app)
-- [!] OIDC state/nonce/PKCE or provider-equivalent protections do not expose secrets and reject invalid callbacks. (Lagrange says OIDC not available even tho it is in the Komga web app)
+- [x] OIDC/SSO entry point is present when supported by this provider. (The Komga login screen exposes `Open server sign-in`.)
+- [x] OIDC provider discovery loads the expected providers. (The provider is selected by Komga's server login page.)
+- [x] OIDC provider selection, browser/WebView handoff, callback, cancellation, failure, and successful return work. (User-confirmed through the Komga WebView flow; native AppAuth/Custom Tabs are not included.)
+- [ ] OIDC state/nonce/PKCE or provider-equivalent protections do not expose secrets and reject invalid callbacks. (Identity-provider protocol protections remain server/provider-owned and were not independently tested in Lagrange.)
 - [x] Login resumes the intended destination after authentication.
 - [x] Logout clears the provider session and does not delete device-shared downloaded media.
 - [x] Session expiration returns to the correct provider login screen.

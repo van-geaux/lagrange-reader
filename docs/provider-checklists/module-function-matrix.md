@@ -8,6 +8,8 @@ This matrix is separate from the per-provider manual checklist. The matrix answe
 
 On 2026-10-04, the user confirmed the shared filter-surface behavior for BookOrbit and Komga on a Samsung SM-S931B running Android 16 with `Lagrange-debug-202610041340.apk`. Library, Series, Author, and Local Books filter-surface behavior was validated under issue [#206](https://github.com/van-geaux/lagrange-reader/issues/206). Provider capabilities that remain unsupported or partial are still represented as `U` or `P`; this confirmation records correct handling of exposed controls and unavailable provider-specific controls, not new provider capabilities.
 
+On 2026-10-06, the user confirmed Komga server web OIDC sign-in on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610061026.apk` against `https://komga.alredho.com` under issue [#225](https://github.com/van-geaux/lagrange-reader/issues/225). The confirmation covers the Komga login WebView, identity-provider handoff, callback, and authenticated server-session return; it does not cover native AppAuth/Custom Tabs or independent validation of server-side protocol protections.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -51,7 +53,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Server selection | Server profile and switching | Change Server | S | S | Provider ID is stored with the profile. |
 | Server detection | Reachability and validation | URL validation/login entry | S | S | Provider-specific resolver selection. |
 | Authentication | Username/password login | Login screen | S | S | BookOrbit session flow; Komga Basic Auth. |
-| Authentication | OIDC/SSO login | Login screen/browser callback | S | U | BookOrbit flow exists; no Komga OIDC module in current adapter. |
+| Authentication | OIDC/SSO login | Login screen/browser callback | S | S | Komga server web login is opened in the in-app WebView; user-confirmed under issue #225. Native AppAuth/Custom Tabs remain out of scope. |
 | Authentication | Logout/session clearing | Account/server actions | S | S | Provider session clearing is implemented. |
 | Authentication | Session expiry recovery | Login/retry | S | V | Komga live expiry behavior still requires validation. |
 | Libraries | Library discovery | Library dropdown | S | S | Komga `/api/v1/libraries`. |

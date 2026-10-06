@@ -15,7 +15,7 @@ The implementation follows Komga's documented REST contract:
 - cover thumbnail: `GET /api/v1/books/{bookId}/thumbnail`;
 - book file: `GET /api/v1/books/{bookId}/file`.
 
-A `401` or `403` response from the library probe is treated as a reachable Komga server. Basic credentials are stored in the encrypted Android Keystore-backed credential store. When the user selects `Open server sign-in`, the existing in-app WebView loads Komga's `/login` page, so Komga-configured OAuth2/OIDC providers can complete their normal web flow. The resulting Komga session cookie is reused for API, cover, download, streaming, and reader requests. Native AppAuth/Custom Tabs and provider-specific native redirects are not included.
+A `401` or `403` response from the library probe is treated as a reachable Komga server. Basic credentials are stored in the encrypted Android Keystore-backed credential store. When the user selects `Open server sign-in`, the existing in-app WebView loads Komga's `/login` page, so Komga-configured OAuth2/OIDC providers can complete their normal web flow. The WebView supports JavaScript-created windows used by identity providers and keeps those windows inside the sign-in dialog while sharing the Komga session cookies. The resulting Komga session cookie is reused for API, cover, download, streaming, and reader requests. Native AppAuth/Custom Tabs and provider-specific native redirects are not included.
 
 ## Modules
 
