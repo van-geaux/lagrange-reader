@@ -2279,6 +2279,18 @@ class AppCoordinator internal constructor(
         }
     }
 
+    fun onPreviewProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        val reader = _screen.value as? AppScreen.Reader ?: return
+        if (reader.readerState.launchMode != ReaderLaunchMode.PREVIEW) {
+            onProgress(book, position, pageIndex, progressPercent)
+            return
+        }
+        _screen.value = AppScreen.Reader(
+            reader.readerState.copy(launchMode = ReaderLaunchMode.NORMAL)
+        )
+        onProgress(book, position, pageIndex, progressPercent)
+    }
+
     fun minimizeAudioReader() {
         val reader = (_screen.value as? AppScreen.Reader)?.readerState ?: return
         if (reader.book.mediaKind != MediaKind.AUDIO) return
