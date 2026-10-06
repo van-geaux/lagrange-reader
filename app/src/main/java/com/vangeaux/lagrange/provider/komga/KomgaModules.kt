@@ -4,6 +4,7 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.*
 
 import android.content.Context
+import android.webkit.CookieManager
 import android.util.Log
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -35,6 +36,11 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.net.ssl.SSLException
 
 private const val PAGE_SIZE = 100
+
+internal fun komgaSessionHeaders(authorization: String?, cookie: String?): Map<String, String> = buildMap {
+    authorization?.takeIf { it.isNotBlank() }?.let { put("Authorization", it) }
+    cookie?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
+}
 
 internal data class KomgaReadState(
     val status: BookReadStatus,
@@ -270,11 +276,12 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     override suspend fun sessionState(serverUrl: String): SessionState = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext SessionState.Unavailable
-        val auth = authorization ?: return@withContext SessionState.Unauthenticated
+        val headers = requestHeaders(base)
+        if (headers.isEmpty()) return@withContext SessionState.Unauthenticated
         runCatching {
             val request = Request.Builder()
                 .url("$base/api/v2/users/me")
-                .header("Authorization", auth)
+                .apply { headers.forEach { (name, value) -> header(name, value) } }
                 .get()
                 .build()
             client.newCall(request).execute().use { response ->
@@ -291,6 +298,8 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
         serverUrl = null
         authorization = null
         activeProfileId()?.let(credentialStore::clear)
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
     }
 
     internal suspend fun saveCurrentProfileSession() {
@@ -299,17 +308,27 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     internal suspend fun restoreCurrentProfileSession(): Boolean {
         authorization = activeProfileId()?.let(credentialStore::read)
-        return !authorization.isNullOrBlank()
+        return !authorization.isNullOrBlank() || hasWebSession()
     }
 
     internal fun clearRuntimeSession() {
         serverUrl = null
         authorization = null
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
     }
 
     private fun activeProfileId(): String? = ServerProfileStore(appContext).active()?.id
 
-    internal fun authorizationHeader(): String? = authorization
+    internal fun requestHeaders(serverUrl: String): Map<String, String> = komgaSessionHeaders(
+        authorization = authorization,
+        cookie = CookieManager.getInstance().getCookie(serverUrl)
+    )
+
+    internal fun hasSession(serverUrl: String): Boolean = requestHeaders(serverUrl).isNotEmpty()
+
+    private fun hasWebSession(): Boolean =
+        ServerProfileStore(appContext).active()?.serverUrl?.let { requestHeaders(it)["Cookie"] != null } == true
 }
 
 class KomgaLibraryModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaLibraryModule {
@@ -318,7 +337,7 @@ class KomgaLibraryModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaLibra
     override suspend fun loadLibraries(serverUrl: String): List<LibrarySummary> = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
         val request = Request.Builder().url("$base/api/v1/libraries").get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
@@ -349,7 +368,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
         val url = "$base/api/v1/books?library_id=$libraryId&page=$page&size=$PAGE_SIZE&sort=metadata.title,asc"
         val request = Request.Builder().url(url).get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
@@ -363,8 +382,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                     val projection = komgaBookProjection(item)
                     val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
                     val readState = projection.readState
-                    add(
-                        BookSummary(
+                    val summary = BookSummary(
                             libraryId = libraryId,
                             id = id,
                             fileId = item.optString("id").takeIf { it.isNotBlank() },
@@ -386,8 +404,8 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                             progressPageIndex = readState.page,
                             readStatus = readState.status,
                             isRead = readState.isRead
-                        )
                     )
+                    add(summary)
                 }
             }
             LibraryBooksPage(
@@ -432,7 +450,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
 
     private fun loadBooks(base: String, path: String): List<BookSummary> {
         val request = Request.Builder().url("$base$path").get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
@@ -450,7 +468,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
         val request = Request.Builder()
             .url("$base/api/v1/books/list?page=0&size=8&sort=metadata.releaseDate,desc")
             .header("Content-Type", "application/json")
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .post(
                 JSONObject()
                     .put(
@@ -488,7 +506,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
 
     private fun loadSeries(base: String, path: String): List<BookSummary> {
         val request = Request.Builder().url("$base$path").get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
@@ -576,7 +594,7 @@ class KomgaReadingProgressModuleImpl(
         val request = Request.Builder()
             .url(endpoint)
             .header("Content-Type", "application/json")
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .method(if (locator != null) "PUT" else "PATCH", payload.toString().toRequestBody(json))
             .build()
         client.newCall(request).execute().use { response ->
@@ -614,7 +632,7 @@ class KomgaReadingStatusModuleImpl(
         val request = Request.Builder()
             .url(endpoint)
             .header("Content-Type", "application/json")
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .patch(JSONObject().put("completed", true).toString().toRequestBody(json))
             .build()
         execute(endpoint, request)
@@ -625,7 +643,7 @@ class KomgaReadingStatusModuleImpl(
         val endpoint = "$base/api/v1/books/${book.id}/read-progress"
         val request = Request.Builder()
             .url(endpoint)
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .delete()
             .build()
         execute(endpoint, request)
@@ -712,7 +730,7 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
     override suspend fun loadBookDetail(serverUrl: String, book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
         val request = Request.Builder().url("$base/api/v1/books/${book.id}").get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw UserFacingException("Unable to load Komga book details (HTTP ${response.code}).")
@@ -733,7 +751,7 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
                     val progressionRequest = Request.Builder()
                         .url("$base/api/v1/books/${book.id}/progression")
                         .header("Accept", "application/vnd.readium.progression+json")
-                        .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+                        .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
                         .build()
                     client.newCall(progressionRequest).execute().use { progressionResponse ->
                         if (progressionResponse.isSuccessful) {
@@ -822,7 +840,7 @@ class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverMo
             "$base/api/v1/books/${book.id}/thumbnail"
         }
         val request = Request.Builder().url(thumbnailUrl).get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) null else response.body?.bytes()
@@ -830,7 +848,7 @@ class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverMo
     }
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(url).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) null else response.body?.bytes()
@@ -847,10 +865,10 @@ class KomgaDownloadModuleImpl(
 
     override suspend fun downloadBook(serverUrl: String, book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
-        if (auth.authorizationHeader().isNullOrBlank()) {
+        if (!auth.hasSession(base)) {
             auth.restoreCurrentProfileSession()
         }
-        if (auth.authorizationHeader().isNullOrBlank()) {
+        if (!auth.hasSession(base)) {
             throw AuthenticationRequiredException()
         }
         val fileId = book.fileId ?: book.id
@@ -890,7 +908,7 @@ class KomgaDownloadModuleImpl(
             throw UserFacingException("Unable to clear an interrupted Komga download before retrying.")
         }
         val request = Request.Builder().url("$base/api/v1/books/${book.id}/file").get()
-            .apply { auth.authorizationHeader()?.let { header("Authorization", it) } }
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         try {
             client.newCall(request).execute().use { response ->

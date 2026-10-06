@@ -34,6 +34,23 @@ class AppCoordinatorTest {
     )
 
     @Test
+    fun `login provider follows matching configured server profile`() {
+        assertEquals(
+            PROVIDER_KOMGA,
+            providerIdForLogin(
+                "https://komga.example.test/",
+                listOf(
+                    ServerProfile(
+                        id = "https://komga.example.test",
+                        serverUrl = "https://komga.example.test",
+                        providerId = PROVIDER_KOMGA
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
     fun `interrupted download record preserves physical filename`() {
         val record = interruptedDownloadRecord(
             DownloadAttempt(

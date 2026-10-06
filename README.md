@@ -78,7 +78,7 @@ Lagrange is not a standalone ebook reader and does not provide a BookOrbit serve
 3. Sign in with the account provided by your BookOrbit administrator.
 4. Browse your libraries, open a book, or download content from Book Detail for offline use.
 
-The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and a generic server-hosted sign-in fallback. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
+The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and Komga server-hosted sign-in in a WebView for configured OAuth2/OIDC providers. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
 
 ## How the client works
 

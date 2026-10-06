@@ -57,6 +57,14 @@ internal fun shouldRefreshAfterDownloadOutcome(
     booksByFileId: Map<String, BookSummary>
 ): Boolean = activeFileIds.none { fileId -> booksByFileId[fileId]?.id == logicalBookId }
 
+internal fun providerIdForLogin(
+    serverUrl: String,
+    profiles: List<ServerProfile>
+): String = profiles
+    .firstOrNull { serverUrlsMatch(it.serverUrl, serverUrl) }
+    ?.providerId
+    ?: PROVIDER_BOOKORBIT
+
 internal fun recoveredDownloadFilename(
     book: BookSummary,
     fileId: String,
@@ -961,6 +969,9 @@ class AppCoordinator internal constructor(
             val current = _screen.value as? AppScreen.Login ?: return@launch
             oidcJob?.cancel()
             oidcJob = null
+            if (current.providerId == PROVIDER_KOMGA) {
+                loginModule()?.clearSession()
+            }
             _screen.value = current.copy(serverSignIn = ServerSignInState())
             startServerSignInWatcher()
         }
@@ -2567,8 +2578,10 @@ class AppCoordinator internal constructor(
 
     private suspend fun showLogin(message: String, destination: PostLoginDestination) {
         pendingPostLoginDestination = destination
+        val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
         _screen.value = AppScreen.Login(
-            serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
+            serverUrl = serverUrl,
+            providerId = providerIdForLogin(serverUrl, serverProfileStore?.readAll().orEmpty()),
             message = message
         )
     }

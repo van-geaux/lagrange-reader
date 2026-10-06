@@ -313,13 +313,15 @@ private fun BookOrbitDestination(
         } else {
             LoginScreen(
                 serverUrl = screen.serverUrl,
+                providerId = screen.providerId,
                 configuredServerProfiles = coordinator.configuredServerProfiles(),
                 message = screen.message,
                 isSubmitting = screen.isSubmitting,
                 onSwitchServer = coordinator::switchToServerProfile,
                 onNewServer = coordinator::clearServer,
                 onSubmit = coordinator::submitLogin,
-                onOpenOidcSignIn = coordinator::openOidcSignIn
+                onOpenOidcSignIn = coordinator::openOidcSignIn,
+                onOpenServerSignIn = coordinator::openServerSignIn
             )
         }
         is AppScreen.Browser -> CompositionLocalProvider(
