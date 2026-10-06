@@ -257,13 +257,15 @@ internal fun ConfiguredServerCard(
 @Composable
 internal fun LoginScreen(
     serverUrl: String,
+    providerId: String,
     configuredServerProfiles: List<ServerProfile>,
     message: String?,
     isSubmitting: Boolean,
     onSwitchServer: (String) -> Unit,
     onNewServer: () -> Unit,
     onSubmit: (String, String) -> Unit,
-    onOpenOidcSignIn: () -> Unit
+    onOpenOidcSignIn: () -> Unit,
+    onOpenServerSignIn: () -> Unit
 ) {
     var username by remember(serverUrl) { mutableStateOf("") }
     var password by remember(serverUrl) { mutableStateOf("") }
@@ -400,14 +402,26 @@ internal fun LoginScreen(
                             Text("Sign in")
                         }
                     }
-                    OutlinedButton(
-                        onClick = onOpenOidcSignIn,
-                        enabled = !isSubmitting,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 52.dp)
-                    ) {
-                        Text("Sign in with SSO")
+                    if (providerId == PROVIDER_KOMGA) {
+                        OutlinedButton(
+                            onClick = onOpenServerSignIn,
+                            enabled = !isSubmitting,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                        ) {
+                            Text("Open server sign-in")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onOpenOidcSignIn,
+                            enabled = !isSubmitting,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                        ) {
+                            Text("Sign in with SSO")
+                        }
                     }
                 }
             }

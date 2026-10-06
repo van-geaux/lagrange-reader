@@ -112,7 +112,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     internal suspend fun streamingRequestHeaders(url: String): Map<String, String> {
         val serverUrl = getServerUrl().orEmpty()
         if (!sameHttpOrigin(url, serverUrl)) return emptyMap()
-        return authModule.authorizationHeader()?.let { mapOf("Authorization" to it) }.orEmpty()
+        return authModule.requestHeaders(serverUrl)
     }
 
     internal suspend fun recoverStreamingAuthentication(): Boolean =

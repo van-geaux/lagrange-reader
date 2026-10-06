@@ -961,6 +961,9 @@ class AppCoordinator internal constructor(
             val current = _screen.value as? AppScreen.Login ?: return@launch
             oidcJob?.cancel()
             oidcJob = null
+            if (current.providerId == PROVIDER_KOMGA) {
+                loginModule()?.clearSession()
+            }
             _screen.value = current.copy(serverSignIn = ServerSignInState())
             startServerSignInWatcher()
         }
