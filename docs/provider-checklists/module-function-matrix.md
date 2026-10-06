@@ -60,7 +60,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Libraries | Selected-library persistence | Library screen/profile | S | V | Verify per-provider persistence manually. |
 | Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`. |
 | Book catalog | Search | Search screen | S | N | Komga search is not implemented in the current adapter. |
-| Book catalog | Book filters and sorting | Library/Search/More screens | S | P | Verify title, author, series, genre, read state, format, and sort support. |
+| Book catalog | Book filters and sorting | Library/Search/More screens | S | S | User-confirmed on the issue-202 APK; genre, read state, progress, last-read, date, and existing format projections are applied locally after complete Komga paging. |
 | Home shelves | Currently reading | Home | S | N | Komga Home shelf modules are not implemented. |
 | Home shelves | On deck | Home | S | N | Komga Home shelf modules are not implemented. |
 | Home shelves | Want to read | Home | S | N | Komga Home shelf modules are not implemented. |
@@ -74,7 +74,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Aggregation | Post-aggregation library filter | Series screen | S | S | Komga applies library filtering after aggregate loading. |
 | Series | Series catalog | Series screen | S | S | Komga groups by series identity. |
 | Series | Series detail/member ordering | Series detail | S | S | Komga uses series number/order where available. |
-| Series | Completion/read-progress filters | Series filter | S | U | Requires Komga progress/status module. |
+| Series | Completion/read-progress filters | Series filter | S | S | User-confirmed on the issue-202 APK; genre/query/completion and read-progress/date sorting are applied to the aggregated series projection. |
 | Series | Smart Scopes | Series menu | S | U | Explicitly unsupported by Komga adapter. |
 | Authors | Author catalog | Authors screen | S | U | Explicitly unsupported by Komga adapter. |
 | Authors | Author books/navigation | Author detail | S | U | Explicitly unsupported by Komga adapter. |

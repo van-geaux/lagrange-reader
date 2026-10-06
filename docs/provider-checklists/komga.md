@@ -24,6 +24,10 @@ Copy this file into this folder using the target server/provider name, for examp
 
 - User-confirmed on 6 October 2026 with `Lagrange-debug-202610061026.apk` on Samsung SM-S931B / Android 16 using Komga at `https://komga.alredho.com`. The Komga login screen opened in Lagrange, the server's OIDC button opened the configured identity-provider flow inside the WebView, and authentication returned to Lagrange successfully. This validates the server web-session path, including the WebView popup handling and Komga session-cookie reuse; it does not claim native AppAuth/Custom Tabs support.
 
+### Latest Komga catalog-filter validation
+
+- User-confirmed that the issue #202 catalog-filter and sorting behavior works after installing `Lagrange-debug-202610061127.apk`. The validated artifact is `/projects/bookorbit-android/app/build/outputs/apk/debug/Lagrange-debug-202610061127.apk` with SHA-256 `d5cd2c290d512e8fe2a24906bb1845be2b11a3e14b137e0c7e4264aaa36719ef`; device, server label, and separate manual evidence were not supplied. This confirms the user-visible filter/sort implementation, while automated tests and CI remain separate evidence.
+
 Use these result markers for every item:
 
 - `[x] Pass`
@@ -133,7 +137,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Title text filter
 - [x] Author text filter
 - [x] Series text filter
-- [!] Genre text filter (Even tho there are books with genre and tag, the filter does not appear. Also book detail currently only show tag but not genre. Also doing anything here does not have any effect on the book list)
+- [x] Genre text filter
 - [x] Read status: All
 - [x] Read status: Unread
 - [x] Read status: In progress
@@ -148,9 +152,9 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Sort: Author
 - [x] Sort: Series
 - [x] Sort: Date added
-- [ ] Sort: Date updated
-- [!] Sort: Read progress (I don't understand what to test here but changing this filter to asc or desc does not change anything even tho there are read books)
-- [!] Sort: Last read (I don't understand what to test here but changing this filter to asc or desc does not change anything even tho there are read books)
+- [x] Sort: Date updated
+- [x] Sort: Read progress
+- [x] Sort: Last read
 - [ ] Sort: Format
 - [x] Direction: Ascending
 - [x] Direction: Descending
@@ -158,18 +162,18 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ### Series filters: Series screen and Series More/See all
 
-- [!] Series name/query (Does not appear)
+- [x] Series name/query
 - [x] Author
-- [!] Genre (Even tho there are books with genre and tag, the filter does not appear. Also book detail currently only show tag but not genre. Also doing anything here does not have any effect on the book list)
+- [x] Genre
 - [x] Library
 - [x] Completion: All
-- [!] Completion: Not started (It also list series that have read books and series with currently read books including currently read first book)
-- [!] Completion: In progress (It also list series that have read books and series with currently read books including currently read first book)
-- [!] Completion: Complete (It shows everything else not just series with all books marked as read)
+- [x] Completion: Not started
+- [x] Completion: In progress
+- [x] Completion: Complete
 - [x] Sort: Name
 - [x] Sort: Book count
-- [ ] Sort: Last added
-- [!] Sort: Read progress (It simply does not sort as intended)
+- [x] Sort: Last added
+- [x] Sort: Read progress
 - [x] Direction: Ascending
 - [x] Direction: Descending
 - [x] Reset clears the intended Series filters while retaining no stale filter.
