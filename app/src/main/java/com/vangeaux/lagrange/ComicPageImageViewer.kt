@@ -71,12 +71,24 @@ internal fun comicPageExportTitle(title: String, pageIndex: Int): String =
 internal fun paginatedComicLongPressPage(currentPage: Int, pageCount: Int): Int? =
     currentPage.takeIf { it in 0 until pageCount }
 
+internal fun paginatedComicPagePosition(position: Int, pageCount: Int): Int? =
+    position.takeIf { it in 0 until pageCount }
+
 internal fun paginatedComicPageIndex(
     pageHref: String,
     readingOrderHrefs: List<String>
 ): Int? = readingOrderHrefs.indexOfFirst { href ->
-    href.substringBefore('#') == pageHref.substringBefore('#')
+    href.substringBefore('#') == pageHref.substringBefore('#') ||
+        href.substringBefore('?').substringBefore('#') ==
+        pageHref.substringBefore('?').substringBefore('#')
 }.takeIf { it >= 0 }
+
+internal fun comicPageIndexFromLocator(
+    pageHref: String,
+    readingOrderHrefs: List<String>,
+    locatorPosition: Int?
+): Int? = paginatedComicPageIndex(pageHref, readingOrderHrefs)
+    ?: locatorPosition?.minus(1)?.takeIf { it in readingOrderHrefs.indices }
 
 internal fun fittedReaderImageSize(
     containerWidth: Float,

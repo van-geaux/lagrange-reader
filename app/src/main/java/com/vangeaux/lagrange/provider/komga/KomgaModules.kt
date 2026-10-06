@@ -88,13 +88,30 @@ internal fun komgaProgressEndpoint(base: String, bookId: String, hasLocator: Boo
     else "$base/api/v1/books/$bookId/read-progress"
 
 private fun komgaFormat(format: String?, filename: String?): String? {
-    val value = (format ?: filename?.substringAfterLast('.')).orEmpty().lowercase(Locale.US)
+    val filenameExtension = filename?.substringAfterLast('.', "")?.lowercase(Locale.US)
+    when (filenameExtension) {
+        "epub" -> return "epub"
+        "pdf" -> return "pdf"
+        "cbz" -> return "cbz"
+        "cbr" -> return "cbr"
+        "cb7" -> return "cb7"
+        "m4b" -> return "m4b"
+        "m4a" -> return "m4a"
+        "mp3" -> return "mp3"
+        "flac" -> return "flac"
+        "opus" -> return "opus"
+        "ogg" -> return "ogg"
+        "wav" -> return "wav"
+    }
+    val value = format.orEmpty().lowercase(Locale.US)
     return when {
         value.contains("epub") -> "epub"
         value.contains("pdf") -> "pdf"
         value.contains("cbz") -> "cbz"
         value.contains("cbr") -> "cbr"
         value.contains("cb7") || value.contains("7z") -> "cb7"
+        value == "application/zip" -> "cbz"
+        value.contains("rar") -> "cbr"
         value.contains("m4b") -> "m4b"
         value.contains("m4a") -> "m4a"
         value.contains("mp3") || value.contains("mpeg") -> "mp3"
@@ -102,7 +119,7 @@ private fun komgaFormat(format: String?, filename: String?): String? {
         value.contains("opus") -> "opus"
         value.contains("ogg") -> "ogg"
         value.contains("wav") -> "wav"
-        else -> filename?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() }
+        else -> filenameExtension?.takeIf { it.isNotBlank() }
     }
 }
 
@@ -119,6 +136,7 @@ internal fun komgaBookProjection(item: JSONObject): KomgaBookProjection {
     val primaryFile = media.optJSONArray("files")?.optJSONObject(0)
     val filename = primaryFile?.optString("fileName")?.takeIf { it.isNotBlank() }
         ?: media.optString("fileName").takeIf { it.isNotBlank() }
+        ?: item.optString("name").takeIf { it.isNotBlank() }
     val format = komgaFormat(
         primaryFile?.optString("mediaType")?.takeIf { it.isNotBlank() }
             ?: media.optString("mediaType").takeIf { it.isNotBlank() },
@@ -705,9 +723,10 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
             val filename = primaryFile?.optString("fileName")?.takeIf { it.isNotBlank() }
                 ?: media.optString("fileName").takeIf { it.isNotBlank() }
                 ?: root.optString("name").takeIf { it.isNotBlank() }
-            val format = primaryFile?.optString("mediaType")?.takeIf { it.isNotBlank() }
+            val rawFormat = primaryFile?.optString("mediaType")?.takeIf { it.isNotBlank() }
                 ?: media.optString("mediaType").takeIf { it.isNotBlank() }
                 ?: filename?.substringAfterLast('.', "")
+            val format = komgaFormat(rawFormat, filename)
             val mediaKind = komgaMediaKind(format, filename)
             val progressionLocatorJson = if (mediaKind == MediaKind.EPUB) {
                 runCatching {

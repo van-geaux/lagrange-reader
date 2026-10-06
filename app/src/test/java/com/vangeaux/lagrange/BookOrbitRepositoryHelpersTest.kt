@@ -280,8 +280,17 @@ class BookOrbitRepositoryHelpersTest {
     @Test
     fun `comic page count parser rejects malformed and empty responses`() {
         assertEquals(24, parseComicPageCount("{\"pageCount\":24}".toByteArray()))
+        assertEquals(3, parseComicPageCount("[{\"number\":0},{\"number\":1},{\"number\":2}]".toByteArray()))
         assertNull(parseComicPageCount("{\"pageCount\":0}".toByteArray()))
         assertNull(parseComicPageCount("not-json".toByteArray()))
+    }
+
+    @Test
+    fun `comic page URL inserts page number before query parameters`() {
+        assertEquals(
+            "https://komga.example/api/v1/books/book-1/pages/0?zero_based=true",
+            comicPageUrl("https://komga.example/api/v1/books/book-1/pages?zero_based=true", 0)
+        )
     }
 
     @Test

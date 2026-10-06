@@ -43,6 +43,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.viewpager.widget.ViewPager
+
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
@@ -77,7 +79,6 @@ import com.vangeaux.lagrange.provider.resolveActiveProviderAuthenticatedMediaMod
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
-
 internal fun continuousComicCacheBudgetBytes(
     maxMemoryBytes: Long = Runtime.getRuntime().maxMemory()
 ): Int =
@@ -137,10 +138,10 @@ internal suspend fun openReadiumRemoteComic(
         return@withContext ReadiumComicOpenResult.Error("BookOrbit reported no comic pages.")
     }
     val normalizedPagesUrl = pagesUrl.trimEnd('/')
-    val baseUrl = AbsoluteUrl(normalizedPagesUrl + "/")
+    val baseUrl = AbsoluteUrl(normalizedPagesUrl.substringBefore('?') + "/")
         ?: return@withContext ReadiumComicOpenResult.Error("The comic page URL is invalid.")
     val pageUrls = (0 until pageCount).mapNotNull { pageIndex ->
-        AbsoluteUrl(normalizedPagesUrl + "/" + pageIndex)
+        AbsoluteUrl(comicPageUrl(normalizedPagesUrl, pageIndex))
     }
     if (pageUrls.size != pageCount) {
         return@withContext ReadiumComicOpenResult.Error("A comic page URL is invalid.")
@@ -173,6 +174,16 @@ internal suspend fun openReadiumRemoteComic(
         )
     }
     ReadiumComicOpenResult.Opened(publication)
+}
+
+internal fun comicPageUrl(pagesUrl: String, pageIndex: Int): String {
+    val normalized = pagesUrl.trimEnd('/')
+    val queryIndex = normalized.indexOf('?')
+    return if (queryIndex < 0) {
+        "$normalized/$pageIndex"
+    } else {
+        normalized.substring(0, queryIndex) + "/$pageIndex" + normalized.substring(queryIndex)
+    }
 }
 
 internal data class ReadiumComicProgressResult(
@@ -585,6 +596,16 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         supportFragmentManager.beginTransaction()
             .replace(readerContainerId, fragment, NAVIGATOR_TAG)
             .commitNow()
+        findComicPager(fragment.view)?.let { pager ->
+            pager.addOnPageChangeListener(
+                object : ViewPager.SimpleOnPageChangeListener() {
+                    override fun onPageSelected(position: Int) {
+                        updatePaginatedPage(position, openedPublication)
+                    }
+                }
+            )
+            updatePaginatedPage(pager.currentItem, openedPublication)
+        }
         fragment.publicationView.layoutDirection = if (
             readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
         ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
@@ -602,7 +623,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         navigatorLocationJob?.cancel()
         navigatorLocationJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                fragment.currentLocator.collect(::updateLocation)
+                fragment.currentLocator.collect(::persistLocation)
             }
         }
         progressView?.visibility = View.GONE
@@ -651,6 +672,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         is PhotoView -> view
         is ViewGroup -> (0 until view.childCount)
             .firstNotNullOfOrNull { index -> findComicPhotoView(view.getChildAt(index)) }
+        else -> null
+    }
+
+    private fun findComicPager(view: View?): ViewPager? = when (view) {
+        is ViewPager -> view
+        is ViewGroup -> (0 until view.childCount)
+            .firstNotNullOfOrNull { index -> findComicPager(view.getChildAt(index)) }
         else -> null
     }
 
@@ -820,10 +848,31 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private fun updateLocation(locator: Locator) {
         val openedPublication = publication ?: return
-        val index = openedPublication.readingOrder.indexOfFirst { link ->
+        val directIndex = openedPublication.readingOrder.indexOfFirst { link ->
             link.url().isEquivalent(locator.href.removeFragment())
-        }.takeIf { it >= 0 } ?: currentPage
+        }
+        val index = directIndex.takeIf { it >= 0 }
+            ?: comicPageIndexFromLocator(
+                pageHref = locator.href.toString(),
+                readingOrderHrefs = openedPublication.readingOrder.map { link -> link.url().toString() },
+                locatorPosition = locator.locations.position
+            )
+            ?: currentPage
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)
+        persistLocation(locator)
+    }
+
+    private fun updatePaginatedPage(position: Int, openedPublication: Publication) {
+        val pageIndex = paginatedComicPagePosition(position, openedPublication.readingOrder.size)
+            ?: return
+        currentPage = pageIndex
+        val locator = openedPublication.locatorFromLink(openedPublication.readingOrder[pageIndex])
+            ?: return
+        persistLocation(locator)
+    }
+
+
+    private fun persistLocation(locator: Locator) {
         if (!isPreview) locatorStore.save(readerKey, locator)
         readingSessionReporter.activity(currentProgressPercent())
         updateResult()
