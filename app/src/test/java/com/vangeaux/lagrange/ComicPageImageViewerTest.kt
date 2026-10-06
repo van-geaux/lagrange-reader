@@ -59,6 +59,13 @@ class ComicPageImageViewerTest {
     }
 
     @Test
+    fun `pager position is the authoritative paginated comic page`() {
+        assertEquals(0, paginatedComicPagePosition(0, 242))
+        assertEquals(241, paginatedComicPagePosition(241, 242))
+        assertEquals(null, paginatedComicPagePosition(242, 242))
+    }
+
+    @Test
     fun `comic locator position resolves page when remote href is normalized`() {
         assertEquals(
             5,

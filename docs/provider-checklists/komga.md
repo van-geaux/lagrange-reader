@@ -16,6 +16,10 @@ Copy this file into this folder using the target server/provider name, for examp
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
 - Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 over USB (serial RRGL4029FRB). Komga book 0RSF6TWS1GRPH was reset to approximately 55% on the server and opened at 54% in Lagrange with the exact server EPUB locator. https://github.com/van-geaux/lagrange-reader/issues/199`
 
+### Latest comic validation
+
+- User-confirmed on 6 October 2026 with `Lagrange-debug-202610060853.apk` on Samsung SM-S931B / Android 16 over Tailscale ADB (`100.90.237.107:32927`). An online Komga comic opened in paginated mode, the visible page counter advanced from page 1 while navigating forward and backward, and the streamed book did not become a durable local download. The validation covers the online CBZ/CBR reader/progress path; no PDF sample was available and no separate CB7 validation is claimed.
+
 Use these result markers for every item:
 
 - `[x] Pass`
@@ -205,7 +209,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 - [x] Stream/open a supported EPUB online.
 - [ ] Stream/open a supported PDF online.
-- [ ] Stream/open a supported comic online.
+- [x] Stream/open a supported comic online. (User confirmed the online Komga comic opens and the page counter advances in the issue-223 APK; the validated scope is the streamed CBZ/CBR path.)
 - [-] Stream/listen to a supported audiobook online. (Komga does not support audiobook)
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
@@ -223,7 +227,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [ ] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
 - [x] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported. (The Komga Readium progression locator restored Chapter 32/63 and Book 151/279, approximately 54%.)
 - [ ] PDF progress synchronization is verified, including page/index behavior where supported.
-- [ ] Comic progress synchronization is verified for each supported comic format.
+- [x] Comic page progress is verified for the streamed CBZ/CBR path. (The user confirmed forward/backward page movement and the visible page counter on the issue-223 APK; no separate CB7 validation is claimed.)
 - [-] Audiobook progress synchronization is verified for single-file playback. (Komga does not support audiobook)
 - [-] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position. (Komga does not support audiobook)
 - [x] Read and unread state synchronization is verified independently from exact position synchronization.

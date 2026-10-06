@@ -71,6 +71,9 @@ internal fun comicPageExportTitle(title: String, pageIndex: Int): String =
 internal fun paginatedComicLongPressPage(currentPage: Int, pageCount: Int): Int? =
     currentPage.takeIf { it in 0 until pageCount }
 
+internal fun paginatedComicPagePosition(position: Int, pageCount: Int): Int? =
+    position.takeIf { it in 0 until pageCount }
+
 internal fun paginatedComicPageIndex(
     pageHref: String,
     readingOrderHrefs: List<String>

@@ -9,7 +9,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
 import android.util.LruCache
 import android.view.Gravity
 import android.view.KeyEvent
@@ -44,6 +43,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.viewpager.widget.ViewPager
 
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -79,8 +79,6 @@ import com.vangeaux.lagrange.provider.resolveActiveProviderAuthenticatedMediaMod
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
-private const val PAGINATED_COMIC_PROGRESS_TAG = "ComicProgress223Paginated"
-
 internal fun continuousComicCacheBudgetBytes(
     maxMemoryBytes: Long = Runtime.getRuntime().maxMemory()
 ): Int =
@@ -598,6 +596,16 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         supportFragmentManager.beginTransaction()
             .replace(readerContainerId, fragment, NAVIGATOR_TAG)
             .commitNow()
+        findComicPager(fragment.view)?.let { pager ->
+            pager.addOnPageChangeListener(
+                object : ViewPager.SimpleOnPageChangeListener() {
+                    override fun onPageSelected(position: Int) {
+                        updatePaginatedPage(position, openedPublication)
+                    }
+                }
+            )
+            updatePaginatedPage(pager.currentItem, openedPublication)
+        }
         fragment.publicationView.layoutDirection = if (
             readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
         ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
@@ -615,13 +623,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         navigatorLocationJob?.cancel()
         navigatorLocationJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                fragment.currentLocator.collect { locator ->
-                    Log.d(
-                        PAGINATED_COMIC_PROGRESS_TAG,
-                        "locator href=${locator.href} position=${locator.locations.position}"
-                    )
-                    updateLocation(locator)
-                }
+                fragment.currentLocator.collect(::persistLocation)
             }
         }
         progressView?.visibility = View.GONE
@@ -670,6 +672,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         is PhotoView -> view
         is ViewGroup -> (0 until view.childCount)
             .firstNotNullOfOrNull { index -> findComicPhotoView(view.getChildAt(index)) }
+        else -> null
+    }
+
+    private fun findComicPager(view: View?): ViewPager? = when (view) {
+        is ViewPager -> view
+        is ViewGroup -> (0 until view.childCount)
+            .firstNotNullOfOrNull { index -> findComicPager(view.getChildAt(index)) }
         else -> null
     }
 
@@ -849,11 +858,16 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 locatorPosition = locator.locations.position
             )
             ?: currentPage
-        Log.d(
-            PAGINATED_COMIC_PROGRESS_TAG,
-            "directIndex=$directIndex resolvedIndex=$index currentPageBefore=$currentPage"
-        )
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)
+        persistLocation(locator)
+    }
+
+    private fun updatePaginatedPage(position: Int, openedPublication: Publication) {
+        val pageIndex = paginatedComicPagePosition(position, openedPublication.readingOrder.size)
+            ?: return
+        currentPage = pageIndex
+        val locator = openedPublication.locatorFromLink(openedPublication.readingOrder[pageIndex])
+            ?: return
         persistLocation(locator)
     }
 

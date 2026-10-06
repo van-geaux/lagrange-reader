@@ -2,7 +2,6 @@ package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +51,6 @@ internal enum class ContinuousComicTapAction {
 
 internal const val MAX_CONTINUOUS_COMIC_BITMAP_PIXELS = 16_000_000L
 internal const val CONTINUOUS_COMIC_PREFETCH_PAGE_COUNT = 2
-private const val CONTINUOUS_COMIC_PROGRESS_TAG = "ComicProgress223"
-
 internal data class ContinuousComicVisibleItem(
     val index: Int,
     val offset: Int,
@@ -202,10 +199,7 @@ internal fun ContinuousComicReader(
             ) ?: listState.firstVisibleItemIndex
         }
             .distinctUntilChanged()
-            .collect { pageIndex ->
-                Log.d(CONTINUOUS_COMIC_PROGRESS_TAG, "visiblePage=$pageIndex")
-                onPageChanged(pageIndex)
-            }
+            .collect(onPageChanged)
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val targetWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
