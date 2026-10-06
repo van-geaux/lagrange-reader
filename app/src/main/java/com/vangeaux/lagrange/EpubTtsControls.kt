@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -116,34 +117,34 @@ private fun EpubTtsSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val normalized = settings.normalized()
-    var speedText by remember(normalized) {
+    var speedText by remember {
         mutableStateOf(formatEpubTtsRate(normalized.speed))
     }
-    var pitchText by remember(normalized) {
+    var pitchText by remember {
         mutableStateOf(formatEpubTtsRate(normalized.pitch))
     }
-    var customPausesEnabled by remember(normalized) {
+    var customPausesEnabled by remember {
         mutableStateOf(normalized.pauses.enabled)
     }
-    var showBookTitleOnLockScreen by remember(normalized) {
+    var showBookTitleOnLockScreen by remember {
         mutableStateOf(normalized.showBookTitleOnLockScreen)
     }
-    var commaText by remember(normalized) {
+    var commaText by remember {
         mutableStateOf(normalized.pauses.commaMillis.toString())
     }
-    var semicolonText by remember(normalized) {
+    var semicolonText by remember {
         mutableStateOf(normalized.pauses.semicolonMillis.toString())
     }
-    var colonText by remember(normalized) {
+    var colonText by remember {
         mutableStateOf(normalized.pauses.colonMillis.toString())
     }
-    var emDashText by remember(normalized) {
+    var emDashText by remember {
         mutableStateOf(normalized.pauses.emDashMillis.toString())
     }
-    var ellipsisText by remember(normalized) {
+    var ellipsisText by remember {
         mutableStateOf(normalized.pauses.ellipsisMillis.toString())
     }
-    var parenthesesText by remember(normalized) {
+    var parenthesesText by remember {
         mutableStateOf(normalized.pauses.parenthesesMillis.toString())
     }
     var showValidationErrors by remember { mutableStateOf(false) }
@@ -157,6 +158,12 @@ private fun EpubTtsSettingsDialog(
     val parsedEllipsis = parseEpubTtsPauseMillis(ellipsisText)
     val parsedParentheses = parseEpubTtsPauseMillis(parenthesesText)
 
+    fun applyImmediateRate(speed: Float? = null, pitch: Float? = null) {
+        speed?.let { speedText = formatEpubTtsRate(it) }
+        pitch?.let { pitchText = formatEpubTtsRate(it) }
+        onApply(normalized.copy(speed = speed ?: normalized.speed, pitch = pitch ?: normalized.pitch))
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Text-to-speech settings") },
@@ -168,21 +175,26 @@ private fun EpubTtsSettingsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TtsRateSetting(
+                PlaybackRateAdjustmentSetting(
                     title = "Speed",
-                    value = speedText,
-                    presets = EPUB_TTS_PLAYBACK_SPEED_OPTIONS,
-                    isError = showValidationErrors && parsedSpeed == null,
+                    value = normalized.speed,
+                    minHundredths = EPUB_TTS_RATE_MIN_HUNDREDTHS,
+                    maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
                     rateDescription = "text-to-speech speed",
-                    onValueChange = { speedText = it }
+                    onValueChange = { applyImmediateRate(speed = it) }
                 )
-                TtsRateSetting(
+                PlaybackRateAdjustmentSetting(
                     title = "Pitch",
-                    value = pitchText,
-                    presets = EPUB_TTS_PITCH_OPTIONS,
-                    isError = showValidationErrors && parsedPitch == null,
+                    value = normalized.pitch,
+                    minHundredths = EPUB_TTS_RATE_MIN_HUNDREDTHS,
+                    maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
                     rateDescription = "text-to-speech pitch",
-                    onValueChange = { pitchText = it }
+                    onValueChange = { applyImmediateRate(pitch = it) }
+                )
+                HorizontalDivider()
+                Text(
+                    "Speed and pitch changes apply immediately. Settings below require Apply.",
+                    style = MaterialTheme.typography.bodySmall
                 )
                 Text("Extra punctuation pauses", style = MaterialTheme.typography.titleSmall)
                 Row(
@@ -196,60 +208,65 @@ private fun EpubTtsSettingsDialog(
                     )
                     Switch(
                         checked = customPausesEnabled,
-                        onCheckedChange = { customPausesEnabled = it }
+                        onCheckedChange = { customPausesEnabled = it },
+                        modifier = Modifier.testTag("tts-custom-pauses")
                     )
                 }
-                Text(
-                    "Values are at 1× and scale with reading speed. Grouping marks applies to " +
-                        "opening and closing parentheses, square brackets, and braces. Turn " +
-                        "custom pauses off to use only the Android speech engine's handling. " +
-                        "Some voices add their own latency between chunks; use 0 for commas if " +
-                        "small values sound too long.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                TtsPauseSetting(
-                    label = "Comma",
-                    value = commaText,
-                    isError = customPausesEnabled && showValidationErrors && parsedComma == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { commaText = it }
-                )
-                TtsPauseSetting(
-                    label = "Semicolon",
-                    value = semicolonText,
-                    isError = customPausesEnabled && showValidationErrors && parsedSemicolon == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { semicolonText = it }
-                )
-                TtsPauseSetting(
-                    label = "Colon",
-                    value = colonText,
-                    isError = customPausesEnabled && showValidationErrors && parsedColon == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { colonText = it }
-                )
-                TtsPauseSetting(
-                    label = "Em dash",
-                    value = emDashText,
-                    isError = customPausesEnabled && showValidationErrors && parsedEmDash == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { emDashText = it }
-                )
-                TtsPauseSetting(
-                    label = "Ellipsis (… or ...)",
-                    value = ellipsisText,
-                    isError = customPausesEnabled && showValidationErrors && parsedEllipsis == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { ellipsisText = it }
-                )
-                TtsPauseSetting(
-                    label = "Grouping marks: ( ) [ ] { }",
-                    value = parenthesesText,
-                    isError = customPausesEnabled && showValidationErrors &&
-                        parsedParentheses == null,
-                    enabled = customPausesEnabled,
-                    onValueChange = { parenthesesText = it }
-                )
+                if (customPausesEnabled) {
+                    Text(
+                        "Values are measured at 1× and scale with reading speed. Android voices " +
+                            "may add their own latency between chunks.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    TtsPauseSetting(
+                        label = "Comma",
+                        value = commaText,
+                        isError = showValidationErrors && parsedComma == null,
+                        enabled = true,
+                        onValueChange = { commaText = it },
+                        supportingText = "Use 0 if the pause sounds too long."
+                    )
+                    TtsPauseSetting(
+                        label = "Semicolon",
+                        value = semicolonText,
+                        isError = showValidationErrors && parsedSemicolon == null,
+                        enabled = true,
+                        onValueChange = { semicolonText = it }
+                    )
+                    TtsPauseSetting(
+                        label = "Colon",
+                        value = colonText,
+                        isError = showValidationErrors && parsedColon == null,
+                        enabled = true,
+                        onValueChange = { colonText = it }
+                    )
+                    TtsPauseSetting(
+                        label = "Em dash",
+                        value = emDashText,
+                        isError = showValidationErrors && parsedEmDash == null,
+                        enabled = true,
+                        onValueChange = { emDashText = it }
+                    )
+                    TtsPauseSetting(
+                        label = "Ellipsis (… or ...)",
+                        value = ellipsisText,
+                        isError = showValidationErrors && parsedEllipsis == null,
+                        enabled = true,
+                        onValueChange = { ellipsisText = it }
+                    )
+                    Text(
+                        "Grouping marks applies to opening and closing parentheses, square " +
+                            "brackets, and braces.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    TtsPauseSetting(
+                        label = "Grouping marks: ( ) [ ] { }",
+                        value = parenthesesText,
+                        isError = showValidationErrors && parsedParentheses == null,
+                        enabled = true,
+                        onValueChange = { parenthesesText = it }
+                    )
+                }
                 Text("Lock-screen privacy", style = MaterialTheme.typography.titleSmall)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -265,6 +282,10 @@ private fun EpubTtsSettingsDialog(
                         onCheckedChange = { showBookTitleOnLockScreen = it }
                     )
                 }
+                Text(
+                    "When enabled, the book title is shown in the lock-screen media controls.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         },
         confirmButton = {
@@ -310,33 +331,13 @@ private fun EpubTtsSettingsDialog(
 }
 
 @Composable
-private fun TtsRateSetting(
-    title: String,
-    value: String,
-    presets: List<Float>,
-    isError: Boolean,
-    rateDescription: String,
-    onValueChange: (String) -> Unit
-) {
-    PlaybackRateSetting(
-        title = title,
-        value = value,
-        minHundredths = EPUB_TTS_RATE_MIN_HUNDREDTHS,
-        maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
-        isError = isError,
-        rateDescription = rateDescription,
-        presets = presets,
-        onValueChange = onValueChange
-    )
-}
-
-@Composable
 private fun TtsPauseSetting(
     label: String,
     value: String,
     isError: Boolean,
     enabled: Boolean,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    supportingText: String? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -349,7 +350,13 @@ private fun TtsPauseSetting(
         isError = isError,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         supportingText = {
-            Text(if (isError) "Enter a whole number from 0 to 2000" else "0 to 2000 ms")
+            Text(
+                when {
+                    isError -> "Enter a whole number from 0 to 2000"
+                    supportingText != null -> supportingText
+                    else -> "0 to 2000 ms"
+                }
+            )
         }
     )
 }

@@ -11,10 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
@@ -63,7 +66,7 @@ class EpubMediaOverlayControlsInstrumentedTest {
     }
 
     @Test
-    fun readAlongSettingsUseSharedAdjustmentStepsAndApplyExplicitly() {
+    fun readAlongSettingsApplyAdjustmentStepsImmediatelyWithoutPresetsOrApply() {
         val speed = mutableFloatStateOf(1f)
         composeRule.setContent {
             BookOrbitTheme {
@@ -84,13 +87,13 @@ class EpubMediaOverlayControlsInstrumentedTest {
         composeRule.onNodeWithContentDescription("Read-along settings").performClick()
         composeRule.onNodeWithText("Read-along settings").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Increase read-along speed by 0.05").performClick()
-        composeRule.runOnIdle { assertEquals(1f, speed.floatValue, 0.0001f) }
-        composeRule.onNodeWithText("Apply").performClick()
         composeRule.runOnIdle { assertEquals(1.05f, speed.floatValue, 0.0001f) }
+        composeRule.onAllNodesWithText("Custom speed").assertCountEquals(0)
+        composeRule.onNodeWithText("Apply").assertIsNotEnabled()
     }
 
     @Test
-    fun ttsSettingsUseTheSameFineAndCoarseAdjustmentPatternForSpeedAndPitch() {
+    fun ttsSpeedAndPitchApplyImmediatelyAndPunctuationIsConditional() {
         val settings = mutableStateOf(EpubTtsSettings())
         composeRule.setContent {
             BookOrbitTheme {
@@ -112,15 +115,19 @@ class EpubMediaOverlayControlsInstrumentedTest {
         composeRule.onNodeWithContentDescription(
             "Increase text-to-speech speed by 0.05"
         ).performClick()
+        composeRule.runOnIdle { assertEquals(1.05f, settings.value.speed, 0.0001f) }
         composeRule.onNodeWithContentDescription(
             "Increase text-to-speech pitch by 0.10"
         ).performClick()
-        composeRule.onNodeWithText("Apply").performClick()
-
         composeRule.runOnIdle {
             assertEquals(1.05f, settings.value.speed, 0.0001f)
             assertEquals(1.1f, settings.value.pitch, 0.0001f)
         }
+        composeRule.onNodeWithText("Speed and pitch changes apply immediately. Settings below require Apply.")
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithText("Comma").assertCountEquals(0)
+        composeRule.onNodeWithTag("tts-custom-pauses").performClick()
+        composeRule.onNodeWithText("Comma").assertIsDisplayed()
     }
 
     @Test
