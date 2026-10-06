@@ -42,6 +42,10 @@ internal fun komgaSessionHeaders(authorization: String?, cookie: String?): Map<S
     cookie?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
 }
 
+internal fun komgaParseInstantMillis(value: String?): Long? = value
+    ?.takeIf { it.isNotBlank() }
+    ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+
 internal data class KomgaReadState(
     val status: BookReadStatus,
     val isRead: Boolean,
@@ -403,7 +407,13 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                             progressPercent = readState.progressPercent,
                             progressPageIndex = readState.page,
                             readStatus = readState.status,
-                            isRead = readState.isRead
+                            isRead = readState.isRead,
+                            addedAtMillis = komgaParseInstantMillis(item.optString("created")),
+                            updatedAtMillis = komgaParseInstantMillis(item.optString("lastModified")),
+                            lastReadAtMillis = komgaParseInstantMillis(
+                                item.optJSONObject("readProgress")?.optString("readDate")
+                            ),
+                            genres = metadata.optJSONArray("genres").toStringList()
                     )
                     add(summary)
                 }

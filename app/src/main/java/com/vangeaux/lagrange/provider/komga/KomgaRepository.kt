@@ -234,7 +234,43 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         libraryId: String,
         page: Int,
         filter: BookBrowseFilter
-    ): LibraryBooksPage = loadBooksPage(libraryId, page)
+    ): LibraryBooksPage {
+        if (!filter.isActive) return loadBooksPage(libraryId, page)
+        val serverUrl = getServerUrl().orEmpty()
+        return runCatching {
+            val allBooks = buildList {
+                var currentPage = 0
+                while (currentPage < 1000) {
+                    val result = catalogModule.loadBooks(serverUrl, libraryId, currentPage)
+                    addAll(result.items)
+                    if (result.isComplete || result.items.isEmpty()) break
+                    currentPage++
+                }
+            }
+            filteredLibraryPage(allBooks, filter, page)
+        }.getOrElse { error ->
+            val cached = cachedLibraryPage(serverUrl, libraryId)?.items.orEmpty()
+            if (cached.isEmpty()) throw error
+            filteredLibraryPage(cached, filter, page)
+        }
+    }
+
+    private fun filteredLibraryPage(
+        books: List<BookSummary>,
+        filter: BookBrowseFilter,
+        page: Int
+    ): LibraryBooksPage {
+        val filtered = filterAndSortLocalBooks(books, filter)
+        val from = (page * 100).coerceAtMost(filtered.size)
+        val to = (from + 100).coerceAtMost(filtered.size)
+        return LibraryBooksPage(
+            items = filtered.subList(from, to),
+            total = filtered.size,
+            page = page,
+            size = 100,
+            isComplete = to >= filtered.size
+        )
+    }
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo {
         val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
