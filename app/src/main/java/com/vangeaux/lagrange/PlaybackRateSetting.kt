@@ -105,6 +105,27 @@ internal fun PlaybackRateSetting(
 }
 
 @Composable
+internal fun PlaybackRateAdjustmentSetting(
+    title: String,
+    value: Float,
+    minHundredths: Int,
+    maxHundredths: Int,
+    rateDescription: String,
+    onValueChange: (Float) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        PlaybackRateAdjustmentRow(
+            value = value,
+            minHundredths = minHundredths,
+            maxHundredths = maxHundredths,
+            rateDescription = rateDescription,
+            onValueChange = onValueChange
+        )
+    }
+}
+
+@Composable
 internal fun PlaybackRateAdjustmentRow(
     value: Float,
     minHundredths: Int,

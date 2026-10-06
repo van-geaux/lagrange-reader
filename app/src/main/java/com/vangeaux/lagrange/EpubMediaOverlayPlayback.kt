@@ -340,7 +340,7 @@ internal fun EpubMediaOverlayControls(
         if (settingsVisible) {
             EpubMediaOverlaySettingsDialog(
                 speed = speed,
-                onApply = onSpeedChange,
+                onSpeedChange = onSpeedChange,
                 onDismiss = { settingsVisible = false }
             )
         }
@@ -350,49 +350,26 @@ internal fun EpubMediaOverlayControls(
 @Composable
 private fun EpubMediaOverlaySettingsDialog(
     speed: Float,
-    onApply: (Float) -> Unit,
+    onSpeedChange: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     val normalized = normalizeAudioPlaybackSpeed(speed)
-    var speedText by remember(normalized) {
-        mutableStateOf(formatEditablePlaybackRate(normalized))
-    }
-    var showValidationError by remember { mutableStateOf(false) }
-    val parsedSpeed = parsePlaybackRate(
-        value = speedText,
-        minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
-        maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS
-    )
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Read-along settings") },
         text = {
-            PlaybackRateSetting(
+            PlaybackRateAdjustmentSetting(
                 title = "Speed",
-                value = speedText,
+                value = normalized,
                 minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
                 maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
-                isError = showValidationError && parsedSpeed == null,
                 rateDescription = "read-along speed",
-                presets = EPUB_TTS_PLAYBACK_SPEED_OPTIONS,
-                onValueChange = { speedText = it }
+                onValueChange = onSpeedChange
             )
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    val value = parsedSpeed
-                    if (value == null) {
-                        showValidationError = true
-                    } else {
-                        onApply(value)
-                        onDismiss()
-                    }
-                }
-            ) { Text("Apply") }
+            TextButton(onClick = {}, enabled = false) { Text("Apply") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

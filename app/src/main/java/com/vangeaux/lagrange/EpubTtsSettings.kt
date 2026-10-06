@@ -7,32 +7,6 @@ internal const val EPUB_TTS_RATE_MAX_HUNDREDTHS = 200
 internal const val EPUB_TTS_PAUSE_MIN_MILLIS = 0
 internal const val EPUB_TTS_PAUSE_MAX_MILLIS = 2_000
 
-internal val EPUB_TTS_PLAYBACK_SPEED_OPTIONS = listOf(
-    0.5f,
-    0.75f,
-    0.9f,
-    0.95f,
-    1f,
-    1.05f,
-    1.1f,
-    1.25f,
-    1.5f,
-    1.75f,
-    2f
-)
-
-internal val EPUB_TTS_PITCH_OPTIONS = listOf(
-    0.5f,
-    0.75f,
-    0.9f,
-    1f,
-    1.1f,
-    1.25f,
-    1.5f,
-    1.75f,
-    2f
-)
-
 internal data class EpubTtsPauseSettings(
     val enabled: Boolean = true,
     // A non-zero comma value necessarily creates a new Android TTS utterance. Engines may add
@@ -58,7 +32,7 @@ internal data class EpubTtsPauseSettings(
 internal data class EpubTtsSettings(
     val speed: Float = 1f,
     val pitch: Float = 1f,
-    val pauses: EpubTtsPauseSettings = EpubTtsPauseSettings(),
+    val pauses: EpubTtsPauseSettings = EpubTtsPauseSettings(enabled = false),
     val showBookTitleOnLockScreen: Boolean = true
 ) {
     fun normalized(): EpubTtsSettings = copy(

@@ -34,7 +34,7 @@ The TTS module does not upload credentials or expose provider-specific network b
 
 ## Persistence and settings
 
-TTS preferences are stored by `AppPreferencesStore`, separately from server profiles and credentials. The persisted settings include speed, pitch, punctuation pauses, and whether the book title appears on the lock screen. EPUB TTS locator state is stored separately from normal EPUB reader position.
+TTS preferences are stored by `AppPreferencesStore`, separately from server profiles and credentials. The persisted settings include speed, pitch, punctuation pauses, and whether the book title appears on the lock screen. Speed and pitch use immediate fine/coarse adjustments; punctuation and lock-screen settings remain Apply-based. Custom punctuation pauses are disabled by default and their fields are shown only when enabled. EPUB TTS locator state is stored separately from normal EPUB reader position.
 
 ## Unsupported and deferred behavior
 

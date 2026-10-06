@@ -214,7 +214,7 @@ internal class AppPreferencesStore(context: Context) {
         speed = readEpubTtsPlaybackSpeed(),
         pitch = preferences.getFloat(EPUB_TTS_PITCH_KEY, 1f),
         pauses = EpubTtsPauseSettings(
-            enabled = preferences.getBoolean(EPUB_TTS_CUSTOM_PAUSES_ENABLED_KEY, true),
+            enabled = preferences.getBoolean(EPUB_TTS_CUSTOM_PAUSES_ENABLED_KEY, false),
             commaMillis = preferences.getInt(
                 EPUB_TTS_COMMA_PAUSE_MILLIS_KEY,
                 EpubTtsPauseSettings().commaMillis

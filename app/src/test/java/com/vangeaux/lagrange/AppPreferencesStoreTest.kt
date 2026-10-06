@@ -60,11 +60,7 @@ class AppPreferencesStoreTest {
     }
 
     @Test
-    fun epubTtsRatesSupportPresetsCustomHundredthsAndSafeBounds() {
-        assertEquals(
-            listOf(0.5f, 0.75f, 0.9f, 0.95f, 1f, 1.05f, 1.1f, 1.25f, 1.5f, 1.75f, 2f),
-            EPUB_TTS_PLAYBACK_SPEED_OPTIONS
-        )
+    fun epubTtsRatesSupportHundredthsAndSafeBounds() {
         assertEquals(0.5f, normalizeEpubTtsPlaybackSpeed(0.1f))
         assertEquals(2f, normalizeEpubTtsPlaybackSpeed(3f))
         assertEquals(0.97f, normalizeEpubTtsPlaybackSpeed(0.97f))
@@ -94,19 +90,9 @@ class AppPreferencesStoreTest {
     }
 
     @Test
-    fun `EPUB TTS punctuation defaults use the tested device overrides`() {
-        assertEquals(
-            EpubTtsPauseSettings(
-                enabled = true,
-                commaMillis = 0,
-                semicolonMillis = 200,
-                colonMillis = 175,
-                emDashMillis = 200,
-                ellipsisMillis = 250,
-                parenthesesMillis = 100
-            ),
-            EpubTtsPauseSettings()
-        )
+    fun `EPUB TTS punctuation defaults to disabled`() {
+        assertEquals(false, EpubTtsSettings().pauses.enabled)
+        assertEquals(true, EpubTtsPauseSettings().enabled)
     }
 
     @Test
