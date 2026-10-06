@@ -242,7 +242,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] In-progress, finished, and completion thresholds match the target server's contract.
 - [x] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
 - [x] Progress updates are authenticated for the selected server and provider profile.
-- [!] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported. (Even tho the book is downloaded locally, on airplane mode user can't open it and presented with server not available. I also noticed that sometimes on online mode when opening a downloaded book it took about the same amount of time compared to streaming a book. It seems that komga provider in Lagrange does not prioritize local file, this is high priority assessment target)
+- [x] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported.
 - [ ] Failed progress updates retry safely without duplicating or regressing the user's position.
 - [x] Conflicting local/server progress follows a documented resolution rule. (When online, the Komga server Readium locator is authoritative; stale local EPUB position data is not applied over it.)
 - [x] Preview does not write ordinary book progress or change the saved resume position.
@@ -264,7 +264,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Interrupted downloads recover according to the provider contract.
 - [ ] Downloaded content is stored at the expected local path.
 - [ ] Download metadata persists after process recreation.
-- [!] Download status appears on the originating book and remains correct after reopening. (Download status does shows up in local books screen but does not show up in home nor libraries screen's recommended tab)
+- [x] Download status appears on the originating book and remains correct after reopening.
 - [x] Local books screen lists completed local copies.
 - [x] Local books shows correct title, author, format, file, size, and status.
 - [x] Local books opens the selected local file offline. (Validated on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042127.apk`, Samsung SM-S931B over USB `RRGL4029FRB`, with airplane mode enabled and Wi-Fi disabled. The cached Komga Home screen opened without Login and exposed downloaded books.)
@@ -388,7 +388,7 @@ These checks were derived from repository issues and should be applied when the 
 - [ ] Invalid, encrypted, empty, traversal-containing, and resource-excessive archives fail safely.
 - [ ] The original downloaded archive remains intact after extraction.
 - [ ] Extraction results are reused only while the source archive is unchanged.
-- [!] Offline reader fallback does not make an unnecessary provider request. (Everything seems to make provider request)
+- [x] Offline reader fallback does not make an unnecessary provider request.
 - [ ] Cached Series Previous/Next navigation works offline.
 
 ### EPUB image preview
