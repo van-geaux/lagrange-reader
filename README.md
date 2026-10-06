@@ -78,7 +78,7 @@ Lagrange is not a standalone ebook reader and does not provide a BookOrbit serve
 3. Sign in with the account provided by your BookOrbit administrator.
 4. Browse your libraries, open a book, or download content from Book Detail for offline use.
 
-The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and Komga server-hosted sign-in in a WebView for configured OAuth2/OIDC providers. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/oidc-authentication.md).
+The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and Komga server-hosted sign-in in a WebView for configured OAuth2/OIDC providers. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/providers/bookorbit/oidc-authentication.md).
 
 ## How the client works
 
@@ -111,7 +111,7 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 ## BookOrbit compatibility
 
-Lagrange targets the BookOrbit API used by the current `v1.5.4` release. The implemented API behavior is documented in [`docs/bookorbit-api.md`](docs/bookorbit-api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
+Lagrange targets the BookOrbit API used by the current `v1.5.4` release. The implemented API behavior is documented in [`docs/providers/bookorbit/api.md`](docs/providers/bookorbit/api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
 
 The compatibility table below is based on the tagged BookOrbit server history and the API change introduced in [BookOrbit's dedicated audiobook playback commit](https://github.com/BookOrbit/bookorbit/commit/ceda7428b0d1b8c43db59d266ca8318d9714c8b0). It describes the supported API boundary, not a complete end-to-end test matrix for every server release.
 
