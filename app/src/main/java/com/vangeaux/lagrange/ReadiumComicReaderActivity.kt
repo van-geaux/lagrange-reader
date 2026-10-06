@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.util.LruCache
 import android.view.Gravity
 import android.view.KeyEvent
@@ -43,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +79,7 @@ import com.vangeaux.lagrange.provider.resolveActiveProviderAuthenticatedMediaMod
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 private const val MAX_CONTINUOUS_COMIC_PAGE_BYTES = 64L * 1024L * 1024L
+private const val PAGINATED_COMIC_PROGRESS_TAG = "ComicProgress223Paginated"
 
 internal fun continuousComicCacheBudgetBytes(
     maxMemoryBytes: Long = Runtime.getRuntime().maxMemory()
@@ -612,7 +615,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         navigatorLocationJob?.cancel()
         navigatorLocationJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                fragment.currentLocator.collect(::updateLocation)
+                fragment.currentLocator.collect { locator ->
+                    Log.d(
+                        PAGINATED_COMIC_PROGRESS_TAG,
+                        "locator href=${locator.href} position=${locator.locations.position}"
+                    )
+                    updateLocation(locator)
+                }
             }
         }
         progressView?.visibility = View.GONE
@@ -840,7 +849,16 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 locatorPosition = locator.locations.position
             )
             ?: currentPage
+        Log.d(
+            PAGINATED_COMIC_PROGRESS_TAG,
+            "directIndex=$directIndex resolvedIndex=$index currentPageBefore=$currentPage"
+        )
         currentPage = index.coerceIn(0, openedPublication.readingOrder.lastIndex)
+        persistLocation(locator)
+    }
+
+
+    private fun persistLocation(locator: Locator) {
         if (!isPreview) locatorStore.save(readerKey, locator)
         readingSessionReporter.activity(currentProgressPercent())
         updateResult()
