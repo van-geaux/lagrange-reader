@@ -63,7 +63,7 @@ Download EPUB, PDF, CBZ, CBR, and CB7 samples. Reopen valid local files with the
 
 When the affected scope requires it, verify normal versus Preview launch isolation, exact normal resume, Preview starting without persisted progress, progress on close, offline local fallback, orientation lock, keep-awake, themes, accessibility, and large-text behavior.
 
-For EPUB, verify chapter/page navigation, continuous active-resource seeking, text size, margins, reading direction, custom/accessibility fonts, image handling, and optional read-along narration. For PDF and comics, verify page navigation, progress, links where applicable, layout modes, page gaps, and reader chrome. For audiobook playback, verify compact/full players, chapters, seeking, speed, sleep timer, session history, notification controls, backgrounding, screen lock, audio focus, and process/task recreation.
+For EPUB, verify chapter/page navigation, continuous active-resource seeking, text size, margins, reading direction, custom/accessibility fonts, image handling, and optional read-along narration. When Android TTS is available, long-press a word and a sentence, choose `Listen from here`, and confirm playback starts at the selected word/sentence rather than the chapter beginning; on EPUB 3 media-overlay books, confirm `Play narration` remains a separate action. Repeat once in Preview and confirm the listen actions are unavailable. For PDF and comics, verify page navigation, progress, links where applicable, layout modes, page gaps, and reader chrome. For audiobook playback, verify compact/full players, chapters, seeking, speed, sleep timer, session history, notification controls, backgrounding, screen lock, audio focus, and process/task recreation.
 
 ### EPUB Image Library
 

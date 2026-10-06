@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,6 +88,7 @@ internal data class EpubTtsSessionSpec(
     val filePath: String,
     val title: String,
     val initialLocator: Locator?,
+    val selectionText: String? = null,
     val settings: EpubTtsSettings,
     val playWhenReady: Boolean
 )
@@ -456,6 +458,7 @@ class EpubTtsPlaybackService : Service() {
                 }
                 return@launch
             }
+            seekTtsToSelection(created, spec.initialLocator, spec.selectionText)
             publication = opened
             navigator = created
             binder.publish {
@@ -471,6 +474,27 @@ class EpubTtsPlaybackService : Service() {
             updateNotification()
         }
     }
+
+    private suspend fun seekTtsToSelection(
+        active: AndroidTtsNavigator,
+        initialLocator: Locator?,
+        selectionText: String?
+    ) {
+        val target = selectionText?.normaliseTtsText() ?: return
+        val targetSelector = initialLocator?.locations?.get("cssSelector") as? String
+        repeat(100) {
+            val location = active.location.value
+            val currentSelector = location.utteranceLocator.locations["cssSelector"] as? String
+            if (targetSelector != null && currentSelector != targetSelector) return
+            if (location.utterance.normaliseTtsText().contains(target)) return
+            if (!active.hasNextUtterance()) return
+            active.skipToNextUtterance()
+            delay(10)
+        }
+    }
+
+    private fun String.normaliseTtsText(): String =
+        lowercase().replace(Regex("\\s+"), " ").trim()
 
     private fun observe(
         active: AndroidTtsNavigator,
