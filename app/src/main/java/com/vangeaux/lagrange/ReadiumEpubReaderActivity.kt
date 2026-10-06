@@ -334,11 +334,17 @@ internal data class CapturedEpubSelection(
     val mediaOverlayTextFragment: String? = null
 )
 
-internal fun epubSelectionActions(mediaOverlayAvailable: Boolean = false): List<EpubSelectionAction> = buildList {
+internal fun epubSelectionActions(
+    mediaOverlayAvailable: Boolean = false,
+    textToSpeechAvailable: Boolean = false
+): List<EpubSelectionAction> = buildList {
     add(EpubSelectionAction("Copy"))
     add(EpubSelectionAction("Share"))
     if (mediaOverlayAvailable) {
         add(EpubSelectionAction("Play narration", EpubSelectionActionPresentation.ALWAYS))
+    }
+    if (textToSpeechAvailable) {
+        add(EpubSelectionAction("Listen from here", EpubSelectionActionPresentation.ALWAYS))
     }
     add(EpubSelectionAction("Web search", EpubSelectionActionPresentation.OVERFLOW))
     add(EpubSelectionAction("Highlight"))
@@ -1128,7 +1134,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 shouldApplyInsetsPadding = false,
                 selectionActionModeCallback = if (
                     epubAnnotationFeaturesEnabled(intent) ||
-                    (!isPreview && mediaOverlayPlaylist.isNotEmpty())
+                    (!isPreview && (mediaOverlayPlaylist.isNotEmpty() || ttsAvailable))
                 ) {
                     highlightActionModeCallback()
                 } else null
@@ -1220,11 +1226,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
     }
 
-    private fun requestTtsPlayback(choice: EpubListenChoice) {
+    private fun requestTtsPlayback(choice: EpubListenChoice, restoredLocator: Locator? = null) {
         if (isPreview) return
         val preferences = getSharedPreferences(TTS_PRIVACY_PREFERENCES, MODE_PRIVATE)
         if (preferences.getBoolean(TTS_PRIVACY_ACKNOWLEDGED, false)) {
-            startTtsPlayback(choice)
+            startTtsPlayback(choice, restoredLocator = restoredLocator)
             return
         }
         AlertDialog.Builder(this)
@@ -1235,7 +1241,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
             .setPositiveButton("Continue") { _, _ ->
                 preferences.edit().putBoolean(TTS_PRIVACY_ACKNOWLEDGED, true).apply()
-                startTtsPlayback(choice)
+                startTtsPlayback(choice, restoredLocator = restoredLocator)
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -1968,12 +1974,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun highlightActionModeCallback(): ActionMode.Callback = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
             epubSelectionActions(
-                mediaOverlayAvailable = !isPreview && mediaOverlayPlaylist.isNotEmpty()
+                mediaOverlayAvailable = !isPreview && mediaOverlayPlaylist.isNotEmpty(),
+                textToSpeechAvailable = !isPreview && ttsAvailable
             ).forEachIndexed { order, action ->
                 val actionId = when (action.label) {
                     "Copy" -> ACTION_COPY
                     "Share" -> ACTION_SHARE
                     "Play narration" -> ACTION_PLAY_NARRATION
+                    "Listen from here" -> ACTION_TTS_FROM_SELECTION
                     "Web search" -> ACTION_WEB_SEARCH
                     "Highlight" -> ACTION_HIGHLIGHT
                     else -> ACTION_HIGHLIGHT_WITH_NOTE
@@ -2004,6 +2012,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     ACTION_SHARE -> shareSelection(selection)
                     ACTION_WEB_SEARCH -> searchSelection(selection)
                     ACTION_PLAY_NARRATION -> playNarrationForSelection(selection)
+                    ACTION_TTS_FROM_SELECTION -> requestTtsPlayback(
+                        EpubListenChoice.TTS_FROM_HERE,
+                        restoredLocator = selection.selection.locator
+                    )
                     ACTION_HIGHLIGHT -> showHighlightChoiceDialog(selection, note = null)
                     ACTION_HIGHLIGHT_WITH_NOTE -> promptForNote(existingNote = null) { note ->
                         showHighlightChoiceDialog(selection, note)
@@ -2750,6 +2762,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val ACTION_HIGHLIGHT = 1001
         private const val ACTION_HIGHLIGHT_WITH_NOTE = 1002
         private const val ACTION_PLAY_NARRATION = 1005
+        private const val ACTION_TTS_FROM_SELECTION = 1006
         private const val ACTION_SHARE = 1003
         private const val ACTION_WEB_SEARCH = 1004
         private val SELECTION_ACTIONS = setOf(
@@ -2757,6 +2770,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             ACTION_SHARE,
             ACTION_WEB_SEARCH,
             ACTION_PLAY_NARRATION,
+            ACTION_TTS_FROM_SELECTION,
             ACTION_HIGHLIGHT,
             ACTION_HIGHLIGHT_WITH_NOTE
         )

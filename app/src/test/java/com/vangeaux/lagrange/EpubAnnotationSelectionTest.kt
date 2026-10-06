@@ -48,12 +48,46 @@ class EpubAnnotationSelectionTest {
     }
 
     @Test
+    fun `selection menu exposes TTS from here for TTS-capable EPUBs`() {
+        val actions = epubSelectionActions(textToSpeechAvailable = true)
+
+        assertEquals(
+            listOf("Copy", "Share", "Listen from here", "Web search", "Highlight", "Highlight + Note"),
+            actions.map { it.label }
+        )
+        assertEquals(
+            EpubSelectionActionPresentation.ALWAYS,
+            actions.first { it.label == "Listen from here" }.presentation
+        )
+    }
+
+    @Test
+    fun `selection menu exposes both narration and TTS when both are available`() {
+        assertEquals(
+            listOf(
+                "Copy",
+                "Share",
+                "Play narration",
+                "Listen from here",
+                "Web search",
+                "Highlight",
+                "Highlight + Note"
+            ),
+            epubSelectionActions(
+                mediaOverlayAvailable = true,
+                textToSpeechAvailable = true
+            ).map { it.label }
+        )
+    }
+
+    @Test
     fun `play narration is always visible while web search stays in overflow`() {
         val actions = epubSelectionActions(mediaOverlayAvailable = true).associateBy { it.label }
 
         assertEquals(EpubSelectionActionPresentation.ALWAYS, actions.getValue("Play narration").presentation)
         assertEquals(EpubSelectionActionPresentation.OVERFLOW, actions.getValue("Web search").presentation)
         assertFalse(epubSelectionActions(mediaOverlayAvailable = false).any { it.label == "Play narration" })
+        assertFalse(epubSelectionActions(textToSpeechAvailable = false).any { it.label == "Listen from here" })
     }
 
     @Test
