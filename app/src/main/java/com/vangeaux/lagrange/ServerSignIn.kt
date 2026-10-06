@@ -124,11 +124,17 @@ internal fun ServerSignInDialog(
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { context ->
-                                WebView(context).apply {
+                                val container = FrameLayout(context)
+                                lateinit var chromeClient: WebChromeClient
+
+                                fun createWebView(): WebView = WebView(context).apply {
                                     settings.javaScriptEnabled = true
                                     settings.domStorageEnabled = true
+                                    settings.javaScriptCanOpenWindowsAutomatically = true
+                                    settings.setSupportMultipleWindows(true)
                                     CookieManager.getInstance().setAcceptCookie(true)
                                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                    webChromeClient = chromeClient
                                     webViewClient = object : WebViewClient() {
                                         override fun onPageFinished(view: WebView, url: String) {
                                             super.onPageFinished(view, url)
@@ -151,6 +157,18 @@ internal fun ServerSignInDialog(
                                             }
                                         }
 
+                                        override fun onReceivedHttpError(
+                                            view: WebView,
+                                            request: WebResourceRequest,
+                                            errorResponse: android.webkit.WebResourceResponse
+                                        ) {
+                                            super.onReceivedHttpError(view, request, errorResponse)
+                                            if (request.isForMainFrame) {
+                                                isLoading = false
+                                                loadError = "The sign-in page returned HTTP ${errorResponse.statusCode}."
+                                            }
+                                        }
+
                                         override fun onReceivedSslError(
                                             view: WebView,
                                             handler: SslErrorHandler,
@@ -161,8 +179,45 @@ internal fun ServerSignInDialog(
                                             loadError = "The server's TLS certificate could not be validated."
                                         }
                                     }
-                                    loadUrl(loginUrl)
                                 }
+
+                                chromeClient = object : WebChromeClient() {
+                                    override fun onCreateWindow(
+                                        view: WebView,
+                                        isDialog: Boolean,
+                                        isUserGesture: Boolean,
+                                        resultMsg: android.os.Message
+                                    ): Boolean {
+                                        val popup = createWebView()
+                                        container.addView(
+                                            popup,
+                                            FrameLayout.LayoutParams(
+                                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                                ViewGroup.LayoutParams.MATCH_PARENT
+                                            )
+                                        )
+                                        val transport = resultMsg.obj as WebView.WebViewTransport
+                                        transport.webView = popup
+                                        resultMsg.sendToTarget()
+                                        return true
+                                    }
+
+                                    override fun onCloseWindow(window: WebView) {
+                                        container.removeView(window)
+                                        window.destroy()
+                                    }
+                                }
+
+                                val mainWebView = createWebView()
+                                container.addView(
+                                    mainWebView,
+                                    FrameLayout.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                )
+                                mainWebView.loadUrl(loginUrl)
+                                container
                             }
                         )
                     }
