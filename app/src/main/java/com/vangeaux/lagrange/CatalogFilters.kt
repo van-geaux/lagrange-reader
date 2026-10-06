@@ -144,6 +144,9 @@ internal fun filterAndSortLocalBooks(
         val titleMatches = filter.title.isNullOrBlank() || book.title.contains(filter.title.trim(), ignoreCase = true)
         val authorMatches = filter.author.isNullOrBlank() || book.author.orEmpty().contains(filter.author.trim(), ignoreCase = true)
         val seriesMatches = filter.series.isNullOrBlank() || book.seriesName.orEmpty().contains(filter.series.trim(), ignoreCase = true)
+        val genreMatches = filter.genre.isNullOrBlank() || book.genres.any {
+            it.contains(filter.genre.trim(), ignoreCase = true)
+        }
         val readMatches = when (filter.readStatus) {
             BookReadFilter.ALL -> true
             BookReadFilter.UNREAD -> !book.hasStartedReading() && !book.isRead
@@ -151,7 +154,7 @@ internal fun filterAndSortLocalBooks(
             BookReadFilter.FINISHED -> book.isRead || (book.progressPercent ?: 0f) >= 99.5f
         }
         val formatMatches = filter.format == BookFormatFilter.ALL || book.mediaKind in filter.format.mediaKinds
-        titleMatches && authorMatches && seriesMatches && readMatches && formatMatches
+        titleMatches && authorMatches && seriesMatches && genreMatches && readMatches && formatMatches
     }
     val comparator = when (filter.sort) {
         BookSortOption.SERVER_DEFAULT -> null
@@ -189,6 +192,7 @@ internal fun aggregateBooksToSeriesCatalog(books: List<BookSummary>): SeriesCata
                 downloadedFormats = normalizedAvailableFormats(
                     grouped.flatMap { book -> downloadedFormatLabels(book).map { it to MediaKind.UNKNOWN } }
                 ),
+                genres = grouped.flatMap { it.genres }.distinct().sorted(),
                 coverUrl = grouped.firstNotNullOfOrNull { it.coverUrl },
                 lastAddedAtMillis = grouped.mapNotNull { it.addedAtMillis }.maxOrNull()
             )
@@ -230,7 +234,16 @@ internal fun filterAndSortSeriesCatalog(
         val authorMatches = filter.author.isNullOrBlank() || series.authors.any {
             it.contains(filter.author.trim(), ignoreCase = true)
         }
-        queryMatches && authorMatches
+        val genreMatches = filter.genre.isNullOrBlank() || series.genres.any {
+            it.contains(filter.genre.trim(), ignoreCase = true)
+        }
+        val completionMatches = when (filter.completion) {
+            SeriesCompletionFilter.ALL -> true
+            SeriesCompletionFilter.NOT_STARTED -> series.readCount == 0
+            SeriesCompletionFilter.IN_PROGRESS -> series.readCount in 1 until series.bookCount
+            SeriesCompletionFilter.COMPLETE -> series.bookCount > 0 && series.readCount >= series.bookCount
+        }
+        queryMatches && authorMatches && genreMatches && completionMatches
     }
     val comparator = when (filter.sort) {
         SeriesSortOption.NAME -> compareBy<SeriesSummary> { it.name.lowercase() }

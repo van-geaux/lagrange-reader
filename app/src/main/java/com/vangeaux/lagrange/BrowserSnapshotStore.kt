@@ -178,6 +178,7 @@ class BrowserSnapshotStore(context: Context) {
                                     put("author", book.author)
                                     put("format", book.format)
                                     put("availableFormats", JSONArray(book.availableFormats))
+                                    put("genres", JSONArray(book.genres))
                                     put("mediaKind", book.mediaKind.name)
                                     put("streamUrl", book.streamUrl)
                                     put("downloadUrl", book.downloadUrl)
@@ -239,6 +240,7 @@ class BrowserSnapshotStore(context: Context) {
                         author = item.optString("author").takeIf { it.isNotBlank() },
                         format = item.optString("format").takeIf { it.isNotBlank() },
                         availableFormats = item.optJSONArray("availableFormats").toStringList(),
+                        genres = item.optJSONArray("genres").toStringList(),
                         mediaKind = runCatching {
                             MediaKind.valueOf(item.optString("mediaKind"))
                         }.getOrDefault(MediaKind.UNKNOWN),

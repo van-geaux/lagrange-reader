@@ -193,7 +193,8 @@ data class BookSummary(
     val isServerMissing: Boolean = false,
     val isLocalOnlyOverride: Boolean? = null,
     val availableFormats: List<String> = emptyList(),
-    val downloadedFormats: List<String> = emptyList()
+    val downloadedFormats: List<String> = emptyList(),
+    val genres: List<String> = emptyList()
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
     val isLocalOnly: Boolean get() = isLocalOnlyOverride ?: libraryId.isBlank()
@@ -532,7 +533,8 @@ data class SeriesSummary(
     val coverUrl: String? = null,
     val lastAddedAtMillis: Long? = null,
     val availableFormats: List<String> = emptyList(),
-    val downloadedFormats: List<String> = emptyList()
+    val downloadedFormats: List<String> = emptyList(),
+    val genres: List<String> = emptyList()
 )
 
 data class AuthorSummary(

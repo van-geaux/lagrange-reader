@@ -83,4 +83,69 @@ class CatalogFiltersTest {
         assertEquals(listOf("3"), result.map { it.id })
         assertTrue(filterAndSortLocalBooks(books, BookBrowseFilter(readStatus = BookReadFilter.FINISHED)).map { it.id }.contains("2"))
     }
+
+    @Test
+    fun `local books filter by genre and sort by progress and last read`() {
+        val books = listOf(
+            BookSummary(
+                "library", "unread", "file-unread", "Unread", genres = listOf("Fantasy"),
+                progressPercent = 0f, lastReadAtMillis = 100L
+            ),
+            BookSummary(
+                "library", "reading", "file-reading", "Reading", genres = listOf("Fantasy"),
+                progressPercent = 60f, lastReadAtMillis = 300L
+            ),
+            BookSummary(
+                "library", "read", "file-read", "Read", genres = listOf("History"),
+                progressPercent = 100f, isRead = true, lastReadAtMillis = 200L
+            )
+        )
+
+        assertEquals(
+            listOf("reading", "unread"),
+            filterAndSortLocalBooks(
+                books,
+                BookBrowseFilter(genre = "fant", sort = BookSortOption.READ_PROGRESS, direction = SortDirection.DESCENDING)
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("reading", "unread"),
+            filterAndSortLocalBooks(
+                books,
+                BookBrowseFilter(genre = "fant", sort = BookSortOption.LAST_READ, direction = SortDirection.DESCENDING)
+            ).map { it.id }
+        )
+    }
+
+    @Test
+    fun `series filter applies genre and exact completion states`() {
+        val series = listOf(
+            SeriesSummary("none", "None", bookCount = 2, readCount = 0, genres = listOf("Fantasy")),
+            SeriesSummary("partial", "Partial", bookCount = 2, readCount = 1, genres = listOf("Fantasy")),
+            SeriesSummary("complete", "Complete", bookCount = 2, readCount = 2, genres = listOf("Fantasy")),
+            SeriesSummary("other", "Other", bookCount = 1, readCount = 1, genres = listOf("History"))
+        )
+
+        assertEquals(
+            listOf("none"),
+            filterAndSortSeriesCatalog(
+                series,
+                SeriesCatalogFilter(genre = "fant", completion = SeriesCompletionFilter.NOT_STARTED)
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("partial"),
+            filterAndSortSeriesCatalog(
+                series,
+                SeriesCatalogFilter(genre = "fant", completion = SeriesCompletionFilter.IN_PROGRESS)
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("complete"),
+            filterAndSortSeriesCatalog(
+                series,
+                SeriesCatalogFilter(genre = "fant", completion = SeriesCompletionFilter.COMPLETE)
+            ).map { it.id }
+        )
+    }
 }
