@@ -209,7 +209,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
 - [x] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.
-- [x] Go to read from Preview opens the normal reader at the expected location.
+- [x] Go to read from Preview opens the normal reader at the expected location and reconciles progress when the reader closes. (User confirmed the issue-233 fix for BookOrbit; device and server identifiers were not supplied.)
 - [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
 - [x] Unsupported formats show an honest unavailable state.
 - [x] Reader/player errors identify the affected provider operation.
