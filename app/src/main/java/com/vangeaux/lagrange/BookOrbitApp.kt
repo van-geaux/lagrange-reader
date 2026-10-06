@@ -426,6 +426,7 @@ private fun BookOrbitDestination(
             state = screen.readerState,
             onBack = coordinator::closeReader,
             onProgress = coordinator::onProgress,
+            onPreviewProgress = coordinator::onPreviewProgress,
             comicPageLoader = coordinator::loadCatalogImage,
             audioPlaybackController = audioPlaybackController,
             onAudioReady = coordinator::minimizeAudioReader,
@@ -720,6 +721,7 @@ private fun ReaderScreen(
     state: ReaderState,
     onBack: () -> Unit,
     onProgress: (BookSummary, Long, Int, Float?) -> Unit,
+    onPreviewProgress: (BookSummary, Long, Int, Float?) -> Unit,
     comicPageLoader: suspend (String) -> ByteArray?,
     audioPlaybackController: ReadiumAudioPlaybackController?,
     onAudioReady: () -> Unit,
@@ -729,11 +731,8 @@ private fun ReaderScreen(
         KeepReaderScreenAwake()
     }
     val isPreview = state.launchMode == ReaderLaunchMode.PREVIEW
-    val readerProgress: (BookSummary, Long, Int, Float?) -> Unit = if (isPreview) {
-        { _, _, _, _ -> }
-    } else {
-        onProgress
-    }
+    val readerProgress: (BookSummary, Long, Int, Float?) -> Unit =
+        if (isPreview) onPreviewProgress else onProgress
     if (shouldUseReadiumEpubReader(state.book.mediaKind)) {
         val readerFile = state.localFile
         if (readerFile == null || !readerFile.exists()) {

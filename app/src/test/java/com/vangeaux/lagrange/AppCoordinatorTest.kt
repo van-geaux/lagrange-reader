@@ -2504,6 +2504,36 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `preview to read promotes progress and refreshes continue reading`() = runTest {
+        val repository = FakeBookOrbitDataSource()
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book),
+                homeBooks = listOf(book)
+            )
+        )
+
+        coordinator.previewBook(book)
+        advanceUntilIdle()
+        coordinator.onPreviewProgress(book, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+
+        val promoted = coordinator.screen.value as AppScreen.Reader
+        assertEquals(ReaderLaunchMode.NORMAL, promoted.readerState.launchMode)
+        coordinator.closeReader()
+
+        val restored = coordinator.screen.value as AppScreen.Browser
+        assertEquals(50f, restored.browserState.homeBooks.single().progressPercent)
+        advanceUntilIdle()
+
+        assertEquals(listOf(book), repository.queuedProgress)
+        assertTrue(repository.syncPendingProgressCalls >= 1)
+    }
+
+    @Test
     fun `reader progress is captured before close and synced before browser refresh`() = runTest {
         val repository = FakeBookOrbitDataSource()
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
