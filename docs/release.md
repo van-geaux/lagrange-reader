@@ -50,6 +50,24 @@ If a rename is required again in the future:
 
 Starting with Lagrange 1.5.2, the tag-triggered release workflow publishes these ABI-specific assets together. Keep the plain combined asset as the default download.
 
+## Google Play distribution
+
+Google Play releases use an Android App Bundle rather than the GitHub APK assets. The application id must remain `com.vangeaux.lagrange` so Play updates target the same app.
+
+Before each Play release:
+
+1. Increment `versionCode` and update `versionName` in `app/build.gradle.kts`.
+2. Run the automated release checks and verify the signed release build.
+3. Run the manually triggered `Android Play Bundle` workflow from the intended branch or tag.
+4. Download `app-release.aab` and its `.sha256` file from the workflow artifact `Lagrange-play-bundle-<run-number>`.
+5. Upload the AAB to Play Console, beginning with Internal testing.
+6. Validate the Play-installed build before promoting it to Closed testing or Production.
+7. Publish the GitHub release only after the matching Play version is available, because in-app update detection reads GitHub's latest release API.
+
+The workflow uses the existing `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` GitHub secrets to create a signed `bundleRelease` build. It does not upload to Google Play automatically. Keep Play App Signing enabled and protect the upload keystore and passwords.
+
+The Play listing should include the public privacy-policy URL, store metadata, screenshots, content rating, target-audience and ads declarations, Data Safety responses, and app-access instructions for the BookOrbit server/account sign-in flow. The Play listing URL used by the in-app update action is `https://play.google.com/store/apps/details?id=com.vangeaux.lagrange`.
+
 ## Signing strategy
 
 - debug builds continue using the default Android debug keystore
@@ -69,6 +87,7 @@ Starting with Lagrange 1.5.2, the tag-triggered release workflow publishes these
 - Release APKs are published as GitHub Release assets rather than committed to the repository.
 - The historical `v1.1.0` APK is already uploaded to the `v1.1.0` GitHub Release.
 - Future `v*` tag pushes use `.github/workflows/android-release.yml` to build a signed APK and create a GitHub Release asset.
+- Manual `Android Play Bundle` workflow runs use `.github/workflows/android-play-bundle.yml` to build and artifact a signed AAB for Play Console submission; Play publishing remains a deliberate Console action.
 - The repository secrets required by the workflow are configured: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
 - No release keystore is committed in this repository.
 - The tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses.
