@@ -135,6 +135,7 @@ class LibraryReaderPreferencesTest {
     @Test
     fun `global navigation bar policy applies uniformly to supported readers`() {
         assertTrue(AppPreferences().hideNavigationBarWhileReading)
+        assertFalse(AppPreferences().hideStatusBarWhileReading)
         assertFalse(readerSystemBarsPolicy(true).showNavigationBar)
         assertTrue(readerSystemBarsPolicy(false).showNavigationBar)
     }

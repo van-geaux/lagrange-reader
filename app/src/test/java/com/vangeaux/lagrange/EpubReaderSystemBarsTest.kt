@@ -14,4 +14,32 @@ class EpubReaderSystemBarsTest {
         assertTrue(EpubReaderTheme.Sepia.usesDarkStatusBarIcons())
         assertFalse(EpubReaderTheme.Dark.usesDarkStatusBarIcons())
     }
+
+    @Test
+    fun `status and navigation bars can be hidden independently`() {
+        assertFalse(
+            readerSystemBarsPolicy(
+                hideNavigationBar = true,
+                hideStatusBar = true
+            ).showStatusBar
+        )
+        assertFalse(
+            readerSystemBarsPolicy(
+                hideNavigationBar = false,
+                hideStatusBar = true
+            ).showStatusBar
+        )
+        assertTrue(
+            readerSystemBarsPolicy(
+                hideNavigationBar = true,
+                hideStatusBar = false
+            ).showStatusBar
+        )
+        assertTrue(
+            readerSystemBarsPolicy(
+                hideNavigationBar = false,
+                hideStatusBar = false
+            ).showNavigationBar
+        )
+    }
 }

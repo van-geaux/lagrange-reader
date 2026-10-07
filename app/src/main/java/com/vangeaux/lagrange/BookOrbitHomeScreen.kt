@@ -3606,6 +3606,17 @@ internal fun OptionsScreen(
                 }
             )
         }
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "immersive-reading-status") {
+            AppPreferenceSwitchRow(
+                title = "Immersive reading: hide status bar",
+                summary = "Expand EPUB, PDF, and comic readers into the status-bar area. Off by default.",
+                checked = preferences.hideStatusBarWhileReading,
+                testTag = "options-hide-status-bar-reading",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(hideStatusBarWhileReading = it))
+                }
+            )
+        }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "theme") {
             AppPreferenceSelectionRow(
                 title = "Theme",

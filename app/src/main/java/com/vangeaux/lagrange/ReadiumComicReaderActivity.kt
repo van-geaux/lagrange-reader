@@ -1073,9 +1073,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private fun configureSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         val preferences = AppPreferencesStore(this).read()
-        val policy = readerSystemBarsPolicy(preferences.hideNavigationBarWhileReading)
+        val policy = readerSystemBarsPolicy(
+            hideNavigationBar = preferences.hideNavigationBarWhileReading,
+            hideStatusBar = preferences.hideStatusBarWhileReading
+        )
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            show(WindowInsetsCompat.Type.statusBars())
+            if (policy.showStatusBar) show(WindowInsetsCompat.Type.statusBars())
+            else hide(WindowInsetsCompat.Type.statusBars())
             if (policy.showNavigationBar) show(WindowInsetsCompat.Type.navigationBars())
             else hide(WindowInsetsCompat.Type.navigationBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

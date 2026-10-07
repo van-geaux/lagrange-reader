@@ -13,6 +13,11 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `status bar hiding defaults to disabled`() {
+        assertEquals(false, AppPreferences().hideStatusBarWhileReading)
+    }
+
+    @Test
     fun `EPUB image minimum dimension defaults to 250 and normalizes to 25 pixel steps`() {
         assertEquals(250, AppPreferences().epubImageMinimumDimensionPx)
         assertEquals(0, normalizeEpubImageMinimumDimensionPx(-1))

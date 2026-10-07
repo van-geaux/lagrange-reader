@@ -80,8 +80,13 @@ internal data class ReaderSystemBarsPolicy(
     val showNavigationBar: Boolean
 )
 
-internal fun readerSystemBarsPolicy(globalHide: Boolean): ReaderSystemBarsPolicy =
-    ReaderSystemBarsPolicy(showNavigationBar = !globalHide)
+internal fun readerSystemBarsPolicy(
+    hideNavigationBar: Boolean,
+    hideStatusBar: Boolean = false
+): ReaderSystemBarsPolicy = ReaderSystemBarsPolicy(
+    showStatusBar = !hideStatusBar,
+    showNavigationBar = !hideNavigationBar
+)
 
 internal fun readerViewportBottomInset(
     navigationBarBottomInset: Int,
