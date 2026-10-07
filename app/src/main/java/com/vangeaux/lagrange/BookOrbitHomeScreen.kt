@@ -4440,20 +4440,22 @@ internal fun ReaderConfigurationControls(
         testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
         onCheckedChange = onShowTapZoneTutorialAfterChangesChange
     )
-    Text("Typography", style = MaterialTheme.typography.titleMedium)
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        EPUB_THEME_OPTIONS.forEach { theme ->
-            FilterChip(
-                selected = value.theme == theme,
-                onClick = { onPreferencesChange(value.copy(theme = theme)) },
-                label = { Text(theme.label) },
-                modifier = Modifier.testTag(
-                    "$testTagPrefix-theme-${theme.name.lowercase()}"
+    if (format != ReaderConfigurationFormat.COMIC) {
+        Text("Typography", style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            EPUB_THEME_OPTIONS.forEach { theme ->
+                FilterChip(
+                    selected = value.theme == theme,
+                    onClick = { onPreferencesChange(value.copy(theme = theme)) },
+                    label = { Text(theme.label) },
+                    modifier = Modifier.testTag(
+                        "$testTagPrefix-theme-${theme.name.lowercase()}"
+                    )
                 )
-            )
+            }
         }
     }
     if (format == ReaderConfigurationFormat.EPUB) {
@@ -4566,26 +4568,28 @@ internal fun ReaderConfigurationControls(
             )
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedButton(
-            onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale - 0.1f)) },
-            modifier = Modifier.testTag("$testTagPrefix-font-decrease")
-        ) { Text("A-") }
-        Text(
-            "Text size ${formatEpubFontScale(value.fontScale)}",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        OutlinedButton(
-            onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale + 0.1f)) },
-            modifier = Modifier.testTag("$testTagPrefix-font-increase")
-        ) { Text("A+") }
+    if (format != ReaderConfigurationFormat.COMIC) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale - 0.1f)) },
+                modifier = Modifier.testTag("$testTagPrefix-font-decrease")
+            ) { Text("A-") }
+            Text(
+                "Text size ${formatEpubFontScale(value.fontScale)}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            OutlinedButton(
+                onClick = { onPreferencesChange(value.copy(fontScale = value.fontScale + 0.1f)) },
+                modifier = Modifier.testTag("$testTagPrefix-font-increase")
+            ) { Text("A+") }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     when (format) {
         ReaderConfigurationFormat.EPUB -> {
             ReaderLayoutModeSettings(
