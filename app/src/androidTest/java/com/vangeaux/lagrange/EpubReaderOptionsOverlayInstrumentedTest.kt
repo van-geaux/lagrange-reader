@@ -8,12 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
-
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -253,6 +253,11 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                 onShowTapZoneTutorialAfterChangesChange = { showTutorialAfterChanges.value = it }
             )
         }
+
+        composeRule.onAllNodesWithTag("reader-options-reading-theme-oledblack")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-font-decrease")
+            .assertCountEquals(0)
 
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
             .performScrollTo()
