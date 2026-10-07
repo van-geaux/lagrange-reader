@@ -250,6 +250,9 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
+        composeRule.onNodeWithTag("reader-options-reading-theme-oledblack")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("reader-options-reading-theme-dark")
             .performScrollTo()
             .performClick()

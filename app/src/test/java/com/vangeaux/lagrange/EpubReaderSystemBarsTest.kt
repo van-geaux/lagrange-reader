@@ -13,6 +13,7 @@ class EpubReaderSystemBarsTest {
         assertTrue(EpubReaderTheme.Light.usesDarkStatusBarIcons())
         assertTrue(EpubReaderTheme.Sepia.usesDarkStatusBarIcons())
         assertFalse(EpubReaderTheme.Dark.usesDarkStatusBarIcons())
+        assertFalse(EpubReaderTheme.OledBlack.usesDarkStatusBarIcons())
     }
 
     @Test

@@ -11,6 +11,7 @@ class EpubReaderThemeStoreTest {
         }
 
         assertEquals(EpubReaderTheme.Dark, epubReaderThemeFromStorage(" DARK "))
+        assertEquals(EpubReaderTheme.OledBlack, epubReaderThemeFromStorage(" OLED_BLACK "))
         assertEquals(EpubReaderTheme.Sepia, epubReaderThemeFromStorage(null))
         assertEquals(EpubReaderTheme.Sepia, epubReaderThemeFromStorage("unknown"))
     }

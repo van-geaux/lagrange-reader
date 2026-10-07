@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,6 +14,15 @@ class EpubReaderOptionsPaletteTest {
             assertContrast(theme, "secondary text", palette.mutedContent, palette.container)
             assertContrast(theme, "primary action", palette.onAccent, palette.accent)
         }
+    }
+
+    @Test
+    fun `oled black reader theme uses a true black container`() {
+        val palette = EpubReaderTheme.OledBlack.readerOptionsPalette()
+
+        assertEquals(0xFF000000.toInt(), palette.container)
+        assertEquals(0xFF000000.toInt(), EpubReaderTheme.OledBlack.backgroundColor)
+        assertEquals("#000000", EpubReaderTheme.OledBlack.backgroundCss)
     }
 
     private fun assertContrast(
