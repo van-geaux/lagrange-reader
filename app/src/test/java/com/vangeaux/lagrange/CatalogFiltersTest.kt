@@ -7,6 +7,31 @@ import org.junit.Test
 
 class CatalogFiltersTest {
     @Test
+    fun `book and series filters round trip through storage`() {
+        val bookFilter = BookBrowseFilter(
+            title = "Dune",
+            genre = "Science fiction",
+            readStatus = BookReadFilter.IN_PROGRESS,
+            format = BookFormatFilter.EPUB,
+            sort = BookSortOption.LAST_READ,
+            direction = SortDirection.DESCENDING
+        )
+        assertEquals(bookFilter, bookBrowseFilterFromStorage(bookFilter.toStorageValue()))
+
+        val seriesFilter = SeriesCatalogFilter(
+            author = "Terry Pratchett",
+            genre = "Fantasy",
+            libraryId = "library-1",
+            completion = SeriesCompletionFilter.IN_PROGRESS,
+            sort = SeriesSortOption.READ_PROGRESS,
+            direction = SortDirection.DESCENDING
+        )
+        assertEquals(seriesFilter, seriesCatalogFilterFromStorage(seriesFilter.toStorageValue()))
+        assertEquals(null, bookBrowseFilterFromStorage("not-json"))
+        assertEquals(null, seriesCatalogFilterFromStorage("not-json"))
+    }
+
+    @Test
     fun `book filter produces server group rules and official sort fields`() {
         val filter = BookBrowseFilter(
             title = "Dune",

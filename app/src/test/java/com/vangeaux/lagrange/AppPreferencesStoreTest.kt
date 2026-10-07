@@ -311,6 +311,24 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `locked filter storage maps preserve screen keys and invalid values are ignored`() {
+        val stored = stringMapStorageValue(
+            mapOf(
+                "library:one" to BookBrowseFilter(sort = BookSortOption.LAST_READ).toStorageValue(),
+                "series:all" to SeriesCatalogFilter(sort = SeriesSortOption.READ_PROGRESS).toStorageValue()
+            )
+        )
+        assertEquals(
+            mapOf(
+                "library:one" to BookBrowseFilter(sort = BookSortOption.LAST_READ).toStorageValue(),
+                "series:all" to SeriesCatalogFilter(sort = SeriesSortOption.READ_PROGRESS).toStorageValue()
+            ),
+            stringMapFromStorage(stored)
+        )
+        assertEquals(emptyMap<String, String>(), stringMapFromStorage("not-json"))
+    }
+
+    @Test
     fun `background policy maps to work manager constraints`() {
         assertEquals(
             NetworkType.CONNECTED,
