@@ -1762,6 +1762,8 @@ internal fun EpubReaderOptionsBottomSheet(
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    showTapZoneTutorialAfterChanges: Boolean = true,
+    onShowTapZoneTutorialAfterChangesChange: (Boolean) -> Unit = {},
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -1907,6 +1909,8 @@ internal fun EpubReaderOptionsBottomSheet(
                         ReaderConfigurationControls(
                             value = preferences,
                             onPreferencesChange = onPreferencesChange,
+                            showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
+                            onShowTapZoneTutorialAfterChangesChange = onShowTapZoneTutorialAfterChangesChange,
                             format = ReaderConfigurationFormat.EPUB,
                             onCustomFontRequest = onCustomFontRequest,
                             onCustomFontRemove = onCustomFontRemove
@@ -2000,6 +2004,8 @@ internal fun ComicReaderOptionsBottomSheet(
     onContinueReading: () -> Unit,
     onCloseBook: () -> Unit,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    showTapZoneTutorialAfterChanges: Boolean = true,
+    onShowTapZoneTutorialAfterChangesChange: (Boolean) -> Unit = {},
     format: ReaderConfigurationFormat = ReaderConfigurationFormat.COMIC,
     modifier: Modifier = Modifier
 ) {
@@ -2086,6 +2092,8 @@ internal fun ComicReaderOptionsBottomSheet(
                 ReaderConfigurationControls(
                     value = preferences,
                     onPreferencesChange = onPreferencesChange,
+                    showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
+                    onShowTapZoneTutorialAfterChangesChange = onShowTapZoneTutorialAfterChangesChange,
                     format = format
                 )
             }

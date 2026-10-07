@@ -18,6 +18,14 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `format-specific tap-zone tutorials default to enabled`() {
+        val preferences = AppPreferences()
+        assertEquals(true, preferences.showEpubTapZoneTutorialAfterChanges)
+        assertEquals(true, preferences.showPdfTapZoneTutorialAfterChanges)
+        assertEquals(true, preferences.showComicTapZoneTutorialAfterChanges)
+    }
+
+    @Test
     fun `EPUB image minimum dimension defaults to 250 and normalizes to 25 pixel steps`() {
         assertEquals(250, AppPreferences().epubImageMinimumDimensionPx)
         assertEquals(0, normalizeEpubImageMinimumDimensionPx(-1))

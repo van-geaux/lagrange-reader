@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertCountEquals
 
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -238,6 +239,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                 comicPageGapDp = 24f
             )
         )
+        val showTutorialAfterChanges = mutableStateOf(true)
         composeRule.setContent {
             ComicReaderOptionsBottomSheet(
                 title = "Profile test",
@@ -246,9 +248,16 @@ class EpubReaderOptionsOverlayInstrumentedTest {
                 preferences = profile.value,
                 onContinueReading = {},
                 onCloseBook = {},
-                onPreferencesChange = { profile.value = it }
+                onPreferencesChange = { profile.value = it },
+                showTapZoneTutorialAfterChanges = showTutorialAfterChanges.value,
+                onShowTapZoneTutorialAfterChangesChange = { showTutorialAfterChanges.value = it }
             )
         }
+
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
+            .performScrollTo()
+            .assertIsOn()
+            .performClick()
 
         composeRule.onNodeWithTag("reader-options-reading-theme-oledblack")
             .performScrollTo()
@@ -272,6 +281,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(24f, profile.value.comicPageGapDp)
             assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
             assertEquals(ReaderTapZoneInvertMode.BOTH, profile.value.tapZoneInvertMode)
+            assertEquals(false, showTutorialAfterChanges.value)
         }
     }
 }
