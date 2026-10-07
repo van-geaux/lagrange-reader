@@ -39,7 +39,7 @@ Use [`docs/provider-checklists/komga.md`](provider-checklists/komga.md) for Komg
 
 Verify Settings contains Appearance, General, Library, Downloads & Offline, and Network & Sync without duplicate About or Account & Server entries. Change a library reader preference and confirm it remains scoped to that library after reopening.
 
-Open reader options for EPUB, PDF, and comics. EPUB exposes typography, margins, and layout controls; PDF exposes PDF layout and page-gap controls; comics expose CBR/CBZ layout and page-gap controls. Confirm changes apply live and persist after closing/reopening the reader.
+Open reader options for EPUB, PDF, and comics. EPUB exposes typography, margins, and layout controls; PDF exposes PDF typography, layout, and page-gap controls; comics omit the Typography section and expose only CBR/CBZ layout and page-gap controls. Confirm changes apply live and persist after closing/reopening the reader.
 
 Verify `Immersive reading: hide navigation bar` persists and applies to EPUB, PDF, and comics. When disabled, content, progress, and reader menus remain above the visible navigation-bar inset. Audiobook behavior is unchanged.
 
