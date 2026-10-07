@@ -66,6 +66,8 @@ Before each Play release:
 
 The workflow uses the existing `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` GitHub secrets to create a signed `bundleRelease` build. It does not upload to Google Play automatically. Keep Play App Signing enabled and protect the upload keystore and passwords.
 
+For Android developer verification package registration, run the manually triggered `Android Package Registration APK` workflow with the identifier supplied by Play Console. It creates `app/src/main/assets/adi-registration.properties` only during the workflow, builds a signed `app-release.apk`, uploads the APK and checksum as a short-lived artifact, and removes the temporary asset before the job ends. Upload that artifact to the package-registration page, not to a normal Play testing track. Never commit the identifier or signing credentials.
+
 The Play listing should include the public privacy-policy URL, store metadata, screenshots, content rating, target-audience and ads declarations, Data Safety responses, and app-access instructions for the BookOrbit server/account sign-in flow. The Play listing URL used by the in-app update action is `https://play.google.com/store/apps/details?id=com.vangeaux.lagrange`.
 
 ## Signing strategy
@@ -88,6 +90,7 @@ The Play listing should include the public privacy-policy URL, store metadata, s
 - The historical `v1.1.0` APK is already uploaded to the `v1.1.0` GitHub Release.
 - Future `v*` tag pushes use `.github/workflows/android-release.yml` to build a signed APK and create a GitHub Release asset.
 - Manual `Android Play Bundle` workflow runs use `.github/workflows/android-play-bundle.yml` to build and artifact a signed AAB for Play Console submission; Play publishing remains a deliberate Console action.
+- Manual `Android Package Registration APK` workflow runs use `.github/workflows/android-package-registration.yml` to create the temporary proof APK required by Android developer verification.
 - The repository secrets required by the workflow are configured: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
 - No release keystore is committed in this repository.
 - The tracked tree and repository history contain no sensitive environment/keystore/key paths, high-confidence secret signatures, hardcoded credential assignments, or unexplained production/internal hosts; remaining non-public URL literals are explicit test fixtures and Android emulator loopback addresses.
