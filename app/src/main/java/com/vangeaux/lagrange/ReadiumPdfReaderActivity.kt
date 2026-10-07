@@ -215,7 +215,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val appPreferences = AppPreferencesStore(this).read()
-        showTapZoneTutorialAfterChanges = appPreferences.showTapZoneTutorialAfterChanges
+        showTapZoneTutorialAfterChanges = appPreferences.showPdfTapZoneTutorialAfterChanges
         readerPreferences = appPreferences.readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
@@ -585,7 +585,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
         showTapZoneTutorialAfterChanges = enabled
         AppPreferencesStore(this).save(
-            AppPreferencesStore(this).read().copy(showTapZoneTutorialAfterChanges = enabled)
+            AppPreferencesStore(this).read().copy(showPdfTapZoneTutorialAfterChanges = enabled)
         )
     }
 

@@ -719,7 +719,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             enabled = !isPreview
         )
         val appPreferences = appPreferencesStore.read()
-        showTapZoneTutorialAfterChanges = appPreferences.showTapZoneTutorialAfterChanges
+        showTapZoneTutorialAfterChanges = appPreferences.showEpubTapZoneTutorialAfterChanges
         readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
             ?: LibraryReaderPreferences(
                 theme = themeStore.read(),
@@ -2564,7 +2564,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
         showTapZoneTutorialAfterChanges = enabled
         appPreferencesStore.save(
-            appPreferencesStore.read().copy(showTapZoneTutorialAfterChanges = enabled)
+            appPreferencesStore.read().copy(showEpubTapZoneTutorialAfterChanges = enabled)
         )
     }
 

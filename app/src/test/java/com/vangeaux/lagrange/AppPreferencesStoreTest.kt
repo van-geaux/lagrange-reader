@@ -18,8 +18,11 @@ class AppPreferencesStoreTest {
     }
 
     @Test
-    fun `tap-zone tutorial after changes defaults to enabled`() {
-        assertEquals(true, AppPreferences().showTapZoneTutorialAfterChanges)
+    fun `format-specific tap-zone tutorials default to enabled`() {
+        val preferences = AppPreferences()
+        assertEquals(true, preferences.showEpubTapZoneTutorialAfterChanges)
+        assertEquals(true, preferences.showPdfTapZoneTutorialAfterChanges)
+        assertEquals(true, preferences.showComicTapZoneTutorialAfterChanges)
     }
 
     @Test

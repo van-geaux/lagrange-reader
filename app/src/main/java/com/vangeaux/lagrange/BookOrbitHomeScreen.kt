@@ -331,6 +331,12 @@ internal enum class ReaderConfigurationFormat {
     PDF,
     COMIC
 }
+
+internal fun ReaderConfigurationFormat.tapZoneTutorialPreferenceTitle(): String = when (this) {
+    ReaderConfigurationFormat.EPUB -> "Show EPUB tap-zone tutorial after changes"
+    ReaderConfigurationFormat.PDF -> "Show PDF tap-zone tutorial after changes"
+    ReaderConfigurationFormat.COMIC -> "Show comic tap-zone tutorial after changes"
+}
 private val CATALOG_GRID_PADDING = 16.dp
 private val CATALOG_JUMP_RAIL_END_PADDING = 32.dp
 
@@ -4428,8 +4434,8 @@ internal fun ReaderConfigurationControls(
         testTagPrefix = "$testTagPrefix-tap-zone"
     )
     AppPreferenceSwitchRow(
-        title = "Show tap-zone tutorial after changes",
-        summary = "Show the tap-zone guide again when the layout or inversion changes.",
+        title = format.tapZoneTutorialPreferenceTitle(),
+        summary = "Show this format's tap-zone guide again when the layout or inversion changes.",
         checked = showTapZoneTutorialAfterChanges,
         testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
         onCheckedChange = onShowTapZoneTutorialAfterChangesChange

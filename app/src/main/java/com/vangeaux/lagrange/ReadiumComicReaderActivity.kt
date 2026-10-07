@@ -298,7 +298,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val appPreferences = AppPreferencesStore(this).read()
-        showTapZoneTutorialAfterChanges = appPreferences.showTapZoneTutorialAfterChanges
+        showTapZoneTutorialAfterChanges = appPreferences.showComicTapZoneTutorialAfterChanges
         readerPreferences = appPreferences.readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
@@ -933,7 +933,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
         showTapZoneTutorialAfterChanges = enabled
         AppPreferencesStore(this).save(
-            AppPreferencesStore(this).read().copy(showTapZoneTutorialAfterChanges = enabled)
+            AppPreferencesStore(this).read().copy(showComicTapZoneTutorialAfterChanges = enabled)
         )
     }
 
