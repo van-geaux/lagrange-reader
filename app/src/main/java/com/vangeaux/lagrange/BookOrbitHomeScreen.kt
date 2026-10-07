@@ -4252,6 +4252,13 @@ private fun LibraryReaderConfiguration(
                         selectedLibrary.id,
                         value.copy(pdfPageGapDp = pageGapDp)
                     )
+                },
+                invertColors = value.invertPdfColors,
+                onInvertColorsChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(invertPdfColors = enabled)
+                    )
                 }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -4285,7 +4292,9 @@ private fun ReaderFormatLayoutSettings(
     pageGapDp: Float,
     testTagPrefix: String,
     onLayoutModeChange: (ReaderLayoutMode) -> Unit,
-    onPageGapChange: (Float) -> Unit
+    onPageGapChange: (Float) -> Unit,
+    invertColors: Boolean? = null,
+    onInvertColorsChange: ((Boolean) -> Unit)? = null
 ) {
     ReaderLayoutModeSettings(
         formatLabel = formatLabel,
@@ -4310,6 +4319,15 @@ private fun ReaderFormatLayoutSettings(
             valueRange = 0f..MAX_READER_PAGE_GAP_DP,
             steps = 11,
             modifier = Modifier.testTag("$testTagPrefix-page-gap")
+        )
+    }
+    if (invertColors != null && onInvertColorsChange != null) {
+        AppPreferenceSwitchRow(
+            title = "Invert PDF colors",
+            summary = "Invert page colors and images for accessibility",
+            checked = invertColors,
+            testTag = "$testTagPrefix-invert-colors",
+            onCheckedChange = onInvertColorsChange
         )
     }
 }
@@ -4631,7 +4649,9 @@ internal fun ReaderConfigurationControls(
             pageGapDp = value.pdfPageGapDp,
             testTagPrefix = "$testTagPrefix-pdf",
             onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
-            onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) }
+            onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) },
+            invertColors = value.invertPdfColors,
+            onInvertColorsChange = { onPreferencesChange(value.copy(invertPdfColors = it)) }
         )
         ReaderConfigurationFormat.COMIC -> ReaderFormatLayoutSettings(
             formatLabel = "CBR/CBZ",

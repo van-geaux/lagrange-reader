@@ -4,6 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
@@ -127,6 +130,22 @@ internal fun pdfiumPreferencesFor(
         ReaderLayoutMode.CONTINUOUS -> Axis.VERTICAL
     }
 )
+
+internal fun pdfColorMatrix(inverted: Boolean): FloatArray = if (inverted) {
+    floatArrayOf(
+        -1f, 0f, 0f, 0f, 255f,
+        0f, -1f, 0f, 0f, 255f,
+        0f, 0f, -1f, 0f, 255f,
+        0f, 0f, 0f, 1f, 0f
+    )
+} else {
+    floatArrayOf(
+        1f, 0f, 0f, 0f, 0f,
+        0f, 1f, 0f, 0f, 0f,
+        0f, 0f, 1f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f
+    )
+}
 
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumPdfReaderActivity : FragmentActivity() {
@@ -504,6 +523,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                 )
             )
             navigator = fragment
+            applyPdfColorInversion()
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     fragment.currentLocator.collect(::updateLocation)
@@ -576,10 +596,25 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             normalized.readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
         ) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
         navigator?.submitPreferences(pdfiumPreferencesFor(normalized))
+        applyPdfColorInversion()
         val store = AppPreferencesStore(this)
         store.save(store.read().withReaderPreferences(libraryId, normalized))
         configureSystemBars()
         if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
+    }
+
+    private fun applyPdfColorInversion() {
+        val publicationView = navigator?.publicationView ?: return
+        if (readerPreferences.invertPdfColors) {
+            publicationView.setLayerType(
+                View.LAYER_TYPE_HARDWARE,
+                Paint().apply {
+                    colorFilter = ColorMatrixColorFilter(ColorMatrix(pdfColorMatrix(inverted = true)))
+                }
+            )
+        } else {
+            publicationView.setLayerType(View.LAYER_TYPE_NONE, null)
+        }
     }
 
     private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
