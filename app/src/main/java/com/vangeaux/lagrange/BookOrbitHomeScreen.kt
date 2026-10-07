@@ -4380,6 +4380,8 @@ private fun ReaderTapZoneSettings(
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    showTapZoneTutorialAfterChanges: Boolean = true,
+    onShowTapZoneTutorialAfterChangesChange: (Boolean) -> Unit = {},
     testTagPrefix: String = "reader-options-reading",
     format: ReaderConfigurationFormat = ReaderConfigurationFormat.EPUB,
     onCustomFontRequest: () -> Unit = {},
@@ -4424,6 +4426,13 @@ internal fun ReaderConfigurationControls(
         value = value,
         onPreferencesChange = onPreferencesChange,
         testTagPrefix = "$testTagPrefix-tap-zone"
+    )
+    AppPreferenceSwitchRow(
+        title = "Show tap-zone tutorial after changes",
+        summary = "Show the tap-zone guide again when the layout or inversion changes.",
+        checked = showTapZoneTutorialAfterChanges,
+        testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
+        onCheckedChange = onShowTapZoneTutorialAfterChangesChange
     )
     Text("Typography", style = MaterialTheme.typography.titleMedium)
     FlowRow(

@@ -586,6 +586,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var epubLayoutMode by mutableStateOf(ReaderLayoutMode.PAGINATED)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
+    private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
     private var chapterTitles by mutableStateOf(emptyList<String>())
     private var currentChapter by mutableStateOf(0)
     private var currentPage by mutableStateOf(0)
@@ -718,6 +719,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             enabled = !isPreview
         )
         val appPreferences = appPreferencesStore.read()
+        showTapZoneTutorialAfterChanges = appPreferences.showTapZoneTutorialAfterChanges
         readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
             ?: LibraryReaderPreferences(
                 theme = themeStore.read(),
@@ -930,6 +932,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
+                            showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
+                            onShowTapZoneTutorialAfterChangesChange = ::updateShowTapZoneTutorialAfterChanges,
                             onCustomFontRequest = ::chooseCustomFont,
                             onCustomFontRemove = ::removeCustomFont,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -2554,7 +2558,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             current.withReaderPreferences(libraryId, normalized)
         )
         configureSystemBars()
-        if (tapZoneChanged) showTapZoneTutorial()
+        if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
+    }
+
+    private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
+        showTapZoneTutorialAfterChanges = enabled
+        appPreferencesStore.save(
+            appPreferencesStore.read().copy(showTapZoneTutorialAfterChanges = enabled)
+        )
     }
 
     private fun applyReaderPadding() {

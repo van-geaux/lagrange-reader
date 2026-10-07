@@ -150,6 +150,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private var isPreview: Boolean = false
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
+    private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var pageLocators: List<Locator> = emptyList()
@@ -213,7 +214,9 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
-        readerPreferences = AppPreferencesStore(this).read().readerPreferencesFor(libraryId)
+        val appPreferences = AppPreferencesStore(this).read()
+        showTapZoneTutorialAfterChanges = appPreferences.showTapZoneTutorialAfterChanges
+        readerPreferences = appPreferences.readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
@@ -364,6 +367,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                             onContinueReading = ::hideOptions,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
+                            showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
+                            onShowTapZoneTutorialAfterChangesChange = ::updateShowTapZoneTutorialAfterChanges,
                             format = ReaderConfigurationFormat.PDF,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
@@ -574,7 +579,14 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val store = AppPreferencesStore(this)
         store.save(store.read().withReaderPreferences(libraryId, normalized))
         configureSystemBars()
-        if (tapZoneChanged) showTapZoneTutorial()
+        if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
+    }
+
+    private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
+        showTapZoneTutorialAfterChanges = enabled
+        AppPreferencesStore(this).save(
+            AppPreferencesStore(this).read().copy(showTapZoneTutorialAfterChanges = enabled)
+        )
     }
 
     private fun toggleChrome() {

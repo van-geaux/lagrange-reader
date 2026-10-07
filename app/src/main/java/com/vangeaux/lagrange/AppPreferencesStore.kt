@@ -57,6 +57,7 @@ data class AppPreferences(
     val reduceMotion: Boolean = false,
     val hideNavigationBarWhileReading: Boolean = true,
     val hideStatusBarWhileReading: Boolean = false,
+    val showTapZoneTutorialAfterChanges: Boolean = true,
     val cellularDownloadPolicy: CellularDownloadPolicy = CellularDownloadPolicy.ASK_FOR_CONFIRMATION,
     val backgroundRefreshNetworkPolicy: BackgroundRefreshNetworkPolicy =
         BackgroundRefreshNetworkPolicy.WIFI_ONLY,
@@ -94,6 +95,10 @@ internal class AppPreferencesStore(context: Context) {
         reduceMotion = preferences.getBoolean(REDUCE_MOTION_KEY, false),
         hideNavigationBarWhileReading = preferences.getBoolean(HIDE_NAVIGATION_BAR_WHILE_READING_KEY, true),
         hideStatusBarWhileReading = preferences.getBoolean(HIDE_STATUS_BAR_WHILE_READING_KEY, false),
+        showTapZoneTutorialAfterChanges = preferences.getBoolean(
+            SHOW_TAP_ZONE_TUTORIAL_AFTER_CHANGES_KEY,
+            true
+        ),
         cellularDownloadPolicy = cellularDownloadPolicyFromStorage(
             preferences.getString(CELLULAR_DOWNLOAD_POLICY_KEY, null)
         ),
@@ -148,6 +153,10 @@ internal class AppPreferencesStore(context: Context) {
             .putBoolean(REDUCE_MOTION_KEY, value.reduceMotion)
             .putBoolean(HIDE_NAVIGATION_BAR_WHILE_READING_KEY, value.hideNavigationBarWhileReading)
             .putBoolean(HIDE_STATUS_BAR_WHILE_READING_KEY, value.hideStatusBarWhileReading)
+            .putBoolean(
+                SHOW_TAP_ZONE_TUTORIAL_AFTER_CHANGES_KEY,
+                value.showTapZoneTutorialAfterChanges
+            )
             .putString(
                 CELLULAR_DOWNLOAD_POLICY_KEY,
                 cellularDownloadPolicyStorageValue(value.cellularDownloadPolicy)
@@ -314,6 +323,7 @@ internal class AppPreferencesStore(context: Context) {
         const val REDUCE_MOTION_KEY = "reduce_motion"
         const val HIDE_NAVIGATION_BAR_WHILE_READING_KEY = "hide_navigation_bar_while_reading"
         const val HIDE_STATUS_BAR_WHILE_READING_KEY = "hide_status_bar_while_reading"
+        const val SHOW_TAP_ZONE_TUTORIAL_AFTER_CHANGES_KEY = "show_tap_zone_tutorial_after_changes"
         const val CELLULAR_DOWNLOAD_POLICY_KEY = "cellular_download_policy"
         const val BACKGROUND_REFRESH_NETWORK_POLICY_KEY = "background_refresh_network_policy"
         const val OFFLINE_CACHE_LIBRARY_IDS_KEY = "offline_cache_library_ids"

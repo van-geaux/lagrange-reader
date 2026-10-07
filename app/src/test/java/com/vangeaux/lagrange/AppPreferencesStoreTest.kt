@@ -18,6 +18,11 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `tap-zone tutorial after changes defaults to enabled`() {
+        assertEquals(true, AppPreferences().showTapZoneTutorialAfterChanges)
+    }
+
+    @Test
     fun `EPUB image minimum dimension defaults to 250 and normalizes to 25 pixel steps`() {
         assertEquals(250, AppPreferences().epubImageMinimumDimensionPx)
         assertEquals(0, normalizeEpubImageMinimumDimensionPx(-1))
