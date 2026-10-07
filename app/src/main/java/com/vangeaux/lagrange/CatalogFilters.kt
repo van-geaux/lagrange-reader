@@ -85,6 +85,29 @@ data class SeriesCatalogFilter(
             sort != SeriesSortOption.NAME || direction != SortDirection.ASCENDING
 }
 
+internal fun SeriesCatalogFilter.toStorageValue(): String = JSONObject()
+    .put("query", query)
+    .put("author", author)
+    .put("genre", genre)
+    .put("libraryId", libraryId)
+    .put("completion", completion.name)
+    .put("sort", sort.name)
+    .put("direction", direction.name)
+    .toString()
+
+internal fun seriesCatalogFilterFromStorage(value: String?): SeriesCatalogFilter? = runCatching {
+    val json = JSONObject(value ?: return null)
+    SeriesCatalogFilter(
+        query = json.optString("query").takeIf { it.isNotBlank() },
+        author = json.optString("author").takeIf { it.isNotBlank() },
+        genre = json.optString("genre").takeIf { it.isNotBlank() },
+        libraryId = json.optString("libraryId").takeIf { it.isNotBlank() },
+        completion = SeriesCompletionFilter.valueOf(json.optString("completion")),
+        sort = SeriesSortOption.valueOf(json.optString("sort")),
+        direction = SortDirection.valueOf(json.optString("direction"))
+    )
+}.getOrNull()
+
 internal fun BookBrowseFilter.toServerFilter(): JSONObject? {
     val rules = JSONArray()
     listOf("title" to title, "series" to series).forEach { (field, value) ->
@@ -135,6 +158,31 @@ internal fun BookBrowseFilter.toServerFilter(): JSONObject? {
             .put("rules", rules)
     }
 }
+
+internal fun BookBrowseFilter.toStorageValue(): String = JSONObject()
+    .put("title", title)
+    .put("author", author)
+    .put("series", series)
+    .put("genre", genre)
+    .put("readStatus", readStatus.name)
+    .put("format", format.name)
+    .put("sort", sort.name)
+    .put("direction", direction.name)
+    .toString()
+
+internal fun bookBrowseFilterFromStorage(value: String?): BookBrowseFilter? = runCatching {
+    val json = JSONObject(value ?: return null)
+    BookBrowseFilter(
+        title = json.optString("title").takeIf { it.isNotBlank() },
+        author = json.optString("author").takeIf { it.isNotBlank() },
+        series = json.optString("series").takeIf { it.isNotBlank() },
+        genre = json.optString("genre").takeIf { it.isNotBlank() },
+        readStatus = BookReadFilter.valueOf(json.optString("readStatus")),
+        format = BookFormatFilter.valueOf(json.optString("format")),
+        sort = BookSortOption.valueOf(json.optString("sort")),
+        direction = SortDirection.valueOf(json.optString("direction"))
+    )
+}.getOrNull()
 
 internal fun filterAndSortLocalBooks(
     books: List<BookSummary>,

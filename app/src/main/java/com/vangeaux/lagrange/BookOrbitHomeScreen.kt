@@ -1877,6 +1877,9 @@ internal fun NativeLibraryBrowserScreen(
                 activeSeriesGenre != null -> SeriesCatalogScreen(
                     query = "",
                     initialFilter = SeriesCatalogFilter(genre = activeSeriesGenre),
+                    persistenceKey = "series-genre:${selectedSmartScope?.id ?: "all"}:$activeSeriesGenre",
+                    appPreferences = appPreferences,
+                    onAppPreferencesChange = onAppPreferencesChange,
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
                     books = state.homeBooks,
@@ -2002,6 +2005,9 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.SERIES -> SeriesCatalogScreen(
                     query = "",
                     initialFilter = SeriesCatalogFilter(),
+                    persistenceKey = "series:${selectedSmartScope?.id ?: "all"}",
+                    appPreferences = appPreferences,
+                    onAppPreferencesChange = onAppPreferencesChange,
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
                     books = state.homeBooks,
@@ -2052,7 +2058,9 @@ internal fun NativeLibraryBrowserScreen(
                     confirmDeleteLocalCopy = appPreferences.confirmDeleteLocalCopy,
                     onDeleteLocalCopies = onDeleteLocalCopies,
                     onMarkAsRead = onMarkAsRead,
-                    onMarkAsUnread = onMarkAsUnread
+                    onMarkAsUnread = onMarkAsUnread,
+                    appPreferences = appPreferences,
+                    onAppPreferencesChange = onAppPreferencesChange
                 )
                 destination == BrowserDestination.STATISTICS -> StatisticsScreen(
                     loader = statisticsLoader,
@@ -2603,6 +2611,9 @@ internal fun smartScopeCatalogStateKey(selectedScope: SmartScope?): Long? =
 private fun SeriesCatalogScreen(
     query: String,
     initialFilter: SeriesCatalogFilter,
+    persistenceKey: String,
+    appPreferences: AppPreferences,
+    onAppPreferencesChange: (AppPreferences) -> Unit,
     libraryOptions: List<LibrarySummary>,
     selectedScope: SmartScope? = null,
     books: List<BookSummary> = emptyList(),
@@ -2613,6 +2624,8 @@ private fun SeriesCatalogScreen(
     onSeriesSelected: (SeriesSummary) -> Unit
 ) {
     val selectedScopeId = smartScopeCatalogStateKey(selectedScope)
+    val lockedFilter = appPreferences.lockedSeriesFilters[persistenceKey]
+        ?.let(::seriesCatalogFilterFromStorage)
     var items by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
     var total by remember(query, initialFilter, selectedScopeId) { mutableStateOf(0) }
     var isLoading by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
@@ -2620,7 +2633,9 @@ private fun SeriesCatalogScreen(
     var loadError by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
     var filter by remember(query, initialFilter, selectedScopeId) {
-        mutableStateOf(initialFilter.copy(query = query.takeIf { it.isNotBlank() }))
+        mutableStateOf(
+            (lockedFilter ?: initialFilter).copy(query = query.takeIf { it.isNotBlank() })
+        )
     }
     var showFilter by rememberSaveable(query, initialFilter) { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
@@ -2790,10 +2805,15 @@ private fun SeriesCatalogScreen(
     if (showFilter) {
         SeriesFilterSheet(
             initial = filter,
+            initialLocked = appPreferences.lockedSeriesFilters.containsKey(persistenceKey),
             libraries = libraryOptions,
             onDismiss = { showFilter = false },
-            onApply = {
-                filter = it
+            onApply = { nextFilter, locked ->
+                val nextFilters = appPreferences.lockedSeriesFilters.toMutableMap().apply {
+                    if (locked) put(persistenceKey, nextFilter.toStorageValue()) else remove(persistenceKey)
+                }
+                onAppPreferencesChange(appPreferences.copy(lockedSeriesFilters = nextFilters))
+                filter = nextFilter
                 showFilter = false
             }
         )
@@ -2804,10 +2824,12 @@ private fun SeriesCatalogScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun BookFilterSheet(
     initial: BookBrowseFilter,
+    initialLocked: Boolean,
     onDismiss: () -> Unit,
-    onApply: (BookBrowseFilter) -> Unit
+    onApply: (BookBrowseFilter, Boolean) -> Unit
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
+    var locked by remember(initialLocked) { mutableStateOf(initialLocked) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2868,9 +2890,19 @@ private fun BookFilterSheet(
                     onSelected = { draft = draft.copy(direction = it) }
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Lock filter", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Restore this filter when returning to this screen.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = locked, onCheckedChange = { locked = it })
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { draft = BookBrowseFilter() }) { Text("Reset") }
-                Button(onClick = { onApply(draft) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text("Apply") }
             }
         }
     }
@@ -2880,11 +2912,13 @@ private fun BookFilterSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun SeriesFilterSheet(
     initial: SeriesCatalogFilter,
+    initialLocked: Boolean,
     libraries: List<LibrarySummary>,
     onDismiss: () -> Unit,
-    onApply: (SeriesCatalogFilter) -> Unit
+    onApply: (SeriesCatalogFilter, Boolean) -> Unit
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
+    var locked by remember(initialLocked) { mutableStateOf(initialLocked) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2939,9 +2973,19 @@ private fun SeriesFilterSheet(
                 label = { it.label },
                 onSelected = { draft = draft.copy(direction = it) }
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Lock filter", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Restore this filter when returning to this screen.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = locked, onCheckedChange = { locked = it })
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { draft = SeriesCatalogFilter(query = draft.query) }) { Text("Reset") }
-                Button(onClick = { onApply(draft) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text("Apply") }
             }
         }
     }
@@ -5748,6 +5792,8 @@ private fun LibraryContentScreen(
                     onDeleteLocalCopy = onDeleteLocalCopy,
                     onMarkAsRead = onMarkAsRead,
                     onMarkAsUnread = onMarkAsUnread,
+                    appPreferences = appPreferences,
+                    onAppPreferencesChange = onAppPreferencesChange,
                     browseOptionsExpanded = browseOptionsExpanded,
                     onBrowseOptionsExpandedChange = { expanded ->
                         state.selectedLibraryId?.let { libraryId ->
@@ -6114,12 +6160,16 @@ private fun LibraryBrowseScreen(
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
+    appPreferences: AppPreferences,
+    onAppPreferencesChange: (AppPreferences) -> Unit,
     browseOptionsExpanded: Boolean,
     onBrowseOptionsExpandedChange: (Boolean) -> Unit,
     headerContent: (@Composable () -> Unit)? = null
 ) {
     val libraryId = state.selectedLibraryId
-    var filter by remember(libraryId) { mutableStateOf(BookBrowseFilter()) }
+    val persistenceKey = "library:${libraryId ?: "all"}"
+    val lockedFilter = appPreferences.lockedBookFilters[persistenceKey]?.let(::bookBrowseFilterFromStorage)
+    var filter by remember(libraryId, lockedFilter) { mutableStateOf(lockedFilter ?: BookBrowseFilter()) }
     var showFilter by rememberSaveable(libraryId) { mutableStateOf(false) }
     val books = remember(state.books, filter) { filterAndSortLocalBooks(state.books, filter) }
     val total = if (filter.isActive) books.size else state.booksTotal ?: books.size
@@ -6155,9 +6205,14 @@ private fun LibraryBrowseScreen(
     if (showFilter) {
         BookFilterSheet(
             initial = filter,
+            initialLocked = appPreferences.lockedBookFilters.containsKey(persistenceKey),
             onDismiss = { showFilter = false },
-            onApply = {
-                filter = it
+            onApply = { nextFilter, locked ->
+                val nextFilters = appPreferences.lockedBookFilters.toMutableMap().apply {
+                    if (locked) put(persistenceKey, nextFilter.toStorageValue()) else remove(persistenceKey)
+                }
+                onAppPreferencesChange(appPreferences.copy(lockedBookFilters = nextFilters))
+                filter = nextFilter
                 showFilter = false
             }
         )
@@ -6981,7 +7036,9 @@ private fun LocalBooksScreen(
     confirmDeleteLocalCopy: Boolean,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
     onMarkAsRead: (BookSummary) -> Unit,
-    onMarkAsUnread: (BookSummary) -> Unit
+    onMarkAsUnread: (BookSummary) -> Unit,
+    appPreferences: AppPreferences,
+    onAppPreferencesChange: (AppPreferences) -> Unit
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
@@ -6998,7 +7055,9 @@ private fun LocalBooksScreen(
             reloadKey += 1
         }
     }
-    var filter by remember { mutableStateOf(BookBrowseFilter()) }
+    val persistenceKey = "local:${libraryId ?: "all"}"
+    val lockedFilter = appPreferences.lockedBookFilters[persistenceKey]?.let(::bookBrowseFilterFromStorage)
+    var filter by remember(libraryId, lockedFilter) { mutableStateOf(lockedFilter ?: BookBrowseFilter()) }
     var showFilter by rememberSaveable { mutableStateOf(false) }
     val scopedBooks = remember(books, libraryId) {
         books.orEmpty().filter { libraryId == null || it.libraryId == libraryId }
@@ -7067,9 +7126,14 @@ private fun LocalBooksScreen(
     if (showFilter) {
         BookFilterSheet(
             initial = filter,
+            initialLocked = appPreferences.lockedBookFilters.containsKey(persistenceKey),
             onDismiss = { showFilter = false },
-            onApply = {
-                filter = it
+            onApply = { nextFilter, locked ->
+                val nextFilters = appPreferences.lockedBookFilters.toMutableMap().apply {
+                    if (locked) put(persistenceKey, nextFilter.toStorageValue()) else remove(persistenceKey)
+                }
+                onAppPreferencesChange(appPreferences.copy(lockedBookFilters = nextFilters))
+                filter = nextFilter
                 showFilter = false
             }
         )

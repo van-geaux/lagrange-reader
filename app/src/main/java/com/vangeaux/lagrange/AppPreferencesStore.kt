@@ -70,7 +70,9 @@ data class AppPreferences(
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
     val libraryReaderPreferences: Map<String, LibraryReaderPreferences> = emptyMap(),
-    val libraryBrowseOptionsExpanded: Map<String, Boolean> = emptyMap()
+    val libraryBrowseOptionsExpanded: Map<String, Boolean> = emptyMap(),
+    val lockedBookFilters: Map<String, String> = emptyMap(),
+    val lockedSeriesFilters: Map<String, String> = emptyMap()
 )
 
 internal class AppPreferencesStore(context: Context) {
@@ -124,7 +126,9 @@ internal class AppPreferencesStore(context: Context) {
         ),
         libraryBrowseOptionsExpanded = libraryBrowseOptionsExpandedFromStorage(
             preferences.getString(LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY, null)
-        )
+        ),
+        lockedBookFilters = stringMapFromStorage(preferences.getString(LOCKED_BOOK_FILTERS_KEY, null)),
+        lockedSeriesFilters = stringMapFromStorage(preferences.getString(LOCKED_SERIES_FILTERS_KEY, null))
     )
 
     fun save(value: AppPreferences) {
@@ -182,6 +186,8 @@ internal class AppPreferencesStore(context: Context) {
                 LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY,
                 libraryBrowseOptionsExpandedStorageValue(value.libraryBrowseOptionsExpanded)
             )
+            .putString(LOCKED_BOOK_FILTERS_KEY, stringMapStorageValue(value.lockedBookFilters))
+            .putString(LOCKED_SERIES_FILTERS_KEY, stringMapStorageValue(value.lockedSeriesFilters))
             .apply()
     }
 
@@ -319,6 +325,8 @@ internal class AppPreferencesStore(context: Context) {
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
         const val LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY = "library_browse_options_expanded"
+        const val LOCKED_BOOK_FILTERS_KEY = "locked_book_filters"
+        const val LOCKED_SERIES_FILTERS_KEY = "locked_series_filters"
         const val AUDIO_PLAYBACK_SPEED_KEY = "audio_playback_speed"
         const val EPUB_TTS_PLAYBACK_SPEED_KEY = "epub_tts_playback_speed"
         const val EPUB_TTS_PITCH_KEY = "epub_tts_pitch"
@@ -367,6 +375,26 @@ internal fun libraryBrowseOptionsExpandedFromStorage(value: String?): Map<String
         buildMap {
             storage.keys().forEach { libraryId ->
                 if (libraryId.isNotBlank()) put(libraryId, storage.optBoolean(libraryId, false))
+            }
+        }
+    }.getOrDefault(emptyMap())
+}
+
+internal fun stringMapStorageValue(values: Map<String, String>): String = JSONObject().apply {
+    values.toSortedMap().forEach { (key, storedValue) ->
+        if (key.isNotBlank()) put(key, storedValue)
+    }
+}.toString()
+
+internal fun stringMapFromStorage(value: String?): Map<String, String> {
+    if (value.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        val storage = JSONObject(value)
+        buildMap {
+            storage.keys().forEach { key ->
+                if (key.isNotBlank() && storage.has(key) && !storage.isNull(key)) {
+                    put(key, storage.getString(key))
+                }
             }
         }
     }.getOrDefault(emptyMap())
