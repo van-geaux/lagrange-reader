@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 1.5.4](https://img.shields.io/badge/version-1.5.4-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.4)
+[![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.6.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
