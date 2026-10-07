@@ -68,7 +68,7 @@ The workflow uses the existing `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWOR
 
 For Android developer verification package registration, run the manually triggered `Android Package Registration APK` workflow with the identifier supplied by Play Console. It creates `app/src/main/assets/adi-registration.properties` only during the workflow, builds a signed `app-release.apk`, uploads the APK and checksum as a short-lived artifact, and removes the temporary asset before the job ends. Upload that artifact to the package-registration page, not to a normal Play testing track. Never commit the identifier or signing credentials.
 
-The Play listing should include the public privacy-policy URL, store metadata, screenshots, content rating, target-audience and ads declarations, Data Safety responses, and app-access instructions for the BookOrbit server/account sign-in flow. The Play listing URL used by the in-app update action is `https://play.google.com/store/apps/details?id=com.vangeaux.lagrange`.
+The Play listing should include the public privacy-policy URL, store metadata, screenshots, content rating, target-audience and ads declarations, Data Safety responses, and app-access instructions for the supported server/account sign-in flows.
 
 ## Signing strategy
 

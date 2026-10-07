@@ -145,11 +145,6 @@ class MainActivity : ComponentActivity() {
                             startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse(update.htmlUrl))
                             )
-                        },
-                        onOpenGooglePlay = {
-                            startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(LAGRANGE_GOOGLE_PLAY_URL))
-                            )
                         }
                     )
                 }
