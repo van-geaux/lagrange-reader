@@ -510,7 +510,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                 }
             }
             progressView?.visibility = View.GONE
-            if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+            if (showTapZoneTutorialAfterChanges && !tapZoneTutorialHasShown) showTapZoneTutorial()
         }
     }
 

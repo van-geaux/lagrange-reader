@@ -1194,7 +1194,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         progressView?.visibility = View.GONE
         applyReaderPadding()
-        if (!tapZoneTutorialHasShown) showTapZoneTutorial()
+        if (showTapZoneTutorialAfterChanges && !tapZoneTutorialHasShown) showTapZoneTutorial()
         restoreTtsPositionAfterRecreation(openedPublication)
     }
 

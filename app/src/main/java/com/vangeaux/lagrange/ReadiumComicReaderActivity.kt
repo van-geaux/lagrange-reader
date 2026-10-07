@@ -586,7 +586,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         if (readerPreferences.comicLayoutMode == ReaderLayoutMode.CONTINUOUS) {
             showContinuousPublication(openedPublication, initialLocator)
             progressView?.visibility = View.GONE
-            if (showTutorial) showTapZoneTutorial(continuous = true)
+            if (showTutorial && showTapZoneTutorialAfterChanges) {
+                showTapZoneTutorial(continuous = true)
+            }
             return
         }
         val fragmentFactory = ImageNavigatorFragment.createFactory(
@@ -632,7 +634,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             }
         }
         progressView?.visibility = View.GONE
-        if (showTutorial) showTapZoneTutorial()
+        if (showTutorial && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
     }
 
     private fun installPaginatedComicLongPress(
