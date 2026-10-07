@@ -160,8 +160,7 @@ fun BookOrbitApp(
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
-    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {},
-    onOpenGooglePlay: () -> Unit = {}
+    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
     val fullAudioPlayerBook by coordinator.fullAudioPlayerBook.collectAsState()
@@ -228,10 +227,6 @@ fun BookOrbitApp(
                     coordinator.dismissReleaseUpdate()
                     onDownloadReleaseUpdate(update)
                 },
-                onGooglePlay = {
-                    coordinator.dismissReleaseUpdate()
-                    onOpenGooglePlay()
-                },
                 onIgnore = coordinator::ignoreReleaseUpdate
             )
         }
@@ -242,7 +237,6 @@ fun BookOrbitApp(
 private fun ReleaseUpdateDialog(
     update: ReleaseUpdate,
     onDownload: () -> Unit,
-    onGooglePlay: () -> Unit,
     onIgnore: () -> Unit
 ) {
     AlertDialog(
@@ -267,10 +261,6 @@ private fun ReleaseUpdateDialog(
                     onClick = onDownload,
                     modifier = Modifier.testTag("release-update-download")
                 ) { Text("GitHub") }
-                TextButton(
-                    onClick = onGooglePlay,
-                    modifier = Modifier.testTag("release-update-google-play")
-                ) { Text("Google Play") }
             }
         },
         dismissButton = {

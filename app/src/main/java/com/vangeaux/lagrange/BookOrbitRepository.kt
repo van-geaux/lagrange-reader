@@ -77,9 +77,6 @@ private val annotationSyncMutex = Mutex()
 internal const val LAGRANGE_GITHUB_RELEASES_API_URL =
     "https://api.github.com/repos/van-geaux/lagrange-reader/releases/latest"
 
-internal const val LAGRANGE_GOOGLE_PLAY_URL =
-    "https://play.google.com/store/apps/details?id=com.vangeaux.lagrange"
-
 private const val LAGRANGE_GITHUB_RELEASES_PAGE_URL =
     "https://github.com/van-geaux/lagrange-reader/releases/tag/"
 
