@@ -185,7 +185,7 @@ internal fun readiumPreferences(
     theme = when (theme) {
         EpubReaderTheme.Light -> ReadiumTheme.LIGHT
         EpubReaderTheme.Sepia -> ReadiumTheme.SEPIA
-        EpubReaderTheme.Dark -> ReadiumTheme.DARK
+        EpubReaderTheme.Dark, EpubReaderTheme.OledBlack -> ReadiumTheme.DARK
     },
     fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
     lineHeight = readiumEpubLineHeight(lineSpacing),

@@ -878,7 +878,8 @@ internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
     showNavigationBar = false
 )
 
-internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean = this != EpubReaderTheme.Dark
+internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean =
+    this != EpubReaderTheme.Dark && this != EpubReaderTheme.OledBlack
 
 internal data class EpubReaderProgressStatus(
     val completionPercent: Float,
@@ -1742,6 +1743,15 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
         surfaceVariant = 0xFF2B2723.toInt(),
         outline = 0xFF8B8175.toInt()
     )
+    EpubReaderTheme.OledBlack -> EpubReaderOptionsPalette(
+        container = 0xFF000000.toInt(),
+        content = 0xFFF5F5F6.toInt(),
+        mutedContent = 0xFFCECDD2.toInt(),
+        accent = 0xFFA8CDE0.toInt(),
+        onAccent = 0xFF073447.toInt(),
+        surfaceVariant = 0xFF1C1C1E.toInt(),
+        outline = 0xFF96959B.toInt()
+    )
 }
 
 @Composable
@@ -1760,7 +1770,7 @@ internal fun EpubReaderOptionsBottomSheet(
     val parentShapes = MaterialTheme.shapes
     val colors = remember(preferences.theme) {
         val palette = preferences.theme.readerOptionsPalette()
-        if (preferences.theme == EpubReaderTheme.Dark) {
+        if (preferences.theme == EpubReaderTheme.Dark || preferences.theme == EpubReaderTheme.OledBlack) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -2602,7 +2612,8 @@ private const val EPUB_READER_BRIDGE = "BookOrbitReader"
 internal val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,
-    EpubReaderTheme.Dark
+    EpubReaderTheme.Dark,
+    EpubReaderTheme.OledBlack
 )
 
 enum class EpubReaderTheme(
@@ -2632,5 +2643,12 @@ enum class EpubReaderTheme(
         backgroundCss = "#181512",
         foregroundCss = "#ECE4D8",
         linkCss = "#8DB5FF"
+    ),
+    OledBlack(
+        label = "OLED black",
+        backgroundColor = 0xFF000000.toInt(),
+        backgroundCss = "#000000",
+        foregroundCss = "#F5F5F6",
+        linkCss = "#A8CDE0"
     )
 }

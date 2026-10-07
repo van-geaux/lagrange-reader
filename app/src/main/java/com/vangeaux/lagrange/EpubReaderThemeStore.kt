@@ -27,10 +27,12 @@ internal fun epubReaderThemeStorageValue(theme: EpubReaderTheme): String = when 
     EpubReaderTheme.Light -> "light"
     EpubReaderTheme.Sepia -> "sepia"
     EpubReaderTheme.Dark -> "dark"
+    EpubReaderTheme.OledBlack -> "oled_black"
 }
 
 internal fun epubReaderThemeFromStorage(value: String?): EpubReaderTheme = when (value?.trim()?.lowercase()) {
     "light" -> EpubReaderTheme.Light
     "dark" -> EpubReaderTheme.Dark
+    "oled_black" -> EpubReaderTheme.OledBlack
     else -> EpubReaderTheme.Sepia
 }
