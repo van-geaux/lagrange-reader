@@ -22,11 +22,9 @@ BookOrbit remains the server and source of truth for your library. Lagrange is t
 
 This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
-## Temporary contribution pause
+## Contributing
 
-Pull requests for new features and general fixes are temporarily paused for a few days while the multi-server architecture and provider-module refactor are prepared. This short pause is intended to let the refactor stabilize before additional changes are integrated.
-
-Please do not open a pull request during this pause unless a maintainer has requested it or it fixes a security vulnerability. Security reports should follow [`SECURITY.md`](SECURITY.md). Issue reports and design discussion remain welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the current contribution policy.
+Contributions are welcome. Start with an issue or feature discussion, then follow the repository workflow in [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Security reports should follow [`SECURITY.md`](SECURITY.md).
 
 ## Screenshots
 
