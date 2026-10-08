@@ -23,6 +23,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -123,7 +124,10 @@ internal fun readiumReadingProgression(
 internal fun pdfiumPreferencesFor(
     preferences: LibraryReaderPreferences
 ): PdfiumPreferences = PdfiumPreferences(
-    pageSpacing = preferences.pdfPageGapDp.toDouble(),
+    pageSpacing = if (
+        preferences.pdfLayoutMode == ReaderLayoutMode.PAGINATED &&
+        preferences.joinPdfFacingPages
+    ) 0.0 else preferences.pdfPageGapDp.toDouble(),
     readingProgression = readiumReadingProgression(preferences.readingDirection),
     scrollAxis = when (preferences.pdfLayoutMode) {
         ReaderLayoutMode.PAGINATED -> Axis.HORIZONTAL
@@ -534,6 +538,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         }
     }
 
+
     private fun openPdfExternalLink(uri: String): Boolean {
         val opened = runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
@@ -583,7 +588,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     private fun goToPage(index: Int) {
-        val locator = pageLocators.getOrNull(index.coerceIn(0, currentPageCount - 1)) ?: return
+        val targetPage = index.coerceIn(0, currentPageCount - 1)
+        val locator = pageLocators.getOrNull(targetPage) ?: return
         navigator?.go(locator)
     }
 
@@ -778,7 +784,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putReaderLocator(navigator?.currentLocator?.value ?: restoredLocator)
+        outState.putReaderLocator(navigator?.currentLocator?.value ?: pageLocators.getOrNull(currentPage) ?: restoredLocator)
         outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
         outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
         outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)

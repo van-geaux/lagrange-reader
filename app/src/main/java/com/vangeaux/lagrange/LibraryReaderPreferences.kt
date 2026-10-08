@@ -62,6 +62,7 @@ data class LibraryReaderPreferences(
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
     val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
+    val joinPdfFacingPages: Boolean = false,
     val invertPdfColors: Boolean = false,
     val comicLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     val comicPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP
@@ -175,6 +176,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("epubLayout", readerLayoutModeStorageValue(normalized.epubLayoutMode))
             put("pdfLayout", readerLayoutModeStorageValue(normalized.pdfLayoutMode))
             put("pdfPageGapDp", normalized.pdfPageGapDp.toDouble())
+            put("joinPdfFacingPages", normalized.joinPdfFacingPages)
             put("invertPdfColors", normalized.invertPdfColors)
             put("comicLayout", readerLayoutModeStorageValue(normalized.comicLayoutMode))
             put("comicPageGapDp", normalized.comicPageGapDp.toDouble())
@@ -227,6 +229,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             "pdfPageGapDp",
                             DEFAULT_READER_PAGE_GAP_DP.toDouble()
                         ).toFloat(),
+                        joinPdfFacingPages = item.optBoolean("joinPdfFacingPages", false),
                         invertPdfColors = item.optBoolean("invertPdfColors", false),
                         comicLayoutMode = readerLayoutModeFromStorage(
                             item.optString("comicLayout"),
