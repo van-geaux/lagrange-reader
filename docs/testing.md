@@ -88,6 +88,8 @@ For cached catalogs, confirm complete cached content appears before network refr
 
 Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. For BookOrbit OIDC, verify provider discovery, PKCE/state/nonce validation, callback exchange, session verification, and recovery in the server-hosted WebView. This is not native AppAuth; native redirect validation remains pending.
 
+With both a BookOrbit profile and a Komga profile configured, sign in to each provider, switch BookOrbit → Komga and back, then repeat Komga → BookOrbit and back. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting beyond a day. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state.
+
 After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available as device-shared Local books. Repeat with compact/full audiobook playback and a preparing session.
 
 ## Verification reporting

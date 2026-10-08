@@ -615,7 +615,7 @@ class AppCoordinator internal constructor(
                 return@launch
             }
             repository = targetRepository
-            serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            targetRepository.setServerUrl(serverUrl)
             audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(
@@ -654,7 +654,7 @@ class AppCoordinator internal constructor(
                 return@launch
             }
             repository = targetRepository
-            serverSelectionModule()?.setServerUrl(serverUrl) ?: repository.setServerUrl(serverUrl)
+            targetRepository.setServerUrl(serverUrl)
             audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(

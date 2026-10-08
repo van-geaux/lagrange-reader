@@ -2105,7 +2105,7 @@ class AppCoordinatorTest {
     fun `change server reconfigures audiobook playback for the replacement repository`() = runTest {
         val replacement = "https://replacement.example.test"
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
-        val replacementRepository = FakeBookOrbitDataSource(serverUrl = replacement)
+        val replacementRepository = FakeBookOrbitDataSource(serverUrl = null)
         val coordinator = AppCoordinator(
             repository = repository,
             dispatcher = StandardTestDispatcher(testScheduler),
@@ -2118,6 +2118,7 @@ class AppCoordinatorTest {
         advanceUntilIdle()
 
         assertSame(replacementRepository, reconfiguredRepository)
+        assertEquals(replacement, replacementRepository.serverUrl)
     }
 
     @Test
