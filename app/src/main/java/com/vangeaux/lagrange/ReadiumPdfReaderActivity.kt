@@ -24,7 +24,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.LazyListState
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -167,8 +167,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var footerView: ComposeView
     private lateinit var tapZoneTutorialView: ComposeView
     private var pdfSpreadView: ComposeView? = null
-    private var pdfSpreadListState: LazyListState? = null
-    private var pdfSpreads: List<PdfSpread> = emptyList()
+    private var pdfSpreadJumpToPage: ((Int) -> Unit)? = null
     private lateinit var pdfFile: File
 
     private lateinit var readerKey: String
@@ -575,13 +574,11 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                         PdfSpreadPage(index, pdfSpreadAspectRatio(link?.width, link?.height))
                     },
                     initialPage = initialPage,
-                    pageGapDp = readerPreferences.pdfPageGapDp,
                     invertPdfColors = readerPreferences.invertPdfColors,
                     readingDirection = readingDirection,
                     onPageChanged = ::updatePdfSpreadPage,
                     onTap = ::handlePdfSpreadTap,
-                    onListStateAvailable = { pdfSpreadListState = it },
-                    onSpreadsAvailable = { pdfSpreads = it },
+                    onJumpToPageAvailable = { pdfSpreadJumpToPage = it },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -659,11 +656,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private fun goToPage(index: Int) {
         val targetPage = index.coerceIn(0, currentPageCount - 1)
         val locator = pageLocators.getOrNull(targetPage) ?: return
-        pdfSpreadListState?.let { listState ->
-            val row = pdfSpreadInitialRow(pdfSpreads, targetPage)
-            lifecycleScope.launch {
-                listState.animateScrollToItem(row)
-            }
+        pdfSpreadJumpToPage?.let { jumpToPage ->
+            jumpToPage(targetPage)
             return
         }
         navigator?.go(locator)
@@ -878,8 +872,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         publication?.close()
         publication = null
         pdfSpreadView = null
-        pdfSpreadListState = null
-        pdfSpreads = emptyList()
+        pdfSpreadJumpToPage = null
         navigator = null
     }
 
