@@ -4327,8 +4327,8 @@ private fun ReaderFormatLayoutSettings(
     }
     if (joinFacingPages != null && onJoinFacingPagesChange != null) {
         AppPreferenceSwitchRow(
-            title = "Join facing pages",
-            summary = "Pair portrait pages in landscape when space allows; keep landscape pages alone",
+            title = "Remove gap between pages",
+            summary = "Use native PDFium navigation with no gap between paginated pages",
             checked = joinFacingPages,
             enabled = layoutMode == ReaderLayoutMode.PAGINATED,
             testTag = "$testTagPrefix-join-facing-pages",
