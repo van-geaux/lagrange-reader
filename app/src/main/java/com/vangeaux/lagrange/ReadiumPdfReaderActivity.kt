@@ -577,6 +577,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     initialPage = initialPage,
                     pageGapDp = readerPreferences.pdfPageGapDp,
                     invertPdfColors = readerPreferences.invertPdfColors,
+                    readingDirection = readingDirection,
                     onPageChanged = ::updatePdfSpreadPage,
                     onTap = ::handlePdfSpreadTap,
                     onListStateAvailable = { pdfSpreadListState = it },
