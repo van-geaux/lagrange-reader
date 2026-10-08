@@ -4295,6 +4295,8 @@ private fun ReaderFormatLayoutSettings(
     testTagPrefix: String,
     onLayoutModeChange: (ReaderLayoutMode) -> Unit,
     onPageGapChange: (Float) -> Unit,
+    joinFacingPages: Boolean? = null,
+    onJoinFacingPagesChange: ((Boolean) -> Unit)? = null,
     invertColors: Boolean? = null,
     onInvertColorsChange: ((Boolean) -> Unit)? = null
 ) {
@@ -4321,6 +4323,16 @@ private fun ReaderFormatLayoutSettings(
             valueRange = 0f..MAX_READER_PAGE_GAP_DP,
             steps = 11,
             modifier = Modifier.testTag("$testTagPrefix-page-gap")
+        )
+    }
+    if (joinFacingPages != null && onJoinFacingPagesChange != null) {
+        AppPreferenceSwitchRow(
+            title = "Join facing pages",
+            summary = "Pair portrait pages in landscape when space allows; keep landscape pages alone",
+            checked = joinFacingPages,
+            enabled = layoutMode == ReaderLayoutMode.PAGINATED,
+            testTag = "$testTagPrefix-join-facing-pages",
+            onCheckedChange = onJoinFacingPagesChange
         )
     }
     if (invertColors != null && onInvertColorsChange != null) {
@@ -4652,6 +4664,8 @@ internal fun ReaderConfigurationControls(
             testTagPrefix = "$testTagPrefix-pdf",
             onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
             onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) },
+            joinFacingPages = value.joinPdfFacingPages,
+            onJoinFacingPagesChange = { onPreferencesChange(value.copy(joinPdfFacingPages = it)) },
             invertColors = value.invertPdfColors,
             onInvertColorsChange = { onPreferencesChange(value.copy(invertPdfColors = it)) }
         )

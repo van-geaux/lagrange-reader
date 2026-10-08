@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -287,6 +288,36 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
             assertEquals(ReaderTapZoneInvertMode.BOTH, profile.value.tapZoneInvertMode)
             assertEquals(false, showTutorialAfterChanges.value)
+        }
+    }
+
+    @Test
+    fun pdfFacingPageToggleIsOffByDefaultAndDisabledForContinuousLayout() {
+        val profile = mutableStateOf(LibraryReaderPreferences())
+        composeRule.setContent {
+            ReaderConfigurationControls(
+                value = profile.value,
+                onPreferencesChange = { profile.value = it },
+                format = ReaderConfigurationFormat.PDF
+            )
+        }
+
+        composeRule.onNodeWithTag("reader-options-reading-pdf-join-facing-pages")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+
+        composeRule.onNodeWithTag("reader-options-reading-pdf-layout-paginated")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-pdf-join-facing-pages")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(ReaderLayoutMode.PAGINATED, profile.value.pdfLayoutMode)
+            assertTrue(profile.value.joinPdfFacingPages)
         }
     }
 }

@@ -8,6 +8,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -23,6 +24,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -123,7 +125,10 @@ internal fun readiumReadingProgression(
 internal fun pdfiumPreferencesFor(
     preferences: LibraryReaderPreferences
 ): PdfiumPreferences = PdfiumPreferences(
-    pageSpacing = preferences.pdfPageGapDp.toDouble(),
+    pageSpacing = if (
+        preferences.pdfLayoutMode == ReaderLayoutMode.PAGINATED &&
+        preferences.joinPdfFacingPages
+    ) 0.0 else preferences.pdfPageGapDp.toDouble(),
     readingProgression = readiumReadingProgression(preferences.readingDirection),
     scrollAxis = when (preferences.pdfLayoutMode) {
         ReaderLayoutMode.PAGINATED -> Axis.HORIZONTAL
@@ -161,6 +166,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
     private lateinit var tapZoneTutorialView: ComposeView
+    private var pdfSpreadView: ComposeView? = null
+    private var pdfSpreadListState: LazyListState? = null
+    private var pdfSpreads: List<PdfSpread> = emptyList()
+    private lateinit var pdfFile: File
 
     private lateinit var readerKey: String
     private lateinit var libraryId: String
@@ -254,6 +263,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             showError("The PDF reader file is unavailable.")
             return
         }
+        pdfFile = file
         lifecycleScope.launch {
             when (val result = openReadiumPdf(this@ReadiumPdfReaderActivity, file)) {
                 is ReadiumPdfOpenResult.Error -> showError(result.message)
@@ -489,6 +499,12 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     }
                 }
                 ?: initialLocator(openedPublication)
+            if (shouldUsePdfSpreadReader(readerPreferences)) {
+                showPdfSpreadPublication(initialLocator)
+                progressView?.visibility = View.GONE
+                if (showTapZoneTutorialAfterChanges && !tapZoneTutorialHasShown) showTapZoneTutorial()
+                return@prepareAndAttachPublicationWhenResumed
+            }
             val fragmentFactory = PdfNavigatorFragment.createFactory(
                 publication = openedPublication,
                 initialLocator = initialLocator,
@@ -531,6 +547,63 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             }
             progressView?.visibility = View.GONE
             if (showTapZoneTutorialAfterChanges && !tapZoneTutorialHasShown) showTapZoneTutorial()
+        }
+    }
+
+    private fun showPdfSpreadPublication(initialLocator: Locator?) {
+        val initialPage = initialLocator?.let { locator ->
+            pageLocators.indexOfFirst { page -> page.href.isEquivalent(locator.href.removeFragment()) }
+        }?.takeIf { it >= 0 } ?: currentPage
+        currentPage = initialPage.coerceIn(0, currentPageCount - 1)
+        if (pdfSpreadView == null) {
+            pdfSpreadView = ComposeView(this).also { view ->
+                readerContainer.addView(
+                    view,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+            }
+        }
+        pdfSpreadView?.setContent {
+            BookOrbitTheme {
+                PdfSpreadReader(
+                    file = pdfFile,
+                    pages = pageLocators.mapIndexed { index, _ ->
+                        val link = publication?.readingOrder?.getOrNull(index)
+                        PdfSpreadPage(index, pdfSpreadAspectRatio(link?.width, link?.height))
+                    },
+                    initialPage = initialPage,
+                    pageGapDp = readerPreferences.pdfPageGapDp,
+                    invertPdfColors = readerPreferences.invertPdfColors,
+                    onPageChanged = ::updatePdfSpreadPage,
+                    onTap = ::handlePdfSpreadTap,
+                    onListStateAvailable = { pdfSpreadListState = it },
+                    onSpreadsAvailable = { pdfSpreads = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    private fun updatePdfSpreadPage(pageIndex: Int) {
+        pageLocators.getOrNull(pageIndex)?.let(::updateLocation)
+    }
+
+    private fun handlePdfSpreadTap(event: MotionEvent, width: Int, height: Int) {
+        when (readerTapZoneAction(
+            x = event.x,
+            y = event.y,
+            width = width.toFloat(),
+            height = height.toFloat(),
+            layout = readerPreferences.tapZoneLayout,
+            readingDirection = readingDirection,
+            invertMode = readerPreferences.tapZoneInvertMode
+        )) {
+            ReaderTapZoneAction.PREVIOUS -> goToPage(currentPage - 1)
+            ReaderTapZoneAction.NEXT -> goToPage(currentPage + 1)
+            ReaderTapZoneAction.MENU -> toggleChrome()
         }
     }
 
@@ -583,12 +656,21 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     private fun goToPage(index: Int) {
-        val locator = pageLocators.getOrNull(index.coerceIn(0, currentPageCount - 1)) ?: return
+        val targetPage = index.coerceIn(0, currentPageCount - 1)
+        val locator = pageLocators.getOrNull(targetPage) ?: return
+        pdfSpreadListState?.let { listState ->
+            val row = pdfSpreadInitialRow(pdfSpreads, targetPage)
+            lifecycleScope.launch {
+                listState.animateScrollToItem(row)
+            }
+            return
+        }
         navigator?.go(locator)
     }
 
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
+        val spreadModeChanged = shouldUsePdfSpreadReader(readerPreferences) != shouldUsePdfSpreadReader(normalized)
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         readingDirection = normalized.readingDirection
@@ -600,6 +682,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val store = AppPreferencesStore(this)
         store.save(store.read().withReaderPreferences(libraryId, normalized))
         configureSystemBars()
+        if (spreadModeChanged) {
+            recreate()
+            return
+        }
         if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
     }
 
@@ -778,7 +864,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putReaderLocator(navigator?.currentLocator?.value ?: restoredLocator)
+        outState.putReaderLocator(navigator?.currentLocator?.value ?: pageLocators.getOrNull(currentPage) ?: restoredLocator)
         outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
         outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
         outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
@@ -790,6 +876,9 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         super.onDestroy()
         publication?.close()
         publication = null
+        pdfSpreadView = null
+        pdfSpreadListState = null
+        pdfSpreads = emptyList()
         navigator = null
     }
 

@@ -297,6 +297,40 @@ class LibraryReaderPreferencesTest {
     }
 
     @Test
+    fun `PDF facing-page toggle removes spacing only for paginated layout`() {
+        val joined = pdfiumPreferencesFor(
+            LibraryReaderPreferences(
+                pdfLayoutMode = ReaderLayoutMode.PAGINATED,
+                pdfPageGapDp = 12f,
+                joinPdfFacingPages = true
+            )
+        )
+        val continuous = pdfiumPreferencesFor(
+            LibraryReaderPreferences(
+                pdfLayoutMode = ReaderLayoutMode.CONTINUOUS,
+                pdfPageGapDp = 12f,
+                joinPdfFacingPages = true
+            )
+        )
+
+        assertEquals(0.0, joined.pageSpacing)
+        assertEquals(12.0, continuous.pageSpacing)
+    }
+
+    @Test
+    fun `PDF facing-page toggle defaults off and persists per library`() {
+        assertFalse(LibraryReaderPreferences().joinPdfFacingPages)
+
+        val decoded = libraryReaderPreferencesFromStorage(
+            libraryReaderPreferencesStorageValue(
+                mapOf("joined" to LibraryReaderPreferences(joinPdfFacingPages = true))
+            )
+        )
+
+        assertTrue(decoded.getValue("joined").joinPdfFacingPages)
+    }
+
+    @Test
     fun `PDF color inversion preference persists independently`() {
         val decoded = libraryReaderPreferencesFromStorage(
             libraryReaderPreferencesStorageValue(
