@@ -17,6 +17,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
@@ -147,6 +148,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
@@ -5458,13 +5460,40 @@ private fun BookCardCoverSlot(
             .aspectRatio(BOOK_CARD_COVER_SLOT_ASPECT_RATIO),
         contentAlignment = BOOK_CARD_COVER_ALIGNMENT
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(book.coverAspectRatio.widthToHeight),
             content = {
                 BookCover(book, coverLoader)
                 overlay()
+                if (book.isUnread() && !book.isServerMissing) {
+                    val markerSize = minOf(28.dp, maxWidth * 0.18f).coerceAtLeast(20.dp)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(markerSize)
+                            .testTag("unread-book-marker")
+                            .semantics { contentDescription = "Unread book" }
+                    ) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val fold = size.width * 0.56f
+                            val marker = Path().apply {
+                                moveTo(size.width, 0f)
+                                lineTo(size.width - fold, 0f)
+                                lineTo(size.width, fold)
+                                close()
+                            }
+                            drawPath(path = marker, color = Color(0xFFFFC107))
+                            drawLine(
+                                color = Color(0xFF8D6E00),
+                                start = Offset(size.width - fold, 0f),
+                                end = Offset(size.width, fold),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+                    }
+                }
             }
         )
     }

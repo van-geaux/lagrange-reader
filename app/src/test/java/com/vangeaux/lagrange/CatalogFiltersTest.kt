@@ -6,6 +6,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatalogFiltersTest {
+
+    @Test
+    fun `unread marker only applies to books without progress or read status`() {
+        assertTrue(BookSummary("library", "unread", null, "Unread").isUnread())
+        assertFalse(
+            BookSummary("library", "started", null, "Started", progressPercent = 10f).isUnread()
+        )
+        assertFalse(
+            BookSummary("library", "finished", null, "Finished", isRead = true).isUnread()
+        )
+    }
     @Test
     fun `book and series filters round trip through storage`() {
         val bookFilter = BookBrowseFilter(

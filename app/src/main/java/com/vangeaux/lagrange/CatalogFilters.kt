@@ -308,6 +308,10 @@ internal fun filterAndSortSeriesCatalog(
 internal fun mergeSmartScopeBookPages(pages: List<List<BookSummary>>): List<BookSummary> =
     pages.flatten().asReversed().distinctBy { it.id to it.fileId }.asReversed()
 
+internal fun BookSummary.isUnread(): Boolean {
+    return !isRead && !hasStartedReading()
+}
+
 private fun BookSummary.hasStartedReading(): Boolean {
     return (progressPercent ?: 0f) > 0f ||
         (progressPositionMs ?: 0L) > 0L ||
