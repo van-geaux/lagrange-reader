@@ -403,6 +403,20 @@ private fun EpubTtsVoice.displayName(): String = buildString {
     append(if (requiresNetwork) "Network" else "Local")
     append(" · ")
     append(quality.lowercase().replaceFirstChar(Char::uppercase))
+    append(" · ")
+    append(voiceVariantLabel())
+}
+
+private fun EpubTtsVoice.voiceVariantLabel(): String {
+    val normalizedId = id.lowercase(Locale.ROOT)
+    val variantStart = normalizedId.indexOf("-x-")
+    val variantEnd = listOf("-local", "-network")
+        .mapNotNull { suffix -> normalizedId.indexOf(suffix, variantStart + 3).takeIf { it >= 0 } }
+        .minOrNull()
+    if (variantStart >= 0 && variantEnd != null && variantEnd > variantStart + 3) {
+        return "Variant " + id.substring(variantStart + 3, variantEnd).uppercase(Locale.ROOT)
+    }
+    return "Voice " + id.substringAfterLast('-').ifBlank { id }
 }
 
 @Composable
