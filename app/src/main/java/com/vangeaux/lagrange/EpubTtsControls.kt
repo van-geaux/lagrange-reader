@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @Composable
 internal fun EpubTtsControls(
@@ -393,10 +394,15 @@ private fun EpubTtsSettingsDialog(
 }
 
 private fun EpubTtsVoice.displayName(): String = buildString {
-    append(id)
+    val localeName = Locale.forLanguageTag(languageTag)
+        .getDisplayName(Locale.getDefault())
+        .takeIf(String::isNotBlank)
+        ?: languageTag
+    append(localeName)
+    append(" · ")
+    append(if (requiresNetwork) "Network" else "Local")
     append(" · ")
     append(quality.lowercase().replaceFirstChar(Char::uppercase))
-    append(if (requiresNetwork) " · Network" else " · Local")
 }
 
 @Composable

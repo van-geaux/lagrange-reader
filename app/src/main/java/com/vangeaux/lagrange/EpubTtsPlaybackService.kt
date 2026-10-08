@@ -667,7 +667,7 @@ class EpubTtsPlaybackService : Service() {
             .map { voice ->
                 EpubTtsVoice(
                     id = voice.id.value,
-                    languageTag = voice.language.removeRegion().toString(),
+                    languageTag = voice.language.code,
                     quality = voice.quality.name,
                     requiresNetwork = voice.requiresNetwork
                 )
@@ -678,7 +678,7 @@ class EpubTtsPlaybackService : Service() {
             it.copy(
                 canGoPrevious = active?.hasPreviousUtterance() == true,
                 canGoNext = active?.hasNextUtterance() == true,
-                voiceLanguageTag = language?.toString(),
+                voiceLanguageTag = language?.code,
                 voices = voices
             )
         }

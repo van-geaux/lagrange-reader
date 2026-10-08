@@ -41,11 +41,20 @@ internal data class EpubTtsSettings(
         pitch = normalizeEpubTtsPitch(pitch),
         pauses = pauses.normalized(),
         voiceIds = voiceIds
-            .mapKeys { it.key.trim().lowercase() }
+            .mapKeys { normalizeEpubTtsVoiceLanguageKey(it.key) }
             .filterKeys(String::isNotBlank)
             .mapValues { it.value.trim() }
             .filterValues(String::isNotBlank)
     )
+}
+
+internal fun normalizeEpubTtsVoiceLanguageKey(value: String): String {
+    val trimmed = value.trim().lowercase()
+    return if (trimmed.startsWith("language(") && trimmed.endsWith(")")) {
+        trimmed.removePrefix("language(").removeSuffix(")")
+    } else {
+        trimmed
+    }
 }
 
 internal fun normalizeEpubTtsPlaybackSpeed(value: Float): Float =
