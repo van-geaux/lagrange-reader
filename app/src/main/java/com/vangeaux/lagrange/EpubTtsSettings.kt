@@ -33,12 +33,18 @@ internal data class EpubTtsSettings(
     val speed: Float = 1f,
     val pitch: Float = 1f,
     val pauses: EpubTtsPauseSettings = EpubTtsPauseSettings(enabled = false),
-    val showBookTitleOnLockScreen: Boolean = true
+    val showBookTitleOnLockScreen: Boolean = true,
+    val voiceIds: Map<String, String> = emptyMap()
 ) {
     fun normalized(): EpubTtsSettings = copy(
         speed = normalizeEpubTtsPlaybackSpeed(speed),
         pitch = normalizeEpubTtsPitch(pitch),
-        pauses = pauses.normalized()
+        pauses = pauses.normalized(),
+        voiceIds = voiceIds
+            .mapKeys { it.key.trim().lowercase() }
+            .filterKeys(String::isNotBlank)
+            .mapValues { it.value.trim() }
+            .filterValues(String::isNotBlank)
     )
 }
 

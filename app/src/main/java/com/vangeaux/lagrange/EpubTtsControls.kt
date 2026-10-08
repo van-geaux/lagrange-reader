@@ -47,6 +47,8 @@ internal fun EpubTtsControls(
     isPlaying: Boolean,
     canGoPrevious: Boolean,
     canGoNext: Boolean,
+    voiceLanguageTag: String? = null,
+    voices: List<EpubTtsVoice> = emptyList(),
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -103,6 +105,8 @@ internal fun EpubTtsControls(
         if (settingsVisible) {
             EpubTtsSettingsDialog(
                 settings = settings,
+                voiceLanguageTag = voiceLanguageTag,
+                voices = voices,
                 onApply = onSettingsChange,
                 onDismiss = { settingsVisible = false }
             )
@@ -113,6 +117,8 @@ internal fun EpubTtsControls(
 @Composable
 private fun EpubTtsSettingsDialog(
     settings: EpubTtsSettings,
+    voiceLanguageTag: String?,
+    voices: List<EpubTtsVoice>,
     onApply: (EpubTtsSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -129,6 +135,7 @@ private fun EpubTtsSettingsDialog(
     var showBookTitleOnLockScreen by remember {
         mutableStateOf(normalized.showBookTitleOnLockScreen)
     }
+    var voiceDialogVisible by remember { mutableStateOf(false) }
     var commaText by remember {
         mutableStateOf(normalized.pauses.commaMillis.toString())
     }
@@ -190,6 +197,27 @@ private fun EpubTtsSettingsDialog(
                     maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
                     rateDescription = "text-to-speech pitch",
                     onValueChange = { applyImmediateRate(pitch = it) }
+                )
+                HorizontalDivider()
+                Text("Voice", style = MaterialTheme.typography.titleSmall)
+                val selectedVoiceId = voiceLanguageTag?.let(normalized.voiceIds::get)
+                val selectedVoice = voices.firstOrNull { it.id == selectedVoiceId }
+                TextButton(
+                    onClick = { voiceDialogVisible = true },
+                    enabled = voices.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        when {
+                            selectedVoice != null -> selectedVoice.displayName()
+                            voices.isNotEmpty() -> "Default Android voice"
+                            else -> "No compatible voices available"
+                        }
+                    )
+                }
+                Text(
+                    "Voices are filtered to this EPUB's language. Network voices may send spoken text to their provider.",
+                    style = MaterialTheme.typography.bodySmall
                 )
                 HorizontalDivider()
                 Text(
@@ -316,7 +344,8 @@ private fun EpubTtsSettingsDialog(
                                     parenthesesMillis = parsedParentheses
                                         ?: normalized.pauses.parenthesesMillis
                                 ),
-                                showBookTitleOnLockScreen = showBookTitleOnLockScreen
+                                showBookTitleOnLockScreen = showBookTitleOnLockScreen,
+                                voiceIds = normalized.voiceIds
                             )
                         )
                         onDismiss()
@@ -328,6 +357,46 @@ private fun EpubTtsSettingsDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+    if (voiceDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { voiceDialogVisible = false },
+            title = { Text("Text-to-speech voice") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            onApply(normalized.copy(voiceIds = voiceLanguageTag?.let {
+                                normalized.voiceIds - it
+                            } ?: normalized.voiceIds))
+                            voiceDialogVisible = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Default Android voice") }
+                    voices.forEach { voice ->
+                        TextButton(
+                            onClick = {
+                                onApply(normalized.copy(voiceIds = voiceLanguageTag?.let {
+                                    normalized.voiceIds + (it to voice.id)
+                                } ?: normalized.voiceIds))
+                                voiceDialogVisible = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(voice.displayName()) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { voiceDialogVisible = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+private fun EpubTtsVoice.displayName(): String = buildString {
+    append(id)
+    append(" · ")
+    append(quality.lowercase().replaceFirstChar(Char::uppercase))
+    append(if (requiresNetwork) " · Network" else " · Local")
 }
 
 @Composable

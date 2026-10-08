@@ -109,6 +109,16 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun `EPUB TTS voice selections normalize language keys and drop blank values`() {
+        assertEquals(
+            mapOf("en-us" to "voice-1"),
+            EpubTtsSettings(
+                voiceIds = mapOf(" EN-US " to " voice-1 ", " " to "ignored", "fr" to " ")
+            ).normalized().voiceIds
+        )
+    }
+
+    @Test
     fun epubListenChoicesOfferIndependentStartAndResumeActions() {
         assertEquals(
             listOf(EpubListenChoice.TTS_FROM_HERE),

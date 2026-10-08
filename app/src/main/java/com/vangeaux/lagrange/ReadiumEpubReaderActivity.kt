@@ -623,6 +623,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var ttsCanGoPrevious by mutableStateOf(false)
     private var ttsCanGoNext by mutableStateOf(false)
     private var ttsSettings by mutableStateOf(EpubTtsSettings())
+    private var ttsVoiceLanguageTag by mutableStateOf<String?>(null)
+    private var ttsVoices by mutableStateOf<List<EpubTtsVoice>>(emptyList())
     private var lastTtsLocator: Locator? = null
     private var restoredTtsLocator: Locator? = null
 
@@ -1038,6 +1040,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         isPlaying = ttsIsPlaying,
                         canGoPrevious = ttsCanGoPrevious,
                         canGoNext = ttsCanGoNext,
+                        voiceLanguageTag = ttsVoiceLanguageTag,
+                        voices = ttsVoices,
                         onPlayPause = ::toggleTtsPlayback,
                         onPrevious = ::previousTtsUtterance,
                         onNext = ::nextTtsUtterance,
@@ -1452,6 +1456,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
                 val wasPlaying = ttsIsPlaying
                 ttsSettings = state.settings.normalized()
+                ttsVoiceLanguageTag = state.voiceLanguageTag
+                ttsVoices = state.voices
                 ttsIsPlaying = state.isPlaying
                 ttsCanGoPrevious = state.canGoPrevious
                 ttsCanGoNext = state.canGoNext
@@ -1473,6 +1479,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsIsPlaying = false
         ttsCanGoPrevious = false
         ttsCanGoNext = false
+        ttsVoiceLanguageTag = null
+        ttsVoices = emptyList()
         if (wasPlaying && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
             readingSessionReporter.pause(currentPercent)
         }
@@ -1563,6 +1571,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsIsPlaying = false
         ttsCanGoPrevious = false
         ttsCanGoNext = false
+        ttsVoiceLanguageTag = null
+        ttsVoices = emptyList()
         if (::ttsView.isInitialized) {
             ttsView.visibility = View.GONE
             updateReaderViewportOverlaySpace?.invoke()
