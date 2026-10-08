@@ -1544,6 +1544,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun showTtsFailure(error: EpubTtsFailureKind) {
+        val voiceLanguageTag = ttsVoiceLanguageTag
+        val failedVoiceId = voiceLanguageTag?.let(ttsSettings.voiceIds::get)
+        val recoveryLocator = validTtsLocator(lastTtsLocator)
+        val alternativeVoices = ttsVoices.filterNot { it.id == failedVoiceId }
         closeTtsPlayback()
         if (error == EpubTtsFailureKind.LANGUAGE_DATA) {
             AlertDialog.Builder(this)
@@ -1551,6 +1555,35 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 .setMessage("Android needs voice data for this book's language before it can read aloud.")
                 .setPositiveButton("Install voice") { _, _ ->
                     AndroidTtsEngine.requestInstallVoice(applicationContext)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else if (voiceLanguageTag != null && alternativeVoices.isNotEmpty()) {
+            val choices = listOf<EpubTtsVoice?>(null) + alternativeVoices
+            val message = if (error == EpubTtsFailureKind.NETWORK) {
+                "The selected voice could not reach its network service. Choose another voice."
+            } else {
+                "The selected voice could not read this text. Choose another voice."
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Text-to-speech voice failed")
+                .setMessage(message)
+                .setItems(
+                    choices.map { voice -> voice?.displayName() ?: "Default Android voice" }.toTypedArray()
+                ) { _, index ->
+                    val selectedVoice = choices[index]
+                    val nextSettings = ttsSettings.copy(
+                        voiceIds = if (selectedVoice == null) {
+                            ttsSettings.voiceIds - voiceLanguageTag
+                        } else {
+                            ttsSettings.voiceIds + (voiceLanguageTag to selectedVoice.id)
+                        }
+                    )
+                    applyTtsSettings(nextSettings)
+                    requestTtsPlayback(
+                        EpubListenChoice.TTS_KEEP_LISTENING,
+                        restoredLocator = recoveryLocator
+                    )
                 }
                 .setNegativeButton("Cancel", null)
                 .show()

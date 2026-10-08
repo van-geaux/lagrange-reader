@@ -398,7 +398,7 @@ private fun EpubTtsSettingsDialog(
     }
 }
 
-private fun EpubTtsVoice.displayName(): String = buildString {
+internal fun EpubTtsVoice.displayName(): String = buildString {
     val localeName = Locale.forLanguageTag(languageTag)
         .getDisplayName(Locale.getDefault())
         .takeIf(String::isNotBlank)
