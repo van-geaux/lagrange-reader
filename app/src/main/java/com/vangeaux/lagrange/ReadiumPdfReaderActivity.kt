@@ -604,16 +604,16 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     private fun applyPdfColorInversion() {
-        val publicationView = navigator?.publicationView ?: return
+        val pdfView = navigator?.let(::pdfDocumentView) ?: return
         if (readerPreferences.invertPdfColors) {
-            publicationView.setLayerType(
+            pdfView.setLayerType(
                 View.LAYER_TYPE_HARDWARE,
                 Paint().apply {
                     colorFilter = ColorMatrixColorFilter(ColorMatrix(pdfColorMatrix(inverted = true)))
                 }
             )
         } else {
-            publicationView.setLayerType(View.LAYER_TYPE_NONE, null)
+            pdfView.setLayerType(View.LAYER_TYPE_NONE, null)
         }
     }
 

@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.graphics.PointF
 import android.graphics.RectF
+import android.view.View
 import java.net.URI
 import kotlin.math.roundToInt
 
@@ -118,6 +119,12 @@ internal class PdfHyperlinkTapHandler(
         )
     }
 }
+
+internal fun pdfDocumentView(navigator: PdfiumNavigatorFragment): View? =
+    navigator.childFragmentManager.fragments
+        .filterIsInstance<PdfiumDocumentFragment>()
+        .firstOrNull()
+        ?.privateField<PDFView>("pdfView")
 
 private fun Any.invokePrivateFloat(name: String, vararg args: Any?): Float? = runCatching {
     javaClass.declaredMethods.firstOrNull { method ->
