@@ -47,6 +47,7 @@ import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.Language
 
 internal object EpubTtsAccountSession {
     private val epoch = AtomicLong(0L)
@@ -109,6 +110,8 @@ internal data class EpubTtsServiceState(
     val canGoPrevious: Boolean = false,
     val canGoNext: Boolean = false,
     val settings: EpubTtsSettings = EpubTtsSettings(),
+    val voiceLanguageTag: String? = null,
+    val voices: List<EpubTtsVoice> = emptyList(),
     val failure: EpubTtsFailureKind? = null,
     val failureSerial: Long = 0L,
     val completedOwnerToken: String? = null,
@@ -117,6 +120,13 @@ internal data class EpubTtsServiceState(
     val hasSession: Boolean
         get() = readerKey != null && (isPreparing || failure == null)
 }
+
+internal data class EpubTtsVoice(
+    val id: String,
+    val languageTag: String,
+    val quality: String,
+    val requiresNetwork: Boolean
+)
 
 internal fun epubTtsMediaPlaybackState(state: EpubTtsServiceState): Int = when {
     state.failure != null -> PlaybackStateCompat.STATE_ERROR
@@ -235,7 +245,9 @@ class EpubTtsPlaybackService : Service() {
             navigator?.submitPreferences(
                 AndroidTtsPreferences(
                     pitch = normalized.pitch.toDouble(),
-                    speed = normalized.speed.toDouble()
+                    speed = normalized.speed.toDouble(),
+                    voices = normalized.voiceIds.mapKeys { (language, _) -> Language(language) }
+                        .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
                 )
             )
             if (previous.speed == normalized.speed &&
@@ -444,7 +456,10 @@ class EpubTtsPlaybackService : Service() {
                 initialLocator = spec.initialLocator,
                 initialPreferences = AndroidTtsPreferences(
                     pitch = spec.settings.normalized().pitch.toDouble(),
-                    speed = spec.settings.normalized().speed.toDouble()
+                    speed = spec.settings.normalized().speed.toDouble(),
+                    voices = spec.settings.normalized().voiceIds
+                        .mapKeys { (language, _) -> Language(language) }
+                        .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
                 )
             )
             val created = result.getOrNull()
@@ -646,10 +661,25 @@ class EpubTtsPlaybackService : Service() {
 
     private fun publishNavigatorCapabilities() {
         val active = navigator
+        val language = active?.settings?.value?.language?.removeRegion()
+        val voices = active?.voices.orEmpty()
+            .filter { voice -> voice.language.removeRegion() == language }
+            .map { voice ->
+                EpubTtsVoice(
+                    id = voice.id.value,
+                    languageTag = voice.language.code,
+                    quality = voice.quality.name,
+                    requiresNetwork = voice.requiresNetwork
+                )
+            }
+            .distinctBy(EpubTtsVoice::id)
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.id })
         binder.publish {
             it.copy(
                 canGoPrevious = active?.hasPreviousUtterance() == true,
-                canGoNext = active?.hasNextUtterance() == true
+                canGoNext = active?.hasNextUtterance() == true,
+                voiceLanguageTag = language?.code,
+                voices = voices
             )
         }
     }

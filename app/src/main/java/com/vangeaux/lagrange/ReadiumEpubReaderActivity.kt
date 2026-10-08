@@ -623,6 +623,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var ttsCanGoPrevious by mutableStateOf(false)
     private var ttsCanGoNext by mutableStateOf(false)
     private var ttsSettings by mutableStateOf(EpubTtsSettings())
+    private var ttsVoiceLanguageTag by mutableStateOf<String?>(null)
+    private var ttsVoices by mutableStateOf<List<EpubTtsVoice>>(emptyList())
     private var lastTtsLocator: Locator? = null
     private var restoredTtsLocator: Locator? = null
 
@@ -1038,6 +1040,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         isPlaying = ttsIsPlaying,
                         canGoPrevious = ttsCanGoPrevious,
                         canGoNext = ttsCanGoNext,
+                        voiceLanguageTag = ttsVoiceLanguageTag,
+                        voices = ttsVoices,
                         onPlayPause = ::toggleTtsPlayback,
                         onPrevious = ::previousTtsUtterance,
                         onNext = ::nextTtsUtterance,
@@ -1241,7 +1245,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun requestTtsPlayback(
         choice: EpubListenChoice,
         restoredLocator: Locator? = null,
-        selectionText: String? = null
+        selectionText: String? = null,
+        playWhenReady: Boolean = true
     ) {
         if (isPreview) return
         val preferences = getSharedPreferences(TTS_PRIVACY_PREFERENCES, MODE_PRIVATE)
@@ -1249,7 +1254,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             startTtsPlayback(
                 choice,
                 restoredLocator = restoredLocator,
-                selectionText = selectionText
+                selectionText = selectionText,
+                playWhenReady = playWhenReady
             )
             return
         }
@@ -1264,7 +1270,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 startTtsPlayback(
                     choice,
                     restoredLocator = restoredLocator,
-                    selectionText = selectionText
+                    selectionText = selectionText,
+                    playWhenReady = playWhenReady
                 )
             }
             .setNegativeButton("Cancel", null)
@@ -1452,6 +1459,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
                 val wasPlaying = ttsIsPlaying
                 ttsSettings = state.settings.normalized()
+                ttsVoiceLanguageTag = state.voiceLanguageTag
+                ttsVoices = state.voices
                 ttsIsPlaying = state.isPlaying
                 ttsCanGoPrevious = state.canGoPrevious
                 ttsCanGoNext = state.canGoNext
@@ -1473,6 +1482,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsIsPlaying = false
         ttsCanGoPrevious = false
         ttsCanGoNext = false
+        ttsVoiceLanguageTag = null
+        ttsVoices = emptyList()
         if (wasPlaying && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
             readingSessionReporter.pause(currentPercent)
         }
@@ -1536,8 +1547,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun showTtsFailure(error: EpubTtsFailureKind) {
-        closeTtsPlayback()
+        val voiceLanguageTag = ttsVoiceLanguageTag
+        val failedVoiceId = voiceLanguageTag?.let(ttsSettings.voiceIds::get)
+        val recoveryLocator = validTtsLocator(lastTtsLocator)
+        val alternativeVoices = ttsVoices.filterNot { it.id == failedVoiceId }
         if (error == EpubTtsFailureKind.LANGUAGE_DATA) {
+            closeTtsPlayback()
             AlertDialog.Builder(this)
                 .setTitle("Voice data is missing")
                 .setMessage("Android needs voice data for this book's language before it can read aloud.")
@@ -1546,7 +1561,56 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
+        } else if (voiceLanguageTag != null && failedVoiceId != null) {
+            val nextSettings = ttsSettings.copy(
+                voiceIds = ttsSettings.voiceIds - voiceLanguageTag
+            )
+            closeTtsPlayback()
+            applyTtsSettings(nextSettings)
+            requestTtsPlayback(
+                EpubListenChoice.TTS_KEEP_LISTENING,
+                restoredLocator = recoveryLocator,
+                playWhenReady = false
+            )
+            AlertDialog.Builder(this)
+                .setTitle("Text-to-speech voice failed")
+                .setMessage(
+                    "The selected voice could not read this text. " +
+                        "Default Android voice is selected and paused."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+        } else if (voiceLanguageTag != null && alternativeVoices.isNotEmpty()) {
+            val choices = listOf<EpubTtsVoice?>(null) + alternativeVoices
+            val message = if (error == EpubTtsFailureKind.NETWORK) {
+                "The selected voice could not reach its network service. Choose another voice."
+            } else {
+                "The selected voice could not read this text. Choose another voice."
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Text-to-speech voice failed")
+                .setMessage(message)
+                .setItems(
+                    choices.map { voice -> voice?.displayName() ?: "Default Android voice" }.toTypedArray()
+                ) { _, index ->
+                    val selectedVoice = choices[index]
+                    val nextSettings = ttsSettings.copy(
+                        voiceIds = if (selectedVoice == null) {
+                            ttsSettings.voiceIds - voiceLanguageTag
+                        } else {
+                            ttsSettings.voiceIds + (voiceLanguageTag to selectedVoice.id)
+                        }
+                    )
+                    applyTtsSettings(nextSettings)
+                    requestTtsPlayback(
+                        EpubListenChoice.TTS_KEEP_LISTENING,
+                        restoredLocator = recoveryLocator
+                    )
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         } else {
+            closeTtsPlayback()
             val message = if (error == EpubTtsFailureKind.NETWORK) {
                 "The selected text-to-speech voice could not reach its network service."
             } else {
@@ -1563,6 +1627,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsIsPlaying = false
         ttsCanGoPrevious = false
         ttsCanGoNext = false
+        ttsVoiceLanguageTag = null
+        ttsVoices = emptyList()
         if (::ttsView.isInitialized) {
             ttsView.visibility = View.GONE
             updateReaderViewportOverlaySpace?.invoke()

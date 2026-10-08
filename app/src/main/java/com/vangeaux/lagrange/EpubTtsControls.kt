@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @Composable
 internal fun EpubTtsControls(
@@ -47,6 +48,8 @@ internal fun EpubTtsControls(
     isPlaying: Boolean,
     canGoPrevious: Boolean,
     canGoNext: Boolean,
+    voiceLanguageTag: String? = null,
+    voices: List<EpubTtsVoice> = emptyList(),
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -103,6 +106,8 @@ internal fun EpubTtsControls(
         if (settingsVisible) {
             EpubTtsSettingsDialog(
                 settings = settings,
+                voiceLanguageTag = voiceLanguageTag,
+                voices = voices,
                 onApply = onSettingsChange,
                 onDismiss = { settingsVisible = false }
             )
@@ -113,6 +118,8 @@ internal fun EpubTtsControls(
 @Composable
 private fun EpubTtsSettingsDialog(
     settings: EpubTtsSettings,
+    voiceLanguageTag: String?,
+    voices: List<EpubTtsVoice>,
     onApply: (EpubTtsSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -129,6 +136,7 @@ private fun EpubTtsSettingsDialog(
     var showBookTitleOnLockScreen by remember {
         mutableStateOf(normalized.showBookTitleOnLockScreen)
     }
+    var voiceDialogVisible by remember { mutableStateOf(false) }
     var commaText by remember {
         mutableStateOf(normalized.pauses.commaMillis.toString())
     }
@@ -190,6 +198,27 @@ private fun EpubTtsSettingsDialog(
                     maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
                     rateDescription = "text-to-speech pitch",
                     onValueChange = { applyImmediateRate(pitch = it) }
+                )
+                HorizontalDivider()
+                Text("Voice", style = MaterialTheme.typography.titleSmall)
+                val selectedVoiceId = voiceLanguageTag?.let(normalized.voiceIds::get)
+                val selectedVoice = voices.firstOrNull { it.id == selectedVoiceId }
+                TextButton(
+                    onClick = { voiceDialogVisible = true },
+                    enabled = voices.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        when {
+                            selectedVoice != null -> selectedVoice.displayName()
+                            voices.isNotEmpty() -> "Default Android voice"
+                            else -> "No compatible voices available"
+                        }
+                    )
+                }
+                Text(
+                    "Voices are filtered to this EPUB's language. Network voices may send spoken text to their provider.",
+                    style = MaterialTheme.typography.bodySmall
                 )
                 HorizontalDivider()
                 Text(
@@ -316,7 +345,8 @@ private fun EpubTtsSettingsDialog(
                                     parenthesesMillis = parsedParentheses
                                         ?: normalized.pauses.parenthesesMillis
                                 ),
-                                showBookTitleOnLockScreen = showBookTitleOnLockScreen
+                                showBookTitleOnLockScreen = showBookTitleOnLockScreen,
+                                voiceIds = normalized.voiceIds
                             )
                         )
                         onDismiss()
@@ -328,6 +358,70 @@ private fun EpubTtsSettingsDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+    if (voiceDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { voiceDialogVisible = false },
+            title = { Text("Text-to-speech voice") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            onApply(normalized.copy(voiceIds = voiceLanguageTag?.let {
+                                normalized.voiceIds - it
+                            } ?: normalized.voiceIds))
+                            voiceDialogVisible = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Default Android voice") }
+                    voices.forEach { voice ->
+                        TextButton(
+                            onClick = {
+                                onApply(normalized.copy(voiceIds = voiceLanguageTag?.let {
+                                    normalized.voiceIds + (it to voice.id)
+                                } ?: normalized.voiceIds))
+                                voiceDialogVisible = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(voice.displayName()) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { voiceDialogVisible = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+internal fun EpubTtsVoice.displayName(): String = buildString {
+    val localeName = Locale.forLanguageTag(languageTag)
+        .getDisplayName(Locale.getDefault())
+        .takeIf(String::isNotBlank)
+        ?: languageTag
+    append(localeName)
+    append(" · ")
+    append(if (requiresNetwork) "Network" else "Local")
+    append(" · ")
+    append(quality.lowercase().replaceFirstChar(Char::uppercase))
+    append(" · ")
+    append(voiceVariantLabel())
+}
+
+private fun EpubTtsVoice.voiceVariantLabel(): String {
+    val normalizedId = id.lowercase(Locale.ROOT)
+    val variantStart = normalizedId.indexOf("-x-")
+    val variantEnd = listOf("-local", "-network")
+        .mapNotNull { suffix -> normalizedId.indexOf(suffix, variantStart + 3).takeIf { it >= 0 } }
+        .minOrNull()
+    if (variantStart >= 0 && variantEnd != null && variantEnd > variantStart + 3) {
+        return "Variant " + id.substring(variantStart + 3, variantEnd).uppercase(Locale.ROOT)
+    }
+    return "Voice " + id.substringAfterLast('-').ifBlank { id }
 }
 
 @Composable
