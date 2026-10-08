@@ -25,6 +25,7 @@ class LibraryReaderPreferencesTest {
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 8f,
+            invertPdfColors = true,
             comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
             comicPageGapDp = 24f
         )
@@ -125,6 +126,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(ReaderLayoutMode.CONTINUOUS, decoded.pdfLayoutMode)
         assertEquals(ReaderLayoutMode.PAGINATED, decoded.comicLayoutMode)
         assertEquals(DEFAULT_READER_PAGE_GAP_DP, decoded.pdfPageGapDp)
+        assertFalse(decoded.invertPdfColors)
         assertEquals(DEFAULT_READER_PAGE_GAP_DP, decoded.comicPageGapDp)
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
@@ -292,6 +294,21 @@ class LibraryReaderPreferencesTest {
         assertEquals(ReadingProgression.RTL, paginated.readingProgression)
         assertEquals(12.0, paginated.pageSpacing)
         assertEquals(Axis.VERTICAL, continuous.scrollAxis)
+    }
+
+    @Test
+    fun `PDF color inversion preference persists independently`() {
+        val decoded = libraryReaderPreferencesFromStorage(
+            libraryReaderPreferencesStorageValue(
+                mapOf(
+                    "inverted" to LibraryReaderPreferences(invertPdfColors = true),
+                    "normal" to LibraryReaderPreferences()
+                )
+            )
+        )
+
+        assertTrue(decoded.getValue("inverted").invertPdfColors)
+        assertFalse(decoded.getValue("normal").invertPdfColors)
     }
 
     @Test
