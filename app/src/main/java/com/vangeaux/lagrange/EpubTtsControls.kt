@@ -363,7 +363,12 @@ private fun EpubTtsSettingsDialog(
             onDismissRequest = { voiceDialogVisible = false },
             title = { Text("Text-to-speech voice") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     TextButton(
                         onClick = {
                             onApply(normalized.copy(voiceIds = voiceLanguageTag?.let {
