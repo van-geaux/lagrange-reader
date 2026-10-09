@@ -211,8 +211,9 @@ class EpubTtsPlaybackService : Service() {
             val active = navigator ?: return
             active.play()
             if (navigator !== active) return
-            publish { it.copy(isPlaying = true) }
-            updatePlaybackWakeLock(isPlaying = true)
+            val isPlaying = active.playback.value.playWhenReady
+            publish { it.copy(isPlaying = isPlaying) }
+            updatePlaybackWakeLock(isPlaying = isPlaying)
             updateNotification()
         }
 
@@ -221,8 +222,9 @@ class EpubTtsPlaybackService : Service() {
             val active = navigator ?: return
             active.pause()
             if (navigator !== active) return
-            publish { it.copy(isPlaying = false) }
-            updatePlaybackWakeLock(isPlaying = false)
+            val isPlaying = active.playback.value.playWhenReady
+            publish { it.copy(isPlaying = isPlaying) }
+            updatePlaybackWakeLock(isPlaying = isPlaying)
             updateNotification()
         }
 
@@ -762,7 +764,8 @@ class EpubTtsPlaybackService : Service() {
     private fun updateNotification() {
         val state = binder.state.value
         updateMediaSession(state)
-        promoteToForeground(state.title ?: "Text to speech", state.isPlaying)
+        val isPlaying = navigator?.playback?.value?.playWhenReady ?: state.isPlaying
+        promoteToForeground(state.title ?: "Text to speech", isPlaying)
     }
 
     private fun updateMediaSession(state: EpubTtsServiceState) {
