@@ -803,67 +803,40 @@ class EpubTtsPlaybackService : Service() {
         val exposeTitle = state.settings.showBookTitleOnLockScreen
         val notificationTitle = if (exposeTitle) title else epubTtsExposedTitle(state)
         val stopIntent = serviceAction(ACTION_STOP, 4)
-        val compactActionIndices = mutableListOf<Int>()
-        var actionIndex = 0
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
-            .setContentTitle(notificationTitle)
-            .setContentText(
-                when {
-                    state.failure != null -> "Text to speech needs attention"
-                    state.isPreparing -> "Preparing text to speech"
-                    isPlaying -> "Reading aloud"
-                    else -> "Text to speech paused"
-                }
-            )
-            .setContentIntent(appLaunchIntent())
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setVisibility(
-                if (exposeTitle) NotificationCompat.VISIBILITY_PUBLIC
-                else NotificationCompat.VISIBILITY_PRIVATE
-            )
-            .setOnlyAlertOnce(true)
-            .setOngoing(isPlaying || state.isPreparing)
-            .setDeleteIntent(stopIntent)
-        if (state.failure == null && !state.isPreparing && state.readerKey != null) {
-            if (state.canGoPrevious) {
-                builder.addAction(
-                    android.R.drawable.ic_media_previous,
-                    "Previous",
-                    serviceAction(ACTION_PREVIOUS, 1)
-                )
-                compactActionIndices += actionIndex++
+        val active = state.failure == null && !state.isPreparing && state.readerKey != null
+        val notification = buildEpubNarrationNotification(
+            context = this,
+            title = notificationTitle,
+            detail = when {
+                state.failure != null -> "Text to speech needs attention"
+                state.isPreparing -> "Preparing text to speech"
+                isPlaying -> "Reading aloud"
+                else -> "Text to speech paused"
+            },
+            isPlaying = isPlaying && active,
+            contentIntent = appLaunchIntent(),
+            mediaSessionToken = mediaSession.sessionToken,
+            actions = EpubNarrationNotificationActions(
+                previous = serviceAction(ACTION_PREVIOUS, 1).takeIf { active && state.canGoPrevious },
+                playPause = serviceAction(if (isPlaying) ACTION_PAUSE else ACTION_PLAY, 2),
+                next = serviceAction(ACTION_NEXT, 3).takeIf { active && state.canGoNext },
+                close = stopIntent
+            ),
+            visibility = if (exposeTitle) {
+                NotificationCompat.VISIBILITY_PUBLIC
+            } else {
+                NotificationCompat.VISIBILITY_PRIVATE
             }
-            builder.addAction(
-                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (isPlaying) "Pause" else "Play",
-                serviceAction(if (isPlaying) ACTION_PAUSE else ACTION_PLAY, 2)
-            )
-            compactActionIndices += actionIndex++
-            if (state.canGoNext) {
-                builder.addAction(
-                    android.R.drawable.ic_media_next,
-                    "Next",
-                    serviceAction(ACTION_NEXT, 3)
-                )
-                compactActionIndices += actionIndex
-            }
-        }
-        builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", stopIntent)
-        val notification = builder.setStyle(
-            MediaNotificationCompat.MediaStyle()
-                .setMediaSession(mediaSession.sessionToken)
-                .setShowActionsInCompactView(*compactActionIndices.take(3).toIntArray())
-        ).build()
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
                 this,
-                NOTIFICATION_ID,
+                EPUB_NARRATION_NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            startForeground(EPUB_NARRATION_NOTIFICATION_ID, notification)
         }
     }
 
@@ -871,8 +844,8 @@ class EpubTtsPlaybackService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(
-                CHANNEL_ID,
-                "Text to speech",
+                EPUB_NARRATION_NOTIFICATION_CHANNEL_ID,
+                "EPUB narration",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps book narration playing while the screen is off"
@@ -900,8 +873,7 @@ class EpubTtsPlaybackService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "epub_tts_playback"
-        private const val NOTIFICATION_ID = 4302
+
         private const val WAKE_LOCK_TIMEOUT_MILLIS = 10 * 60 * 1_000L
         private const val ACTION_PREPARE = "com.vangeaux.lagrange.tts.PREPARE"
         private const val ACTION_PLAY = "com.vangeaux.lagrange.tts.PLAY"
