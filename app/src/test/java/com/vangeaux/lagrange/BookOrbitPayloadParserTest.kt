@@ -751,6 +751,30 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseReaderProgress keeps the server update time for the matching ebook file`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "book-progress",
+            fileId = "file-primary",
+            title = "Progress EPUB",
+            mediaKind = MediaKind.EPUB,
+            lastReadAtMillis = 5L
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","percentage":63.5,"updatedAt":"2026-10-01T12:00:00Z"}]"""
+        )
+        val withoutStamp = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","percentage":63.5}]"""
+        )
+
+        assertEquals(1_790_856_000_000L, hydrated.lastReadAtMillis)
+        assertEquals(5L, withoutStamp.lastReadAtMillis)
+    }
+
+    @Test
     fun `parseReaderProgress hydrates matching audiobook position and preserves mismatched file`() {
         val book = BookSummary(
             libraryId = "lib-progress",

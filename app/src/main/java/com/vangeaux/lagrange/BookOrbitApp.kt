@@ -752,6 +752,8 @@ private fun ReaderScreen(
                 initialPage = if (isPreview) 0 else state.readerPageIndex,
                 initialPageCount = if (isPreview) 1 else state.book.readerPageCount ?: 1,
                 initialPercent = if (isPreview) null else state.progressPercent,
+                serverProgressPercent = if (isPreview) null else state.serverProgressPercent,
+                serverProgressUpdatedAtMillis = if (isPreview) null else state.serverProgressUpdatedAtMillis,
                 initialLocatorJson = if (isPreview) null else state.initialLocatorJson,
                 initialCfi = state.initialCfi,
                 initialAnnotationText = state.annotationText,

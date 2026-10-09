@@ -1574,12 +1574,11 @@ class AppCoordinator internal constructor(
                 } else {
                     emptyList()
                 }
-                val progressBook = if (
-                    launchMode == ReaderLaunchMode.NORMAL &&
+                val fetchServerProgress = launchMode == ReaderLaunchMode.NORMAL &&
                     !offlineOpen &&
                     syncResult != SyncAttemptResult.TransientFailure &&
                     syncResult != SyncAttemptResult.AuthenticationBlocked
-                ) {
+                val progressBook = if (fetchServerProgress) {
                     readerModule()?.loadReaderProgress(readerBook, audioFiles)
                         ?: repository.loadReaderProgress(readerBook, audioFiles)
                 } else {
@@ -1596,7 +1595,16 @@ class AppCoordinator internal constructor(
                     ?.durationSeconds
                     ?.takeIf { it > 0L }
                     ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
-                val sharedState = restoreSharedReaderPosition(preparedState)
+                val sharedState = restoreSharedReaderPosition(preparedState).let { state ->
+                    if (fetchServerProgress && progressBook.mediaKind == MediaKind.EPUB) {
+                        state.copy(
+                            serverProgressPercent = progressBook.progressPercent,
+                            serverProgressUpdatedAtMillis = progressBook.lastReadAtMillis
+                        )
+                    } else {
+                        state
+                    }
+                }
                 presentationStarted = true
                 presentReaderState(
                     sharedState.copy(audioTotalDurationMs = audioTotalDurationMs),

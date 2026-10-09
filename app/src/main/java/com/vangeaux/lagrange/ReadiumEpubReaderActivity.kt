@@ -221,18 +221,29 @@ internal fun readiumOverallPercent(
     return (((safeChapterIndex + safeResourceProgression) / safeChapterCount) * 100.0).toFloat()
 }
 
-/**
- * Progress made on another device reaches this one only as a server percentage, while the exact
- * locator saved here is more precise. Prefer the locator unless the server is ahead by more than
- * the drift two renderers can disagree on.
- */
-internal const val SERVER_PROGRESS_AHEAD_THRESHOLD_PERCENT = 1f
+/** Device and server clocks are not synchronized, so a server stamp must clearly postdate the saved locator. */
+internal const val SERVER_PROGRESS_CLOCK_TOLERANCE_MS = 60_000L
 
-internal fun isServerProgressAheadOfLocator(
+/** Renderers lay a book out differently, so smaller percent differences are drift, not newer reading. */
+internal const val SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT = 2f
+
+/**
+ * Whether progress recorded on the server by another device should replace the exact locator saved
+ * here. Both must hold: the server progress was written after the locator was saved, and it points
+ * somewhere materially different. A locator without a save time predates this check and counts as
+ * older than any server progress; one without a total progression cannot be compared fairly, so it
+ * is kept.
+ */
+internal fun shouldPreferServerProgress(
     serverPercent: Float?,
-    locatorPercent: Float
-): Boolean = serverPercent != null &&
-    serverPercent - locatorPercent > SERVER_PROGRESS_AHEAD_THRESHOLD_PERCENT
+    serverUpdatedAtMillis: Long?,
+    locatorPercent: Float?,
+    locatorSavedAtMillis: Long?
+): Boolean {
+    if (serverPercent == null || serverUpdatedAtMillis == null || locatorPercent == null) return false
+    if (serverUpdatedAtMillis <= (locatorSavedAtMillis ?: 0L) + SERVER_PROGRESS_CLOCK_TOLERANCE_MS) return false
+    return abs(serverPercent - locatorPercent) > SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT
+}
 
 internal fun selectReadiumPositionIndex(
     targetProgression: Double?,
@@ -2482,34 +2493,44 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
         val chapterCount = openedPublication.readingOrder.size.coerceAtLeast(1)
-        val initialPercent = intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN)
+        val serverPercent = intent.getFloatExtra(EXTRA_SERVER_PROGRESS_PERCENT, Float.NaN)
             .takeUnless(Float::isNaN)
+        val serverUpdatedAtMillis = intent.getLongExtra(EXTRA_SERVER_PROGRESS_UPDATED_AT, -1L)
+            .takeIf { it >= 0L }
+        var serverProgressWins = false
         if (!isPreview) {
             locatorStore.read(readerKey)?.let { stored ->
                 val storedChapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
                     link.url().isEquivalent(stored.href.removeFragment())
                 }
                 if (storedChapterIndex >= 0) {
-                    val storedPercent = readiumOverallPercent(
-                        totalProgression = stored.locations.totalProgression,
-                        resourceProgression = stored.locations.progression,
-                        chapterIndex = storedChapterIndex,
-                        chapterCount = chapterCount
+                    serverProgressWins = shouldPreferServerProgress(
+                        serverPercent = serverPercent,
+                        serverUpdatedAtMillis = serverUpdatedAtMillis,
+                        locatorPercent = stored.locations.totalProgression?.let { total ->
+                            readiumOverallPercent(total, null, storedChapterIndex, chapterCount)
+                        },
+                        locatorSavedAtMillis = locatorStore.readSavedAt(readerKey)
                     )
-                    if (!isServerProgressAheadOfLocator(initialPercent, storedPercent)) {
-                        return stored
-                    }
+                    if (!serverProgressWins) return stored
                 }
             }
         }
-        val requestedChapter = intent.getIntExtra(EXTRA_INITIAL_CHAPTER, 0)
+        // When another device's progress wins, position from that percent alone: the chapter, page
+        // and page count in the intent describe this device's previous session.
+        val initialPercent = if (serverProgressWins) {
+            serverPercent
+        } else {
+            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+        }
+        val requestedChapter = if (serverProgressWins) 0 else intent.getIntExtra(EXTRA_INITIAL_CHAPTER, 0)
         val chapterIndex = when {
             isPreview -> 0
             requestedChapter > 0 -> requestedChapter.coerceIn(0, chapterCount - 1)
             else -> percentToChapterIndex(initialPercent, chapterCount)
         }
-        val initialPage = intent.getIntExtra(EXTRA_INITIAL_PAGE, 0).coerceAtLeast(0)
-        val initialPageCount = intent.getIntExtra(EXTRA_INITIAL_PAGE_COUNT, 1).coerceAtLeast(1)
+        val initialPage = if (serverProgressWins) 0 else intent.getIntExtra(EXTRA_INITIAL_PAGE, 0).coerceAtLeast(0)
+        val initialPageCount = if (serverProgressWins) 1 else intent.getIntExtra(EXTRA_INITIAL_PAGE_COUNT, 1).coerceAtLeast(1)
         val totalProgression = if (isPreview) 0.0 else initialPercent
             ?.div(100f)
             ?.coerceIn(0f, 1f)
@@ -2548,7 +2569,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
-        if (!isPreview) locatorStore.save(readerKey, locator)
+        if (!isPreview) locatorStore.save(readerKey, locator, System.currentTimeMillis())
         readingSessionReporter.activity(currentPercent)
         updateResult()
     }
@@ -2904,6 +2925,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
         private const val EXTRA_INITIAL_PAGE_COUNT = "readium_epub_initial_page_count"
         private const val EXTRA_INITIAL_PERCENT = "readium_epub_initial_percent"
+        private const val EXTRA_SERVER_PROGRESS_PERCENT = "readium_epub_server_progress_percent"
+        private const val EXTRA_SERVER_PROGRESS_UPDATED_AT = "readium_epub_server_progress_updated_at"
         private const val EXTRA_INITIAL_CFI = "readium_epub_initial_cfi"
         private const val EXTRA_INITIAL_LOCATOR_JSON = "readium_epub_initial_locator_json"
         private const val EXTRA_INITIAL_ANNOTATION_TEXT = "readium_epub_initial_annotation_text"
@@ -2953,6 +2976,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             initialPage: Int,
             initialPageCount: Int = 1,
             initialPercent: Float? = null,
+            serverProgressPercent: Float? = null,
+            serverProgressUpdatedAtMillis: Long? = null,
             initialLocatorJson: String? = null,
             initialCfi: String? = null,
             initialAnnotationText: String? = null,
@@ -2974,6 +2999,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_INITIAL_PAGE_COUNT, initialPageCount)
             .apply {
                 initialPercent?.let { putExtra(EXTRA_INITIAL_PERCENT, it) }
+                serverProgressPercent?.let { putExtra(EXTRA_SERVER_PROGRESS_PERCENT, it) }
+                serverProgressUpdatedAtMillis?.let { putExtra(EXTRA_SERVER_PROGRESS_UPDATED_AT, it) }
                 initialLocatorJson?.let { putExtra(EXTRA_INITIAL_LOCATOR_JSON, it) }
                 initialCfi?.let { putExtra(EXTRA_INITIAL_CFI, it) }
                 initialAnnotationText?.let { putExtra(EXTRA_INITIAL_ANNOTATION_TEXT, it) }
@@ -3016,14 +3043,25 @@ internal class ReadiumEpubLocatorStore(context: Context) {
         return runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
     }
 
-    fun save(readerKey: String, locator: Locator) {
+    fun save(readerKey: String, locator: Locator, savedAtMillis: Long = System.currentTimeMillis()) {
         if (readerKey.isBlank()) return
-        preferences.edit().putString(readerKey, locator.toJSON().toString()).apply()
+        preferences.edit()
+            .putString(readerKey, locator.toJSON().toString())
+            .putLong(savedAtKey(readerKey), savedAtMillis)
+            .apply()
+    }
+
+    /** When the locator was saved on this device, or null for locators saved before this was recorded. */
+    fun readSavedAt(readerKey: String): Long? {
+        if (readerKey.isBlank()) return null
+        return preferences.getLong(savedAtKey(readerKey), -1L).takeIf { it >= 0L }
     }
 
     fun clear() {
         preferences.edit().clear().apply()
     }
+
+    private fun savedAtKey(readerKey: String) = "$readerKey#savedAt"
 }
 
 internal class ReadiumEpubTtsPositionStore(context: Context) {
