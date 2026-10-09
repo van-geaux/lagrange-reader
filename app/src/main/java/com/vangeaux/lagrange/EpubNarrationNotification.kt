@@ -26,7 +26,6 @@ internal fun buildEpubNarrationNotification(
     detail: String,
     isPlaying: Boolean,
     contentIntent: PendingIntent,
-    mediaSessionToken: android.support.v4.media.session.MediaSessionCompat.Token,
     actions: EpubNarrationNotificationActions,
     visibility: Int = NotificationCompat.VISIBILITY_PUBLIC
 ): Notification {
@@ -75,16 +74,7 @@ internal fun buildEpubNarrationNotification(
         builder.addAction(android.R.drawable.ic_media_next, "Next narration sentence", it)
     }
     builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", actions.close)
-    val compactIndices = buildList {
-        if (actions.previous != null) add(0)
-        add(if (actions.previous != null) 1 else 0)
-        if (actions.next != null) add(if (actions.previous != null) 2 else 1)
-    }
-    return builder.setStyle(
-        MediaNotificationCompat.MediaStyle()
-            .setMediaSession(mediaSessionToken)
-            .setShowActionsInCompactView(*compactIndices.toIntArray())
-    ).build()
+    return builder.build()
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

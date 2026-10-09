@@ -837,7 +837,6 @@ class EpubTtsPlaybackService : Service() {
             detail = epubTtsNotificationDetail(state, isPlaying),
             isPlaying = isPlaying && active,
             contentIntent = appLaunchIntent(),
-            mediaSessionToken = mediaSession.sessionToken,
             actions = actions,
             visibility = if (exposeTitle) {
                 NotificationCompat.VISIBILITY_PUBLIC

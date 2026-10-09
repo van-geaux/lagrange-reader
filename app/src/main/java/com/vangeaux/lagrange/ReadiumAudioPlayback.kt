@@ -298,7 +298,6 @@ private class ReadAlongMediaNotificationProvider(
                 player.mediaMetadata.artist?.toString() ?: "Read-along",
                 player.isPlaying,
                 sessionActivity,
-                mediaSession.getSessionCompatToken(),
                 actions
             )
         )
