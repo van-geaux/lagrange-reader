@@ -211,10 +211,9 @@ class EpubTtsPlaybackService : Service() {
             val active = navigator ?: return
             active.play()
             if (navigator !== active) return
-            val isPlaying = active.playback.value.playWhenReady
-            publish { it.copy(isPlaying = isPlaying) }
-            updatePlaybackWakeLock(isPlaying = isPlaying)
-            updateNotification()
+            publish { it.copy(isPlaying = true) }
+            updatePlaybackWakeLock(isPlaying = true)
+            updateNotification(isPlayingOverride = true)
         }
 
         fun pause(ownerToken: String? = null) {
@@ -222,10 +221,9 @@ class EpubTtsPlaybackService : Service() {
             val active = navigator ?: return
             active.pause()
             if (navigator !== active) return
-            val isPlaying = active.playback.value.playWhenReady
-            publish { it.copy(isPlaying = isPlaying) }
-            updatePlaybackWakeLock(isPlaying = isPlaying)
-            updateNotification()
+            publish { it.copy(isPlaying = false) }
+            updatePlaybackWakeLock(isPlaying = false)
+            updateNotification(isPlayingOverride = false)
         }
 
         fun previous(ownerToken: String? = null) {
@@ -761,10 +759,12 @@ class EpubTtsPlaybackService : Service() {
         if (stopService) stopSelf()
     }
 
-    private fun updateNotification() {
+    private fun updateNotification(isPlayingOverride: Boolean? = null) {
         val state = binder.state.value
         updateMediaSession(state)
-        val isPlaying = navigator?.playback?.value?.playWhenReady ?: state.isPlaying
+        val isPlaying = isPlayingOverride
+            ?: navigator?.playback?.value?.playWhenReady
+            ?: state.isPlaying
         promoteToForeground(state.title ?: "Text to speech", isPlaying)
     }
 
