@@ -26,6 +26,8 @@ The current implementation is split across these feature files:
 
 The EPUB reader owns publication-specific navigation and overlays. It uses `EpubTtsModuleImpl` for service/session operations and observes the service binder for playback state, controls, and locator updates.
 
+The EPUB reader passes both the selected text and a paragraph locator when `Listen from here` is invoked. TTS scans utterances for the normalized selected text first, so a selected word or phrase starts in the sentence containing that text rather than at the paragraph's first sentence or the chapter beginning; the paragraph selector is only a fallback when selected text is unavailable.
+
 ## Account and lifecycle isolation
 
 TTS request IDs reject stale starts. Account epochs reject work belonging to a previous authenticated session. Server change, logout, and related account-bound cleanup invalidate the TTS account epoch and stop the TTS service before the old session is discarded.
