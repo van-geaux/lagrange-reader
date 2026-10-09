@@ -185,9 +185,8 @@ data class BookSummary(
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
     val lastReadAtMillis: Long? = null,
-    /** Set only from a matched BookOrbit progress entry, never from catalog or locally merged values. */
+    /** Set only by a progress fetch that matched this file; cleared before each fetch so it is never stale. */
     val serverProgressPercent: Float? = null,
-    val serverProgressUpdatedAtMillis: Long? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
     val readerLocatorJson: String? = null,
@@ -758,7 +757,8 @@ data class ReaderState(
     val progressPercent: Float? = null,
     /** Fresh BookOrbit progress fetched when the reader was opened, kept apart from queued local progress. */
     val serverProgressPercent: Float? = null,
-    val serverProgressUpdatedAtMillis: Long? = null,
+    /** What this device itself last reported to the server (queued or synced), to recognize its own writes. */
+    val lastReportedProgressPercent: Float? = null,
     val serverProgressAuthoritative: Boolean = false,
     val initialLocatorJson: String? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,

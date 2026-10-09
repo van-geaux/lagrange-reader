@@ -1656,9 +1656,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             comicExtractionError = localResolution.comicExtractionError,
             localFileError = localResolution.localFileError
         )
+        val latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
         val restoredProgress = resolveRestoredReaderProgress(
             book = book,
-            latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
+            latestProgress = latestProgress
         )
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
@@ -1668,7 +1669,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             lastKnownPosition = restoredProgress.positionMs,
             pageIndex = restoredProgress.pageIndex,
             readerPageIndex = 0,
-            progressPercent = restoredProgress.progressPercent
+            progressPercent = restoredProgress.progressPercent,
+            lastReportedProgressPercent = normalizeStoredProgressPercent(latestProgress?.progressPercent)
         )
     }
 
@@ -4038,8 +4040,7 @@ internal object BookOrbitPayloadParser {
             progressPercent = percentage ?: progressPercent,
             progressPositionMs = positionMs ?: progressPositionMs,
             progressPageIndex = pageIndex ?: progressPageIndex,
-            serverProgressPercent = percentage,
-            serverProgressUpdatedAtMillis = progress.timestampValue("updatedAt", "lastReadAt")
+            serverProgressPercent = percentage
         )
     }
 

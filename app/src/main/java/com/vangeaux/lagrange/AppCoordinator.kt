@@ -1579,8 +1579,9 @@ class AppCoordinator internal constructor(
                     syncResult != SyncAttemptResult.TransientFailure &&
                     syncResult != SyncAttemptResult.AuthenticationBlocked
                 val progressBook = if (fetchServerProgress) {
-                    readerModule()?.loadReaderProgress(readerBook, audioFiles)
-                        ?: repository.loadReaderProgress(readerBook, audioFiles)
+                    val unfetchedBook = readerBook.copy(serverProgressPercent = null)
+                    readerModule()?.loadReaderProgress(unfetchedBook, audioFiles)
+                        ?: repository.loadReaderProgress(unfetchedBook, audioFiles)
                 } else {
                     readerBook
                 }
@@ -1597,10 +1598,7 @@ class AppCoordinator internal constructor(
                     ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
                 val sharedState = restoreSharedReaderPosition(preparedState).let { state ->
                     if (fetchServerProgress && progressBook.mediaKind == MediaKind.EPUB) {
-                        state.copy(
-                            serverProgressPercent = progressBook.serverProgressPercent,
-                            serverProgressUpdatedAtMillis = progressBook.serverProgressUpdatedAtMillis
-                        )
+                        state.copy(serverProgressPercent = progressBook.serverProgressPercent)
                     } else {
                         state
                     }

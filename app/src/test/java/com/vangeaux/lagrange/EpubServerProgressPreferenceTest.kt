@@ -7,47 +7,40 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpubServerProgressPreferenceTest {
-    private val knownStamp = 1_000L
-    private val newStamp = 2_000L
-
     private fun prefer(
         serverPercent: Float? = 62f,
-        serverUpdatedAt: Long? = newStamp,
-        locatorPercent: Float? = 40f,
-        knownUpdatedAt: Long? = knownStamp
-    ) = shouldPreferServerProgress(serverPercent, serverUpdatedAt, locatorPercent, knownUpdatedAt)
+        lastReported: Float? = 40f,
+        locatorPercent: Float? = 40f
+    ) = shouldPreferServerProgress(serverPercent, lastReported, locatorPercent)
 
     @Test
-    fun `changed and clearly different server progress wins`() {
-        assertTrue(prefer())
+    fun `server progress written elsewhere and far from the locator wins`() {
+        assertTrue(prefer(serverPercent = 62f, lastReported = 40f, locatorPercent = 40f))
     }
 
     @Test
-    fun `changed server progress that went backwards also wins`() {
-        assertTrue(prefer(serverPercent = 20f, locatorPercent = 40f))
+    fun `server progress written elsewhere that went backwards also wins`() {
+        assertTrue(prefer(serverPercent = 20f, lastReported = 40f, locatorPercent = 40f))
     }
 
     @Test
-    fun `locator is kept when nobody wrote since this device last looked`() {
-        assertFalse(prefer(serverUpdatedAt = knownStamp, serverPercent = 90f))
+    fun `server progress equal to what this device reported is its own write`() {
+        // e.g. narration reported an equal-chapter estimate that differs from the exact locator
+        assertFalse(prefer(serverPercent = 25f, lastReported = 25f, locatorPercent = 12f))
+        assertFalse(prefer(serverPercent = 50f, lastReported = 50.3f, locatorPercent = 60f))
     }
 
     @Test
-    fun `locator is kept when this device's own write points at the same place`() {
-        assertFalse(prefer(serverPercent = 40.5f, locatorPercent = 40f))
+    fun `locator is kept within renderer drift of other progress`() {
+        assertFalse(prefer(serverPercent = 61.9f, lastReported = 40f, locatorPercent = 60f))
+        assertTrue(prefer(serverPercent = 62.1f, lastReported = 40f, locatorPercent = 60f))
     }
 
     @Test
-    fun `locator is kept within renderer drift`() {
-        assertFalse(prefer(serverPercent = 41.9f, locatorPercent = 40f))
-        assertTrue(prefer(serverPercent = 42.1f, locatorPercent = 40f))
-    }
-
-    @Test
-    fun `without a remembered time only server progress ahead of the locator wins`() {
-        assertTrue(prefer(knownUpdatedAt = null, serverPercent = 62f, locatorPercent = 40f))
-        assertFalse(prefer(knownUpdatedAt = null, serverPercent = 40f, locatorPercent = 55f))
-        assertFalse(prefer(knownUpdatedAt = null, serverPercent = 41f, locatorPercent = 40f))
+    fun `with nothing reported by this device only server progress ahead of the locator wins`() {
+        assertTrue(prefer(serverPercent = 62f, lastReported = null, locatorPercent = 40f))
+        assertFalse(prefer(serverPercent = 40f, lastReported = null, locatorPercent = 55f))
+        assertFalse(prefer(serverPercent = 41f, lastReported = null, locatorPercent = 40f))
     }
 
     @Test
@@ -58,7 +51,6 @@ class EpubServerProgressPreferenceTest {
     @Test
     fun `locator is kept when no fresh server progress is known`() {
         assertFalse(prefer(serverPercent = null))
-        assertFalse(prefer(serverUpdatedAt = null))
     }
 
     @Test
