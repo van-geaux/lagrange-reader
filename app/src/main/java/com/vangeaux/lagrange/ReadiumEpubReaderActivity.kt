@@ -263,12 +263,11 @@ internal fun progressionFromPositions(
     resourceProgression: Double?,
     resourcePositions: List<Pair<Double?, Double?>>
 ): Double? {
-    val usable = resourcePositions.mapNotNull { (progression, total) ->
-        total?.let { (progression ?: 0.0) to it }
-    }
-    if (usable.isEmpty()) return null
-    val target = resourceProgression ?: 0.0
-    return (usable.lastOrNull { (progression, _) -> progression <= target } ?: usable.first()).second
+    val index = selectReadiumPositionIndex(
+        targetProgression = resourceProgression ?: 0.0,
+        totalProgressions = resourcePositions.map { it.first }
+    ) ?: return null
+    return resourcePositions[index].second
 }
 
 internal fun selectReadiumPositionIndex(
@@ -1175,16 +1174,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
             ?: initialLocator(openedPublication)
         // Start the session where the reader actually opens, so reaching it is not counted as reading.
-        readingSessionReporter.start(
-            readiumOverallPercent(
-                totalProgression = initialLocator.locations.totalProgression,
-                resourceProgression = initialLocator.locations.progression,
-                chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
-                    link.url().isEquivalent(initialLocator.href.removeFragment())
-                }.coerceAtLeast(0),
-                chapterCount = openedPublication.readingOrder.size
-            )
-        )
+        readingSessionReporter.start(locatorOverallPercent(openedPublication, initialLocator))
         val paginationListener = object : EpubNavigatorFragment.PaginationListener {
             override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
                 currentPage = pageIndex.coerceAtLeast(0)
@@ -1576,6 +1566,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
     }
+
+    /** Narration of this book is running in the service, possibly started by an earlier reader screen. */
+    private fun bookNarrationActive(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
+        state.readerKey == readerKey && state.hasSession
+    } == true
 
     private fun hasActiveTtsSession(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
         state.ownerToken == ttsOwnerToken && state.readerKey == readerKey && state.hasSession
@@ -2531,9 +2526,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val stored = locatorStore.read(readerKey)?.takeIf { locator ->
                 openedPublication.readingOrder.any { it.url().isEquivalent(locator.href.removeFragment()) }
             }
+            val serverPercent = intent.getFloatExtra(EXTRA_SERVER_PROGRESS_PERCENT, Float.NaN)
+                .takeUnless(Float::isNaN)
+            // The server value describes the moment the book was opened; later restarts of this
+            // activity must not compare it with positions the user has since moved to.
+            intent.removeExtra(EXTRA_SERVER_PROGRESS_PERCENT)
+            if (stored != null && serverPercent == null) return stored
             if (stored != null) {
-                val serverPercent = intent.getFloatExtra(EXTRA_SERVER_PROGRESS_PERCENT, Float.NaN)
-                    .takeUnless(Float::isNaN)
                 val storedTotal = stored.locations.totalProgression ?: progressionFromPositions(
                     resourceProgression = stored.locations.progression,
                     resourcePositions = bookPositions
@@ -2551,7 +2550,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 // narration would resume. The stored narration position is dropped once the
                 // reader has actually moved, in updateLocation.
                 resumedFromServer = true
-                lastTtsLocator = null
                 return locatorFromPercent(
                     openedPublication,
                     initialPercent = serverPercent,
@@ -2607,6 +2605,25 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
     }
 
+    /** Overall percent of a locator, using the book's own positions when it carries no total progression. */
+    private fun locatorOverallPercent(openedPublication: Publication, locator: Locator): Float {
+        val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
+            link.url().isEquivalent(locator.href.removeFragment())
+        }.coerceAtLeast(0)
+        val total = locator.locations.totalProgression ?: progressionFromPositions(
+            resourceProgression = locator.locations.progression,
+            resourcePositions = bookPositions
+                .filter { it.href.removeFragment().isEquivalent(locator.href.removeFragment()) }
+                .map { it.locations.progression to it.locations.totalProgression }
+        )
+        return readiumOverallPercent(
+            totalProgression = total,
+            resourceProgression = locator.locations.progression,
+            chapterIndex = chapterIndex,
+            chapterCount = openedPublication.readingOrder.size
+        )
+    }
+
     private fun updateLocation(locator: Locator) {
         val openedPublication = publication ?: return
         val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
@@ -2624,7 +2641,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (!isPreview) locatorStore.save(readerKey, locator)
         if (resumedFromServer) {
             resumedFromServer = false
-            if (!hasActiveTtsSession()) ttsPositionStore.remove(readerKey)
+            if (!bookNarrationActive()) {
+                lastTtsLocator = null
+                ttsPositionStore.remove(readerKey)
+            }
         }
         readingSessionReporter.activity(currentPercent)
         updateResult()
