@@ -750,12 +750,23 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         lifecycleScope.launch {
-            val readerFile = withContext(Dispatchers.IO) {
+            val preparation = withContext(Dispatchers.IO) {
                 val custom = readerPreferences.customFont
                 if (readerPreferences.fontFamily == EpubReaderFontFamily.CUSTOM && custom != null) {
                     val fontFile = customFontStore.fontFile(custom)
-                    if (fontFile.isFile) prepareEpubWithCustomFont(this@ReadiumEpubReaderActivity, file, custom, fontFile) else file
-                } else file
+                    if (fontFile.isFile) {
+                        prepareEpubWithCustomFontSafely(this@ReadiumEpubReaderActivity, file, custom, fontFile)
+                    } else {
+                        CustomFontEpubPreparationResult.Prepared(file)
+                    }
+                } else CustomFontEpubPreparationResult.Prepared(file)
+            }
+            val readerFile = when (preparation) {
+                is CustomFontEpubPreparationResult.Prepared -> preparation.file
+                is CustomFontEpubPreparationResult.Rejected -> {
+                    showError(preparation.message)
+                    return@launch
+                }
             }
             when (val result = openReadiumEpub(this@ReadiumEpubReaderActivity, readerFile)) {
                 is ReadiumEpubOpenResult.Error -> showError(result.message)
