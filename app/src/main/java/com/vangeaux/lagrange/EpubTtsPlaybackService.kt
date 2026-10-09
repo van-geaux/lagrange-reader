@@ -773,6 +773,7 @@ class EpubTtsPlaybackService : Service() {
         val state = binder.state.value
         updateMediaSession(state)
         val isPlaying = isPlayingOverride
+            ?: requestedPlaybackState
             ?: navigator?.playback?.value?.playWhenReady
             ?: state.isPlaying
         promoteToForeground(state.title ?: "Text to speech", isPlaying)
