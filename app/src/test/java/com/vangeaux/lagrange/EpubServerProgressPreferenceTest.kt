@@ -1,44 +1,40 @@
 package com.vangeaux.lagrange
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpubServerProgressPreferenceTest {
-    private val savedAt = 1_000_000_000L
-    private val hourLater = savedAt + 3_600_000L
+    private val knownStamp = 1_000L
+    private val newStamp = 2_000L
 
     private fun prefer(
         serverPercent: Float? = 62f,
-        serverUpdatedAt: Long? = hourLater,
+        serverUpdatedAt: Long? = newStamp,
         locatorPercent: Float? = 40f,
-        locatorSavedAt: Long? = savedAt
-    ) = shouldPreferServerProgress(serverPercent, serverUpdatedAt, locatorPercent, locatorSavedAt)
+        knownUpdatedAt: Long? = knownStamp
+    ) = shouldPreferServerProgress(serverPercent, serverUpdatedAt, locatorPercent, knownUpdatedAt)
 
     @Test
-    fun `newer and clearly different server progress wins`() {
+    fun `changed and clearly different server progress wins`() {
         assertTrue(prefer())
     }
 
     @Test
-    fun `newer server progress that went backwards also wins`() {
+    fun `changed server progress that went backwards also wins`() {
         assertTrue(prefer(serverPercent = 20f, locatorPercent = 40f))
     }
 
     @Test
-    fun `locator is kept when the server progress is older than the locator`() {
-        assertFalse(prefer(serverUpdatedAt = savedAt - 3_600_000L))
+    fun `locator is kept when nobody wrote since this device last looked`() {
+        assertFalse(prefer(serverUpdatedAt = knownStamp, serverPercent = 90f))
     }
 
     @Test
-    fun `locator is kept when the server stamp is within clock tolerance`() {
-        assertFalse(prefer(serverUpdatedAt = savedAt + SERVER_PROGRESS_CLOCK_TOLERANCE_MS))
-        assertTrue(prefer(serverUpdatedAt = savedAt + SERVER_PROGRESS_CLOCK_TOLERANCE_MS + 1))
-    }
-
-    @Test
-    fun `locator is kept when a clock skewed echo of its own sync points at the same place`() {
-        assertFalse(prefer(serverPercent = 40.5f, serverUpdatedAt = hourLater))
+    fun `locator is kept when this device's own write points at the same place`() {
+        assertFalse(prefer(serverPercent = 40.5f, locatorPercent = 40f))
     }
 
     @Test
@@ -48,13 +44,14 @@ class EpubServerProgressPreferenceTest {
     }
 
     @Test
-    fun `locator without a save time is older than any server progress`() {
-        assertTrue(prefer(locatorSavedAt = null))
-        assertFalse(prefer(locatorSavedAt = null, serverPercent = 40.5f))
+    fun `without a remembered time only server progress ahead of the locator wins`() {
+        assertTrue(prefer(knownUpdatedAt = null, serverPercent = 62f, locatorPercent = 40f))
+        assertFalse(prefer(knownUpdatedAt = null, serverPercent = 40f, locatorPercent = 55f))
+        assertFalse(prefer(knownUpdatedAt = null, serverPercent = 41f, locatorPercent = 40f))
     }
 
     @Test
-    fun `locator is kept when it cannot be compared fairly`() {
+    fun `locator is kept when it cannot be compared`() {
         assertFalse(prefer(locatorPercent = null))
     }
 
@@ -62,5 +59,27 @@ class EpubServerProgressPreferenceTest {
     fun `locator is kept when no fresh server progress is known`() {
         assertFalse(prefer(serverPercent = null))
         assertFalse(prefer(serverUpdatedAt = null))
+    }
+
+    @Test
+    fun `locator total progression is used when present`() {
+        assertEquals(
+            0.4,
+            locatorTotalProgression(0.4, 0.5, listOf(0.0 to 0.1, 0.9 to 0.2))!!,
+            0.0001
+        )
+    }
+
+    @Test
+    fun `missing total progression is read from the positions of the same resource`() {
+        val positions = listOf(0.0 to 0.30, 0.25 to 0.33, 0.5 to 0.36, 0.75 to 0.39)
+        assertEquals(0.36, locatorTotalProgression(null, 0.6, positions)!!, 0.0001)
+        assertEquals(0.30, locatorTotalProgression(null, null, positions)!!, 0.0001)
+    }
+
+    @Test
+    fun `missing total progression with no usable positions cannot be compared`() {
+        assertNull(locatorTotalProgression(null, 0.5, emptyList()))
+        assertNull(locatorTotalProgression(null, 0.5, listOf(0.0 to null)))
     }
 }

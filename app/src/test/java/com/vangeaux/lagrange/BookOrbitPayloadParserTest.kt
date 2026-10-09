@@ -751,13 +751,14 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
-    fun `parseReaderProgress keeps the server update time for the matching ebook file`() {
+    fun `parseReaderProgress records server percent and update time only from the matching entry`() {
         val book = BookSummary(
             libraryId = "lib-progress",
             id = "book-progress",
             fileId = "file-primary",
             title = "Progress EPUB",
             mediaKind = MediaKind.EPUB,
+            progressPercent = 10f,
             lastReadAtMillis = 5L
         )
 
@@ -769,9 +770,17 @@ class BookOrbitPayloadParserTest {
             book = book,
             payload = """[{"fileId":"file-primary","percentage":63.5}]"""
         )
+        val otherFile = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-secondary","percentage":63.5,"updatedAt":"2026-10-01T12:00:00Z"}]"""
+        )
 
-        assertEquals(1_790_856_000_000L, hydrated.lastReadAtMillis)
-        assertEquals(5L, withoutStamp.lastReadAtMillis)
+        assertEquals(63.5f, hydrated.serverProgressPercent)
+        assertEquals(1_790_856_000_000L, hydrated.serverProgressUpdatedAtMillis)
+        assertEquals(5L, hydrated.lastReadAtMillis)
+        assertNull(withoutStamp.serverProgressUpdatedAtMillis)
+        assertNull(otherFile.serverProgressPercent)
+        assertNull(otherFile.serverProgressUpdatedAtMillis)
     }
 
     @Test

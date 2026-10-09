@@ -185,6 +185,9 @@ data class BookSummary(
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
     val lastReadAtMillis: Long? = null,
+    /** Set only from a matched BookOrbit progress entry, never from catalog or locally merged values. */
+    val serverProgressPercent: Float? = null,
+    val serverProgressUpdatedAtMillis: Long? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
     val readerLocatorJson: String? = null,

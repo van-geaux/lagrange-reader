@@ -1598,8 +1598,8 @@ class AppCoordinator internal constructor(
                 val sharedState = restoreSharedReaderPosition(preparedState).let { state ->
                     if (fetchServerProgress && progressBook.mediaKind == MediaKind.EPUB) {
                         state.copy(
-                            serverProgressPercent = progressBook.progressPercent,
-                            serverProgressUpdatedAtMillis = progressBook.lastReadAtMillis
+                            serverProgressPercent = progressBook.serverProgressPercent,
+                            serverProgressUpdatedAtMillis = progressBook.serverProgressUpdatedAtMillis
                         )
                     } else {
                         state

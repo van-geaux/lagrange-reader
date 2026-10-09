@@ -4038,7 +4038,8 @@ internal object BookOrbitPayloadParser {
             progressPercent = percentage ?: progressPercent,
             progressPositionMs = positionMs ?: progressPositionMs,
             progressPageIndex = pageIndex ?: progressPageIndex,
-            lastReadAtMillis = progress.timestampValue("updatedAt", "lastReadAt") ?: lastReadAtMillis
+            serverProgressPercent = percentage,
+            serverProgressUpdatedAtMillis = progress.timestampValue("updatedAt", "lastReadAt")
         )
     }
 
