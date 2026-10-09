@@ -221,6 +221,19 @@ internal fun readiumOverallPercent(
     return (((safeChapterIndex + safeResourceProgression) / safeChapterCount) * 100.0).toFloat()
 }
 
+/**
+ * Progress made on another device reaches this one only as a server percentage, while the exact
+ * locator saved here is more precise. Prefer the locator unless the server is ahead by more than
+ * the drift two renderers can disagree on.
+ */
+internal const val SERVER_PROGRESS_AHEAD_THRESHOLD_PERCENT = 1f
+
+internal fun isServerProgressAheadOfLocator(
+    serverPercent: Float?,
+    locatorPercent: Float
+): Boolean = serverPercent != null &&
+    serverPercent - locatorPercent > SERVER_PROGRESS_AHEAD_THRESHOLD_PERCENT
+
 internal fun selectReadiumPositionIndex(
     targetProgression: Double?,
     totalProgressions: List<Double?>
@@ -2468,19 +2481,27 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 runCatching { Locator.fromJSON(json) }.getOrNull()?.let { return it }
             }
         }
-        if (!isPreview) {
-            locatorStore.read(readerKey)?.let { stored ->
-                if (openedPublication.readingOrder.any { link ->
-                        link.url().isEquivalent(stored.href.removeFragment())
-                    }
-                ) {
-                    return stored
-                }
-            }
-        }
         val chapterCount = openedPublication.readingOrder.size.coerceAtLeast(1)
         val initialPercent = intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN)
             .takeUnless(Float::isNaN)
+        if (!isPreview) {
+            locatorStore.read(readerKey)?.let { stored ->
+                val storedChapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
+                    link.url().isEquivalent(stored.href.removeFragment())
+                }
+                if (storedChapterIndex >= 0) {
+                    val storedPercent = readiumOverallPercent(
+                        totalProgression = stored.locations.totalProgression,
+                        resourceProgression = stored.locations.progression,
+                        chapterIndex = storedChapterIndex,
+                        chapterCount = chapterCount
+                    )
+                    if (!isServerProgressAheadOfLocator(initialPercent, storedPercent)) {
+                        return stored
+                    }
+                }
+            }
+        }
         val requestedChapter = intent.getIntExtra(EXTRA_INITIAL_CHAPTER, 0)
         val chapterIndex = when {
             isPreview -> 0
