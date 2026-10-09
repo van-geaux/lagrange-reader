@@ -755,8 +755,6 @@ data class ReaderState(
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
-    /** Fresh BookOrbit progress fetched when the reader was opened, kept apart from queued local progress. */
-    val serverProgressPercent: Float? = null,
     /** What this device itself last reported to the server (queued or synced), to recognize its own writes. */
     val lastReportedProgressPercent: Float? = null,
     val serverProgressAuthoritative: Boolean = false,

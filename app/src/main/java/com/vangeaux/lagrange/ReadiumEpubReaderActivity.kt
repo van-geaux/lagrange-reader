@@ -224,17 +224,20 @@ internal fun readiumOverallPercent(
 /** Renderers lay a book out differently, so smaller percent differences are drift, not newer reading. */
 internal const val SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT = 2f
 
-/** A server value this close to what this device last reported is this device's own write. */
-internal const val OWN_REPORT_TOLERANCE_PERCENT = 0.5f
+/**
+ * A server value this close to what this device last reported is this device's own write. The
+ * server may round or truncate what it stores, so this is wider than a float comparison.
+ */
+internal const val OWN_REPORT_TOLERANCE_PERCENT = 1f
 
 /**
  * Whether progress recorded on the server should replace the exact locator saved here.
  *
- * Server progress that matches what this device last reported is its own write, so the locator
- * stands. Anything else was written elsewhere, and wins when it is materially different from the
- * locator. With nothing reported by this device (a fresh install, or a book never reported), only
- * server progress that is ahead of the locator wins, since the server may merely lag this device.
- * Differences within [SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT] are renderer drift, not reading.
+ * Only progress ahead of the locator is followed, as when a book is reopened elsewhere in the app:
+ * a position that merely moved back, or a reset written by another client, never pulls this device
+ * backwards. Server progress that matches what this device last reported is its own write and
+ * leaves the locator alone. A lead within [SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT] is renderer
+ * drift, not reading.
  */
 internal fun shouldPreferServerProgress(
     serverPercent: Float?,
@@ -247,30 +250,24 @@ internal fun shouldPreferServerProgress(
     ) {
         return false
     }
-    val difference = serverPercent - locatorPercent
-    return if (lastReportedPercent == null) {
-        difference > SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT
-    } else {
-        abs(difference) > SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT
-    }
+    return serverPercent - locatorPercent > SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT
 }
 
 /**
- * Overall progression (0..1) of a saved locator. Locators written by narration or annotations lack
- * a total progression, so it is read from the book's own positions in the same resource instead of
- * assuming equal chapter lengths. Each candidate is (resource progression, total progression).
+ * Overall progression (0..1) for a position inside one resource, read from the book's own positions
+ * in that resource rather than assuming equal chapter lengths. Locators written by narration or
+ * annotations lack a total progression and need this. Each candidate is (resource progression,
+ * total progression).
  */
-internal fun locatorTotalProgression(
-    locatorTotalProgression: Double?,
-    locatorResourceProgression: Double?,
+internal fun progressionFromPositions(
+    resourceProgression: Double?,
     resourcePositions: List<Pair<Double?, Double?>>
 ): Double? {
-    locatorTotalProgression?.let { return it }
     val usable = resourcePositions.mapNotNull { (progression, total) ->
         total?.let { (progression ?: 0.0) to it }
     }
     if (usable.isEmpty()) return null
-    val target = locatorResourceProgression ?: 0.0
+    val target = resourceProgression ?: 0.0
     return (usable.lastOrNull { (progression, _) -> progression <= target } ?: usable.first()).second
 }
 
@@ -679,7 +676,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var ttsVoiceLanguageTag by mutableStateOf<String?>(null)
     private var ttsVoices by mutableStateOf<List<EpubTtsVoice>>(emptyList())
     private var lastTtsLocator: Locator? = null
-    private var resumedFromServerPercent: Float? = null
+    private var resumedFromServer = false
     private var restoredTtsLocator: Locator? = null
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
@@ -1177,8 +1174,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
             ?: initialLocator(openedPublication)
+        // Start the session where the reader actually opens, so reaching it is not counted as reading.
         readingSessionReporter.start(
-            resumedFromServerPercent
+            initialLocator.locations.totalProgression?.let { (it.coerceIn(0.0, 1.0) * 100.0).toFloat() }
                 ?: intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
         )
         val paginationListener = object : EpubNavigatorFragment.PaginationListener {
@@ -2530,9 +2528,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (stored != null) {
                 val serverPercent = intent.getFloatExtra(EXTRA_SERVER_PROGRESS_PERCENT, Float.NaN)
                     .takeUnless(Float::isNaN)
-                val storedTotal = locatorTotalProgression(
-                    locatorTotalProgression = stored.locations.totalProgression,
-                    locatorResourceProgression = stored.locations.progression,
+                val storedTotal = stored.locations.totalProgression ?: progressionFromPositions(
+                    resourceProgression = stored.locations.progression,
                     resourcePositions = bookPositions
                         .filter { it.href.removeFragment().isEquivalent(stored.href.removeFragment()) }
                         .map { it.locations.progression to it.locations.totalProgression }
@@ -2545,9 +2542,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 )
                 if (!serverProgressWins) return stored
                 // Another device read on: its position replaces this device's, including where
-                // narration would resume, and the reading session starts from it.
-                resumedFromServerPercent = serverPercent
-                ttsPositionStore.remove(readerKey)
+                // narration would resume. The stored narration position is dropped once the
+                // reader has actually moved, in updateLocation.
+                resumedFromServer = true
                 lastTtsLocator = null
                 return locatorFromPercent(
                     openedPublication,
@@ -2619,6 +2616,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
+        if (resumedFromServer) {
+            resumedFromServer = false
+            ttsPositionStore.remove(readerKey)
+        }
         readingSessionReporter.activity(currentPercent)
         updateResult()
     }

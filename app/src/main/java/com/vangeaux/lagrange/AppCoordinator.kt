@@ -1578,12 +1578,13 @@ class AppCoordinator internal constructor(
                     !offlineOpen &&
                     syncResult != SyncAttemptResult.TransientFailure &&
                     syncResult != SyncAttemptResult.AuthenticationBlocked
+                // A book carried over from an earlier reader session must not pass as fresh server progress.
+                val unfetchedBook = readerBook.copy(serverProgressPercent = null)
                 val progressBook = if (fetchServerProgress) {
-                    val unfetchedBook = readerBook.copy(serverProgressPercent = null)
                     readerModule()?.loadReaderProgress(unfetchedBook, audioFiles)
                         ?: repository.loadReaderProgress(unfetchedBook, audioFiles)
                 } else {
-                    readerBook
+                    unfetchedBook
                 }
                 val preparedState = readerModule()?.buildReaderState(
                     book = progressBook,
@@ -1596,13 +1597,7 @@ class AppCoordinator internal constructor(
                     ?.durationSeconds
                     ?.takeIf { it > 0L }
                     ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
-                val sharedState = restoreSharedReaderPosition(preparedState).let { state ->
-                    if (fetchServerProgress && progressBook.mediaKind == MediaKind.EPUB) {
-                        state.copy(serverProgressPercent = progressBook.serverProgressPercent)
-                    } else {
-                        state
-                    }
-                }
+                val sharedState = restoreSharedReaderPosition(preparedState)
                 presentationStarted = true
                 presentReaderState(
                     sharedState.copy(audioTotalDurationMs = audioTotalDurationMs),
@@ -1623,7 +1618,10 @@ class AppCoordinator internal constructor(
                 val canRetryLocal = launchMode == ReaderLaunchMode.NORMAL && !offlineOpen && !presentationStarted
                 val finalError = if (canRetryLocal) {
                     val localAttempt = try {
-                        val state = repository.buildReaderState(book = book, localOnly = true)
+                        val state = repository.buildReaderState(
+                            book = book.copy(serverProgressPercent = null),
+                            localOnly = true
+                        )
                         val sharedState = restoreSharedReaderPosition(state)
                         presentReaderState(sharedState, emptyList())
                         Result.success(Unit)
