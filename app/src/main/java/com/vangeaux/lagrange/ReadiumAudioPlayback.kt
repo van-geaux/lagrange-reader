@@ -290,17 +290,6 @@ private class ReadAlongMediaNotificationProvider(
         val sessionActivity = mediaSession.sessionActivity
             ?: error("Read-along session activity was unavailable")
         val actions = EpubNarrationNotificationActions(previous, playPause, next, close)
-        notificationManager?.notify(
-            EPUB_NARRATION_MEDIA_NOTIFICATION_ID,
-            buildEpubNarrationMediaAnchorNotification(
-                context,
-                player.mediaMetadata.title?.toString() ?: "Read-along",
-                sessionActivity,
-                mediaSession,
-                actions,
-                player.isPlaying
-            )
-        )
         return MediaNotification(
             EPUB_NARRATION_NOTIFICATION_ID,
             buildEpubNarrationNotification(
@@ -309,6 +298,7 @@ private class ReadAlongMediaNotificationProvider(
                 player.mediaMetadata.artist?.toString() ?: "Read-along",
                 player.isPlaying,
                 sessionActivity,
+                mediaSession.getSessionCompatToken(),
                 actions
             )
         )

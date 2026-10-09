@@ -754,8 +754,7 @@ class EpubTtsPlaybackService : Service() {
         }
         if (removeNotification) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-            getSystemService(NotificationManager::class.java)
-                ?.cancel(EPUB_NARRATION_MEDIA_NOTIFICATION_ID)
+
         }
         if (stopService) stopSelf()
     }
@@ -829,23 +828,13 @@ class EpubTtsPlaybackService : Service() {
             next = serviceAction(ACTION_NEXT, 3).takeIf { active && state.canGoNext },
             close = stopIntent
         )
-        getSystemService(NotificationManager::class.java)?.notify(
-            EPUB_NARRATION_MEDIA_NOTIFICATION_ID,
-            buildEpubNarrationCompatMediaAnchorNotification(
-                context = this,
-                title = notificationTitle,
-                contentIntent = appLaunchIntent(),
-                mediaSessionToken = mediaSession.sessionToken,
-                actions = actions,
-                isPlaying = isPlaying && active
-            )
-        )
         val notification = buildEpubNarrationNotification(
             context = this,
             title = notificationTitle,
             detail = epubTtsNotificationDetail(state, isPlaying),
             isPlaying = isPlaying && active,
             contentIntent = appLaunchIntent(),
+            mediaSessionToken = mediaSession.sessionToken,
             actions = actions,
             visibility = if (exposeTitle) {
                 NotificationCompat.VISIBILITY_PUBLIC
