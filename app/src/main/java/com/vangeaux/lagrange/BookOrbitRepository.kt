@@ -1410,6 +1410,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     override suspend fun loadReaderProgress(
         book: BookSummary,
         availableFiles: List<BookFileOption>
+    ): BookSummary = fetchReaderProgress(book.copy(serverProgressPercent = null), availableFiles)
+
+    private suspend fun fetchReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
     ): BookSummary = withContext(Dispatchers.IO) {
         if (book.fileId == null) return@withContext book
         if (book.mediaKind == MediaKind.AUDIO) {

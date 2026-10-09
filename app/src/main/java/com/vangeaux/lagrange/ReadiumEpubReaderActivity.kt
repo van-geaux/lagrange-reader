@@ -1176,8 +1176,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             ?: initialLocator(openedPublication)
         // Start the session where the reader actually opens, so reaching it is not counted as reading.
         readingSessionReporter.start(
-            initialLocator.locations.totalProgression?.let { (it.coerceIn(0.0, 1.0) * 100.0).toFloat() }
-                ?: intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
+            readiumOverallPercent(
+                totalProgression = initialLocator.locations.totalProgression,
+                resourceProgression = initialLocator.locations.progression,
+                chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
+                    link.url().isEquivalent(initialLocator.href.removeFragment())
+                }.coerceAtLeast(0),
+                chapterCount = openedPublication.readingOrder.size
+            )
         )
         val paginationListener = object : EpubNavigatorFragment.PaginationListener {
             override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
@@ -2618,7 +2624,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (!isPreview) locatorStore.save(readerKey, locator)
         if (resumedFromServer) {
             resumedFromServer = false
-            ttsPositionStore.remove(readerKey)
+            if (!hasActiveTtsSession()) ttsPositionStore.remove(readerKey)
         }
         readingSessionReporter.activity(currentPercent)
         updateResult()
