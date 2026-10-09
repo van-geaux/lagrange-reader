@@ -15,6 +15,9 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -174,6 +177,39 @@ class ComicSpreadReaderInstrumentedTest {
         val coverWidth = requests.first { it.first == 0 }.second
         val pairedWidth = requests.first { it.first == 1 }.second
         assertTrue("cover $coverWidth vs paired $pairedWidth", coverWidth >= pairedWidth * 2 - 1)
+    }
+
+    @Test
+    fun pinchZoomLocksPageSwipesUntilZoomedBackOut() {
+        val recorder = Recorder()
+        setReader(recorder, initialPage = 2)
+        val reader = composeRule.onNodeWithContentDescription("Pages 2 and 3")
+
+        reader.performTouchInput {
+            pinch(
+                start0 = center - Offset(20f, 0f),
+                end0 = center - Offset(200f, 0f),
+                start1 = center + Offset(20f, 0f),
+                end1 = center + Offset(200f, 0f)
+            )
+        }
+        composeRule.waitForIdle()
+        reader.performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+        assertEquals("zoomed spread must not page", ComicSpread(listOf(1, 2)), recorder.spreads.last())
+
+        reader.performTouchInput {
+            pinch(
+                start0 = center - Offset(250f, 0f),
+                end0 = center - Offset(5f, 0f),
+                start1 = center + Offset(250f, 0f),
+                end1 = center + Offset(5f, 0f)
+            )
+        }
+        composeRule.waitForIdle()
+        reader.performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+        assertEquals(ComicSpread(listOf(3, 4)), recorder.spreads.last())
     }
 
     @Test

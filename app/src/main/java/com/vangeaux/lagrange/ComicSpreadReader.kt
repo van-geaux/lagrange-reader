@@ -270,11 +270,13 @@ private fun ComicSpreadPage(
             .pointerInput(spread) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
+                    // Gesture-local scale: the hoisted value only updates after recomposition.
+                    var scale = currentZoom
                     do {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.count { it.pressed }
-                        if (pressed >= 2 || currentZoom > 1.01f) {
-                            val nextScale = boundedComicImageScale(currentZoom * event.calculateZoom())
+                        if (pressed >= 2 || scale > 1.01f) {
+                            val nextScale = boundedComicImageScale(scale * event.calculateZoom())
                             val nextOffset = boundedComicImagePan(
                                 offset + event.calculatePan(),
                                 size.width.toFloat(),
@@ -282,9 +284,11 @@ private fun ComicSpreadPage(
                                 nextScale
                             )
                             if (nextScale <= 1.01f) {
+                                scale = 1f
                                 onZoomChange(1f)
                                 offset = Offset.Zero
                             } else {
+                                scale = nextScale
                                 onZoomChange(nextScale)
                                 offset = nextOffset
                             }
