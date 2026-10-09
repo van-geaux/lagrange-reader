@@ -177,8 +177,12 @@ internal fun ttsSelectionMatches(
     currentUtterance: String,
     targetText: String
 ): Boolean {
-    if (targetSelector != null) return currentSelector == targetSelector
-    return currentUtterance.lowercase().replace(Regex("\\s+"), " ").trim().contains(targetText)
+    val normalizedUtterance = currentUtterance
+        .lowercase()
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    if (targetText.isNotBlank()) return normalizedUtterance.contains(targetText)
+    return targetSelector != null && currentSelector == targetSelector
 }
 
 @OptIn(ExperimentalReadiumApi::class)
