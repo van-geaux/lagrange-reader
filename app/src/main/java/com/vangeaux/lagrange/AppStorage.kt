@@ -33,8 +33,8 @@ internal class AppStorageManager private constructor(
         )
     }
 
-    suspend fun clearDisposableCache() = withContext(Dispatchers.IO) {
-        deleteChildren(File(filesDir, "cover_cache"))
+    suspend fun clearDisposableCache(includeCoverCache: Boolean = true) = withContext(Dispatchers.IO) {
+        if (includeCoverCache) deleteChildren(File(filesDir, "cover_cache"))
         deleteChildren(cacheDir)
     }
 

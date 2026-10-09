@@ -3,14 +3,21 @@ package com.vangeaux.lagrange
 
 
 import android.content.Context
+import android.webkit.CookieManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.WorkManager
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import okio.Buffer
 import okhttp3.mockwebserver.Dispatcher
@@ -21,6 +28,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -83,6 +91,389 @@ class BookOrbitRepositoryIntegrationTest {
         assertEquals("GET", sessionRequest.method)
         assertEquals("/api/v1/auth/me", sessionRequest.path)
         assertEquals("Bearer integration-token", sessionRequest.getHeader("Authorization"))
+    }
+
+    @Test
+    fun catalogImagesAuthenticateOnlyToTheConfiguredOrigin() = runBlocking {
+        val external = MockWebServer().apply { start() }
+        try {
+            server.enqueue(
+                jsonResponse("""{"accessToken":"catalog-token"}""")
+                    .setHeader("Set-Cookie", "bookorbit_session=private; Path=/")
+            )
+            repository.login("reader", "secret")
+            server.takeRequest(5, TimeUnit.SECONDS)!!
+
+            server.enqueue(MockResponse().setBody("same-origin-image"))
+            assertEquals(
+                "same-origin-image",
+                requireNotNull(
+                    repository.loadCatalogImage(server.url("/same-origin.jpg").toString())
+                ).decodeToString()
+            )
+            val sameOriginRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("Bearer catalog-token", sameOriginRequest.getHeader("Authorization"))
+            assertTrue(
+                sameOriginRequest.getHeader("Cookie").orEmpty()
+                    .contains("bookorbit_session=private")
+            )
+
+            external.enqueue(MockResponse().setBody("external-image"))
+            assertEquals(
+                "external-image",
+                requireNotNull(
+                    repository.loadCatalogImage(external.url("/external.jpg").toString())
+                ).decodeToString()
+            )
+            val externalRequest = external.takeRequest(5, TimeUnit.SECONDS)!!
+            assertNull(externalRequest.getHeader("Authorization"))
+            assertNull(externalRequest.getHeader("Cookie"))
+        } finally {
+            external.shutdown()
+        }
+    }
+
+    @Test
+    fun catalogImagesPreserveCookiePathsAndSameOriginCookieUpdates() = runBlocking {
+        server.enqueue(
+            jsonResponse("""{"accessToken":"catalog-token"}""")
+                .setHeader("Set-Cookie", "image_session=initial; Path=/api/images")
+        )
+        repository.login("reader", "secret")
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+
+        server.enqueue(
+            MockResponse()
+                .setBody("first-image")
+                .setHeader("Set-Cookie", "image_session=rotated; Path=/api/images")
+        )
+        repository.loadCatalogImage(server.url("/api/images/first.jpg").toString())
+        assertTrue(
+            server.takeRequest(5, TimeUnit.SECONDS)!!
+                .getHeader("Cookie").orEmpty()
+                .contains("image_session=initial")
+        )
+
+        server.enqueue(MockResponse().setBody("outside-path"))
+        repository.loadCatalogImage(server.url("/outside.jpg").toString())
+        assertNull(server.takeRequest(5, TimeUnit.SECONDS)!!.getHeader("Cookie"))
+
+        server.enqueue(MockResponse().setBody("second-image"))
+        repository.loadCatalogImage(server.url("/api/images/second.jpg").toString())
+        assertTrue(
+            server.takeRequest(5, TimeUnit.SECONDS)!!
+                .getHeader("Cookie").orEmpty()
+                .contains("image_session=rotated")
+        )
+    }
+
+    @Test
+    fun catalogImageRedirectCannotRegainCredentialsAfterCrossingOrigin() = runBlocking {
+        val external = MockWebServer().apply { start() }
+        try {
+            server.enqueue(
+                jsonResponse("""{"accessToken":"catalog-token"}""")
+                    .setHeader("Set-Cookie", "bookorbit_session=private; Path=/")
+            )
+            repository.login("reader", "secret")
+            server.takeRequest(5, TimeUnit.SECONDS)!!
+
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", external.url("/external-hop"))
+            )
+            external.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", server.url("/returned-to-server.jpg"))
+                    .setHeader("Set-Cookie", "external_cookie=bad; Path=/")
+            )
+            server.enqueue(
+                MockResponse()
+                    .setBody("redirected-image")
+                    .setHeader("Set-Cookie", "returned_cookie=bad; Path=/")
+            )
+
+            assertEquals(
+                "redirected-image",
+                requireNotNull(
+                    repository.loadCatalogImage(server.url("/start.jpg").toString())
+                ).decodeToString()
+            )
+            val initialRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+            val externalRequest = external.takeRequest(5, TimeUnit.SECONDS)!!
+            val returnedRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("Bearer catalog-token", initialRequest.getHeader("Authorization"))
+            assertNull(externalRequest.getHeader("Authorization"))
+            assertNull(externalRequest.getHeader("Cookie"))
+            assertNull(returnedRequest.getHeader("Authorization"))
+            assertNull(returnedRequest.getHeader("Cookie"))
+
+            server.enqueue(MockResponse().setBody("verification-image"))
+            repository.loadCatalogImage(server.url("/verification.jpg").toString())
+            val verificationRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertTrue(
+                !verificationRequest.getHeader("Cookie").orEmpty()
+                    .contains("returned_cookie=bad")
+            )
+            assertTrue(
+                !CookieManager.getInstance()
+                    .getCookie(external.url("/verification.jpg").toString()).orEmpty()
+                    .contains("external_cookie=bad")
+            )
+        } finally {
+            external.shutdown()
+        }
+    }
+
+    @Test
+    fun externalCatalogImageRedirectDoesNotUpgradeToServerCredentials() = runBlocking {
+        val external = MockWebServer().apply { start() }
+        try {
+            server.enqueue(
+                jsonResponse("""{"accessToken":"catalog-token"}""")
+                    .setHeader("Set-Cookie", "bookorbit_session=private; Path=/")
+            )
+            repository.login("reader", "secret")
+            server.takeRequest(5, TimeUnit.SECONDS)!!
+
+            external.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", server.url("/external-return.jpg"))
+            )
+            server.enqueue(MockResponse().setBody("external-redirect"))
+
+            assertEquals(
+                "external-redirect",
+                requireNotNull(
+                    repository.loadCatalogImage(external.url("/external-start.jpg").toString())
+                ).decodeToString()
+            )
+            val externalRequest = external.takeRequest(5, TimeUnit.SECONDS)!!
+            val serverRequest = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertNull(externalRequest.getHeader("Authorization"))
+            assertNull(externalRequest.getHeader("Cookie"))
+            assertNull(serverRequest.getHeader("Authorization"))
+            assertNull(serverRequest.getHeader("Cookie"))
+        } finally {
+            external.shutdown()
+        }
+    }
+
+    @Test
+    fun catalogImageRejectsOversizedDeclaredResponse() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody("not-read")
+                .setHeader("Content-Length", MAX_COVER_IMAGE_RESPONSE_BYTES + 1)
+        )
+
+        assertThrows(UserFacingException::class.java) {
+            runBlocking {
+                repository.loadCatalogImage(server.url("/oversized.jpg").toString())
+            }
+        }
+    }
+
+    @Test
+    fun redirectedComicPageUsesTheLimitForTheFinalUrl() = runBlocking {
+        val external = MockWebServer().apply { start() }
+        try {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", external.url("/ordinary-image.jpg"))
+            )
+            external.enqueue(
+                MockResponse()
+                    .setBody("not-read")
+                    .setHeader("Content-Length", MAX_COVER_IMAGE_RESPONSE_BYTES + 1)
+            )
+
+            assertThrows(UserFacingException::class.java) {
+                runBlocking {
+                    repository.loadCatalogImage(
+                        server.url("/api/v1/cbz/files/file-1/pages/0").toString()
+                    )
+                }
+            }
+        } finally {
+            external.shutdown()
+        }
+    }
+
+    @Test
+    fun concurrentCoverMissesShareOneNetworkRequest() = runBlocking {
+        val workerRepository = BookOrbitRepository(context)
+        val coverUrl = server.url("/api/v1/books/book-1/thumbnail").toString()
+        val book = BookSummary("library-1", "book-1", null, "Book", coverUrl = coverUrl)
+        server.enqueue(MockResponse().setBody("shared-cover"))
+
+        val results = coroutineScope {
+            listOf(
+                async { repository.loadBookCover(book) },
+                async { workerRepository.loadBookCover(book) }
+            ).awaitAll()
+        }
+
+        assertEquals(listOf("shared-cover", "shared-cover"), results.map { it?.decodeToString() })
+        assertEquals(
+            "/api/v1/books/book-1/thumbnail",
+            server.takeRequest(5, TimeUnit.SECONDS)!!.path
+        )
+        assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun coverCacheDoesNotCrossAccountsOnTheSameServer() = runBlocking {
+        val secondRepository = BookOrbitRepository(context)
+        val coverUrl = server.url("/api/v1/books/book-1/thumbnail").toString()
+        val book = BookSummary("library-1", "book-1", null, "Book", coverUrl = coverUrl)
+        server.enqueue(jsonResponse("""{"accessToken":"account-a"}"""))
+        repository.login("account-a", "secret")
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+        server.enqueue(MockResponse().setBody("account-a-cover"))
+        assertEquals("account-a-cover", repository.loadBookCover(book)?.decodeToString())
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+
+        server.enqueue(jsonResponse("""{"accessToken":"account-b"}"""))
+        secondRepository.login("account-b", "secret")
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+        server.enqueue(MockResponse().setBody("account-b-cover"))
+
+        assertEquals("account-b-cover", secondRepository.loadBookCover(book)?.decodeToString())
+        assertEquals(
+            "Bearer account-b",
+            server.takeRequest(5, TimeUnit.SECONDS)!!.getHeader("Authorization")
+        )
+    }
+
+    @Test
+    fun sameServerAccountSwitchDuringImage401CannotRetryWithTheNewToken() = runBlocking {
+        val secondRepository = BookOrbitRepository(context)
+        val imageEntered = CountDownLatch(1)
+        val releaseImage = CountDownLatch(1)
+        val imageRequests = AtomicInteger(0)
+        val observedAuthorization = AtomicReference<String?>()
+        server.enqueue(jsonResponse("""{"accessToken":"account-a"}"""))
+        repository.login("account-a", "secret")
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return if (request.path == "/api/v1/auth/login") {
+                    jsonResponse("""{"accessToken":"account-b"}""")
+                } else {
+                    imageRequests.incrementAndGet()
+                    observedAuthorization.set(request.getHeader("Authorization"))
+                    imageEntered.countDown()
+                    releaseImage.await(5, TimeUnit.SECONDS)
+                    MockResponse().setResponseCode(401)
+                }
+            }
+        }
+
+        try {
+            val pending = async {
+                runCatching {
+                    repository.loadCatalogImage(server.url("/delayed-image.jpg").toString())
+                }
+            }
+            assertTrue(imageEntered.await(5, TimeUnit.SECONDS))
+            secondRepository.login("account-b", "secret")
+            repeat(2) { server.takeRequest(5, TimeUnit.SECONDS)!! }
+            releaseImage.countDown()
+
+            assertTrue(pending.await().isFailure)
+            assertEquals(1, imageRequests.get())
+            assertEquals("Bearer account-a", observedAuthorization.get())
+        } finally {
+            releaseImage.countDown()
+        }
+    }
+
+    @Test
+    fun staleImageResponseCannotRestoreThePreviousAccountsCookie() = runBlocking {
+        val secondRepository = BookOrbitRepository(context)
+        val imageEntered = CountDownLatch(1)
+        val releaseImage = CountDownLatch(1)
+        server.enqueue(
+            jsonResponse("""{"accessToken":"account-a"}""")
+                .setHeader("Set-Cookie", "account_session=account-a; Path=/")
+        )
+        repository.login("account-a", "secret")
+        server.takeRequest(5, TimeUnit.SECONDS)!!
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                "/api/v1/auth/login" -> jsonResponse("""{"accessToken":"account-b"}""")
+                    .setHeader("Set-Cookie", "account_session=account-b; Path=/")
+                "/delayed-image.jpg" -> {
+                    imageEntered.countDown()
+                    releaseImage.await(5, TimeUnit.SECONDS)
+                    MockResponse()
+                        .setBody("stale-image")
+                        .setHeader("Set-Cookie", "account_session=account-a-late; Path=/")
+                }
+                else -> MockResponse().setBody("verification-image")
+            }
+        }
+
+        try {
+            val pending = async {
+                runCatching {
+                    repository.loadCatalogImage(server.url("/delayed-image.jpg").toString())
+                }
+            }
+            assertTrue(imageEntered.await(5, TimeUnit.SECONDS))
+            secondRepository.login("account-b", "secret")
+            repeat(2) { server.takeRequest(5, TimeUnit.SECONDS)!! }
+            releaseImage.countDown()
+            assertTrue(pending.await().isFailure)
+
+            secondRepository.loadCatalogImage(server.url("/verification.jpg").toString())
+            val verification = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertTrue(
+                verification.getHeader("Cookie").orEmpty()
+                    .contains("account_session=account-b")
+            )
+            assertTrue(
+                !verification.getHeader("Cookie").orEmpty()
+                    .contains("account-a-late")
+            )
+        } finally {
+            releaseImage.countDown()
+        }
+    }
+
+    @Test
+    fun cacheClearRejectsAndDoesNotStoreADelayedCoverResponse() = runBlocking {
+        val workerRepository = BookOrbitRepository(context)
+        val imageEntered = CountDownLatch(1)
+        val releaseImage = CountDownLatch(1)
+        val imageRequests = AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val count = imageRequests.incrementAndGet()
+                if (count == 1) {
+                    imageEntered.countDown()
+                    releaseImage.await(5, TimeUnit.SECONDS)
+                    return MockResponse().setBody("stale-cover")
+                }
+                return MockResponse().setBody("fresh-cover")
+            }
+        }
+        val coverUrl = server.url("/api/v1/books/book-1/thumbnail").toString()
+        val book = BookSummary("library-1", "book-1", null, "Book", coverUrl = coverUrl)
+
+        val pending = async { runCatching { workerRepository.loadBookCover(book) } }
+        assertTrue(imageEntered.await(5, TimeUnit.SECONDS))
+        repository.clearAppCache()
+        releaseImage.countDown()
+
+        assertTrue(pending.await().isFailure)
+        assertEquals("fresh-cover", repository.loadBookCover(book)?.decodeToString())
+        assertEquals(2, imageRequests.get())
     }
 
     @Test
