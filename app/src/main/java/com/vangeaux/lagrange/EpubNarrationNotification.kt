@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 
@@ -46,7 +47,8 @@ internal fun buildEpubNarrationNotification(
         }
     }
     val builder = NotificationCompat.Builder(context, EPUB_NARRATION_NOTIFICATION_CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.ic_media_play)
+        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.drawable.ic_launcher_foreground))
         .setContentTitle(title)
         .setContentText(detail)
         .setContentIntent(contentIntent)

@@ -186,6 +186,7 @@ class EpubTtsPlaybackService : Service() {
     private var preparedRequestId: Long? = null
     private lateinit var mediaSession: MediaSessionCompat
     private var generation = 0L
+    private var requestedPlaybackState: Boolean? = null
     private var lastQueuedAtMillis = 0L
     private var lastQueuedPercent: Float? = null
     private var lastQueuedChapter = -1
@@ -209,6 +210,7 @@ class EpubTtsPlaybackService : Service() {
         fun play(ownerToken: String? = null) {
             if (!isOwner(ownerToken)) return
             val active = navigator ?: return
+            requestedPlaybackState = true
             active.play()
             if (navigator !== active) return
             publish { it.copy(isPlaying = true) }
@@ -219,6 +221,7 @@ class EpubTtsPlaybackService : Service() {
         fun pause(ownerToken: String? = null) {
             if (!isOwner(ownerToken)) return
             val active = navigator ?: return
+            requestedPlaybackState = false
             active.pause()
             if (navigator !== active) return
             publish { it.copy(isPlaying = false) }
@@ -558,10 +561,15 @@ class EpubTtsPlaybackService : Service() {
                         )
                     }
                     TtsNavigator.State.Ready, null -> {
-                        binder.publish { it.copy(isPlaying = playback.playWhenReady) }
-                        updatePlaybackWakeLock(playback.playWhenReady)
+                        val requested = requestedPlaybackState
+                        if (requested == playback.playWhenReady) {
+                            requestedPlaybackState = null
+                        }
+                        val isPlaying = requestedPlaybackState ?: playback.playWhenReady
+                        binder.publish { it.copy(isPlaying = isPlaying) }
+                        updatePlaybackWakeLock(isPlaying)
                         publishNavigatorCapabilities()
-                        updateNotification()
+                        updateNotification(isPlayingOverride = isPlaying)
                     }
                 }
             }
@@ -653,6 +661,7 @@ class EpubTtsPlaybackService : Service() {
     private fun failSession(requestGeneration: Long, kind: EpubTtsFailureKind) {
         if (generation != requestGeneration) return
         openingJob = null
+        requestedPlaybackState = null
         playbackJob?.cancel()
         playbackJob = null
         locationJob?.cancel()
@@ -721,6 +730,7 @@ class EpubTtsPlaybackService : Service() {
         completedOwnerToken: String? = null
     ) {
         generation += 1
+        requestedPlaybackState = null
         openingJob?.cancel()
         openingJob = null
         playbackJob?.cancel()
