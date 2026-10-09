@@ -2208,6 +2208,45 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `change server validates the current session before saving it`() = runTest {
+        val events = mutableListOf<String>()
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl).apply {
+            onSessionState = { events += "current-session" }
+        }
+        val replacementRepository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Authenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        ).apply {
+            onSessionState = { events += "target-session" }
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacementRepository },
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean {
+                        events += "save"
+                        return true
+                    }
+
+                    override suspend fun restoreCurrentProfileSession(): Boolean {
+                        events += "restore"
+                        return true
+                    }
+                }
+            }
+        )
+
+        coordinator.changeServer("https://target.example.test")
+        advanceUntilIdle()
+
+        assertEquals(listOf("current-session", "save", "restore", "target-session"), events)
+    }
+
+    @Test
     fun `change server leaves the replacement prefilled when its validation fails`() = runTest {
         val replacement = "https://unreachable.example.test"
         val repository = FakeBookOrbitDataSource(
@@ -3127,6 +3166,7 @@ private class FakeBookOrbitDataSource(
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
     var sessionStateCalls = 0
+    var onSessionState: (() -> Unit)? = null
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
     val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
@@ -3157,6 +3197,7 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun getSessionState(): SessionState {
+        onSessionState?.invoke()
         sessionStateRequested = true
         sessionStateGate?.await()
         val result = sessionStateSequence.getOrNull(sessionStateCalls) ?: sessionState

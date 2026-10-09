@@ -641,6 +641,11 @@ class AppCoordinator internal constructor(
             // catalog/local-book state remain visible during the switch.
             _screen.value = AppScreen.Startup("Switching server…")
             val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
+            // Give the current provider one last authenticated request before its
+            // profile session is persisted. BookOrbit can renew an expired access
+            // token from this request; saving first would preserve the stale token
+            // while the user is using another provider.
+            runCatching { repository.getSessionState() }
             providerSessionModule()?.saveCurrentProfileSession()
             _fullAudioPlayerBook.value = null
             closeAccountBoundPlayback()
