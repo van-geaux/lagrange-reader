@@ -82,6 +82,31 @@ class EpubTtsPlaybackServiceTest {
     }
 
     @Test
+    fun `notification shows the current utterance while TTS is active`() {
+        val state = EpubTtsServiceState(
+            readerKey = "book",
+            isPlaying = true,
+            utterance = "The sentence currently being read."
+        )
+
+        assertEquals(
+            "The sentence currently being read.",
+            epubTtsNotificationDetail(state, isPlaying = true)
+        )
+    }
+
+    @Test
+    fun `notification keeps status text when no utterance is available`() {
+        assertEquals(
+            "Reading aloud",
+            epubTtsNotificationDetail(
+                EpubTtsServiceState(readerKey = "book", isPlaying = true),
+                isPlaying = true
+            )
+        )
+    }
+
+    @Test
     fun `new start and cancellation invalidate every older start request`() {
         val first = EpubTtsRequestSession.begin()
         val second = EpubTtsRequestSession.begin()

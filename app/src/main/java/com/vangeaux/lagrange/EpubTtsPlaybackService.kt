@@ -105,6 +105,7 @@ internal data class EpubTtsServiceState(
     val readerKey: String? = null,
     val title: String? = null,
     val locator: Locator? = null,
+    val utterance: String? = null,
     val isPreparing: Boolean = false,
     val isPlaying: Boolean = false,
     val canGoPrevious: Boolean = false,
@@ -157,6 +158,17 @@ internal fun epubTtsExposedTitle(state: EpubTtsServiceState): String =
     } else {
         "Text to speech"
     }
+
+internal fun epubTtsNotificationDetail(
+    state: EpubTtsServiceState,
+    isPlaying: Boolean
+): String = when {
+    state.failure != null -> "Text to speech needs attention"
+    state.isPreparing -> "Preparing text to speech"
+    !state.utterance.isNullOrBlank() -> state.utterance
+    isPlaying -> "Reading aloud"
+    else -> "Text to speech paused"
+}
 
 /** Owns EPUB speech independently of any Activity so rotation, lock and screen-off are harmless. */
 @OptIn(ExperimentalReadiumApi::class)
@@ -556,9 +568,12 @@ class EpubTtsPlaybackService : Service() {
         }
         locationJob = scope.launch {
             active.location
-                .map { it.utteranceLocator }
-                .distinctUntilChanged()
-                .collect { locator ->
+                .distinctUntilChanged { previous, current ->
+                    previous.utteranceLocator == current.utteranceLocator &&
+                        previous.utterance == current.utterance
+                }
+                .collect { location ->
+                    val locator = location.utteranceLocator
                     if (navigator !== active || generation != requestGeneration) return@collect
                     if (!isSpecCurrent(spec)) {
                         closeStaleSession(spec)
@@ -567,7 +582,9 @@ class EpubTtsPlaybackService : Service() {
                     ReadiumEpubTtsPositionStore(applicationContext).save(spec.readerKey, locator)
                     ReadiumEpubLocatorStore(applicationContext).save(spec.readerKey, locator)
                     if (binder.state.value.isPlaying) updatePlaybackWakeLock(isPlaying = true)
-                    binder.publish { it.copy(locator = locator) }
+                    binder.publish {
+                        it.copy(locator = locator, utterance = location.utterance)
+                    }
                     publishNavigatorCapabilities()
                     queueServerProgress(spec, openedPublication, locator)
                 }
@@ -826,12 +843,7 @@ class EpubTtsPlaybackService : Service() {
         val notification = buildEpubNarrationNotification(
             context = this,
             title = notificationTitle,
-            detail = when {
-                state.failure != null -> "Text to speech needs attention"
-                state.isPreparing -> "Preparing text to speech"
-                isPlaying -> "Reading aloud"
-                else -> "Text to speech paused"
-            },
+            detail = epubTtsNotificationDetail(state, isPlaying),
             isPlaying = isPlaying && active,
             contentIntent = appLaunchIntent(),
             actions = actions,
