@@ -1921,10 +1921,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 )
             }
         }
-        if (!localOnly && savedBook.mediaKind == MediaKind.EPUB && session.launchMode == ReaderLaunchMode.NORMAL) {
-            // Another device may have read on while this one was closed; the reader compares it with its locator.
-            bookForRestore = runCatching { loadReaderProgress(savedBook, emptyList()) }.getOrDefault(savedBook)
-        }
         val localResolution = resolveReadableFile(bookForRestore, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
         if (localOnly && localFile == null) {
@@ -1956,15 +1952,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }.getOrElse {
             return@withContext null
         }
-        val latestProgress = queuedAudioProgress ?: latestKnownProgress(
-            serverUrl,
-            bookForRestore.id,
-            bookForRestore.fileId,
-            bookForRestore.mediaKind
-        )
         val restoredProgress = resolveRestoredReaderProgress(
             book = bookForRestore,
-            latestProgress = latestProgress
+            latestProgress = queuedAudioProgress ?: latestKnownProgress(
+                serverUrl,
+                bookForRestore.id,
+                bookForRestore.fileId,
+                bookForRestore.mediaKind
+            )
         )
         ReaderState(
             book = if (localFile != null) {
@@ -1979,7 +1974,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             pageIndex = restoredProgress.pageIndex,
             readerPageIndex = savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
-            lastReportedProgressPercent = normalizeStoredProgressPercent(latestProgress?.progressPercent),
             launchMode = session.launchMode,
             audioFiles = audioFiles,
             audioTotalDurationMs = audioTotalDurationMs

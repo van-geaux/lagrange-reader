@@ -2533,12 +2533,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             intent.removeExtra(EXTRA_SERVER_PROGRESS_PERCENT)
             if (stored != null && serverPercent == null) return stored
             if (stored != null) {
-                val storedTotal = stored.locations.totalProgression ?: progressionFromPositions(
-                    resourceProgression = stored.locations.progression,
-                    resourcePositions = bookPositions
-                        .filter { it.href.removeFragment().isEquivalent(stored.href.removeFragment()) }
-                        .map { it.locations.progression to it.locations.totalProgression }
-                )
+                val storedTotal = locatorTotalProgression(stored)
                 val serverProgressWins = shouldPreferServerProgress(
                     serverPercent = serverPercent,
                     lastReportedPercent = intent.getFloatExtra(EXTRA_LAST_REPORTED_PERCENT, Float.NaN)
@@ -2605,19 +2600,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
     }
 
-    /** Overall percent of a locator, using the book's own positions when it carries no total progression. */
-    private fun locatorOverallPercent(openedPublication: Publication, locator: Locator): Float {
-        val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
-            link.url().isEquivalent(locator.href.removeFragment())
-        }.coerceAtLeast(0)
-        val total = locator.locations.totalProgression ?: progressionFromPositions(
+    /** Total progression of a locator, read from the book's own positions when it carries none. */
+    private fun locatorTotalProgression(locator: Locator): Double? =
+        locator.locations.totalProgression ?: progressionFromPositions(
             resourceProgression = locator.locations.progression,
             resourcePositions = bookPositions
                 .filter { it.href.removeFragment().isEquivalent(locator.href.removeFragment()) }
                 .map { it.locations.progression to it.locations.totalProgression }
         )
+
+    /** Overall percent of a locator, using the book's own positions when it carries no total progression. */
+    private fun locatorOverallPercent(openedPublication: Publication, locator: Locator): Float {
+        val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
+            link.url().isEquivalent(locator.href.removeFragment())
+        }.coerceAtLeast(0)
         return readiumOverallPercent(
-            totalProgression = total,
+            totalProgression = locatorTotalProgression(locator),
             resourceProgression = locator.locations.progression,
             chapterIndex = chapterIndex,
             chapterCount = openedPublication.readingOrder.size
@@ -2630,16 +2628,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             link.url().isEquivalent(locator.href.removeFragment())
         }.takeIf { it >= 0 } ?: currentChapter
         currentChapter = chapterIndex.coerceIn(0, openedPublication.readingOrder.lastIndex)
-        currentPercent = readiumOverallPercent(
-            totalProgression = locator.locations.totalProgression,
-            resourceProgression = locator.locations.progression,
-            chapterIndex = currentChapter,
-            chapterCount = openedPublication.readingOrder.size
-        )
+        currentPercent = locatorOverallPercent(openedPublication, locator)
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
-        if (resumedFromServer) {
+        // The service binds asynchronously; wait for it so narration already playing is not mistaken for none.
+        if (resumedFromServer && ttsServiceBinder != null) {
             resumedFromServer = false
             if (!bookNarrationActive()) {
                 lastTtsLocator = null
