@@ -171,6 +171,16 @@ internal fun epubTtsNotificationDetail(
 }
 
 /** Owns EPUB speech independently of any Activity so rotation, lock and screen-off are harmless. */
+internal fun ttsSelectionMatches(
+    currentSelector: String?,
+    targetSelector: String?,
+    currentUtterance: String,
+    targetText: String
+): Boolean {
+    if (targetSelector != null) return currentSelector == targetSelector
+    return currentUtterance.lowercase().replace(Regex("\\s+"), " ").trim().contains(targetText)
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 class EpubTtsPlaybackService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -515,8 +525,7 @@ class EpubTtsPlaybackService : Service() {
         repeat(100) {
             val location = active.location.value
             val currentSelector = location.utteranceLocator.locations["cssSelector"] as? String
-            if (targetSelector != null && currentSelector != targetSelector) return
-            if (location.utterance.normaliseTtsText().contains(target)) return
+            if (ttsSelectionMatches(currentSelector, targetSelector, location.utterance, target)) return
             if (!active.hasNextUtterance()) return
             active.skipToNextUtterance()
             delay(10)

@@ -107,6 +107,38 @@ class EpubTtsPlaybackServiceTest {
     }
 
     @Test
+    fun `tts selection matching advances until the selected paragraph selector`() {
+        assertFalse(
+            ttsSelectionMatches(
+                currentSelector = "body > p:nth-of-type(1)",
+                targetSelector = "body > p:nth-of-type(3)",
+                currentUtterance = "First sentence.",
+                targetText = "Selected word"
+            )
+        )
+        assertTrue(
+            ttsSelectionMatches(
+                currentSelector = "body > p:nth-of-type(3)",
+                targetSelector = "body > p:nth-of-type(3)",
+                currentUtterance = "Third sentence.",
+                targetText = "Selected word"
+            )
+        )
+    }
+
+    @Test
+    fun `tts selection matching falls back to selected text without a selector`() {
+        assertTrue(
+            ttsSelectionMatches(
+                currentSelector = null,
+                targetSelector = null,
+                currentUtterance = "The selected word is here.",
+                targetText = "selected word"
+            )
+        )
+    }
+
+    @Test
     fun `new start and cancellation invalidate every older start request`() {
         val first = EpubTtsRequestSession.begin()
         val second = EpubTtsRequestSession.begin()
