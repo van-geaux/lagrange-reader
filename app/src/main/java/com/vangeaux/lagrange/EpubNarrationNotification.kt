@@ -26,7 +26,6 @@ internal fun buildEpubNarrationNotification(
     detail: String,
     isPlaying: Boolean,
     contentIntent: PendingIntent,
-    mediaSessionToken: android.support.v4.media.session.MediaSessionCompat.Token,
     actions: EpubNarrationNotificationActions,
     visibility: Int = NotificationCompat.VISIBILITY_PUBLIC
 ): Notification {
@@ -75,16 +74,7 @@ internal fun buildEpubNarrationNotification(
         builder.addAction(android.R.drawable.ic_media_next, "Next narration sentence", it)
     }
     builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", actions.close)
-    val compactIndices = buildList {
-        if (actions.previous != null) add(0)
-        add(if (actions.previous != null) 1 else 0)
-        if (actions.next != null) add(if (actions.previous != null) 2 else 1)
-    }
-    return builder.setStyle(
-        MediaNotificationCompat.MediaStyle()
-            .setMediaSession(mediaSessionToken)
-            .setShowActionsInCompactView(*compactIndices.toIntArray())
-    ).build()
+    return builder.build()
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -120,6 +110,42 @@ internal fun buildEpubNarrationMediaAnchorNotification(
     return builder.setStyle(
         MediaNotificationCompat.MediaStyle()
             .setMediaSession(mediaSession.getSessionCompatToken())
+            .setShowActionsInCompactView(*compactIndices.toIntArray())
+    ).build()
+}
+
+internal fun buildEpubNarrationCompatMediaAnchorNotification(
+    context: Context,
+    title: String,
+    contentIntent: PendingIntent,
+    mediaSessionToken: android.support.v4.media.session.MediaSessionCompat.Token,
+    actions: EpubNarrationNotificationActions,
+    isPlaying: Boolean
+): Notification {
+    val builder = NotificationCompat.Builder(context, EPUB_NARRATION_NOTIFICATION_CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_media_play)
+        .setContentTitle(title)
+        .setContentText("EPUB narration")
+        .setContentIntent(contentIntent)
+        .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+        .setOnlyAlertOnce(true)
+        .setOngoing(isPlaying)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+    actions.previous?.let { builder.addAction(android.R.drawable.ic_media_previous, "Previous", it) }
+    builder.addAction(
+        if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+        if (isPlaying) "Pause" else "Play",
+        actions.playPause
+    )
+    actions.next?.let { builder.addAction(android.R.drawable.ic_media_next, "Next", it) }
+    val compactIndices = buildList {
+        if (actions.previous != null) add(0)
+        add(if (actions.previous != null) 1 else 0)
+        if (actions.next != null) add(if (actions.previous != null) 2 else 1)
+    }
+    return builder.setStyle(
+        MediaNotificationCompat.MediaStyle()
+            .setMediaSession(mediaSessionToken)
             .setShowActionsInCompactView(*compactIndices.toIntArray())
     ).build()
 }

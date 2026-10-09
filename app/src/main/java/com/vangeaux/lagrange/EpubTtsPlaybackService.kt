@@ -737,6 +737,8 @@ class EpubTtsPlaybackService : Service() {
         }
         if (removeNotification) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            getSystemService(NotificationManager::class.java)
+                ?.cancel(EPUB_NARRATION_MEDIA_NOTIFICATION_ID)
         }
         if (stopService) stopSelf()
     }
@@ -804,6 +806,23 @@ class EpubTtsPlaybackService : Service() {
         val notificationTitle = if (exposeTitle) title else epubTtsExposedTitle(state)
         val stopIntent = serviceAction(ACTION_STOP, 4)
         val active = state.failure == null && !state.isPreparing && state.readerKey != null
+        val actions = EpubNarrationNotificationActions(
+            previous = serviceAction(ACTION_PREVIOUS, 1).takeIf { active && state.canGoPrevious },
+            playPause = serviceAction(if (isPlaying) ACTION_PAUSE else ACTION_PLAY, 2),
+            next = serviceAction(ACTION_NEXT, 3).takeIf { active && state.canGoNext },
+            close = stopIntent
+        )
+        getSystemService(NotificationManager::class.java)?.notify(
+            EPUB_NARRATION_MEDIA_NOTIFICATION_ID,
+            buildEpubNarrationCompatMediaAnchorNotification(
+                context = this,
+                title = notificationTitle,
+                contentIntent = appLaunchIntent(),
+                mediaSessionToken = mediaSession.sessionToken,
+                actions = actions,
+                isPlaying = isPlaying && active
+            )
+        )
         val notification = buildEpubNarrationNotification(
             context = this,
             title = notificationTitle,
@@ -815,13 +834,7 @@ class EpubTtsPlaybackService : Service() {
             },
             isPlaying = isPlaying && active,
             contentIntent = appLaunchIntent(),
-            mediaSessionToken = mediaSession.sessionToken,
-            actions = EpubNarrationNotificationActions(
-                previous = serviceAction(ACTION_PREVIOUS, 1).takeIf { active && state.canGoPrevious },
-                playPause = serviceAction(if (isPlaying) ACTION_PAUSE else ACTION_PLAY, 2),
-                next = serviceAction(ACTION_NEXT, 3).takeIf { active && state.canGoNext },
-                close = stopIntent
-            ),
+            actions = actions,
             visibility = if (exposeTitle) {
                 NotificationCompat.VISIBILITY_PUBLIC
             } else {
