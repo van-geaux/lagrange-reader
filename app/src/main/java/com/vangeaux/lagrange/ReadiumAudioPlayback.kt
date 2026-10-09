@@ -84,8 +84,6 @@ internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO
 internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_FORWARD_30"
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
-private const val READALONG_NOTIFICATION_ID = 4102
-private const val READALONG_NOTIFICATION_CHANNEL_ID = "readalong_playback"
 private const val READALONG_SESSION_PREFIX = "epub-readalong:"
 private const val READALONG_PREVIOUS_ACTION = "com.vangeaux.lagrange.READALONG_PREVIOUS"
 private const val READALONG_NEXT_ACTION = "com.vangeaux.lagrange.READALONG_NEXT"
@@ -234,7 +232,7 @@ private class ReadAlongMediaNotificationProvider(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager?.createNotificationChannel(
                 NotificationChannel(
-                    READALONG_NOTIFICATION_CHANNEL_ID,
+                    EPUB_NARRATION_NOTIFICATION_CHANNEL_ID,
                     "Read-along playback",
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
@@ -260,108 +258,58 @@ private class ReadAlongMediaNotificationProvider(
         }
 
         val player = mediaSession.player
-        val metadata = player.mediaMetadata
-        val views = RemoteViews(context.packageName, R.layout.notification_readalong).apply {
-            setTextViewText(
-                R.id.readalong_sentence,
-                metadata.artist ?: "Read-along"
-            )
-        }
-        val cardBuilder = NotificationCompat.Builder(context, READALONG_NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(null)
-            .setContentText(null)
-            .setContentIntent(mediaSession.sessionActivity)
-            .setCustomContentView(views)
-            .setCustomBigContentView(views)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setOnlyAlertOnce(true)
-            .setOngoing(player.isPlaying)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
-        addCustomAction(
-            cardBuilder,
-            views,
+        val previous = actionFactory.createCustomAction(
             mediaSession,
-            actionFactory,
-            readAlongPreviousSessionCommand,
-            android.R.drawable.ic_media_previous,
+            IconCompat.createWithResource(context, android.R.drawable.ic_media_previous),
             "Previous narration sentence",
-            R.id.readalong_previous
-        )
-        addAction(
-            cardBuilder,
-            views,
+            readAlongPreviousSessionCommand.customAction,
+            readAlongPreviousSessionCommand.customExtras
+        ).actionIntent?.takeIf { player.currentMediaItemIndex > 0 }
+        val next = actionFactory.createCustomAction(
             mediaSession,
-            actionFactory,
-            Player.COMMAND_PLAY_PAUSE,
-            if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            if (player.isPlaying) "Pause narration" else "Play narration",
-            R.id.readalong_play_pause
-        )
-        addCustomAction(
-            cardBuilder,
-            views,
-            mediaSession,
-            actionFactory,
-            readAlongNextSessionCommand,
-            android.R.drawable.ic_media_next,
+            IconCompat.createWithResource(context, android.R.drawable.ic_media_next),
             "Next narration sentence",
-            R.id.readalong_next
-        )
-        return MediaNotification(READALONG_NOTIFICATION_ID, cardBuilder.build())
-    }
-
-    private fun addAction(
-        builder: NotificationCompat.Builder,
-        views: RemoteViews?,
-        mediaSession: MediaSession,
-        actionFactory: MediaNotification.ActionFactory,
-        command: Int,
-        iconRes: Int,
-        label: String,
-        viewId: Int
-    ) {
-        if (!mediaSession.player.isCommandAvailable(command)) return
-        val action = actionFactory.createMediaAction(
+            readAlongNextSessionCommand.customAction,
+            readAlongNextSessionCommand.customExtras
+        ).actionIntent?.takeIf { player.currentMediaItemIndex + 1 < player.mediaItemCount }
+        val playPause = actionFactory.createMediaAction(
             mediaSession,
-            IconCompat.createWithResource(context, iconRes),
-            label,
-            command
-        )
-        builder.addAction(action)
-        views?.apply {
-            setImageViewResource(viewId, iconRes)
-            setOnClickPendingIntent(viewId, action.actionIntent)
-        }
-    }
-
-    private fun addCustomAction(
-        builder: NotificationCompat.Builder,
-        views: RemoteViews,
-        mediaSession: MediaSession,
-        actionFactory: MediaNotification.ActionFactory,
-        command: SessionCommand,
-        iconRes: Int,
-        label: String,
-        viewId: Int
-    ) {
-        val action = actionFactory.createCustomAction(
+            IconCompat.createWithResource(
+                context,
+                if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            ),
+            if (player.isPlaying) "Pause narration" else "Play narration",
+            Player.COMMAND_PLAY_PAUSE
+        ).actionIntent ?: error("Read-along play/pause action was unavailable")
+        val close = actionFactory.createMediaAction(
             mediaSession,
-            IconCompat.createWithResource(context, iconRes),
-            label,
-            command.customAction,
-            command.customExtras
+            IconCompat.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
+            "Close narration",
+            Player.COMMAND_STOP
+        ).actionIntent ?: playPause
+        val sessionActivity = mediaSession.sessionActivity
+            ?: error("Read-along session activity was unavailable")
+        val actions = EpubNarrationNotificationActions(previous, playPause, next, close)
+        return MediaNotification(
+            EPUB_NARRATION_NOTIFICATION_ID,
+            buildEpubNarrationNotification(
+                context,
+                player.mediaMetadata.title?.toString() ?: "Read-along",
+                player.mediaMetadata.artist?.toString() ?: "Read-along",
+                player.isPlaying,
+                sessionActivity,
+                actions
+            )
         )
-        builder.addAction(action)
-        views.setImageViewResource(viewId, iconRes)
-        views.setOnClickPendingIntent(viewId, action.actionIntent)
     }
 
     companion object {
         fun cancelSentenceNotification(context: Context) {
             context.getSystemService(NotificationManager::class.java)
-                ?.cancel(READALONG_NOTIFICATION_ID)
+                ?.apply {
+                    cancel(EPUB_NARRATION_NOTIFICATION_ID)
+                    cancel(EPUB_NARRATION_MEDIA_NOTIFICATION_ID)
+                }
         }
     }
 

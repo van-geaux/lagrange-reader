@@ -82,6 +82,75 @@ class EpubTtsPlaybackServiceTest {
     }
 
     @Test
+    fun `notification shows the current utterance while TTS is active`() {
+        val state = EpubTtsServiceState(
+            readerKey = "book",
+            isPlaying = true,
+            utterance = "The sentence currently being read."
+        )
+
+        assertEquals(
+            "The sentence currently being read.",
+            epubTtsNotificationDetail(state, isPlaying = true)
+        )
+    }
+
+    @Test
+    fun `notification keeps status text when no utterance is available`() {
+        assertEquals(
+            "Reading aloud",
+            epubTtsNotificationDetail(
+                EpubTtsServiceState(readerKey = "book", isPlaying = true),
+                isPlaying = true
+            )
+        )
+    }
+
+    @Test
+    fun `tts selection matching prefers selected text over paragraph selector`() {
+        assertFalse(
+            ttsSelectionMatches(
+                currentSelector = "body > p:nth-of-type(3)",
+                targetSelector = "body > p:nth-of-type(3)",
+                currentUtterance = "The first sentence in this paragraph.",
+                targetText = "selected word"
+            )
+        )
+        assertTrue(
+            ttsSelectionMatches(
+                currentSelector = "body > p:nth-of-type(3)",
+                targetSelector = "body > p:nth-of-type(3)",
+                currentUtterance = "The selected word is in this sentence.",
+                targetText = "selected word"
+            )
+        )
+    }
+
+    @Test
+    fun `tts selection matching falls back to selected text without a selector`() {
+        assertTrue(
+            ttsSelectionMatches(
+                currentSelector = null,
+                targetSelector = null,
+                currentUtterance = "The selected word is here.",
+                targetText = "selected word"
+            )
+        )
+    }
+
+    @Test
+    fun `tts selection matching uses selector only without selected text`() {
+        assertTrue(
+            ttsSelectionMatches(
+                currentSelector = "body > p:nth-of-type(3)",
+                targetSelector = "body > p:nth-of-type(3)",
+                currentUtterance = "Any sentence.",
+                targetText = ""
+            )
+        )
+    }
+
+    @Test
     fun `new start and cancellation invalidate every older start request`() {
         val first = EpubTtsRequestSession.begin()
         val second = EpubTtsRequestSession.begin()
