@@ -10,6 +10,8 @@ On 2026-10-04, the user confirmed the shared filter-surface behavior for BookOrb
 
 On 2026-10-06, the user confirmed Komga server web OIDC sign-in on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610061026.apk` against `https://komga.alredho.com` under issue [#225](https://github.com/van-geaux/lagrange-reader/issues/225). The confirmation covers the Komga login WebView, identity-provider handoff, callback, and authenticated server-session return; it does not cover native AppAuth/Custom Tabs or independent validation of server-side protocol protections.
 
+On 2026-10-09, the user confirmed the saved-session provider-switch path on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610092219.apk` against the configured BookOrbit and Komga profiles under issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268). Switching to Komga, waiting five minutes, and returning to BookOrbit restored BookOrbit Home without login. This confirms the implemented server-selection/session-restoration function for both provider directions; it does not independently validate general provider token-expiry behavior.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -50,7 +52,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Module | Function | Manual/UI surface | BookOrbit | Komga | Evidence or note |
 |---|---|---|---:|---:|---|
 | Server selection | Server type selection | Server URL input | S | S | Explicit provider profile selection exists. |
-| Server selection | Server profile and switching | Change Server | S | S | Provider ID is stored with the profile. |
+| Server selection | Server profile and switching | Change Server | S | S | Provider ID is stored with the profile. User-confirmed under issue #268 after a five-minute Komga idle interval and return to BookOrbit. |
 | Server detection | Reachability and validation | URL validation/login entry | S | S | Provider-specific resolver selection. |
 | Authentication | Username/password login | Login screen | S | S | BookOrbit session flow; Komga Basic Auth. |
 | Authentication | OIDC/SSO login | Login screen/browser callback | S | S | Komga server web login is opened in the in-app WebView; user-confirmed under issue #225. Native AppAuth/Custom Tabs remain out of scope. |
