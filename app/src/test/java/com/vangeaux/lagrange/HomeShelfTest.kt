@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.komga.komgaReadState
+import com.vangeaux.lagrange.provider.komga.komgaReadActivityMillis
 import com.vangeaux.lagrange.provider.komga.komgaReaderProgressBook
 import com.vangeaux.lagrange.provider.komga.komgaReaderPageIndex
 import com.vangeaux.lagrange.provider.komga.komgaProgressionLocatorJson
@@ -21,6 +22,192 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HomeShelfTest {
+    @Test
+    fun `generated On deck requires the synced provider setting`() {
+        val books = listOf(
+            seriesBook("read", 1.0, status = BookReadStatus.READ, isRead = true),
+            seriesBook("next", 2.0)
+        )
+
+        assertTrue(generatedOnDeckBooks(books, enabled = false, limit = null).isEmpty())
+        assertEquals(listOf("next"), generatedOnDeckBooks(books, enabled = true, limit = null).map { it.id })
+    }
+
+    @Test
+    fun `recently updated series See all retains the complete Home catalog`() {
+        val novel = seriesBook("novel", 1.0).copy(
+            libraryId = "books",
+            seriesId = "novel-series",
+            seriesName = "Novel series",
+            updatedAtMillis = 400L
+        )
+        val comic = seriesBook("comic", 1.0).copy(
+            libraryId = "comics",
+            seriesId = "comic-series",
+            seriesName = "Comic series",
+            updatedAtMillis = 300L
+        )
+
+        val source = homeSeriesSeeAllSourceBooks(
+            section = HomeSection.RECENTLY_UPDATED_SERIES,
+            completeCatalog = listOf(novel, comic),
+            fetchedRecentPage = listOf(comic)
+        )
+
+        assertEquals(
+            listOf("novel-series", "comic-series"),
+            homeSeriesSummaries(source, useUpdatedAt = true).map { it.id }
+        )
+    }
+
+    @Test
+    fun `komga reading activity prefers progress modification time and falls back to read date`() {
+        assertEquals(
+            1_791_201_600_000L,
+            komgaReadActivityMillis(
+                JSONObject(
+                    """{"lastModified":"2026-10-05T12:00:00Z","readDate":"2026-10-04T12:00:00Z"}"""
+                )
+            )
+        )
+        assertEquals(
+            1_791_115_200_000L,
+            komgaReadActivityMillis(JSONObject("""{"readDate":"2026-10-04T12:00:00Z"}"""))
+        )
+    }
+
+    @Test
+    fun `currently reading sorts newest reading activity first`() {
+        val undatedHighProgress = seriesBook(
+            "book-undated",
+            index = 1.0,
+            status = BookReadStatus.READING
+        ).copy(progressPercent = 95f)
+        val older = seriesBook("book-older", index = 2.0, status = BookReadStatus.READING)
+            .copy(lastReadAtMillis = 100L, progressPercent = 90f)
+        val newest = seriesBook("book-newest", index = 3.0, status = BookReadStatus.REREADING)
+            .copy(lastReadAtMillis = 300L, progressPercent = 1f)
+        val middle = seriesBook("book-middle", index = 4.0, status = BookReadStatus.READING)
+            .copy(lastReadAtMillis = 200L, progressPercent = 10f)
+
+        assertEquals(
+            listOf(newest, middle, older, undatedHighProgress),
+            currentlyReadingBooks(listOf(undatedHighProgress, older, newest, middle), limit = null)
+        )
+        assertEquals(
+            listOf(newest, middle, older, undatedHighProgress),
+            sortCurrentlyReadingBooks(listOf(undatedHighProgress, older, newest, middle))
+        )
+    }
+
+    @Test
+    fun `BookOrbit recently added series uses import sequence instead of configurable file date`() {
+        val earlyImportedSeries = listOf(
+            seriesBook("100", 1.0, addedAt = 5_000L),
+            seriesBook("200", 2.0, addedAt = 6_000L)
+        ).map { it.copy(seriesId = "series-old", seriesName = "Older series") }
+        val laterImportedSeries = listOf(
+            seriesBook("900", 1.0, addedAt = 100L)
+        ).map { it.copy(seriesId = "series-new", seriesName = "Newer series") }
+        val books = earlyImportedSeries + laterImportedSeries
+        val serverSeries = listOf(
+            SeriesSummary(id = "series-old", name = "Older series", lastAddedAtMillis = 6_000L),
+            SeriesSummary(id = "series-new", name = "Newer series", lastAddedAtMillis = 100L)
+        )
+
+        assertEquals(
+            listOf("series-new", "series-old"),
+            homeSeriesSummaries(
+                books = books,
+                useUpdatedAt = false,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("series-new", "series-old"),
+            homeSeriesPreview(
+                series = serverSeries,
+                books = books,
+                limit = Int.MAX_VALUE,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+    }
+
+    @Test
+    fun `later BookOrbit volume does not promote an old series`() {
+        val oldSeries = listOf(
+            seriesBook("100", 1.0, addedAt = 100L),
+            seriesBook("1200", 2.0, addedAt = 3_000L)
+        ).map { it.copy(seriesId = "series-old", seriesName = "Old series") }
+        val newSeries = listOf(
+            seriesBook("900", 1.0, addedAt = 2_000L)
+        ).map { it.copy(seriesId = "series-new", seriesName = "New series") }
+
+        assertEquals(
+            listOf("series-new", "series-old"),
+            homeSeriesSummaries(
+                books = oldSeries + newSeries,
+                useUpdatedAt = false,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+    }
+
+    @Test
+    fun `authoritative series absent from selected library stays excluded`() {
+        val selectedLibraryBook = seriesBook("900", 1.0, addedAt = 100L).copy(
+            libraryId = "selected-library",
+            seriesId = "series-selected",
+            seriesName = "Selected series"
+        )
+        val serverSeries = listOf(
+            SeriesSummary(id = "series-selected", name = "Selected series", lastAddedAtMillis = 100L),
+            SeriesSummary(id = "series-other", name = "Other library series", lastAddedAtMillis = 5_000L)
+        )
+
+        assertEquals(
+            listOf("series-selected"),
+            homeSeriesPreview(
+                series = serverSeries,
+                books = listOf(selectedLibraryBook),
+                limit = Int.MAX_VALUE,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+    }
+
+    @Test
+    fun `nonnumeric book IDs retain timestamp fallback and updated series remains timestamp ordered`() {
+        val older = seriesBook("old-book", 1.0, addedAt = 100L).copy(
+            seriesId = "old-series",
+            seriesName = "Old series",
+            updatedAtMillis = 5_000L
+        )
+        val newer = seriesBook("new-book", 1.0, addedAt = 200L).copy(
+            seriesId = "new-series",
+            seriesName = "New series",
+            updatedAtMillis = 1_000L
+        )
+
+        assertEquals(
+            listOf("new-series", "old-series"),
+            homeSeriesSummaries(
+                books = listOf(older, newer),
+                useUpdatedAt = false,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+        assertEquals(
+            listOf("old-series", "new-series"),
+            homeSeriesSummaries(
+                books = listOf(older, newer),
+                useUpdatedAt = true,
+                preferBookOrbitImportSequence = true
+            ).map { it.id }
+        )
+    }
+
     @Test
     fun `home section library scope uses all libraries only for server-wide surfaces`() {
         val libraries = listOf(

@@ -5030,12 +5030,25 @@ private fun HomeFeed(
     // library Recommended feed instead of reusing aggregate contents.
     val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
     val currentlyReadingAll = remember(libraryScopedBooks, serverShelves) {
-        if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
-        else currentlyReadingBooks(libraryScopedBooks, limit = null)
+        if (serverShelves.isServerProvided) {
+            sortCurrentlyReadingBooks(
+                serverShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
+            )
+        } else {
+            currentlyReadingBooks(libraryScopedBooks, limit = null)
+        }
     }
-    val onDeckAll = remember(libraryScopedBooks, serverShelves) {
+    val onDeckAll = remember(
+        libraryScopedBooks,
+        serverShelves,
+        state.homeShelfPreferences.onDeckEnabled
+    ) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
-        else onDeckBooks(libraryScopedBooks, limit = null)
+        else generatedOnDeckBooks(
+            books = libraryScopedBooks,
+            enabled = state.homeShelfPreferences.onDeckEnabled,
+            limit = null
+        )
     }
     val wantToReadAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.WANT_TO_READ].orEmpty()
@@ -5052,7 +5065,14 @@ private fun HomeFeed(
                 .thenByDescending { it.addedAtMillis ?: 0L }
         )
     }
-    val fallbackRecentSeries = remember(libraryScopedBooks) { homeSeriesSummaries(libraryScopedBooks, useUpdatedAt = false) }
+    val preferBookOrbitImportSequence = !serverShelves.isServerProvided
+    val fallbackRecentSeries = remember(libraryScopedBooks, preferBookOrbitImportSequence) {
+        homeSeriesSummaries(
+            books = libraryScopedBooks,
+            useUpdatedAt = false,
+            preferBookOrbitImportSequence = preferBookOrbitImportSequence
+        )
+    }
     val authoritativeRecentSeries by produceState<List<SeriesSummary>?>(
         initialValue = null,
         libraryScopedBooks,
@@ -5089,13 +5109,15 @@ private fun HomeFeed(
                 }
             }.distinctBy { it.id },
             books = seriesBooks,
-            limit = Int.MAX_VALUE
+            limit = Int.MAX_VALUE,
+            preferBookOrbitImportSequence = false
         )
     } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
             books = libraryScopedBooks,
-            limit = Int.MAX_VALUE
+            limit = Int.MAX_VALUE,
+            preferBookOrbitImportSequence = true
         )
     }
     val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
@@ -6014,19 +6036,29 @@ private fun HomeSeriesSectionScreen(
             }.getOrNull()
             return@LaunchedEffect
         }
+        // The Home preview is built from the complete cached catalog. Replacing it
+        // with page zero from each library made See all lose series in large libraries.
+        if (section == HomeSection.RECENTLY_UPDATED_SERIES) {
+            sourceBooks = homeSeriesSeeAllSourceBooks(section, books, emptyList())
+            return@LaunchedEffect
+        }
         val libraryIds = if (serverWide) {
             state.libraries.map { it.id }
         } else {
             listOfNotNull(state.selectedLibraryId)
         }
-        sourceBooks = libraryIds.flatMap { libraryId ->
+        val loadedBooks = libraryIds.flatMap { libraryId ->
             runCatching { recentBooksPageLoader(libraryId, section, 0).items }.getOrDefault(emptyList())
         }.distinctBy { it.id to it.fileId }
+        sourceBooks = homeSeriesSeeAllSourceBooks(section, books, loadedBooks)
     }
-    val fallbackSeries = remember(sourceBooks, section) {
+    val preferBookOrbitImportSequence =
+        section == HomeSection.RECENTLY_ADDED_SERIES && !state.homeShelves.isServerProvided
+    val fallbackSeries = remember(sourceBooks, section, preferBookOrbitImportSequence) {
         homeSeriesSummaries(
             books = sourceBooks,
-            useUpdatedAt = section == HomeSection.RECENTLY_UPDATED_SERIES
+            useUpdatedAt = section == HomeSection.RECENTLY_UPDATED_SERIES,
+            preferBookOrbitImportSequence = preferBookOrbitImportSequence
         )
     }
     val series = if (
@@ -6034,7 +6066,12 @@ private fun HomeSeriesSectionScreen(
         serverWide &&
         section == HomeSection.RECENTLY_ADDED_SERIES
     ) {
-        homeSeriesPreview(authoritativeSeries!!, books = books, limit = Int.MAX_VALUE)
+        homeSeriesPreview(
+            series = authoritativeSeries!!,
+            books = books,
+            limit = Int.MAX_VALUE,
+            preferBookOrbitImportSequence = preferBookOrbitImportSequence
+        )
     } else {
         authoritativeSeries ?: fallbackSeries
     }
@@ -6118,10 +6155,19 @@ private fun HomeSectionScreen(
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?
 ) {
-    val localSectionBooks = remember(books, section) {
+    val localSectionBooks = remember(
+        books,
+        section,
+        state.homeShelfPreferences.onDeckEnabled,
+        state.homeShelves.isServerProvided
+    ) {
         when (section) {
             HomeSection.CURRENTLY_READING -> currentlyReadingBooks(books, limit = null)
-            HomeSection.ON_DECK -> onDeckBooks(books, limit = null)
+            HomeSection.ON_DECK -> generatedOnDeckBooks(
+                books = books,
+                enabled = state.homeShelfPreferences.onDeckEnabled || state.homeShelves.isServerProvided,
+                limit = null
+            )
             HomeSection.WANT_TO_READ -> wantToReadBooks(books, limit = null)
             HomeSection.RECENTLY_ADDED_BOOKS -> books.sortedWith(
                 compareByDescending<BookSummary> { it.addedAtMillis != null }
@@ -10304,14 +10350,32 @@ internal fun currentlyReadingBooks(
             it.readStatus == BookReadStatus.READING ||
                 it.readStatus == BookReadStatus.REREADING
         }
-        .sortedWith(
-            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
-                .thenByDescending { it.progressPercent ?: 0f }
-                .thenByDescending { it.updatedAtMillis ?: 0L }
-                .thenBy { it.title.lowercase() }
-        )
+        .let(::sortCurrentlyReadingBooks)
         .let { result -> limit?.let(result::take) ?: result }
 }
+
+internal fun generatedOnDeckBooks(
+    books: List<BookSummary>,
+    enabled: Boolean,
+    limit: Int? = HOME_PREVIEW_LIMIT
+): List<BookSummary> = if (enabled) onDeckBooks(books, limit) else emptyList()
+
+/** Keeps the full Home catalog behind the Recently updated series preview and See all views. */
+internal fun homeSeriesSeeAllSourceBooks(
+    section: HomeSection,
+    completeCatalog: List<BookSummary>,
+    fetchedRecentPage: List<BookSummary>
+): List<BookSummary> = if (section == HomeSection.RECENTLY_UPDATED_SERIES) {
+    completeCatalog
+} else {
+    fetchedRecentPage
+}
+
+internal fun sortCurrentlyReadingBooks(books: List<BookSummary>): List<BookSummary> =
+    books.sortedWith(
+        compareByDescending<BookSummary> { it.lastReadAtMillis != null }
+            .thenByDescending { it.lastReadAtMillis ?: 0L }
+    )
 
 internal fun recentlyReadBooks(
     books: List<BookSummary>,
@@ -10359,21 +10423,27 @@ internal fun librarySeriesCount(
 
 internal fun homeSeriesSummaries(
     books: List<BookSummary>,
-    useUpdatedAt: Boolean
+    useUpdatedAt: Boolean,
+    preferBookOrbitImportSequence: Boolean = false
 ): List<SeriesSummary> {
     val grouped = books
         .filter { !it.seriesName.isNullOrBlank() }
         .groupBy { it.seriesId ?: it.seriesName.orEmpty() }
     return grouped.mapNotNull { (seriesKey, members) ->
-        val representative = if (useUpdatedAt) {
-            members.maxByOrNull { it.updatedAtMillis ?: 0L }
-        } else {
-            members.minByOrNull { it.addedAtMillis ?: Long.MAX_VALUE }
-        } ?: return@mapNotNull null
+        val introductionOrder = seriesIntroductionOrder(members, preferBookOrbitImportSequence)
+        val representative = (
+            if (useUpdatedAt) {
+                members.maxByOrNull { it.updatedAtMillis ?: 0L }
+            } else if (introductionOrder.importSequence != null) {
+                members.minByOrNull { it.bookOrbitImportSequence() ?: Long.MAX_VALUE }
+            } else {
+                members.minByOrNull { it.addedAtMillis ?: Long.MAX_VALUE }
+            }
+        ) ?: return@mapNotNull null
         val timestamp = if (useUpdatedAt) representative.updatedAtMillis else representative.addedAtMillis
-        if (timestamp == null) return@mapNotNull null
+        if (timestamp == null && (useUpdatedAt || introductionOrder.importSequence == null)) return@mapNotNull null
         val name = representative.seriesName.orEmpty()
-        SeriesSummary(
+        val summary = SeriesSummary(
             id = seriesKey,
             name = name,
             authors = members.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct(),
@@ -10388,52 +10458,111 @@ internal fun homeSeriesSummaries(
                 }
             )
         )
-    }.sortedByDescending { it.lastAddedAtMillis ?: 0L }
+        summary to if (useUpdatedAt) {
+            SeriesIntroductionOrder(fallbackAddedAtMillis = timestamp)
+        } else {
+            introductionOrder
+        }
+    }.sortedWith { (leftSummary, leftOrder), (rightSummary, rightOrder) ->
+        compareSeriesIntroductionOrder(leftOrder, rightOrder)
+            .takeUnless { it == 0 }
+            ?: compareValues(leftSummary.name.lowercase(), rightSummary.name.lowercase())
+    }.map { (summary, _) -> summary }
 }
 
 internal fun homeSeriesPreview(
     series: List<SeriesSummary>,
     books: List<BookSummary>? = null,
-    limit: Int = HOME_PREVIEW_LIMIT
+    limit: Int = HOME_PREVIEW_LIMIT,
+    preferBookOrbitImportSequence: Boolean = false
 ): List<SeriesSummary> {
     val uniqueSeries = series.groupBy { it.id }
         .values
         .mapNotNull { entries -> entries.maxByOrNull { it.lastAddedAtMillis ?: 0L } }
-    val firstAddedBySeries: Map<String, Long> = books?.let { sourceBooks ->
-        buildList {
-            sourceBooks.forEach { book ->
-                val timestamp = book.addedAtMillis ?: return@forEach
-                book.seriesId?.takeIf(String::isNotBlank)?.let { add(it to timestamp) }
-                book.seriesName?.trim()?.takeIf(String::isNotBlank)?.let { add(it to timestamp) }
-            }
-        }
-            .groupBy({ (key, _) -> key }, { (_, timestamp) -> timestamp })
-            .mapValues { (_, timestamps) -> timestamps.min() }
-    } ?: emptyMap()
+    val introductionOrderBySeries = books?.let { sourceBooks ->
+        seriesIntroductionOrdersByKey(sourceBooks, preferBookOrbitImportSequence)
+    }.orEmpty()
     return uniqueSeries
         .mapNotNull { summary ->
-            val timestamp = if (books == null) {
-                summary.lastAddedAtMillis
+            val order = if (books == null) {
+                SeriesIntroductionOrder(fallbackAddedAtMillis = summary.lastAddedAtMillis)
             } else {
-                firstAddedBySeries[summary.id]
-                    ?: firstAddedBySeries[summary.name.trim()]
+                introductionOrderBySeries[summary.id]
+                    ?: introductionOrderBySeries[summary.name.trim()]
+                    ?: return@mapNotNull null
             }
-            timestamp?.let { timestamp to summary }
+            if (order.importSequence == null && order.fallbackAddedAtMillis == null) null else summary to order
         }
-        .sortedByDescending { (timestamp, _) -> timestamp }
-        .map { (_, summary) -> summary }
+        .sortedWith { (leftSummary, leftOrder), (rightSummary, rightOrder) ->
+            compareSeriesIntroductionOrder(leftOrder, rightOrder)
+                .takeUnless { it == 0 }
+                ?: compareValues(leftSummary.name.lowercase(), rightSummary.name.lowercase())
+        }
+        .map { (summary, _) -> summary }
         .take(limit)
 }
 
 internal fun homeSeriesShelfItems(
     series: List<SeriesSummary>,
     books: List<BookSummary>,
-    limit: Int = Int.MAX_VALUE
+    limit: Int = Int.MAX_VALUE,
+    preferBookOrbitImportSequence: Boolean = false
 ): List<Pair<String, BookSummary>> = homeSeriesPreview(
     enrichSeriesAvailableFormats(series, books),
     books = books,
-    limit = limit
+    limit = limit,
+    preferBookOrbitImportSequence = preferBookOrbitImportSequence
 ).map { item -> item.name to item.asShelfBook() }
+
+private data class SeriesIntroductionOrder(
+    val importSequence: Long? = null,
+    val fallbackAddedAtMillis: Long? = null
+)
+
+private fun BookSummary.bookOrbitImportSequence(): Long? = id.toLongOrNull()?.takeIf { it >= 0L }
+
+private fun seriesIntroductionOrder(
+    members: List<BookSummary>,
+    preferBookOrbitImportSequence: Boolean
+): SeriesIntroductionOrder = SeriesIntroductionOrder(
+    importSequence = if (preferBookOrbitImportSequence) {
+        members.mapNotNull(BookSummary::bookOrbitImportSequence).minOrNull()
+    } else {
+        null
+    },
+    fallbackAddedAtMillis = members.mapNotNull(BookSummary::addedAtMillis).minOrNull()
+)
+
+private fun seriesIntroductionOrdersByKey(
+    books: List<BookSummary>,
+    preferBookOrbitImportSequence: Boolean
+): Map<String, SeriesIntroductionOrder> {
+    val membersByKey = mutableMapOf<String, MutableList<BookSummary>>()
+    books.forEach { book ->
+        val keys = listOfNotNull(
+            book.seriesId?.takeIf(String::isNotBlank),
+            book.seriesName?.trim()?.takeIf(String::isNotBlank)
+        ).distinct()
+        keys.forEach { key -> membersByKey.getOrPut(key) { mutableListOf() }.add(book) }
+    }
+    return membersByKey.mapValues { (_, members) ->
+        seriesIntroductionOrder(members, preferBookOrbitImportSequence)
+    }
+}
+
+private fun compareSeriesIntroductionOrder(
+    left: SeriesIntroductionOrder,
+    right: SeriesIntroductionOrder
+): Int = when {
+    left.importSequence != null && right.importSequence != null ->
+        compareValues(right.importSequence, left.importSequence)
+    left.importSequence != null -> -1
+    right.importSequence != null -> 1
+    else -> compareValues(
+        right.fallbackAddedAtMillis ?: Long.MIN_VALUE,
+        left.fallbackAddedAtMillis ?: Long.MIN_VALUE
+    )
+}
 
 private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
     libraryId = "series",
