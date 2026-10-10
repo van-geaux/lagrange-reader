@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -375,7 +376,7 @@ class BookOrbitRepositoryIntegrationTest {
         }
 
         try {
-            val pending = async {
+            val pending = async(Dispatchers.IO) {
                 runCatching {
                     repository.loadCatalogImage(server.url("/delayed-image.jpg").toString())
                 }
@@ -420,7 +421,7 @@ class BookOrbitRepositoryIntegrationTest {
         }
 
         try {
-            val pending = async {
+            val pending = async(Dispatchers.IO) {
                 runCatching {
                     repository.loadCatalogImage(server.url("/delayed-image.jpg").toString())
                 }
@@ -466,7 +467,7 @@ class BookOrbitRepositoryIntegrationTest {
         val coverUrl = server.url("/api/v1/books/book-1/thumbnail").toString()
         val book = BookSummary("library-1", "book-1", null, "Book", coverUrl = coverUrl)
 
-        val pending = async { runCatching { workerRepository.loadBookCover(book) } }
+        val pending = async(Dispatchers.IO) { runCatching { workerRepository.loadBookCover(book) } }
         assertTrue(imageEntered.await(5, TimeUnit.SECONDS))
         repository.clearAppCache()
         releaseImage.countDown()
