@@ -254,6 +254,34 @@ internal fun shouldPreferServerProgress(
 }
 
 /**
+ * Tracks when the narration position stored on this device, replaced by newer server progress, can
+ * be dropped. That waits until the reader has moved to the server position and the narration service
+ * is connected, so narration of this book that is already running keeps its position. The service
+ * binds asynchronously, so either can happen first.
+ */
+internal class StaleNarrationPositionCleanup {
+    private var resumedFromServer = false
+    private var readerOnServerPosition = false
+
+    fun serverProgressWon() {
+        resumedFromServer = true
+        readerOnServerPosition = false
+    }
+
+    fun readerMoved() {
+        if (resumedFromServer) readerOnServerPosition = true
+    }
+
+    /** Whether to drop the stored narration position now; decided once per server resume. */
+    fun shouldDrop(serviceConnected: Boolean, narrationActive: () -> Boolean): Boolean {
+        if (!resumedFromServer || !readerOnServerPosition || !serviceConnected) return false
+        resumedFromServer = false
+        readerOnServerPosition = false
+        return !narrationActive()
+    }
+}
+
+/**
  * Overall progression (0..1) for a position inside one resource, read from the book's own positions
  * in that resource rather than assuming equal chapter lengths. Locators written by narration or
  * annotations lack a total progression and need this. Each candidate is (resource progression,
@@ -675,7 +703,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var ttsVoiceLanguageTag by mutableStateOf<String?>(null)
     private var ttsVoices by mutableStateOf<List<EpubTtsVoice>>(emptyList())
     private var lastTtsLocator: Locator? = null
-    private var resumedFromServer = false
+    private val staleNarrationPositionCleanup = StaleNarrationPositionCleanup()
     private var restoredTtsLocator: Locator? = null
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
@@ -1464,6 +1492,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             onConnected = { service ->
                 ttsServiceBinder = service
                 observeTtsService(service)
+                dropStaleNarrationPosition()
                 openPendingTtsSession()
             },
             onDisconnected = {
@@ -1571,6 +1600,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun bookNarrationActive(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
         state.readerKey == readerKey && state.hasSession
     } == true
+
+    /** Called from both updateLocation and the service connection, whichever completes the conditions last. */
+    private fun dropStaleNarrationPosition() {
+        if (staleNarrationPositionCleanup.shouldDrop(ttsServiceBinder != null, ::bookNarrationActive)) {
+            lastTtsLocator = null
+            ttsPositionStore.remove(readerKey)
+        }
+    }
 
     private fun hasActiveTtsSession(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
         state.ownerToken == ttsOwnerToken && state.readerKey == readerKey && state.hasSession
@@ -2543,8 +2580,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 if (!serverProgressWins) return stored
                 // Another device read on: its position replaces this device's, including where
                 // narration would resume. The stored narration position is dropped once the
-                // reader has actually moved, in updateLocation.
-                resumedFromServer = true
+                // reader has actually moved and the narration service is connected.
+                staleNarrationPositionCleanup.serverProgressWon()
                 return locatorFromPercent(
                     openedPublication,
                     initialPercent = serverPercent,
@@ -2632,14 +2669,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
-        // The service binds asynchronously; wait for it so narration already playing is not mistaken for none.
-        if (resumedFromServer && ttsServiceBinder != null) {
-            resumedFromServer = false
-            if (!bookNarrationActive()) {
-                lastTtsLocator = null
-                ttsPositionStore.remove(readerKey)
-            }
-        }
+        staleNarrationPositionCleanup.readerMoved()
+        dropStaleNarrationPosition()
         readingSessionReporter.activity(currentPercent)
         updateResult()
     }
