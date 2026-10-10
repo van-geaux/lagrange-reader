@@ -89,6 +89,7 @@ internal fun resolveProviderReaderModule(repository: BookOrbitDataSource): Reade
 internal fun resolveProviderHomeShelfModule(repository: BookOrbitDataSource): HomeShelfModule =
     if (repository is KomgaRepository) KomgaModuleSet(repository).home else object : HomeShelfModule {
         override suspend fun loadCachedHomeBooks() = repository.loadCachedHomeBooks()
+        override suspend fun loadHomeShelfPreferences() = repository.loadHomeShelfPreferences()
     }
 
 internal fun resolveProviderLibraryModule(repository: BookOrbitDataSource): LibraryModule =

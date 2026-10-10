@@ -329,6 +329,7 @@ interface BookOrbitDataSource {
         firstPage: LibraryBooksPage? = null
     ): LibraryBooksPage = (firstPage ?: loadBooksPage(libraryId, 0)).copy(isComplete = true)
     suspend fun loadCachedHomeBooks(): List<BookSummary> = emptyList()
+    suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -994,6 +995,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 .orEmpty()
         }
         books.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads)
+    }
+
+    override suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = withContext(Dispatchers.IO) {
+        runCatching {
+            BookOrbitPayloadParser.parseHomeShelfPreferences(
+                request("/api/v1/auth/me", "GET", null)
+            )
+        }.getOrDefault(HomeShelfPreferences())
     }
 
     override suspend fun refreshLibraryCatalog(
@@ -3480,6 +3489,32 @@ private class WebViewCookieJar : CookieJar {
 }
 
 internal object BookOrbitPayloadParser {
+    /**
+     * BookOrbit only promises dashboard layout to other clients when the user
+     * explicitly enabled cross-session syncing. Optional native shelves stay off
+     * when that preference is unavailable or malformed.
+     */
+    fun parseHomeShelfPreferences(payload: String): HomeShelfPreferences {
+        val root = runCatching { JSONObject(payload) }.getOrNull() ?: return HomeShelfPreferences()
+        val user = root.optJSONObject("user") ?: root
+        val dashboardConfig = user.optJSONObject("settings")
+            ?.optJSONObject("dashboardShelfConfig")
+            ?: return HomeShelfPreferences()
+        if (dashboardConfig.opt("syncAcrossSessions") !is Boolean ||
+            !dashboardConfig.optBoolean("syncAcrossSessions")
+        ) {
+            return HomeShelfPreferences()
+        }
+        val scrollers = dashboardConfig.optJSONArray("scrollers") ?: return HomeShelfPreferences()
+        val onDeckEnabled = (0 until scrollers.length()).any { index ->
+            val scroller = scrollers.optJSONObject(index) ?: return@any false
+            scroller.optString("type") == "up-next-in-series" &&
+                scroller.opt("enabled") is Boolean &&
+                scroller.optBoolean("enabled")
+        }
+        return HomeShelfPreferences(onDeckEnabled = onDeckEnabled)
+    }
+
     fun parseSmartScopes(payload: String): List<SmartScope> {
         val array = runCatching {
             when (val root = JSONTokener(payload).nextValue()) {

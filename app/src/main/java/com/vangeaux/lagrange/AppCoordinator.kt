@@ -1137,6 +1137,13 @@ class AppCoordinator internal constructor(
                 val homeShelves = runCatching {
                     homeShelfModule()?.loadHomeShelves()
                 }.getOrNull() ?: HomeShelfData()
+                // Dashboard settings are optional. Load them concurrently so a failed
+                // preference request cannot hold up the first library render.
+                val homeShelfPreferencesRequest = async {
+                    runCatching {
+                        homeShelfModule()?.loadHomeShelfPreferences()
+                    }.getOrNull() ?: HomeShelfPreferences()
+                }
                 var homeBooks = homeShelfModule()?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
@@ -1158,6 +1165,14 @@ class AppCoordinator internal constructor(
                     )
                 )
 
+                val homeShelfPreferences = homeShelfPreferencesRequest.await()
+                lastBrowserState
+                    ?.takeIf { it.serverUrl == serverUrl && it.selectedLibraryId == selectedLibrary }
+                    ?.takeIf { it.homeShelfPreferences != homeShelfPreferences }
+                    ?.let { current ->
+                        showBrowser(current.copy(homeShelfPreferences = homeShelfPreferences))
+                    }
+
                 val refreshedCatalog = repository.refreshLibraryCatalog(
                     libraryId = selectedLibrary,
                     firstPage = firstPage.takeUnless { it.isComplete }
@@ -1177,6 +1192,7 @@ class AppCoordinator internal constructor(
                         page = refreshedCatalog,
                         homeBooks = homeBooks,
                         homeShelves = homeShelves,
+                        homeShelfPreferences = homeShelfPreferences,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated && libraries.size > 1,
                         isCatalogSyncing = false
@@ -2071,6 +2087,18 @@ class AppCoordinator internal constructor(
                         homeBooks = current.homeBooks.map { currentBook ->
                             if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
                         },
+                        homeShelves = current.homeShelves.copy(
+                            booksBySection = current.homeShelves.booksBySection.mapValues { (_, books) ->
+                                books.map { currentBook ->
+                                    if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
+                                }
+                            },
+                            seriesBySection = current.homeShelves.seriesBySection.mapValues { (_, books) ->
+                                books.map { currentBook ->
+                                    if (currentBook.id == book.id) currentBook.withReadingStateReset() else currentBook
+                                }
+                            }
+                        ),
                         debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
                         message = successMessage
                     )
@@ -2088,7 +2116,7 @@ class AppCoordinator internal constructor(
         val shelves = runCatching { homeShelfModule()?.loadHomeShelves() }.getOrNull() ?: return
         if (!shelves.isServerProvided) return
         val current = lastBrowserState ?: return
-        showBrowser(current.copy(homeShelves = shelves))
+        showBrowser(current.copy(homeShelves = mergeKnownProgress(shelves)))
     }
 
     private fun findKnownBook(fileId: String): BookSummary? {
@@ -2258,7 +2286,8 @@ class AppCoordinator internal constructor(
             lastBrowserState?.let { browser ->
                 lastBrowserState = browser.copy(
                     books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
-                    homeBooks = mergeKnownProgress(browser.homeBooks, null)
+                    homeBooks = mergeKnownProgress(browser.homeBooks, null),
+                    homeShelves = mergeKnownProgress(browser.homeShelves)
                 )
             }
             if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
@@ -2371,6 +2400,7 @@ class AppCoordinator internal constructor(
                 browser.copy(
                     books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
                     homeBooks = mergeKnownProgress(browser.homeBooks, null),
+                    homeShelves = mergeKnownProgress(browser.homeShelves),
                     isRefreshing = true,
                     isLoadingLibraries = true,
                     isLoadingBooks = true,
@@ -2400,6 +2430,7 @@ class AppCoordinator internal constructor(
         page: LibraryBooksPage,
         homeBooks: List<BookSummary>? = null,
         homeShelves: HomeShelfData? = null,
+        homeShelfPreferences: HomeShelfPreferences? = null,
         pendingProgressCount: Int,
         isRefreshing: Boolean,
         isCatalogSyncing: Boolean
@@ -2411,7 +2442,12 @@ class AppCoordinator internal constructor(
             selectedLibraryId = libraryId,
             books = mergeKnownProgress(page.items, libraryId),
             homeBooks = mergeKnownProgress(homeBooks ?: transient?.homeBooks.orEmpty(), null),
-            homeShelves = homeShelves ?: transient?.homeShelves ?: HomeShelfData(),
+            homeShelves = mergeKnownProgress(
+                homeShelves ?: transient?.homeShelves ?: HomeShelfData()
+            ),
+            homeShelfPreferences = homeShelfPreferences
+                ?: transient?.homeShelfPreferences
+                ?: HomeShelfPreferences(),
             booksTotal = page.total,
             booksSeriesTotal = page.seriesTotal,
             booksPage = page.page ?: 0,
@@ -2556,6 +2592,15 @@ class AppCoordinator internal constructor(
             .toList()
         return merged + recentBooks
     }
+
+    private fun mergeKnownProgress(shelves: HomeShelfData): HomeShelfData = shelves.copy(
+        booksBySection = shelves.booksBySection.mapValues { (_, books) ->
+            mergeKnownProgress(books, null)
+        },
+        seriesBySection = shelves.seriesBySection.mapValues { (_, books) ->
+            mergeKnownProgress(books, null)
+        }
+    )
 
     private fun readingStatusAfterProgress(progressPercent: Float?): BookReadStatus = when {
         progressPercent != null && progressPercent >= 99.5f -> BookReadStatus.READ
