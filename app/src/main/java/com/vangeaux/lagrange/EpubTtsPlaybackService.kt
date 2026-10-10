@@ -269,6 +269,27 @@ class EpubTtsPlaybackService : Service() {
             if (!isOwner(ownerToken)) return
             val normalized = value.normalized()
             val previous = mutableState.value.settings
+            if (previous.images != normalized.images) {
+                val spec = activeSpec
+                if (spec != null) {
+                    val state = mutableState.value
+                    val replacement = spec.copy(
+                        initialLocator = navigator?.location?.value?.utteranceLocator
+                            ?: state.locator
+                            ?: spec.initialLocator,
+                        selectionText = null,
+                        playWhenReady = if (state.isPreparing) {
+                            spec.playWhenReady
+                        } else {
+                            state.isPlaying
+                        },
+                        settings = normalized
+                    )
+                    closeSession(removeNotification = false, stopService = false)
+                    openSession(replacement)
+                    return
+                }
+            }
             mutableState.value = mutableState.value.copy(settings = normalized)
             activeSpec = activeSpec?.copy(settings = normalized)
             navigator?.submitPreferences(
@@ -452,7 +473,13 @@ class EpubTtsPlaybackService : Service() {
         }
         promoteToForeground(spec.title, isPlaying = false)
         openingJob = scope.launch {
-            val opened = when (val result = openReadiumEpub(this@EpubTtsPlaybackService, File(spec.filePath))) {
+            val opened = when (
+                val result = openReadiumEpub(
+                    this@EpubTtsPlaybackService,
+                    File(spec.filePath),
+                    ttsImageSettings = spec.settings.images
+                )
+            ) {
                 is ReadiumEpubOpenResult.Opened -> result.publication
                 is ReadiumEpubOpenResult.Error -> {
                     failSession(requestGeneration, EpubTtsFailureKind.GENERIC)

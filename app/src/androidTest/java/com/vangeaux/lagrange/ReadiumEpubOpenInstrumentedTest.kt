@@ -1,3 +1,5 @@
+@file:OptIn(org.readium.r2.shared.ExperimentalReadiumApi::class)
+
 package com.vangeaux.lagrange
 
 import android.graphics.Bitmap
@@ -46,6 +48,8 @@ import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.publication.services.coverFitting
+import org.readium.r2.shared.publication.services.content.Content
+import org.readium.r2.shared.publication.services.content.content
 import org.readium.r2.shared.publication.services.positions
 
 @RunWith(AndroidJUnit4::class)
@@ -251,6 +255,69 @@ class ReadiumEpubOpenInstrumentedTest {
             delay(500L)
         } finally {
             opened.publication.close()
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun epubTtsImageSettingsFilterDecorativeAltPathsInAnOpenedPublication() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-tts-decorative-image.epub")
+        writeDecorativeImageEpub(epub)
+
+        val hidden = openReadiumEpub(
+            context,
+            epub,
+            ttsImageSettings = EpubTtsImageSettings()
+        ) as ReadiumEpubOpenResult.Opened
+        try {
+            val content = requireNotNull(hidden.publication.content())
+            val elements = content.elements()
+            assertEquals(
+                listOf("A sentence before the divider.", "After the divider."),
+                elements.filterIsInstance<Content.TextualElement>().mapNotNull { it.text }
+            )
+            assertTrue(
+                "content=${content.javaClass.name}; elements=${elements.map { it.javaClass.name }}",
+                elements.none { it is Content.ImageElement }
+            )
+            assertTrue(elements.none { element ->
+                element is Content.TextualElement &&
+                    element.text.orEmpty().contains("C:\\Example\\Images")
+            })
+        } finally {
+            hidden.publication.close()
+        }
+
+        val described = openReadiumEpub(
+            context,
+            epub,
+            ttsImageSettings = EpubTtsImageSettings(readDescriptions = true)
+        ) as ReadiumEpubOpenResult.Opened
+        try {
+            val captions = requireNotNull(described.publication.content()).elements()
+                .filterIsInstance<Content.ImageElement>()
+                .mapNotNull(Content.ImageElement::caption)
+            assertEquals(emptyList<String>(), captions)
+        } finally {
+            described.publication.close()
+        }
+
+        val resourceOnly = openReadiumEpub(
+            context,
+            epub,
+            ttsImageSettings = EpubTtsImageSettings(readResourceNames = true)
+        ) as ReadiumEpubOpenResult.Opened
+        try {
+            val captions = requireNotNull(resourceOnly.publication.content()).elements()
+                .filterIsInstance<Content.ImageElement>()
+                .mapNotNull(Content.ImageElement::caption)
+            assertEquals(1, captions.size)
+            assertTrue(captions.single().startsWith("Resource: "))
+            assertTrue(captions.single().endsWith("Images/divider.gif"))
+            assertTrue(!captions.single().contains("X:\\Data"))
+        } finally {
+            resourceOnly.publication.close()
             epub.delete()
         }
     }
@@ -765,6 +832,59 @@ class ReadiumEpubOpenInstrumentedTest {
                 """.trimIndent().toByteArray()
             )
             zip.writeDeflated("OEBPS/Images/cover.jpg", coverBytes)
+        }
+    }
+
+    private fun writeDecorativeImageEpub(target: File) {
+        ZipOutputStream(target.outputStream().buffered()).use { zip ->
+            zip.writeStored("mimetype", "application/epub+zip".toByteArray())
+            zip.writeDeflated(
+                "META-INF/container.xml",
+                """
+                <?xml version="1.0"?>
+                <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                  <rootfiles>
+                    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                  </rootfiles>
+                </container>
+                """.trimIndent().toByteArray()
+            )
+            zip.writeDeflated(
+                "OEBPS/content.opf",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+                  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier id="book-id">readium-tts-decorative-image</dc:identifier>
+                    <dc:title>Decorative image TTS</dc:title>
+                    <dc:language>en</dc:language>
+                    <meta property="dcterms:modified">2026-10-08T00:00:00Z</meta>
+                  </metadata>
+                  <manifest>
+                    <item id="chapter" href="Text/chapter.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="divider" href="Images/divider.gif" media-type="image/gif"/>
+                  </manifest>
+                  <spine><itemref idref="chapter"/></spine>
+                </package>
+                """.trimIndent().toByteArray()
+            )
+            zip.writeDeflated(
+                "OEBPS/Text/chapter.xhtml",
+                """
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                  <head><title>Chapter</title></head>
+                  <body>
+                    <p>A sentence before the divider.</p>
+                    <img src="../Images/divider.gif" alt="Description: C:\Example\Images\divider.gif"/>
+                    <p>After the divider.</p>
+                  </body>
+                </html>
+                """.trimIndent().toByteArray()
+            )
+            zip.writeDeflated(
+                "OEBPS/Images/divider.gif",
+                byteArrayOf(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)
+            )
         }
     }
 

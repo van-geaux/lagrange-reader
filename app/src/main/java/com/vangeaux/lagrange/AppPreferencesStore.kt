@@ -276,6 +276,16 @@ internal class AppPreferencesStore(context: Context) {
                 EpubTtsPauseSettings().parenthesesMillis
             )
         ),
+        images = EpubTtsImageSettings(
+            readDescriptions = preferences.getBoolean(
+                EPUB_TTS_READ_IMAGE_DESCRIPTIONS_KEY,
+                false
+            ),
+            readResourceNames = preferences.getBoolean(
+                EPUB_TTS_READ_IMAGE_RESOURCE_NAMES_KEY,
+                false
+            )
+        ),
         showBookTitleOnLockScreen = preferences.getBoolean(
             EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY,
             true
@@ -297,6 +307,14 @@ internal class AppPreferencesStore(context: Context) {
             .putInt(
                 EPUB_TTS_PARENTHESES_PAUSE_MILLIS_KEY,
                 normalized.pauses.parenthesesMillis
+            )
+            .putBoolean(
+                EPUB_TTS_READ_IMAGE_DESCRIPTIONS_KEY,
+                normalized.images.readDescriptions
+            )
+            .putBoolean(
+                EPUB_TTS_READ_IMAGE_RESOURCE_NAMES_KEY,
+                normalized.images.readResourceNames
             )
             .putBoolean(
                 EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY,
@@ -377,6 +395,10 @@ internal class AppPreferencesStore(context: Context) {
         const val EPUB_TTS_ELLIPSIS_PAUSE_MILLIS_KEY = "epub_tts_ellipsis_pause_millis"
         const val EPUB_TTS_PARENTHESES_PAUSE_MILLIS_KEY =
             "epub_tts_parentheses_pause_millis"
+        const val EPUB_TTS_READ_IMAGE_DESCRIPTIONS_KEY =
+            "epub_tts_read_image_descriptions"
+        const val EPUB_TTS_READ_IMAGE_RESOURCE_NAMES_KEY =
+            "epub_tts_read_image_resource_names"
         const val EPUB_TTS_SHOW_BOOK_TITLE_ON_LOCK_SCREEN_KEY =
             "epub_tts_show_book_title_on_lock_screen"
         const val EPUB_TTS_VOICE_IDS_KEY = "epub_tts_voice_ids"

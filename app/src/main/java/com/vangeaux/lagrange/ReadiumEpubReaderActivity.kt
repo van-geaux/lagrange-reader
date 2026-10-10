@@ -95,6 +95,7 @@ import org.readium.r2.shared.publication.Href
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.services.content.ContentService
 import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
@@ -109,7 +110,8 @@ internal sealed interface ReadiumEpubOpenResult {
 
 internal suspend fun openReadiumEpub(
     context: Context,
-    file: File
+    file: File,
+    ttsImageSettings: EpubTtsImageSettings? = null
 ): ReadiumEpubOpenResult = withContext(Dispatchers.IO) {
     if (!file.isFile || file.length() <= 0L) {
         return@withContext ReadiumEpubOpenResult.Error("The EPUB file is unavailable.")
@@ -129,7 +131,18 @@ internal suspend fun openReadiumEpub(
     )
     val publicationResult = PublicationOpener(publicationParser).open(
         asset = asset,
-        allowUserInteraction = false
+        allowUserInteraction = false,
+        onCreatePublication = {
+            ttsImageSettings?.let { imageSettings ->
+                val currentFactory = servicesBuilder[ContentService::class]
+                if (currentFactory !is EpubTtsImageContentServiceFactory) {
+                    servicesBuilder[ContentService::class] = EpubTtsImageContentServiceFactory(
+                        delegate = currentFactory,
+                        settings = imageSettings
+                    )
+                }
+            }
+        }
     )
     val publication = publicationResult.getOrNull()
         ?: return@withContext ReadiumEpubOpenResult.Error("Readium could not open this EPUB publication.")

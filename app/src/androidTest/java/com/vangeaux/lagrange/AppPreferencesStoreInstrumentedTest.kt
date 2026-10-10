@@ -9,6 +9,26 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AppPreferencesStoreInstrumentedTest {
     @Test
+    fun epubTtsImageSettingsSurviveStoreRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = AppPreferencesStore(context)
+        val original = store.readEpubTtsSettings()
+        val expected = original.copy(
+            images = EpubTtsImageSettings(
+                readDescriptions = true,
+                readResourceNames = true
+            )
+        )
+
+        try {
+            store.saveEpubTtsSettings(expected)
+            assertEquals(expected.normalized(), AppPreferencesStore(context).readEpubTtsSettings())
+        } finally {
+            store.saveEpubTtsSettings(original)
+        }
+    }
+
+    @Test
     fun interfacePreferencesSurviveStoreRecreation() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = AppPreferencesStore(context)

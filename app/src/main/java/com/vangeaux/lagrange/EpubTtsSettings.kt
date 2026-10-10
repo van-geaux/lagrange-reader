@@ -29,10 +29,16 @@ internal data class EpubTtsPauseSettings(
     )
 }
 
+internal data class EpubTtsImageSettings(
+    val readDescriptions: Boolean = false,
+    val readResourceNames: Boolean = false
+)
+
 internal data class EpubTtsSettings(
     val speed: Float = 1f,
     val pitch: Float = 1f,
     val pauses: EpubTtsPauseSettings = EpubTtsPauseSettings(enabled = false),
+    val images: EpubTtsImageSettings = EpubTtsImageSettings(),
     val showBookTitleOnLockScreen: Boolean = true,
     val voiceIds: Map<String, String> = emptyMap()
 ) {

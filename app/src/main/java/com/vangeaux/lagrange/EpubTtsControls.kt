@@ -137,6 +137,12 @@ private fun EpubTtsSettingsDialog(
         mutableStateOf(normalized.showBookTitleOnLockScreen)
     }
     var voiceDialogVisible by remember { mutableStateOf(false) }
+    var readImageDescriptions by remember {
+        mutableStateOf(normalized.images.readDescriptions)
+    }
+    var readImageResourceNames by remember {
+        mutableStateOf(normalized.images.readResourceNames)
+    }
     var commaText by remember {
         mutableStateOf(normalized.pauses.commaMillis.toString())
     }
@@ -296,6 +302,46 @@ private fun EpubTtsSettingsDialog(
                         onValueChange = { parenthesesText = it }
                     )
                 }
+                HorizontalDivider()
+                Text("Images", style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Read image descriptions",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Switch(
+                        checked = readImageDescriptions,
+                        onCheckedChange = { readImageDescriptions = it },
+                        modifier = Modifier.testTag("tts-read-image-descriptions")
+                    )
+                }
+                Text(
+                    "Speak EPUB alternative text and accessibility descriptions. Off by default.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Read full image resource names",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Switch(
+                        checked = readImageResourceNames,
+                        onCheckedChange = { readImageResourceNames = it },
+                        modifier = Modifier.testTag("tts-read-image-resource-names")
+                    )
+                }
+                Text(
+                    "Speak the full EPUB-relative folder, filename, and extension. Off by default and independent of descriptions.",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 Text("Lock-screen privacy", style = MaterialTheme.typography.titleSmall)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -344,6 +390,10 @@ private fun EpubTtsSettingsDialog(
                                         ?: normalized.pauses.ellipsisMillis,
                                     parenthesesMillis = parsedParentheses
                                         ?: normalized.pauses.parenthesesMillis
+                                ),
+                                images = EpubTtsImageSettings(
+                                    readDescriptions = readImageDescriptions,
+                                    readResourceNames = readImageResourceNames
                                 ),
                                 showBookTitleOnLockScreen = showBookTitleOnLockScreen,
                                 voiceIds = normalized.voiceIds
