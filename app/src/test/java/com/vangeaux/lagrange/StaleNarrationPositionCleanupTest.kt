@@ -64,6 +64,36 @@ class StaleNarrationPositionCleanupTest {
     }
 
     @Test
+    fun `a cleanup pending at recreation completes in the recreated reader`() {
+        val before = StaleNarrationPositionCleanup()
+        before.serverProgressWon()
+        before.readerMoved()
+        assertFalse(before.shouldDrop(serviceConnected = false, narrationActive = idle))
+        assertTrue(before.isPending)
+
+        // the recreated reader restores the pending flag, then shows the reader and binds again
+        val after = StaleNarrationPositionCleanup()
+        if (before.isPending) after.serverProgressWon()
+        assertFalse(after.shouldDrop(serviceConnected = true, narrationActive = idle))
+        after.readerMoved()
+
+        assertTrue(after.shouldDrop(serviceConnected = true, narrationActive = idle))
+        assertFalse(after.isPending)
+    }
+
+    @Test
+    fun `nothing is pending without a server resume or once decided`() {
+        val cleanup = StaleNarrationPositionCleanup()
+        assertFalse(cleanup.isPending)
+
+        cleanup.serverProgressWon()
+        cleanup.readerMoved()
+        cleanup.shouldDrop(serviceConnected = true, narrationActive = narrating)
+
+        assertFalse(cleanup.isPending)
+    }
+
+    @Test
     fun `nothing is dropped without a server resume`() {
         val cleanup = StaleNarrationPositionCleanup()
         cleanup.readerMoved()

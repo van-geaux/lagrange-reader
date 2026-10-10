@@ -29,6 +29,7 @@ internal const val STATE_READER_CHROME_VISIBLE = "reader_chrome_visible"
 internal const val STATE_READER_OPTIONS_VISIBLE = "reader_options_visible"
 internal const val STATE_READER_TUTORIAL_SHOWN = "reader_tutorial_shown"
 internal const val STATE_EPUB_TTS_LOCATOR = "epub_tts_saved_locator"
+internal const val STATE_STALE_NARRATION_CLEANUP_PENDING = "epub_stale_narration_cleanup_pending"
 
 internal fun Bundle.readReaderLocator(): Locator? = getString(STATE_READER_LOCATOR)
     ?.let { saved -> runCatching { Locator.fromJSON(JSONObject(saved)) }.getOrNull() }

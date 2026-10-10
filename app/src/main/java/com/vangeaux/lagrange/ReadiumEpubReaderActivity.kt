@@ -257,11 +257,14 @@ internal fun shouldPreferServerProgress(
  * Tracks when the narration position stored on this device, replaced by newer server progress, can
  * be dropped. That waits until the reader has moved to the server position and the narration service
  * is connected, so narration of this book that is already running keeps its position. The service
- * binds asynchronously, so either can happen first.
+ * binds asynchronously, so either can happen first. A pending cleanup is carried across activity
+ * recreation through [isPending], since the recreated reader no longer sees the server progress.
  */
 internal class StaleNarrationPositionCleanup {
     private var resumedFromServer = false
     private var readerOnServerPosition = false
+
+    val isPending: Boolean get() = resumedFromServer
 
     fun serverProgressWon() {
         resumedFromServer = true
@@ -791,6 +794,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         restoredTtsLocator = savedInstanceState?.readEpubTtsLocator()
         lastTtsLocator = restoredTtsLocator ?: ttsPositionStore.read(readerKey)
+        // The restored reader opens where the server progress put it; the narration position it
+        // replaced must still be dropped once the reader is shown again and the service connects.
+        if (savedInstanceState?.getBoolean(STATE_STALE_NARRATION_CLEANUP_PENDING) == true) {
+            staleNarrationPositionCleanup.serverProgressWon()
+        }
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         bookId = epubAnnotationBookId(intent)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
@@ -2990,6 +2998,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
         outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
         outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
+        outState.putBoolean(STATE_STALE_NARRATION_CLEANUP_PENDING, staleNarrationPositionCleanup.isPending)
         super.onSaveInstanceState(outState)
     }
 
