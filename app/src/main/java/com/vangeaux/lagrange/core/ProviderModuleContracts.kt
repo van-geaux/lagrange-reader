@@ -88,7 +88,11 @@ interface ReaderModule {
 
 interface DownloadModule {
     val handlesDownloadsDirectly: Boolean get() = false
-    suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
+    suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String? = null,
+        onProgress: (Float?) -> Unit = {}
+    ): File
     suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary>
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun deleteLocalCopies(book: BookSummary): Set<String>

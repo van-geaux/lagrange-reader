@@ -64,7 +64,11 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
             override suspend fun restoreActiveReaderState(session: ActiveReaderSession, localOnly: Boolean) = source.restoreActiveReaderState(session, localOnly)
         },
         downloads = object : DownloadModule {
-            override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = source.downloadBook(book, onProgress)
+            override suspend fun downloadBook(
+                book: BookSummary,
+                storageScopeId: String?,
+                onProgress: (Float?) -> Unit
+            ) = source.downloadBook(book, storageScopeId, onProgress)
             override suspend fun loadAudiobookDownloadFiles(book: BookSummary) = source.loadAudiobookDownloadFiles(book)
             override suspend fun deleteLocalCopy(book: BookSummary) = source.deleteLocalCopy(book)
             override suspend fun deleteLocalCopies(book: BookSummary) = source.deleteLocalCopies(book)

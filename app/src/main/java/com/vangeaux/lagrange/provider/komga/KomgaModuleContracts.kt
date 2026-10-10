@@ -35,5 +35,10 @@ interface KomgaCoverModule {
 }
 
 interface KomgaDownloadModule {
-    suspend fun downloadBook(serverUrl: String, book: BookSummary, onProgress: (Float?) -> Unit): File
+    suspend fun downloadBook(
+        serverUrl: String,
+        book: BookSummary,
+        storageScopeId: String? = null,
+        onProgress: (Float?) -> Unit
+    ): File
 }

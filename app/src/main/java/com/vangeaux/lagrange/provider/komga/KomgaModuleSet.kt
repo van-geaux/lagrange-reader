@@ -6,7 +6,11 @@ import com.vangeaux.lagrange.core.*
 internal class KomgaModuleSet(private val repository: KomgaRepository) {
     val downloads: DownloadModule = object : DownloadModule {
         override val handlesDownloadsDirectly: Boolean = false
-        override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = repository.downloadBook(book, onProgress)
+        override suspend fun downloadBook(
+            book: BookSummary,
+            storageScopeId: String?,
+            onProgress: (Float?) -> Unit
+        ) = repository.downloadBook(book, storageScopeId, onProgress)
         override suspend fun loadAudiobookDownloadFiles(book: BookSummary) = repository.loadAudiobookDownloadFiles(book)
         override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
         override suspend fun deleteLocalCopies(book: BookSummary) = repository.deleteLocalCopies(book)

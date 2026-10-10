@@ -2327,7 +2327,11 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
         resetReadingStateBooks += book
     }
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File {
         downloadedBooks += book
         return File("unused")
     }

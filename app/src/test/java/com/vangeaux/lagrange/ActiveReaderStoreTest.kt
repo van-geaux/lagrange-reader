@@ -148,6 +148,14 @@ class ActiveReaderStoreTest {
         )
 
         assertEquals(active.fileId, restoredForEviction?.fileId)
+        assertTrue(
+            downloadFileGroupIsProtected(
+                fileIds = setOf(requireNotNull(active.fileId)),
+                queuedFileIds = emptySet(),
+                attemptFileIds = emptySet(),
+                activeFileId = restoredForEviction?.fileId
+            )
+        )
         assertNull(
             ActiveReaderStore(filesDir).read("https://example.test", "account-a")
         )

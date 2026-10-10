@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import java.io.File
 import java.nio.file.Files
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -14,6 +15,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DownloadStoreTest {
+    @Test
+    fun `cancellation gate closes the callback-before-persistence race`() = runBlocking {
+        val gate = DownloadRequestCancellationGate()
+        val checked = CompletableDeferred<Unit>()
+        val allowPersistence = CompletableDeferred<Unit>()
+        var persisted = false
+        val start = launch(Dispatchers.Default) {
+            gate.serializeMutation {
+                val shouldPersist = !gate.consumeCancellation("request-1")
+                checked.complete(Unit)
+                allowPersistence.await()
+                if (shouldPersist) persisted = true
+            }
+        }
+        checked.await()
+        gate.cancel(listOf("request-1"))
+        val cleanup = launch(Dispatchers.Default) {
+            gate.serializeMutation { persisted = false }
+        }
+        allowPersistence.complete(Unit)
+        start.join()
+        cleanup.join()
+        assertFalse(persisted)
+
+        gate.cancel(listOf("request-2"))
+        gate.serializeMutation {
+            if (!gate.consumeCancellation("request-2")) persisted = true
+        }
+        assertFalse(persisted)
+    }
+
     @Test
     fun `readAll prunes records whose files are missing`() = runBlocking {
         val filesDir = Files.createTempDirectory("download-store-test").toFile()

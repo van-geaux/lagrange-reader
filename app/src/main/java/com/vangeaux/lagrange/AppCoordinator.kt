@@ -2286,6 +2286,19 @@ class AppCoordinator internal constructor(
                     homeBooks = mergeKnownProgress(browser.homeBooks, null)
                 )
             }
+            if (book.mediaKind == MediaKind.EPUB && book.readerPageIndex != null) {
+                readerLifecycleModule?.saveEpubReaderPosition((serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
+                    book.copy(
+                        progressPageIndex = pageIndex,
+                        readerPageIndex = book.readerPageIndex,
+                        readerPageCount = book.readerPageCount
+                    )
+                ) ?: repository.saveEpubReaderPosition(book.copy(
+                    progressPageIndex = pageIndex,
+                    readerPageIndex = book.readerPageIndex,
+                    readerPageCount = book.readerPageCount
+                ))
+            }
             if (
                 acceptAudioProgress &&
                     ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())

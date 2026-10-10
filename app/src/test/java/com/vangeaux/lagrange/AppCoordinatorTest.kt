@@ -3357,7 +3357,11 @@ private class FakeBookOrbitDataSource(
         return if (localOnly) restoreActiveReaderLocalOnlyResult else restoreActiveReaderResult
     }
 
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File {
         downloadedBooks += book
         concurrentDownloads += 1
         maxConcurrentDownloads = maxOf(maxConcurrentDownloads, concurrentDownloads)
