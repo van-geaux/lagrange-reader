@@ -369,6 +369,24 @@ class AutomaticDownloadsTest {
     }
 
     @Test
+    fun `gigabyte settings accept decimals and reject unsafe values`() {
+        assertEquals(512L * 1024L * 1024L, parseAutomaticDownloadGiB("0.5"))
+        assertEquals("0.5", formatAutomaticDownloadGiB(512L * 1024L * 1024L))
+        assertEquals(256L * 1024L * 1024L, parseAutomaticDownloadGiB("0.25"))
+        assertEquals("0.25", formatAutomaticDownloadGiB(256L * 1024L * 1024L))
+        assertEquals(10_737_418L, parseAutomaticDownloadGiB("0.01"))
+        assertEquals(
+            10_737_418L,
+            LocalBookStoragePolicy(maximumBytes = 10_737_418L).normalized().maximumBytes
+        )
+        assertEquals(0L, parseAutomaticDownloadGiB("0"))
+        assertEquals("0", formatAutomaticDownloadGiB(0L))
+        assertNull(parseAutomaticDownloadGiB("infinite"))
+        assertNotNull(parseAutomaticDownloadGiB("2048"))
+        assertNull(parseAutomaticDownloadGiB("2049"))
+    }
+
+    @Test
     fun `preferred mode chooses one readable copy while all copies includes alternates`() {
         val epub = book("epub", MediaKind.EPUB, "epub")
         val pdf = book("pdf", MediaKind.PDF, "pdf")
