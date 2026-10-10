@@ -91,14 +91,22 @@ internal class EpubMediaOverlayPlaybackViewModel : ViewModel() {
     }
 
     fun closePlayback() {
-        sessionBinder?.closeMediaOverlaySession()
-        sessionBinder = null
-        player?.release()
-        player = null
-        playableClips = emptyList()
-        activeClip = null
-        isPlaying = false
-        speed = 1f
+        val activeBinder = sessionBinder
+        val activePlayer = player
+        try {
+            if (activeBinder != null) {
+                activeBinder.closeMediaOverlaySession()
+            } else {
+                activePlayer?.release()
+            }
+        } finally {
+            sessionBinder = null
+            player = null
+            playableClips = emptyList()
+            activeClip = null
+            isPlaying = false
+            speed = 1f
+        }
     }
 
     override fun onCleared() {

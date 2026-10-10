@@ -7,7 +7,13 @@ import com.vangeaux.lagrange.ReaderState
 data class ActiveReaderSession(
     val serverUrl: String,
     val book: BookSummary,
-    val launchMode: ReaderLaunchMode
+    val launchMode: ReaderLaunchMode,
+    val profileId: String = "",
+    val providerId: String = "",
+    val accountScope: String = "",
+    val storageScopeId: String = "",
+    val publicationId: String = "",
+    val epubFingerprint: String = ""
 )
 
 /**

@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -180,6 +181,7 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -201,6 +203,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 internal enum class BrowserDestination {
     HOME,
@@ -2081,6 +2085,7 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
                     libraries = state.libraries,
+                    serverUrl = state.serverUrl,
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
@@ -3505,6 +3510,7 @@ private fun BookPosterCard(
 internal fun OptionsScreen(
     preferences: AppPreferences,
     libraries: List<LibrarySummary> = emptyList(),
+    serverUrl: String = "",
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
@@ -3529,7 +3535,51 @@ internal fun OptionsScreen(
     var isClearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
     var offlineCacheRefreshKey by rememberSaveable { mutableIntStateOf(0) }
+    var automaticDownloadRefreshKey by rememberSaveable { mutableIntStateOf(0) }
+    var showClearDownloadedBooks by remember { mutableStateOf(false) }
+    var isClearingDownloadedBooks by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activeProfile = remember(serverUrl) { ServerProfileStore(context).active() }
+    val automaticProfileId = activeProfile?.id ?: serverProfileId(serverUrl)
+    val automaticStorageScopeId = remember(serverUrl, automaticProfileId) {
+        downloadStorageScopeId(context, serverUrl, automaticProfileId) ?: "unresolved-account"
+    }
+    val automaticPolicyStore = remember { AutomaticDownloadPolicyStore(context) }
+    var automaticPolicy by remember(automaticProfileId, serverUrl, automaticStorageScopeId) {
+        mutableStateOf(
+            automaticPolicyStore.read(
+                automaticProfileId,
+                serverUrl,
+                automaticStorageScopeId
+            )
+        )
+    }
+    val automaticStatus by produceState(
+        initialValue = AutomaticDownloadStatusStore(context).read(
+            automaticProfileId,
+            automaticStorageScopeId
+        ),
+        automaticDownloadRefreshKey,
+        automaticProfileId
+    ) {
+        repeat(160) { attempt ->
+            value = AutomaticDownloadStatusStore(context).read(
+                automaticProfileId,
+                automaticStorageScopeId
+            )
+            if (attempt > 1 && value.state != AutomaticDownloadRunState.RUNNING) return@produceState
+            delay(750)
+        }
+    }
+    val saveAutomaticPolicy: (AutomaticDownloadPolicy) -> Unit = { requested ->
+        if (automaticStorageScopeId != "unresolved-account") {
+            val saved = automaticPolicyStore.save(requested)
+            automaticPolicy = saved
+            AutomaticDownloadScheduler.reconfigure(context, saved)
+            automaticDownloadRefreshKey += 1
+        }
+    }
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
         value = runCatching { storageUsageLoader() }.getOrNull()
     }
@@ -3807,6 +3857,44 @@ internal fun OptionsScreen(
                 }
             )
         }
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "automatic-book-downloads") {
+            AutomaticBookDownloadConfiguration(
+                policy = automaticPolicy,
+                libraries = libraries,
+                status = automaticStatus,
+                onPolicyChange = saveAutomaticPolicy,
+                onSyncNow = {
+                    if (AutomaticDownloadScheduler.enqueueNow(context, automaticPolicy)) {
+                        automaticDownloadRefreshKey += 1
+                    }
+                },
+                onCancel = {
+                    automaticPolicy = AutomaticDownloadScheduler.cancel(context, automaticPolicy)
+                    automaticDownloadRefreshKey += 1
+                }
+            )
+        }
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "clear-downloaded-books") {
+            ListItem(
+                headlineContent = { Text("Remove downloaded books") },
+                supportingContent = {
+                    Text(
+                        "Remove local book files for this server. Server copies and reading progress are kept."
+                    )
+                },
+                trailingContent = {
+                    TextButton(
+                        onClick = { showClearDownloadedBooks = true },
+                        enabled = !isClearingDownloadedBooks,
+                        modifier = Modifier.testTag("options-clear-downloaded-books")
+                    ) {
+                        Text(if (isClearingDownloadedBooks) "Removing..." else "Remove")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "confirm-local-delete") {
             AppPreferenceSwitchRow(
                 title = "Confirm before deleting local copy",
@@ -3936,6 +4024,313 @@ internal fun OptionsScreen(
         )
         null -> Unit
     }
+
+    if (showClearDownloadedBooks) {
+        AlertDialog(
+            onDismissRequest = { showClearDownloadedBooks = false },
+            title = { Text("Remove downloaded books?") },
+            text = {
+                Text(
+                    "This removes local book files for the current server. Active readers and transfers are kept. Automatic-download settings stay configured, but cleared versions are not fetched again until they change or you request them."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDownloadedBooks = false
+                        isClearingDownloadedBooks = true
+                        scope.launch {
+                            val result = clearLocalCopiesForServer(context, serverUrl)
+                            storageMessage = buildString {
+                                append("Removed ${result.removedCount} files (${formatByteSize(result.removedBytes)})")
+                                if (result.keptActiveCount > 0) append("; kept ${result.keptActiveCount} active")
+                                if (result.failedCount > 0) append("; ${result.failedCount} failed")
+                            }
+                            isClearingDownloadedBooks = false
+                            storageRefreshKey += 1
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm-clear-downloaded-books")
+                ) { Text("Remove local copies") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDownloadedBooks = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AutomaticBookDownloadConfiguration(
+    policy: AutomaticDownloadPolicy,
+    libraries: List<LibrarySummary>,
+    status: AutomaticDownloadStatus,
+    onPolicyChange: (AutomaticDownloadPolicy) -> Unit,
+    onSyncNow: () -> Unit,
+    onCancel: () -> Unit
+) {
+    var reserveText by remember(policy.profileId) {
+        mutableStateOf(formatAutomaticDownloadGiB(policy.reserveBytes))
+    }
+    var maximumText by remember(policy.profileId) {
+        mutableStateOf(formatAutomaticDownloadGiB(policy.maximumBytes))
+    }
+    var limitError by remember { mutableStateOf(false) }
+    val hasScope = policy.scope == AutomaticDownloadScope.ALL_LIBRARIES ||
+        policy.selectedLibraryIds.isNotEmpty()
+    val isRunning = status.state == AutomaticDownloadRunState.RUNNING
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .testTag("options-automatic-book-downloads"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Automatic book downloads", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Download readable book files in small background batches. Completed files remain when syncing is disabled.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            AppPreferenceSwitchRow(
+                title = "Enable automatic book downloads",
+                summary = "Off by default; existing downloads are never removed by this switch",
+                checked = policy.enabled,
+                testTag = "automatic-download-enabled",
+                onCheckedChange = { onPolicyChange(policy.copy(enabled = it)) }
+            )
+            Text("Library scope", style = MaterialTheme.typography.titleMedium)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = policy.scope == AutomaticDownloadScope.SELECTED_LIBRARIES,
+                    onClick = {
+                        onPolicyChange(policy.copy(scope = AutomaticDownloadScope.SELECTED_LIBRARIES))
+                    },
+                    label = { Text("Selected libraries") },
+                    modifier = Modifier.testTag("automatic-download-scope-selected")
+                )
+                FilterChip(
+                    selected = policy.scope == AutomaticDownloadScope.ALL_LIBRARIES,
+                    onClick = {
+                        onPolicyChange(policy.copy(scope = AutomaticDownloadScope.ALL_LIBRARIES))
+                    },
+                    label = { Text("All libraries") },
+                    modifier = Modifier.testTag("automatic-download-scope-all")
+                )
+            }
+            if (policy.scope == AutomaticDownloadScope.SELECTED_LIBRARIES) {
+                if (libraries.isEmpty()) {
+                    Text("No libraries available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        libraries.forEach { library ->
+                            FilterChip(
+                                selected = library.id in policy.selectedLibraryIds,
+                                onClick = {
+                                    val next = if (library.id in policy.selectedLibraryIds) {
+                                        policy.selectedLibraryIds - library.id
+                                    } else {
+                                        policy.selectedLibraryIds + library.id
+                                    }
+                                    onPolicyChange(policy.copy(selectedLibraryIds = next))
+                                },
+                                label = { Text(library.name) },
+                                modifier = Modifier.testTag(
+                                    "automatic-download-library-${library.id}"
+                                )
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    "New libraries added to the server are included automatically.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text("Initial behavior", style = MaterialTheme.typography.titleMedium)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = policy.initialMode ==
+                        AutomaticDownloadInitialMode.EXISTING_AND_FUTURE,
+                    onClick = {
+                        onPolicyChange(
+                            policy.copy(
+                                initialMode = AutomaticDownloadInitialMode.EXISTING_AND_FUTURE
+                            )
+                        )
+                    },
+                    label = { Text("Existing and future") }
+                )
+                FilterChip(
+                    selected = policy.initialMode == AutomaticDownloadInitialMode.NEW_BOOKS_ONLY,
+                    onClick = {
+                        onPolicyChange(
+                            policy.copy(initialMode = AutomaticDownloadInitialMode.NEW_BOOKS_ONLY)
+                        )
+                    },
+                    label = { Text("New books only") }
+                )
+            }
+            if (policy.initialMode == AutomaticDownloadInitialMode.NEW_BOOKS_ONLY) {
+                Text(
+                    "The first complete scan records a baseline without downloading existing books.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AppPreferenceSwitchRow(
+                title = "Download every readable copy",
+                summary = "Off by default. When enabled, alternate formats and multipart audio count toward storage limits.",
+                checked = policy.allReadableCopies,
+                testTag = "automatic-download-all-copies",
+                onCheckedChange = { onPolicyChange(policy.copy(allReadableCopies = it)) }
+            )
+            AppPreferenceSwitchRow(
+                title = "Unmetered networks only",
+                summary = "Recommended for background book downloads",
+                checked = policy.unmeteredOnly,
+                testTag = "automatic-download-unmetered",
+                onCheckedChange = { onPolicyChange(policy.copy(unmeteredOnly = it)) }
+            )
+            AppPreferenceSwitchRow(
+                title = "Only while charging",
+                summary = "Enabled by default",
+                checked = policy.chargingRequired,
+                testTag = "automatic-download-charging",
+                onCheckedChange = { onPolicyChange(policy.copy(chargingRequired = it)) }
+            )
+            HorizontalDivider()
+            Text("Storage limits", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Use 0 to disable either limit.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = reserveText,
+                onValueChange = { reserveText = it; limitError = false },
+                label = { Text("Reserved minimum free space on this device") },
+                suffix = { Text("GB") },
+                singleLine = true,
+                isError = limitError,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth().testTag("automatic-download-reserve")
+            )
+            OutlinedTextField(
+                value = maximumText,
+                onValueChange = { maximumText = it; limitError = false },
+                label = { Text("Maximum local books on this device") },
+                suffix = { Text("GB") },
+                singleLine = true,
+                isError = limitError,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth().testTag("automatic-download-maximum")
+            )
+            TextButton(
+                onClick = {
+                    val reserve = parseAutomaticDownloadGiB(reserveText)
+                    val maximum = parseAutomaticDownloadGiB(maximumText)
+                    if (reserve == null || maximum == null) {
+                        limitError = true
+                    } else {
+                        onPolicyChange(
+                            policy.copy(reserveBytes = reserve, maximumBytes = maximum)
+                        )
+                        reserveText = formatAutomaticDownloadGiB(reserve)
+                        maximumText = formatAutomaticDownloadGiB(maximum)
+                    }
+                },
+                modifier = Modifier.testTag("automatic-download-save-limits")
+            ) { Text("Save limits") }
+            if (limitError) {
+                Text(
+                    "Enter 0 (disabled) or a value up to 2048 GB.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            AppPreferenceSwitchRow(
+                title = "Remove older local copies automatically",
+                summary = "Off by default. If either device-wide limit is crossed, completed books are removed first, then the least recently used. This also applies when automatic syncing is off, but never removes an active book or transfer.",
+                checked = policy.automaticRemovalEnabled,
+                testTag = "automatic-download-removal",
+                onCheckedChange = { onPolicyChange(policy.copy(automaticRemovalEnabled = it)) }
+            )
+            if (isRunning) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            status.message?.let { message ->
+                Text(
+                    message,
+                    color = if (status.state == AutomaticDownloadRunState.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (status.checked > 0 || status.queued > 0 || status.failed > 0) {
+                Text(
+                    "Checked ${status.checked} - Queued ${status.queued} - Skipped ${status.skipped} - Failed ${status.failed}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onSyncNow,
+                    enabled = policy.enabled && hasScope && !isRunning,
+                    modifier = Modifier.testTag("automatic-download-sync-now")
+                ) { Text("Sync next batch") }
+                if (isRunning) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        modifier = Modifier.testTag("automatic-download-cancel")
+                    ) { Text("Cancel") }
+                }
+            }
+            Text(
+                "Each pass checks at most one catalog page and queues at most five files, so a very large library cannot create thousands of transfers at once.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+internal fun parseAutomaticDownloadGiB(value: String): Long? {
+    val gib = value.trim().toDoubleOrNull()
+        ?.takeIf { it.isFinite() && it in 0.0..2048.0 }
+        ?: return null
+    val bytes = (gib * 1024.0 * 1024.0 * 1024.0).toLong()
+    return bytes.takeIf { gib == 0.0 || it > 0L }
+}
+
+internal fun formatAutomaticDownloadGiB(bytes: Long): String {
+    return BigDecimal.valueOf(bytes.coerceAtLeast(0L))
+        .divide(BigDecimal.valueOf(1024L * 1024L * 1024L), 6, RoundingMode.HALF_UP)
+        .stripTrailingZeros()
+        .toPlainString()
 }
 
 @OptIn(ExperimentalLayoutApi::class)

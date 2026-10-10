@@ -528,9 +528,18 @@ class AppCoordinator internal constructor(
             // Provider sessions may keep credentials in runtime-only state. Restore the
             // active profile before validating the session so a process restart can use
             // the same offline fallback path as a warm process.
-            providerSessionModule()?.restoreCurrentProfileSession()
+            val sessionModule = providerSessionModule()
+            val restoredProfileSession =
+                sessionModule?.restoreCurrentProfileSession() ?: true
+            if (!restoredProfileSession) {
+                allowCachedLoginFallback = false
+            }
 
-            val localAudioState = restoreActiveReaderStateThroughSharedLifecycle(localOnly = true)?.let { readerState ->
+            val localAudioState = if (restoredProfileSession) {
+                restoreActiveReaderStateThroughSharedLifecycle(localOnly = true)
+            } else {
+                null
+            }?.let { readerState ->
                 if (readerState.book.mediaKind != MediaKind.AUDIO) {
                     _screen.value = AppScreen.Reader(readerState)
                     return@launch
@@ -538,7 +547,11 @@ class AppCoordinator internal constructor(
                 readerState
             }
 
-            val startupCache = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
+            val startupCache = if (restoredProfileSession && allowCachedLoginFallback) {
+                cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()
+            } else {
+                null
+            }
             if (startupCache != null) {
                 showBrowser(
                     startupCache.copy(
@@ -588,7 +601,11 @@ class AppCoordinator internal constructor(
                 }
                 SessionState.Unavailable -> {
                     localAudioState?.let(::restoreAudioInBackground)
-                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
+                    val cached = if (restoredProfileSession && allowCachedLoginFallback) {
+                        cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()
+                    } else {
+                        null
+                    }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -744,7 +761,11 @@ class AppCoordinator internal constructor(
                     resumeAfterLogin()
                 }
                 SessionState.Unauthenticated -> {
-                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
+                    val cached = if (allowCachedLoginFallback) {
+                        cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()
+                    } else {
+                        null
+                    }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(
@@ -760,7 +781,11 @@ class AppCoordinator internal constructor(
                     }
                 }
                 SessionState.Unavailable -> {
-                    val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()).takeIf { allowCachedLoginFallback }
+                    val cached = if (allowCachedLoginFallback) {
+                        cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState()
+                    } else {
+                        null
+                    }
                     if (cached != null) {
                         showBrowser(
                             cached.copy(

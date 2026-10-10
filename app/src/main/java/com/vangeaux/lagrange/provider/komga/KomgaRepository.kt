@@ -4,6 +4,7 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.*
 
 import android.content.Context
+import android.util.Log
 import com.vangeaux.lagrange.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -103,11 +104,65 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     }
 
     override suspend fun clearServer() {
-        preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
-        authModule.clearRuntimeSession()
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        try {
+            preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
+            authModule.clearRuntimeSession()
+            browserSnapshotStore.clear()
+        } finally {
+            clearUnscopedEpubResumeState()
+            profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
     }
 
-    override suspend fun clearSession() = authModule.clearSession()
+    override suspend fun clearSession() {
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        try {
+            authModule.clearSession()
+            browserSnapshotStore.clear()
+        } finally {
+            clearUnscopedEpubResumeState()
+            profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
+    }
+
+    private suspend fun clearUnscopedEpubResumeState() {
+        bestEffortResumeCleanup("reader positions") { EpubReaderPositionStore(appContext).clear() }
+        bestEffortResumeCleanup("locators") { ReadiumEpubLocatorStore(appContext).clear() }
+        bestEffortResumeCleanup("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
+    }
+
+    private suspend fun bestEffortResumeCleanup(
+        name: String,
+        cleanup: suspend () -> Unit
+    ) {
+        try {
+            cleanup()
+        } catch (error: Exception) {
+            Log.w("KomgaRepository", "Unable to clear unscoped EPUB $name", error)
+        }
+    }
+
+    private fun activeAutomaticDownloadPolicy(profileId: String?): AutomaticDownloadPolicy? {
+        val serverUrl = preferences.getString(SERVER_URL_KEY, null).orEmpty()
+        if (serverUrl.isBlank()) return null
+        val resolvedProfileId = profileId ?: serverProfileId(serverUrl)
+        val storageScopeId = downloadStorageScopeId(appContext, serverUrl, resolvedProfileId)
+            ?: return null
+        return AutomaticDownloadPolicyStore(appContext)
+            .read(resolvedProfileId, serverUrl, storageScopeId)
+    }
+
+    private fun pauseAutomaticDownloadsForInactiveProfile(policy: AutomaticDownloadPolicy?) {
+        if (policy == null) return
+        runCatching {
+            AutomaticDownloadScheduler.pauseForInactiveProfile(appContext, policy)
+        }
+    }
 
     internal suspend fun streamingRequestHeaders(url: String): Map<String, String> {
         val serverUrl = getServerUrl().orEmpty()
@@ -465,24 +520,18 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         return komgaCachedSeriesDetailFromBooks(books, seriesId)
     }
 
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File {
         val serverUrl = getServerUrl().orEmpty()
-        val target = downloadModule.downloadBook(serverUrl, book, onProgress)
-        downloadStore.save(
-            DownloadRecord(
-                serverUrl = serverUrl,
-                fileId = book.fileId ?: book.id,
-                bookId = book.id,
-                title = book.title,
-                filename = book.filename ?: target.name,
-                localPath = target.absolutePath,
-                mediaKind = book.mediaKind,
-                mimeType = book.format,
-                sourceUpdatedAtMillis = book.updatedAtMillis,
-                status = DownloadRecordStatus.COMPLETE
-            )
-        )
-        return target
+        return downloadModule.downloadBook(serverUrl, book, storageScopeId, onProgress)
+    }
+
+    override suspend fun clearInterruptedDownload(fileId: String) {
+        val serverUrl = getServerUrl().orEmpty()
+        downloadStore.removeAttempt(serverUrl, fileId)
     }
 
     override suspend fun deleteLocalCopy(book: BookSummary) {

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.work.Constraints
+import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
@@ -25,6 +26,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.CoroutineScope
@@ -33,21 +35,95 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Stable, per-file unique WorkManager work name. Same file never runs as two concurrent works. */
-internal fun downloadUniqueWorkName(serverUrl: String, fileId: String): String =
-    "$DOWNLOAD_WORK_NAME_PREFIX:$serverUrl:$fileId"
+/** Stable, per-account, per-file WorkManager name. Account switches cannot replace other work. */
+internal fun downloadUniqueWorkName(
+    serverUrl: String,
+    storageScopeId: String,
+    fileId: String
+): String = "$DOWNLOAD_WORK_NAME_PREFIX:$serverUrl:$storageScopeId:$fileId"
 
 internal fun downloadFileTag(fileId: String): String = "$DOWNLOAD_FILE_TAG_PREFIX:$fileId"
 
 internal fun downloadServerTag(serverUrl: String): String = "$DOWNLOAD_SERVER_TAG_PREFIX:$serverUrl"
 
+internal fun downloadRequestTag(requestId: String): String = "$DOWNLOAD_REQUEST_TAG_PREFIX:$requestId"
+
+internal fun downloadStorageScopeTag(storageScopeId: String): String =
+    "$DOWNLOAD_STORAGE_SCOPE_TAG_PREFIX:$storageScopeId"
+
+internal fun downloadPolicyGenerationTag(generation: Long): String =
+    "$DOWNLOAD_POLICY_GENERATION_TAG_PREFIX:$generation"
+
+internal fun downloadWorkTagsMatchRequest(tags: Set<String>, requestId: String): Boolean =
+    if (requestId.isBlank()) {
+        tags.none { it.startsWith("$DOWNLOAD_REQUEST_TAG_PREFIX:") }
+    } else {
+        downloadRequestTag(requestId) in tags
+    }
+
+internal fun downloadRequestIdFromTags(tags: Set<String>): String? = tags
+    .firstOrNull { it.startsWith("$DOWNLOAD_REQUEST_TAG_PREFIX:") }
+    ?.removePrefix("$DOWNLOAD_REQUEST_TAG_PREFIX:")
+
+internal fun downloadFileIdFromTags(tags: Set<String>): String? = tags
+    .firstOrNull { it.startsWith("$DOWNLOAD_FILE_TAG_PREFIX:") }
+    ?.removePrefix("$DOWNLOAD_FILE_TAG_PREFIX:")
+
+internal fun downloadStorageScopeIdFromTags(tags: Set<String>): String? = tags
+    .firstOrNull { it.startsWith("$DOWNLOAD_STORAGE_SCOPE_TAG_PREFIX:") }
+    ?.removePrefix("$DOWNLOAD_STORAGE_SCOPE_TAG_PREFIX:")
+    ?.takeIf { it.isNotBlank() }
+
+internal fun downloadWorkTagsOwnQueuedRequest(
+    tags: Set<String>,
+    queuedRequestIdsByFile: Map<String, String>
+): Boolean {
+    val fileId = downloadFileIdFromTags(tags) ?: return false
+    val requestId = queuedRequestIdsByFile[fileId] ?: return false
+    return downloadWorkTagsMatchRequest(tags, requestId)
+}
+
+internal fun downloadPolicyGenerationFromTags(tags: Set<String>): Long? = tags
+    .firstOrNull { it.startsWith("$DOWNLOAD_POLICY_GENERATION_TAG_PREFIX:") }
+    ?.removePrefix("$DOWNLOAD_POLICY_GENERATION_TAG_PREFIX:")
+    ?.toLongOrNull()
+
+internal fun downloadWorkMayBeCancelledThroughGeneration(
+    tags: Set<String>,
+    maximumGeneration: Long
+): Boolean = downloadPolicyGenerationFromTags(tags)?.let { it <= maximumGeneration } ?: true
+
 internal fun nextDownloadQueueSequence(nowMillis: Long, previous: Long): Long =
     maxOf(nowMillis * 1_000L, previous + 1L)
+
+internal fun shouldEnforcePostDownloadCapacity(
+    origin: DownloadOrigin,
+    workerPolicyGeneration: Long?,
+    currentPolicy: AutomaticDownloadPolicy
+): Boolean {
+    if (currentPolicy.maximumBytes <= 0L && currentPolicy.reserveBytes <= 0L) return false
+    return when (origin) {
+        DownloadOrigin.AUTOMATIC -> currentPolicy.enabled &&
+            workerPolicyGeneration == currentPolicy.generation
+        DownloadOrigin.MANUAL -> currentPolicy.automaticRemovalEnabled
+    }
+}
+
+internal fun downloadExistingWorkPolicy(
+    origin: DownloadOrigin,
+    replacingRetiringOwner: Boolean
+): ExistingWorkPolicy = if (origin == DownloadOrigin.MANUAL || replacingRetiringOwner) {
+    ExistingWorkPolicy.REPLACE
+} else {
+    ExistingWorkPolicy.KEEP
+}
 
 internal class DownloadProgressThrottler(
     private val minIntervalMillis: Long
@@ -89,7 +165,7 @@ internal class DownloadTransferGate {
 private val physicalDownloadGate = DownloadTransferGate()
 
 internal fun downloadAttemptBookSummary(attempt: DownloadAttempt): BookSummary = BookSummary(
-    libraryId = "",
+    libraryId = attempt.libraryId,
     id = attempt.bookId,
     fileId = attempt.fileId,
     title = attempt.title,
@@ -103,9 +179,16 @@ internal fun downloadAttemptBookSummary(attempt: DownloadAttempt): BookSummary =
 private const val DOWNLOAD_WORK_NAME_PREFIX = "bookorbit-download"
 private const val DOWNLOAD_FILE_TAG_PREFIX = "bookorbit-download-file"
 private const val DOWNLOAD_SERVER_TAG_PREFIX = "bookorbit-download-server"
+private const val DOWNLOAD_REQUEST_TAG_PREFIX = "bookorbit-download-request"
+private const val DOWNLOAD_STORAGE_SCOPE_TAG_PREFIX = "bookorbit-download-storage-scope"
+private const val DOWNLOAD_POLICY_GENERATION_TAG_PREFIX = "bookorbit-download-policy-generation"
 internal const val DOWNLOAD_TAG = "bookorbit-download-all"
+internal const val AUTOMATIC_DOWNLOAD_TAG = "bookorbit-download-automatic"
 
 private const val KEY_SERVER_URL = "server-url"
+private const val KEY_REQUEST_ID = "request-id"
+private const val KEY_PROFILE_ID = "profile-id"
+private const val KEY_STORAGE_SCOPE_ID = "storage-scope-id"
 private const val KEY_FILE_ID = "file-id"
 private const val KEY_BOOK_ID = "book-id"
 private const val KEY_LIBRARY_ID = "library-id"
@@ -114,6 +197,11 @@ private const val KEY_FILENAME = "filename"
 private const val KEY_MEDIA_KIND = "media-kind"
 private const val KEY_FORMAT = "format"
 private const val KEY_UPDATED_AT = "updated-at"
+private const val KEY_EXPECTED_SIZE = "expected-size"
+private const val KEY_DOWNLOAD_ORIGIN = "download-origin"
+private const val KEY_REQUIRES_UNMETERED = "requires-unmetered"
+private const val KEY_REQUIRES_CHARGING = "requires-charging"
+private const val KEY_POLICY_GENERATION = "policy-generation"
 private const val KEY_CELLULAR_CONSENT_GRANTED = "cellular-consent-granted"
 internal const val KEY_PROGRESS = "progress"
 internal const val KEY_OUTCOME = "outcome"
@@ -134,19 +222,35 @@ internal fun isRetryableDownloadHttpCode(code: Int): Boolean =
  */
 internal fun downloadWorkRequest(
     serverUrl: String,
+    requestId: String = "",
+    profileId: String = "",
+    storageScopeId: String = "",
     book: BookSummary,
     fileId: String,
-    cellularConsentGranted: Boolean
-): OneTimeWorkRequest =
-    OneTimeWorkRequestBuilder<BookDownloadWorker>()
+    cellularConsentGranted: Boolean,
+    expectedSizeBytes: Long? = null,
+    origin: DownloadOrigin = DownloadOrigin.MANUAL,
+    requiresUnmeteredNetwork: Boolean = false,
+    requiresCharging: Boolean = false,
+    policyGeneration: Long? = null
+): OneTimeWorkRequest {
+    require(storageScopeId.isNotBlank()) { "A stable download account scope is required." }
+    val builder = OneTimeWorkRequestBuilder<BookDownloadWorker>()
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
         .setConstraints(
             Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(
+                    if (requiresUnmeteredNetwork) NetworkType.UNMETERED else NetworkType.CONNECTED
+                )
+                .setRequiresCharging(requiresCharging)
                 .build()
         )
         .setInputData(
             workDataOf(
                 KEY_SERVER_URL to serverUrl,
+                KEY_REQUEST_ID to requestId,
+                KEY_PROFILE_ID to profileId,
+                KEY_STORAGE_SCOPE_ID to storageScopeId,
                 KEY_FILE_ID to fileId,
                 KEY_BOOK_ID to book.id,
                 KEY_LIBRARY_ID to book.libraryId,
@@ -155,13 +259,31 @@ internal fun downloadWorkRequest(
                 KEY_MEDIA_KIND to book.mediaKind.name,
                 KEY_FORMAT to book.format,
                 KEY_UPDATED_AT to (book.updatedAtMillis ?: -1L),
+                KEY_EXPECTED_SIZE to (expectedSizeBytes ?: -1L),
+                KEY_DOWNLOAD_ORIGIN to origin.name,
+                KEY_REQUIRES_UNMETERED to requiresUnmeteredNetwork,
+                KEY_REQUIRES_CHARGING to requiresCharging,
+                KEY_POLICY_GENERATION to (policyGeneration ?: -1L),
                 KEY_CELLULAR_CONSENT_GRANTED to cellularConsentGranted
             )
         )
         .addTag(DOWNLOAD_TAG)
+        .addTag(
+            if (origin == DownloadOrigin.AUTOMATIC) {
+                AUTOMATIC_DOWNLOAD_TAG
+            } else {
+                "$AUTOMATIC_DOWNLOAD_TAG-manual"
+            }
+        )
         .addTag(downloadFileTag(fileId))
         .addTag(downloadServerTag(serverUrl))
-        .build()
+        .addTag(downloadStorageScopeTag(storageScopeId))
+    if (requestId.isNotBlank()) builder.addTag(downloadRequestTag(requestId))
+    if (policyGeneration != null) {
+        builder.addTag(downloadPolicyGenerationTag(policyGeneration))
+    }
+    return builder.build()
+}
 
 /**
  * Foreground [CoroutineWorker] that performs a single book download by delegating the actual
@@ -176,11 +298,19 @@ class BookDownloadWorker(
 
     override suspend fun doWork(): Result {
         val serverUrl = inputData.getString(KEY_SERVER_URL)
+        val requestId = inputData.getString(KEY_REQUEST_ID).orEmpty()
+        val profileId = inputData.getString(KEY_PROFILE_ID).orEmpty()
+        val storageScopeId = inputData.getString(KEY_STORAGE_SCOPE_ID).orEmpty()
         val fileId = inputData.getString(KEY_FILE_ID)
         val bookId = inputData.getString(KEY_BOOK_ID)
         val title = inputData.getString(KEY_TITLE)
-        if (serverUrl.isNullOrBlank() || fileId.isNullOrBlank() || bookId.isNullOrBlank() || title.isNullOrBlank()) {
+        if (serverUrl.isNullOrBlank() || profileId.isBlank() || storageScopeId.isBlank() ||
+            fileId.isNullOrBlank() || bookId.isNullOrBlank() || title.isNullOrBlank()
+        ) {
             return Result.failure()
+        }
+        if (downloadStorageScopeId(applicationContext, serverUrl, profileId) != storageScopeId) {
+            return Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_AUTH_REQUIRED))
         }
         val book = BookSummary(
             libraryId = inputData.getString(KEY_LIBRARY_ID).orEmpty(),
@@ -194,16 +324,69 @@ class BookDownloadWorker(
             }.getOrDefault(MediaKind.UNKNOWN),
             updatedAtMillis = inputData.getLong(KEY_UPDATED_AT, -1L).takeIf { it >= 0L }
         )
+        val origin = runCatching {
+            DownloadOrigin.valueOf(
+                inputData.getString(KEY_DOWNLOAD_ORIGIN) ?: DownloadOrigin.MANUAL.name
+            )
+        }.getOrDefault(DownloadOrigin.MANUAL)
+        val expectedSizeBytes = inputData.getLong(KEY_EXPECTED_SIZE, -1L).takeIf { it >= 0L }
+        val policyGeneration = inputData.getLong(KEY_POLICY_GENERATION, -1L).takeIf { it >= 0L }
 
-        setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
+        val workerDownloadStore = DownloadStore(applicationContext)
+        reconcileVerifiedCommitsWhenReaderInactive(
+            applicationContext,
+            workerDownloadStore,
+            serverUrl,
+            storageScopeId
+        )
+        val claimedAttempt = workerDownloadStore.claimQueuedDownload(
+            serverUrl,
+            fileId,
+            requestId,
+            storageScopeId
+        )
+        if (claimedAttempt == null) {
+            finishQueueEntry(
+                serverUrl,
+                fileId,
+                requestId,
+                storageScopeId = storageScopeId,
+                replaceRetiringFileId = fileId
+            )
+            return Result.success()
+        }
+        if (claimedAttempt.storageScopeId != storageScopeId) {
+            return Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_AUTH_REQUIRED))
+        }
+        if (claimedAttempt.state == DownloadAttemptState.VERIFIED ||
+            claimedAttempt.state == DownloadAttemptState.COMMITTING
+        ) {
+            return Result.retry()
+        }
 
-        val repository = resolveProviderRepository(applicationContext, serverUrl)
-        val downloadModule = resolveProviderDownloadModule(repository)
-        val progressThrottler = DownloadProgressThrottler(minIntervalMillis = 500L)
+        if (origin == DownloadOrigin.AUTOMATIC) {
+            val policy = AutomaticDownloadPolicyStore(applicationContext)
+                .read(profileId, serverUrl, storageScopeId)
+            val activeProfile = ServerProfileStore(applicationContext).active()
+            if (!policy.enabled || policy.generation != policyGeneration ||
+                activeProfile?.id != profileId ||
+                !serverUrlsMatch(activeProfile.serverUrl, serverUrl)
+            ) {
+                finishQueueEntry(serverUrl, fileId, requestId)
+                return Result.success()
+            }
+        }
+
+        return try {
+            setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
+
+            val repository = resolveProviderRepository(applicationContext, serverUrl)
+            val downloadModule = resolveProviderDownloadModule(repository)
+            val progressThrottler = DownloadProgressThrottler(minIntervalMillis = 500L)
 
         // The session may have changed servers between enqueue and execution.
-        if (repository.getServerUrl() != serverUrl) {
-            finishQueueEntry(serverUrl, fileId)
+        if (!serverUrlsMatch(repository.getServerUrl().orEmpty(), serverUrl)) {
+            finishQueueEntry(serverUrl, fileId, requestId)
             return Result.failure()
         }
 
@@ -218,7 +401,7 @@ class BookDownloadWorker(
                 cellularConsentGranted = inputData.getBoolean(KEY_CELLULAR_CONSENT_GRANTED, false)
             )
         ) {
-            finishQueueEntry(serverUrl, fileId)
+            finishQueueEntry(serverUrl, fileId, requestId)
             return Result.failure(
                 workDataOf(
                     KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
@@ -227,10 +410,59 @@ class BookDownloadWorker(
             )
         }
 
-        return try {
+
+        if (expectedSizeBytes != null && automaticStorageLimitsApply(origin)) {
+            val policy = AutomaticDownloadPolicyStore(applicationContext)
+                .read(profileId, serverUrl, storageScopeId)
+            if (downloadIsIndividuallyOverCap(expectedSizeBytes, origin, policy)) {
+                suppressStorageBlocked(
+                    origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
+                )
+                finishQueueEntry(serverUrl, fileId, requestId)
+                return Result.failure(
+                    workDataOf(
+                        KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
+                        KEY_ERROR_MESSAGE to "This file is larger than the maximum local-book storage limit."
+                    )
+                )
+            }
+            val existingBytes = DownloadStore(applicationContext).find(
+                serverUrl,
+                fileId,
+                storageScopeId
+            )
+                ?.localPath
+                ?.let(::File)
+                ?.length()
+                ?.coerceAtLeast(0L)
+                ?: 0L
+            val capacity = AutomaticDownloadStorage.ensureCapacity(
+                context = applicationContext,
+                serverUrl = serverUrl,
+                profileId = profileId,
+                policy = policy,
+                incomingFinalBytes = (expectedSizeBytes - existingBytes).coerceAtLeast(0L),
+                incomingPeakBytes = expectedSizeBytes,
+                protectedFileIds = setOf(fileId),
+                allowRemoval = true
+            )
+            if (!capacity.allowed) {
+                suppressStorageBlocked(
+                    origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
+                )
+                finishQueueEntry(serverUrl, fileId, requestId)
+                return Result.failure(
+                    workDataOf(
+                        KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
+                        KEY_ERROR_MESSAGE to (capacity.message ?: "The storage limit would be exceeded.")
+                    )
+                )
+            }
+        }
+
             coroutineScope {
                 val localFile = physicalDownloadGate.withPermit {
-                    downloadModule.downloadBook(book) { progress ->
+                    downloadModule.downloadBook(book, storageScopeId) { progress ->
                         if (!progressThrottler.shouldEmit(progress, System.currentTimeMillis())) {
                             return@downloadBook
                         }
@@ -239,6 +471,7 @@ class BookDownloadWorker(
                             title = title,
                             fileId = fileId,
                             serverUrl = serverUrl,
+                            storageScopeId = storageScopeId,
                             progress = progress
                         )
                         launch {
@@ -248,32 +481,93 @@ class BookDownloadWorker(
                         }
                     }
                 }
-                finishQueueEntry(serverUrl, fileId)
+                val cleanupPolicy = AutomaticDownloadPolicyStore(applicationContext)
+                    .read(profileId, serverUrl, storageScopeId)
+                if (shouldEnforcePostDownloadCapacity(origin, policyGeneration, cleanupPolicy)) {
+                    val postDownloadCapacity = AutomaticDownloadStorage.ensureCapacity(
+                        context = applicationContext,
+                        serverUrl = serverUrl,
+                        profileId = profileId,
+                        policy = cleanupPolicy,
+                        incomingFinalBytes = 0L,
+                        incomingPeakBytes = 0L,
+                        protectedFileIds = setOf(fileId),
+                        allowRemoval = cleanupPolicy.automaticRemovalEnabled
+                    )
+                    if (!postDownloadCapacity.allowed && origin == DownloadOrigin.AUTOMATIC) {
+                        suppressStorageBlocked(
+                            origin,
+                            serverUrl,
+                            profileId,
+                            storageScopeId,
+                            fileId,
+                            book.updatedAtMillis
+                        )
+                        removeCompletedDownloadAfterLimit(
+                            serverUrl,
+                            book,
+                            fileId,
+                            requestId,
+                            storageScopeId
+                        )
+                        finishQueueEntry(serverUrl, fileId, requestId)
+                        return@coroutineScope Result.failure(
+                            workDataOf(
+                                KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
+                                KEY_ERROR_MESSAGE to (
+                                    postDownloadCapacity.message
+                                        ?: "The completed file could not fit within the storage limits."
+                                    )
+                            )
+                        )
+                    }
+                }
+                finishQueueEntry(
+                    serverUrl,
+                    fileId,
+                    requestId,
+                    successfulCompletion = true,
+                    continueAutomatic = origin == DownloadOrigin.AUTOMATIC
+                )
                 Result.success(workDataOf(KEY_LOCAL_PATH to localFile.absolutePath))
             }
         } catch (cancellation: CancellationException) {
-            withContext(NonCancellable) {
-                runCatching { repository.clearInterruptedDownload(fileId) }
-                finishQueueEntry(serverUrl, fileId)
-            }
+            // Cancellation retires this WorkSpec, not necessarily the durable logical request.
+            // REPLACE installs a successor carrying the same request ID, while explicit user and
+            // policy cancellation paths remove queue ownership themselves before pumping again.
             throw cancellation
         } catch (auth: AuthenticationRequiredException) {
-            finishQueueEntry(serverUrl, fileId)
+            if (origin == DownloadOrigin.AUTOMATIC) {
+                AutomaticDownloadStatusStore(applicationContext).write(
+                    profileId,
+                    storageScopeId,
+                    AutomaticDownloadStatus(
+                        state = AutomaticDownloadRunState.PAUSED,
+                        message = "Automatic downloads are paused until you sign in again."
+                    )
+                )
+            }
+            // Keep the durable queue owner. A successful sign-in can pump the same request again
+            // without losing its scan position or treating an authentication lapse as completion.
             Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_AUTH_REQUIRED))
+        } catch (_: DownloadReplacementDeferredException) {
+            // A verified stage is intentionally retained. This retry is not failure exhaustion:
+            // the next run publishes it after the Activity/TTS lease has been released.
+            Result.retry()
         } catch (io: UnknownHostException) {
-            Result.retry()
+            retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
         } catch (io: SocketTimeoutException) {
-            Result.retry()
+            retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
         } catch (io: SSLException) {
-            Result.retry()
+            retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
         } catch (http: HttpRequestException) {
             if (http.code == 403) {
-                finishQueueEntry(serverUrl, fileId)
+                finishQueueEntry(serverUrl, fileId, requestId)
                 Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_PERMISSION_DENIED))
             } else if (isRetryableDownloadHttpCode(http.code)) {
-                Result.retry()
+                retryOrStopAutomatic(origin, serverUrl, fileId, http.message)
             } else {
-                finishQueueEntry(serverUrl, fileId)
+                finishQueueEntry(serverUrl, fileId, requestId)
                 Result.failure(
                     workDataOf(
                         KEY_OUTCOME to OUTCOME_FAILED,
@@ -282,9 +576,22 @@ class BookDownloadWorker(
                 )
             }
         } catch (io: IOException) {
-            Result.retry()
+            retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
+        } catch (changed: LocalBookStoragePolicyChangedException) {
+            retryOrStopAutomatic(origin, serverUrl, fileId, changed.message)
+        } catch (storage: LocalBookStorageLimitException) {
+            suppressStorageBlocked(
+                origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
+            )
+            finishQueueEntry(serverUrl, fileId, requestId)
+            Result.failure(
+                workDataOf(
+                    KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
+                    KEY_ERROR_MESSAGE to storage.message
+                )
+            )
         } catch (error: Throwable) {
-            finishQueueEntry(serverUrl, fileId)
+            finishQueueEntry(serverUrl, fileId, requestId)
             Result.failure(
                 workDataOf(
                     KEY_OUTCOME to OUTCOME_FAILED,
@@ -296,11 +603,120 @@ class BookDownloadWorker(
         }
     }
 
-    private suspend fun finishQueueEntry(serverUrl: String, fileId: String) {
+    private suspend fun finishQueueEntry(
+        serverUrl: String,
+        fileId: String,
+        requestId: String,
+        successfulCompletion: Boolean = false,
+        continueAutomatic: Boolean = false,
+        storageScopeId: String = inputData.getString(KEY_STORAGE_SCOPE_ID).orEmpty(),
+        replaceRetiringFileId: String? = null
+    ) {
         withContext(NonCancellable + Dispatchers.IO) {
-            DownloadStore(applicationContext).removeQueuedDownload(serverUrl, fileId)
-            DownloadQueuePump.enqueueNext(applicationContext, serverUrl, ignoredWorkId = id)
+            val next = DownloadQueuePump.finishAndEnqueueNext(
+                context = applicationContext,
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                storageScopeId = storageScopeId,
+                successfulCompletion = successfulCompletion,
+                ignoredWorkId = id,
+                replaceRetiringFileId = replaceRetiringFileId
+            )
+            if (continueAutomatic && next == null) {
+                val profileId = inputData.getString(KEY_PROFILE_ID).orEmpty()
+                val generation = inputData.getLong(KEY_POLICY_GENERATION, -1L)
+                val policy = AutomaticDownloadPolicyStore(applicationContext)
+                    .read(profileId, serverUrl, storageScopeId)
+                if (policy.enabled && policy.generation == generation) {
+                    AutomaticDownloadScheduler.enqueueContinuation(applicationContext, policy)
+                }
+            }
         }
+    }
+
+    private fun suppressStorageBlocked(
+        origin: DownloadOrigin,
+        serverUrl: String,
+        profileId: String,
+        storageScopeId: String,
+        fileId: String,
+        sourceRevision: Long?
+    ) {
+        if (origin != DownloadOrigin.AUTOMATIC) return
+        val generation = LocalBookStoragePolicyStore(applicationContext).read().generation
+        AutomaticDownloadSuppressionStore(applicationContext).suppress(
+            serverUrl = serverUrl,
+            profileId = profileId,
+            fileId = fileId,
+            sourceRevision = sourceRevision,
+            reason = AutomaticDownloadSuppressionReason.STORAGE_BLOCKED,
+            storageGeneration = generation,
+            storageScopeId = storageScopeId
+        )
+    }
+
+    private suspend fun removeCompletedDownloadAfterLimit(
+        serverUrl: String,
+        book: BookSummary,
+        fileId: String,
+        requestId: String,
+        storageScopeId: String
+    ) = withContext(NonCancellable + Dispatchers.IO) {
+        val store = DownloadStore(applicationContext)
+        if (!store.deleteCompletedDownloadIfOwned(
+                serverUrl,
+                fileId,
+                requestId,
+                storageScopeId
+            )
+        ) {
+            return@withContext
+        }
+        BookDetailCacheStore(applicationContext).remove(serverUrl, book.id, fileId)
+        val replacement = store.readAll(serverUrl, storageScopeId)
+            .firstOrNull { it.bookId == book.id && it.status == DownloadRecordStatus.COMPLETE }
+            ?.localPath
+        LibraryCatalogStore(applicationContext).updateLocalPath(serverUrl, book.id, replacement)
+        BrowserSnapshotStore(applicationContext).updateLocalPath(serverUrl, book.id, replacement)
+    }
+
+    private suspend fun retryOrStopAutomatic(
+        origin: DownloadOrigin,
+        serverUrl: String,
+        fileId: String,
+        message: String?
+    ): Result {
+        if (runAttemptCount < 4) return Result.retry()
+        if (origin == DownloadOrigin.AUTOMATIC) {
+            val profileId = inputData.getString(KEY_PROFILE_ID).orEmpty()
+            val storageScopeId = inputData.getString(KEY_STORAGE_SCOPE_ID).orEmpty()
+            val sourceRevision = inputData.getLong(KEY_UPDATED_AT, -1L).takeIf { it >= 0L }
+            val generation = LocalBookStoragePolicyStore(applicationContext).read().generation
+            AutomaticDownloadSuppressionStore(applicationContext).suppress(
+                serverUrl = serverUrl,
+                profileId = profileId,
+                fileId = fileId,
+                sourceRevision = sourceRevision,
+                reason = AutomaticDownloadSuppressionReason.RETRY_EXHAUSTED,
+                storageGeneration = generation,
+                retryAfterMillis = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24),
+                storageScopeId = storageScopeId
+            )
+        }
+        withContext(NonCancellable) {
+            finishQueueEntry(
+                serverUrl,
+                fileId,
+                inputData.getString(KEY_REQUEST_ID).orEmpty()
+            )
+        }
+        return Result.failure(
+            workDataOf(
+                KEY_OUTCOME to OUTCOME_FAILED,
+                KEY_ERROR_MESSAGE to (message ?: "Download stopped after five attempts.")
+            )
+        )
     }
 
     private fun foregroundInfo(context: Context, title: String, progressPercent: Int?): ForegroundInfo {
@@ -311,6 +727,7 @@ class BookDownloadWorker(
             title = title,
             fileId = fileId,
             serverUrl = inputData.getString(KEY_SERVER_URL).orEmpty(),
+            storageScopeId = inputData.getString(KEY_STORAGE_SCOPE_ID).orEmpty(),
             progress = progressPercent?.div(100f)
         )
         refreshDownloadNotificationSummary(context)
@@ -338,60 +755,360 @@ class BookDownloadWorker(
     }
 }
 
-private object DownloadQueuePump {
+internal object DownloadQueuePump {
     private val mutex = Mutex()
-    private val observersByServer = ConcurrentHashMap<String, (UUID) -> Unit>()
+    private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val observersByScope = ConcurrentHashMap<String, (UUID) -> Unit>()
 
-    fun registerObserver(serverUrl: String, observer: (UUID) -> Unit) {
-        observersByServer[serverUrl] = observer
+    private fun observerKey(serverUrl: String, storageScopeId: String): String =
+        "$serverUrl\u0000$storageScopeId"
+
+    fun registerObserver(
+        serverUrl: String,
+        storageScopeId: String,
+        observer: (UUID) -> Unit
+    ) {
+        observersByScope[observerKey(serverUrl, storageScopeId)] = observer
     }
 
     fun clearObservers() {
-        observersByServer.clear()
+        observersByScope.clear()
+    }
+
+    fun wakeVerifiedReplacements(
+        context: Context,
+        releasedLeases: List<LocalBookReaderLease>
+    ) {
+        recoveryScope.launch {
+            val store = DownloadStore(context)
+            val targets = verifiedReplacementWakeTargets(store.readAttempts(), releasedLeases)
+            targets.forEach { target ->
+                try {
+                    mutex.withLock {
+                        if (downloadStorageScopeId(context, target.serverUrl) != target.storageScopeId) {
+                            return@withLock
+                        }
+                        val workManager = WorkManager.getInstance(context)
+                        workManager.cancelUniqueWork(
+                            downloadUniqueWorkName(
+                                target.serverUrl,
+                                target.storageScopeId,
+                                target.fileId
+                            )
+                        ).result.get()
+                        enqueueNextLocked(
+                            context = context,
+                            serverUrl = target.serverUrl,
+                            storageScopeId = target.storageScopeId,
+                            ignoredWorkId = null,
+                            replaceRetiringFileId = target.fileId
+                        )
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    delay(1_000L)
+                    enqueueNext(context, target.serverUrl, target.storageScopeId)
+                }
+            }
+        }
     }
 
     suspend fun enqueueNext(
         context: Context,
         serverUrl: String,
-        ignoredWorkId: UUID? = null
+        storageScopeId: String? = null,
+        ignoredWorkId: UUID? = null,
+        replaceRetiringFileId: String? = null
     ): UUID? = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val workManager = WorkManager.getInstance(context)
-            val hasActiveTransfer = runCatching {
-                workManager.getWorkInfosByTag(downloadServerTag(serverUrl)).get()
-            }.getOrDefault(emptyList()).any { info ->
-                !info.state.isFinished && info.id != ignoredWorkId
-            }
-            if (hasActiveTransfer) return@withLock null
-
-            val entry = DownloadStore(context).nextQueuedDownload(serverUrl) ?: run {
-                observersByServer.remove(serverUrl)
+            val resolvedScope = storageScopeId
+                ?: downloadStorageScopeId(context, serverUrl)
+                ?: return@withLock null
+            if (downloadStorageScopeId(context, serverUrl) != resolvedScope) {
                 return@withLock null
             }
-            val book = BookSummary(
-                libraryId = entry.libraryId,
-                id = entry.bookId,
-                fileId = entry.fileId,
-                title = entry.title,
-                filename = entry.filename,
-                format = entry.mimeType,
-                mediaKind = entry.mediaKind,
-                updatedAtMillis = entry.sourceUpdatedAtMillis
-            )
-            val request = downloadWorkRequest(
+            enqueueNextLocked(
+                context = context,
                 serverUrl = serverUrl,
-                book = book,
-                fileId = entry.fileId,
-                cellularConsentGranted = entry.cellularConsentGranted
+                storageScopeId = resolvedScope,
+                ignoredWorkId = ignoredWorkId,
+                replaceRetiringFileId = replaceRetiringFileId
             )
-            workManager.enqueueUniqueWork(
-                downloadUniqueWorkName(serverUrl, entry.fileId),
-                ExistingWorkPolicy.KEEP,
+        }
+    }
+
+    suspend fun finishAndEnqueueNext(
+        context: Context,
+        serverUrl: String,
+        fileId: String,
+        requestId: String,
+        storageScopeId: String,
+        successfulCompletion: Boolean,
+        ignoredWorkId: UUID,
+        replaceRetiringFileId: String? = null
+    ): UUID? = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            DownloadStore(context).finishDownloadRequest(
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                successfulCompletion = successfulCompletion,
+                storageScopeId = storageScopeId
+            )
+            if (downloadStorageScopeId(context, serverUrl) == storageScopeId) {
+                enqueueNextLocked(
+                    context = context,
+                    serverUrl = serverUrl,
+                    storageScopeId = storageScopeId,
+                    ignoredWorkId = ignoredWorkId,
+                    replaceRetiringFileId = replaceRetiringFileId
+                )
+            } else {
+                null
+            }
+        }
+    }
+
+    private suspend fun enqueueNextLocked(
+        context: Context,
+        serverUrl: String,
+        storageScopeId: String,
+        ignoredWorkId: UUID?,
+        replaceRetiringFileId: String?
+    ): UUID? {
+        val workManager = WorkManager.getInstance(context)
+        val store = DownloadStore(context)
+        reconcileVerifiedCommitsWhenReaderInactive(
+            context,
+            store,
+            serverUrl,
+            storageScopeId
+        )
+        val queuedEntries = store.readDownloadQueue(serverUrl, storageScopeId)
+        val queuedRequestIdsByFile = queuedEntries.associate { it.fileId to it.requestId }
+        val workInfos = runCatching {
+            workManager.getWorkInfosByTag(downloadServerTag(serverUrl)).get()
+        }.getOrElse {
+            recoveryScope.launch {
+                delay(1_000L)
+                enqueueNext(context.applicationContext, serverUrl, storageScopeId)
+            }
+            return null
+        }
+        val activeTransfers = workInfos.filter { info ->
+            !info.state.isFinished && info.id != ignoredWorkId &&
+                downloadStorageScopeIdFromTags(info.tags) == storageScopeId
+        }
+        val staleTransfers = activeTransfers.filterNot { info ->
+            downloadWorkTagsOwnQueuedRequest(info.tags, queuedRequestIdsByFile)
+        }
+        staleTransfers.forEach { info ->
+            workManager.cancelWorkById(info.id)
+            val staleFileId = downloadFileIdFromTags(info.tags)
+            if (staleFileId != null) {
+                store.removeAttemptIfOwned(
+                    serverUrl,
+                    staleFileId,
+                    downloadRequestIdFromTags(info.tags).orEmpty(),
+                    storageScopeId = storageScopeId
+                )
+            }
+        }
+        val ownedTransfers = activeTransfers - staleTransfers.toSet()
+        val entry = queuedEntries.minWithOrNull(
+            compareBy<DownloadQueueEntry> { it.origin == DownloadOrigin.AUTOMATIC }
+                .thenBy { it.sequence }
+        ) ?: run {
+            observersByScope.remove(observerKey(serverUrl, storageScopeId))
+            return null
+        }
+        if (ownedTransfers.isNotEmpty()) {
+            val preemptible = if (entry.origin == DownloadOrigin.MANUAL) {
+                ownedTransfers.filter { info ->
+                    AUTOMATIC_DOWNLOAD_TAG in info.tags &&
+                        (info.state == WorkInfo.State.ENQUEUED ||
+                            info.state == WorkInfo.State.BLOCKED)
+                }
+            } else {
+                emptyList()
+            }
+            if (preemptible.isEmpty() || preemptible.size != ownedTransfers.size) {
+                return null
+            }
+            preemptible.forEach { workManager.cancelWorkById(it.id) }
+        }
+        val book = BookSummary(
+            libraryId = entry.libraryId,
+            id = entry.bookId,
+            fileId = entry.fileId,
+            title = entry.title,
+            filename = entry.filename,
+            format = entry.mimeType,
+            mediaKind = entry.mediaKind,
+            updatedAtMillis = entry.sourceUpdatedAtMillis
+        )
+        val request = downloadWorkRequest(
+            serverUrl = serverUrl,
+            requestId = entry.requestId,
+            profileId = entry.profileId,
+            storageScopeId = entry.storageScopeId,
+            book = book,
+            fileId = entry.fileId,
+            cellularConsentGranted = entry.cellularConsentGranted,
+            expectedSizeBytes = entry.expectedSizeBytes,
+            origin = entry.origin,
+            requiresUnmeteredNetwork = entry.requiresUnmeteredNetwork,
+            requiresCharging = entry.requiresCharging,
+            policyGeneration = entry.policyGeneration
+        )
+        val enqueue = workManager.enqueueUniqueWork(
+                downloadUniqueWorkName(serverUrl, storageScopeId, entry.fileId),
+                downloadExistingWorkPolicy(
+                    entry.origin,
+                    replaceRetiringFileId == entry.fileId || staleTransfers.any { info ->
+                        downloadFileIdFromTags(info.tags) == entry.fileId
+                    }
+                ),
                 request
             )
-            observersByServer[serverUrl]?.invoke(request.id)
-            request.id
+        val inserted = runCatching { enqueue.result.get() }.isSuccess
+        if (!inserted) {
+            recoveryScope.launch {
+                delay(1_000L)
+                enqueueNext(context.applicationContext, serverUrl, storageScopeId)
+            }
+            return null
         }
+        observersByScope[observerKey(serverUrl, storageScopeId)]?.invoke(request.id)
+        return request.id
+    }
+}
+
+internal data class VerifiedReplacementWakeTarget(
+    val serverUrl: String,
+    val storageScopeId: String,
+    val fileId: String
+)
+
+internal fun verifiedReplacementWakeTargets(
+    attempts: List<DownloadAttempt>,
+    releasedLeases: List<LocalBookReaderLease>
+): Set<VerifiedReplacementWakeTarget> = attempts.asSequence()
+    .filter {
+        it.state == DownloadAttemptState.VERIFIED ||
+            it.state == DownloadAttemptState.COMMITTING
+    }
+    .filter { attempt ->
+        releasedLeases.any { lease ->
+            localReaderLeaseBlocksReplacement(
+                lease = lease,
+                serverUrl = attempt.serverUrl,
+                storageScopeId = attempt.storageScopeId,
+                fileId = attempt.fileId,
+                targetPath = attempt.targetPath
+            )
+        }
+    }
+    .map { VerifiedReplacementWakeTarget(it.serverUrl, it.storageScopeId, it.fileId) }
+    .toSet()
+
+internal suspend fun enqueueAutomaticDownloadBatch(
+    context: Context,
+    profileId: String,
+    serverUrl: String,
+    policy: AutomaticDownloadPolicy,
+    candidates: List<AutomaticDownloadCandidate>
+): Set<String> = withContext(Dispatchers.IO) {
+    val store = DownloadStore(context)
+    val queued = store.readDownloadQueue(serverUrl, policy.storageScopeId)
+    val queuedIds = queued.mapTo(mutableSetOf()) { it.fileId }
+    val remaining = (5 - queued.count { it.origin == DownloadOrigin.AUTOMATIC })
+        .coerceAtLeast(0)
+    if (remaining == 0) return@withContext emptySet()
+    var previousSequence = queued.maxOfOrNull { it.sequence } ?: 0L
+    val accepted = candidates
+        .filter { it.book.fileId != null && it.book.fileId !in queuedIds }
+        .distinctBy { it.book.fileId }
+        .take(remaining)
+    val requests = accepted.map { candidate ->
+        val book = candidate.book
+        val fileId = requireNotNull(book.fileId)
+        val requestId = UUID.randomUUID().toString()
+        val existing = store.find(serverUrl, fileId, policy.storageScopeId)
+        val target = store.ownedTargetOrIsolated(
+            serverUrl = serverUrl,
+            fileId = fileId,
+            title = book.title,
+            mediaKind = book.mediaKind,
+            formatHint = book.format,
+            recordedPath = existing?.localPath,
+            storageScopeId = policy.storageScopeId
+        )
+        val attempt = DownloadAttempt(
+                serverUrl = serverUrl,
+                requestId = requestId,
+                profileId = profileId,
+                storageScopeId = policy.storageScopeId,
+                fileId = fileId,
+                bookId = book.id,
+                libraryId = book.libraryId,
+                title = book.title,
+                filename = book.filename,
+                targetPath = target.absolutePath,
+                existingLocalPath = existing?.localPath,
+                mediaKind = book.mediaKind,
+                mimeType = book.format,
+                sourceUpdatedAtMillis = book.updatedAtMillis,
+                expectedSizeBytes = candidate.expectedSizeBytes,
+                origin = DownloadOrigin.AUTOMATIC,
+                policyGeneration = policy.generation
+            )
+        previousSequence = nextDownloadQueueSequence(System.currentTimeMillis(), previousSequence)
+        val entry = DownloadQueueEntry(
+            serverUrl = serverUrl,
+            requestId = requestId,
+            profileId = profileId,
+            storageScopeId = policy.storageScopeId,
+            fileId = fileId,
+            bookId = book.id,
+            libraryId = book.libraryId,
+            title = book.title,
+            filename = book.filename,
+            mediaKind = book.mediaKind,
+            mimeType = book.format,
+            sourceUpdatedAtMillis = book.updatedAtMillis,
+            expectedSizeBytes = candidate.expectedSizeBytes,
+            origin = DownloadOrigin.AUTOMATIC,
+            requiresUnmeteredNetwork = policy.unmeteredOnly,
+            requiresCharging = policy.chargingRequired,
+            policyGeneration = policy.generation,
+            cellularConsentGranted = !policy.unmeteredOnly,
+            sequence = previousSequence
+        )
+        entry to attempt
+    }
+
+    val entries = store.enqueueDownloadsWithAttempts(
+        requests,
+        maximumAutomaticEntriesPerServer = 5
+    )
+    DownloadQueuePump.enqueueNext(context, serverUrl, policy.storageScopeId)
+    entries.mapTo(mutableSetOf()) { it.fileId }
+}
+
+internal class DownloadRequestCancellationGate {
+    private val mutationMutex = Mutex()
+    private val cancelledRequestIds = ConcurrentHashMap.newKeySet<String>()
+
+    fun cancel(requestIds: Collection<String>) {
+        cancelledRequestIds.addAll(requestIds)
+    }
+
+    fun consumeCancellation(requestId: String): Boolean = cancelledRequestIds.remove(requestId)
+
+    suspend fun <T> serializeMutation(block: suspend () -> T): T = mutationMutex.withLock {
+        block()
     }
 }
 
@@ -407,12 +1124,28 @@ internal class WorkManagerDownloadScheduler(
     private val downloadStore by lazy { DownloadStore(context) }
     private val sequence = AtomicLong()
     private val observerRegistry = DownloadObserverRegistry()
-    private val callbacksByFileId = ConcurrentHashMap<String, DownloadCallbacks>()
+    private val callbacksByDownload = ConcurrentHashMap<DownloadCallbackKey, DownloadCallbacks>()
     private val maintenanceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val cancellationGate = DownloadRequestCancellationGate()
 
     private data class DownloadCallbacks(
         val onProgress: (Float?) -> Unit,
         val onOutcome: suspend (DownloadOutcome) -> Unit
+    )
+
+    private data class CancellationOwner(
+        val serverUrl: String,
+        val storageScopeId: String,
+        val fileId: String,
+        val requestId: String,
+        val workId: UUID? = null
+    )
+
+    internal data class DownloadCallbackKey(
+        val serverUrl: String,
+        val storageScopeId: String,
+        val fileId: String,
+        val requestId: String
     )
 
     override fun start(
@@ -443,18 +1176,42 @@ internal class WorkManagerDownloadScheduler(
         onOutcome: suspend (String, DownloadOutcome) -> Unit
     ) {
         if (downloads.isEmpty()) return
-        DownloadQueuePump.registerObserver(serverUrl) { workId ->
-            scope.launch { observe(scope, serverUrl, workId) }
+        val activeProfile = ServerProfileStore(context).active()
+        val activeProfileId = activeProfile?.id.orEmpty()
+        val storageScopeId = downloadStorageScopeId(context, serverUrl, activeProfileId)
+        if (activeProfile == null || !serverUrlsMatch(activeProfile.serverUrl, serverUrl) ||
+            storageScopeId == null
+        ) {
+            scope.launch {
+                val error = AuthenticationRequiredException()
+                downloads.forEach { onOutcome(it.fileId, DownloadOutcome.Failed(error)) }
+            }
+            return
+        }
+        DownloadQueuePump.registerObserver(serverUrl, storageScopeId) { workId ->
+            scope.launch { observe(scope, serverUrl, storageScopeId, workId) }
         }
         val queuedEntries = downloads.map { download ->
             val book = download.book
             val fileId = download.fileId
-            callbacksByFileId[fileId] = DownloadCallbacks(
+            val requestId = UUID.randomUUID().toString()
+            AutomaticDownloadSuppressionStore(context).clear(
+                serverUrl,
+                activeProfileId,
+                fileId,
+                storageScopeId
+            )
+            callbacksByDownload[
+                DownloadCallbackKey(serverUrl, storageScopeId, fileId, requestId)
+            ] = DownloadCallbacks(
                 onProgress = { progress -> onProgress(fileId, progress) },
                 onOutcome = { outcome -> onOutcome(fileId, outcome) }
             )
             DownloadQueueEntry(
                 serverUrl = serverUrl,
+                requestId = requestId,
+                profileId = activeProfileId,
+                storageScopeId = storageScopeId,
                 fileId = fileId,
                 bookId = book.id,
                 libraryId = book.libraryId,
@@ -463,6 +1220,7 @@ internal class WorkManagerDownloadScheduler(
                 mediaKind = book.mediaKind,
                 mimeType = book.format,
                 sourceUpdatedAtMillis = book.updatedAtMillis,
+                origin = DownloadOrigin.MANUAL,
                 cellularConsentGranted = cellularConsentGranted,
                 sequence = sequence.updateAndGet { previous ->
                     nextDownloadQueueSequence(System.currentTimeMillis(), previous)
@@ -472,32 +1230,66 @@ internal class WorkManagerDownloadScheduler(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    downloads.forEach { download ->
+                    val requests = downloads.map { download ->
                         val book = download.book
                         val fileId = download.fileId
-                        val existing = downloadStore.find(serverUrl, fileId)
-                        val target = existing?.localPath?.let(::File)
-                            ?: downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
-                        downloadStore.saveAttempt(
-                            DownloadAttempt(
+                        val requestId = queuedEntries.first { it.fileId == fileId }.requestId
+                        val existing = downloadStore.find(serverUrl, fileId, storageScopeId)
+                        val target = downloadStore.ownedTargetOrIsolated(
+                            serverUrl = serverUrl,
+                            fileId = fileId,
+                            title = book.title,
+                            mediaKind = book.mediaKind,
+                            formatHint = book.format,
+                            recordedPath = existing?.localPath,
+                            storageScopeId = storageScopeId
+                        )
+                        val attempt = DownloadAttempt(
                                 serverUrl = serverUrl,
+                                requestId = requestId,
+                                profileId = activeProfileId,
+                                storageScopeId = storageScopeId,
                                 fileId = fileId,
                                 bookId = book.id,
+                                libraryId = book.libraryId,
                                 title = book.title,
                                 filename = book.filename,
                                 targetPath = target.absolutePath,
                                 existingLocalPath = existing?.localPath,
                                 mediaKind = book.mediaKind,
                                 mimeType = book.format,
-                                sourceUpdatedAtMillis = book.updatedAtMillis
+                                sourceUpdatedAtMillis = book.updatedAtMillis,
+                                origin = DownloadOrigin.MANUAL
                             )
-                        )
+                        queuedEntries.first { it.fileId == fileId } to attempt
                     }
-                    downloadStore.enqueueDownloads(queuedEntries)
+                    cancellationGate.serializeMutation {
+                        val surviving = requests.filterNot { (entry, _) ->
+                            cancellationGate.consumeCancellation(entry.requestId)
+                        }
+                        downloadStore.enqueueDownloadsWithAttempts(surviving)
+                    }
                 }
-                val workId = DownloadQueuePump.enqueueNext(context, serverUrl)
+                val workId = DownloadQueuePump.enqueueNext(context, serverUrl, storageScopeId)
                 if (workId != null) {
-                    observe(scope, serverUrl, workId)
+                    observe(scope, serverUrl, storageScopeId, workId)
+                } else {
+                    val requestedIds = downloads.mapTo(mutableSetOf()) { it.fileId }
+                    val activeMatching = withContext(Dispatchers.IO) {
+                        runCatching {
+                            workManager.getWorkInfosByTag(downloadServerTag(serverUrl)).get()
+                        }.getOrDefault(emptyList()).filter { info ->
+                            !info.state.isFinished &&
+                                downloadStorageScopeIdFromTags(info.tags) == storageScopeId &&
+                                info.tags.any { tag ->
+                                tag.startsWith("$DOWNLOAD_FILE_TAG_PREFIX:") &&
+                                    tag.removePrefix("$DOWNLOAD_FILE_TAG_PREFIX:") in requestedIds
+                            }
+                        }
+                    }
+                    activeMatching.forEach { info ->
+                        observe(scope, serverUrl, storageScopeId, info.id)
+                    }
                 }
             } catch (error: Throwable) {
                 downloads.forEach { download -> onOutcome(download.fileId, DownloadOutcome.Failed(error)) }
@@ -506,21 +1298,123 @@ internal class WorkManagerDownloadScheduler(
     }
 
     override fun cancel(serverUrl: String, fileId: String) {
-        workManager.cancelUniqueWork(downloadUniqueWorkName(serverUrl, fileId))
-        callbacksByFileId.remove(fileId)
+        val owners = captureCancellationOwners(serverUrl, fileId)
+        cancellationGate.cancel(owners.map { it.requestId })
+        owners.mapNotNull { it.workId }.distinct().forEach(workManager::cancelWorkById)
+        callbacksByDownload.keys.removeIf { key ->
+            owners.any {
+                it.serverUrl == key.serverUrl &&
+                    it.storageScopeId == key.storageScopeId && it.fileId == key.fileId &&
+                    it.requestId == key.requestId
+            }
+        }
         maintenanceScope.launch {
-            downloadStore.removeQueuedDownload(serverUrl, fileId)
-            DownloadQueuePump.enqueueNext(context, serverUrl)
+            cancellationGate.serializeMutation {
+                owners.distinctBy {
+                    listOf(it.serverUrl, it.storageScopeId, it.fileId, it.requestId)
+                }.forEach { owner ->
+                    downloadStore.cancelDownloadRequestIfOwned(
+                        owner.serverUrl,
+                        owner.fileId,
+                        owner.requestId,
+                        owner.storageScopeId
+                    )
+                }
+            }
+            owners.map { it.serverUrl to it.storageScopeId }.toSet().forEach { ownerScope ->
+                DownloadQueuePump.enqueueNext(context, ownerScope.first, ownerScope.second)
+            }
         }
     }
 
     override fun cancelAll() {
-        workManager.cancelAllWorkByTag(DOWNLOAD_TAG)
-        callbacksByFileId.clear()
+        val owners = captureCancellationOwners()
+        cancellationGate.cancel(owners.map { it.requestId })
+        owners.mapNotNull { it.workId }.distinct().forEach(workManager::cancelWorkById)
+        callbacksByDownload.keys.removeIf { key ->
+            owners.any {
+                it.serverUrl == key.serverUrl &&
+                    it.storageScopeId == key.storageScopeId && it.fileId == key.fileId &&
+                    it.requestId == key.requestId
+            }
+        }
         DownloadQueuePump.clearObservers()
         maintenanceScope.launch {
-            downloadStore.clearDownloadQueue()
-            workManager.cancelAllWorkByTag(DOWNLOAD_TAG)
+            cancellationGate.serializeMutation {
+                owners.distinctBy {
+                    listOf(it.serverUrl, it.storageScopeId, it.fileId, it.requestId)
+                }.forEach { owner ->
+                    downloadStore.cancelDownloadRequestIfOwned(
+                        owner.serverUrl,
+                        owner.fileId,
+                        owner.requestId,
+                        owner.storageScopeId
+                    )
+                }
+            }
+            owners.map { it.serverUrl to it.storageScopeId }.toSet().forEach { ownerScope ->
+                DownloadQueuePump.enqueueNext(context, ownerScope.first, ownerScope.second)
+            }
+        }
+    }
+
+    private fun captureCancellationOwners(
+        serverUrl: String? = null,
+        fileId: String? = null
+    ): List<CancellationOwner> {
+        val requestedScope = serverUrl?.let { downloadStorageScopeId(context, it) }
+        if (serverUrl != null && requestedScope == null) return emptyList()
+        val callbackOwners = callbacksByDownload.keys
+            .filter { key ->
+                (serverUrl == null || key.serverUrl == serverUrl) &&
+                    (requestedScope == null || key.storageScopeId == requestedScope) &&
+                    (fileId == null || key.fileId == fileId)
+            }
+            .map { key ->
+                CancellationOwner(
+                    key.serverUrl,
+                    key.storageScopeId,
+                    key.fileId,
+                    key.requestId
+                )
+            }
+        return runBlocking(Dispatchers.IO) {
+        val queuedOwners = downloadStore.readDownloadQueue()
+            .filter { entry ->
+                (serverUrl == null || entry.serverUrl == serverUrl) &&
+                    (requestedScope == null || entry.storageScopeId == requestedScope) &&
+                    (fileId == null || entry.fileId == fileId)
+            }
+            .map { entry ->
+                CancellationOwner(
+                    entry.serverUrl,
+                    entry.storageScopeId,
+                    entry.fileId,
+                    entry.requestId
+                )
+            }
+        val activeOwners = runCatching {
+            workManager.getWorkInfosByTag(DOWNLOAD_TAG).get()
+        }.getOrDefault(emptyList()).filter { info ->
+            !info.state.isFinished &&
+                (serverUrl == null || downloadServerTag(serverUrl) in info.tags) &&
+                (requestedScope == null ||
+                    downloadStorageScopeIdFromTags(info.tags) == requestedScope) &&
+                (fileId == null || downloadFileTag(fileId) in info.tags)
+        }.mapNotNull { info ->
+            val ownerServer = info.tags.firstOrNull {
+                it.startsWith("$DOWNLOAD_SERVER_TAG_PREFIX:")
+            }?.removePrefix("$DOWNLOAD_SERVER_TAG_PREFIX:") ?: return@mapNotNull null
+            val ownerFile = downloadFileIdFromTags(info.tags) ?: return@mapNotNull null
+            CancellationOwner(
+                ownerServer,
+                downloadStorageScopeIdFromTags(info.tags) ?: return@mapNotNull null,
+                ownerFile,
+                downloadRequestIdFromTags(info.tags).orEmpty(),
+                info.id
+            )
+        }
+        callbackOwners + queuedOwners + activeOwners
         }
     }
 
@@ -531,20 +1425,31 @@ internal class WorkManagerDownloadScheduler(
         onProgress: (String, Float?) -> Unit,
         onOutcome: suspend (String, DownloadOutcome) -> Unit
     ): Map<String, BookSummary> {
-        DownloadQueuePump.registerObserver(serverUrl) { workId ->
-            scope.launch { observe(scope, serverUrl, workId) }
+        val storageScopeId = downloadStorageScopeId(context, serverUrl) ?: return emptyMap()
+        DownloadQueuePump.registerObserver(serverUrl, storageScopeId) { workId ->
+            scope.launch { observe(scope, serverUrl, storageScopeId, workId) }
         }
         val (attemptsByFileId, queued) = withContext(Dispatchers.IO) {
+            runCatching {
+                reconcileVerifiedCommitsWhenReaderInactive(
+                    context,
+                    downloadStore,
+                    serverUrl,
+                    storageScopeId
+                )
+            }
             val attempts = runCatching {
-                downloadStore.readAttempts(serverUrl).associateBy { it.fileId }
+                downloadStore.readAttempts(serverUrl, storageScopeId).associateBy { it.fileId }
             }.getOrDefault(emptyMap())
-            val queue = runCatching { downloadStore.readDownloadQueue(serverUrl) }
+            val queue = runCatching { downloadStore.readDownloadQueue(serverUrl, storageScopeId) }
                 .getOrDefault(emptyList())
             attempts to queue
         }
         val active = linkedMapOf<String, BookSummary>()
         queued.forEach { entry ->
-            callbacksByFileId[entry.fileId] = DownloadCallbacks(
+            callbacksByDownload[
+                DownloadCallbackKey(serverUrl, storageScopeId, entry.fileId, entry.requestId)
+            ] = DownloadCallbacks(
                 onProgress = { progress -> onProgress(entry.fileId, progress) },
                 onOutcome = { outcome -> onOutcome(entry.fileId, outcome) }
             )
@@ -560,7 +1465,7 @@ internal class WorkManagerDownloadScheduler(
                     updatedAtMillis = entry.sourceUpdatedAtMillis
                 )
         }
-        val startedWorkId = DownloadQueuePump.enqueueNext(context, serverUrl)
+        val startedWorkId = DownloadQueuePump.enqueueNext(context, serverUrl, storageScopeId)
         val infos = withContext(Dispatchers.IO) {
             runCatching { workManager.getWorkInfosByTag(DOWNLOAD_TAG).get() }
                 .getOrDefault(emptyList())
@@ -568,25 +1473,24 @@ internal class WorkManagerDownloadScheduler(
         for (info in infos) {
             if (info.state.isFinished) continue
             if (downloadServerTag(serverUrl) !in info.tags) continue
-            val fileId = info.tags.firstOrNull { it.startsWith(DOWNLOAD_FILE_TAG_PREFIX) }
-                ?.removePrefix("$DOWNLOAD_FILE_TAG_PREFIX:")
-                ?: continue
-            active[fileId] = attemptsByFileId[fileId]?.let(::downloadAttemptBookSummary)
-                ?: bookForFileId(fileId)
-                ?: BookSummary(
-                    libraryId = "",
-                    id = "download-$fileId",
-                    fileId = fileId,
-                    title = "File $fileId"
-                )
-            callbacksByFileId[fileId] = DownloadCallbacks(
-                onProgress = { progress -> onProgress(fileId, progress) },
-                onOutcome = { outcome -> onOutcome(fileId, outcome) }
+            if (downloadStorageScopeIdFromTags(info.tags) != storageScopeId) continue
+            // Callbacks were registered from the durable queue above. An active Work whose
+            // request ID is no longer queued is stale and must be observed only for retirement,
+            // never allowed to complete the replacement's UI lifecycle.
+            observe(
+                scope = scope,
+                serverUrl = serverUrl,
+                storageScopeId = storageScopeId,
+                workId = info.id
             )
-            observe(scope = scope, serverUrl = serverUrl, workId = info.id)
         }
         if (startedWorkId != null) {
-            observe(scope = scope, serverUrl = serverUrl, workId = startedWorkId)
+            observe(
+                scope = scope,
+                serverUrl = serverUrl,
+                storageScopeId = storageScopeId,
+                workId = startedWorkId
+            )
         }
         return active
     }
@@ -594,6 +1498,7 @@ internal class WorkManagerDownloadScheduler(
     private fun observe(
         scope: CoroutineScope,
         serverUrl: String,
+        storageScopeId: String,
         workId: UUID,
     ) {
         if (!observerRegistry.register(workId)) return
@@ -604,15 +1509,21 @@ internal class WorkManagerDownloadScheduler(
                 scope.launch {
                     val fileId = info.tags.firstOrNull { it.startsWith(DOWNLOAD_FILE_TAG_PREFIX) }
                         ?.removePrefix("$DOWNLOAD_FILE_TAG_PREFIX:")
-                    val callbacks = fileId?.let(callbacksByFileId::get)
+                    val requestId = downloadRequestIdFromTags(info.tags).orEmpty()
+                    val callbackKey = fileId?.let {
+                        DownloadCallbackKey(serverUrl, storageScopeId, it, requestId)
+                    }
+                    val callbacks = callbackKey?.let(callbacksByDownload::get)
                     if (callbacks != null) {
                         deliver(info, callbacks.onProgress, callbacks.onOutcome)
                     }
                     if (info.state.isFinished) {
                         liveData.removeObserver(observer)
                         observerRegistry.retire(workId)
-                        fileId?.let(callbacksByFileId::remove)
-                        observeActive(scope, serverUrl)
+                        if (callbackKey != null && callbacks != null) {
+                            callbacksByDownload.remove(callbackKey, callbacks)
+                        }
+                        observeActive(scope, serverUrl, storageScopeId)
                     }
                 }
             }
@@ -620,15 +1531,22 @@ internal class WorkManagerDownloadScheduler(
         liveData.observeForever(observer)
     }
 
-    private fun observeActive(scope: CoroutineScope, serverUrl: String) {
+    private fun observeActive(
+        scope: CoroutineScope,
+        serverUrl: String,
+        storageScopeId: String
+    ) {
         scope.launch {
             val infos = withContext(Dispatchers.IO) {
                 runCatching {
                     workManager.getWorkInfosByTag(downloadServerTag(serverUrl)).get()
                 }.getOrDefault(emptyList())
             }
-            infos.filter { !it.state.isFinished }.forEach { info ->
-                observe(scope, serverUrl, info.id)
+            infos.filter {
+                !it.state.isFinished &&
+                    downloadStorageScopeIdFromTags(it.tags) == storageScopeId
+            }.forEach { info ->
+                observe(scope, serverUrl, storageScopeId, info.id)
             }
         }
     }
