@@ -335,6 +335,9 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
         cookie = CookieManager.getInstance().getCookie(serverUrl)
     )
 
+    internal fun credentialOrigin(): String? = serverUrl
+        ?: ServerProfileStore(appContext).active()?.serverUrl
+
     internal fun hasSession(serverUrl: String): Boolean = requestHeaders(serverUrl).isNotEmpty()
 
     private fun hasWebSession(): Boolean =
@@ -846,7 +849,19 @@ private fun JSONArray?.toStringList(): List<String> = buildList {
 }
 
 class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverModule {
-    private val client = KomgaHttpClient().client
+    private val client = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addNetworkInterceptor { chain ->
+            val incoming = chain.request()
+            val latch = incoming.tag(CredentialTrustLatch::class.java)
+                ?: CredentialTrustLatch(null)
+            val tagged = incoming.newBuilder()
+                .tag(CredentialTrustLatch::class.java, latch)
+                .build()
+            chain.proceed(originBoundRequest(tagged, latch.credentialOrigin, latch))
+        }
+        .build()
 
     override suspend fun loadBookCover(serverUrl: String, book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext null
@@ -855,19 +870,38 @@ class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverMo
         } else {
             "$base/api/v1/books/${book.id}/thumbnail"
         }
-        val request = Request.Builder().url(thumbnailUrl).get()
-            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) null else response.body?.bytes()
-        }
+        loadImage(thumbnailUrl, base)
     }
+
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url).get()
-            .apply { auth.requestHeaders(url).forEach { (name, value) -> header(name, value) } }
+        loadImage(url, auth.credentialOrigin())
+    }
+
+    private fun loadImage(url: String, credentialOrigin: String?): ByteArray? {
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "image/*")
+            .apply {
+                if (sameHttpOrigin(url, credentialOrigin.orEmpty())) {
+                    auth.requestHeaders(url).forEach { (name, value) -> header(name, value) }
+                }
+            }
+            .tag(CredentialTrustLatch::class.java, CredentialTrustLatch(credentialOrigin))
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) null else response.body?.bytes()
+            if (!response.isSuccessful) return null
+            val body = response.body ?: return ByteArray(0)
+            return body.byteStream().use { input ->
+                readBoundedCatalogImageBytes(
+                    input = input,
+                    declaredLength = body.contentLength(),
+                    maxBytes = catalogImageResponseLimit(
+                        url = response.request.url.toString(),
+                        serverUrl = credentialOrigin.orEmpty()
+                    )
+                )
+            }
         }
     }
 }

@@ -45,6 +45,7 @@ import org.json.JSONTokener
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -54,8 +55,11 @@ import java.net.UnknownHostException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileSystemException
 import java.nio.file.NoSuchFileException
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.text.DecimalFormat
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import java.util.UUID
@@ -70,9 +74,89 @@ private const val LIBRARY_PAGE_SIZE = 100
 private const val LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS = 4
 private const val LIBRARY_PARALLEL_PAGE_THRESHOLD = 4
 private const val COMPLETED_PROGRESS_PERCENT = 99.5f
+internal const val MAX_COVER_IMAGE_RESPONSE_BYTES = 16L * 1024L * 1024L
+internal const val MAX_COMIC_PAGE_IMAGE_RESPONSE_BYTES = 64L * 1024L * 1024L
+private const val MAX_IN_MEMORY_COVER_CACHE_BYTES = 32L * 1024L * 1024L
+private const val CATALOG_IMAGE_REQUEST_LOCK_COUNT = 64
 private val progressSyncMutex = Mutex()
 private val readingSessionSyncMutex = Mutex()
 private val annotationSyncMutex = Mutex()
+
+private object CatalogImageCoordinator {
+    val generation = AtomicLong(0L)
+    val sessionMutationMutex = Mutex()
+    val cacheMutationMutex = Mutex()
+    val requestLocks = Array(CATALOG_IMAGE_REQUEST_LOCK_COUNT) { Mutex() }
+    val memoryCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
+    var memoryCacheBytes = 0L
+}
+
+internal class CatalogImageRequestScope(
+    val serverUrl: String,
+    val profileId: String?,
+    internal val accessToken: String?,
+    internal val cookie: String?,
+    val generation: Long
+) {
+    internal val authorization: String? = accessToken
+        ?.takeIf(String::isNotBlank)
+        ?.let { "Bearer $it" }
+    val cacheScopeId: String = catalogImageCacheScopeId(
+        serverUrl = serverUrl,
+        profileId = profileId,
+        authorization = authorization,
+        cookie = cookie
+    )
+
+    fun sameLogicalSession(other: CatalogImageRequestScope): Boolean =
+        generation == other.generation &&
+            serverUrl == other.serverUrl &&
+            profileId == other.profileId
+
+    fun sameCredentialScope(other: CatalogImageRequestScope): Boolean =
+        sameLogicalSession(other) && cacheScopeId == other.cacheScopeId
+}
+
+internal fun catalogImageCacheScopeId(
+    serverUrl: String,
+    profileId: String?,
+    authorization: String?,
+    cookie: String?
+): String {
+    val value = listOf(serverUrl, profileId.orEmpty(), authorization.orEmpty(), cookie.orEmpty())
+        .joinToString("\u0000")
+    return MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte) }
+}
+
+internal fun scopedCoverCacheIdentity(
+    scopeId: String,
+    bookId: String,
+    coverIdentity: String
+): String = "$scopeId\u0000$bookId\u0000$coverIdentity"
+
+private class StaleCatalogImageRequestException : IOException(
+    "The catalog image request belongs to an inactive account session."
+)
+
+private data class CatalogImageResponse(
+    val bytes: ByteArray,
+    val scope: CatalogImageRequestScope
+)
+
+private data class ScopedCoverLoad(
+    val bytes: ByteArray,
+    val loadedFromNetwork: Boolean
+)
+
+internal fun catalogImageResponseMayPersistCookies(
+    scope: CatalogImageRequestScope?,
+    currentGeneration: Long,
+    trustLatch: CredentialTrustLatch
+): Boolean = scope != null &&
+    scope.generation == currentGeneration &&
+    trustLatch.credentialsRemainAllowed
 
 internal const val LAGRANGE_GITHUB_RELEASES_API_URL =
     "https://api.github.com/repos/van-geaux/lagrange-reader/releases/latest"
@@ -399,11 +483,45 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val appStorageManager = AppStorageManager(context)
-    private val coverCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
         .followRedirects(true)
         .followSslRedirects(true)
+        .build()
+    private val imageClient = OkHttpClient.Builder()
+        .cookieJar(WebViewCookieJar())
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addNetworkInterceptor { chain ->
+            val incoming = chain.request()
+            val scope = incoming.tag(CatalogImageRequestScope::class.java)
+            val latch = incoming.tag(CredentialTrustLatch::class.java)
+                ?: CredentialTrustLatch(scope?.serverUrl)
+            val tagged = incoming.newBuilder()
+                .tag(CredentialTrustLatch::class.java, latch)
+                .build()
+            val generationAtEntry = CatalogImageCoordinator.generation.get()
+            val outbound = if (scope != null && scope.generation == generationAtEntry) {
+                originBoundRequest(tagged, scope.serverUrl, latch)
+            } else {
+                tagged.withoutCredentials()
+            }
+            val response = chain.proceed(outbound)
+            if (
+                catalogImageResponseMayPersistCookies(
+                    scope,
+                    CatalogImageCoordinator.generation.get(),
+                    latch
+                )
+            ) {
+                response
+            } else {
+                response.newBuilder()
+                    .removeHeader("Set-Cookie")
+                    .removeHeader("Set-Cookie2")
+                    .build()
+            }
+        }
         .build()
     private val sessionRefreshLock = Any()
     @Volatile
@@ -413,6 +531,111 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     private fun rememberLibraryCoverAspectRatios(libraries: List<LibrarySummary>) {
         libraryCoverAspectRatios = libraries.associate { it.id to it.coverAspectRatio }
+    }
+
+    private fun rememberCover(cacheIdentity: String, bytes: ByteArray) =
+        synchronized(CatalogImageCoordinator.memoryCache) {
+        CatalogImageCoordinator.memoryCache.put(cacheIdentity, bytes)?.let { previous ->
+            CatalogImageCoordinator.memoryCacheBytes -= previous.size.toLong()
+        }
+        CatalogImageCoordinator.memoryCacheBytes += bytes.size.toLong()
+        while (
+            CatalogImageCoordinator.memoryCache.size > 32 ||
+            CatalogImageCoordinator.memoryCacheBytes > MAX_IN_MEMORY_COVER_CACHE_BYTES
+        ) {
+            val oldest = CatalogImageCoordinator.memoryCache.entries.firstOrNull() ?: break
+            CatalogImageCoordinator.memoryCacheBytes -= oldest.value.size.toLong()
+            CatalogImageCoordinator.memoryCache.remove(oldest.key)
+        }
+    }
+
+    private fun cachedCover(cacheIdentity: String): ByteArray? =
+        synchronized(CatalogImageCoordinator.memoryCache) {
+            CatalogImageCoordinator.memoryCache[cacheIdentity]
+        }
+
+    private fun clearMemoryCoverCache() = synchronized(CatalogImageCoordinator.memoryCache) {
+        CatalogImageCoordinator.memoryCache.clear()
+        CatalogImageCoordinator.memoryCacheBytes = 0L
+    }
+
+    private suspend fun captureCatalogImageRequestScope(
+        requestUrl: String? = null
+    ): CatalogImageRequestScope =
+        CatalogImageCoordinator.sessionMutationMutex.withLock {
+            captureCatalogImageRequestScopeLocked(requestUrl)
+        }
+
+    private suspend fun captureCatalogImageRequestScopeLocked(
+        requestUrl: String? = null
+    ): CatalogImageRequestScope {
+            val generation = CatalogImageCoordinator.generation.get()
+            val preferences = context.dataStore.data.first()
+            val serverUrl = preferences[Keys.SERVER_URL].orEmpty()
+            val profileId = ServerProfileStore(context).active()?.id
+                ?: serverUrl.takeIf(String::isNotBlank)?.let(::serverProfileId)
+            val scope = CatalogImageRequestScope(
+                serverUrl = serverUrl,
+                profileId = profileId,
+                accessToken = preferences[Keys.ACCESS_TOKEN],
+                cookie = requestUrl
+                    ?.takeIf { sameHttpOrigin(it, serverUrl) }
+                    ?.let { CookieManager.getInstance().getCookie(it) },
+                generation = generation
+            )
+            if (CatalogImageCoordinator.generation.get() != generation) {
+                throw StaleCatalogImageRequestException()
+            }
+            return scope
+        }
+
+    private suspend fun requireCurrentCatalogImageScope(scope: CatalogImageRequestScope) {
+        if (!scope.sameLogicalSession(captureCatalogImageRequestScope())) {
+            throw StaleCatalogImageRequestException()
+        }
+    }
+
+    private fun requireCurrentCatalogImageGeneration(scope: CatalogImageRequestScope) {
+        if (scope.generation != CatalogImageCoordinator.generation.get()) {
+            throw StaleCatalogImageRequestException()
+        }
+    }
+
+    private suspend fun refreshCatalogImageSession(
+        scope: CatalogImageRequestScope,
+        requestUrl: String
+    ): CatalogImageRequestScope? = CatalogImageCoordinator.sessionMutationMutex.withLock {
+        val current = captureCatalogImageRequestScopeLocked(requestUrl)
+        if (!scope.sameCredentialScope(current)) throw StaleCatalogImageRequestException()
+        if (!refreshSession(scope.accessToken)) return@withLock null
+        val refreshed = captureCatalogImageRequestScopeLocked(requestUrl)
+        if (!scope.sameLogicalSession(refreshed)) throw StaleCatalogImageRequestException()
+        refreshed
+    }
+
+    private fun catalogImageRequestLock(key: String): Mutex =
+        CatalogImageCoordinator.requestLocks[
+            Math.floorMod(key.hashCode(), CatalogImageCoordinator.requestLocks.size)
+        ]
+
+    private suspend fun invalidateCatalogImageSession(clearDiskCache: Boolean = false) {
+        CatalogImageCoordinator.generation.incrementAndGet()
+        CatalogImageCoordinator.cacheMutationMutex.withLock {
+            clearMemoryCoverCache()
+            if (clearDiskCache) coverCacheStore.clear()
+        }
+    }
+
+    private suspend fun <T> mutateCatalogImageSession(
+        clearDiskCacheAfter: Boolean = false,
+        mutation: suspend () -> T
+    ): T = CatalogImageCoordinator.sessionMutationMutex.withLock {
+        invalidateCatalogImageSession()
+        try {
+            mutation()
+        } finally {
+            invalidateCatalogImageSession(clearDiskCache = clearDiskCacheAfter)
+        }
     }
 
     override suspend fun getServerUrl(): String? = context.dataStore.data.first()[Keys.SERVER_URL]
@@ -437,27 +660,32 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
 
     override suspend fun setServerUrl(serverUrl: String) {
-        context.dataStore.edit { prefs ->
-            prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
+        mutateCatalogImageSession {
+            context.dataStore.edit { prefs ->
+                prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
+            }
         }
     }
 
     override suspend fun clearServer() {
-        OfflineCacheScheduler.cancelAll(context)
-        CoverCacheWarmWorker.cancelAll(context)
-        libraryCoverAspectRatios = emptyMap()
-        context.dataStore.edit { prefs ->
-            prefs.remove(Keys.SERVER_URL)
-            prefs.remove(Keys.SELECTED_LIBRARY_ID)
+        mutateCatalogImageSession(clearDiskCacheAfter = true) {
+            OfflineCacheScheduler.cancelAll(context)
+            CoverCacheWarmWorker.cancelAll(context)
+            libraryCoverAspectRatios = emptyMap()
+            context.dataStore.edit { prefs ->
+                prefs.remove(Keys.SERVER_URL)
+                prefs.remove(Keys.SELECTED_LIBRARY_ID)
+            }
+            bookDetailCacheStore.clear()
+            clearRuntimeSession()
         }
-        coverCacheStore.clear()
-        bookDetailCacheStore.clear()
-        clearRuntimeSession()
     }
 
     override suspend fun clearSession() {
-        clearRuntimeSession()
-        currentProfileId()?.let(profileSessionStore::clear)
+        mutateCatalogImageSession(clearDiskCacheAfter = true) {
+            clearRuntimeSession()
+            currentProfileId()?.let(profileSessionStore::clear)
+        }
     }
 
     private suspend fun clearRuntimeSession() {
@@ -508,45 +736,47 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun restoreCurrentProfileSession(): Boolean {
-        val profileId = currentProfileId() ?: return false
-        val storedSession = profileSessionStore.read(profileId)
-        val parsedSession = storedSession?.let { value ->
-            runCatching {
-                JSONObject(value).let { json ->
-                    json.optString("accessToken").takeIf(String::isNotBlank) to
-                        listOfNotNull(
-                            json.optString("cookieApi").takeIf(String::isNotBlank),
-                            json.optString("cookieAuth").takeIf(String::isNotBlank)
-                        ).takeIf(List<String>::isNotEmpty)
-                            ?.joinToString("\u0000")
-                }
-            }.getOrNull()
-        }
-        val token = parsedSession?.first ?: storedSession
-        val cookiesByPath = parsedSession?.second?.split('\u0000').orEmpty()
-        context.dataStore.edit { prefs ->
-            if (token.isNullOrBlank()) prefs.remove(Keys.ACCESS_TOKEN)
-            else prefs[Keys.ACCESS_TOKEN] = token
-        }
-        val serverUrl = getServerUrl().orEmpty()
-        if (cookiesByPath.isNotEmpty() && serverUrl.isNotBlank()) {
-            withContext(Dispatchers.Main.immediate) {
-                cookiesByPath.forEachIndexed { index, cookie ->
-                    val path = if (index == 0) "/api" else "/api/v1/auth"
-                    cookie.split(';')
-                        .map(String::trim)
-                        .filter(String::isNotBlank)
-                        .forEach { value ->
-                            CookieManager.getInstance().setCookie(
-                                "${serverUrl.trimEnd('/')}$path",
-                                value
-                            )
-                        }
+        return mutateCatalogImageSession {
+            val profileId = currentProfileId() ?: return@mutateCatalogImageSession false
+            val storedSession = profileSessionStore.read(profileId)
+            val parsedSession = storedSession?.let { value ->
+                runCatching {
+                    JSONObject(value).let { json ->
+                        json.optString("accessToken").takeIf(String::isNotBlank) to
+                            listOfNotNull(
+                                json.optString("cookieApi").takeIf(String::isNotBlank),
+                                json.optString("cookieAuth").takeIf(String::isNotBlank)
+                            ).takeIf(List<String>::isNotEmpty)
+                                ?.joinToString("\u0000")
                     }
-                CookieManager.getInstance().flush()
+                }.getOrNull()
             }
+            val token = parsedSession?.first ?: storedSession
+            val cookiesByPath = parsedSession?.second?.split('\u0000').orEmpty()
+            context.dataStore.edit { prefs ->
+                if (token.isNullOrBlank()) prefs.remove(Keys.ACCESS_TOKEN)
+                else prefs[Keys.ACCESS_TOKEN] = token
+            }
+            val serverUrl = getServerUrl().orEmpty()
+            if (cookiesByPath.isNotEmpty() && serverUrl.isNotBlank()) {
+                withContext(Dispatchers.Main.immediate) {
+                    cookiesByPath.forEachIndexed { index, cookie ->
+                        val path = if (index == 0) "/api" else "/api/v1/auth"
+                        cookie.split(';')
+                            .map(String::trim)
+                            .filter(String::isNotBlank)
+                            .forEach { value ->
+                                CookieManager.getInstance().setCookie(
+                                    "${serverUrl.trimEnd('/')}$path",
+                                    value
+                                )
+                            }
+                    }
+                    CookieManager.getInstance().flush()
+                }
+            }
+            !token.isNullOrBlank()
         }
-        return !token.isNullOrBlank()
     }
 
     private suspend fun currentProfileId(): String? =
@@ -582,7 +812,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             .put("password", password)
             .toString()
             .toRequestBody(JSON)
-        requestLogin(body)
+        mutateCatalogImageSession {
+            requestLogin(body)
+        }
     }
 
     override suspend fun loadOidcProviders(): List<BookOrbitOidcProvider> = withContext(Dispatchers.IO) {
@@ -613,17 +845,19 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             .put("state", transaction.state)
             .toString()
             .toRequestBody(JSON)
-        val payload = requestUnauthenticated(
-            path = "/api/v1/auth/oidc/callback",
-            method = "POST",
-            body = body
-        )
-        val accessToken = extractAccessToken(payload)
-        context.dataStore.edit { prefs ->
-            if (accessToken.isNullOrBlank()) {
-                prefs.remove(Keys.ACCESS_TOKEN)
-            } else {
-                prefs[Keys.ACCESS_TOKEN] = accessToken
+        mutateCatalogImageSession {
+            val payload = requestUnauthenticated(
+                path = "/api/v1/auth/oidc/callback",
+                method = "POST",
+                body = body
+            )
+            val accessToken = extractAccessToken(payload)
+            context.dataStore.edit { prefs ->
+                if (accessToken.isNullOrBlank()) {
+                    prefs.remove(Keys.ACCESS_TOKEN)
+                } else {
+                    prefs[Keys.ACCESS_TOKEN] = accessToken
+                }
             }
         }
     }
@@ -1270,38 +1504,77 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = withContext(Dispatchers.IO) {
-        val serverUrl = getServerUrl().orEmpty()
-        val candidates = bookCoverCandidateUrls(book, serverUrl)
+        val initialScope = captureCatalogImageRequestScope()
+        val candidates = bookCoverCandidateUrls(book, initialScope.serverUrl)
         var lastFailure: Throwable? = null
         candidates.forEach { url ->
-            val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
-            synchronized(coverCache) { coverCache[cacheIdentity] }?.let { return@withContext it }
-            coverCacheStore.read(serverUrl, book.id, cacheIdentity)?.let { bytes ->
-                if (bytes.isNotEmpty()) {
-                    synchronized(coverCache) { coverCache[cacheIdentity] = bytes }
-                    return@withContext bytes
-                }
-            }
-            val bytes = try {
-                requestBytes(url)
+            val result = try {
+                loadScopedCover(book, url, initialScope)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
                 lastFailure = error
                 return@forEach
             }
-            if (bytes.isEmpty()) return@forEach
-            coverCacheStore.save(serverUrl, book.id, cacheIdentity, bytes)
-            synchronized(coverCache) {
-                coverCache[cacheIdentity] = bytes
-                while (coverCache.size > 32) {
-                    coverCache.remove(coverCache.entries.first().key)
-                }
-            }
-            return@withContext bytes
+            if (result.bytes.isNotEmpty()) return@withContext result.bytes
         }
         lastFailure?.let { throw it }
         null
+    }
+
+    private suspend fun loadScopedCover(
+        book: BookSummary,
+        url: String,
+        initialScope: CatalogImageRequestScope
+    ): ScopedCoverLoad {
+        val requestKey = listOf(
+            initialScope.generation.toString(),
+            initialScope.serverUrl,
+            initialScope.profileId.orEmpty(),
+            book.id,
+            coverCacheIdentity(url, book.updatedAtMillis)
+        ).joinToString("\u0000")
+        return catalogImageRequestLock(requestKey).withLock {
+            val scope = captureCatalogImageRequestScope(url)
+            if (!initialScope.sameLogicalSession(scope)) throw StaleCatalogImageRequestException()
+            val coverIdentity = coverCacheIdentity(url, book.updatedAtMillis)
+            val scopedIdentity = scopedCoverCacheIdentity(scope.cacheScopeId, book.id, coverIdentity)
+            val cached = CatalogImageCoordinator.cacheMutationMutex.withLock cacheLock@{
+                requireCurrentCatalogImageGeneration(scope)
+                cachedCover(scopedIdentity)?.let {
+                    return@cacheLock ScopedCoverLoad(it, loadedFromNetwork = false)
+                }
+                coverCacheStore.read(scope.serverUrl, book.id, scopedIdentity)?.let { bytes ->
+                    if (bytes.isEmpty()) return@let
+                    requireCurrentCatalogImageGeneration(scope)
+                    rememberCover(scopedIdentity, bytes)
+                    return@cacheLock ScopedCoverLoad(bytes, loadedFromNetwork = false)
+                }
+                null
+            }
+            if (cached != null) return@withLock cached
+            val response = requestBytes(url, scope)
+            if (response.bytes.isEmpty()) {
+                return@withLock ScopedCoverLoad(response.bytes, loadedFromNetwork = true)
+            }
+            val responseIdentity = scopedCoverCacheIdentity(
+                response.scope.cacheScopeId,
+                book.id,
+                coverIdentity
+            )
+            requireCurrentCatalogImageScope(response.scope)
+            CatalogImageCoordinator.cacheMutationMutex.withLock {
+                requireCurrentCatalogImageGeneration(response.scope)
+                coverCacheStore.save(
+                    response.scope.serverUrl,
+                    book.id,
+                    responseIdentity,
+                    response.bytes
+                )
+                rememberCover(responseIdentity, response.bytes)
+            }
+            ScopedCoverLoad(response.bytes, loadedFromNetwork = true)
+        }
     }
 
     internal suspend fun warmCoverCacheBatch(
@@ -1320,17 +1593,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             val book = books[index]
             val url = book.coverUrl?.let(::coverThumbnailUrl)
             if (url != null) {
-                val cacheIdentity = coverCacheIdentity(url, book.updatedAtMillis)
-                if (!coverCacheStore.contains(expectedServerUrl, book.id, cacheIdentity)) {
-                    try {
-                        val bytes = requestBytes(url)
-                        if (bytes.isNotEmpty() && getServerUrl().orEmpty() == expectedServerUrl) {
-                            coverCacheStore.save(expectedServerUrl, book.id, cacheIdentity, bytes)
-                            downloaded += 1
-                        }
-                    } catch (error: HttpRequestException) {
-                        if (error.code != 404) throw error
-                    }
+                try {
+                    val scope = captureCatalogImageRequestScope(url)
+                    if (scope.serverUrl != expectedServerUrl) return@withContext null
+                    val result = loadScopedCover(book, url, scope)
+                    if (result.bytes.isNotEmpty() && result.loadedFromNetwork) downloaded += 1
+                } catch (_: StaleCatalogImageRequestException) {
+                    return@withContext null
+                } catch (error: HttpRequestException) {
+                    if (error.code != 404) throw error
                 }
             }
             index += 1
@@ -1385,24 +1656,22 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 if (url == null) {
                     unavailable += 1
                 } else {
-                    val identity = coverCacheIdentity(url, book.updatedAtMillis)
-                    if (coverCacheStore.contains(expectedServerUrl, book.id, identity)) {
-                        skipped += 1
-                    } else {
-                        try {
-                            val bytes = requestBytes(url)
-                            if (bytes.isEmpty()) {
-                                unavailable += 1
-                            } else {
-                                coverCacheStore.save(expectedServerUrl, book.id, identity, bytes)
-                                downloaded += 1
-                            }
-                        } catch (error: HttpRequestException) {
-                            when {
-                                error.code == 404 -> unavailable += 1
-                                isRetryableOfflineCacheError(error) -> throw error
-                                else -> failed += 1
-                            }
+                    try {
+                        val scope = captureCatalogImageRequestScope(url)
+                        if (scope.serverUrl != expectedServerUrl) return@withContext null
+                        val result = loadScopedCover(book, url, scope)
+                        when {
+                            result.bytes.isEmpty() -> unavailable += 1
+                            result.loadedFromNetwork -> downloaded += 1
+                            else -> skipped += 1
+                        }
+                    } catch (_: StaleCatalogImageRequestException) {
+                        return@withContext null
+                    } catch (error: HttpRequestException) {
+                        when {
+                            error.code == 404 -> unavailable += 1
+                            isRetryableOfflineCacheError(error) -> throw error
+                            else -> failed += 1
                         }
                     }
                 }
@@ -1421,9 +1690,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun loadCatalogImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
-        runCatching { requestBytes(url) }.getOrElse { error ->
+        val scope = captureCatalogImageRequestScope(url)
+        runCatching { requestBytes(url, scope).bytes }.getOrElse { error ->
             if (error is HttpRequestException && error.code == 404 && url.endsWith("/cover")) {
-                requestBytes(url.removeSuffix("/cover") + "/thumbnail")
+                val fallbackUrl = url.removeSuffix("/cover") + "/thumbnail"
+                val fallbackScope = captureCatalogImageRequestScope(fallbackUrl)
+                if (!scope.sameLogicalSession(fallbackScope)) throw StaleCatalogImageRequestException()
+                requestBytes(fallbackUrl, fallbackScope).bytes
             } else {
                 throw error
             }
@@ -2193,9 +2466,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     override suspend fun loadStorageUsage(): StorageUsage = appStorageManager.usage()
 
     override suspend fun clearAppCache() = withContext(Dispatchers.IO) {
-        synchronized(coverCache) { coverCache.clear() }
-        coverCacheStore.clear()
-        appStorageManager.clearDisposableCache()
+        invalidateCatalogImageSession(clearDiskCache = true)
+        // CoverCacheStore was cleared under the process-wide image cache lock above.
+        // Do not delete the same directory again outside that lock.
+        appStorageManager.clearDisposableCache(includeCoverCache = false)
     }
 
     override suspend fun loadOfflineCacheStatus(): OfflineCacheStatus =
@@ -2214,8 +2488,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     override suspend fun clearOfflineCache() = withContext(Dispatchers.IO) {
         OfflineCacheSyncWorker.cancel(context)
-        synchronized(coverCache) { coverCache.clear() }
-        coverCacheStore.clear()
+        invalidateCatalogImageSession(clearDiskCache = true)
         bookDetailCacheStore.clear()
         OfflineCacheStatusStore(context).write(OfflineCacheStatus())
     }
@@ -2902,19 +3175,61 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
     }
 
-    private suspend fun requestBytes(url: String): ByteArray {
-        return executeAuthenticatedCancellable(
-            requestFactory = {
-                Request.Builder()
-                    .url(url)
-                    .get()
-                    .header("Accept", "image/*")
-                    .addSessionAccessToken()
-                    .build()
-            },
-            action = "load a book cover"
-        ) { response ->
-            response.body?.bytes() ?: ByteArray(0)
+    private suspend fun requestBytes(
+        url: String,
+        initialScope: CatalogImageRequestScope
+    ): CatalogImageResponse {
+        val requestContext = currentCoroutineContext()
+        fun requestFactory(scope: CatalogImageRequestScope): Request {
+            val builder = Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "image/*")
+                .tag(CatalogImageRequestScope::class.java, scope)
+                .tag(CredentialTrustLatch::class.java, CredentialTrustLatch(scope.serverUrl))
+            scope.authorization?.let { builder.header("Authorization", it) }
+            return builder.build()
+        }
+
+        requireCurrentCatalogImageScope(initialScope)
+        var responseScope = initialScope
+        var response = executeCancellable(requestFactory(responseScope), imageClient)
+        val credentialsAllowed = response.request
+            .tag(CredentialTrustLatch::class.java)
+            ?.credentialsRemainAllowed == true
+        if (credentialsAllowed && response.code in setOf(401, 403)) {
+            response.close()
+            refreshCatalogImageSession(responseScope, url)?.let { refreshedScope ->
+                responseScope = refreshedScope
+                response = executeCancellable(requestFactory(responseScope), imageClient)
+            }
+        }
+        response.use {
+            val responseCredentialsAllowed = it.request
+                .tag(CredentialTrustLatch::class.java)
+                ?.credentialsRemainAllowed == true
+            if (responseCredentialsAllowed && it.code == 401) {
+                throw AuthenticationRequiredException()
+            }
+            if (!it.isSuccessful) {
+                throw HttpRequestException(code = it.code, action = "load a catalog image")
+            }
+            val body = it.body
+            val bytes = if (body == null) {
+                ByteArray(0)
+            } else body.byteStream().use { input ->
+                readBoundedCatalogImageBytes(
+                    input = input,
+                    declaredLength = body.contentLength(),
+                    maxBytes = catalogImageResponseLimit(
+                        url = it.request.url.toString(),
+                        serverUrl = responseScope.serverUrl
+                    ),
+                    checkActive = { requestContext.ensureActive() }
+                )
+            }
+            requireCurrentCatalogImageScope(responseScope)
+            return CatalogImageResponse(bytes, responseScope)
         }
     }
 
@@ -2942,9 +3257,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
     }
 
-    private suspend fun executeCancellable(request: Request): Response =
+    private suspend fun executeCancellable(
+        request: Request,
+        callClient: OkHttpClient = client
+    ): Response =
         suspendCancellableCoroutine { continuation ->
-            val call = client.newCall(request)
+            val call = callClient.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
@@ -4845,6 +5163,109 @@ internal fun sameHttpOrigin(requestUrl: String, serverUrl: String): Boolean {
         request.host == server.host &&
         request.port == server.port
 }
+
+internal class CredentialTrustLatch(credentialOrigin: String?) {
+    internal val credentialOrigin = credentialOrigin.orEmpty()
+    private val origin = credentialOrigin?.toHttpUrlOrNull()
+    @Volatile
+    private var initialized = false
+    @Volatile
+    private var beganOnCredentialOrigin = false
+    @Volatile
+    var credentialsRemainAllowed = false
+        private set
+
+    @Synchronized
+    fun mayRetainCredentials(request: Request): Boolean {
+        val sameOrigin = origin?.let { credentialOriginUrl ->
+            request.url.scheme == credentialOriginUrl.scheme &&
+                request.url.host == credentialOriginUrl.host &&
+                request.url.port == credentialOriginUrl.port
+        } == true
+        if (!initialized) {
+            initialized = true
+            beganOnCredentialOrigin = sameOrigin
+            credentialsRemainAllowed = sameOrigin
+        }
+        if (beganOnCredentialOrigin && origin?.scheme == "https" && request.url.scheme == "http") {
+            throw IOException("Refusing an authenticated HTTPS redirect to insecure HTTP.")
+        }
+        if (!sameOrigin) credentialsRemainAllowed = false
+        return sameOrigin && credentialsRemainAllowed
+    }
+}
+
+internal fun originBoundRequest(
+    request: Request,
+    credentialOrigin: String?,
+    trustLatch: CredentialTrustLatch = CredentialTrustLatch(credentialOrigin)
+): Request {
+    if (trustLatch.mayRetainCredentials(request)) return request
+    return request.withoutCredentials()
+}
+
+internal fun Request.withoutCredentials(): Request =
+    newBuilder()
+        .removeHeader("Authorization")
+        .removeHeader("Proxy-Authorization")
+        .removeHeader("Cookie")
+        .build()
+
+internal fun readBoundedCatalogImageBytes(
+    input: InputStream,
+    declaredLength: Long,
+    maxBytes: Long = MAX_COVER_IMAGE_RESPONSE_BYTES,
+    checkActive: () -> Unit = {}
+): ByteArray {
+    require(maxBytes in 1..Int.MAX_VALUE.toLong())
+    if (declaredLength > maxBytes) {
+        throw UserFacingException("The image response is too large.")
+    }
+    val maximum = maxBytes.toInt()
+    var output = ByteArray(minOf(DEFAULT_CATALOG_IMAGE_BUFFER_BYTES, maximum))
+    var total = 0
+    while (true) {
+        checkActive()
+        if (total == output.size) {
+            if (total == maximum) {
+                if (input.read() >= 0) {
+                    throw UserFacingException("The image response is too large.")
+                }
+                break
+            }
+            output = output.copyOf(minOf(maximum, output.size * 2))
+        }
+        val read = input.read(output, total, output.size - total)
+        if (read < 0) break
+        if (read == 0) continue
+        total += read
+    }
+    checkActive()
+    return if (total == output.size) output else output.copyOf(total)
+}
+
+internal fun catalogImageResponseLimit(url: String, serverUrl: String): Long {
+    val parsed = url.toHttpUrlOrNull() ?: return MAX_COVER_IMAGE_RESPONSE_BYTES
+    if (!sameHttpOrigin(url, serverUrl)) return MAX_COVER_IMAGE_RESPONSE_BYTES
+    val path = parsed.pathSegments
+    val isBookOrbitComicPage = path.size == 7 &&
+        path.take(4) == listOf("api", "v1", "cbz", "files") &&
+        path[4].isNotBlank() &&
+        path[5] == "pages" &&
+        path[6].toIntOrNull()?.let { it >= 0 } == true
+    val isKomgaComicPage = path.size == 6 &&
+        path.take(3) == listOf("api", "v1", "books") &&
+        path[3].isNotBlank() &&
+        path[4] == "pages" &&
+        path[5].toIntOrNull()?.let { it >= 0 } == true
+    return if (isBookOrbitComicPage || isKomgaComicPage) {
+        MAX_COMIC_PAGE_IMAGE_RESPONSE_BYTES
+    } else {
+        MAX_COVER_IMAGE_RESPONSE_BYTES
+    }
+}
+
+private const val DEFAULT_CATALOG_IMAGE_BUFFER_BYTES = 8 * 1024
 
 internal fun readerCacheExtension(book: BookSummary): String = when (book.mediaKind) {
     MediaKind.EPUB -> "epub"

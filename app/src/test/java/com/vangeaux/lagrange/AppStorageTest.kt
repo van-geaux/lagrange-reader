@@ -46,6 +46,26 @@ class AppStorageTest {
     }
 
     @Test
+    fun `generic cache clear can leave synchronized cover storage alone`() = runTest {
+        val filesDir = Files.createTempDirectory("app-storage-files").toFile()
+        val cacheDir = Files.createTempDirectory("app-storage-cache").toFile()
+        val cover = filesDir.resolve("cover_cache/cover.bin").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(4))
+        }
+        val transient = cacheDir.resolve("reader-cache/chapter.html").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(4))
+        }
+        val manager = AppStorageManager(filesDir, cacheDir)
+
+        manager.clearDisposableCache(includeCoverCache = false)
+
+        assertTrue(cover.isFile)
+        assertTrue(!transient.exists())
+    }
+
+    @Test
     fun `legacy full media caches are pruned without touching document caches`() = runTest {
         val filesDir = Files.createTempDirectory("app-storage-files").toFile()
         val cacheDir = Files.createTempDirectory("app-storage-cache").toFile()

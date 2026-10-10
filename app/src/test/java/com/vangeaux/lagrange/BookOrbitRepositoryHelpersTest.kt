@@ -1,9 +1,12 @@
 package com.vangeaux.lagrange
 
+import java.io.ByteArrayInputStream
+import okhttp3.Request
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -245,6 +248,198 @@ class BookOrbitRepositoryHelpersTest {
                 "https://books.example.test:8443/api/v1/books/files/1/serve",
                 "https://books.example.test"
             )
+        )
+        assertTrue(
+            sameHttpOrigin(
+                "https://books.example.test:443/cover.jpg",
+                "https://BOOKS.example.test"
+            )
+        )
+        assertFalse(sameHttpOrigin("not a URL", "https://books.example.test"))
+        assertFalse(sameHttpOrigin("https://books.example.test/cover.jpg", "not a URL"))
+    }
+
+    @Test
+    fun `cross origin redirects cannot regain credentials`() {
+        val external = Request.Builder()
+            .url("https://cdn.example.test/book.jpg")
+            .header("Authorization", "Bearer secret")
+            .header("Proxy-Authorization", "Basic secret")
+            .header("Cookie", "session=secret")
+            .build()
+        val sameOrigin = external.newBuilder()
+            .url("https://books.example.test/cover.jpg")
+            .build()
+
+        val latch = CredentialTrustLatch("https://books.example.test")
+        assertEquals(
+            "Bearer secret",
+            originBoundRequest(sameOrigin, "https://books.example.test", latch)
+                .header("Authorization")
+        )
+        val stripped = originBoundRequest(external, "https://books.example.test", latch)
+        assertNull(stripped.header("Authorization"))
+        assertNull(stripped.header("Proxy-Authorization"))
+        assertNull(stripped.header("Cookie"))
+        assertNull(
+            originBoundRequest(sameOrigin, "https://books.example.test", latch)
+                .header("Authorization")
+        )
+
+        val externalFirst = CredentialTrustLatch("https://books.example.test")
+        originBoundRequest(external, "https://books.example.test", externalFirst)
+        assertNull(
+            originBoundRequest(sameOrigin, "https://books.example.test", externalFirst)
+                .header("Cookie")
+        )
+
+        val downgrade = CredentialTrustLatch("https://books.example.test")
+        originBoundRequest(sameOrigin, "https://books.example.test", downgrade)
+        assertThrows(java.io.IOException::class.java) {
+            originBoundRequest(
+                sameOrigin.newBuilder().url("http://books.example.test/cover.jpg").build(),
+                "https://books.example.test",
+                downgrade
+            )
+        }
+    }
+
+    @Test
+    fun `catalog image cache scopes separate accounts and cookies`() {
+        val first = catalogImageCacheScopeId(
+            serverUrl = "https://books.example.test",
+            profileId = "profile-1",
+            authorization = "Bearer account-a",
+            cookie = "session=a"
+        )
+        assertEquals(
+            first,
+            catalogImageCacheScopeId(
+                serverUrl = "https://books.example.test",
+                profileId = "profile-1",
+                authorization = "Bearer account-a",
+                cookie = "session=a"
+            )
+        )
+        assertFalse(
+            first == catalogImageCacheScopeId(
+                serverUrl = "https://books.example.test",
+                profileId = "profile-1",
+                authorization = "Bearer account-b",
+                cookie = "session=a"
+            )
+        )
+        assertFalse(
+            first == catalogImageCacheScopeId(
+                serverUrl = "https://books.example.test",
+                profileId = "profile-1",
+                authorization = "Bearer account-a",
+                cookie = "session=b"
+            )
+        )
+        assertFalse(
+            scopedCoverCacheIdentity(first, "book-1", "cover") ==
+                scopedCoverCacheIdentity(first, "book-2", "cover")
+        )
+    }
+
+    @Test
+    fun `invalidated image requests lose every credential header`() {
+        val request = Request.Builder()
+            .url("https://books.example.test/cover.jpg")
+            .header("Authorization", "Bearer secret")
+            .header("Proxy-Authorization", "Basic secret")
+            .header("Cookie", "session=secret")
+            .build()
+
+        val stripped = request.withoutCredentials()
+
+        assertNull(stripped.header("Authorization"))
+        assertNull(stripped.header("Proxy-Authorization"))
+        assertNull(stripped.header("Cookie"))
+    }
+
+    @Test
+    fun `stale or anonymous image responses cannot persist cookies`() {
+        val scope = CatalogImageRequestScope(
+            serverUrl = "https://books.example.test",
+            profileId = "profile-1",
+            accessToken = "secret",
+            cookie = "session=secret",
+            generation = 7L
+        )
+        val request = Request.Builder()
+            .url("https://books.example.test/cover.jpg")
+            .build()
+        val trusted = CredentialTrustLatch(scope.serverUrl).apply {
+            mayRetainCredentials(request)
+        }
+
+        assertTrue(catalogImageResponseMayPersistCookies(scope, 7L, trusted))
+        assertFalse(catalogImageResponseMayPersistCookies(scope, 8L, trusted))
+        assertFalse(
+            catalogImageResponseMayPersistCookies(
+                scope,
+                7L,
+                CredentialTrustLatch(scope.serverUrl)
+            )
+        )
+        assertFalse(catalogImageResponseMayPersistCookies(null, 7L, trusted))
+    }
+
+    @Test
+    fun `catalog image response rejects declared and streamed bytes beyond its limit`() {
+        assertThrows(UserFacingException::class.java) {
+            readBoundedCatalogImageBytes(
+                input = ByteArrayInputStream(byteArrayOf(1)),
+                declaredLength = 5,
+                maxBytes = 4
+            )
+        }
+        assertThrows(UserFacingException::class.java) {
+            readBoundedCatalogImageBytes(
+                input = ByteArrayInputStream(byteArrayOf(1, 2, 3, 4, 5)),
+                declaredLength = -1,
+                maxBytes = 4
+            )
+        }
+        assertEquals(
+            listOf<Byte>(1, 2, 3, 4),
+            readBoundedCatalogImageBytes(
+                input = ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)),
+                declaredLength = -1,
+                maxBytes = 4
+            ).toList()
+        )
+    }
+
+    @Test
+    fun `only same origin comic pages receive the larger response limit`() {
+        val server = "https://books.example.test"
+        assertEquals(
+            MAX_COMIC_PAGE_IMAGE_RESPONSE_BYTES,
+            catalogImageResponseLimit(
+                "https://books.example.test/api/v1/cbz/files/file-1/pages/0?zero_based=true",
+                server
+            )
+        )
+        assertEquals(
+            MAX_COMIC_PAGE_IMAGE_RESPONSE_BYTES,
+            catalogImageResponseLimit(
+                "https://books.example.test/api/v1/books/book-1/pages/0?zero_based=true",
+                server
+            )
+        )
+        assertEquals(
+            MAX_COVER_IMAGE_RESPONSE_BYTES,
+            catalogImageResponseLimit(
+                "https://cdn.example.test/api/v1/cbz/files/file-1/pages/0",
+                server
+            )
+        )
+        assertEquals(
+            MAX_COVER_IMAGE_RESPONSE_BYTES,
+            catalogImageResponseLimit("https://books.example.test/cover.jpg", server)
         )
     }
 
