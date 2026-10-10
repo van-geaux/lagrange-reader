@@ -106,6 +106,8 @@ class AppPreferencesStoreTest {
     fun `EPUB TTS punctuation defaults to disabled`() {
         assertEquals(false, EpubTtsSettings().pauses.enabled)
         assertEquals(true, EpubTtsPauseSettings().enabled)
+        assertEquals(false, EpubTtsSettings().images.readDescriptions)
+        assertEquals(false, EpubTtsSettings().images.readResourceNames)
     }
 
     @Test
