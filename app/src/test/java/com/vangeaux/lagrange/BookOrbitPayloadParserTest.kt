@@ -751,6 +751,36 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseReaderProgress records the server percent only from the matching entry`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "book-progress",
+            fileId = "file-primary",
+            title = "Progress EPUB",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 10f
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","percentage":63.5}]"""
+        )
+        val noPercentage = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","pageNumber":4}]"""
+        )
+        val otherFile = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-secondary","percentage":63.5}]"""
+        )
+
+        assertEquals(63.5f, hydrated.serverProgressPercent)
+        assertNull(noPercentage.serverProgressPercent)
+        assertNull(otherFile.serverProgressPercent)
+        assertEquals(10f, otherFile.progressPercent)
+    }
+
+    @Test
     fun `parseReaderProgress hydrates matching audiobook position and preserves mismatched file`() {
         val book = BookSummary(
             libraryId = "lib-progress",

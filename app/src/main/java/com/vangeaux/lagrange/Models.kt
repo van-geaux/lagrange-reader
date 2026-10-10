@@ -185,6 +185,8 @@ data class BookSummary(
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
     val lastReadAtMillis: Long? = null,
+    /** Set only by a progress fetch that matched this file; cleared before each fetch so it is never stale. */
+    val serverProgressPercent: Float? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
     val readerLocatorJson: String? = null,
@@ -753,6 +755,8 @@ data class ReaderState(
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
+    /** What this device itself last reported to the server (queued or synced), to recognize its own writes. */
+    val lastReportedProgressPercent: Float? = null,
     val serverProgressAuthoritative: Boolean = false,
     val initialLocatorJson: String? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,

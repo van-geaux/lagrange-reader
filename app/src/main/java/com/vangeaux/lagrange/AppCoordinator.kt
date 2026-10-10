@@ -1579,16 +1579,17 @@ class AppCoordinator internal constructor(
                 } else {
                     emptyList()
                 }
-                val progressBook = if (
-                    launchMode == ReaderLaunchMode.NORMAL &&
+                val fetchServerProgress = launchMode == ReaderLaunchMode.NORMAL &&
                     !offlineOpen &&
                     syncResult != SyncAttemptResult.TransientFailure &&
                     syncResult != SyncAttemptResult.AuthenticationBlocked
-                ) {
-                    readerModule()?.loadReaderProgress(readerBook, audioFiles)
-                        ?: repository.loadReaderProgress(readerBook, audioFiles)
+                // A book carried over from an earlier reader session must not pass as fresh server progress.
+                val unfetchedBook = readerBook.copy(serverProgressPercent = null)
+                val progressBook = if (fetchServerProgress) {
+                    readerModule()?.loadReaderProgress(unfetchedBook, audioFiles)
+                        ?: repository.loadReaderProgress(unfetchedBook, audioFiles)
                 } else {
-                    readerBook
+                    unfetchedBook
                 }
                 val preparedState = readerModule()?.buildReaderState(
                     book = progressBook,
@@ -1622,7 +1623,10 @@ class AppCoordinator internal constructor(
                 val canRetryLocal = launchMode == ReaderLaunchMode.NORMAL && !offlineOpen && !presentationStarted
                 val finalError = if (canRetryLocal) {
                     val localAttempt = try {
-                        val state = repository.buildReaderState(book = book, localOnly = true)
+                        val state = repository.buildReaderState(
+                            book = book.copy(serverProgressPercent = null),
+                            localOnly = true
+                        )
                         val sharedState = restoreSharedReaderPosition(state)
                         presentReaderState(sharedState, emptyList())
                         Result.success(Unit)
