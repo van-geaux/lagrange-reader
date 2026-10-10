@@ -733,6 +733,45 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `bootstrap does not expose cached account state when no profile session was restored`() = runTest {
+        val cached = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book)
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unavailable,
+            cachedBrowserState = cached,
+            restoreActiveReaderLocalOnlyResult = ReaderState(book)
+        )
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = false
+                    override suspend fun restoreCurrentProfileSession(): Boolean = false
+                }
+            }
+        )
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+        assertEquals(0, repository.cachedBrowserStateCalls)
+        assertTrue(repository.restoreActiveReaderCalls.isEmpty())
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+        assertEquals(0, repository.cachedBrowserStateCalls)
+    }
+
+    @Test
     fun `checkForAppUpdate exposes and dismisses the release notification`() = runTest {
         val update = ReleaseUpdate(
             versionName = "1.2.0",
@@ -3165,6 +3204,7 @@ private class FakeBookOrbitDataSource(
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
+    var cachedBrowserStateCalls = 0
     var sessionStateCalls = 0
     var onSessionState: (() -> Unit)? = null
     var selectedLibraryId: String? = null
@@ -3253,7 +3293,10 @@ private class FakeBookOrbitDataSource(
         return emptyList()
     }
 
-    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
+    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? {
+        cachedBrowserStateCalls += 1
+        return cachedBrowserState
+    }
 
     override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = interruptedDownloads
 

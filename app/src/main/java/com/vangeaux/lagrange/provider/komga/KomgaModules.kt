@@ -44,6 +44,12 @@ internal fun komgaSessionHeaders(authorization: String?, cookie: String?): Map<S
     cookie?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
 }
 
+internal fun komgaAuthenticatedPrincipal(payload: String): AuthenticatedAccountPrincipal? =
+    authenticatedAccountPrincipal(
+        payload = payload,
+        stableFields = listOf("id", "userId")
+    )
+
 internal fun komgaParseInstantMillis(value: String?): Long? = value
     ?.takeIf { it.isNotBlank() }
     ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
@@ -266,6 +272,7 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
             .header("Authorization", Credentials.basic(username, password))
             .get()
             .build()
+        var authenticatedPrincipal: AuthenticatedAccountPrincipal? = null
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
                 throw UserFacingException("Komga did not accept this username or password.")
@@ -273,10 +280,16 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
             if (!response.isSuccessful) {
                 throw UserFacingException("Komga sign-in failed with HTTP ${response.code}.")
             }
+            authenticatedPrincipal = komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
         }
         this@KomgaAuthModuleImpl.serverUrl = base
         authorization = Credentials.basic(username, password)
-        activeProfileId()?.let { credentialStore.write(it, authorization!!) }
+        activeProfileId()?.let { profileId ->
+            credentialStore.write(profileId, authorization!!)
+            authenticatedPrincipal?.let { principal ->
+                persistAuthenticatedAccount(profileId, principal)
+            }
+        }
         Unit
     }
 
@@ -292,7 +305,16 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
                 .build()
             client.newCall(request).execute().use { response ->
                 when {
-                    response.isSuccessful -> SessionState.Authenticated
+                    response.isSuccessful -> {
+                        val principal = komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
+                        val profileId = activeProfileId()
+                        if (principal != null && profileId != null) {
+                            persistAuthenticatedAccount(profileId, principal)
+                            SessionState.Authenticated
+                        } else {
+                            SessionState.Unavailable
+                        }
+                    }
                     response.code == 401 || response.code == 403 -> SessionState.Unauthenticated
                     else -> SessionState.Unavailable
                 }
@@ -315,6 +337,18 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
     internal suspend fun restoreCurrentProfileSession(): Boolean {
         authorization = activeProfileId()?.let(credentialStore::read)
         return !authorization.isNullOrBlank() || hasWebSession()
+    }
+
+    private fun persistAuthenticatedAccount(
+        profileId: String,
+        principal: AuthenticatedAccountPrincipal
+    ) {
+        AuthenticatedAccountScopeStore(appContext).writeAuthoritative(
+            profileId = profileId,
+            providerId = PROVIDER_KOMGA,
+            principal = principal.canonical,
+            equivalentPrincipals = principal.provenAliases
+        )
     }
 
     internal suspend fun clearRuntimeSession() = withContext(Dispatchers.Main.immediate) {
@@ -924,6 +958,7 @@ class KomgaDownloadModuleImpl(
         val fileId = book.fileId ?: book.id
         val existingRecord = downloadStore.find(serverUrl, fileId)
         val target = DownloadStore(context).downloadTarget(
+            serverUrl = serverUrl,
             fileId = fileId,
             title = book.title,
             mediaKind = book.mediaKind,

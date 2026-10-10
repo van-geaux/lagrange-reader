@@ -477,7 +477,13 @@ internal class WorkManagerDownloadScheduler(
                         val fileId = download.fileId
                         val existing = downloadStore.find(serverUrl, fileId)
                         val target = existing?.localPath?.let(::File)
-                            ?: downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
+                            ?: downloadStore.downloadTarget(
+                                serverUrl,
+                                fileId,
+                                book.title,
+                                book.mediaKind,
+                                book.format
+                            )
                         downloadStore.saveAttempt(
                             DownloadAttempt(
                                 serverUrl = serverUrl,

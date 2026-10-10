@@ -8,7 +8,8 @@ import kotlinx.coroutines.withContext
 
 data class StorageUsage(
     val downloadedBytes: Long = 0L,
-    val cacheBytes: Long = 0L
+    val cacheBytes: Long = 0L,
+    val availableBytes: Long = 0L
 )
 
 internal class AppStorageManager private constructor(
@@ -29,7 +30,8 @@ internal class AppStorageManager private constructor(
             cacheBytes = fileTreeSize(File(filesDir, "cover_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache.json")) +
-                fileTreeSize(cacheDir)
+                fileTreeSize(cacheDir),
+            availableBytes = filesDir.usableSpace.coerceAtLeast(0L)
         )
     }
 
