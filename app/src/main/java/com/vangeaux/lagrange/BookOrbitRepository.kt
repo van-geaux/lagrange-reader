@@ -490,19 +490,61 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     override suspend fun saveCurrentProfileSession() {
         val profileId = currentProfileId() ?: return
         val token = context.dataStore.data.first()[Keys.ACCESS_TOKEN]
-        if (token.isNullOrBlank()) {
+        val serverUrl = getServerUrl().orEmpty()
+        val cookieApi = CookieManager.getInstance().getCookie("${serverUrl.trimEnd('/')}/api")
+        val cookieAuth = CookieManager.getInstance().getCookie("${serverUrl.trimEnd('/')}/api/v1/auth")
+        if (token.isNullOrBlank() && cookieApi.isNullOrBlank() && cookieAuth.isNullOrBlank()) {
             profileSessionStore.clear(profileId)
         } else {
-            profileSessionStore.write(profileId, token)
+            profileSessionStore.write(
+                profileId,
+                JSONObject()
+                    .put("accessToken", token)
+                    .put("cookieApi", cookieApi)
+                    .put("cookieAuth", cookieAuth)
+                    .toString()
+            )
         }
     }
 
     override suspend fun restoreCurrentProfileSession(): Boolean {
         val profileId = currentProfileId() ?: return false
-        val token = profileSessionStore.read(profileId)
+        val storedSession = profileSessionStore.read(profileId)
+        val parsedSession = storedSession?.let { value ->
+            runCatching {
+                JSONObject(value).let { json ->
+                    json.optString("accessToken").takeIf(String::isNotBlank) to
+                        listOfNotNull(
+                            json.optString("cookieApi").takeIf(String::isNotBlank),
+                            json.optString("cookieAuth").takeIf(String::isNotBlank)
+                        ).takeIf(List<String>::isNotEmpty)
+                            ?.joinToString("\u0000")
+                }
+            }.getOrNull()
+        }
+        val token = parsedSession?.first ?: storedSession
+        val cookiesByPath = parsedSession?.second?.split('\u0000').orEmpty()
         context.dataStore.edit { prefs ->
             if (token.isNullOrBlank()) prefs.remove(Keys.ACCESS_TOKEN)
             else prefs[Keys.ACCESS_TOKEN] = token
+        }
+        val serverUrl = getServerUrl().orEmpty()
+        if (cookiesByPath.isNotEmpty() && serverUrl.isNotBlank()) {
+            withContext(Dispatchers.Main.immediate) {
+                cookiesByPath.forEachIndexed { index, cookie ->
+                    val path = if (index == 0) "/api" else "/api/v1/auth"
+                    cookie.split(';')
+                        .map(String::trim)
+                        .filter(String::isNotBlank)
+                        .forEach { value ->
+                            CookieManager.getInstance().setCookie(
+                                "${serverUrl.trimEnd('/')}$path",
+                                value
+                            )
+                        }
+                    }
+                CookieManager.getInstance().flush()
+            }
         }
         return !token.isNullOrBlank()
     }

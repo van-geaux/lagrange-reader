@@ -28,6 +28,10 @@ Copy this file into this folder using the target server/provider name, for examp
 
 - User-confirmed that the issue #202 catalog-filter and sorting behavior works after installing `Lagrange-debug-202610061127.apk`. The validated artifact is `/projects/bookorbit-android/app/build/outputs/apk/debug/Lagrange-debug-202610061127.apk` with SHA-256 `d5cd2c290d512e8fe2a24906bb1845be2b11a3e14b137e0c7e4264aaa36719ef`; device, server label, and separate manual evidence were not supplied. This confirms the user-visible filter/sort implementation, while automated tests and CI remain separate evidence.
 
+### Latest provider-switch session validation
+
+- User-confirmed on 9 October 2026 with `Lagrange-debug-202610092219.apk` (SHA-256 `a68513e7b4eeb16885cc0345fa9446a395ff675c39514d9b8a8c703d8bf95e69`) on Samsung SM-S931B / Android 16 over ADB (`192.168.1.170:42533`). The Komga profile opened successfully, remained active for five minutes, and switching back to BookOrbit restored the other provider's Home without showing login. The validation covers the saved-session provider-switch path in issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268); it does not claim validation of general token-expiry behavior outside provider switching.
+
 Use these result markers for every item:
 
 - `[x] Pass`

@@ -16,6 +16,10 @@ Copy this file into this folder using the target server/provider name, for examp
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
 - Evidence links/screenshots/logs: `User-confirmed on Samsung SM-S931B / Android 16 with Lagrange-debug-202610041340.apk; https://github.com/van-geaux/lagrange-reader/issues/206`
 
+### Latest provider-switch session validation
+
+- User-confirmed on 9 October 2026 with `Lagrange-debug-202610092219.apk` (SHA-256 `a68513e7b4eeb16885cc0345fa9446a395ff675c39514d9b8a8c703d8bf95e69`) on Samsung SM-S931B / Android 16 over ADB (`192.168.1.170:42533`). With BookOrbit and Komga profiles configured, switching to Komga, waiting five minutes, and returning to BookOrbit restored BookOrbit Home without showing login. The validation covers the saved-session provider-switch path in issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268); it does not claim validation of general token-expiry behavior outside provider switching.
+
 Use these result markers for every item:
 
 - `[x] Pass`

@@ -14,6 +14,7 @@ import com.vangeaux.lagrange.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -28,6 +29,7 @@ import java.io.FileOutputStream
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.Locale
+import kotlin.coroutines.resume
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.security.KeyStore
@@ -315,11 +317,15 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
         return !authorization.isNullOrBlank() || hasWebSession()
     }
 
-    internal fun clearRuntimeSession() {
+    internal suspend fun clearRuntimeSession() = withContext(Dispatchers.Main.immediate) {
         serverUrl = null
         authorization = null
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
+        suspendCancellableCoroutine { continuation ->
+            CookieManager.getInstance().removeAllCookies {
+                CookieManager.getInstance().flush()
+                if (continuation.isActive) continuation.resume(Unit)
+            }
+        }
     }
 
     private fun activeProfileId(): String? = ServerProfileStore(appContext).active()?.id

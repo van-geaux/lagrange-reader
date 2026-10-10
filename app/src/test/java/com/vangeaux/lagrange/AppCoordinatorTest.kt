@@ -2105,7 +2105,7 @@ class AppCoordinatorTest {
     fun `change server reconfigures audiobook playback for the replacement repository`() = runTest {
         val replacement = "https://replacement.example.test"
         val repository = FakeBookOrbitDataSource(serverUrl = serverUrl)
-        val replacementRepository = FakeBookOrbitDataSource(serverUrl = replacement)
+        val replacementRepository = FakeBookOrbitDataSource(serverUrl = null)
         val coordinator = AppCoordinator(
             repository = repository,
             dispatcher = StandardTestDispatcher(testScheduler),
@@ -2118,6 +2118,132 @@ class AppCoordinatorTest {
         advanceUntilIdle()
 
         assertSame(replacementRepository, reconfiguredRepository)
+        assertEquals(replacement, replacementRepository.serverUrl)
+    }
+
+    @Test
+    fun `change server restores a reachable Komga replacement without reopening login`() = runTest {
+        val komgaUrl = "https://komga.example.test"
+        val bookOrbitRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val komgaRepository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Authenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        )
+        val coordinator = AppCoordinator(
+            repository = bookOrbitRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> komgaRepository },
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = true
+                    override suspend fun restoreCurrentProfileSession(): Boolean = true
+                }
+            }
+        )
+
+        coordinator.changeServer(komgaUrl, providerId = PROVIDER_KOMGA)
+        advanceUntilIdle()
+
+        assertEquals(komgaUrl, komgaRepository.serverUrl)
+        assertFalse(coordinator.screen.value is AppScreen.Login)
+    }
+
+    @Test
+    fun `change server restores a reachable BookOrbit replacement without reopening login`() = runTest {
+        val bookOrbitUrl = "https://bookorbit.example.test"
+        val komgaRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val bookOrbitRepository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Authenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        )
+        val coordinator = AppCoordinator(
+            repository = komgaRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> bookOrbitRepository },
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = true
+                    override suspend fun restoreCurrentProfileSession(): Boolean = true
+                }
+            }
+        )
+
+        coordinator.changeServer(bookOrbitUrl, providerId = PROVIDER_BOOKORBIT)
+        advanceUntilIdle()
+
+        assertEquals(bookOrbitUrl, bookOrbitRepository.serverUrl)
+        assertFalse(coordinator.screen.value is AppScreen.Login)
+    }
+
+    @Test
+    fun `change server keeps an expired saved session on login`() = runTest {
+        val replacement = "https://expired.example.test"
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacementRepository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated
+        )
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacementRepository },
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = true
+
+                    override suspend fun restoreCurrentProfileSession(): Boolean = true
+                }
+            }
+        )
+
+        coordinator.changeServer(replacement)
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+        assertEquals(1, replacementRepository.clearSessionCalls)
+    }
+
+    @Test
+    fun `change server validates the current session before saving it`() = runTest {
+        val events = mutableListOf<String>()
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl).apply {
+            onSessionState = { events += "current-session" }
+        }
+        val replacementRepository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Authenticated,
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(book)
+        ).apply {
+            onSessionState = { events += "target-session" }
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacementRepository },
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean {
+                        events += "save"
+                        return true
+                    }
+
+                    override suspend fun restoreCurrentProfileSession(): Boolean {
+                        events += "restore"
+                        return true
+                    }
+                }
+            }
+        )
+
+        coordinator.changeServer("https://target.example.test")
+        advanceUntilIdle()
+
+        assertEquals(listOf("current-session", "save", "restore", "target-session"), events)
     }
 
     @Test
@@ -3040,6 +3166,7 @@ private class FakeBookOrbitDataSource(
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
     var sessionStateCalls = 0
+    var onSessionState: (() -> Unit)? = null
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
     val refreshFirstPages = mutableListOf<LibraryBooksPage?>()
@@ -3070,6 +3197,7 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun getSessionState(): SessionState {
+        onSessionState?.invoke()
         sessionStateRequested = true
         sessionStateGate?.await()
         val result = sessionStateSequence.getOrNull(sessionStateCalls) ?: sessionState
