@@ -4,9 +4,9 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Current release
 
-- [x] Lagrange 1.5.4 is published as [`v1.5.4`](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.4), with combined and ABI-specific APK assets.
-- [x] `app/build.gradle.kts` records `versionName 1.5.4` and `versionCode 25`.
-- [x] Release validation is recorded in [`docs/release-notes/v1.5.4.md`](docs/release-notes/v1.5.4.md); Android-test sources compiled but no connected device was available during release preparation.
+- [ ] Lagrange 2.0.0 is prepared for publication as [`v2.0.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0), with combined and ABI-specific APK assets.
+- [x] `app/build.gradle.kts` records `versionName 2.0.0` and `versionCode 27`.
+- [ ] Release validation is recorded in [`docs/release-notes/v2.0.0.md`](docs/release-notes/v2.0.0.md); automated verification passes, while current-device validation and final release publication remain part of the release gate. Security advisories [`GHSA-rmjp-8gm4-6j6w`](https://github.com/van-geaux/lagrange-reader/security/advisories/GHSA-rmjp-8gm4-6j6w) and [`GHSA-vr98-2hj5-h9wp`](https://github.com/van-geaux/lagrange-reader/security/advisories/GHSA-vr98-2hj5-h9wp) are published.
 
 ## Current implementation status
 

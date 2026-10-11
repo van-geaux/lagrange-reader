@@ -4,8 +4,8 @@ This document contains current project direction only. Historical work orders an
 
 ## Current status
 
-- Release: Lagrange 1.5.4 is published at [`v1.5.4`](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.5.4). See [`release-notes/v1.5.4.md`](release-notes/v1.5.4.md).
-- Version marker: `versionName 1.5.4`, `versionCode 25` in `app/build.gradle.kts`.
+- Release: Lagrange 2.0.0 is being prepared for publication at [`v2.0.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0). See [`release-notes/v2.0.0.md`](release-notes/v2.0.0.md).
+- Version marker: `versionName 2.0.0`, `versionCode 27` in `app/build.gradle.kts`.
 - Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit and Komga provider modules are the current integration surfaces; additional providers require a focused contract and validation plan.
 - Current release capabilities include EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, immersive reader controls, audiobook speed/progress controls, grouped physical-file downloads, and client-side offline CBR/CB7 extraction.
 - MOBI, AZW, AZW3, and FB2 remain explicitly unsupported. Native AppAuth/Custom Tabs remains deferred until upstream mobile-redirect support is deployed.

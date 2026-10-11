@@ -6,19 +6,19 @@
 
 # Lagrange Reader
 
-An offline-first Android reader for BookOrbit.
+An offline-first Android reader for BookOrbit and Komga.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v1.6.0)
+[![Version 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 
 </div>
 
-Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit). It began with a personal need: I love BookOrbit, but I wanted an app that lets me take my library with me and read offline.
+Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit) and [Komga](https://komga.org/). It began with a personal need: I wanted an app that lets me take my library with me and read offline.
 
-It is now for anyone who already uses a BookOrbit server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
+It is now for anyone who already uses a BookOrbit or Komga server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
 
-BookOrbit remains the server and source of truth for your library. Lagrange is the Android client: it lets you browse, download, read, listen, and keep working when your connection is unavailable. When you reconnect, queued progress and other supported changes synchronize back to BookOrbit.
+Your configured server remains the source of truth for its library. Lagrange is the Android client: it lets you browse, download, read, listen where supported, and keep working when your connection is unavailable. When you reconnect, queued progress and other supported changes synchronize back to the active provider.
 
 This is a community project, not an official BookOrbit application. Development was AI-assisted, with the implementation, testing, and product decisions reviewed by the project owner.
 
@@ -63,20 +63,20 @@ The following screenshots show the main reading and library experience. More scr
 
 Use Lagrange if you have:
 
-- access to a BookOrbit server and an account on that server;
+- access to a BookOrbit or Komga server and an account on that server;
 - an Android phone or tablet running Android 8.0 (API 26) or newer;
 - books, comics, PDFs, or audiobooks that you want available away from the server.
 
-Lagrange is not a standalone ebook reader and does not provide a BookOrbit server. If you do not already have BookOrbit access, start with the [BookOrbit project](https://github.com/BookOrbit).
+Lagrange is not a standalone ebook reader and does not provide a BookOrbit or Komga server. If you do not already have server access, start with the [BookOrbit project](https://github.com/BookOrbit) or [Komga](https://komga.org/).
 
 ## Get started
 
 1. Install the latest [Lagrange release](https://github.com/van-geaux/lagrange-reader/releases).
-2. Open the app and enter the URL of your BookOrbit server. Prefer HTTPS, especially outside your home network.
-3. Sign in with the account provided by your BookOrbit administrator.
+2. Open the app and choose BookOrbit or Komga, then enter your server URL. Prefer HTTPS, especially outside your home network.
+3. Sign in with the account provided by your server administrator.
 4. Browse your libraries, open a book, or download content from Book Detail for offline use.
 
-The current sign-in flow supports username/password, explicit BookOrbit OIDC provider sign-in in a WebView, and Komga server-hosted sign-in in a WebView for configured OAuth2/OIDC providers. Native OIDC/AppAuth is not implemented. See [OIDC / SSO Authentication](docs/providers/bookorbit/oidc-authentication.md).
+The current sign-in flow supports BookOrbit username/password and server-hosted OIDC sign-in in a WebView, plus Komga Basic Auth and server-hosted OAuth2/OIDC sign-in in a WebView. Native OIDC/AppAuth is not implemented. See [BookOrbit OIDC / SSO Authentication](docs/providers/bookorbit/oidc-authentication.md) and [Komga integration](docs/providers/komga/integration.md).
 
 ## How the client works
 
