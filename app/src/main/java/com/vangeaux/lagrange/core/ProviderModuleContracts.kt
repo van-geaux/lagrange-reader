@@ -52,6 +52,7 @@ interface SeriesCatalogModule {
 
 interface HomeShelfModule {
     suspend fun loadCachedHomeBooks(): List<BookSummary>
+    suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData(
         booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to loadCachedHomeBooks())
     )

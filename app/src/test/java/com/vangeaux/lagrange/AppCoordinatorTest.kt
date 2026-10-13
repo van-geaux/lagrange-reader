@@ -2716,6 +2716,36 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `live progress updates cached home shelf books and series`() = runTest {
+        val audiobook = book.copy(format = "m4b", mediaKind = MediaKind.AUDIO)
+        val coordinator = AppCoordinator(
+            FakeBookOrbitDataSource(),
+            StandardTestDispatcher(testScheduler)
+        )
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = emptyList(),
+                homeShelves = HomeShelfData(
+                    booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(audiobook)),
+                    seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(audiobook))
+                )
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = audiobook)))
+
+        coordinator.onProgress(audiobook, position = 90_000L, pageIndex = 0, progressPercent = 50f)
+        advanceUntilIdle()
+        coordinator.minimizeAudioReader()
+
+        val shelves = (coordinator.screen.value as AppScreen.Browser).browserState.homeShelves
+        assertEquals(50f, shelves.booksBySection[HomeSection.CURRENTLY_READING]?.single()?.progressPercent)
+        assertEquals(50f, shelves.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES]?.single()?.progressPercent)
+    }
+
+    @Test
     fun `successful sync lets refreshed server progress replace the local overlay`() = runTest {
         val serverBook = book.copy(progressPercent = 72f, progressLabel = "72%")
         val repository = FakeBookOrbitDataSource(
@@ -2888,6 +2918,45 @@ class AppCoordinatorTest {
         assertNull(reset.progressLabel)
         assertNull(reset.lastReadAtMillis)
         assertTrue(browser.browserState.message.orEmpty().contains("as unread"))
+    }
+
+    @Test
+    fun `mark as unread resets home shelf books and series`() = runTest {
+        val completed = book.copy(
+            progressLabel = "100%",
+            progressPercent = 100f,
+            progressPositionMs = 10_000L,
+            progressPageIndex = 4,
+            readStatus = BookReadStatus.READ,
+            isRead = true,
+            lastReadAtMillis = 200L,
+            readerPageIndex = 2,
+            readerPageCount = 8
+        )
+        val coordinator = AppCoordinator(
+            FakeBookOrbitDataSource(pendingProgressCountResult = 0),
+            StandardTestDispatcher(testScheduler)
+        )
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = emptyList(),
+                homeShelves = HomeShelfData(
+                    booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(completed)),
+                    seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(completed))
+                )
+            )
+        )
+
+        coordinator.markBookAsUnread(completed)
+        advanceUntilIdle()
+
+        val shelves = (coordinator.screen.value as AppScreen.Browser).browserState.homeShelves
+        val expected = listOf(completed.withReadingStateReset())
+        assertEquals(expected, shelves.booksBySection[HomeSection.CURRENTLY_READING])
+        assertEquals(expected, shelves.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES])
     }
 
     @Test

@@ -708,6 +708,7 @@ data class BrowserState(
     val books: List<BookSummary>,
     val homeBooks: List<BookSummary> = books,
     val homeShelves: HomeShelfData = HomeShelfData(),
+    val homeShelfPreferences: HomeShelfPreferences = HomeShelfPreferences(),
     val booksTotal: Int? = null,
     val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,
@@ -731,6 +732,11 @@ data class BrowserState(
     val debugPendingProgressCount: Int = 0,
     val isOfflineSnapshot: Boolean = false,
     val message: String? = null
+)
+
+/** Provider-owned Home shelf choices that can be safely reflected by the native client. */
+data class HomeShelfPreferences(
+    val onDeckEnabled: Boolean = false
 )
 
 data class HomeShelfData(

@@ -7,6 +7,38 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `synced BookOrbit up next setting enables generated On deck`() {
+        val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(
+            """
+            {"user":{"settings":{"dashboardShelfConfig":{
+              "syncAcrossSessions":true,
+              "scrollers":[
+                {"type":"currently-reading","enabled":true},
+                {"type":"up-next-in-series","enabled":true}
+              ]
+            }}}}
+            """.trimIndent()
+        )
+
+        assertTrue(preferences.onDeckEnabled)
+    }
+
+    @Test
+    fun `missing malformed disabled and unsynced dashboard settings hide generated On deck`() {
+        val payloads = listOf(
+            "{}",
+            "not json",
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":false,"scrollers":[{"type":"up-next-in-series","enabled":true}]}}}""",
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}""",
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":{}}}}"""
+        )
+
+        payloads.forEach { payload ->
+            assertTrue(!BookOrbitPayloadParser.parseHomeShelfPreferences(payload).onDeckEnabled)
+        }
+    }
+
+    @Test
     fun annotationBookSummaryPreservesBookAndFileIdentity() {
         val annotation = BookAnnotation(
             id = "a1",

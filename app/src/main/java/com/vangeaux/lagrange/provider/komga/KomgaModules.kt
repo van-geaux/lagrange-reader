@@ -48,6 +48,10 @@ internal fun komgaParseInstantMillis(value: String?): Long? = value
     ?.takeIf { it.isNotBlank() }
     ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
+internal fun komgaReadActivityMillis(progress: JSONObject?): Long? =
+    komgaParseInstantMillis(progress?.optString("lastModified"))
+        ?: komgaParseInstantMillis(progress?.optString("readDate"))
+
 internal data class KomgaReadState(
     val status: BookReadStatus,
     val isRead: Boolean,
@@ -85,10 +89,7 @@ internal fun komgaReaderProgressBook(book: BookSummary, payload: String): BookSu
         progressPageIndex = page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
         readStatus = if (completed) BookReadStatus.READ else BookReadStatus.READING,
         isRead = completed,
-        lastReadAtMillis = progress.optString("readDate")
-            .takeIf { it.isNotBlank() }
-            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-            ?: book.lastReadAtMillis
+        lastReadAtMillis = komgaReadActivityMillis(progress) ?: book.lastReadAtMillis
     )
 }
 
@@ -419,9 +420,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                             isRead = readState.isRead,
                             addedAtMillis = komgaParseInstantMillis(item.optString("created")),
                             updatedAtMillis = komgaParseInstantMillis(item.optString("lastModified")),
-                            lastReadAtMillis = komgaParseInstantMillis(
-                                item.optJSONObject("readProgress")?.optString("readDate")
-                            ),
+                            lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress")),
                             genres = metadata.optJSONArray("genres").toStringList()
                     )
                     add(summary)
@@ -570,7 +569,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             isRead = readState.isRead,
             addedAtMillis = parseInstantMillis(item.optString("created")),
             updatedAtMillis = parseInstantMillis(item.optString("lastModified")),
-            lastReadAtMillis = parseInstantMillis(item.optJSONObject("readProgress")?.optString("readDate").orEmpty())
+            lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress"))
         )
     }
 
@@ -783,8 +782,8 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
             } else {
                 null
             }
-            val readProgress = komgaReadState(root.optJSONObject("readProgress"))
-            val readProgressDate = root.optJSONObject("readProgress")?.optString("readDate")
+            val readProgressObject = root.optJSONObject("readProgress")
+            val readProgress = komgaReadState(readProgressObject)
             val resolvedBook = book.copy(
                 title = metadata.optString("title", book.title),
                 filename = filename ?: book.filename,
@@ -807,9 +806,7 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
                 progressPageIndex = readProgress.page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
                 readStatus = readProgress.status,
                 isRead = readProgress.isRead,
-                lastReadAtMillis = readProgressDate
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                lastReadAtMillis = komgaReadActivityMillis(readProgressObject)
                     ?: book.lastReadAtMillis,
                 readerLocatorJson = progressionLocatorJson ?: book.readerLocatorJson
             )

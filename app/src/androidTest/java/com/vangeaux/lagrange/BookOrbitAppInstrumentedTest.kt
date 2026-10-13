@@ -50,6 +50,87 @@ class BookOrbitAppInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun openOnDeckSectionUpdatesWhenDelayedPreferenceArrives() {
+        val read = BookSummary(
+            libraryId = "library",
+            id = "read",
+            fileId = "read-file",
+            title = "Already read",
+            seriesId = "series",
+            seriesName = "Series",
+            seriesIndex = 1.0,
+            readStatus = BookReadStatus.READ,
+            isRead = true
+        )
+        val next = BookSummary(
+            libraryId = "library",
+            id = "next",
+            fileId = "next-file",
+            title = "Next on deck",
+            seriesId = "series",
+            seriesName = "Series",
+            seriesIndex = 2.0,
+            readStatus = BookReadStatus.UNREAD
+        )
+        val screenState = mutableStateOf(
+            BrowserState(
+                serverUrl = "https://books.example.test",
+                libraries = listOf(LibrarySummary("library", "Library")),
+                selectedLibraryId = "library",
+                books = listOf(read, next),
+                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = false)
+            )
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                HomeSectionScreen(
+                    section = HomeSection.ON_DECK,
+                    books = screenState.value.books,
+                    state = screenState.value,
+                    serverWide = true,
+                    recentBooksPageLoader = { _, _, _ -> LibraryBooksPage() },
+                    modifier = Modifier.fillMaxSize(),
+                    coverLoader = { null },
+                    onBookSelected = {},
+                    onDownload = {},
+                    onCancelDownload = {},
+                    onClearFailedDownload = {},
+                    onDeleteLocalCopy = {},
+                    onMarkAsRead = {},
+                    onMarkAsUnread = {},
+                    onMarkAsStatus = null
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("No on deck books found.").assertIsDisplayed()
+        composeRule.runOnIdle {
+            screenState.value = screenState.value.copy(
+                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = true)
+            )
+        }
+
+        composeRule.onNodeWithText("Next on deck").assertIsDisplayed()
+        composeRule.onAllNodesWithText("No on deck books found.").assertCountEquals(0)
+
+        composeRule.runOnIdle {
+            screenState.value = screenState.value.copy(
+                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = false)
+            )
+        }
+        composeRule.onNodeWithText("No on deck books found.").assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            screenState.value = screenState.value.copy(
+                homeShelves = HomeShelfData(isServerProvided = true)
+            )
+        }
+        composeRule.onNodeWithText("Next on deck").assertIsDisplayed()
+        composeRule.onAllNodesWithText("No on deck books found.").assertCountEquals(0)
+    }
+
+    @Test
     fun moreMenuSheetBottomPaddingUsesHostNavigationInset() {
         assertEquals(96, moreMenuSheetBottomPaddingPx(96))
         assertEquals(0, moreMenuSheetBottomPaddingPx(-1))
