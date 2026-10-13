@@ -94,6 +94,8 @@ internal data class EpubTtsSessionSpec(
     val playWhenReady: Boolean
 )
 
+private fun ttsReaderLeaseId(requestId: Long): String = "epub-tts:$requestId"
+
 internal enum class EpubTtsFailureKind {
     LANGUAGE_DATA,
     NETWORK,
@@ -458,6 +460,12 @@ class EpubTtsPlaybackService : Service() {
         }
         closeSession(removeNotification = false, stopService = false)
         activeSpec = spec
+        LocalBookReaderLeaseStore(applicationContext).acquire(
+            ownerId = ttsReaderLeaseId(spec.requestId),
+            serverUrl = "",
+            fileId = spec.fileId,
+            localPath = spec.filePath
+        )
         val requestGeneration = ++generation
         binder.publish {
             EpubTtsServiceState(
@@ -769,6 +777,7 @@ class EpubTtsPlaybackService : Service() {
         stopService: Boolean = true,
         completedOwnerToken: String? = null
     ) {
+        val closingSpec = activeSpec
         generation += 1
         requestedPlaybackState = null
         openingJob?.cancel()
@@ -786,6 +795,11 @@ class EpubTtsPlaybackService : Service() {
         publication?.close()
         publication = null
         activeSpec = null
+        closingSpec?.let { spec ->
+            LocalBookReaderLeaseStore(applicationContext).release(
+                ttsReaderLeaseId(spec.requestId)
+            )
+        }
         preparedOwnerToken = null
         preparedRequestId = null
         lastQueuedAtMillis = 0L

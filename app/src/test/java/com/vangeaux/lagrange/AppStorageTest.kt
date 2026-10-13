@@ -29,12 +29,18 @@ class AppStorageTest {
         }
         val manager = AppStorageManager(filesDir, cacheDir)
 
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 150), manager.usage())
+        val beforeClear = manager.usage()
+        assertEquals(100, beforeClear.downloadedBytes)
+        assertEquals(150, beforeClear.cacheBytes)
+        assertTrue(beforeClear.availableBytes > 0L)
 
         manager.clearDisposableCache()
 
         assertTrue(downloaded.isFile)
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 50), manager.usage())
+        val afterClear = manager.usage()
+        assertEquals(100, afterClear.downloadedBytes)
+        assertEquals(50, afterClear.cacheBytes)
+        assertTrue(afterClear.availableBytes > 0L)
     }
 
     @Test

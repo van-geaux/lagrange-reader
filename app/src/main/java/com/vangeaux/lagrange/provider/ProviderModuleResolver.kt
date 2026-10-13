@@ -40,7 +40,8 @@ internal fun resolveProviderDownloadModule(repository: BookOrbitDataSource): Dow
     if (repository is KomgaRepository) KomgaModuleSet(repository).downloads else BookOrbitModuleSet(repository).modules.downloads
 
 internal fun resolveProviderRepository(context: Context, serverUrl: String): BookOrbitDataSource {
-    val profile = ServerProfileStore(context).readAll().firstOrNull { it.serverUrl == serverUrl }
+    val profile = ServerProfileStore(context).readAll()
+        .firstOrNull { serverUrlsMatch(it.serverUrl, serverUrl) }
     return if (profile?.providerId == PROVIDER_KOMGA) KomgaRepository(context) else BookOrbitRepository(context)
 }
 
