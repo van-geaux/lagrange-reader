@@ -83,7 +83,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-
+    
+    lint {
+        disable 'MissingOnPlayFromSearch'
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

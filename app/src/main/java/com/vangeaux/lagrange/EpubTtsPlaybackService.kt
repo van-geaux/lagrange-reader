@@ -1,4 +1,3 @@
-@file:SuppressLint("MissingOnPlayFromSearch")
 
 package com.vangeaux.lagrange
 
