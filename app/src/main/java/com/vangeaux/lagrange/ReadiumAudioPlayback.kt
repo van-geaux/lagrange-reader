@@ -722,8 +722,7 @@ internal class AudiobookMediaSessionCallback(
 
     override fun onPlaybackResumption(
         mediaSession: MediaSession,
-        controller: MediaSession.ControllerInfo,
-        isForPlayback: Boolean
+        controller: MediaSession.ControllerInfo
     ): ListenableFuture<MediaItemsWithStartPosition> {
         val service = serviceProvider()
             ?: return Futures.immediateFailedFuture(
@@ -731,8 +730,7 @@ internal class AudiobookMediaSessionCallback(
             )
         return service.libraryScope.futureResult {
             service.handleAndroidAutoPlaybackResumption(
-                controller = controller,
-                isForPlayback = isForPlayback
+                controller = controller
             )
         }
     }
@@ -1482,7 +1480,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
 
     internal suspend fun handleAndroidAutoPlaybackResumption(
         controller: MediaSession.ControllerInfo,
-        isForPlayback: Boolean
+        isForPlayback: Boolean = true
     ): MediaItemsWithStartPosition {
         val bridge = AndroidAutoCatalogBridge.getInstance(this)
         val resumable = binder.session.value?.book

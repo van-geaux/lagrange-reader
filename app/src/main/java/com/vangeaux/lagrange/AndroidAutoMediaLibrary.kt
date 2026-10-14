@@ -575,9 +575,9 @@ internal fun buildAndroidAutoLibraryBookSpecs(
     mergeAndDeduplicateAudiobooks(catalogBooks, localBooks)
         .filter { it.libraryId == libraryId }
         .sortedWith(
-            compareBy<BookSummary>(String.CASE_INSENSITIVE_ORDER) { it.seriesName ?: it.title }
+            compareBy<BookSummary> { (it.seriesName ?: it.title).lowercase(Locale.US) }
                 .thenBy { it.seriesIndex ?: Double.MAX_VALUE }
-                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+                .thenBy { it.title.lowercase(Locale.US) }
         )
         .map { bookToAndroidAutoNodeSpec(it) }
 
