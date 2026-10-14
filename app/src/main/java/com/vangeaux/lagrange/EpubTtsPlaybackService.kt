@@ -337,6 +337,7 @@ class EpubTtsPlaybackService : Service() {
                     MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
             setSessionActivity(appLaunchIntent())
+            @android.annotation.SuppressLint("MissingOnPlayFromSearch")
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() = binder.play()
 
