@@ -32,6 +32,10 @@
         android:theme="@style/Theme.BookOrbit"
         android:usesCleartextTraffic="true">
 
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <activity
             android:name=".ReadiumEpubReaderActivity"
             android:exported="false"
@@ -48,10 +52,12 @@
         <service
             android:name=".ReadiumAudioPlaybackService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
         <service
@@ -63,6 +69,13 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <provider
+            android:name=".AndroidAutoCoverProvider"
+            android:authorities="${applicationId}.auto.covers"
+            android:enabled="true"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <receiver
             android:name=".DownloadNotificationReceiver"

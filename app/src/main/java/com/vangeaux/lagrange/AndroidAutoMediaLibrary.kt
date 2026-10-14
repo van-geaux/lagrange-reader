@@ -1,0 +1,1455 @@
+package com.vangeaux.lagrange
+
+import android.app.Application
+import android.content.Context
+import android.os.Bundle
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaConstants
+import com.vangeaux.lagrange.provider.*
+import java.io.File
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+internal const val ANDROID_AUTO_ROOT_ID = "auto:root"
+internal const val ANDROID_AUTO_TAB_CONTINUE_ID = "auto:tab:continue"
+internal const val ANDROID_AUTO_TAB_DOWNLOADED_ID = "auto:tab:downloaded"
+internal const val ANDROID_AUTO_TAB_RECENT_ID = "auto:tab:recent"
+internal const val ANDROID_AUTO_TAB_LIBRARIES_ID = "auto:tab:libraries"
+internal const val ANDROID_AUTO_ACTIVE_CHAPTERS_ID = "auto:active_chapters"
+internal const val ANDROID_AUTO_SERIES_ROOT_ID = "auto:series_root"
+
+internal const val AUDIO_PREVIOUS_CHAPTER_SESSION_ACTION =
+    "com.vangeaux.lagrange.AUDIO_PREVIOUS_CHAPTER"
+internal const val AUDIO_NEXT_CHAPTER_SESSION_ACTION =
+    "com.vangeaux.lagrange.AUDIO_NEXT_CHAPTER"
+internal const val CHAPTER_RESTART_THRESHOLD_MS = 3_000L
+
+internal enum class AndroidAutoCompletionStatus {
+    NOT_PLAYED,
+    PARTIALLY_PLAYED,
+    FULLY_PLAYED
+}
+
+internal data class AndroidAutoCompletionState(
+    val status: AndroidAutoCompletionStatus,
+    val completionFraction: Double = 0.0
+)
+
+internal enum class AndroidAutoContentStyle {
+    DEFAULT,
+    LIST,
+    GRID,
+    CATEGORY_LIST
+}
+
+internal data class AndroidAutoNodeSpec(
+    val mediaId: String,
+    val title: String,
+    val subtitle: String? = null,
+    val artist: String? = null,
+    val albumTitle: String? = null,
+    val groupTitle: String? = null,
+    val isBrowsable: Boolean,
+    val isPlayable: Boolean,
+    val mediaType: Int = MediaMetadata.MEDIA_TYPE_AUDIO_BOOK,
+    val completionState: AndroidAutoCompletionState = AndroidAutoCompletionState(
+        AndroidAutoCompletionStatus.NOT_PLAYED
+    ),
+    val isDownloaded: Boolean = false,
+    val bookId: String? = null,
+    val libraryId: String? = null,
+    val durationMs: Long? = null,
+    val browsableContentStyle: AndroidAutoContentStyle = AndroidAutoContentStyle.DEFAULT,
+    val playableContentStyle: AndroidAutoContentStyle = AndroidAutoContentStyle.DEFAULT
+)
+
+internal sealed interface AndroidAutoMediaId {
+    fun encode(): String
+
+    data object Root : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_ROOT_ID
+    }
+
+    data object TabContinue : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_TAB_CONTINUE_ID
+    }
+
+    data object TabDownloaded : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_TAB_DOWNLOADED_ID
+    }
+
+    data object TabRecent : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_TAB_RECENT_ID
+    }
+
+    data object TabLibraries : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_TAB_LIBRARIES_ID
+    }
+
+    data object ActiveChapters : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_ACTIVE_CHAPTERS_ID
+    }
+
+    data object SeriesRoot : AndroidAutoMediaId {
+        override fun encode(): String = ANDROID_AUTO_SERIES_ROOT_ID
+    }
+
+    data class Library(val libraryId: String) : AndroidAutoMediaId {
+        override fun encode(): String = "auto:library:${urlEncode(libraryId)}"
+    }
+
+    data class Series(val seriesId: String) : AndroidAutoMediaId {
+        override fun encode(): String = "auto:series:${urlEncode(seriesId)}"
+    }
+
+    data class BookChapters(
+        val bookId: String,
+        val fileId: String? = null
+    ) : AndroidAutoMediaId {
+        override fun encode(): String =
+            "auto:book_chapters:${urlEncode(bookId)}:${urlEncode(fileId.orEmpty())}"
+    }
+
+    data class Book(
+        val bookId: String,
+        val fileId: String? = null
+    ) : AndroidAutoMediaId {
+        override fun encode(): String =
+            "auto:book:${urlEncode(bookId)}:${urlEncode(fileId.orEmpty())}"
+    }
+
+    data class Chapter(
+        val bookId: String,
+        val fileId: String? = null,
+        val chapterIndex: Int,
+        val startMs: Long
+    ) : AndroidAutoMediaId {
+        override fun encode(): String =
+            "auto:chapter:${urlEncode(bookId)}:${urlEncode(fileId.orEmpty())}:" +
+                "${chapterIndex.coerceAtLeast(0)}:${startMs.coerceAtLeast(0L)}"
+    }
+
+    companion object {
+        fun parse(rawMediaId: String?): AndroidAutoMediaId? {
+            val cleaned = rawMediaId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            return when (cleaned) {
+                ANDROID_AUTO_ROOT_ID -> Root
+                ANDROID_AUTO_TAB_CONTINUE_ID -> TabContinue
+                ANDROID_AUTO_TAB_DOWNLOADED_ID -> TabDownloaded
+                ANDROID_AUTO_TAB_RECENT_ID -> TabRecent
+                ANDROID_AUTO_TAB_LIBRARIES_ID -> TabLibraries
+                ANDROID_AUTO_ACTIVE_CHAPTERS_ID -> ActiveChapters
+                ANDROID_AUTO_SERIES_ROOT_ID -> SeriesRoot
+                else -> {
+                    val parts = cleaned.split(':')
+                    if (parts.size < 3 || parts[0] != "auto") return null
+                    when (parts[1]) {
+                        "library" -> {
+                            val libraryId = urlDecode(parts.subList(2, parts.size).joinToString(":"))
+                                .takeIf { it.isNotBlank() } ?: return null
+                            Library(libraryId)
+                        }
+                        "series" -> {
+                            val seriesId = urlDecode(parts.subList(2, parts.size).joinToString(":"))
+                                .takeIf { it.isNotBlank() } ?: return null
+                            Series(seriesId)
+                        }
+                        "book_chapters" -> {
+                            val bookId = urlDecode(parts.getOrNull(2).orEmpty())
+                                .takeIf { it.isNotBlank() } ?: return null
+                            val fileId = parts.getOrNull(3)?.let(::urlDecode)?.takeIf { it.isNotBlank() }
+                            BookChapters(bookId = bookId, fileId = fileId)
+                        }
+                        "book" -> {
+                            val bookId = urlDecode(parts.getOrNull(2).orEmpty())
+                                .takeIf { it.isNotBlank() } ?: return null
+                            val fileId = parts.getOrNull(3)?.let(::urlDecode)?.takeIf { it.isNotBlank() }
+                            Book(bookId = bookId, fileId = fileId)
+                        }
+                        "chapter" -> {
+                            if (parts.size < 6) return null
+                            val bookId = urlDecode(parts[2]).takeIf { it.isNotBlank() } ?: return null
+                            val fileId = urlDecode(parts[3]).takeIf { it.isNotBlank() }
+                            val chapterIndex = parts[4].toIntOrNull()?.coerceAtLeast(0) ?: return null
+                            val startMs = parts[5].toLongOrNull()?.coerceAtLeast(0L) ?: return null
+                            Chapter(
+                                bookId = bookId,
+                                fileId = fileId,
+                                chapterIndex = chapterIndex,
+                                startMs = startMs
+                            )
+                        }
+                        else -> null
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun urlEncode(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8.name())
+
+private fun urlDecode(value: String): String =
+    runCatching { URLDecoder.decode(value, StandardCharsets.UTF_8.name()) }.getOrDefault(value)
+
+internal fun isAudiobookCandidate(book: BookSummary): Boolean {
+    if (book.isServerMissing && !book.isDownloaded) return false
+    if (book.mediaKind == MediaKind.AUDIO) return true
+    if (book.availableFormats.any { it.equals("AUDIO", ignoreCase = true) }) return true
+    if (book.downloadedFormats.any { it.equals("AUDIO", ignoreCase = true) }) return true
+    return false
+}
+
+internal fun resolveAndroidAutoCompletionState(book: BookSummary): AndroidAutoCompletionState {
+    if (book.isRead || book.readStatus?.isCompletedStatus() == true) {
+        return AndroidAutoCompletionState(
+            status = AndroidAutoCompletionStatus.FULLY_PLAYED,
+            completionFraction = 1.0
+        )
+    }
+    val percent = book.progressPercent?.takeIf { it.isFinite() && it > 0f }
+    if (percent != null && percent >= 99.5f) {
+        return AndroidAutoCompletionState(
+            status = AndroidAutoCompletionStatus.FULLY_PLAYED,
+            completionFraction = 1.0
+        )
+    }
+    val hasPartialProgress = (percent != null && percent > 0f) ||
+        (book.progressPositionMs != null && book.progressPositionMs > 0L) ||
+        book.readStatus == BookReadStatus.READING ||
+        book.readStatus == BookReadStatus.REREADING
+    if (hasPartialProgress) {
+        val fraction = ((percent ?: 1f).toDouble() / 100.0).coerceIn(0.01, 0.99)
+        return AndroidAutoCompletionState(
+            status = AndroidAutoCompletionStatus.PARTIALLY_PLAYED,
+            completionFraction = fraction
+        )
+    }
+    return AndroidAutoCompletionState(
+        status = AndroidAutoCompletionStatus.NOT_PLAYED,
+        completionFraction = 0.0
+    )
+}
+
+internal fun formatAndroidAutoBookSubtitle(book: BookSummary): String {
+    val parts = mutableListOf<String>()
+    book.author?.takeIf { it.isNotBlank() }?.let(parts::add)
+    val seriesLabel = book.seriesName?.takeIf { it.isNotBlank() }?.let { name ->
+        val indexText = book.seriesIndex?.let { index ->
+            if (index % 1.0 == 0.0) "#${index.toInt()}" else "#$index"
+        }
+        if (indexText != null) "$name $indexText" else name
+    }
+    seriesLabel?.let(parts::add)
+    val progressPercent = book.progressPercent?.takeIf { it > 0f && !book.isRead }
+    if (progressPercent != null) {
+        parts += "${progressPercent.toInt().coerceIn(1, 99)}% listened"
+    } else if (book.isDownloaded || "AUDIO" in book.downloadedFormats) {
+        parts += "Downloaded"
+    }
+    return parts.joinToString(" · ").ifBlank { "Audiobook" }
+}
+
+internal fun bookToAndroidAutoNodeSpec(
+    book: BookSummary,
+    groupTitle: String? = null
+): AndroidAutoNodeSpec {
+    val isDownloaded = book.isDownloaded ||
+        book.downloadedFormats.any { it.equals("AUDIO", ignoreCase = true) }
+    return AndroidAutoNodeSpec(
+        mediaId = AndroidAutoMediaId.Book(book.id, book.fileId).encode(),
+        title = book.title,
+        subtitle = formatAndroidAutoBookSubtitle(book),
+        artist = book.author,
+        albumTitle = book.seriesName ?: book.title,
+        groupTitle = groupTitle,
+        isBrowsable = false,
+        isPlayable = true,
+        mediaType = MediaMetadata.MEDIA_TYPE_AUDIO_BOOK,
+        completionState = resolveAndroidAutoCompletionState(book),
+        isDownloaded = isDownloaded,
+        bookId = book.id,
+        libraryId = book.libraryId
+    )
+}
+
+internal fun buildAndroidAutoRootNodeSpec(): AndroidAutoNodeSpec = AndroidAutoNodeSpec(
+    mediaId = ANDROID_AUTO_ROOT_ID,
+    title = "Lagrange Reader",
+    isBrowsable = true,
+    isPlayable = false,
+    mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+    browsableContentStyle = AndroidAutoContentStyle.LIST,
+    playableContentStyle = AndroidAutoContentStyle.LIST
+)
+
+internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
+    AndroidAutoNodeSpec(
+        mediaId = ANDROID_AUTO_TAB_CONTINUE_ID,
+        title = "Continue Listening",
+        subtitle = "Active and in-progress audiobooks",
+        isBrowsable = true,
+        isPlayable = false,
+        mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        browsableContentStyle = AndroidAutoContentStyle.LIST,
+        playableContentStyle = AndroidAutoContentStyle.LIST
+    ),
+    AndroidAutoNodeSpec(
+        mediaId = ANDROID_AUTO_TAB_DOWNLOADED_ID,
+        title = "Downloaded",
+        subtitle = "Offline audiobooks on this device",
+        isBrowsable = true,
+        isPlayable = false,
+        mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        browsableContentStyle = AndroidAutoContentStyle.LIST,
+        playableContentStyle = AndroidAutoContentStyle.GRID
+    ),
+    AndroidAutoNodeSpec(
+        mediaId = ANDROID_AUTO_TAB_RECENT_ID,
+        title = "Recent",
+        subtitle = "Recently added and updated audiobooks",
+        isBrowsable = true,
+        isPlayable = false,
+        mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        browsableContentStyle = AndroidAutoContentStyle.LIST,
+        playableContentStyle = AndroidAutoContentStyle.GRID
+    ),
+    AndroidAutoNodeSpec(
+        mediaId = ANDROID_AUTO_TAB_LIBRARIES_ID,
+        title = "Libraries",
+        subtitle = "Browse by library and series",
+        isBrowsable = true,
+        isPlayable = false,
+        mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+        browsableContentStyle = AndroidAutoContentStyle.LIST,
+        playableContentStyle = AndroidAutoContentStyle.LIST
+    )
+)
+
+internal fun mergeAndDeduplicateAudiobooks(
+    primary: Iterable<BookSummary>,
+    secondary: Iterable<BookSummary> = emptyList()
+): List<BookSummary> {
+    val byId = LinkedHashMap<String, BookSummary>()
+    for (book in primary.asSequence() + secondary.asSequence()) {
+        if (!isAudiobookCandidate(book) || book.id.isBlank()) continue
+        val existing = byId[book.id]
+        if (existing == null) {
+            byId[book.id] = book
+        } else {
+            byId[book.id] = mergeAudiobookMetadata(existing, book)
+        }
+    }
+    return byId.values.toList()
+}
+
+private fun mergeAudiobookMetadata(existing: BookSummary, candidate: BookSummary): BookSummary =
+    existing.copy(
+        libraryId = existing.libraryId.ifBlank { candidate.libraryId },
+        fileId = if (existing.mediaKind == MediaKind.AUDIO) {
+            existing.fileId ?: candidate.fileId
+        } else {
+            candidate.fileId ?: existing.fileId
+        },
+        author = existing.author ?: candidate.author,
+        format = if (existing.mediaKind == MediaKind.AUDIO) {
+            existing.format ?: candidate.format
+        } else {
+            candidate.format ?: existing.format
+        },
+        mediaKind = if (existing.mediaKind == MediaKind.AUDIO || candidate.mediaKind == MediaKind.AUDIO) {
+            MediaKind.AUDIO
+        } else {
+            existing.mediaKind
+        },
+        streamUrl = existing.streamUrl ?: candidate.streamUrl,
+        coverUrl = existing.coverUrl ?: candidate.coverUrl,
+        localPath = existing.localPath ?: candidate.localPath,
+        progressPercent = existing.progressPercent ?: candidate.progressPercent,
+        progressPositionMs = existing.progressPositionMs ?: candidate.progressPositionMs,
+        seriesId = existing.seriesId ?: candidate.seriesId,
+        seriesName = existing.seriesName ?: candidate.seriesName,
+        seriesIndex = existing.seriesIndex ?: candidate.seriesIndex,
+        readStatus = existing.readStatus ?: candidate.readStatus,
+        isRead = existing.isRead || candidate.isRead,
+        addedAtMillis = existing.addedAtMillis ?: candidate.addedAtMillis,
+        updatedAtMillis = existing.updatedAtMillis ?: candidate.updatedAtMillis,
+        lastReadAtMillis = maxOfNullable(existing.lastReadAtMillis, candidate.lastReadAtMillis),
+        audioChapters = existing.audioChapters.ifEmpty { candidate.audioChapters },
+        availableFormats = (existing.availableFormats + candidate.availableFormats).distinct(),
+        downloadedFormats = (existing.downloadedFormats + candidate.downloadedFormats).distinct()
+    )
+
+private fun maxOfNullable(a: Long?, b: Long?): Long? = when {
+    a == null -> b
+    b == null -> a
+    else -> maxOf(a, b)
+}
+
+internal fun buildAndroidAutoContinueListeningSpecs(
+    activeBook: BookSummary?,
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>,
+    maxItems: Int = 30
+): List<AndroidAutoNodeSpec> {
+    val allBooks = mergeAndDeduplicateAudiobooks(
+        primary = listOfNotNull(activeBook) + localBooks,
+        secondary = catalogBooks
+    )
+    val resolvedActive = activeBook
+        ?.takeIf(::isAudiobookCandidate)
+        ?.let { active ->
+            allBooks.firstOrNull { it.id == active.id }?.let { merged ->
+                mergeAudiobookMetadata(active, merged)
+            } ?: active
+        }
+
+    val nodes = mutableListOf<AndroidAutoNodeSpec>()
+    if (resolvedActive != null) {
+        nodes += bookToAndroidAutoNodeSpec(resolvedActive, groupTitle = "Now Playing")
+        if (resolvedActive.audioChapters.isNotEmpty()) {
+            nodes += AndroidAutoNodeSpec(
+                mediaId = AndroidAutoMediaId.BookChapters(
+                    bookId = resolvedActive.id,
+                    fileId = resolvedActive.fileId
+                ).encode(),
+                title = "Chapters · ${resolvedActive.title}",
+                subtitle = "${resolvedActive.audioChapters.size} chapters",
+                artist = resolvedActive.author,
+                albumTitle = resolvedActive.title,
+                groupTitle = "Now Playing",
+                isBrowsable = true,
+                isPlayable = false,
+                mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+                bookId = resolvedActive.id,
+                libraryId = resolvedActive.libraryId,
+                playableContentStyle = AndroidAutoContentStyle.LIST
+            )
+        }
+    }
+
+    val inProgress = allBooks
+        .filter { book ->
+            book.id != resolvedActive?.id &&
+                resolveAndroidAutoCompletionState(book).status ==
+                AndroidAutoCompletionStatus.PARTIALLY_PLAYED
+        }
+        .sortedWith(
+            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+                .thenByDescending { it.progressPercent ?: 0f }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        )
+        .take(maxItems)
+
+    inProgress.forEach { book ->
+        nodes += bookToAndroidAutoNodeSpec(book, groupTitle = "In Progress")
+    }
+
+    if (nodes.isEmpty()) {
+        val fallback = allBooks
+            .sortedWith(
+                compareByDescending<BookSummary> { it.isDownloaded }
+                    .thenByDescending { it.lastReadAtMillis ?: it.addedAtMillis ?: 0L }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            .take(maxItems)
+        fallback.forEach { book ->
+            nodes += bookToAndroidAutoNodeSpec(book, groupTitle = "Suggested")
+        }
+    }
+
+    return nodes
+}
+
+internal fun buildAndroidAutoDownloadedSpecs(
+    localBooks: List<BookSummary>,
+    catalogBooks: List<BookSummary> = emptyList()
+): List<AndroidAutoNodeSpec> {
+    val downloadedCatalog = catalogBooks.filter { book ->
+        book.isDownloaded || book.downloadedFormats.any { it.equals("AUDIO", ignoreCase = true) }
+    }
+    return mergeAndDeduplicateAudiobooks(
+        primary = logicalLocalBooks(localBooks),
+        secondary = downloadedCatalog
+    )
+        .filter { book ->
+            book.isDownloaded || book.downloadedFormats.any { it.equals("AUDIO", ignoreCase = true) }
+        }
+        .sortedWith(
+            compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        )
+        .map { bookToAndroidAutoNodeSpec(it) }
+}
+
+internal fun buildAndroidAutoRecentSpecs(
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>,
+    maxItems: Int = 50
+): List<AndroidAutoNodeSpec> =
+    mergeAndDeduplicateAudiobooks(primary = catalogBooks, secondary = localBooks)
+        .sortedWith(
+            compareByDescending<BookSummary> { it.addedAtMillis ?: it.updatedAtMillis ?: 0L }
+                .thenByDescending { it.lastReadAtMillis ?: 0L }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        )
+        .take(maxItems)
+        .map { bookToAndroidAutoNodeSpec(it) }
+
+internal fun buildAndroidAutoLibrariesRootSpecs(
+    libraries: List<LibrarySummary>,
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>
+): List<AndroidAutoNodeSpec> {
+    val allAudiobooks = mergeAndDeduplicateAudiobooks(catalogBooks, localBooks)
+    val countByLibrary = allAudiobooks
+        .filter { it.libraryId.isNotBlank() }
+        .groupingBy { it.libraryId }
+        .eachCount()
+
+    val nodes = mutableListOf<AndroidAutoNodeSpec>()
+    val seriesCount = allAudiobooks.mapNotNull { it.seriesId?.takeIf(String::isNotBlank) }.distinct().size
+    if (seriesCount > 0) {
+        nodes += AndroidAutoNodeSpec(
+            mediaId = ANDROID_AUTO_SERIES_ROOT_ID,
+            title = "Series",
+            subtitle = if (seriesCount == 1) "1 audiobook series" else "$seriesCount audiobook series",
+            isBrowsable = true,
+            isPlayable = false,
+            mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+            browsableContentStyle = AndroidAutoContentStyle.LIST
+        )
+    }
+
+    val librariesWithAudio = libraries.filter { (countByLibrary[it.id] ?: 0) > 0 }
+    val displayedLibraries = librariesWithAudio.ifEmpty { libraries }
+    displayedLibraries.forEach { library ->
+        val count = countByLibrary[library.id]
+        val subtitle = when {
+            count != null && count == 1 -> "1 audiobook"
+            count != null && count > 1 -> "$count audiobooks"
+            !library.description.isNullOrBlank() -> library.description
+            else -> "Library"
+        }
+        nodes += AndroidAutoNodeSpec(
+            mediaId = AndroidAutoMediaId.Library(library.id).encode(),
+            title = library.name,
+            subtitle = subtitle,
+            isBrowsable = true,
+            isPlayable = false,
+            mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+            libraryId = library.id,
+            playableContentStyle = AndroidAutoContentStyle.LIST
+        )
+    }
+
+    if (nodes.isEmpty() && allAudiobooks.isNotEmpty()) {
+        allAudiobooks
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+            .forEach { book ->
+                nodes += bookToAndroidAutoNodeSpec(book)
+            }
+    }
+
+    return nodes
+}
+
+internal fun buildAndroidAutoLibraryBookSpecs(
+    libraryId: String,
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>
+): List<AndroidAutoNodeSpec> =
+    mergeAndDeduplicateAudiobooks(catalogBooks, localBooks)
+        .filter { it.libraryId == libraryId }
+        .sortedWith(
+            compareBy<BookSummary>(String.CASE_INSENSITIVE_ORDER) { it.seriesName ?: it.title }
+                .thenBy { it.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        )
+        .map { bookToAndroidAutoNodeSpec(it) }
+
+internal fun buildAndroidAutoSeriesFolderSpecs(
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>
+): List<AndroidAutoNodeSpec> {
+    val grouped = mergeAndDeduplicateAudiobooks(catalogBooks, localBooks)
+        .filter { !it.seriesId.isNullOrBlank() && !it.seriesName.isNullOrBlank() }
+        .groupBy { requireNotNull(it.seriesId) }
+
+    return grouped.entries
+        .mapNotNull { (seriesId, books) ->
+            val representative = books.sortedWith(
+                compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            ).firstOrNull() ?: return@mapNotNull null
+            val seriesName = representative.seriesName ?: return@mapNotNull null
+            val count = books.size
+            val countLabel = if (count == 1) "1 audiobook" else "$count audiobooks"
+            val authorLabel = representative.author?.takeIf { it.isNotBlank() }
+            AndroidAutoNodeSpec(
+                mediaId = AndroidAutoMediaId.Series(seriesId).encode(),
+                title = seriesName,
+                subtitle = listOfNotNull(authorLabel, countLabel).joinToString(" · "),
+                artist = representative.author,
+                isBrowsable = true,
+                isPlayable = false,
+                mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+                bookId = representative.id,
+                libraryId = representative.libraryId,
+                playableContentStyle = AndroidAutoContentStyle.LIST
+            )
+        }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+}
+
+internal fun buildAndroidAutoSeriesBookSpecs(
+    seriesId: String,
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>
+): List<AndroidAutoNodeSpec> =
+    mergeAndDeduplicateAudiobooks(catalogBooks, localBooks)
+        .filter { it.seriesId == seriesId }
+        .sortedWith(
+            compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        )
+        .map { bookToAndroidAutoNodeSpec(it) }
+
+internal fun buildAndroidAutoChapterSpecs(
+    book: BookSummary,
+    currentPositionMs: Long = book.progressPositionMs ?: 0L,
+    totalDurationMs: Long? = null
+): List<AndroidAutoNodeSpec> {
+    val chapters = book.audioChapters
+    if (chapters.isEmpty()) {
+        return listOf(bookToAndroidAutoNodeSpec(book))
+    }
+    val activeChapterIndex = chapters.indexOfLast { it.startMs <= currentPositionMs.coerceAtLeast(0L) }
+        .coerceAtLeast(0)
+    return chapters.mapIndexed { index, chapter ->
+        val nextStartMs = chapters.getOrNull(index + 1)?.startMs ?: totalDurationMs
+        val chapterDurationMs = nextStartMs
+            ?.minus(chapter.startMs)
+            ?.takeIf { it > 0L }
+        val completionState = when {
+            index < activeChapterIndex -> AndroidAutoCompletionState(
+                status = AndroidAutoCompletionStatus.FULLY_PLAYED,
+                completionFraction = 1.0
+            )
+            index == activeChapterIndex && currentPositionMs > chapter.startMs -> {
+                val fraction = if (chapterDurationMs != null && chapterDurationMs > 0L) {
+                    ((currentPositionMs - chapter.startMs).toDouble() / chapterDurationMs.toDouble())
+                        .coerceIn(0.01, 0.99)
+                } else {
+                    0.5
+                }
+                AndroidAutoCompletionState(
+                    status = AndroidAutoCompletionStatus.PARTIALLY_PLAYED,
+                    completionFraction = fraction
+                )
+            }
+            else -> AndroidAutoCompletionState(AndroidAutoCompletionStatus.NOT_PLAYED)
+        }
+        val chapterTitle = chapter.title.ifBlank { "Chapter ${index + 1}" }
+        val timestampLabel = formatAndroidAutoTimestamp(chapter.startMs)
+        val durationLabel = chapterDurationMs?.let { " · ${formatAndroidAutoDuration(it)}" }.orEmpty()
+        AndroidAutoNodeSpec(
+            mediaId = AndroidAutoMediaId.Chapter(
+                bookId = book.id,
+                fileId = book.fileId,
+                chapterIndex = index,
+                startMs = chapter.startMs
+            ).encode(),
+            title = chapterTitle,
+            subtitle = "Starts at $timestampLabel$durationLabel",
+            artist = book.author,
+            albumTitle = book.title,
+            isBrowsable = false,
+            isPlayable = true,
+            mediaType = MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER,
+            completionState = completionState,
+            isDownloaded = book.isDownloaded,
+            bookId = book.id,
+            libraryId = book.libraryId,
+            durationMs = chapterDurationMs
+        )
+    }
+}
+
+internal fun formatAndroidAutoTimestamp(positionMs: Long): String {
+    val totalSeconds = (positionMs.coerceAtLeast(0L) / 1_000L)
+    val hours = totalSeconds / 3_600L
+    val minutes = (totalSeconds % 3_600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
+}
+
+internal fun formatAndroidAutoDuration(durationMs: Long): String {
+    val totalMinutes = (durationMs.coerceAtLeast(0L) / 60_000L)
+    val hours = totalMinutes / 60L
+    val minutes = totalMinutes % 60L
+    return when {
+        hours > 0L && minutes > 0L -> "${hours}h ${minutes}m"
+        hours > 0L -> "${hours}h"
+        totalMinutes > 0L -> "${totalMinutes}m"
+        else -> "${(durationMs.coerceAtLeast(1_000L) / 1_000L)}s"
+    }
+}
+
+internal fun resolveAndroidAutoChapterSkip(
+    chapters: List<AudiobookChapter>,
+    currentPositionMs: Long,
+    totalDurationMs: Long,
+    direction: Int,
+    restartThresholdMs: Long = CHAPTER_RESTART_THRESHOLD_MS
+): Long? {
+    if (chapters.isEmpty() || direction == 0) return null
+    val ordered = chapters.sortedBy { it.startMs }
+    val clampedPosition = currentPositionMs.coerceAtLeast(0L)
+    val currentIndex = ordered.indexOfLast { it.startMs <= clampedPosition }.coerceAtLeast(0)
+    return if (direction < 0) {
+        val currentStart = ordered[currentIndex].startMs
+        if (clampedPosition - currentStart > restartThresholdMs || currentIndex == 0) {
+            currentStart
+        } else {
+            ordered[currentIndex - 1].startMs
+        }
+    } else {
+        val nextIndex = currentIndex + 1
+        val nextStart = ordered.getOrNull(nextIndex)?.startMs ?: return null
+        if (totalDurationMs > 0L && nextStart >= totalDurationMs) null else nextStart
+    }
+}
+
+internal fun searchAndroidAutoBooks(
+    query: String,
+    catalogBooks: List<BookSummary>,
+    localBooks: List<BookSummary>,
+    remoteResults: List<BookSummary> = emptyList(),
+    titleExtra: String? = null,
+    artistExtra: String? = null,
+    albumExtra: String? = null,
+    maxResults: Int = 30
+): List<BookSummary> {
+    val candidates = mergeAndDeduplicateAudiobooks(
+        primary = remoteResults + localBooks,
+        secondary = catalogBooks
+    )
+    val normalizedQuery = query.trim().lowercase(Locale.US)
+    val normalizedTitle = titleExtra?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() }
+    val normalizedArtist = artistExtra?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() }
+    val normalizedAlbum = albumExtra?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() }
+
+    if (
+        normalizedQuery.isEmpty() &&
+        normalizedTitle == null &&
+        normalizedArtist == null &&
+        normalizedAlbum == null
+    ) {
+        return candidates
+            .sortedWith(
+                compareByDescending<BookSummary> { it.lastReadAtMillis ?: 0L }
+                    .thenByDescending { it.isDownloaded }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            .take(maxResults)
+    }
+
+    val tokens = normalizedQuery
+        .split(Regex("\\s+"))
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+
+    return candidates
+        .mapNotNull { book ->
+            val score = scoreAndroidAutoSearchCandidate(
+                book = book,
+                normalizedQuery = normalizedQuery,
+                tokens = tokens,
+                normalizedTitle = normalizedTitle,
+                normalizedArtist = normalizedArtist,
+                normalizedAlbum = normalizedAlbum
+            )
+            if (score > 0) book to score else null
+        }
+        .sortedWith(
+            compareByDescending<Pair<BookSummary, Int>> { it.second }
+                .thenByDescending { it.first.isDownloaded }
+                .thenByDescending { it.first.lastReadAtMillis ?: 0L }
+                .thenBy { it.first.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.first.title }
+        )
+        .map { it.first }
+        .take(maxResults)
+}
+
+private fun scoreAndroidAutoSearchCandidate(
+    book: BookSummary,
+    normalizedQuery: String,
+    tokens: List<String>,
+    normalizedTitle: String?,
+    normalizedArtist: String?,
+    normalizedAlbum: String?
+): Int {
+    val title = book.title.lowercase(Locale.US)
+    val author = book.author?.lowercase(Locale.US).orEmpty()
+    val series = book.seriesName?.lowercase(Locale.US).orEmpty()
+    val filename = book.filename?.lowercase(Locale.US).orEmpty()
+    var score = 0
+
+    if (normalizedQuery.isNotEmpty()) {
+        when {
+            title == normalizedQuery -> score += 100
+            title.startsWith(normalizedQuery) -> score += 80
+            title.contains(normalizedQuery) -> score += 60
+        }
+        when {
+            series == normalizedQuery -> score += 70
+            series.startsWith(normalizedQuery) -> score += 55
+            series.contains(normalizedQuery) -> score += 45
+        }
+        when {
+            author == normalizedQuery -> score += 65
+            author.contains(normalizedQuery) -> score += 40
+        }
+        if (filename.contains(normalizedQuery)) {
+            score += 25
+        }
+        if (tokens.isNotEmpty()) {
+            val haystack = "$title $author $series $filename"
+            val matchedTokens = tokens.count { token -> haystack.contains(token) }
+            if (matchedTokens == tokens.size) {
+                score += 35
+            } else if (matchedTokens > 0 && score > 0) {
+                score += matchedTokens * 5
+            }
+        }
+    }
+
+    if (normalizedTitle != null) {
+        if (title == normalizedTitle) score += 90
+        else if (title.contains(normalizedTitle)) score += 50
+    }
+    if (normalizedArtist != null && author.isNotEmpty()) {
+        if (author == normalizedArtist) score += 60
+        else if (author.contains(normalizedArtist)) score += 35
+    }
+    if (normalizedAlbum != null) {
+        if (series == normalizedAlbum || title == normalizedAlbum) score += 60
+        else if (series.contains(normalizedAlbum) || title.contains(normalizedAlbum)) score += 35
+    }
+
+    return score
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun AndroidAutoNodeSpec.toMediaItem(packageName: String): MediaItem {
+    val extras = Bundle().apply {
+        when (completionState.status) {
+            AndroidAutoCompletionStatus.NOT_PLAYED -> {
+                putInt(
+                    MediaConstants.EXTRAS_KEY_COMPLETION_STATUS,
+                    MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_NOT_PLAYED
+                )
+            }
+            AndroidAutoCompletionStatus.PARTIALLY_PLAYED -> {
+                putInt(
+                    MediaConstants.EXTRAS_KEY_COMPLETION_STATUS,
+                    MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_PARTIALLY_PLAYED
+                )
+                putDouble(
+                    MediaConstants.EXTRAS_KEY_COMPLETION_PERCENTAGE,
+                    completionState.completionFraction.coerceIn(0.0, 1.0)
+                )
+            }
+            AndroidAutoCompletionStatus.FULLY_PLAYED -> {
+                putInt(
+                    MediaConstants.EXTRAS_KEY_COMPLETION_STATUS,
+                    MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_FULLY_PLAYED
+                )
+                putDouble(MediaConstants.EXTRAS_KEY_COMPLETION_PERCENTAGE, 1.0)
+            }
+        }
+        putLong(
+            MediaConstants.EXTRAS_KEY_DOWNLOAD_STATUS,
+            if (isDownloaded) {
+                MediaConstants.EXTRAS_VALUE_STATUS_DOWNLOADED
+            } else {
+                MediaConstants.EXTRAS_VALUE_STATUS_NOT_DOWNLOADED
+            }
+        )
+        groupTitle?.takeIf { it.isNotBlank() }?.let { group ->
+            putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, group)
+        }
+        browsableContentStyle.toMediaConstantsValue()?.let { style ->
+            putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE, style)
+        }
+        playableContentStyle.toMediaConstantsValue()?.let { style ->
+            putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_PLAYABLE, style)
+        }
+    }
+
+    val metadataBuilder = MediaMetadata.Builder()
+        .setTitle(title)
+        .setSubtitle(subtitle)
+        .setArtist(artist)
+        .setAlbumTitle(albumTitle)
+        .setIsBrowsable(isBrowsable)
+        .setIsPlayable(isPlayable)
+        .setMediaType(mediaType)
+        .setExtras(extras)
+
+    durationMs?.takeIf { it > 0L }?.let(metadataBuilder::setDurationMs)
+    bookId?.takeIf { it.isNotBlank() }?.let { id ->
+        metadataBuilder.setArtworkUri(androidAutoCoverUri(packageName, id, libraryId))
+    }
+
+    return MediaItem.Builder()
+        .setMediaId(mediaId)
+        .setMediaMetadata(metadataBuilder.build())
+        .build()
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun AndroidAutoContentStyle.toMediaConstantsValue(): Int? = when (this) {
+    AndroidAutoContentStyle.DEFAULT -> null
+    AndroidAutoContentStyle.LIST -> MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM
+    AndroidAutoContentStyle.GRID -> MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM
+    AndroidAutoContentStyle.CATEGORY_LIST ->
+        MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_CATEGORY_LIST_ITEM
+}
+
+internal data class AndroidAutoCatalogSnapshot(
+    val serverUrl: String,
+    val activeBook: BookSummary?,
+    val libraries: List<LibrarySummary>,
+    val catalogBooks: List<BookSummary>,
+    val localBooks: List<BookSummary>
+)
+
+internal class AndroidAutoCatalogBridge private constructor(
+    private val application: Application
+) {
+    private val mutex = Mutex()
+    private val bridgeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val activeReaderStore = ActiveReaderStore(application)
+    private val browserSnapshotStore = BrowserSnapshotStore(application)
+    private val bookDetailCacheStore = BookDetailCacheStore(application)
+    private val downloadStore = DownloadStore(application)
+    private val coverCacheStore = CoverCacheStore(application)
+    private val lastQueuedSnapshots = ConcurrentHashMap<String, ProgressSnapshot>()
+
+    private fun currentRepository(): BookOrbitDataSource {
+        val activeProfile = ServerProfileStore(application).active()
+        val serverUrl = activeProfile?.serverUrl
+        return if (!serverUrl.isNullOrBlank()) {
+            resolveProviderRepository(application, serverUrl)
+        } else {
+            BookOrbitRepository(application)
+        }
+    }
+
+    suspend fun loadSnapshot(): AndroidAutoCatalogSnapshot = withContext(Dispatchers.IO) {
+        val repository = currentRepository()
+        runCatching {
+            resolveProviderSessionModule(repository).restoreCurrentProfileSession()
+        }
+        val serverUrl = resolveProviderServerSelectionModule(repository).getServerUrl().orEmpty()
+        val activeSessionBook = if (serverUrl.isNotBlank()) {
+            runCatching { activeReaderStore.read(serverUrl) }.getOrNull()
+        } else {
+            null
+        }
+        val localBooks = runCatching {
+            resolveProviderLocalBooksModule(repository).loadLocalBooks()
+        }.getOrDefault(emptyList())
+
+        val cachedHomeBooks = runCatching {
+            resolveProviderHomeShelfModule(repository).loadCachedHomeBooks()
+        }.getOrDefault(emptyList())
+
+        val snapshot = if (serverUrl.isNotBlank()) {
+            runCatching { browserSnapshotStore.read(serverUrl) }.getOrNull()
+        } else {
+            null
+        }
+        val libraries = snapshot?.libraries?.ifEmpty { null }
+            ?: runCatching { resolveProviderLibraryModule(repository).loadLibraries() }
+                .getOrDefault(emptyList())
+
+        val catalogBooks = if (cachedHomeBooks.isNotEmpty()) {
+            cachedHomeBooks
+        } else {
+            val fromSnapshot = snapshot?.booksByLibraryId?.values?.flatten().orEmpty()
+            fromSnapshot.ifEmpty {
+                libraries.flatMap { library ->
+                    runCatching {
+                        resolveProviderBookCatalogModule(repository)
+                            .loadCachedLibraryCatalog(library.id)
+                            ?.items
+                            .orEmpty()
+                    }.getOrDefault(emptyList())
+                }
+            }
+        }
+
+        AndroidAutoCatalogSnapshot(
+            serverUrl = serverUrl,
+            activeBook = activeSessionBook,
+            libraries = libraries,
+            catalogBooks = catalogBooks,
+            localBooks = localBooks
+        )
+    }
+
+    suspend fun resolveChildren(parentId: String): List<AndroidAutoNodeSpec> =
+        withContext(Dispatchers.IO) {
+            val parsed = AndroidAutoMediaId.parse(parentId) ?: return@withContext emptyList()
+            val snapshot = loadSnapshot()
+            val controller = (application as? BookOrbitApplication)?.audioPlaybackController
+            val liveSessionBook = runCatching {
+                controller?.session()?.value?.activeBookSummary()
+            }.getOrNull()
+            val activeBook = liveSessionBook ?: snapshot.activeBook
+
+            when (parsed) {
+                AndroidAutoMediaId.Root -> buildAndroidAutoRootTabSpecs()
+                AndroidAutoMediaId.TabContinue -> buildAndroidAutoContinueListeningSpecs(
+                    activeBook = activeBook,
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                AndroidAutoMediaId.TabDownloaded -> buildAndroidAutoDownloadedSpecs(
+                    localBooks = snapshot.localBooks,
+                    catalogBooks = snapshot.catalogBooks
+                )
+                AndroidAutoMediaId.TabRecent -> buildAndroidAutoRecentSpecs(
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                AndroidAutoMediaId.TabLibraries -> buildAndroidAutoLibrariesRootSpecs(
+                    libraries = snapshot.libraries,
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                AndroidAutoMediaId.SeriesRoot -> buildAndroidAutoSeriesFolderSpecs(
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                is AndroidAutoMediaId.Library -> buildAndroidAutoLibraryBookSpecs(
+                    libraryId = parsed.libraryId,
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                is AndroidAutoMediaId.Series -> buildAndroidAutoSeriesBookSpecs(
+                    seriesId = parsed.seriesId,
+                    catalogBooks = snapshot.catalogBooks,
+                    localBooks = snapshot.localBooks
+                )
+                AndroidAutoMediaId.ActiveChapters -> {
+                    val book = activeBook ?: return@withContext emptyList()
+                    val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
+                    buildAndroidAutoChapterSpecs(hydrated)
+                }
+                is AndroidAutoMediaId.BookChapters -> {
+                    val book = findBook(parsed.bookId, parsed.fileId, snapshot)
+                        ?: return@withContext emptyList()
+                    val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
+                    buildAndroidAutoChapterSpecs(hydrated)
+                }
+                is AndroidAutoMediaId.Book -> {
+                    val book = findBook(parsed.bookId, parsed.fileId, snapshot)
+                        ?: return@withContext emptyList()
+                    val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
+                    buildAndroidAutoChapterSpecs(hydrated)
+                }
+                is AndroidAutoMediaId.Chapter -> emptyList()
+            }
+        }
+
+    suspend fun resolveItem(mediaId: String): AndroidAutoNodeSpec? = withContext(Dispatchers.IO) {
+        val parsed = AndroidAutoMediaId.parse(mediaId) ?: return@withContext null
+        val snapshot = loadSnapshot()
+        when (parsed) {
+            AndroidAutoMediaId.Root -> buildAndroidAutoRootNodeSpec()
+            AndroidAutoMediaId.TabContinue,
+            AndroidAutoMediaId.TabDownloaded,
+            AndroidAutoMediaId.TabRecent,
+            AndroidAutoMediaId.TabLibraries ->
+                buildAndroidAutoRootTabSpecs().firstOrNull { it.mediaId == mediaId }
+            AndroidAutoMediaId.SeriesRoot ->
+                buildAndroidAutoLibrariesRootSpecs(
+                    snapshot.libraries,
+                    snapshot.catalogBooks,
+                    snapshot.localBooks
+                ).firstOrNull { it.mediaId == ANDROID_AUTO_SERIES_ROOT_ID }
+            is AndroidAutoMediaId.Library ->
+                buildAndroidAutoLibrariesRootSpecs(
+                    snapshot.libraries,
+                    snapshot.catalogBooks,
+                    snapshot.localBooks
+                ).firstOrNull { it.mediaId == mediaId }
+            is AndroidAutoMediaId.Series ->
+                buildAndroidAutoSeriesFolderSpecs(
+                    snapshot.catalogBooks,
+                    snapshot.localBooks
+                ).firstOrNull { it.mediaId == mediaId }
+            AndroidAutoMediaId.ActiveChapters -> {
+                val active = snapshot.activeBook ?: return@withContext null
+                AndroidAutoNodeSpec(
+                    mediaId = ANDROID_AUTO_ACTIVE_CHAPTERS_ID,
+                    title = "Chapters · ${active.title}",
+                    subtitle = "${active.audioChapters.size} chapters",
+                    artist = active.author,
+                    isBrowsable = true,
+                    isPlayable = false,
+                    mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+                    bookId = active.id,
+                    libraryId = active.libraryId
+                )
+            }
+            is AndroidAutoMediaId.BookChapters -> {
+                val book = findBook(parsed.bookId, parsed.fileId, snapshot) ?: return@withContext null
+                val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
+                AndroidAutoNodeSpec(
+                    mediaId = mediaId,
+                    title = "Chapters · ${hydrated.title}",
+                    subtitle = "${hydrated.audioChapters.size} chapters",
+                    artist = hydrated.author,
+                    isBrowsable = true,
+                    isPlayable = false,
+                    mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+                    bookId = hydrated.id,
+                    libraryId = hydrated.libraryId
+                )
+            }
+            is AndroidAutoMediaId.Book -> {
+                val book = findBook(parsed.bookId, parsed.fileId, snapshot) ?: return@withContext null
+                bookToAndroidAutoNodeSpec(book)
+            }
+            is AndroidAutoMediaId.Chapter -> {
+                val book = findBook(parsed.bookId, parsed.fileId, snapshot) ?: return@withContext null
+                val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
+                buildAndroidAutoChapterSpecs(hydrated)
+                    .getOrNull(parsed.chapterIndex)
+            }
+        }
+    }
+
+    suspend fun search(
+        query: String,
+        titleExtra: String? = null,
+        artistExtra: String? = null,
+        albumExtra: String? = null
+    ): List<BookSummary> = withContext(Dispatchers.IO) {
+        val snapshot = loadSnapshot()
+        val repository = currentRepository()
+        val remoteResults = if (query.isNotBlank() && snapshot.serverUrl.isNotBlank()) {
+            runCatching {
+                resolveProviderBookCatalogModule(repository).searchBooks(query)
+            }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        searchAndroidAutoBooks(
+            query = query,
+            catalogBooks = snapshot.catalogBooks,
+            localBooks = snapshot.localBooks,
+            remoteResults = remoteResults,
+            titleExtra = titleExtra,
+            artistExtra = artistExtra,
+            albumExtra = albumExtra
+        )
+    }
+
+    suspend fun findResumableBook(): BookSummary? = withContext(Dispatchers.IO) {
+        val snapshot = loadSnapshot()
+        snapshot.activeBook?.takeIf(::isAudiobookCandidate)?.let { return@withContext it }
+        val candidates = mergeAndDeduplicateAudiobooks(
+            primary = snapshot.localBooks,
+            secondary = snapshot.catalogBooks
+        )
+        candidates
+            .filter {
+                resolveAndroidAutoCompletionState(it).status ==
+                    AndroidAutoCompletionStatus.PARTIALLY_PLAYED
+            }
+            .maxByOrNull { it.lastReadAtMillis ?: 0L }
+            ?: candidates.firstOrNull { it.isDownloaded }
+            ?: candidates.firstOrNull()
+    }
+
+    suspend fun openBookForPlayback(
+        bookId: String,
+        preferredFileId: String? = null,
+        overridePositionMs: Long? = null,
+        playWhenReady: Boolean = true
+    ): Boolean = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val controller = (application as? BookOrbitApplication)?.audioPlaybackController
+                ?: return@withContext false
+            val snapshot = loadSnapshot()
+            val baseBook = findBook(bookId, preferredFileId, snapshot) ?: return@withContext false
+            val repository = currentRepository()
+            val detailModule = resolveProviderBookDetailModule(repository)
+            val readerModule = resolveProviderReaderModule(repository)
+            val progressModule = resolveProviderReadingProgressModule(repository)
+
+            runCatching { progressModule.syncPendingProgress() }
+
+            val detail = runCatching { detailModule.loadBookDetail(baseBook) }.getOrNull()
+                ?: runCatching { detailModule.loadCachedBookDetail(baseBook) }.getOrNull()
+
+            val targetBook = resolveAudioTargetBook(
+                baseBook = baseBook,
+                preferredFileId = preferredFileId,
+                detail = detail,
+                serverUrl = snapshot.serverUrl
+            )
+            val onlineAudioFiles = detail?.availableFiles?.let { options ->
+                AudiobookTimeline.selectedPlaybackAudioFiles(options, targetBook.fileId)
+            }.orEmpty()
+            val localAudioFiles = detail?.availableFiles?.let { options ->
+                AudiobookTimeline.selectedLocalPlaybackAudioFiles(options, targetBook.fileId)
+            }.orEmpty()
+
+            val totalDurationMs = detail
+                ?.durationSeconds
+                ?.takeIf { it > 0L }
+                ?.let { seconds -> seconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L }
+
+            val onlineAttempt = runCatching {
+                val hydratedBook = if (onlineAudioFiles.isNotEmpty()) {
+                    runCatching {
+                        readerModule.loadReaderProgress(targetBook, onlineAudioFiles)
+                    }.getOrDefault(targetBook)
+                } else {
+                    targetBook
+                }
+                val state = readerModule.buildReaderState(hydratedBook, localOnly = false)
+                val initialPositionMs = overridePositionMs ?: state.lastKnownPosition
+                activeReaderStore.save(snapshot.serverUrl, state.book, ReaderLaunchMode.NORMAL)
+                controller.open(
+                    book = state.book,
+                    file = state.localFile?.takeIf { it.isFile },
+                    streamUrl = state.streamUrl,
+                    initialPositionMs = initialPositionMs,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    playWhenReady = playWhenReady,
+                    audioFiles = onlineAudioFiles,
+                    aggregateDurationMs = totalDurationMs
+                )
+            }.getOrNull()
+
+            if (onlineAttempt is ReadiumAudioOpenResult.Opened) {
+                return@withContext true
+            }
+
+            val offlineAttempt = runCatching {
+                val state = readerModule.buildReaderState(targetBook, localOnly = true)
+                val initialPositionMs = overridePositionMs ?: state.lastKnownPosition
+                activeReaderStore.save(snapshot.serverUrl, state.book, ReaderLaunchMode.NORMAL)
+                controller.open(
+                    book = state.book,
+                    file = state.localFile?.takeIf { it.isFile },
+                    streamUrl = null,
+                    initialPositionMs = initialPositionMs,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    playWhenReady = playWhenReady,
+                    audioFiles = localAudioFiles,
+                    aggregateDurationMs = totalDurationMs
+                )
+            }.getOrNull()
+
+            offlineAttempt is ReadiumAudioOpenResult.Opened
+        }
+    }
+
+    suspend fun loadCoverBytes(bookId: String, libraryId: String? = null): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val snapshot = loadSnapshot()
+            val book = findBook(bookId, preferredFileId = null, snapshot = snapshot)
+                ?: BookSummary(
+                    libraryId = libraryId.orEmpty(),
+                    id = bookId,
+                    fileId = null,
+                    title = ""
+                )
+            if (snapshot.serverUrl.isNotBlank() && !book.coverUrl.isNullOrBlank()) {
+                coverCacheStore.read(snapshot.serverUrl, book.id, book.coverUrl)?.let {
+                    return@withContext it
+                }
+            }
+            val repository = currentRepository()
+            runCatching {
+                resolveProviderBookCoverModule(repository).loadBookCover(book)
+            }.getOrNull()
+        }
+
+    fun recordHeadlessProgress(
+        book: BookSummary,
+        positionMs: Long,
+        progressPercent: Float?,
+        launchMode: ReaderLaunchMode
+    ) {
+        if (launchMode == ReaderLaunchMode.PREVIEW) return
+        val repository = currentRepository()
+        val now = System.currentTimeMillis()
+        val key = "${book.id}:${book.fileId.orEmpty()}"
+        val currentSnapshot = ProgressSnapshot(
+            mediaKind = MediaKind.AUDIO,
+            positionMs = positionMs,
+            pageIndex = 0,
+            progressPercent = progressPercent,
+            observedAtMillis = now
+        )
+        val previousSnapshot = lastQueuedSnapshots[key]
+        if (!ProgressQueuePolicy.shouldQueue(currentSnapshot, previousSnapshot)) {
+            return
+        }
+        lastQueuedSnapshots[key] = currentSnapshot
+        bridgeScope.launch {
+            val serverUrl = resolveProviderServerSelectionModule(repository).getServerUrl().orEmpty()
+            if (serverUrl.isNotBlank()) {
+                runCatching {
+                    activeReaderStore.save(
+                        serverUrl = serverUrl,
+                        book = book.copy(
+                            progressPositionMs = positionMs.takeIf { it > 0L } ?: book.progressPositionMs,
+                            progressPercent = progressPercent ?: book.progressPercent
+                        ),
+                        launchMode = launchMode
+                    )
+                }
+            }
+            runCatching {
+                resolveProviderReadingProgressModule(repository).queueProgress(
+                    book = book,
+                    position = positionMs,
+                    pageIndex = 0,
+                    progressPercent = progressPercent
+                )
+            }
+        }
+    }
+
+    private suspend fun hydrateBookChapters(
+        book: BookSummary,
+        serverUrl: String
+    ): BookSummary {
+        if (book.audioChapters.isNotEmpty()) return book
+        val cachedDetail = if (serverUrl.isNotBlank()) {
+            bookDetailCacheStore.readLatest(serverUrl, book.id, book.fileId)
+        } else {
+            null
+        }
+        val detail = cachedDetail ?: runCatching {
+            resolveProviderBookDetailModule(currentRepository()).loadBookDetail(book)
+        }.getOrNull()
+        val chapters = detail?.audioChapters?.ifEmpty { detail.book.audioChapters }.orEmpty()
+        return if (chapters.isNotEmpty()) book.copy(audioChapters = chapters) else book
+    }
+
+    private suspend fun resolveAudioTargetBook(
+        baseBook: BookSummary,
+        preferredFileId: String?,
+        detail: BookDetailInfo?,
+        serverUrl: String
+    ): BookSummary {
+        val chapters = baseBook.audioChapters.ifEmpty {
+            detail?.audioChapters?.ifEmpty { detail.book.audioChapters }.orEmpty()
+        }
+        val audioOptions = detail?.availableFiles
+            ?.let(AudiobookTimeline::playbackAudioFiles)
+            .orEmpty()
+        val matchedOption = audioOptions.firstOrNull {
+            preferredFileId != null && it.fileId == preferredFileId
+        } ?: audioOptions.firstOrNull {
+            baseBook.fileId != null && it.fileId == baseBook.fileId
+        } ?: audioOptions.firstOrNull()
+
+        if (matchedOption != null) {
+            return matchedOption.book.copy(
+                libraryId = matchedOption.book.libraryId.ifBlank { baseBook.libraryId },
+                coverUrl = matchedOption.book.coverUrl ?: baseBook.coverUrl,
+                audioChapters = chapters
+            )
+        }
+
+        if (baseBook.mediaKind != MediaKind.AUDIO && serverUrl.isNotBlank()) {
+            val downloadedAudio = downloadStore.readAll(serverUrl)
+                .firstOrNull {
+                    it.bookId == baseBook.id &&
+                        it.mediaKind == MediaKind.AUDIO &&
+                        it.status == DownloadRecordStatus.COMPLETE &&
+                        File(it.localPath).isFile
+                }
+            if (downloadedAudio != null) {
+                return baseBook.copy(
+                    fileId = downloadedAudio.fileId,
+                    format = downloadedAudio.mimeType,
+                    mediaKind = MediaKind.AUDIO,
+                    localPath = downloadedAudio.localPath,
+                    audioChapters = chapters
+                )
+            }
+        }
+
+        return baseBook.copy(
+            mediaKind = MediaKind.AUDIO,
+            audioChapters = chapters
+        )
+    }
+
+    private fun findBook(
+        bookId: String,
+        preferredFileId: String?,
+        snapshot: AndroidAutoCatalogSnapshot
+    ): BookSummary? {
+        val allCandidates = buildList {
+            snapshot.activeBook?.let(::add)
+            addAll(snapshot.localBooks)
+            addAll(snapshot.catalogBooks)
+        }.filter { it.id == bookId && isAudiobookCandidate(it) }
+
+        if (allCandidates.isEmpty()) return null
+        val exactFile = preferredFileId?.let { fileId ->
+            allCandidates.firstOrNull { it.fileId == fileId }
+        }
+        val primary = exactFile
+            ?: allCandidates.firstOrNull { it.mediaKind == MediaKind.AUDIO && it.isDownloaded }
+            ?: allCandidates.firstOrNull { it.mediaKind == MediaKind.AUDIO }
+            ?: allCandidates.first()
+
+        return allCandidates.fold(primary, ::mergeAudiobookMetadata)
+    }
+
+    companion object {
+        @Volatile
+        private var instance: AndroidAutoCatalogBridge? = null
+
+        fun getInstance(context: Context): AndroidAutoCatalogBridge =
+            instance ?: synchronized(this) {
+                instance ?: AndroidAutoCatalogBridge(
+                    context.applicationContext as Application
+                ).also { instance = it }
+            }
+    }
+}
