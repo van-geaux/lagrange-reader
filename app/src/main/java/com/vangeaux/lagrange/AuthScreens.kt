@@ -139,6 +139,17 @@ internal fun ServerSetupScreen(
                             modifier = Modifier.weight(1f)
                         ) { Text("Komga") }
                     }
+                    if (providerId == PROVIDER_KAVITA) {
+                        Button(
+                            onClick = { providerId = PROVIDER_KAVITA },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Kavita") }
+                    } else {
+                        OutlinedButton(
+                            onClick = { providerId = PROVIDER_KAVITA },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Kavita") }
+                    }
                 }
                 error?.let {
                     OrbitMessage(it, tone = OrbitMessageTone.ERROR)
@@ -269,16 +280,25 @@ internal fun LoginScreen(
 ) {
     var username by remember(serverUrl) { mutableStateOf("") }
     var password by remember(serverUrl) { mutableStateOf("") }
-    var passwordVisible by remember(serverUrl) { mutableStateOf(false) }
+    var passwordVisible by remember(serverUrl, providerId) { mutableStateOf(false) }
     var validationMessage by remember(serverUrl) { mutableStateOf<String?>(null) }
     var showServerPicker by rememberSaveable(serverUrl) { mutableStateOf(false) }
     val submit = {
-        when {
-            username.isBlank() -> validationMessage = "Enter your username."
-            password.isBlank() -> validationMessage = "Enter your password."
-            else -> {
+        if (providerId == PROVIDER_KAVITA) {
+            if (username.isBlank()) {
+                validationMessage = "Enter your Kavita Auth Key."
+            } else {
                 validationMessage = null
-                onSubmit(username.trim(), password)
+                onSubmit(username.trim(), "")
+            }
+        } else {
+            when {
+                username.isBlank() -> validationMessage = "Enter your username."
+                password.isBlank() -> validationMessage = "Enter your password."
+                else -> {
+                    validationMessage = null
+                    onSubmit(username.trim(), password)
+                }
             }
         }
     }
@@ -333,7 +353,13 @@ internal fun LoginScreen(
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    OrbitEyebrow("BookOrbit server")
+                    OrbitEyebrow(
+                        when (providerId) {
+                            PROVIDER_KOMGA -> "Komga server"
+                            PROVIDER_KAVITA -> "Kavita server"
+                            else -> "BookOrbit server"
+                        }
+                    )
                     Text(serverUrl, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
                         value = username,
@@ -343,46 +369,80 @@ internal fun LoginScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .semantics { contentDescription = "BookOrbit username" },
-                        label = { Text("Username") },
+                            .semantics {
+                                contentDescription = if (providerId == PROVIDER_KAVITA) {
+                                    "Kavita Auth Key"
+                                } else {
+                                    "BookOrbit username"
+                                }
+                            },
+                        label = {
+                            Text(if (providerId == PROVIDER_KAVITA) "Auth Key" else "Username")
+                        },
                         singleLine = true,
                         enabled = !isSubmitting,
+                        visualTransformation = if (providerId == PROVIDER_KAVITA && !passwordVisible) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
+                        trailingIcon = if (providerId == PROVIDER_KAVITA) {
+                            {
+                                TextButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    enabled = !isSubmitting
+                                ) {
+                                    Text(if (passwordVisible) "Hide" else "Show")
+                                }
+                            }
+                        } else {
+                            null
+                        },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Next
+                            keyboardType = if (providerId == PROVIDER_KAVITA) {
+                                KeyboardType.Password
+                            } else {
+                                KeyboardType.Text
+                            },
+                            imeAction = if (providerId == PROVIDER_KAVITA) ImeAction.Done else ImeAction.Next
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = { if (providerId == PROVIDER_KAVITA) submit() }
                         )
                     )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            validationMessage = null
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics { contentDescription = "BookOrbit password" },
-                        label = { Text("Password") },
-                        singleLine = true,
-                        enabled = !isSubmitting,
-                        visualTransformation = if (passwordVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            TextButton(
-                                onClick = { passwordVisible = !passwordVisible },
-                                enabled = !isSubmitting
-                            ) {
-                                Text(if (passwordVisible) "Hide" else "Show")
-                            }
-                        },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
-                    )
+                    if (providerId != PROVIDER_KAVITA) {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = {
+                                password = it
+                                validationMessage = null
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "BookOrbit password" },
+                            label = { Text("Password") },
+                            singleLine = true,
+                            enabled = !isSubmitting,
+                            visualTransformation = if (passwordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                TextButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    enabled = !isSubmitting
+                                ) {
+                                    Text(if (passwordVisible) "Hide" else "Show")
+                                }
+                            },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
+                        )
+                    }
                     validationMessage?.let {
                         OrbitMessage(it, tone = OrbitMessageTone.ERROR)
                     }
@@ -412,7 +472,7 @@ internal fun LoginScreen(
                         ) {
                             Text("Open server sign-in")
                         }
-                    } else {
+                    } else if (providerId == PROVIDER_BOOKORBIT) {
                         OutlinedButton(
                             onClick = onOpenOidcSignIn,
                             enabled = !isSubmitting,

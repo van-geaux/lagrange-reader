@@ -35,8 +35,12 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun getSessionState(): SessionState =
         authModule.sessionState(getServerUrl().orEmpty())
 
-    override suspend fun login(username: String, password: String): Unit =
-        throw UserFacingException("Kavita requires an Auth Key, not a username and password.")
+    override suspend fun login(username: String, password: String): Unit {
+        if (password.isNotEmpty()) {
+            throw UserFacingException("Kavita requires an Auth Key, not a username and password.")
+        }
+        authModule.authenticate(getServerUrl().orEmpty(), username)
+    }
 
     override suspend fun loadLibraries(): List<LibrarySummary> = libraryModule.loadLibraries()
 

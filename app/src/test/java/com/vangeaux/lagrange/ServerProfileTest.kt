@@ -20,4 +20,17 @@ class ServerProfileTest {
             serverProfileId("https://two.example")
         )
     }
+
+    @Test
+    fun KavitaProviderHasAnExplicitProfileIdentity() {
+        assertEquals("kavita", PROVIDER_KAVITA)
+        assertEquals(
+            PROVIDER_KAVITA,
+            ServerProfile(
+                id = "https://demo.kavitareader.com",
+                serverUrl = "https://demo.kavitareader.com",
+                providerId = PROVIDER_KAVITA
+            ).providerId
+        )
+    }
 }
