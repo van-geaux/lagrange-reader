@@ -1,7 +1,10 @@
 package com.vangeaux.lagrange
 
 import android.app.Application
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
+import androidx.annotation.DrawableRes
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -71,6 +74,7 @@ internal data class AndroidAutoNodeSpec(
     val bookId: String? = null,
     val libraryId: String? = null,
     val durationMs: Long? = null,
+    @DrawableRes val iconResId: Int? = null,
     val browsableContentStyle: AndroidAutoContentStyle = AndroidAutoContentStyle.DEFAULT,
     val playableContentStyle: AndroidAutoContentStyle = AndroidAutoContentStyle.DEFAULT
 )
@@ -299,11 +303,12 @@ internal fun buildAndroidAutoRootNodeSpec(): AndroidAutoNodeSpec = AndroidAutoNo
 internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
     AndroidAutoNodeSpec(
         mediaId = ANDROID_AUTO_TAB_CONTINUE_ID,
-        title = "Continue Listening",
+        title = "Home",
         subtitle = "Active and in-progress audiobooks",
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        iconResId = R.drawable.ic_auto_tab_home,
         browsableContentStyle = AndroidAutoContentStyle.LIST,
         playableContentStyle = AndroidAutoContentStyle.LIST
     ),
@@ -314,6 +319,7 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        iconResId = R.drawable.ic_auto_tab_downloaded,
         browsableContentStyle = AndroidAutoContentStyle.LIST,
         playableContentStyle = AndroidAutoContentStyle.GRID
     ),
@@ -324,6 +330,7 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
+        iconResId = R.drawable.ic_auto_tab_recent,
         browsableContentStyle = AndroidAutoContentStyle.LIST,
         playableContentStyle = AndroidAutoContentStyle.GRID
     ),
@@ -334,6 +341,7 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+        iconResId = R.drawable.ic_auto_tab_libraries,
         browsableContentStyle = AndroidAutoContentStyle.LIST,
         playableContentStyle = AndroidAutoContentStyle.LIST
     )
@@ -917,6 +925,15 @@ internal fun AndroidAutoNodeSpec.toMediaItem(packageName: String): MediaItem {
         .setExtras(extras)
 
     durationMs?.takeIf { it > 0L }?.let(metadataBuilder::setDurationMs)
+    iconResId?.let { resId ->
+        metadataBuilder.setArtworkUri(
+            Uri.Builder()
+                .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
+                .authority(packageName)
+                .appendPath(resId.toString())
+                .build()
+        )
+    }
     bookId?.takeIf { it.isNotBlank() }?.let { id ->
         metadataBuilder.setArtworkUri(androidAutoCoverUri(packageName, id, libraryId))
     }
