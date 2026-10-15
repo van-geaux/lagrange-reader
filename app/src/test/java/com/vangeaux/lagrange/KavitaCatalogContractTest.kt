@@ -75,6 +75,15 @@ class KavitaCatalogContractTest {
     }
 
     @Test
+    fun chapterProjectionRemovesKavitaSentinelPrefixFromBookTitle() {
+        val projection = kavitaChapterProjection(
+            JSONObject("""{"id": 42, "title": "Book -100000 - A Real Title"}""")
+        )
+
+        assertEquals("A Real Title", projection?.title)
+    }
+
+    @Test
     fun formatNormalizationUsesMimeOrExtensionFallback() {
         assertEquals("epub", kavitaFormat("application/epub+zip", null))
         assertEquals("cbz", kavitaFormat(null, ".zip"))

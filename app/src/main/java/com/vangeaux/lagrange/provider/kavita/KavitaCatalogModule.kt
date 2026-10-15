@@ -45,7 +45,10 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         chapter.optString("range"),
         chapter.optString("number"),
         filename?.substringBeforeLast('.')
-    ).filterNotNull().firstOrNull(::isUsableKavitaTitle) ?: "Chapter $id"
+    ).filterNotNull().firstOrNull(::isUsableKavitaTitle)
+        ?.let(::normalizeKavitaTitle)
+        ?.takeIf(::isUsableKavitaTitle)
+        ?: "Chapter $id"
     val writers = chapter.optJSONArray("writers")
     val author = writers?.optJSONObject(0)?.optString("name")?.takeIf { it.isNotBlank() }
     val genres = chapter.optJSONArray("genres").jsonTitles() + chapter.optJSONArray("tags").jsonTitles()
@@ -277,6 +280,9 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         filter.genre.isNullOrBlank() || book.genres.any { it.equals(filter.genre, ignoreCase = true) }
     }
 }
+
+private fun normalizeKavitaTitle(value: String): String =
+    value.replaceFirst(Regex("^Book\\s+-100000\\s+-\\s*", RegexOption.IGNORE_CASE), "").trim()
 
 private fun isUsableKavitaTitle(value: String): Boolean =
     value.isNotBlank() && value.trim() != "-100000"
