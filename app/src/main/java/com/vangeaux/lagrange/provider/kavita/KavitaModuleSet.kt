@@ -83,6 +83,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                             genres = series.genres,
                             availableFormats = series.availableFormats,
                             downloadedFormats = series.downloadedFormats,
+                            addedAtMillis = series.lastAddedAtMillis,
                             isRead = series.bookCount > 0 && series.readCount >= series.bookCount,
                             readStatus = if (series.bookCount > 0 && series.readCount >= series.bookCount) {
                                 BookReadStatus.READ
