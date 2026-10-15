@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
+import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -58,6 +59,22 @@ class KavitaCatalogContractTest {
         assertEquals("epub", kavitaFormat("application/epub+zip", null))
         assertEquals("cbz", kavitaFormat(null, ".zip"))
         assertEquals("pdf", kavitaFormat(null, "book.pdf"))
+    }
+
+    @Test
+    fun seriesProjectionReadsChaptersNestedInsideVolumes() {
+        val chapters = kavitaSeriesChapters(
+            JSONObject(
+                """
+                {
+                  "chapters": [{"id": 1}],
+                  "volumes": [{"chapters": [{"id": 2}, {"id": 1}]}]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf(1, 2), chapters.map { it.optInt("id") })
     }
 
     @Test

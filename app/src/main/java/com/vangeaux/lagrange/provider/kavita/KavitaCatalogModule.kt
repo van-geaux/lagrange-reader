@@ -224,10 +224,10 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 throw UserFacingException("Unable to load Kavita series details (HTTP ${response.code}).")
             }
             val root = JSONObject(payload)
-            val chapters = root.optJSONArray("chapters") ?: JSONArray()
+            val chapters = kavitaSeriesChapters(root)
             return buildList {
-                for (index in 0 until chapters.length()) {
-                    val projection = kavitaChapterProjection(chapters.optJSONObject(index) ?: continue) ?: continue
+                for (chapter in chapters) {
+                    val projection = kavitaChapterProjection(chapter) ?: continue
                     val completed = projection.pages != null && projection.pagesRead >= projection.pages
                     val progress = projection.pages?.let {
                         (projection.pagesRead.toFloat() / it.toFloat() * 100f).coerceIn(0f, 100f)
@@ -274,6 +274,24 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         filter.series.isNullOrBlank() || book.seriesName.orEmpty().contains(filter.series, ignoreCase = true)
     }.filter { book ->
         filter.genre.isNullOrBlank() || book.genres.any { it.equals(filter.genre, ignoreCase = true) }
+    }
+}
+
+internal fun kavitaSeriesChapters(root: JSONObject): List<JSONObject> = buildList {
+    val seen = mutableSetOf<Int>()
+    fun addChapters(array: JSONArray?) {
+        if (array == null) return
+        for (index in 0 until array.length()) {
+            val chapter = array.optJSONObject(index) ?: continue
+            val id = chapter.optInt("id", -1)
+            if (id >= 0 && seen.add(id)) add(chapter)
+        }
+    }
+    addChapters(root.optJSONArray("chapters"))
+    addChapters(root.optJSONArray("specials"))
+    val volumes = root.optJSONArray("volumes") ?: return@buildList
+    for (index in 0 until volumes.length()) {
+        addChapters(volumes.optJSONObject(index)?.optJSONArray("chapters"))
     }
 }
 
