@@ -276,7 +276,7 @@ private data class KavitaSeriesProjection(
     val lastAddedAtMillis: Long?
 )
 
-private fun JSONArray?.jsonTitles(): List<String> = buildList {
+internal fun JSONArray?.jsonTitles(): List<String> = buildList {
     val array = this@jsonTitles ?: return@buildList
     for (index in 0 until array.length()) {
         val item = array.optJSONObject(index) ?: continue

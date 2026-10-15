@@ -56,13 +56,14 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadAuthorBooks(authorId: String, page: Int): AuthorBooksPage? = unavailable()
         },
         bookDetail = object : BookDetailModule {
-            override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = unavailable()
-            override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = unavailable()
-            override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo = unavailable()
+            override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo? = repository.loadBookDetail(book)
+            override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = repository.loadCachedBookDetail(book)
+            override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
+                repository.setBookUserRating(book, rating)
         },
         covers = object : BookCoverModule {
-            override suspend fun loadBookCover(book: BookSummary): ByteArray? = unavailable()
-            override suspend fun loadCatalogImage(url: String): ByteArray? = unavailable()
+            override suspend fun loadBookCover(book: BookSummary): ByteArray? = repository.loadBookCover(book)
+            override suspend fun loadCatalogImage(url: String): ByteArray? = repository.loadCatalogImage(url)
         },
         reader = object : ReaderModule {
             override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary = unavailable()
