@@ -40,8 +40,8 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         file?.optString("extension")?.takeIf { it.isNotBlank() } ?: filename
     )
     val title = sequenceOf(
-        chapter.optString("title"),
         chapter.optString("titleName"),
+        chapter.optString("title"),
         chapter.optString("range"),
         chapter.optString("number"),
         filename?.substringBeforeLast('.')

@@ -84,6 +84,17 @@ class KavitaCatalogContractTest {
     }
 
     @Test
+    fun chapterProjectionPrefersKavitaTitleNameOverSentinelTitle() {
+        val projection = kavitaChapterProjection(
+            JSONObject(
+                """{"id": 42, "title": "-100000", "titleName": "A Real Title"}"""
+            )
+        )
+
+        assertEquals("A Real Title", projection?.title)
+    }
+
+    @Test
     fun formatNormalizationUsesMimeOrExtensionFallback() {
         assertEquals("epub", kavitaFormat("application/epub+zip", null))
         assertEquals("cbz", kavitaFormat(null, ".zip"))
