@@ -49,6 +49,23 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadHomeShelves(): HomeShelfData {
                 val books = repository.loadCachedHomeBooks()
                 val libraryId = repository.getSelectedLibraryId()
+                val currentlyReading = books.filter {
+                    !it.isRead && (it.progressPercent ?: 0f) > 0f ||
+                        (!it.isRead && it.progressPageIndex != null)
+                }
+                val recentlyRead = books
+                    .filter { it.isRead || it.readStatus == BookReadStatus.READ }
+                    .sortedByDescending { it.lastReadAtMillis ?: it.updatedAtMillis ?: 0L }
+                val onDeck = books
+                    .filter { !it.isRead && it.readStatus != BookReadStatus.READ }
+                    .sortedWith(compareBy<BookSummary> { it.seriesName.orEmpty() }.thenBy { it.seriesIndex ?: Double.MAX_VALUE })
+                val recentlyAdded = books.sortedByDescending { it.addedAtMillis ?: 0L }
+                val bookShelves = buildMap {
+                    if (currentlyReading.isNotEmpty()) put(HomeSection.CURRENTLY_READING, currentlyReading)
+                    if (onDeck.isNotEmpty()) put(HomeSection.ON_DECK, onDeck)
+                    if (recentlyRead.isNotEmpty()) put(HomeSection.RECENTLY_READ, recentlyRead)
+                    if (recentlyAdded.isNotEmpty()) put(HomeSection.RECENTLY_ADDED_BOOKS, recentlyAdded)
+                }
                 val series = repository.loadSeriesCatalog(
                     SeriesCatalogFilter(libraryId = libraryId),
                     page = 0
@@ -75,7 +92,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                         )
                     }
                 return HomeShelfData(
-                    booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to books),
+                    booksBySection = bookShelves,
                     seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to series),
                     isServerProvided = true
                 )
