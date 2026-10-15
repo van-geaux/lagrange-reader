@@ -127,7 +127,7 @@ This provider is implemented but has not received authenticated device/manual va
 
 | Function group | Kavita status | Endpoint/source evidence | UI/capability note |
 |---|---:|---|---|
-| Server selection and Auth Key login | V | `POST /api/Plugin/authenticate`, `x-api-key` | Kavita uses Auth Key/JWT, not username/password or SSO. |
+| Server selection and username/password login | V | `POST /api/Account/login`, JSON username/password body | Kavita returns a JWT; credentials are not persisted. |
 | Library discovery | V | `GET /api/Library/libraries` | Provider-specific library module is wired. |
 | Book catalog and chapter projection | V | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters are projected into shared book entries. |
 | Series catalog and detail | V | Series projection from Kavita chapter hierarchy | Series filters and detail are provider-routed. |

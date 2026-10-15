@@ -6,7 +6,7 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
 
 - `KavitaAuthModule`
   - probes `GET /api/Library/libraries`;
-  - authenticates an Auth Key through `POST /api/Plugin/authenticate`;
+  - authenticates username/password through `POST /api/Account/login`;
   - stores the returned JWT in encrypted, profile-scoped storage;
   - sends bearer headers for authenticated requests.
 - `KavitaLibraryModule`
@@ -46,4 +46,4 @@ Kavita EPUB reader routing, chapter-unread mutation, audiobook downloads, Home s
 
 `KavitaModuleSet` is the composition root for Kavita capability modules. `ProviderRepositoryResolver` selects `KavitaRepository` only when the active profile has provider ID `kavita`; it does not infer BookOrbit after a failed Kavita request.
 
-Auth Keys are never stored in ordinary profiles, source files, logs, fixtures, or documentation. Authenticated demo-server behavior still requires a locally supplied Auth Key and separate manual validation.
+Kavita usernames and passwords are never stored in ordinary profiles, source files, logs, fixtures, or documentation. Authenticated demo-server behavior requires locally supplied credentials through the secure local mechanism and separate manual validation.

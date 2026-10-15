@@ -6,7 +6,7 @@ This checkpoint adds the Kavita provider path through authentication, library di
 
 The adapter follows Kavita's upstream OpenAPI contract:
 
-- authentication: `POST /api/Plugin/authenticate` with an Auth Key in `x-api-key`;
+- authentication: `POST /api/Account/login` with a JSON username/password body; the response supplies the JWT used for subsequent requests;
 - libraries: `GET /api/Library/libraries`;
 - series catalog: `POST /api/Series/v2?PageNumber={page}&PageSize={size}`;
 - series details and chapters: `GET /api/Series/series-detail?seriesId={seriesId}`;
@@ -26,4 +26,4 @@ The series/volume/chapter hierarchy is not treated as a Komga-style book identit
 
 Implemented provider modules are wired through `KavitaModuleSet` and selected only for profiles with provider ID `kavita`. Unsupported actions remain explicit: EPUB reader routing, chapter unread, audiobook downloads, Home shelves, authors, annotations, statistics, achievements, Smart Scopes, cache warming, and server reading-session history.
 
-Compilation and parser/contract tests do not constitute authenticated demo-server or device validation. Manual validation requires a locally supplied Auth Key and must be recorded separately in the provider checklist and capability matrix.
+Compilation and parser/contract tests do not constitute authenticated demo-server or device validation. Manual validation requires locally supplied credentials through the secure local mechanism; credentials are not stored in profiles, source files, logs, fixtures, or documentation.

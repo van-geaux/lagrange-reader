@@ -11,6 +11,7 @@ import com.vangeaux.lagrange.UserFacingException
 import com.vangeaux.lagrange.normalizeServerUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -22,13 +23,8 @@ import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.net.ssl.SSLException
-import java.net.URLEncoder
-
-internal const val KAVITA_PLUGIN_NAME = "Lagrange"
-
-internal fun kavitaAuthenticateEndpoint(baseUrl: String, apiKey: String): String =
-    "$baseUrl/api/Plugin/authenticate?apiKey=${URLEncoder.encode(apiKey, Charsets.UTF_8.name())}" +
-        "&pluginName=${URLEncoder.encode(KAVITA_PLUGIN_NAME, Charsets.UTF_8.name())}"
+internal fun kavitaLoginEndpoint(baseUrl: String): String =
+    "$baseUrl/api/Account/login"
 
 internal fun kavitaAuthResponseToken(payload: String): String? =
     runCatching { JSONObject(payload).optString("token").takeIf { it.isNotBlank() } }.getOrNull()
@@ -38,7 +34,7 @@ internal fun kavitaSessionHeaders(token: String?): Map<String, String> =
 
 internal interface KavitaAuthModule {
     suspend fun checkServer(serverUrl: String): ServerCheckResult
-    suspend fun authenticate(serverUrl: String, apiKey: String)
+    suspend fun authenticate(serverUrl: String, username: String, password: String)
     suspend fun sessionState(serverUrl: String): SessionState
     suspend fun clearSession()
     suspend fun saveCurrentProfileSession()
@@ -75,20 +71,27 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         }
     }
 
-    override suspend fun authenticate(serverUrl: String, apiKey: String): Unit = withContext(Dispatchers.IO) {
+    override suspend fun authenticate(serverUrl: String, username: String, password: String): Unit = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl)
             ?: throw UserFacingException("Enter a valid Kavita server URL.")
-        if (apiKey.isBlank()) throw UserFacingException("Enter a Kavita Auth Key.")
+        if (username.isBlank()) throw UserFacingException("Enter your Kavita username.")
+        if (password.isBlank()) throw UserFacingException("Enter your Kavita password.")
         val request = Request.Builder()
-            .url(kavitaAuthenticateEndpoint(base, apiKey))
-            .header("x-api-key", apiKey)
+            .url(kavitaLoginEndpoint(base))
+            .header("Content-Type", "application/json")
             .header("Accept", "application/json")
-            .post(ByteArray(0).toRequestBody(null))
+            .post(
+                JSONObject()
+                    .put("username", username)
+                    .put("password", password)
+                    .toString()
+                    .toRequestBody("application/json; charset=utf-8".toMediaType())
+            )
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (response.code == 401 || response.code == 403) {
-                throw UserFacingException("Kavita did not accept this Auth Key.")
+                throw UserFacingException("Kavita did not accept this username or password.")
             }
             if (!response.isSuccessful) {
                 throw UserFacingException("Kavita authentication failed with HTTP ${response.code}.")
