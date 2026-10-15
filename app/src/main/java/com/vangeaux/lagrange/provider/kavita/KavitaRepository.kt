@@ -16,6 +16,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val readerModule = KavitaReaderModuleImpl(authModule)
     private val readingProgressModule = KavitaReadingProgressModuleImpl(authModule)
     private val readingStatusModule = KavitaReadingStatusModuleImpl(authModule)
+    private val downloadModule = KavitaDownloadModuleImpl(appContext, authModule)
 
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
 
@@ -85,12 +86,15 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         readingProgressModule.loadReaderProgress(book)
     override suspend fun markBookAsRead(book: BookSummary) = readingStatusModule.markBookAsRead(book)
     override suspend fun resetBookReadingState(book: BookSummary) = readingStatusModule.resetBookReadingState(book)
+    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File =
+        downloadModule.downloadBook(book, onProgress)
+    override suspend fun deleteLocalCopy(book: BookSummary) = downloadModule.deleteLocalCopy(book)
+    override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = downloadModule.deleteLocalCopies(book)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode) = unavailable<Unit>()
     override suspend fun clearActiveReader() = unavailable<Unit>()
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = unavailable<File>()
-    override suspend fun deleteLocalCopy(book: BookSummary) = unavailable<Unit>()
+
 
     override suspend fun canReachServer(serverUrl: String): Boolean =
         checkServer(serverUrl) == ServerCheckResult.Reachable

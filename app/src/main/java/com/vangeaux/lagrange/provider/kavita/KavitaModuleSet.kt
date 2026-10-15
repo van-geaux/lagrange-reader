@@ -76,10 +76,12 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 repository.restoreActiveReaderState(session, localOnly)
         },
         downloads = object : DownloadModule {
-            override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = unavailable()
-            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = unavailable()
-            override suspend fun deleteLocalCopy(book: BookSummary) = unavailable()
-            override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = unavailable()
+            override val handlesDownloadsDirectly: Boolean = true
+            override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) =
+                repository.downloadBook(book, onProgress)
+            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = emptyList()
+            override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
+            override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = repository.deleteLocalCopies(book)
         },
         localBooks = object : LocalBooksModule {
             override suspend fun loadLocalBooks(): List<BookSummary> = unavailable()
