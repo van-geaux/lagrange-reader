@@ -9,6 +9,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val preferences = appContext.getSharedPreferences("kavita_connection", Context.MODE_PRIVATE)
     private val authModule = KavitaAuthModuleImpl(appContext)
     private val libraryModule = KavitaLibraryModuleImpl(authModule)
+    private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
 
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
 
@@ -44,7 +45,14 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
 
     override suspend fun loadLibraries(): List<LibrarySummary> = libraryModule.loadLibraries()
 
-    override suspend fun loadBooks(libraryId: String): List<BookSummary> = unavailable()
+    override suspend fun loadBooks(libraryId: String): List<BookSummary> = catalogModule.loadBooks(libraryId)
+    override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter) =
+        catalogModule.loadBooksPage(libraryId, page, filter)
+    override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int) =
+        catalogModule.loadRecentBooksPage(libraryId, section, page)
+    override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
+        catalogModule.refreshLibraryCatalog(libraryId, firstPage)
+    override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = unavailable()
     override suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode) = unavailable<Unit>()

@@ -28,12 +28,15 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadLibraries() = repository.loadLibraries()
         },
         bookCatalog = object : BookCatalogModule {
-            override suspend fun loadBooks(libraryId: String): List<BookSummary> = unavailable()
-            override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter): LibraryBooksPage = unavailable()
-            override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int): LibraryBooksPage = unavailable()
+            override suspend fun loadBooks(libraryId: String): List<BookSummary> = repository.loadBooks(libraryId)
+            override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter): LibraryBooksPage =
+                repository.loadBooksPage(libraryId, page, filter)
+            override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int): LibraryBooksPage =
+                repository.loadRecentBooksPage(libraryId, section, page)
             override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = null
-            override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?): LibraryBooksPage = unavailable()
-            override suspend fun searchBooks(query: String): List<BookSummary> = unavailable()
+            override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?): LibraryBooksPage =
+                repository.refreshLibraryCatalog(libraryId, firstPage)
+            override suspend fun searchBooks(query: String): List<BookSummary> = repository.searchBooks(query)
         },
         seriesCatalog = object : SeriesCatalogModule {
             override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage = unavailable()
