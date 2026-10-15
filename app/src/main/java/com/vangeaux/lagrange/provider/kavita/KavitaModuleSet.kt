@@ -46,9 +46,40 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         },
         home = object : HomeShelfModule {
             override suspend fun loadCachedHomeBooks(): List<BookSummary> = repository.loadCachedHomeBooks()
-            override suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData(
-                booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to repository.loadCachedHomeBooks())
-            )
+            override suspend fun loadHomeShelves(): HomeShelfData {
+                val books = repository.loadCachedHomeBooks()
+                val libraryId = repository.getSelectedLibraryId()
+                val series = repository.loadSeriesCatalog(
+                    SeriesCatalogFilter(libraryId = libraryId),
+                    page = 0
+                ).items
+                    .sortedByDescending { it.lastAddedAtMillis ?: Long.MIN_VALUE }
+                    .map { series ->
+                        BookSummary(
+                            libraryId = libraryId.orEmpty(),
+                            id = "series:${series.id}",
+                            fileId = null,
+                            title = series.name,
+                            coverUrl = series.coverUrl,
+                            seriesId = series.id,
+                            seriesName = series.name,
+                            genres = series.genres,
+                            availableFormats = series.availableFormats,
+                            downloadedFormats = series.downloadedFormats,
+                            isRead = series.bookCount > 0 && series.readCount >= series.bookCount,
+                            readStatus = if (series.bookCount > 0 && series.readCount >= series.bookCount) {
+                                BookReadStatus.READ
+                            } else {
+                                BookReadStatus.UNREAD
+                            }
+                        )
+                    }
+                return HomeShelfData(
+                    booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to books),
+                    seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to series),
+                    isServerProvided = true
+                )
+            }
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes(): List<SmartScope> = unavailable()
