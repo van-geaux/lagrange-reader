@@ -59,4 +59,17 @@ class KavitaCatalogContractTest {
         assertEquals("cbz", kavitaFormat(null, ".zip"))
         assertEquals("pdf", kavitaFormat(null, "book.pdf"))
     }
+
+    @Test
+    fun seriesProjectionGroupsChapterBooksBySeriesIdentity() {
+        val books = listOf(
+            BookSummary("1", "chapter:42", "42", "Chapter 1", seriesId = "3", seriesName = "Series"),
+            BookSummary("1", "chapter:43", "43", "Chapter 2", seriesId = "3", seriesName = "Series")
+        )
+        val result = aggregateBooksToSeriesCatalog(books)
+
+        assertEquals(1, result.items.size)
+        assertEquals("3", result.items.single().id)
+        assertEquals(2, result.items.single().bookCount)
+    }
 }

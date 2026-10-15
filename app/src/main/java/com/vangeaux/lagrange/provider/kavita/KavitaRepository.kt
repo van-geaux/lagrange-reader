@@ -12,6 +12,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val libraryModule = KavitaLibraryModuleImpl(authModule)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
+    private val seriesModule = KavitaSeriesCatalogModuleImpl(catalogModule, detailModule)
     private val coverModule = KavitaCoverModuleImpl(authModule)
     private val readerModule = KavitaReaderModuleImpl(authModule)
     private val readingProgressModule = KavitaReadingProgressModuleImpl(authModule)
@@ -60,6 +61,10 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
         catalogModule.refreshLibraryCatalog(libraryId, firstPage)
     override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
+    override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
+        seriesModule.loadSeriesCatalog(filter, page)
+    override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =
+        seriesModule.loadSeriesDetail(seriesId)
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = detailModule.loadBookDetail(book)
     override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = detailModule.loadCachedBookDetail(book)
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =

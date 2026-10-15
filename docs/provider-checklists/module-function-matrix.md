@@ -121,6 +121,24 @@ For every provider-exclusive row, manually verify all of the following:
 | Isolation | Download identity scope | Local Books/server change | S | P | Local files may be shared, identity must remain retained. |
 | Isolation | Reader/player session scope | Server change/logout | S | P | Verify active reader/player cleanup. |
 
+## Kavita implementation checkpoint
+
+This provider is implemented but has not received authenticated device/manual validation. Use `V` for implemented behavior pending manual validation, `N` for not yet implemented, and `U` for a provider contract that does not expose the shared operation.
+
+| Function group | Kavita status | Endpoint/source evidence | UI/capability note |
+|---|---:|---|---|
+| Server selection and Auth Key login | V | `POST /api/Plugin/authenticate`, `x-api-key` | Kavita uses Auth Key/JWT, not username/password or SSO. |
+| Library discovery | V | `GET /api/Library/libraries` | Provider-specific library module is wired. |
+| Book catalog and chapter projection | V | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters are projected into shared book entries. |
+| Series catalog and detail | V | Series projection from Kavita chapter hierarchy | Series filters and detail are provider-routed. |
+| Book detail and covers | V | `GET /api/Series/chapter`, `/api/Image/series-cover` | Authenticated requests are wired. |
+| Comic/PDF reader routing | V | `/api/Reader/chapter-info`, `/api/Reader/image`, `/api/Reader/pdf` | EPUB reader routing remains unavailable. |
+| Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |
+| Chapter read mutation | V | `/api/Reader/mark-chapter-read` | Read action is exposed after manual validation. |
+| Chapter unread mutation | U | Kavita documents unread at series scope | Hidden/unavailable to avoid broad series mutation. |
+| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. |
+| Home shelves, authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
+
 ## Blank target-server column template
 
 When adding a target server, copy this column and replace `[TARGET]` with its provider name. Do not reuse the BookOrbit or Komga status without verifying the new provider's contract.

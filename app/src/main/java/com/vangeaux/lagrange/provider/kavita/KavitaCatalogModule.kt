@@ -141,6 +141,14 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         } ?: emptyList()
     }
 
+    internal suspend fun loadAllBooksForSeriesCatalog(libraryId: String?): List<BookSummary> =
+        filterBooksForSeriesCatalog(
+            loadAllBooksForServer(
+                auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+            ),
+            libraryId
+        )
+
     private suspend fun loadAllBooks(libraryId: String): List<BookSummary> {
         val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
         return loadAllBooksForServer(base).filter { it.libraryId == libraryId }

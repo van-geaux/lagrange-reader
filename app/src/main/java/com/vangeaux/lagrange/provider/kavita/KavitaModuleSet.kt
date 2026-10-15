@@ -39,8 +39,10 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun searchBooks(query: String): List<BookSummary> = repository.searchBooks(query)
         },
         seriesCatalog = object : SeriesCatalogModule {
-            override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage = unavailable()
-            override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? = unavailable()
+            override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
+                repository.loadSeriesCatalog(filter, page)
+            override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =
+                repository.loadSeriesDetail(seriesId)
         },
         home = object : HomeShelfModule {
             override suspend fun loadCachedHomeBooks(): List<BookSummary> = unavailable()

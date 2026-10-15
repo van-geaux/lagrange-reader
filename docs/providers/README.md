@@ -13,4 +13,9 @@ Provider-specific contracts and implementation notes live under this directory. 
 - [Integration](./komga/integration.md) — verified authentication, library, catalog, download, and reader boundaries.
 - [Modules](./komga/modules.md) — Komga provider modules, endpoints, and unsupported capabilities.
 
+## Kavita
+
+- [Integration](./kavita/integration.md) — Auth Key/JWT authentication, hierarchy projection, reader, progress, and download boundaries.
+- [Modules](./kavita/modules.md) — Kavita provider modules, endpoints, capability state, and unsupported operations.
+
 Cross-provider manual validation remains in [`../provider-checklists/`](../provider-checklists/), including the provider function matrix and copyable checklist template.
