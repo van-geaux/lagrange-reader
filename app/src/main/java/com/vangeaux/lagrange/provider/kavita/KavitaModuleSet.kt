@@ -66,11 +66,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                     if (recentlyRead.isNotEmpty()) put(HomeSection.RECENTLY_READ, recentlyRead)
                     if (recentlyAdded.isNotEmpty()) put(HomeSection.RECENTLY_ADDED_BOOKS, recentlyAdded)
                 }
-                val series = repository.loadSeriesCatalog(
-                    SeriesCatalogFilter(libraryId = libraryId),
-                    page = 0
-                ).items
-                    .sortedByDescending { it.lastAddedAtMillis ?: Long.MIN_VALUE }
+                val series = aggregateBooksToSeriesCatalog(books).items
+                    .sortedByDescending { it.lastAddedAtMillis ?: 0L }
                     .map { series ->
                         BookSummary(
                             libraryId = libraryId.orEmpty(),
