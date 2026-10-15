@@ -41,6 +41,7 @@ internal interface KavitaAuthModule {
     suspend fun authenticate(serverUrl: String, apiKey: String)
     suspend fun sessionState(serverUrl: String): SessionState
     suspend fun clearSession()
+    suspend fun saveCurrentProfileSession()
     suspend fun restoreCurrentProfileSession(): Boolean
     fun requestHeaders(): Map<String, String>
 }
@@ -122,10 +123,19 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 
     override fun requestHeaders(): Map<String, String> = kavitaSessionHeaders(token)
 
+    internal fun currentServerUrl(): String? =
+        serverUrl ?: ServerProfileStore(appContext).active()?.serverUrl
+
     override suspend fun clearSession() {
         serverUrl = null
         token = null
         activeProfileId()?.let(credentialStore::clear)
+    }
+
+    override suspend fun saveCurrentProfileSession() {
+        activeProfileId()?.let { profileId ->
+            token?.let { credentialStore.write(profileId, it) }
+        }
     }
 
     override suspend fun restoreCurrentProfileSession(): Boolean {
