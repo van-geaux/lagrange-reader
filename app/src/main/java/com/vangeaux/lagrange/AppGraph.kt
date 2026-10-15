@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.content.Context
 import com.vangeaux.lagrange.provider.komga.KomgaRepository
+import com.vangeaux.lagrange.provider.kavita.KavitaRepository
 import com.vangeaux.lagrange.core.DownloadModule
 import com.vangeaux.lagrange.provider.bookorbit.BookOrbitModuleSet
 
@@ -63,10 +64,10 @@ class AppGraph private constructor(
         private fun createDependencies(context: Context): Dependencies {
             val serverProfileStore = ServerProfileStore(context)
             val activeProfile = serverProfileStore.active()
-            val repository: BookOrbitDataSource = if (activeProfile?.providerId == "komga") {
-                KomgaRepository(context)
-            } else {
-                BookOrbitRepository(context)
+            val repository: BookOrbitDataSource = when (activeProfile?.providerId) {
+                PROVIDER_KOMGA -> KomgaRepository(context)
+                PROVIDER_KAVITA -> KavitaRepository(context)
+                else -> BookOrbitRepository(context)
             }
             val sessionHistoryStore = AudiobookSessionHistoryStore(context)
             val preferencesStore = AppPreferencesStore(context)
