@@ -16,6 +16,7 @@ data class ServerProfile(
 
 const val PROVIDER_BOOKORBIT = "bookorbit"
 const val PROVIDER_KOMGA = "komga"
+const val PROVIDER_KAVITA = "kavita"
 
 class ServerProfileStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
