@@ -22,6 +22,18 @@ class KavitaProgressContractTest {
     }
 
     @Test
+    fun chapterContextUsesBookHierarchyWhenChapterResponseOmitsParentIds() {
+        assertEquals(
+            KavitaChapterContext(chapterId = 42, volumeId = 7, seriesId = 3, libraryId = 1),
+            kavitaChapterContext(
+                JSONObject("""{"id":42,"volumeId":7}"""),
+                fallbackSeriesId = 3,
+                fallbackLibraryId = 1
+            )
+        )
+    }
+
+    @Test
     fun progressProjectionConvertsOneBasedPageToZeroBasedReaderIndex() {
         val book = BookSummary(
             libraryId = "1",

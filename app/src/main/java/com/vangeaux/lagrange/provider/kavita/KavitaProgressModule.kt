@@ -18,11 +18,15 @@ internal data class KavitaChapterContext(
     val libraryId: Int
 )
 
-internal fun kavitaChapterContext(chapter: JSONObject): KavitaChapterContext? {
+internal fun kavitaChapterContext(
+    chapter: JSONObject,
+    fallbackSeriesId: Int? = null,
+    fallbackLibraryId: Int? = null
+): KavitaChapterContext? {
     val chapterId = chapter.optInt("id", -1)
     val volumeId = chapter.optInt("volumeId", -1)
-    val seriesId = chapter.optInt("seriesId", -1)
-    val libraryId = chapter.optInt("libraryId", -1)
+    val seriesId = chapter.optInt("seriesId", -1).takeIf { it >= 0 } ?: fallbackSeriesId ?: -1
+    val libraryId = chapter.optInt("libraryId", -1).takeIf { it >= 0 } ?: fallbackLibraryId ?: -1
     return if (chapterId >= 0 && volumeId >= 0 && seriesId >= 0 && libraryId >= 0) {
         KavitaChapterContext(chapterId, volumeId, seriesId, libraryId)
     } else {
@@ -105,7 +109,11 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
             if (!response.isSuccessful) {
                 throw UserFacingException("Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).")
             }
-            kavitaChapterContext(JSONObject(payload))
+            kavitaChapterContext(
+                JSONObject(payload),
+                fallbackSeriesId = book.seriesId?.toIntOrNull(),
+                fallbackLibraryId = book.libraryId.toIntOrNull()
+            )
                 ?: throw UserFacingException("Kavita returned incomplete chapter hierarchy information.")
         }
     }
@@ -168,7 +176,11 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
         return client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) throw UserFacingException("Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).")
-            kavitaChapterContext(JSONObject(payload))
+            kavitaChapterContext(
+                JSONObject(payload),
+                fallbackSeriesId = book.seriesId?.toIntOrNull(),
+                fallbackLibraryId = book.libraryId.toIntOrNull()
+            )
                 ?: throw UserFacingException("Kavita returned incomplete chapter hierarchy information.")
         }
     }
