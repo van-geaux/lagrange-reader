@@ -133,7 +133,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun startOfflineCacheUpdate(): Boolean = unavailable()
             override suspend fun cancelOfflineCacheUpdate() = unavailable()
             override suspend fun clearOfflineCache() = unavailable()
-            override suspend fun reconfigureBackgroundRefresh() = unavailable()
+            override suspend fun reconfigureBackgroundRefresh() = Unit
         }
     )
 
