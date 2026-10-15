@@ -496,6 +496,26 @@ internal class LagrangeLibrarySessionPlayer(
             super.prepare()
         }
     }
+
+    override fun getMediaMetadata(): androidx.media3.common.MediaMetadata {
+        val base = super.getMediaMetadata()
+        val fallback = fallbackMetadataProvider() ?: return base
+        if (base.artworkUri != null && base.artworkData != null) return base
+        val builder = base.buildUpon()
+        if (base.title.isNullOrBlank() && !fallback.title.isNullOrBlank()) {
+            builder.setTitle(fallback.title)
+        }
+        if (base.artist.isNullOrBlank() && !fallback.artist.isNullOrBlank()) {
+            builder.setArtist(fallback.artist)
+        }
+        if (base.artworkUri == null && fallback.artworkUri != null) {
+            builder.setArtworkUri(fallback.artworkUri)
+        }
+        if (base.artworkData == null && fallback.artworkData != null) {
+            builder.setArtworkData(fallback.artworkData, fallback.artworkDataType)
+        }
+        return builder.build()
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -918,7 +938,7 @@ internal suspend fun openDirectMedia3Audio(
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult {
-    val playlistItems = buildAudiobookMediaItems(audioFiles)
+    val playlistItems = buildAudiobookMediaItems(audioFiles, application.packageName)
     if (shouldUsePlaylistMedia3Audio(playlistItems.size)) {
         return preparePlaylistMedia3Audio(
             application = application,
@@ -1305,7 +1325,8 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
         val engine: AudioPlaybackEngine,
         val mediaSession: MediaSession,
         val audioFiles: List<BookFileOption> = emptyList(),
-        val aggregateDurationMs: Long? = null
+        val aggregateDurationMs: Long? = null,
+        @Volatile var cachedCoverBytes: ByteArray? = null
     ) {
         val player: Player
             get() = engine.player
@@ -1367,6 +1388,25 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             .also { created ->
                 mediaLibrarySession = created
             }
+    }
+
+    private fun activeFallbackMediaMetadata(): androidx.media3.common.MediaMetadata? {
+        val current = binder.session.value ?: return null
+        val book = current.activeBookSummary()
+        val builder = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle(book.title)
+            .setArtist(book.author)
+            .setAlbumTitle(book.seriesName ?: book.title)
+        if (book.id.isNotBlank()) {
+            builder.setArtworkUri(androidAutoCoverUri(packageName, book.id, book.libraryId))
+        }
+        current.cachedCoverBytes?.takeIf { it.isNotEmpty() }?.let { bytes ->
+            builder.setArtworkData(
+                bytes,
+                androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER
+            )
+        }
+        return builder.build()
     }
 
     private fun createSessionActivityIntent(): PendingIntent {
@@ -1588,6 +1628,16 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     aggregateDurationMs
                 ).also { session ->
                     mutableSession.value = session
+                    if (book.id.isNotBlank()) {
+                        libraryScope.launch(Dispatchers.IO) {
+                            val bytes = AndroidAutoCatalogBridge.getInstance(
+                                this@ReadiumAudioPlaybackService
+                            ).loadCoverBytes(book.id, book.libraryId)
+                            if (bytes != null && bytes.isNotEmpty() && mutableSession.value === session) {
+                                session.cachedCoverBytes = bytes
+                            }
+                        }
+                    }
                 }
             } catch (error: Throwable) {
                 mutableSession.value = null

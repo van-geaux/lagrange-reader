@@ -1285,13 +1285,24 @@ internal class AndroidAutoCatalogBridge private constructor(
     suspend fun loadCoverBytes(bookId: String, libraryId: String? = null): ByteArray? =
         withContext(Dispatchers.IO) {
             val snapshot = loadSnapshot()
-            val book = findBook(bookId, preferredFileId = null, snapshot = snapshot)
+            val cachedDetail = if (snapshot.serverUrl.isNotBlank()) {
+                runCatching { bookDetailCacheStore.readLatest(snapshot.serverUrl, bookId, null) }.getOrNull()
+            } else {
+                null
+            }
+            val baseBook = findBook(bookId, preferredFileId = null, snapshot = snapshot)
+                ?: cachedDetail?.book
                 ?: BookSummary(
                     libraryId = libraryId.orEmpty(),
                     id = bookId,
                     fileId = null,
                     title = ""
                 )
+            val book = if (baseBook.coverUrl.isNullOrBlank() && !cachedDetail?.book?.coverUrl.isNullOrBlank()) {
+                baseBook.copy(coverUrl = cachedDetail?.book?.coverUrl)
+            } else {
+                baseBook
+            }
             if (snapshot.serverUrl.isNotBlank() && !book.coverUrl.isNullOrBlank()) {
                 coverCacheStore.read(snapshot.serverUrl, book.id, book.coverUrl)?.let {
                     return@withContext it
