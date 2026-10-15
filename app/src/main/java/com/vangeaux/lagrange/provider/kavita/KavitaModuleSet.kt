@@ -85,14 +85,16 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadLocalBooks(): List<BookSummary> = unavailable()
         },
         readingStatus = object : ReadingStatusModule {
-            override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) = unavailable()
-            override suspend fun markBookAsRead(book: BookSummary) = unavailable()
-            override suspend fun resetBookReadingState(book: BookSummary) = unavailable()
+            override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) =
+                repository.setBookReadingStatus(book, status)
+            override suspend fun markBookAsRead(book: BookSummary) = repository.markBookAsRead(book)
+            override suspend fun resetBookReadingState(book: BookSummary) = repository.resetBookReadingState(book)
         },
         readingProgress = object : ReadingProgressModule {
-            override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = unavailable()
-            override suspend fun pendingProgressCount(): Int = 0
-            override suspend fun syncPendingProgress(): SyncAttemptResult = SyncAttemptResult.Unsupported
+            override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) =
+                repository.queueProgress(book, position, pageIndex, progressPercent)
+            override suspend fun pendingProgressCount(): Int = repository.pendingProgressCount()
+            override suspend fun syncPendingProgress(): SyncAttemptResult = repository.syncPendingProgress()
         },
         readingSessions = object : ReadingSessionModule {
             override suspend fun loadBookReadingSessions(bookId: String, page: Int, pageSize: Int): BookReadingSessionsResult = unavailable()
@@ -136,7 +138,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         authors = false,
         userRating = false,
         extendedReadingStatuses = false,
-        readingStatusOptions = emptyList()
+        readingStatusOptions = listOf(BookReadStatus.UNREAD, BookReadStatus.READ)
     )
 
     val session: ProviderSessionModule = object : ProviderSessionModule {

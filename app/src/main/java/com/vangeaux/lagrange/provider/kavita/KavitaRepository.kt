@@ -14,6 +14,8 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val coverModule = KavitaCoverModuleImpl(authModule)
     private val readerModule = KavitaReaderModuleImpl(authModule)
+    private val readingProgressModule = KavitaReadingProgressModuleImpl(authModule)
+    private val readingStatusModule = KavitaReadingStatusModuleImpl(authModule)
 
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
 
@@ -63,8 +65,6 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         detailModule.setBookUserRating(book, rating)
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = coverModule.loadBookCover(book)
     override suspend fun loadCatalogImage(url: String): ByteArray? = coverModule.loadCatalogImage(url)
-    override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary =
-        readerModule.loadReaderProgress(book, availableFiles)
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState =
         readerModule.buildReaderState(book, localOnly)
     override suspend fun prepareEpubImageLibrarySource(
@@ -75,15 +75,22 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         session: ActiveReaderSession,
         localOnly: Boolean
     ): ReaderState? = readerModule.restoreActiveReaderState(session, localOnly)
+    override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) =
+        readingStatusModule.setBookReadingStatus(book, status)
+    override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) =
+        readingProgressModule.queueProgress(book, position, pageIndex, progressPercent)
+    override suspend fun pendingProgressCount(): Int = readingProgressModule.pendingProgressCount()
+    override suspend fun syncPendingProgress(): SyncAttemptResult = readingProgressModule.syncPendingProgress()
+    override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary =
+        readingProgressModule.loadReaderProgress(book)
+    override suspend fun markBookAsRead(book: BookSummary) = readingStatusModule.markBookAsRead(book)
+    override suspend fun resetBookReadingState(book: BookSummary) = readingStatusModule.resetBookReadingState(book)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
     override suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode) = unavailable<Unit>()
     override suspend fun clearActiveReader() = unavailable<Unit>()
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null
     override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = unavailable<File>()
     override suspend fun deleteLocalCopy(book: BookSummary) = unavailable<Unit>()
-    override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) = unavailable<Unit>()
-    override suspend fun pendingProgressCount(): Int = 0
-    override suspend fun syncPendingProgress(): SyncAttemptResult = SyncAttemptResult.Unsupported
 
     override suspend fun canReachServer(serverUrl: String): Boolean =
         checkServer(serverUrl) == ServerCheckResult.Reachable
