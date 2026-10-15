@@ -177,6 +177,7 @@ internal suspend fun openReadiumRemoteComic(
 }
 
 internal fun comicPageUrl(pagesUrl: String, pageIndex: Int): String {
+    if (pagesUrl.contains("{page}")) return pagesUrl.replace("{page}", pageIndex.toString())
     val normalized = pagesUrl.trimEnd('/')
     val queryIndex = normalized.indexOf('?')
     return if (queryIndex < 0) {

@@ -2,6 +2,7 @@ package com.vangeaux.lagrange.provider.kavita
 
 import android.content.Context
 import com.vangeaux.lagrange.*
+import com.vangeaux.lagrange.core.ActiveReaderSession
 import java.io.File
 
 internal class KavitaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
@@ -12,6 +13,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val coverModule = KavitaCoverModuleImpl(authModule)
+    private val readerModule = KavitaReaderModuleImpl(authModule)
 
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
 
@@ -61,8 +63,19 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         detailModule.setBookUserRating(book, rating)
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = coverModule.loadBookCover(book)
     override suspend fun loadCatalogImage(url: String): ByteArray? = coverModule.loadCatalogImage(url)
+    override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary =
+        readerModule.loadReaderProgress(book, availableFiles)
+    override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState =
+        readerModule.buildReaderState(book, localOnly)
+    override suspend fun prepareEpubImageLibrarySource(
+        book: BookSummary,
+        allowRemoteCache: Boolean
+    ): EpubImageLibrarySourceResult = readerModule.prepareEpubImageLibrarySource(book, allowRemoteCache)
+    override suspend fun restoreActiveReaderState(
+        session: ActiveReaderSession,
+        localOnly: Boolean
+    ): ReaderState? = readerModule.restoreActiveReaderState(session, localOnly)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = null
-    override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = unavailable()
     override suspend fun saveActiveReader(book: BookSummary, launchMode: ReaderLaunchMode) = unavailable<Unit>()
     override suspend fun clearActiveReader() = unavailable<Unit>()
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = null

@@ -66,10 +66,14 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadCatalogImage(url: String): ByteArray? = repository.loadCatalogImage(url)
         },
         reader = object : ReaderModule {
-            override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary = unavailable()
-            override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState = unavailable()
-            override suspend fun prepareEpubImageLibrarySource(book: BookSummary, allowRemoteCache: Boolean): EpubImageLibrarySourceResult = unavailable()
-            override suspend fun restoreActiveReaderState(session: ActiveReaderSession, localOnly: Boolean): ReaderState? = null
+            override suspend fun loadReaderProgress(book: BookSummary, availableFiles: List<BookFileOption>): BookSummary =
+                repository.loadReaderProgress(book, availableFiles)
+            override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState =
+                repository.buildReaderState(book, localOnly)
+            override suspend fun prepareEpubImageLibrarySource(book: BookSummary, allowRemoteCache: Boolean): EpubImageLibrarySourceResult =
+                repository.prepareEpubImageLibrarySource(book, allowRemoteCache)
+            override suspend fun restoreActiveReaderState(session: ActiveReaderSession, localOnly: Boolean): ReaderState? =
+                repository.restoreActiveReaderState(session, localOnly)
         },
         downloads = object : DownloadModule {
             override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = unavailable()
