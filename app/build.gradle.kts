@@ -85,7 +85,7 @@ android {
     }
     
     lint {
-        disable 'MissingOnPlayFromSearch'
+        disable.add("MissingOnPlayFromSearch")
     }
     packaging {
         resources {
