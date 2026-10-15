@@ -108,13 +108,14 @@ class KavitaCatalogContractTest {
                 """
                 {
                   "chapters": [{"id": 1}],
-                  "volumes": [{"chapters": [{"id": 2}, {"id": 1}]}]
+                  "volumes": [{"minNumber": 4.5, "chapters": [{"id": 2}, {"id": 1}]}]
                 }
                 """.trimIndent()
             )
         )
 
         assertEquals(listOf(1, 2), chapters.map { it.optInt("id") })
+        assertEquals(4.5, chapters[1].optDouble("_kavitaVolumeNumber"), 0.0)
     }
 
     @Test

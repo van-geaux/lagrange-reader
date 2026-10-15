@@ -24,6 +24,7 @@ internal data class KavitaChapterProjection(
     val format: String?,
     val pages: Int?,
     val pagesRead: Int,
+    val seriesIndex: Double?,
     val author: String?,
     val genres: List<String>,
     val releaseDateMillis: Long?
@@ -61,6 +62,10 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         format = format,
         pages = chapter.optInt("pages", 0).takeIf { it > 0 },
         pagesRead = chapter.optInt("pagesRead", 0).coerceAtLeast(0),
+        seriesIndex = chapter.optDouble("_kavitaVolumeNumber", Double.NaN)
+            .takeIf { it.isFinite() && it > -99999.0 }
+            ?: chapter.optString("range").toDoubleOrNull()
+                ?.takeIf { it > -99999.0 },
         author = author,
         genres = genres.distinct(),
         releaseDateMillis = chapter.optString("releaseDate")
@@ -252,7 +257,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                             progressPageIndex = projection.pagesRead.takeIf { it > 0 },
                             seriesId = seriesId,
                             seriesName = seriesName,
-                            seriesIndex = projection.id.toDoubleOrNull(),
+                            seriesIndex = projection.seriesIndex,
                             readStatus = when {
                                 completed -> BookReadStatus.READ
                                 projection.pagesRead > 0 -> BookReadStatus.READING
@@ -301,7 +306,20 @@ internal fun kavitaSeriesChapters(root: JSONObject): List<JSONObject> = buildLis
     addChapters(root.optJSONArray("specials"))
     val volumes = root.optJSONArray("volumes") ?: return@buildList
     for (index in 0 until volumes.length()) {
-        addChapters(volumes.optJSONObject(index)?.optJSONArray("chapters"))
+        val volume = volumes.optJSONObject(index) ?: continue
+        val volumeNumber = volume.optDouble("minNumber", Double.NaN)
+            .takeIf { it.isFinite() && it > -99999.0 }
+            ?: volume.optDouble("number", Double.NaN)
+                .takeIf { it.isFinite() && it > -99999.0 }
+        val chapters = volume.optJSONArray("chapters") ?: continue
+        for (chapterIndex in 0 until chapters.length()) {
+            val chapter = chapters.optJSONObject(chapterIndex) ?: continue
+            val id = chapter.optInt("id", -1)
+            if (id >= 0 && seen.add(id)) {
+                volumeNumber?.let { chapter.put("_kavitaVolumeNumber", it) }
+                add(chapter)
+            }
+        }
     }
 }
 
