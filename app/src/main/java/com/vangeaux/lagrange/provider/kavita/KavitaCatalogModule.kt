@@ -40,11 +40,12 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         file?.optString("extension")?.takeIf { it.isNotBlank() } ?: filename
     )
     val title = sequenceOf(
-        chapter.optString("title").takeIf { it.isNotBlank() },
-        chapter.optString("titleName").takeIf { it.isNotBlank() },
-        chapter.optString("range").takeIf { it.isNotBlank() },
-        chapter.optString("number").takeIf { it.isNotBlank() }
-    ).filterNotNull().firstOrNull() ?: "Chapter $id"
+        chapter.optString("title"),
+        chapter.optString("titleName"),
+        chapter.optString("range"),
+        chapter.optString("number"),
+        filename?.substringBeforeLast('.')
+    ).filterNotNull().firstOrNull(::isUsableKavitaTitle) ?: "Chapter $id"
     val writers = chapter.optJSONArray("writers")
     val author = writers?.optJSONObject(0)?.optString("name")?.takeIf { it.isNotBlank() }
     val genres = chapter.optJSONArray("genres").jsonTitles() + chapter.optJSONArray("tags").jsonTitles()
@@ -276,6 +277,9 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         filter.genre.isNullOrBlank() || book.genres.any { it.equals(filter.genre, ignoreCase = true) }
     }
 }
+
+private fun isUsableKavitaTitle(value: String): Boolean =
+    value.isNotBlank() && value.trim() != "-100000"
 
 internal fun kavitaSeriesChapters(root: JSONObject): List<JSONObject> = buildList {
     val seen = mutableSetOf<Int>()
