@@ -15,7 +15,8 @@ internal data class KavitaChapterContext(
     val chapterId: Int,
     val volumeId: Int,
     val seriesId: Int,
-    val libraryId: Int
+    val libraryId: Int,
+    val pages: Int? = null
 )
 
 internal fun kavitaChapterContext(
@@ -27,8 +28,9 @@ internal fun kavitaChapterContext(
     val volumeId = chapter.optInt("volumeId", -1)
     val seriesId = chapter.optInt("seriesId", -1).takeIf { it >= 0 } ?: fallbackSeriesId ?: -1
     val libraryId = chapter.optInt("libraryId", -1).takeIf { it >= 0 } ?: fallbackLibraryId ?: -1
+    val pages = chapter.optInt("pages", 0).takeIf { it > 0 }
     return if (chapterId >= 0 && volumeId >= 0 && seriesId >= 0 && libraryId >= 0) {
-        KavitaChapterContext(chapterId, volumeId, seriesId, libraryId)
+        KavitaChapterContext(chapterId, volumeId, seriesId, libraryId, pages)
     } else {
         null
     }
@@ -161,6 +163,18 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
             .put("seriesId", context.seriesId)
             .put("chapterId", context.chapterId)
             .put("generateReadingSession", true))
+        context.pages?.let { pages ->
+            execute(
+                "$base/api/Reader/progress",
+                JSONObject()
+                    .put("volumeId", context.volumeId)
+                    .put("chapterId", context.chapterId)
+                    .put("pageNum", pages)
+                    .put("seriesId", context.seriesId)
+                    .put("libraryId", context.libraryId)
+            )
+        }
+        Unit
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) {
