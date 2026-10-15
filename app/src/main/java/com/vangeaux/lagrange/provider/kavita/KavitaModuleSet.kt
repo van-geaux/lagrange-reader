@@ -45,8 +45,10 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 repository.loadSeriesDetail(seriesId)
         },
         home = object : HomeShelfModule {
-            override suspend fun loadCachedHomeBooks(): List<BookSummary> = unavailable()
-            override suspend fun loadHomeShelves(): HomeShelfData = unavailable()
+            override suspend fun loadCachedHomeBooks(): List<BookSummary> = repository.loadCachedHomeBooks()
+            override suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData(
+                booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to repository.loadCachedHomeBooks())
+            )
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes(): List<SmartScope> = unavailable()

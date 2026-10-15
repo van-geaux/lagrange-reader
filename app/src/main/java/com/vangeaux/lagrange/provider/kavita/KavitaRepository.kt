@@ -58,6 +58,8 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
         catalogModule.refreshLibraryCatalog(libraryId, firstPage)
     override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> =
+        getSelectedLibraryId()?.let { loadBooks(it) }.orEmpty()
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         seriesModule.loadSeriesCatalog(filter, page)
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =
