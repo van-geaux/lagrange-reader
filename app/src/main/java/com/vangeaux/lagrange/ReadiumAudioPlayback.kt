@@ -438,7 +438,8 @@ private fun <T> CoroutineScope.futureResult(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class LagrangeLibrarySessionPlayer(
-    delegate: Player
+    delegate: Player,
+    private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
@@ -499,7 +500,7 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun getMediaMetadata(): androidx.media3.common.MediaMetadata {
         val base = super.getMediaMetadata()
-        val fallback = fallbackMetadataProvider() ?: return base
+        val fallback = fallbackMetadataProvider?.invoke() ?: return base
         if (base.artworkUri != null && base.artworkData != null) return base
         val builder = base.buildUpon()
         if (base.title.isNullOrBlank() && !fallback.title.isNullOrBlank()) {

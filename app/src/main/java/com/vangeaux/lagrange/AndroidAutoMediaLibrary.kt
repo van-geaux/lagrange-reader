@@ -961,6 +961,14 @@ internal data class AndroidAutoCatalogSnapshot(
     val localBooks: List<BookSummary>
 )
 
+internal fun String.sanitizeAudiobookTitle(): String {
+    val cleaned = this.trim()
+    return if (cleaned.contains(".")) {
+        cleaned.replace(Regex("\\.(m4b|m4a|mp3|flac|aac|ogg|wav|wma)$", RegexOption.IGNORE_CASE), "").trim()
+    } else {
+        cleaned
+    }
+}
 internal class AndroidAutoCatalogBridge private constructor(
     private val application: Application
 ) {
