@@ -251,7 +251,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                             author = projection.author,
                             format = projection.format,
                             mediaKind = kavitaMediaKind(projection.format),
-                            coverUrl = "$base/api/Image/series-cover?seriesId=$seriesId",
+                            coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                             progressLabel = if (projection.pagesRead > 0) "Page ${projection.pagesRead}" else null,
                             progressPercent = progress,
                             progressPageIndex = projection.pagesRead.takeIf { it > 0 },

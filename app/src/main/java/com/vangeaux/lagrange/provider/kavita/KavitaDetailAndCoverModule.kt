@@ -39,6 +39,7 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
                 author = projection.author ?: book.author,
                 format = projection.format ?: book.format,
                 mediaKind = kavitaMediaKind(projection.format ?: book.format),
+                coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                 progressPageIndex = projection.pagesRead.takeIf { it > 0 },
                 progressPercent = projection.pages?.let { pages ->
                     (projection.pagesRead.toFloat() / pages.toFloat() * 100f).coerceIn(0f, 100f)
