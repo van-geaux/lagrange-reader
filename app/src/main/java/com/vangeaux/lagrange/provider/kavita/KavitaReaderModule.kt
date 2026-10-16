@@ -72,6 +72,7 @@ internal class KavitaReaderModuleImpl(
                 MediaKind.COMIC -> ReaderState(
                     book = resolvedBook,
                     comicPagesUrl = "$base/api/Reader/image?chapterId=$chapterId&page={page}",
+                    comicPageCount = resolvedBook.readerPageCount,
                     pageIndex = 0,
                     readerPageIndex = book.progressPageIndex ?: 0,
                     progressPercent = book.progressPercent,

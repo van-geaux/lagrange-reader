@@ -50,6 +50,7 @@ internal suspend fun prepareReadiumComic(
     book: BookSummary,
     localFile: File?,
     pagesUrl: String?,
+    providedPageCount: Int? = null,
     pageLoader: suspend (String) -> ByteArray?
 ): ReadiumComicPreparationResult = withContext(Dispatchers.IO) {
     localFile
@@ -63,10 +64,11 @@ internal suspend fun prepareReadiumComic(
             "This comic could not be prepared as a Readium image publication."
         )
     }
-    val pageCount = runCatching { pageLoader(pagesUrl) }
-        .getOrNull()
-        ?.let(::parseComicPageCount)
-        ?.takeIf { it > 0 }
+    val pageCount = providedPageCount?.takeIf { it > 0 }
+        ?: runCatching { pageLoader(pagesUrl) }
+            .getOrNull()
+            ?.let(::parseComicPageCount)
+            ?.takeIf { it > 0 }
         ?: return@withContext ReadiumComicPreparationResult.Error(
             "BookOrbit could not provide this " +
                 archiveExtension.orEmpty().uppercase(Locale.US) +
@@ -123,6 +125,7 @@ internal fun ReadiumComicReaderLauncher(
     book: BookSummary,
     file: File?,
     pagesUrl: String?,
+    providedPageCount: Int? = null,
     pageLoader: suspend (String) -> ByteArray?,
     title: String,
     readerKey: String,
@@ -156,6 +159,7 @@ internal fun ReadiumComicReaderLauncher(
             book = book,
             localFile = file,
             pagesUrl = pagesUrl,
+            providedPageCount = providedPageCount,
             pageLoader = pageLoader
         )
     }

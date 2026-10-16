@@ -783,6 +783,7 @@ private fun ReaderScreen(
             book = state.book,
             file = state.localFile,
             pagesUrl = state.comicPagesUrl,
+            providedPageCount = state.comicPageCount,
             pageLoader = comicPageLoader,
             title = state.book.title,
             readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
