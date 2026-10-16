@@ -275,7 +275,7 @@ internal fun bookToAndroidAutoNodeSpec(
         book.downloadedFormats.any { it.equals("AUDIO", ignoreCase = true) }
     return AndroidAutoNodeSpec(
         mediaId = AndroidAutoMediaId.Book(book.id, book.fileId).encode(),
-        title = book.title,
+        title = book.title.sanitizeAudiobookTitle(),
         subtitle = formatAndroidAutoBookSubtitle(book),
         artist = book.author,
         albumTitle = book.seriesName ?: book.title,
@@ -671,7 +671,7 @@ internal fun buildAndroidAutoChapterSpecs(
             }
             else -> AndroidAutoCompletionState(AndroidAutoCompletionStatus.NOT_PLAYED)
         }
-        val chapterTitle = chapter.title.ifBlank { "Chapter ${index + 1}" }
+        val chapterTitle = chapter.title.sanitizeAudiobookTitle().ifBlank { "Chapter ${index + 1}" }
         val timestampLabel = formatAndroidAutoTimestamp(chapter.startMs)
         val durationLabel = chapterDurationMs?.let { " · ${formatAndroidAutoDuration(it)}" }.orEmpty()
         AndroidAutoNodeSpec(
