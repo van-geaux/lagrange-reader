@@ -1139,7 +1139,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                     val prefs = AppPreferencesStore(application).read()
                     val liveSession = runCatching { controller?.session()?.value }.getOrNull()
                     val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
-                        ?: prefs.audioPlaybackSpeed
+                        ?: AppPreferencesStore(application).readAudioPlaybackSpeed()
                     buildAndroidAutoChapterSpecs(
                         book = hydrated,
                         currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
@@ -1156,7 +1156,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                     val liveSession = runCatching { controller?.session()?.value }.getOrNull()
                         ?.takeIf { it.book.id == hydrated.id }
                     val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
-                        ?: prefs.audioPlaybackSpeed
+                        ?: AppPreferencesStore(application).readAudioPlaybackSpeed()
                     buildAndroidAutoChapterSpecs(
                         book = hydrated,
                         currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
@@ -1173,7 +1173,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                     val liveSession = runCatching { controller?.session()?.value }.getOrNull()
                         ?.takeIf { it.book.id == hydrated.id }
                     val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
-                        ?: prefs.audioPlaybackSpeed
+                        ?: AppPreferencesStore(application).readAudioPlaybackSpeed()
                     buildAndroidAutoChapterSpecs(
                         book = hydrated,
                         currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
@@ -1252,7 +1252,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                 val prefs = AppPreferencesStore(application).read()
                 buildAndroidAutoChapterSpecs(
                     book = hydrated,
-                    playbackSpeed = prefs.audioPlaybackSpeed,
+                    playbackSpeed = AppPreferencesStore(application).readAudioPlaybackSpeed(),
                     scaleBySpeed = prefs.scaleProgressByPlaybackSpeed
                 ).getOrNull(parsed.chapterIndex)
             }
