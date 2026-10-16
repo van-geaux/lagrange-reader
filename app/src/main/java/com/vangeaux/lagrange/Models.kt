@@ -744,7 +744,8 @@ data class HomeShelfPreferences(
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
-    val isServerProvided: Boolean = false
+    val isServerProvided: Boolean = false,
+    val isAggregatedAcrossLibraries: Boolean = false
 )
 
 enum class ReaderLaunchMode {

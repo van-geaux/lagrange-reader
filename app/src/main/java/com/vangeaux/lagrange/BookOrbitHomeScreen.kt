@@ -837,7 +837,7 @@ internal fun homeLocalBooksPreview(
 }
 
 internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeShelfData {
-    if (libraryId == null) return shelves
+    if (libraryId == null || shelves.isAggregatedAcrossLibraries) return shelves
     fun scoped(source: Map<HomeSection, List<BookSummary>>): Map<HomeSection, List<BookSummary>> =
         source.mapValues { (_, books) -> books.filter { it.libraryId == libraryId } }
     return shelves.copy(

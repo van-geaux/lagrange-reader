@@ -90,7 +90,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 return HomeShelfData(
                     booksBySection = bookShelves,
                     seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to series),
-                    isServerProvided = true
+                    isServerProvided = true,
+                    isAggregatedAcrossLibraries = true
                 )
             }
         },
