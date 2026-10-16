@@ -16,6 +16,7 @@ internal class KavitaReaderModuleImpl(
 ) : ReaderModule {
     private val client = OkHttpClient()
     private val downloadStore = DownloadStore(context.applicationContext)
+    private val downloadModule = KavitaDownloadModuleImpl(context.applicationContext, auth)
 
     override suspend fun loadReaderProgress(
         book: BookSummary,
@@ -55,6 +56,18 @@ internal class KavitaReaderModuleImpl(
                 seriesName = info.optString("seriesName").takeIf { it.isNotBlank() } ?: book.seriesName,
                 readerPageCount = info.optInt("pages", 0).takeIf { it > 0 } ?: book.readerPageCount
             )
+            if (resolvedBook.mediaKind == MediaKind.EPUB) {
+                val localFile = downloadModule.downloadBook(resolvedBook) { }
+                val localBook = resolvedBook.copy(localPath = localFile.absolutePath)
+                return@withContext ReaderState(
+                    book = localBook,
+                    localFile = localFile,
+                    pageIndex = 0,
+                    readerPageIndex = book.progressPageIndex ?: 0,
+                    progressPercent = book.progressPercent,
+                    serverProgressAuthoritative = true
+                )
+            }
             when (resolvedBook.mediaKind) {
                 MediaKind.COMIC -> ReaderState(
                     book = resolvedBook,
