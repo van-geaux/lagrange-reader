@@ -3579,7 +3579,7 @@ internal fun OptionsScreen(
                         selectedCategory == OptionsCategory.LIBRARY -> "Library"
                         selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE -> "Downloads & Offline"
                         selectedCategory == OptionsCategory.NETWORK_SYNC -> "Network & Sync"
-                        null -> "Settings"
+                        selectedCategory == null && subDestination == null -> "Settings"
                         else -> selectedCategory?.title ?: "Settings"
                     },
                     style = MaterialTheme.typography.headlineSmall
