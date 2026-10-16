@@ -1906,8 +1906,18 @@ class ReadiumAudioPlaybackController internal constructor(
         readingSessionFileId = null
     }
 
-    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? =
-        absoluteProgressPercent(session.absolutePositionMs(), session.totalDurationMs())
+    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? {
+        val baseDurationMs = session.totalDurationMs()
+        if (baseDurationMs <= 0L) return null
+
+        val speed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
+        val scaleBySpeed = preferencesStore.read().scaleProgressByPlaybackSpeed
+
+        val effectiveDurationMs = if (scaleBySpeed) (baseDurationMs.toDouble() / speed).toLong() else baseDurationMs
+        val effectivePositionMs = if (scaleBySpeed) (session.absolutePositionMs().toDouble() / speed).toLong() else session.absolutePositionMs()
+
+        return absoluteProgressPercent(effectivePositionMs, effectiveDurationMs)
+    }
 
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
         val activeBook = session.activeBookSummary()
