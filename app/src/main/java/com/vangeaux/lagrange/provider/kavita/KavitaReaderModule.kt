@@ -26,16 +26,16 @@ internal class KavitaReaderModuleImpl(
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState =
         withContext(Dispatchers.IO) {
             if (localOnly) {
-                val localFile = kavitaLocalFile(book)
-                    ?: throw UserFacingException("This Kavita chapter is not available for offline reading.")
-                val localBook = book.copy(localPath = localFile.absolutePath)
-                return@withContext ReaderState(
-                    book = localBook,
-                    localFile = localFile,
-                    pageIndex = localBook.progressPageIndex ?: 0,
-                    progressPercent = localBook.progressPercent,
-                    serverProgressAuthoritative = false
-                )
+                kavitaLocalFile(book)?.let { localFile ->
+                    val localBook = book.copy(localPath = localFile.absolutePath)
+                    return@withContext ReaderState(
+                        book = localBook,
+                        localFile = localFile,
+                        pageIndex = localBook.progressPageIndex ?: 0,
+                        progressPercent = localBook.progressPercent,
+                        serverProgressAuthoritative = false
+                    )
+                }
             }
             val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
             val chapterId = book.id.removePrefix("chapter:").substringBefore(':').ifBlank {
