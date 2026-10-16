@@ -516,6 +516,22 @@ internal class LagrangeLibrarySessionPlayer(
         }
         return builder.build()
     }
+
+    override fun seekToPrevious() {
+        super.seekToPrevious()
+    }
+
+    override fun seekToPreviousMediaItem() {
+        super.seekToPreviousMediaItem()
+    }
+
+    override fun seekToNext() {
+        super.seekToNext()
+    }
+
+    override fun seekToNextMediaItem() {
+        super.seekToNextMediaItem()
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
