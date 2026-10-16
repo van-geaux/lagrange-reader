@@ -8,9 +8,14 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
 
-internal class KavitaReaderModuleImpl(private val auth: KavitaAuthModule) : ReaderModule {
+internal class KavitaReaderModuleImpl(
+    private val auth: KavitaAuthModule,
+    context: android.content.Context
+) : ReaderModule {
     private val client = OkHttpClient()
+    private val downloadStore = DownloadStore(context.applicationContext)
 
     override suspend fun loadReaderProgress(
         book: BookSummary,
@@ -20,7 +25,16 @@ internal class KavitaReaderModuleImpl(private val auth: KavitaAuthModule) : Read
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState =
         withContext(Dispatchers.IO) {
             if (localOnly) {
-                throw UserFacingException("This Kavita chapter is not available for offline reading.")
+                val localFile = kavitaLocalFile(book)
+                    ?: throw UserFacingException("This Kavita chapter is not available for offline reading.")
+                val localBook = book.copy(localPath = localFile.absolutePath)
+                return@withContext ReaderState(
+                    book = localBook,
+                    localFile = localFile,
+                    pageIndex = localBook.progressPageIndex ?: 0,
+                    progressPercent = localBook.progressPercent,
+                    serverProgressAuthoritative = false
+                )
             }
             val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
             val chapterId = book.id.removePrefix("chapter:").substringBefore(':').ifBlank {
@@ -61,6 +75,15 @@ internal class KavitaReaderModuleImpl(private val auth: KavitaAuthModule) : Read
                 else -> throw UserFacingException("Kavita reader support is not available for ${resolvedBook.format ?: "this format"} chapters.")
             }
         }
+
+    private suspend fun kavitaLocalFile(book: BookSummary): File? {
+        val record = downloadStore.find(auth.serverUrl().orEmpty(), book.fileId ?: book.id)
+            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
+        return listOfNotNull(record?.localPath, book.localPath)
+            .asSequence()
+            .map(::File)
+            .firstOrNull(File::isFile)
+    }
 
     override suspend fun prepareEpubImageLibrarySource(
         book: BookSummary,
