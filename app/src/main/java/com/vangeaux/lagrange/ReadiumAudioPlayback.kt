@@ -180,6 +180,8 @@ private fun audiobookCompactViewExtras(index: Int): Bundle = Bundle().apply {
 internal fun audiobookExternalPlayerCommands(
     commands: Player.Commands
 ): Player.Commands = commands.buildUpon()
+    .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
     .removeAll(
         Player.COMMAND_SEEK_TO_PREVIOUS,
         Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
@@ -1063,6 +1065,9 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
         fun activeBookSummary(): BookSummary =
             activeBookSummaryForActiveFile(book, audioFiles, currentFileId())
 
+        fun currentPlaybackSpeed(): Float =
+            player.playbackParameters.speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+
         fun currentFilePositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
 
         fun totalDurationMs(): Long = resolveTotalDurationMs(
@@ -1073,6 +1078,17 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
 
         fun absolutePositionMs(): Long =
             resolveAbsolutePositionMs(audioFiles, currentFileId(), currentFilePositionMs())
+
+        fun effectivePositionMs(scaleBySpeed: Boolean): Long =
+            scaleAudioTimeMs(absolutePositionMs(), currentPlaybackSpeed(), scaleBySpeed)
+
+        fun effectiveTotalDurationMs(scaleBySpeed: Boolean): Long =
+            scaleAudioTimeMs(totalDurationMs(), currentPlaybackSpeed(), scaleBySpeed)
+
+        fun effectiveRemainingMs(scaleBySpeed: Boolean): Long {
+            val rem = (totalDurationMs() - absolutePositionMs()).coerceAtLeast(0L)
+            return scaleAudioTimeMs(rem, currentPlaybackSpeed(), scaleBySpeed)
+        }
 
         fun seekToAbsolutePosition(ms: Long) {
             if (audioFiles.size < 2) {
@@ -1105,7 +1121,11 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             .also { idlePlayer = it }
         val forwarding = LagrangeLibrarySessionPlayer(
             fallbackPlayer,
-            ::activeFallbackMediaMetadata
+            ::activeFallbackMediaMetadata,
+            sessionProvider = ::activeSession,
+            scaleBySpeedProvider = {
+                AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+            }
         ).also {
             librarySessionPlayer = it
         }
@@ -1155,7 +1175,11 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 val librarySession = ensureLibrarySession()
                 val wrappedPlayer = LagrangeLibrarySessionPlayer(
                     engine.player,
-                    ::activeFallbackMediaMetadata
+                    ::activeFallbackMediaMetadata,
+                    sessionProvider = ::activeSession,
+                    scaleBySpeedProvider = {
+                        AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+                    }
                 )
                 wrappedPlayer.addListener(object : Player.Listener {
                     override fun onPlaybackParametersChanged(
@@ -1200,7 +1224,11 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     fallback.clearMediaItems()
                     val wrappedFallback = LagrangeLibrarySessionPlayer(
                         fallback,
-                        ::activeFallbackMediaMetadata
+                        ::activeFallbackMediaMetadata,
+                        sessionProvider = ::activeSession,
+                        scaleBySpeedProvider = {
+                            AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+                        }
                     )
                     librarySessionPlayer = wrappedFallback
                     mediaLibrarySession?.setPlayer(wrappedFallback)
@@ -1478,9 +1506,11 @@ class ReadiumAudioPlaybackController internal constructor(
                 val positionMs = current.absolutePositionMs()
                 val chapterEndMs = audiobookChapterEndMs(current.book.audioChapters, positionMs)
                     ?: current.totalDurationMs()
-                chapterEndMs
+                val rawRemainingMs = chapterEndMs
                     .minus(positionMs)
                     .coerceAtLeast(0L)
+                val scaleBySpeed = preferencesStore.read().scaleProgressByPlaybackSpeed
+                scaleAudioTimeMs(rawRemainingMs, current.currentPlaybackSpeed(), scaleBySpeed)
             }
             if (durationMs == null || durationMs <= 0L) {
                 mutableSleepTimer.value = AudioSleepTimerState()

@@ -653,10 +653,34 @@ internal fun buildAndroidAutoSeriesBookSpecs(
         )
         .map { bookToAndroidAutoNodeSpec(it) }
 
+internal fun scaleAudioTimeMs(
+    rawMs: Long,
+    speed: Float,
+    scaleBySpeed: Boolean
+): Long {
+    if (rawMs <= 0L) return 0L
+    val validSpeed = speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+    if (!scaleBySpeed || kotlin.math.abs(validSpeed - 1.0f) < 0.01f) return rawMs
+    return (rawMs.toDouble() / validSpeed.toDouble()).toLong().coerceAtLeast(0L)
+}
+
+internal fun unscaleAudioTimeMs(
+    scaledMs: Long,
+    speed: Float,
+    scaleBySpeed: Boolean
+): Long {
+    if (scaledMs <= 0L) return 0L
+    val validSpeed = speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+    if (!scaleBySpeed || kotlin.math.abs(validSpeed - 1.0f) < 0.01f) return scaledMs
+    return (scaledMs.toDouble() * validSpeed.toDouble()).toLong().coerceAtLeast(0L)
+}
+
 internal fun buildAndroidAutoChapterSpecs(
     book: BookSummary,
     currentPositionMs: Long = book.progressPositionMs ?: 0L,
-    totalDurationMs: Long? = null
+    totalDurationMs: Long? = null,
+    playbackSpeed: Float = 1.0f,
+    scaleBySpeed: Boolean = false
 ): List<AndroidAutoNodeSpec> {
     val chapters = book.audioChapters
     if (chapters.isEmpty()) {
@@ -666,17 +690,21 @@ internal fun buildAndroidAutoChapterSpecs(
         .coerceAtLeast(0)
     return chapters.mapIndexed { index, chapter ->
         val nextStartMs = chapters.getOrNull(index + 1)?.startMs ?: totalDurationMs
-        val chapterDurationMs = nextStartMs
+        val rawChapterDurationMs = nextStartMs
             ?.minus(chapter.startMs)
             ?.takeIf { it > 0L }
+        val scaledStartMs = scaleAudioTimeMs(chapter.startMs, playbackSpeed, scaleBySpeed)
+        val scaledChapterDurationMs = rawChapterDurationMs?.let {
+            scaleAudioTimeMs(it, playbackSpeed, scaleBySpeed)
+        }
         val completionState = when {
             index < activeChapterIndex -> AndroidAutoCompletionState(
                 status = AndroidAutoCompletionStatus.FULLY_PLAYED,
                 completionFraction = 1.0
             )
             index == activeChapterIndex && currentPositionMs > chapter.startMs -> {
-                val fraction = if (chapterDurationMs != null && chapterDurationMs > 0L) {
-                    ((currentPositionMs - chapter.startMs).toDouble() / chapterDurationMs.toDouble())
+                val fraction = if (rawChapterDurationMs != null && rawChapterDurationMs > 0L) {
+                    ((currentPositionMs - chapter.startMs).toDouble() / rawChapterDurationMs.toDouble())
                         .coerceIn(0.01, 0.99)
                 } else {
                     0.5
@@ -689,8 +717,8 @@ internal fun buildAndroidAutoChapterSpecs(
             else -> AndroidAutoCompletionState(AndroidAutoCompletionStatus.NOT_PLAYED)
         }
         val chapterTitle = chapter.title.sanitizeAudiobookTitle().ifBlank { "Chapter ${index + 1}" }
-        val timestampLabel = formatAndroidAutoTimestamp(chapter.startMs)
-        val durationLabel = chapterDurationMs?.let { " · ${formatAndroidAutoDuration(it)}" }.orEmpty()
+        val timestampLabel = formatAndroidAutoTimestamp(scaledStartMs)
+        val durationLabel = scaledChapterDurationMs?.let { " · ${formatAndroidAutoDuration(it)}" }.orEmpty()
         AndroidAutoNodeSpec(
             mediaId = AndroidAutoMediaId.Chapter(
                 bookId = book.id,
@@ -709,7 +737,7 @@ internal fun buildAndroidAutoChapterSpecs(
             isDownloaded = book.isDownloaded,
             bookId = book.id,
             libraryId = book.libraryId,
-            durationMs = chapterDurationMs
+            durationMs = scaledChapterDurationMs
         )
     }
 }
@@ -1108,19 +1136,51 @@ internal class AndroidAutoCatalogBridge private constructor(
                 AndroidAutoMediaId.ActiveChapters -> {
                     val book = activeBook ?: return@withContext emptyList()
                     val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
-                    buildAndroidAutoChapterSpecs(hydrated)
+                    val prefs = AppPreferencesStore(application).read()
+                    val liveSession = runCatching { controller?.session()?.value }.getOrNull()
+                    val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
+                        ?: prefs.audioPlaybackSpeed
+                    buildAndroidAutoChapterSpecs(
+                        book = hydrated,
+                        currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
+                        totalDurationMs = liveSession?.totalDurationMs(),
+                        playbackSpeed = speed,
+                        scaleBySpeed = prefs.scaleProgressByPlaybackSpeed
+                    )
                 }
                 is AndroidAutoMediaId.BookChapters -> {
                     val book = findBook(parsed.bookId, parsed.fileId, snapshot)
                         ?: return@withContext emptyList()
                     val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
-                    buildAndroidAutoChapterSpecs(hydrated)
+                    val prefs = AppPreferencesStore(application).read()
+                    val liveSession = runCatching { controller?.session()?.value }.getOrNull()
+                        ?.takeIf { it.book.id == hydrated.id }
+                    val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
+                        ?: prefs.audioPlaybackSpeed
+                    buildAndroidAutoChapterSpecs(
+                        book = hydrated,
+                        currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
+                        totalDurationMs = liveSession?.totalDurationMs(),
+                        playbackSpeed = speed,
+                        scaleBySpeed = prefs.scaleProgressByPlaybackSpeed
+                    )
                 }
                 is AndroidAutoMediaId.Book -> {
                     val book = findBook(parsed.bookId, parsed.fileId, snapshot)
                         ?: return@withContext emptyList()
                     val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
-                    buildAndroidAutoChapterSpecs(hydrated)
+                    val prefs = AppPreferencesStore(application).read()
+                    val liveSession = runCatching { controller?.session()?.value }.getOrNull()
+                        ?.takeIf { it.book.id == hydrated.id }
+                    val speed = liveSession?.player?.playbackParameters?.speed?.takeIf { it > 0f }
+                        ?: prefs.audioPlaybackSpeed
+                    buildAndroidAutoChapterSpecs(
+                        book = hydrated,
+                        currentPositionMs = liveSession?.absolutePositionMs() ?: (hydrated.progressPositionMs ?: 0L),
+                        totalDurationMs = liveSession?.totalDurationMs(),
+                        playbackSpeed = speed,
+                        scaleBySpeed = prefs.scaleProgressByPlaybackSpeed
+                    )
                 }
                 is AndroidAutoMediaId.Chapter -> emptyList()
             }
@@ -1189,8 +1249,12 @@ internal class AndroidAutoCatalogBridge private constructor(
             is AndroidAutoMediaId.Chapter -> {
                 val book = findBook(parsed.bookId, parsed.fileId, snapshot) ?: return@withContext null
                 val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
-                buildAndroidAutoChapterSpecs(hydrated)
-                    .getOrNull(parsed.chapterIndex)
+                val prefs = AppPreferencesStore(application).read()
+                buildAndroidAutoChapterSpecs(
+                    book = hydrated,
+                    playbackSpeed = prefs.audioPlaybackSpeed,
+                    scaleBySpeed = prefs.scaleProgressByPlaybackSpeed
+                ).getOrNull(parsed.chapterIndex)
             }
         }
     }
@@ -1508,10 +1572,12 @@ internal class AndroidAutoCatalogBridge private constructor(
 }
 
 internal object AndroidAutoSpeedController {
-    const val ACTION_CYCLE_SPEED = "com.vangeaux.lagrange.action.CYCLE_SPEED"
     const val ACTION_TOGGLE_SPEED_MENU = "com.vangeaux.lagrange.action.TOGGLE_SPEED_MENU"
     const val ACTION_SET_SPEED_PREFIX = "com.vangeaux.lagrange.action.SET_SPEED_"
     const val EXTRA_SPEED_VALUE = "extra_speed_value"
+
+    @Volatile
+    var isMenuExpanded: Boolean = false
 
     data class SpeedPreset(
         val speed: Float,
@@ -1530,7 +1596,6 @@ internal object AndroidAutoSpeedController {
     )
 
     fun getAllSpeedSessionCommands(): List<SessionCommand> = buildList {
-        add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
         add(SessionCommand(ACTION_TOGGLE_SPEED_MENU, Bundle.EMPTY))
         PRESETS.forEach { preset ->
             add(SessionCommand(preset.action, Bundle.EMPTY))
@@ -1541,20 +1606,23 @@ internal object AndroidAutoSpeedController {
         PRESETS.minByOrNull { kotlin.math.abs(it.speed - currentSpeed) } ?: PRESETS[1]
 
     @androidx.annotation.OptIn(UnstableApi::class)
-    fun buildSpeedCommandButtons(currentSpeed: Float, showPresets: Boolean = false): List<CommandButton> = buildList {
+    fun buildSpeedCommandButtons(
+        currentSpeed: Float,
+        showPresets: Boolean = isMenuExpanded
+    ): List<CommandButton> = buildList {
         val activePreset = findCurrentPreset(currentSpeed)
         if (!showPresets) {
-            // Main button displays current speed and opens the direct selection preset list when tapped
+            // Single wireframe button showing current speed; tapping opens the preset list
             add(
                 CommandButton.Builder()
-                    .setDisplayName(activePreset.label)
+                    .setDisplayName("Speed: ${activePreset.label}")
                     .setSessionCommand(SessionCommand(ACTION_TOGGLE_SPEED_MENU, Bundle.EMPTY))
                     .setIconResId(activePreset.iconResId)
                     .setEnabled(true)
                     .build()
             )
         } else {
-            // When open, render each preset directly so the user can select their exact speed
+            // Render each speed preset directly; selecting one applies it and collapses the menu
             PRESETS.forEach { preset ->
                 val isSelected = kotlin.math.abs(preset.speed - activePreset.speed) < 0.05f
                 val displayLabel = if (isSelected) "✓ ${preset.label}" else preset.label
@@ -1575,36 +1643,166 @@ internal object AndroidAutoSpeedController {
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAutoMediaButtonPreferences(
     hasChapters: Boolean = false,
-    currentSpeed: Float = 1.0f
+    currentSpeed: Float = 1.0f,
+    showSpeedPresets: Boolean = AndroidAutoSpeedController.isMenuExpanded
 ): List<CommandButton> = buildList {
-    addAll(audiobookMediaButtonPreferences())
-    if (hasChapters) {
-        add(
-            CommandButton.Builder(CommandButton.ICON_PREVIOUS)
-                .setSessionCommand(audiobookPreviousChapterSessionCommand)
-                .setDisplayName("Previous chapter")
-                .build()
-        )
-        add(
-            CommandButton.Builder(CommandButton.ICON_NEXT)
-                .setSessionCommand(audiobookNextChapterSessionCommand)
-                .setDisplayName("Next chapter")
-                .build()
-        )
+    if (showSpeedPresets) {
+        // When the speed wireframe button is tapped, replace the primary bar actions
+        // with the speed presets so the user can directly tap their desired speed.
+        addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = true))
+    } else {
+        // Keep the collapsed button count <= 4 so Android Auto does not populate or
+        // activate the vertical '...' overflow menu!
+        // Slot 1 & 2: -10s and +30s
+        addAll(audiobookMediaButtonPreferences())
+        // Slot 3: Next Chapter (when chapters are available)
+        if (hasChapters) {
+            add(
+                CommandButton.Builder(CommandButton.ICON_NEXT)
+                    .setSessionCommand(audiobookNextChapterSessionCommand)
+                    .setDisplayName("Next chapter")
+                    .build()
+            )
+        }
+        // Slot 4 (or 3): Wireframe speed button
+        addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = false))
     }
-    addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed))
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class LagrangeLibrarySessionPlayer(
     delegate: Player,
-    private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null
+    private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null,
+    private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
+    private val scaleBySpeedProvider: (() -> Boolean)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
 
     fun armPrePreparedPlaylistGuard() {
         suppressNextSetMediaItems = true
+    }
+
+    private fun currentSpeed(): Float =
+        playbackParameters.speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+
+    private fun isScaled(): Boolean = scaleBySpeedProvider?.invoke() == true
+
+    private fun rawActiveChapterOrTrackBounds(): Pair<Long, Long>? {
+        val active = sessionProvider?.invoke() ?: return null
+        val totalMs = active.totalDurationMs().takeIf { it > 0L } ?: return null
+        val absPosMs = active.absolutePositionMs().coerceIn(0L, totalMs)
+        val chapters = active.book.audioChapters.sortedBy { it.startMs }
+        if (chapters.isNotEmpty() && active.audioFiles.size < 2) {
+            val idx = chapters.indexOfLast { it.startMs <= absPosMs }.coerceAtLeast(0)
+            val startMs = chapters[idx].startMs.coerceAtLeast(0L)
+            val endMs = (chapters.getOrNull(idx + 1)?.startMs ?: totalMs).coerceAtLeast(startMs)
+            if (endMs > startMs) {
+                return (absPosMs - startMs) to (endMs - startMs)
+            }
+        }
+        val rawTrackDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
+        val rawTrackPos = super.getCurrentPosition().coerceAtLeast(0L)
+        if (rawTrackDur != null) {
+            return rawTrackPos.coerceAtMost(rawTrackDur) to rawTrackDur
+        }
+        return absPosMs to totalMs
+    }
+
+    override fun getAvailableCommands(): Player.Commands {
+        return super.getAvailableCommands().buildUpon()
+            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .build()
+    }
+
+    override fun isCommandAvailable(command: Int): Boolean {
+        if (
+            command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM
+        ) {
+            return true
+        }
+        return super.isCommandAvailable(command)
+    }
+
+    override fun isCurrentMediaItemSeekable(): Boolean {
+        if (sessionProvider?.invoke() != null) return true
+        val dur = super.getDuration()
+        if (dur != C.TIME_UNSET && dur > 0L) return true
+        return super.isCurrentMediaItemSeekable()
+    }
+
+    override fun isCurrentMediaItemLive(): Boolean = false
+
+    override fun isCurrentMediaItemDynamic(): Boolean = false
+
+    override fun getDuration(): Long {
+        val bounds = rawActiveChapterOrTrackBounds()
+        val rawDuration = bounds?.second
+            ?: super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
+            ?: sessionProvider?.invoke()?.totalDurationMs()?.takeIf { it > 0L }
+            ?: return super.getDuration()
+        return scaleAudioTimeMs(rawDuration, currentSpeed(), isScaled())
+    }
+
+    override fun getCurrentPosition(): Long {
+        val bounds = rawActiveChapterOrTrackBounds()
+        val rawPosition = bounds?.first
+            ?: super.getCurrentPosition().coerceAtLeast(0L)
+        return scaleAudioTimeMs(rawPosition, currentSpeed(), isScaled())
+    }
+
+    override fun getContentPosition(): Long = currentPosition
+
+    override fun getContentDuration(): Long = duration
+
+    override fun getBufferedPosition(): Long {
+        val dur = duration
+        val pos = currentPosition
+        val rawBuf = scaleAudioTimeMs(super.getBufferedPosition().coerceAtLeast(0L), currentSpeed(), isScaled())
+        return if (dur != C.TIME_UNSET && dur > 0L) {
+            rawBuf.coerceIn(pos, dur)
+        } else {
+            rawBuf.coerceAtLeast(pos)
+        }
+    }
+
+    override fun seekTo(positionMs: Long) {
+        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), currentSpeed(), isScaled())
+        val active = sessionProvider?.invoke()
+        if (active != null) {
+            val totalMs = active.totalDurationMs()
+            val absPosMs = active.absolutePositionMs()
+            val chapters = active.book.audioChapters.sortedBy { it.startMs }
+            if (chapters.isNotEmpty() && active.audioFiles.size < 2 && totalMs > 0L) {
+                val idx = chapters.indexOfLast { it.startMs <= absPosMs }.coerceAtLeast(0)
+                val startMs = chapters[idx].startMs.coerceAtLeast(0L)
+                val endMs = (chapters.getOrNull(idx + 1)?.startMs ?: totalMs).coerceAtLeast(startMs)
+                val targetAbsMs = (startMs + unscaledTargetMs).coerceIn(startMs, endMs)
+                active.seekToAbsolutePosition(targetAbsMs)
+                return
+            }
+            val rawTrackDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
+            if (rawTrackDur == null && totalMs > 0L) {
+                active.seekToAbsolutePosition(unscaledTargetMs.coerceIn(0L, totalMs))
+                return
+            }
+        }
+        super.seekTo(unscaledTargetMs)
+    }
+
+    override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+        if (positionMs == C.TIME_UNSET) {
+            super.seekTo(mediaItemIndex, positionMs)
+            return
+        }
+        if (mediaItemIndex == currentMediaItemIndex) {
+            seekTo(positionMs)
+            return
+        }
+        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), currentSpeed(), isScaled())
+        super.seekTo(mediaItemIndex, unscaledTargetMs)
     }
 
     override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
@@ -1678,6 +1876,10 @@ internal class LagrangeLibrarySessionPlayer(
         if (base.artworkData == null && fallback?.artworkData != null) {
             builder.setArtworkData(fallback.artworkData, fallback.artworkDataType)
         }
+        val currentDuration = duration
+        if (currentDuration != C.TIME_UNSET && currentDuration > 0L) {
+            builder.setDurationMs(currentDuration)
+        }
         return builder.build()
     }
 }
@@ -1744,26 +1946,19 @@ internal fun handleAudiobookCustomCommand(
             if (!handled) session.player.seekForward()
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
-        action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
-            val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
-            val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
-            service?.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
-                ?: session.player.setPlaybackSpeed(nextPreset.speed)
-            service?.refreshAndroidAutoCustomLayout(nextPreset.speed)
+        action == AndroidAutoSpeedController.ACTION_TOGGLE_SPEED_MENU -> {
+            AndroidAutoSpeedController.isMenuExpanded = !AndroidAutoSpeedController.isMenuExpanded
+            service?.refreshAndroidAutoCustomLayout()
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         action.startsWith(AndroidAutoSpeedController.ACTION_SET_SPEED_PREFIX) -> {
             val matchedPreset = AndroidAutoSpeedController.PRESETS.firstOrNull { it.action == action }
             val targetSpeed = matchedPreset?.speed
                 ?: customCommand.customExtras.getFloat(AndroidAutoSpeedController.EXTRA_SPEED_VALUE, 1.0f)
-            
-            // Apply the selected speed to the service/player
+            AndroidAutoSpeedController.isMenuExpanded = false
             service?.applyAndroidAutoPlaybackSpeed(targetSpeed)
                 ?: session.player.setPlaybackSpeed(targetSpeed)
-            
-            // Refresh custom layout to collapse the selection menu back to the primary speed indicator
             service?.refreshAndroidAutoCustomLayout(targetSpeed)
-
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         else -> null
@@ -2034,6 +2229,7 @@ internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Bool
 internal fun ReadiumAudioPlaybackService.applyAndroidAutoPlaybackSpeed(speed: Float) {
     val normalized = normalizeAudioPlaybackSpeed(speed)
     AppPreferencesStore(applicationContext).saveAudioPlaybackSpeed(normalized)
+    AndroidAutoSpeedController.isMenuExpanded = false
     val player = activeSession()?.player ?: librarySessionPlayer
     player?.setPlaybackSpeed(normalized)
     refreshAndroidAutoCustomLayout(normalized)
@@ -2050,7 +2246,8 @@ internal fun ReadiumAudioPlaybackService.refreshAndroidAutoCustomLayout(
     session.setCustomLayout(
         audiobookAutoMediaButtonPreferences(
             hasChapters = activeSessionHasChapters(),
-            currentSpeed = currentSpeed
+            currentSpeed = currentSpeed,
+            showSpeedPresets = AndroidAutoSpeedController.isMenuExpanded
         )
     )
 }
@@ -2185,26 +2382,26 @@ internal suspend fun ReadiumAudioPlaybackService.currentSessionMediaItemsWithPos
     val coverUri = androidAutoCoverUri(packageName, active.book.id, active.book.libraryId)
     grantAndroidAutoCoverUriPermission(this@currentSessionMediaItemsWithPosition, controllerPackage, coverUri)
     val player = active.player
+    val scaledDurationMs = librarySessionPlayer?.duration?.takeIf { it != C.TIME_UNSET && it > 0L }
     val items = if (player.mediaItemCount > 0) {
         (0 until player.mediaItemCount).map { index ->
             val raw = player.getMediaItemAt(index)
-            if (raw.mediaMetadata.artworkUri != null) {
-                raw
-            } else {
-                raw.buildUpon()
-                    .setMediaMetadata(
-                        raw.mediaMetadata.buildUpon()
-                            .setArtworkUri(coverUri)
-                            .setAlbumTitle(active.book.seriesName ?: active.book.title)
-                            .build()
-                    )
-                    .build()
+            val metaBuilder = raw.mediaMetadata.buildUpon()
+            if (raw.mediaMetadata.artworkUri == null) {
+                metaBuilder.setArtworkUri(coverUri)
+                metaBuilder.setAlbumTitle(active.book.seriesName ?: active.book.title)
             }
+            if (scaledDurationMs != null) {
+                metaBuilder.setDurationMs(scaledDurationMs)
+            }
+            raw.buildUpon()
+                .setMediaMetadata(metaBuilder.build())
+                .build()
         }
     } else {
         listOf(bookToAndroidAutoNodeSpec(active.book).toMediaItem(packageName))
     }
     val currentIndex = player.currentMediaItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
-    val currentPos = player.currentPosition.coerceAtLeast(0L)
+    val currentPos = (librarySessionPlayer?.currentPosition ?: player.currentPosition).coerceAtLeast(0L)
     MediaItemsWithStartPosition(items, currentIndex, currentPos)
 }
