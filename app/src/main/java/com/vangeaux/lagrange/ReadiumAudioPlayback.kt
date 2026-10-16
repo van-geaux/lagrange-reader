@@ -164,9 +164,76 @@ internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
         .build()
 )
 
+internal object AndroidAutoSpeedController {
+    const val ACTION_CYCLE_SPEED = "com.vangeaux.lagrange.action.CYCLE_SPEED"
+    const val ACTION_SET_SPEED_PREFIX = "com.vangeaux.lagrange.action.SET_SPEED_"
+    const val EXTRA_SPEED_VALUE = "extra_speed_value"
+
+    data class SpeedPreset(
+        val speed: Float,
+        val label: String,
+        val action: String,
+        val iconResId: Int
+    )
+
+    val PRESETS = listOf(
+        SpeedPreset(0.8f, "0.8x", "${ACTION_SET_SPEED_PREFIX}0_8", R.drawable.ic_speed_0_8x),
+        SpeedPreset(1.0f, "1.0x", "${ACTION_SET_SPEED_PREFIX}1_0", R.drawable.ic_speed_1_0x),
+        SpeedPreset(1.2f, "1.2x", "${ACTION_SET_SPEED_PREFIX}1_2", R.drawable.ic_speed_1_2x),
+        SpeedPreset(1.5f, "1.5x", "${ACTION_SET_SPEED_PREFIX}1_5", R.drawable.ic_speed_1_5x),
+        SpeedPreset(1.8f, "1.8x", "${ACTION_SET_SPEED_PREFIX}1_8", R.drawable.ic_speed_1_8x),
+        SpeedPreset(2.0f, "2.0x", "${ACTION_SET_SPEED_PREFIX}2_0", R.drawable.ic_speed_2_0x)
+    )
+
+    fun getAllSpeedSessionCommands(): List<SessionCommand> = buildList {
+        add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+        PRESETS.forEach { preset ->
+            add(SessionCommand(preset.action, Bundle.EMPTY))
+        }
+    }
+
+    fun findCurrentPreset(currentSpeed: Float): SpeedPreset =
+        PRESETS.minByOrNull { kotlin.math.abs(it.speed - currentSpeed) } ?: PRESETS[1]
+
+    fun findNextPreset(currentSpeed: Float): SpeedPreset {
+        val currentIndex = PRESETS.indexOfFirst { kotlin.math.abs(it.speed - currentSpeed) < 0.05f }
+        val nextIndex = if (currentIndex == -1 || currentIndex == PRESETS.lastIndex) 0 else currentIndex + 1
+        return PRESETS[nextIndex]
+    }
+
+    @androidx.annotation.OptIn(UnstableApi::class)
+    fun buildSpeedCommandButtons(currentSpeed: Float): List<CommandButton> = buildList {
+        val activePreset = findCurrentPreset(currentSpeed)
+        add(
+            CommandButton.Builder()
+                .setDisplayName("Speed (${activePreset.label})")
+                .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+                .setIconResId(activePreset.iconResId)
+                .setEnabled(true)
+                .build()
+        )
+        PRESETS.forEach { preset ->
+            val isSelected = kotlin.math.abs(preset.speed - activePreset.speed) < 0.05f
+            val displayLabel = if (isSelected) "✓ ${preset.label} Speed" else "${preset.label} Speed"
+            val extras = Bundle().apply {
+                putFloat(EXTRA_SPEED_VALUE, preset.speed)
+            }
+            add(
+                CommandButton.Builder()
+                    .setDisplayName(displayLabel)
+                    .setSessionCommand(SessionCommand(preset.action, extras))
+                    .setIconResId(preset.iconResId)
+                    .setEnabled(true)
+                    .build()
+            )
+        }
+    }
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAutoMediaButtonPreferences(
-    hasChapters: Boolean = false
+    hasChapters: Boolean = false,
+    currentSpeed: Float = 1.0f
 ): List<CommandButton> = buildList {
     addAll(audiobookMediaButtonPreferences())
     if (hasChapters) {
@@ -183,6 +250,7 @@ internal fun audiobookAutoMediaButtonPreferences(
                 .build()
         )
     }
+    addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed))
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -192,6 +260,9 @@ internal fun audiobookAvailableSessionCommands(): SessionCommands =
         .add(audiobookSeekForwardSessionCommand)
         .add(audiobookPreviousChapterSessionCommand)
         .add(audiobookNextChapterSessionCommand)
+        .apply {
+            AndroidAutoSpeedController.getAllSpeedSessionCommands().forEach { add(it) }
+        }
         .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -500,19 +571,23 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun getMediaMetadata(): androidx.media3.common.MediaMetadata {
         val base = super.getMediaMetadata()
-        val fallback = fallbackMetadataProvider?.invoke() ?: return base
-        if (base.artworkUri != null && base.artworkData != null) return base
+        val fallback = fallbackMetadataProvider?.invoke()
         val builder = base.buildUpon()
-        if (base.title.isNullOrBlank() && !fallback.title.isNullOrBlank()) {
-            builder.setTitle(fallback.title)
+        val rawTitle = if (!base.title.isNullOrBlank()) {
+            base.title.toString()
+        } else {
+            fallback?.title?.toString()
         }
-        if (base.artist.isNullOrBlank() && !fallback.artist.isNullOrBlank()) {
-            builder.setArtist(fallback.artist)
+        if (!rawTitle.isNullOrBlank()) {
+            builder.setTitle(rawTitle.sanitizeAudiobookTitle())
         }
-        if (base.artworkUri == null && fallback.artworkUri != null) {
+        if (base.artist.isNullOrBlank() && !fallback?.artist.isNullOrBlank()) {
+            builder.setArtist(fallback?.artist)
+        }
+        if (base.artworkUri == null && fallback?.artworkUri != null) {
             builder.setArtworkUri(fallback.artworkUri)
         }
-        if (base.artworkData == null && fallback.artworkData != null) {
+        if (base.artworkData == null && fallback?.artworkData != null) {
             builder.setArtworkData(fallback.artworkData, fallback.artworkDataType)
         }
         return builder.build()
@@ -546,8 +621,12 @@ internal class AudiobookMediaSessionCallback(
         val isAutoController = session.isAutoCompanionController(controller) ||
             session.isAutomotiveController(controller)
         val hasChapters = serviceProvider()?.activeSessionHasChapters() == true
+        val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
         val customLayout = if (isAutoController) {
-            audiobookAutoMediaButtonPreferences(hasChapters = hasChapters)
+            audiobookAutoMediaButtonPreferences(
+                hasChapters = hasChapters,
+                currentSpeed = currentSpeed
+            )
         } else {
             audiobookMediaButtonPreferences()
         }
@@ -567,30 +646,50 @@ internal class AudiobookMediaSessionCallback(
         controller: MediaSession.ControllerInfo,
         customCommand: SessionCommand,
         args: Bundle
-    ): ListenableFuture<SessionResult> = when (customCommand) {
-        audiobookSeekBackSessionCommand -> {
-            session.player.seekBack()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+    ): ListenableFuture<SessionResult> {
+        val action = customCommand.customAction
+        return when {
+            customCommand == audiobookSeekBackSessionCommand -> {
+                session.player.seekBack()
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
 
-        audiobookSeekForwardSessionCommand -> {
-            session.player.seekForward()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+            customCommand == audiobookSeekForwardSessionCommand -> {
+                session.player.seekForward()
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
 
-        audiobookPreviousChapterSessionCommand -> {
-            val handled = serviceProvider()?.skipActiveChapter(direction = -1) == true
-            if (!handled) session.player.seekBack()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+            customCommand == audiobookPreviousChapterSessionCommand -> {
+                val handled = serviceProvider()?.skipActiveChapter(direction = -1) == true
+                if (!handled) session.player.seekBack()
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
 
-        audiobookNextChapterSessionCommand -> {
-            val handled = serviceProvider()?.skipActiveChapter(direction = 1) == true
-            if (!handled) session.player.seekForward()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+            customCommand == audiobookNextChapterSessionCommand -> {
+                val handled = serviceProvider()?.skipActiveChapter(direction = 1) == true
+                if (!handled) session.player.seekForward()
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
 
-        else -> super.onCustomCommand(session, controller, customCommand, args)
+            action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
+                val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
+                val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
+                serviceProvider()?.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
+                    ?: session.player.setPlaybackSpeed(nextPreset.speed)
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+
+            action.startsWith(AndroidAutoSpeedController.ACTION_SET_SPEED_PREFIX) -> {
+                val matchedPreset = AndroidAutoSpeedController.PRESETS.firstOrNull { it.action == action }
+                val targetSpeed = matchedPreset?.speed
+                    ?: customCommand.customExtras.getFloat(AndroidAutoSpeedController.EXTRA_SPEED_VALUE, 1.0f)
+                serviceProvider()?.applyAndroidAutoPlaybackSpeed(targetSpeed)
+                    ?: session.player.setPlaybackSpeed(targetSpeed)
+                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+
+            else -> super.onCustomCommand(session, controller, customCommand, args)
+        }
     }
 
     override fun onGetLibraryRoot(
@@ -816,7 +915,7 @@ internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudi
             fileId = fileId,
             streamUrl = streamUrl,
             mimeType = mimeType,
-            title = file.filename ?: file.book.title,
+            title = (file.filename ?: file.book.title).sanitizeAudiobookTitle(),
             artist = file.book.author,
             localPath = localPath,
             bookId = file.book.id,
@@ -1065,7 +1164,7 @@ private suspend fun prepareDirectMedia3Audio(
         )
         .build()
     val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
-        .setTitle(book.title)
+        .setTitle(book.title.sanitizeAudiobookTitle())
         .setArtist(book.author)
         .setAlbumTitle(book.seriesName ?: book.title)
     if (book.id.isNotBlank()) {
@@ -1289,7 +1388,7 @@ internal suspend fun openReadiumAudio(
             val engineProvider = ExoPlayerEngineProvider(
                 application = application,
                 metadataProvider = DefaultMediaMetadataProvider(
-                    title = book.title,
+                    title = book.title.sanitizeAudiobookTitle(),
                     author = book.author
                 ),
                 configuration = audiobookReadiumEngineConfiguration()
@@ -1394,26 +1493,58 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
             .build()
             .also { idlePlayer = it }
-        val forwarding = LagrangeLibrarySessionPlayer(fallbackPlayer).also {
+        val forwarding = LagrangeLibrarySessionPlayer(
+            fallbackPlayer,
+            ::activeFallbackMediaMetadata
+        ).also {
             librarySessionPlayer = it
         }
+        val initialSpeed = AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
         return MediaLibrarySession.Builder(this, forwarding, mediaSessionCallback)
             .setId(LIBRARY_SESSION_ID)
             .setSessionActivity(createSessionActivityIntent())
-            .setCustomLayout(audiobookMediaButtonPreferences())
+            .setCustomLayout(
+                audiobookAutoMediaButtonPreferences(
+                    hasChapters = false,
+                    currentSpeed = initialSpeed
+                )
+            )
             .build()
             .also { created ->
                 mediaLibrarySession = created
             }
     }
 
+    internal fun applyAndroidAutoPlaybackSpeed(speed: Float) {
+        val normalized = normalizeAudioPlaybackSpeed(speed)
+        AppPreferencesStore(applicationContext).saveAudioPlaybackSpeed(normalized)
+        val player = binder.session.value?.player ?: librarySessionPlayer
+        player?.setPlaybackSpeed(normalized)
+        refreshAndroidAutoCustomLayout(normalized)
+    }
+
+    internal fun refreshAndroidAutoCustomLayout(
+        speedOverride: Float? = null
+    ) {
+        val session = mediaLibrarySession ?: return
+        val currentSpeed = speedOverride
+            ?: binder.session.value?.player?.playbackParameters?.speed?.takeIf { it > 0f }
+            ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
+        session.setCustomLayout(
+            audiobookAutoMediaButtonPreferences(
+                hasChapters = activeSessionHasChapters(),
+                currentSpeed = currentSpeed
+            )
+        )
+    }
+
     private fun activeFallbackMediaMetadata(): androidx.media3.common.MediaMetadata? {
         val current = binder.session.value ?: return null
         val book = current.activeBookSummary()
         val builder = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(book.title)
+            .setTitle(book.title.sanitizeAudiobookTitle())
             .setArtist(book.author)
-            .setAlbumTitle(book.seriesName ?: book.title)
+            .setAlbumTitle((book.seriesName ?: book.title).sanitizeAudiobookTitle())
         if (book.id.isNotBlank()) {
             builder.setArtworkUri(androidAutoCoverUri(packageName, book.id, book.libraryId))
         }
@@ -1615,12 +1746,25 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             closeSession()
             try {
                 val librarySession = ensureLibrarySession()
-                val wrappedPlayer = LagrangeLibrarySessionPlayer(engine.player)
+                val wrappedPlayer = LagrangeLibrarySessionPlayer(
+                    engine.player,
+                    ::activeFallbackMediaMetadata
+                )
+                wrappedPlayer.addListener(object : Player.Listener {
+                    override fun onPlaybackParametersChanged(
+                        playbackParameters: androidx.media3.common.PlaybackParameters
+                    ) {
+                        refreshAndroidAutoCustomLayout(playbackParameters.speed)
+                    }
+                })
                 librarySessionPlayer = wrappedPlayer
                 librarySession.setPlayer(wrappedPlayer)
+                val currentSpeed = engine.player.playbackParameters.speed.takeIf { it > 0f }
+                    ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
                 librarySession.setCustomLayout(
                     audiobookAutoMediaButtonPreferences(
-                        hasChapters = book.audioChapters.isNotEmpty()
+                        hasChapters = book.audioChapters.isNotEmpty(),
+                        currentSpeed = currentSpeed
                     )
                 )
                 if (book.id.isNotBlank()) {
@@ -1666,10 +1810,13 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             mutableSession.value?.let { current ->
                 idlePlayer?.let { fallback ->
                     fallback.clearMediaItems()
-                    val wrappedFallback = LagrangeLibrarySessionPlayer(fallback)
+                    val wrappedFallback = LagrangeLibrarySessionPlayer(
+                        fallback,
+                        ::activeFallbackMediaMetadata
+                    )
                     librarySessionPlayer = wrappedFallback
                     mediaLibrarySession?.setPlayer(wrappedFallback)
-                    mediaLibrarySession?.setCustomLayout(audiobookMediaButtonPreferences())
+                    refreshAndroidAutoCustomLayout()
                 }
                 current.engine.close()
                 mutableSession.value = null
