@@ -915,7 +915,7 @@ internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudi
             fileId = fileId,
             streamUrl = streamUrl,
             mimeType = mimeType,
-            title = (file.filename ?: file.book.title).sanitizeAudiobookTitle(),
+            title = file.filename ?: file.book.title,
             artist = file.book.author,
             localPath = localPath,
             bookId = file.book.id,
@@ -938,7 +938,7 @@ internal fun buildAudiobookMediaItems(
 ): List<MediaItem> =
     buildAudiobookMediaItemSpecs(files).map { spec ->
         val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(spec.title)
+            .setTitle(spec.title.sanitizeAudiobookTitle())
             .setArtist(spec.artist)
             .setAlbumTitle(spec.albumTitle)
         if (spec.bookId.isNotBlank()) {
