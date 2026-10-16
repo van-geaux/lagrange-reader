@@ -1,5 +1,22 @@
 package com.vangeaux.lagrange
 
+import com.google.common.util.concurrent.SettableFuture
+import com.google.common.util.concurrent.MoreExecutors
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.Futures
+import com.google.common.collect.ImmutableList
+import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.CommandButton
+import androidx.media3.common.Player
+import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.C
+import android.provider.MediaStore
 import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
@@ -1488,4 +1505,700 @@ internal class AndroidAutoCatalogBridge private constructor(
                 ).also { instance = it }
             }
     }
+}
+
+internal object AndroidAutoSpeedController {
+    const val ACTION_CYCLE_SPEED = "com.vangeaux.lagrange.action.CYCLE_SPEED"
+    const val ACTION_SET_SPEED_PREFIX = "com.vangeaux.lagrange.action.SET_SPEED_"
+    const val EXTRA_SPEED_VALUE = "extra_speed_value"
+
+    data class SpeedPreset(
+        val speed: Float,
+        val label: String,
+        val action: String,
+        val iconResId: Int
+    )
+
+    val PRESETS = listOf(
+        SpeedPreset(0.8f, "0.8x", "${ACTION_SET_SPEED_PREFIX}0_8", R.drawable.ic_speed_0_8x),
+        SpeedPreset(1.0f, "1.0x", "${ACTION_SET_SPEED_PREFIX}1_0", R.drawable.ic_speed_1_0x),
+        SpeedPreset(1.2f, "1.2x", "${ACTION_SET_SPEED_PREFIX}1_2", R.drawable.ic_speed_1_2x),
+        SpeedPreset(1.5f, "1.5x", "${ACTION_SET_SPEED_PREFIX}1_5", R.drawable.ic_speed_1_5x),
+        SpeedPreset(1.8f, "1.8x", "${ACTION_SET_SPEED_PREFIX}1_8", R.drawable.ic_speed_1_8x),
+        SpeedPreset(2.0f, "2.0x", "${ACTION_SET_SPEED_PREFIX}2_0", R.drawable.ic_speed_2_0x)
+    )
+
+    fun getAllSpeedSessionCommands(): List<SessionCommand> = buildList {
+        add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+        PRESETS.forEach { preset ->
+            add(SessionCommand(preset.action, Bundle.EMPTY))
+        }
+    }
+
+    fun findCurrentPreset(currentSpeed: Float): SpeedPreset =
+        PRESETS.minByOrNull { kotlin.math.abs(it.speed - currentSpeed) } ?: PRESETS[1]
+
+    fun findNextPreset(currentSpeed: Float): SpeedPreset {
+        val currentIndex = PRESETS.indexOfFirst { kotlin.math.abs(it.speed - currentSpeed) < 0.05f }
+        val nextIndex = if (currentIndex == -1 || currentIndex == PRESETS.lastIndex) 0 else currentIndex + 1
+        return PRESETS[nextIndex]
+    }
+
+    @androidx.annotation.OptIn(UnstableApi::class)
+    fun buildSpeedCommandButtons(currentSpeed: Float): List<CommandButton> = buildList {
+        val activePreset = findCurrentPreset(currentSpeed)
+        add(
+            CommandButton.Builder()
+                .setDisplayName("Speed: ${activePreset.label}")
+                .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+                .setIconResId(activePreset.iconResId)
+                .setEnabled(true)
+                .build()
+        )
+        PRESETS.forEach { preset ->
+            val isSelected = kotlin.math.abs(preset.speed - activePreset.speed) < 0.05f
+            val displayLabel = if (isSelected) "✓ ${preset.label} Speed" else "${preset.label} Speed"
+            val extras = Bundle().apply {
+                putFloat(EXTRA_SPEED_VALUE, preset.speed)
+            }
+            add(
+                CommandButton.Builder()
+                    .setDisplayName(displayLabel)
+                    .setSessionCommand(SessionCommand(preset.action, extras))
+                    .setIconResId(preset.iconResId)
+                    .setEnabled(true)
+                    .build()
+            )
+        }
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun audiobookAutoMediaButtonPreferences(
+    hasChapters: Boolean = false,
+    currentSpeed: Float = 1.0f
+): List<CommandButton> = buildList {
+    addAll(audiobookMediaButtonPreferences())
+    if (hasChapters) {
+        add(
+            CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+                .setSessionCommand(audiobookPreviousChapterSessionCommand)
+                .setDisplayName("Previous chapter")
+                .build()
+        )
+        add(
+            CommandButton.Builder(CommandButton.ICON_NEXT)
+                .setSessionCommand(audiobookNextChapterSessionCommand)
+                .setDisplayName("Next chapter")
+                .build()
+        )
+    }
+    addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed))
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal class LagrangeLibrarySessionPlayer(
+    delegate: Player,
+    private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null
+) : ForwardingPlayer(delegate) {
+    @Volatile
+    private var suppressNextSetMediaItems = false
+
+    fun armPrePreparedPlaylistGuard() {
+        suppressNextSetMediaItems = true
+    }
+
+    override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
+        if (suppressNextSetMediaItems) {
+            suppressNextSetMediaItems = false
+            return
+        }
+        super.setMediaItems(mediaItems, resetPosition)
+    }
+
+    override fun setMediaItems(
+        mediaItems: List<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long
+    ) {
+        if (suppressNextSetMediaItems) {
+            suppressNextSetMediaItems = false
+            return
+        }
+        super.setMediaItems(mediaItems, startIndex, startPositionMs)
+    }
+
+    override fun setMediaItem(mediaItem: MediaItem) {
+        if (suppressNextSetMediaItems) {
+            suppressNextSetMediaItems = false
+            return
+        }
+        super.setMediaItem(mediaItem)
+    }
+
+    override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {
+        if (suppressNextSetMediaItems) {
+            suppressNextSetMediaItems = false
+            return
+        }
+        super.setMediaItem(mediaItem, startPositionMs)
+    }
+
+    override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {
+        if (suppressNextSetMediaItems) {
+            suppressNextSetMediaItems = false
+            return
+        }
+        super.setMediaItem(mediaItem, resetPosition)
+    }
+
+    override fun prepare() {
+        if (playbackState == Player.STATE_IDLE) {
+            super.prepare()
+        }
+    }
+
+    override fun getMediaMetadata(): androidx.media3.common.MediaMetadata {
+        val base = super.getMediaMetadata()
+        val fallback = fallbackMetadataProvider?.invoke()
+        val builder = base.buildUpon()
+        val rawTitle = if (!base.title.isNullOrBlank()) {
+            base.title.toString()
+        } else {
+            fallback?.title?.toString()
+        }
+        if (!rawTitle.isNullOrBlank()) {
+            builder.setTitle(rawTitle.sanitizeAudiobookTitle())
+        }
+        if (base.artist.isNullOrBlank() && !fallback?.artist.isNullOrBlank()) {
+            builder.setArtist(fallback?.artist)
+        }
+        if (base.artworkUri == null && fallback?.artworkUri != null) {
+            builder.setArtworkUri(fallback.artworkUri)
+        }
+        if (base.artworkData == null && fallback?.artworkData != null) {
+            builder.setArtworkData(fallback.artworkData, fallback.artworkDataType)
+        }
+        return builder.build()
+    }
+}
+
+private fun <T> CoroutineScope.futureResult(
+    block: suspend CoroutineScope.() -> T
+): ListenableFuture<T> {
+    val future = SettableFuture.create<T>()
+    val job = launch {
+        try {
+            future.set(block())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            future.cancel(false)
+            throw cancelled
+        } catch (error: Throwable) {
+            future.setException(error)
+        }
+    }
+    future.addListener(
+        {
+            if (future.isCancelled) {
+                job.cancel()
+            }
+        },
+        MoreExecutors.directExecutor()
+    )
+    return future
+}
+
+private fun <T> paginateAndroidAutoSpecs(
+    items: List<T>,
+    page: Int,
+    pageSize: Int
+): List<T> {
+    if (page < 0 || pageSize <= 0 || pageSize == Int.MAX_VALUE) return items
+    val fromIndex = (page.toLong() * pageSize.toLong()).coerceAtMost(items.size.toLong()).toInt()
+    val toIndex = (fromIndex.toLong() + pageSize.toLong()).coerceAtMost(items.size.toLong()).toInt()
+    return if (fromIndex >= toIndex) emptyList() else items.subList(fromIndex, toIndex)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun handleAudiobookCustomCommand(
+    session: MediaSession,
+    service: ReadiumAudioPlaybackService?,
+    customCommand: SessionCommand
+): ListenableFuture<SessionResult>? {
+    val action = customCommand.customAction
+    return when {
+        customCommand == audiobookSeekBackSessionCommand -> {
+            session.player.seekBack()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        customCommand == audiobookSeekForwardSessionCommand -> {
+            session.player.seekForward()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        customCommand == audiobookPreviousChapterSessionCommand -> {
+            val handled = service?.skipActiveChapter(direction = -1) == true
+            if (!handled) session.player.seekBack()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        customCommand == audiobookNextChapterSessionCommand -> {
+            val handled = service?.skipActiveChapter(direction = 1) == true
+            if (!handled) session.player.seekForward()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
+            val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
+            val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
+            service?.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
+                ?: session.player.setPlaybackSpeed(nextPreset.speed)
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        action.startsWith(AndroidAutoSpeedController.ACTION_SET_SPEED_PREFIX) -> {
+            val matchedPreset = AndroidAutoSpeedController.PRESETS.firstOrNull { it.action == action }
+            val targetSpeed = matchedPreset?.speed
+                ?: customCommand.customExtras.getFloat(AndroidAutoSpeedController.EXTRA_SPEED_VALUE, 1.0f)
+            service?.applyAndroidAutoPlaybackSpeed(targetSpeed)
+                ?: session.player.setPlaybackSpeed(targetSpeed)
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        else -> null
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onGetAndroidAutoLibraryRoot(
+    service: ReadiumAudioPlaybackService?,
+    params: MediaLibraryService.LibraryParams?
+): ListenableFuture<LibraryResult<MediaItem>> {
+    val svc = service
+        ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    val rootExtras = Bundle().apply {
+        putInt(
+            MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE,
+            MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM
+        )
+        putInt(
+            MediaConstants.EXTRAS_KEY_CONTENT_STYLE_PLAYABLE,
+            MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM
+        )
+        putBoolean("android.media.browse.SEARCH_SUPPORTED", true)
+    }
+    val responseParams = MediaLibraryService.LibraryParams.Builder()
+        .setExtras(rootExtras)
+        .setRecent(params?.isRecent == true)
+        .setOffline(params?.isOffline == true)
+        .setSuggested(params?.isSuggested == true)
+        .build()
+    val rootItem = if (params?.isRecent == true) {
+        AndroidAutoNodeSpec(
+            mediaId = ANDROID_AUTO_TAB_CONTINUE_ID,
+            title = "Continue Listening",
+            isBrowsable = true,
+            isPlayable = false
+        ).toMediaItem(svc.packageName)
+    } else {
+        buildAndroidAutoRootNodeSpec().toMediaItem(svc.packageName)
+    }
+    return Futures.immediateFuture(LibraryResult.ofItem(rootItem, responseParams))
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onGetAndroidAutoChildren(
+    service: ReadiumAudioPlaybackService?,
+    browser: MediaSession.ControllerInfo,
+    parentId: String,
+    page: Int,
+    pageSize: Int,
+    params: MediaLibraryService.LibraryParams?
+): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+    val svc = service
+        ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    return svc.libraryScope.futureResult {
+        val specs = AndroidAutoCatalogBridge.getInstance(svc).resolveChildren(parentId)
+        val pagedSpecs = paginateAndroidAutoSpecs(specs, page, pageSize)
+        val items = pagedSpecs.map { spec ->
+            spec.toMediaItem(svc.packageName).also { item ->
+                grantAndroidAutoCoverUriPermission(
+                    svc,
+                    browser.packageName,
+                    item.mediaMetadata.artworkUri
+                )
+            }
+        }
+        LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onGetAndroidAutoItem(
+    service: ReadiumAudioPlaybackService?,
+    browser: MediaSession.ControllerInfo,
+    mediaId: String
+): ListenableFuture<LibraryResult<MediaItem>> {
+    val svc = service
+        ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    return svc.libraryScope.futureResult {
+        val spec = AndroidAutoCatalogBridge.getInstance(svc).resolveItem(mediaId)
+            ?: return@futureResult LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+        val item = spec.toMediaItem(svc.packageName)
+        grantAndroidAutoCoverUriPermission(
+            svc,
+            browser.packageName,
+            item.mediaMetadata.artworkUri
+        )
+        LibraryResult.ofItem(item, null)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onSearchAndroidAuto(
+    session: MediaLibraryService.MediaLibrarySession,
+    service: ReadiumAudioPlaybackService?,
+    browser: MediaSession.ControllerInfo,
+    query: String,
+    params: MediaLibraryService.LibraryParams?
+): ListenableFuture<LibraryResult<Void>> {
+    val svc = service
+        ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    return svc.libraryScope.futureResult {
+        val results = AndroidAutoCatalogBridge.getInstance(svc).search(query)
+        session.notifySearchResultChanged(browser, query, results.size, params)
+        LibraryResult.ofVoid(params)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onGetAndroidAutoSearchResult(
+    service: ReadiumAudioPlaybackService?,
+    browser: MediaSession.ControllerInfo,
+    query: String,
+    page: Int,
+    pageSize: Int,
+    params: MediaLibraryService.LibraryParams?
+): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+    val svc = service
+        ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    return svc.libraryScope.futureResult {
+        val results = AndroidAutoCatalogBridge.getInstance(svc)
+            .search(query)
+            .map { bookToAndroidAutoNodeSpec(it) }
+        val paged = paginateAndroidAutoSpecs(results, page, pageSize)
+        val items = paged.map { spec ->
+            spec.toMediaItem(svc.packageName).also { item ->
+                grantAndroidAutoCoverUriPermission(
+                    svc,
+                    browser.packageName,
+                    item.mediaMetadata.artworkUri
+                )
+            }
+        }
+        LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onAddAndroidAutoMediaItems(
+    service: ReadiumAudioPlaybackService?,
+    controller: MediaSession.ControllerInfo,
+    mediaItems: List<MediaItem>
+): ListenableFuture<List<MediaItem>> {
+    val svc = service ?: return Futures.immediateFuture(mediaItems)
+    return svc.libraryScope.futureResult {
+        svc.handleAndroidAutoSetMediaItems(
+            controller = controller,
+            mediaItems = mediaItems,
+            startIndex = C.INDEX_UNSET,
+            startPositionMs = C.TIME_UNSET
+        ).mediaItems
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onSetAndroidAutoMediaItems(
+    service: ReadiumAudioPlaybackService?,
+    browser: MediaSession.ControllerInfo,
+    mediaItems: List<MediaItem>,
+    startIndex: Int,
+    startPositionMs: Long
+): ListenableFuture<MediaItemsWithStartPosition> {
+    val svc = service
+        ?: return Futures.immediateFuture(
+            MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
+        )
+    return svc.libraryScope.futureResult {
+        svc.handleAndroidAutoSetMediaItems(
+            controller = browser,
+            mediaItems = mediaItems,
+            startIndex = startIndex,
+            startPositionMs = startPositionMs
+        )
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun onAndroidAutoPlaybackResumption(
+    service: ReadiumAudioPlaybackService?,
+    controller: MediaSession.ControllerInfo
+): ListenableFuture<MediaItemsWithStartPosition> {
+    val svc = service
+        ?: return Futures.immediateFailedFuture(
+            IllegalStateException("Audiobook service is unavailable")
+        )
+    return svc.libraryScope.futureResult {
+        svc.handleAndroidAutoPlaybackResumption(controller = controller)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun buildActiveSessionFallbackMediaMetadata(
+    current: ReadiumAudioPlaybackService.Session?,
+    packageName: String
+): androidx.media3.common.MediaMetadata? {
+    val session = current ?: return null
+    val book = session.activeBookSummary()
+    val builder = androidx.media3.common.MediaMetadata.Builder()
+        .setTitle(book.title.sanitizeAudiobookTitle())
+        .setArtist(book.author)
+        .setAlbumTitle((book.seriesName ?: book.title).sanitizeAudiobookTitle())
+    if (book.id.isNotBlank()) {
+        builder.setArtworkUri(androidAutoCoverUri(packageName, book.id, book.libraryId))
+    }
+    session.cachedCoverBytes?.takeIf { it.isNotEmpty() }?.let { bytes ->
+        builder.setArtworkData(
+            bytes,
+            androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER
+        )
+    }
+    return builder.build()
+}
+
+internal fun grantBookCoverPermissions(
+    service: ReadiumAudioPlaybackService,
+    book: BookSummary
+) {
+    if (book.id.isNotBlank()) {
+        val coverUri = androidAutoCoverUri(service.packageName, book.id, book.libraryId)
+        grantAndroidAutoCoverUriPermission(
+            service,
+            "com.google.android.projection.gearhead",
+            coverUri
+        )
+        grantAndroidAutoCoverUriPermission(
+            service,
+            "com.android.systemui",
+            coverUri
+        )
+    }
+}
+
+internal fun preloadSessionCoverBytes(
+    service: ReadiumAudioPlaybackService,
+    session: ReadiumAudioPlaybackService.Session,
+    isCurrentSession: () -> Boolean
+) {
+    val book = session.book
+    if (book.id.isNotBlank()) {
+        service.libraryScope.launch(Dispatchers.IO) {
+            val bytes = AndroidAutoCatalogBridge.getInstance(service)
+                .loadCoverBytes(book.id, book.libraryId)
+            if (bytes != null && bytes.isNotEmpty() && isCurrentSession()) {
+                session.cachedCoverBytes = bytes
+            }
+        }
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean =
+    activeSession()?.book?.audioChapters?.isNotEmpty() == true
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
+    val current = activeSession() ?: return false
+    val targetMs = resolveAndroidAutoChapterSkip(
+        chapters = current.book.audioChapters,
+        currentPositionMs = current.absolutePositionMs(),
+        totalDurationMs = current.totalDurationMs(),
+        direction = direction
+    ) ?: return false
+    current.seekToAbsolutePosition(targetMs)
+    return true
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.applyAndroidAutoPlaybackSpeed(speed: Float) {
+    val normalized = normalizeAudioPlaybackSpeed(speed)
+    AppPreferencesStore(applicationContext).saveAudioPlaybackSpeed(normalized)
+    val player = activeSession()?.player ?: librarySessionPlayer
+    player?.setPlaybackSpeed(normalized)
+    refreshAndroidAutoCustomLayout(normalized)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.refreshAndroidAutoCustomLayout(
+    speedOverride: Float? = null
+) {
+    val session = mediaLibrarySession ?: return
+    val currentSpeed = speedOverride
+        ?: activeSession()?.player?.playbackParameters?.speed?.takeIf { it > 0f }
+        ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
+    session.setCustomLayout(
+        audiobookAutoMediaButtonPreferences(
+            hasChapters = activeSessionHasChapters(),
+            currentSpeed = currentSpeed
+        )
+    )
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal suspend fun ReadiumAudioPlaybackService.handleAndroidAutoSetMediaItems(
+    controller: MediaSession.ControllerInfo,
+    mediaItems: List<MediaItem>,
+    startIndex: Int,
+    startPositionMs: Long
+): MediaItemsWithStartPosition {
+    val firstItem = mediaItems.firstOrNull()
+        ?: return MediaItemsWithStartPosition(emptyList(), 0, 0L)
+    val bridge = AndroidAutoCatalogBridge.getInstance(this)
+    val parsedId = AndroidAutoMediaId.parse(firstItem.mediaId)
+    val requestedStartMs = startPositionMs.takeIf { it != C.TIME_UNSET && it > 0L }
+
+    when (parsedId) {
+        is AndroidAutoMediaId.Chapter -> {
+            val active = activeSession()
+            if (active != null && active.book.id == parsedId.bookId) {
+                withContext(Dispatchers.Main.immediate) {
+                    active.seekToAbsolutePosition(parsedId.startMs)
+                    active.player.play()
+                }
+                return currentSessionMediaItemsWithPosition(controller.packageName)
+            }
+            bridge.openBookForPlayback(
+                bookId = parsedId.bookId,
+                preferredFileId = parsedId.fileId,
+                overridePositionMs = parsedId.startMs,
+                playWhenReady = true
+            )
+            return currentSessionMediaItemsWithPosition(controller.packageName)
+        }
+
+        is AndroidAutoMediaId.Book -> {
+            bridge.openBookForPlayback(
+                bookId = parsedId.bookId,
+                preferredFileId = parsedId.fileId,
+                overridePositionMs = requestedStartMs,
+                playWhenReady = true
+            )
+            return currentSessionMediaItemsWithPosition(controller.packageName)
+        }
+
+        else -> {
+            val searchQuery = firstItem.requestMetadata.searchQuery?.trim().orEmpty()
+            val extras = firstItem.requestMetadata.extras
+            val titleExtra = extras?.getString(MediaStore.EXTRA_MEDIA_TITLE)
+            val artistExtra = extras?.getString(MediaStore.EXTRA_MEDIA_ARTIST)
+            val albumExtra = extras?.getString(MediaStore.EXTRA_MEDIA_ALBUM)
+            if (
+                searchQuery.isNotEmpty() ||
+                !titleExtra.isNullOrBlank() ||
+                !artistExtra.isNullOrBlank() ||
+                !albumExtra.isNullOrBlank()
+            ) {
+                val matched = bridge.search(
+                    query = searchQuery,
+                    titleExtra = titleExtra,
+                    artistExtra = artistExtra,
+                    albumExtra = albumExtra
+                ).firstOrNull() ?: bridge.findResumableBook()
+                if (matched != null) {
+                    bridge.openBookForPlayback(
+                        bookId = matched.id,
+                        preferredFileId = matched.fileId,
+                        overridePositionMs = requestedStartMs,
+                        playWhenReady = true
+                    )
+                    return currentSessionMediaItemsWithPosition(controller.packageName)
+                }
+            } else {
+                val resumable = bridge.findResumableBook()
+                if (resumable != null) {
+                    bridge.openBookForPlayback(
+                        bookId = resumable.id,
+                        preferredFileId = resumable.fileId,
+                        overridePositionMs = requestedStartMs,
+                        playWhenReady = true
+                    )
+                    return currentSessionMediaItemsWithPosition(controller.packageName)
+                }
+            }
+        }
+    }
+
+    return MediaItemsWithStartPosition(mediaItems, startIndex.coerceAtLeast(0), 0L)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal suspend fun ReadiumAudioPlaybackService.handleAndroidAutoPlaybackResumption(
+    controller: MediaSession.ControllerInfo,
+    isForPlayback: Boolean = true
+): MediaItemsWithStartPosition {
+    val bridge = AndroidAutoCatalogBridge.getInstance(this)
+    val resumable = activeSession()?.book
+        ?: bridge.findResumableBook()
+        ?: throw IllegalStateException("No resumable audiobook available")
+
+    if (!isForPlayback) {
+        val item = bookToAndroidAutoNodeSpec(resumable).toMediaItem(packageName)
+        grantAndroidAutoCoverUriPermission(
+            this,
+            controller.packageName,
+            item.mediaMetadata.artworkUri
+        )
+        return MediaItemsWithStartPosition(
+            listOf(item),
+            0,
+            resumable.progressPositionMs ?: 0L
+        )
+    }
+
+    bridge.openBookForPlayback(
+        bookId = resumable.id,
+        preferredFileId = resumable.fileId,
+        overridePositionMs = null,
+        playWhenReady = true
+    )
+    return currentSessionMediaItemsWithPosition(controller.packageName)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal suspend fun ReadiumAudioPlaybackService.currentSessionMediaItemsWithPosition(
+    controllerPackage: String?
+): MediaItemsWithStartPosition = withContext(Dispatchers.Main.immediate) {
+    val active = activeSession()
+        ?: return@withContext MediaItemsWithStartPosition(emptyList(), 0, 0L)
+    librarySessionPlayer?.armPrePreparedPlaylistGuard()
+    val coverUri = androidAutoCoverUri(packageName, active.book.id, active.book.libraryId)
+    grantAndroidAutoCoverUriPermission(this@currentSessionMediaItemsWithPosition, controllerPackage, coverUri)
+    val player = active.player
+    val items = if (player.mediaItemCount > 0) {
+        (0 until player.mediaItemCount).map { index ->
+            val raw = player.getMediaItemAt(index)
+            if (raw.mediaMetadata.artworkUri != null) {
+                raw
+            } else {
+                raw.buildUpon()
+                    .setMediaMetadata(
+                        raw.mediaMetadata.buildUpon()
+                            .setArtworkUri(coverUri)
+                            .setAlbumTitle(active.book.seriesName ?: active.book.title)
+                            .build()
+                    )
+                    .build()
+            }
+        }
+    } else {
+        listOf(bookToAndroidAutoNodeSpec(active.book).toMediaItem(packageName))
+    }
+    val currentIndex = player.currentMediaItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
+    val currentPos = player.currentPosition.coerceAtLeast(0L)
+    MediaItemsWithStartPosition(items, currentIndex, currentPos)
 }
