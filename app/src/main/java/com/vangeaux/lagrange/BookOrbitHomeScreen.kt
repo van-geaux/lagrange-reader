@@ -3671,7 +3671,7 @@ internal fun OptionsScreen(
                 }
             )
         }
-        if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
+if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
             AppPreferenceSwitchRow(
                 title = "Scale Progress by Playback Speed",
                 summary = "Adjusts remaining time and progress bar tracking when listening above 1.0x speed.",
@@ -3682,19 +3682,24 @@ internal fun OptionsScreen(
                 }
             )
         }
-        if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "android-auto-heading") {
+        if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "android-auto-menu-item") {
             Column(
-                modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { subDestination = "android_auto" }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("options-playback-android-auto"),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 OrbitEyebrow("Android Auto")
-                Text("Dashboard controls", style = MaterialTheme.typography.headlineSmall)
+                Text("Dashboard controls", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Customize playback speed buttons, skip intervals, and steering wheel actions.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         if (subDestination == "android_auto") item(key = "aa-skip-behavior-header") {
             Column(
