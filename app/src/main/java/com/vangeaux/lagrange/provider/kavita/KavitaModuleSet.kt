@@ -56,9 +56,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 val recentlyRead = books
                     .filter { it.isRead || it.readStatus == BookReadStatus.READ }
                     .sortedByDescending { it.lastReadAtMillis ?: it.updatedAtMillis ?: 0L }
-                val onDeck = books
-                    .filter { !it.isRead && it.readStatus != BookReadStatus.READ }
-                    .sortedWith(compareBy<BookSummary> { it.seriesName.orEmpty() }.thenBy { it.seriesIndex ?: Double.MAX_VALUE })
+                val onDeck = onDeckBooks(books, limit = null)
                 val recentlyAdded = books.sortedByDescending { it.addedAtMillis ?: 0L }
                 val bookShelves = buildMap {
                     if (currentlyReading.isNotEmpty()) put(HomeSection.CURRENTLY_READING, currentlyReading)
