@@ -11,6 +11,11 @@ import org.junit.Test
 
 class KavitaCatalogContractTest {
     @Test
+    fun formatExtractsExtensionFromKavitaFilename() {
+        assertEquals("epub", kavitaFormat("application/octet-stream", "novel.epub"))
+    }
+
+    @Test
     fun chapterProjectionReadsNestedFileAndMetadataFields() {
         val projection = kavitaChapterProjection(
             JSONObject(

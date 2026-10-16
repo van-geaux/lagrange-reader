@@ -89,7 +89,10 @@ internal fun kavitaFormat(rawFormat: String?, rawExtension: String?): String? {
         value.contains("opus") -> "opus"
         value.contains("ogg") -> "ogg"
         value.contains("wav") -> "wav"
-        else -> rawExtension?.removePrefix(".")?.takeIf { it.isNotBlank() }
+        else -> rawExtension
+            ?.substringAfterLast('.', missingDelimiterValue = rawExtension)
+            ?.removePrefix(".")
+            ?.takeIf { it.isNotBlank() }
     }
 }
 
