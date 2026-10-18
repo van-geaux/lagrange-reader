@@ -2845,8 +2845,8 @@ class AppCoordinatorTest {
         assertEquals(BookReadStatus.READ, marked.readStatus)
         assertTrue(marked.isRead)
         assertTrue((marked.lastReadAtMillis ?: 0L) > 0L)
-        assertEquals("42%", marked.progressLabel)
-        assertEquals(42f, marked.progressPercent)
+        assertEquals("100%", marked.progressLabel)
+        assertEquals(100f, marked.progressPercent)
         assertEquals(0, browser.browserState.debugPendingProgressCount)
         assertTrue(browser.browserState.message.orEmpty().contains("as read"))
     }

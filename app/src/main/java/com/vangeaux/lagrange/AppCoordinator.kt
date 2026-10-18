@@ -2042,6 +2042,7 @@ class AppCoordinator internal constructor(
                                 currentBook.copy(
                                     readStatus = BookReadStatus.READ,
                                     isRead = true,
+                                    progressLabel = "100%",
                                     progressPercent = 100f,
                                     progressPageIndex = currentBook.readerPageCount?.minus(1)?.coerceAtLeast(0),
                                     lastReadAtMillis = markedAtMillis
@@ -2055,6 +2056,7 @@ class AppCoordinator internal constructor(
                                 currentBook.copy(
                                     readStatus = BookReadStatus.READ,
                                     isRead = true,
+                                    progressLabel = "100%",
                                     progressPercent = 100f,
                                     progressPageIndex = currentBook.readerPageCount?.minus(1)?.coerceAtLeast(0),
                                     lastReadAtMillis = markedAtMillis
