@@ -1427,18 +1427,9 @@ internal class AndroidAutoCatalogBridge private constructor(
                     return@withContext it
                 }
             }
-            val fetched = runCatching {
+            runCatching {
                 resolveProviderBookCoverModule(repository).loadBookCover(hydratedBook)
             }.getOrNull()
-            if (
-                fetched != null &&
-                fetched.isNotEmpty() &&
-                snapshot.serverUrl.isNotBlank() &&
-                !hydratedBook.coverUrl.isNullOrBlank()
-            ) {
-                // Cover cache store populated successfully via provider fallback
-            }
-            fetched
         }
 
     fun recordHeadlessProgress(
@@ -2005,11 +1996,12 @@ internal fun handleAudiobookCustomCommand(
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
-            val currentSpeed = service?.activeSession()?.player?.playbackParameters?.speed
+            val svc = service ?: return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            val currentSpeed = svc.activeSession()?.player?.playbackParameters?.speed
                 ?.takeIf { it > 0f }
-                ?: AppPreferencesStore(service ?: session.player.let { return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS)) }).readAudioPlaybackSpeed()
+                ?: AppPreferencesStore(svc).readAudioPlaybackSpeed()
             val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
-            service?.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
+            svc.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         else -> null

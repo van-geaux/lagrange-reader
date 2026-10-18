@@ -1181,7 +1181,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     override fun onPlaybackParametersChanged(
                         playbackParameters: androidx.media3.common.PlaybackParameters
                     ) {
-                        refreshAndroidAutoCustomLayout(playbackParameters.speed)
+                        refreshAndroidAutoCustomLayout(engine.player.playbackParameters.speed)
                     }
                 })
                 librarySessionPlayer = wrappedPlayer

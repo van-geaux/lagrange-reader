@@ -210,33 +210,19 @@ internal fun ReadiumCompactAudioPlayer(
         if (!isSeeking) seekPositionMs = positionMs.toFloat()
     }
     val context = LocalContext.current
-
     val scaleBySpeed = remember(context, playback.speed, positionMs) {
-
         AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed
-
     }
-
     val chapters = current.book.audioChapters
-
     val activeChapterIndex = chapters.indexOfLast { it.startMs <= positionMs }.coerceAtLeast(0)
-
     val displayedPositionMs = scaleAudioTimeMs(
-
         if (isSeeking) seekPositionMs.toLong() else positionMs,
-
         playback.speed,
-
         scaleBySpeed
-
     )
-
     val remainingMs = durationMs
-
         ?.minus(if (isSeeking) seekPositionMs.toLong() else positionMs)
-
         ?.coerceAtLeast(0L)
-
         ?.let { scaleAudioTimeMs(it, playback.speed, scaleBySpeed) }
 
     Box(modifier = modifier) {
