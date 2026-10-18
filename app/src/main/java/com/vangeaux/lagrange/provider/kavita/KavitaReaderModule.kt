@@ -105,9 +105,18 @@ internal class KavitaReaderModuleImpl(
     override suspend fun prepareEpubImageLibrarySource(
         book: BookSummary,
         allowRemoteCache: Boolean
-    ): EpubImageLibrarySourceResult = EpubImageLibrarySourceResult.Unavailable(
-        "Kavita does not expose an EPUB reader endpoint through this provider module yet."
-    )
+    ): EpubImageLibrarySourceResult = withContext(Dispatchers.IO) {
+        val localFile = kavitaLocalFile(book)
+        if (localFile != null) return@withContext EpubImageLibrarySourceResult.Ready(localFile)
+        if (!allowRemoteCache) return@withContext EpubImageLibrarySourceResult.RemoteConsentRequired
+        runCatching {
+            EpubImageLibrarySourceResult.Ready(downloadModule.downloadBook(book) { })
+        }.getOrElse { error ->
+            EpubImageLibrarySourceResult.Error(
+                error.message ?: "Unable to prepare the Kavita EPUB image library."
+            )
+        }
+    }
 
     override suspend fun restoreActiveReaderState(
         session: ActiveReaderSession,
