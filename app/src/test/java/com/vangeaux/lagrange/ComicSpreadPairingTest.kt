@@ -144,6 +144,19 @@ class ComicSpreadPairingTest {
     }
 
     @Test
+    fun `long press follows the real gutter and undoes zoom and pan`() {
+        val spread = ComicSpread(listOf(4, 5))
+        val ltr = LibraryReadingDirection.LEFT_TO_RIGHT
+        // Off-centre hinge: the left page is 250px wide, then a 20px gutter.
+        assertEquals(5, comicSpreadPageAt(spread, 400f, 1000f, ltr, leftWidthPx = 250f, gutterPx = 20f))
+        assertEquals(4, comicSpreadPageAt(spread, 200f, 1000f, ltr, leftWidthPx = 250f, gutterPx = 20f))
+        // Zoomed 2x and panned 300px right: screen x 600 shows content x 400, the left page.
+        assertEquals(4, comicSpreadPageAt(spread, 600f, 1000f, ltr, scale = 2f, offsetX = 300f))
+        // Same zoom without the pan: screen x 600 shows content x 550, the right page.
+        assertEquals(5, comicSpreadPageAt(spread, 600f, 1000f, ltr, scale = 2f))
+    }
+
+    @Test
     fun `resume uses the first page and progress uses the last visible page`() {
         val pair = ComicSpread(listOf(8, 9))
         val single = ComicSpread(listOf(0))

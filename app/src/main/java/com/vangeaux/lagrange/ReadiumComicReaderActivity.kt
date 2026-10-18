@@ -259,6 +259,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var readingSessionEnded = false
 
     private val locatorStore by lazy { ReadiumComicLocatorStore(this) }
+    private val widePageStore by lazy { ComicWidePageStore(this) }
 
     @Suppress("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -313,6 +314,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         displayAuthor = intent.getStringExtra(EXTRA_AUTHOR).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
+        // Pairing depends on every wide page before the current one, but only nearby pages are
+        // decoded on open; remembered wide pages keep the same facing pages after reopening.
+        wideComicPages = widePageStore.read(readerKey)
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val appPreferences = AppPreferencesStore(this).read()
         showTapZoneTutorialAfterChanges = appPreferences.showComicTapZoneTutorialAfterChanges
@@ -1024,7 +1028,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                     }
                     if (isWideComicPage(aspectRatio)) {
                         runOnUiThread {
-                            if (pageIndex !in wideComicPages) wideComicPages = wideComicPages + pageIndex
+                            if (pageIndex !in wideComicPages) {
+                                wideComicPages = wideComicPages + pageIndex
+                                widePageStore.save(readerKey, wideComicPages)
+                            }
                         }
                     }
                 }
@@ -1524,6 +1531,24 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 percent = data.getFloatExtra(EXTRA_RESULT_PERCENT, Float.NaN).takeUnless(Float::isNaN)
             )
         }
+    }
+}
+
+/** Pages detected as double-page (wide) artwork, per book, so spread pairing survives reopening. */
+internal class ComicWidePageStore(context: Context) {
+    private val preferences = context.getSharedPreferences("readium_comic_wide_pages", Context.MODE_PRIVATE)
+
+    fun read(readerKey: String): Set<Int> {
+        if (readerKey.isBlank()) return emptySet()
+        return preferences.getString(readerKey, null).orEmpty()
+            .split(',')
+            .mapNotNull { it.trim().toIntOrNull()?.takeIf { page -> page >= 0 } }
+            .toSet()
+    }
+
+    fun save(readerKey: String, pages: Set<Int>) {
+        if (readerKey.isBlank()) return
+        preferences.edit().putString(readerKey, pages.sorted().joinToString(",")).apply()
     }
 }
 

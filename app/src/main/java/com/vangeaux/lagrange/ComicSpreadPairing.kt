@@ -86,11 +86,18 @@ internal fun comicSpreadPageAt(
     spread: ComicSpread,
     x: Float,
     width: Float,
-    readingDirection: LibraryReadingDirection
+    readingDirection: LibraryReadingDirection,
+    leftWidthPx: Float = width / 2f,
+    gutterPx: Float = 0f,
+    scale: Float = 1f,
+    offsetX: Float = 0f
 ): Int {
     if (!spread.isPair || width <= 0f) return spread.firstPage
     val screenOrder = comicSpreadScreenOrder(spread, readingDirection)
-    return if (x < width / 2f) screenOrder[0] else screenOrder[1]
+    // Undo the zoom (about the centre) and pan, then split at the middle of the actual gutter.
+    val centre = width / 2f
+    val contentX = (x - centre - offsetX) / scale.coerceAtLeast(0.01f) + centre
+    return if (contentX < leftWidthPx + gutterPx / 2f) screenOrder[0] else screenOrder[1]
 }
 
 /** Page persisted as the resume position: the first page so reopening shows the same spread. */

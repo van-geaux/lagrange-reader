@@ -121,6 +121,44 @@ class ComicSpreadActivityInstrumentedTest {
     }
 
     @Test
+    fun rememberedWidePagesKeepTheSamePairsAfterReopening() {
+        val cbz = File(context.cacheDir, "fold-wide-${System.nanoTime()}.cbz")
+        val readerKey = "fold-wide-comic-${System.nanoTime()}"
+        writeCbz(cbz, 7)
+        useProfile(LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.AUTO))
+        // A previous session found page 2 (index 1) to be double-page artwork. The fixture's pages are
+        // all portrait, so only the remembered classification can change the pairing.
+        ComicWidePageStore(context).save(readerKey, setOf(1))
+        try {
+            ActivityScenario.launch<ReadiumComicReaderActivity>(
+                ReadiumComicReaderActivity.createIntent(
+                    context = context,
+                    file = cbz,
+                    title = "Fold wide",
+                    readerKey = readerKey,
+                    libraryId = libraryId,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    initialPage = 4
+                )
+            ).use { scenario ->
+                var qualifies = false
+                awaitCondition(scenario, "comic reader did not settle") { activity ->
+                    qualifies = windowQualifiesForSpread(activity)
+                    activity.isComicSpreadReaderVisible() == qualifies &&
+                        ReadiumComicLocatorStore(context).read(readerKey) != null
+                }
+                assumeTrue("Requires a large horizontal window (unfolded foldable or tablet)", qualifies)
+                // Cover, wide page 2 alone, then pairs 3–4, 5–6: page 5 (index 4) opens on spread 5–6,
+                // which resumes on its first page. Without the remembered page it would be 4–5 (0003).
+                val stored = requireNotNull(ReadiumComicLocatorStore(context).read(readerKey))
+                assertTrue(stored.href.toString(), stored.href.toString().endsWith("0004.jpg"))
+            }
+        } finally {
+            cbz.delete()
+        }
+    }
+
+    @Test
     fun comicSpreadPreferenceOffKeepsTheSinglePageNavigator() {
         val cbz = File(context.cacheDir, "fold-single-${System.nanoTime()}.cbz")
         val readerKey = "fold-single-comic-${System.nanoTime()}"

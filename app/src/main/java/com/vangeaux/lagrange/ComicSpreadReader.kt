@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,9 +47,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.LayoutDirection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -174,70 +177,74 @@ internal fun ComicSpreadReader(
             }
     }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(COMIC_SPREAD_READER_TEST_TAG)
-    ) {
-        val totalWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
-        val widths = remember(totalWidthPx, gutterKey) { comicSpreadWidths(totalWidthPx, gutterForWidth(totalWidthPx)) }
+    // Page placement, swipe direction and hit-testing are computed in screen order already, so an
+    // RTL device locale must not mirror them a second time.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        BoxWithConstraints(
+            modifier = modifier
+                .fillMaxSize()
+                .testTag(COMIC_SPREAD_READER_TEST_TAG)
+        ) {
+            val totalWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
+            val widths = remember(totalWidthPx, gutterKey) { comicSpreadWidths(totalWidthPx, gutterForWidth(totalWidthPx)) }
 
-        val prefetchPermits = remember { Semaphore(COMIC_SPREAD_PREFETCH_CONCURRENCY) }
-        LaunchedEffect(pagerState, spreads, widths) {
-            snapshotFlow { pagerState.settledPage }
-                .distinctUntilChanged()
-                .collectLatest { settled ->
-                    coroutineScope {
-                        comicSpreadPrefetchIndexes(settled, spreads.size, COMIC_SPREAD_PREFETCH_SPREAD_COUNT)
-                            .flatMap { index ->
-                                val spread = spreads[index]
-                                spread.pages.map { page -> page to comicSpreadDecodeWidth(spread, widths) }
-                            }
-                            .map { (page, width) ->
-                                // Bounded: each decode can approach the per-page pixel cap.
-                                async(Dispatchers.IO) {
-                                    prefetchPermits.withPermit { runCatching { loadPage(page, width) } }
+            val prefetchPermits = remember { Semaphore(COMIC_SPREAD_PREFETCH_CONCURRENCY) }
+            LaunchedEffect(pagerState, spreads, widths) {
+                snapshotFlow { pagerState.settledPage }
+                    .distinctUntilChanged()
+                    .collectLatest { settled ->
+                        coroutineScope {
+                            comicSpreadPrefetchIndexes(settled, spreads.size, COMIC_SPREAD_PREFETCH_SPREAD_COUNT)
+                                .flatMap { index ->
+                                    val spread = spreads[index]
+                                    spread.pages.map { page -> page to comicSpreadDecodeWidth(spread, widths) }
                                 }
-                            }
-                            .awaitAll()
+                                .map { (page, width) ->
+                                    // Bounded: each decode can approach the per-page pixel cap.
+                                    async(Dispatchers.IO) {
+                                        prefetchPermits.withPermit { runCatching { loadPage(page, width) } }
+                                    }
+                                }
+                                .awaitAll()
+                        }
                     }
-                }
-        }
+            }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            // Right-to-left books advance leftwards, like a printed manga.
-            reverseLayout = readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT,
-            userScrollEnabled = zoomScale <= 1.01f,
-            beyondBoundsPageCount = 1,
-            key = { index -> spreads.getOrNull(index)?.firstPage ?: index }
-        ) { index ->
-            val spread = spreads.getOrNull(index) ?: return@HorizontalPager
-            ComicSpreadPage(
-                spread = spread,
-                widths = widths,
-                readingDirection = readingDirection,
-                isCurrent = index == pagerState.currentPage,
-                zoomScale = if (index == pagerState.currentPage) zoomScale else 1f,
-                onZoomChange = { zoomScale = it },
-                cachedPage = cachedPage,
-                loadPage = loadPage,
-                onTap = { position, width, height ->
-                    onTap(
-                        continuousComicTapAction(
-                            x = position.x,
-                            y = position.y,
-                            width = width,
-                            height = height,
-                            readingDirection = readingDirection,
-                            layout = tapZoneLayout,
-                            invertMode = tapZoneInvertMode
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                // Right-to-left books advance leftwards, like a printed manga.
+                reverseLayout = readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT,
+                userScrollEnabled = zoomScale <= 1.01f,
+                beyondBoundsPageCount = 1,
+                key = { index -> spreads.getOrNull(index)?.firstPage ?: index }
+            ) { index ->
+                val spread = spreads.getOrNull(index) ?: return@HorizontalPager
+                ComicSpreadPage(
+                    spread = spread,
+                    widths = widths,
+                    readingDirection = readingDirection,
+                    isCurrent = index == pagerState.currentPage,
+                    zoomScale = if (index == pagerState.currentPage) zoomScale else 1f,
+                    onZoomChange = { zoomScale = it },
+                    cachedPage = cachedPage,
+                    loadPage = loadPage,
+                    onTap = { position, width, height ->
+                        onTap(
+                            continuousComicTapAction(
+                                x = position.x,
+                                y = position.y,
+                                width = width,
+                                height = height,
+                                readingDirection = readingDirection,
+                                layout = tapZoneLayout,
+                                invertMode = tapZoneInvertMode
+                            )
                         )
-                    )
-                },
-                onLongPress = onLongPress
-            )
+                    },
+                    onLongPress = onLongPress
+                )
+            }
         }
     }
 }
@@ -272,6 +279,7 @@ private fun ComicSpreadPage(
     val currentOnLongPress by rememberUpdatedState(onLongPress)
     // Replaced when the decode width changes (e.g. a hinge update) while the spread stays the same.
     val currentLoaded by rememberUpdatedState(loaded)
+    val currentWidths by rememberUpdatedState(widths)
     val density = LocalDensity.current
     val pageDescription = if (spread.isPair) {
         "Pages ${spread.firstPage + 1} and ${spread.lastPage + 1}"
@@ -322,7 +330,16 @@ private fun ComicSpreadPage(
                         currentOnTap(position, size.width.toFloat(), size.height.toFloat())
                     },
                     onLongPress = { position ->
-                        val page = comicSpreadPageAt(spread, position.x, size.width.toFloat(), readingDirection)
+                        val page = comicSpreadPageAt(
+                            spread = spread,
+                            x = position.x,
+                            width = size.width.toFloat(),
+                            readingDirection = readingDirection,
+                            leftWidthPx = currentWidths.leftPx.toFloat(),
+                            gutterPx = currentWidths.gutterPx.toFloat(),
+                            scale = currentZoom,
+                            offsetX = offset.x
+                        )
                         currentLoaded[page]?.let { bitmap -> currentOnLongPress(page, bitmap) }
                     }
                 )
