@@ -28,10 +28,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -49,6 +53,7 @@ import androidx.viewpager.widget.ViewPager
 
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -940,6 +945,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             setContent {
                 // Observed so a hinge change re-measures the gutter without rebuilding the reader.
                 val windowState by windowTracker.state.collectAsState()
+                // Hinge bounds are in window coordinates; the gutter is measured inside the reader.
+                var readerLeftPx by remember { mutableIntStateOf(0) }
                 BookOrbitTheme {
                     ComicSpreadReader(
                         pageCount = openedPublication.readingOrder.size,
@@ -952,9 +959,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
                         gutterForWidth = { widthPx ->
                             // Pages meet with no gap; only a separating hinge pushes them apart.
-                            readerSpreadGutterPx(widthPx, windowTracker.state.value.hinge, minimumGapPx = 0)
+                            readerSpreadGutterPx(
+                                widthPx,
+                                windowTracker.state.value.hinge?.inReaderCoordinates(readerLeftPx),
+                                minimumGapPx = 0
+                            )
                         },
-                        gutterKey = windowState.hinge,
+                        gutterKey = windowState.hinge to readerLeftPx,
                         animateNavigation = {
                             !AppPreferencesStore(this@ReadiumComicReaderActivity).read().reduceMotion
                         },
@@ -966,7 +977,9 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         onTap = ::handleSpreadTap,
                         onLongPress = { pageIndex, bitmap -> comicPageViewer = pageIndex to bitmap },
                         onNavigatorAvailable = { spreadNavigator = it },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+                            readerLeftPx = coordinates.positionInWindow().x.roundToInt()
+                        }
                     )
                 }
             }

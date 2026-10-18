@@ -22,6 +22,10 @@ internal data class ReaderHinge(
     val rightPx: Int
 )
 
+/** The hinge relative to a reader whose left edge is [readerLeftPx] from the window's left edge. */
+internal fun ReaderHinge.inReaderCoordinates(readerLeftPx: Int): ReaderHinge =
+    if (readerLeftPx == 0) this else copy(leftPx = leftPx - readerLeftPx, rightPx = rightPx - readerLeftPx)
+
 internal data class ReaderWindowState(
     val widthDp: Int,
     val heightDp: Int,
