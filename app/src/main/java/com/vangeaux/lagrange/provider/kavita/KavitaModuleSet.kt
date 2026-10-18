@@ -133,7 +133,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = repository.deleteLocalCopies(book)
         },
         localBooks = object : LocalBooksModule {
-            override suspend fun loadLocalBooks(): List<BookSummary> = unavailable()
+            override suspend fun loadLocalBooks(): List<BookSummary> = repository.loadLocalBooks()
         },
         readingStatus = object : ReadingStatusModule {
             override suspend fun setBookReadingStatus(book: BookSummary, status: BookReadStatus) =
@@ -171,13 +171,13 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadUserStatistics() = UserStatistics(status = UserStatisticsStatus.UNSUPPORTED)
         },
         cache = object : CacheModule {
-            override suspend fun loadCachedBrowserState(): BrowserState? = null
-            override suspend fun loadStorageUsage(): StorageUsage = unavailable()
-            override suspend fun clearAppCache() = unavailable()
-            override suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = unavailable()
-            override suspend fun startOfflineCacheUpdate(): Boolean = unavailable()
-            override suspend fun cancelOfflineCacheUpdate() = unavailable()
-            override suspend fun clearOfflineCache() = unavailable()
+            override suspend fun loadCachedBrowserState(): BrowserState? = repository.loadCachedBrowserState()
+            override suspend fun loadStorageUsage(): StorageUsage = repository.loadStorageUsage()
+            override suspend fun clearAppCache() = repository.clearAppCache()
+            override suspend fun loadOfflineCacheStatus(): OfflineCacheStatus = repository.loadOfflineCacheStatus()
+            override suspend fun startOfflineCacheUpdate(): Boolean = repository.startOfflineCacheUpdate()
+            override suspend fun cancelOfflineCacheUpdate() = repository.cancelOfflineCacheUpdate()
+            override suspend fun clearOfflineCache() = repository.clearOfflineCache()
             override suspend fun reconfigureBackgroundRefresh() = Unit
         }
     )

@@ -37,10 +37,15 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
   - downloads chapters from `/api/Download/chapter`;
   - stores files in app-private storage and shared `DownloadStore` metadata;
   - supports progress callbacks and local deletion.
+- `KavitaRepository` local-books and cache integration
+  - expose completed Kavita downloads as the Local books catalog;
+  - restore the cached browser snapshot when the server is unavailable;
+  - report app storage usage and clear disposable cache files;
+  - update, cancel, inspect, and clear the Kavita offline download cache.
 
 ## Unsupported capabilities
 
-Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads and Home shelves are supported. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, provider cache warming, and server reading-session history remain unavailable or unsupported as described by their modules.
+Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, and offline-cache operations are supported. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, background cache warming, and server reading-session history remain unavailable or unsupported as described by their modules.
 
 ## Composition
 
