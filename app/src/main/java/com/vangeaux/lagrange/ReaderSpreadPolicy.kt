@@ -63,6 +63,35 @@ internal fun shouldUseTwoPageSpread(
     return true
 }
 
+/**
+ * Horizontal pixel span reserved between the two pages of a spread. A separating vertical hinge
+ * (half-opened book posture or a dual-screen device) is avoided exactly; otherwise the gutter is
+ * centred on the window with [minimumGapPx] width.
+ */
+internal fun readerSpreadGutterPx(
+    windowWidthPx: Int,
+    hinge: ReaderHinge?,
+    minimumGapPx: Int
+): IntRange {
+    val width = windowWidthPx.coerceAtLeast(0)
+    val gap = minimumGapPx.coerceIn(0, width)
+    if (
+        hinge != null &&
+        hinge.orientation == ReaderHingeOrientation.VERTICAL &&
+        hinge.isSeparating &&
+        hinge.rightPx > hinge.leftPx &&
+        hinge.leftPx > 0 &&
+        hinge.rightPx < width
+    ) {
+        val hingeWidth = hinge.rightPx - hinge.leftPx
+        if (hingeWidth >= gap) return hinge.leftPx until hinge.rightPx
+        val centre = (hinge.leftPx + hinge.rightPx) / 2
+        return (centre - gap / 2) until (centre - gap / 2 + gap)
+    }
+    val start = (width - gap) / 2
+    return start until start + gap
+}
+
 internal fun readerSpreadModeStorageValue(value: ReaderSpreadMode): String = value.name.lowercase()
 
 internal fun readerSpreadModeFromStorage(value: String?): ReaderSpreadMode =
