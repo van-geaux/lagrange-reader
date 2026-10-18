@@ -49,7 +49,10 @@ class ComicSpreadReaderInstrumentedTest {
         initialPage: Int = 0,
         readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
         widePages: () -> Set<Int> = { emptySet() },
-        bitmapFor: (Int) -> Bitmap = { portrait }
+        bitmapFor: (Int) -> Bitmap = { portrait },
+        tapZoneLayout: () -> ReaderTapZoneLayout = { ReaderTapZoneLayout.CURRENT_EDGES },
+        gutterForWidth: (Int) -> IntRange = { width -> readerSpreadGutterPx(width, null, 0) },
+        gutterKey: () -> Any? = { null }
     ) {
         composeRule.setContent {
             Box(modifier = Modifier.size(width = 900.dp, height = 600.dp)) {
@@ -60,9 +63,10 @@ class ComicSpreadReaderInstrumentedTest {
                     shift = false,
                     widePages = widePages(),
                     readingDirection = readingDirection,
-                    tapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
+                    tapZoneLayout = tapZoneLayout(),
                     tapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
-                    gutterForWidth = { width -> readerSpreadGutterPx(width, null, 0) },
+                    gutterForWidth = gutterForWidth,
+                    gutterKey = gutterKey(),
                     animateNavigation = { false },
                     cachedPage = { _, _ -> null },
                     loadPage = { page, width ->
@@ -122,6 +126,51 @@ class ComicSpreadReaderInstrumentedTest {
         composeRule.runOnIdle { navigator.goToPage(-3) }
         composeRule.waitForIdle()
         assertEquals(ComicSpread(listOf(0)), recorder.spreads.last())
+    }
+
+    @Test
+    fun tapZoneChangesApplyToTheSpreadAlreadyOnScreen() {
+        val recorder = Recorder()
+        val layout = mutableStateOf(ReaderTapZoneLayout.CURRENT_EDGES)
+        setReader(recorder, initialPage = 2, tapZoneLayout = { layout.value })
+
+        val reader = composeRule.onNodeWithContentDescription("Pages 2 and 3")
+        reader.performTouchInput { click(centerRight.copy(x = width * 0.95f)) }
+        composeRule.waitForIdle()
+        // The recorder does not turn pages, so the same spread node stays composed: exactly the case
+        // where a gesture handler would keep the old tap-zone mapping.
+        composeRule.runOnIdle { layout.value = ReaderTapZoneLayout.MENU_ONLY }
+        composeRule.waitForIdle()
+        reader.performTouchInput { click(centerRight.copy(x = width * 0.95f)) }
+        composeRule.waitForIdle()
+
+        assertEquals(listOf(ContinuousComicTapAction.NEXT, ContinuousComicTapAction.MENU), recorder.taps)
+    }
+
+    @Test
+    fun hingeChangesRemeasureTheGutterWithoutRebuildingTheReader() {
+        val recorder = Recorder()
+        val separatingHinge = mutableStateOf(false)
+        setReader(
+            recorder,
+            initialPage = 2,
+            gutterForWidth = { width ->
+                // A separating hinge at a quarter of the width pushes the pages apart.
+                if (separatingHinge.value) (width / 4) until (width / 4 + 40) else readerSpreadGutterPx(width, null, 0)
+            },
+            gutterKey = { separatingHinge.value }
+        )
+        composeRule.waitUntil(5_000) {
+            synchronized(recorder.loadRequests) { recorder.loadRequests.any { it.first == 2 } }
+        }
+        val flatWidth = synchronized(recorder.loadRequests) { recorder.loadRequests.first { it.first == 2 }.second }
+
+        composeRule.runOnIdle { separatingHinge.value = true }
+        composeRule.waitUntil(5_000) {
+            synchronized(recorder.loadRequests) {
+                recorder.loadRequests.any { it.first == 2 && it.second > flatWidth + 10 }
+            }
+        }
     }
 
     @Test

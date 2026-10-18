@@ -55,11 +55,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal const val COMIC_SPREAD_PREFETCH_SPREAD_COUNT = 2
+
+/** Concurrent prefetch decodes; each one can approach the per-page bitmap cap. */
+internal const val COMIC_SPREAD_PREFETCH_CONCURRENCY = 2
 internal const val COMIC_SPREAD_READER_TEST_TAG = "comic-spread-reader"
 
 /** Activity-facing navigation for the spread pager (tap zones, volume buttons, page list). */
@@ -112,6 +117,8 @@ internal fun ComicSpreadReader(
     tapZoneLayout: ReaderTapZoneLayout,
     tapZoneInvertMode: ReaderTapZoneInvertMode,
     gutterForWidth: (widthPx: Int) -> IntRange,
+    /** Changes whenever [gutterForWidth] would answer differently for the same width (hinge geometry). */
+    gutterKey: Any? = null,
     animateNavigation: () -> Boolean,
     cachedPage: (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
     loadPage: suspend (pageIndex: Int, targetWidthPx: Int) -> Bitmap?,
@@ -173,8 +180,9 @@ internal fun ComicSpreadReader(
             .testTag(COMIC_SPREAD_READER_TEST_TAG)
     ) {
         val totalWidthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
-        val widths = remember(totalWidthPx) { comicSpreadWidths(totalWidthPx, gutterForWidth(totalWidthPx)) }
+        val widths = remember(totalWidthPx, gutterKey) { comicSpreadWidths(totalWidthPx, gutterForWidth(totalWidthPx)) }
 
+        val prefetchPermits = remember { Semaphore(COMIC_SPREAD_PREFETCH_CONCURRENCY) }
         LaunchedEffect(pagerState, spreads, widths) {
             snapshotFlow { pagerState.settledPage }
                 .distinctUntilChanged()
@@ -186,7 +194,10 @@ internal fun ComicSpreadReader(
                                 spread.pages.map { page -> page to comicSpreadDecodeWidth(spread, widths) }
                             }
                             .map { (page, width) ->
-                                async(Dispatchers.IO) { runCatching { loadPage(page, width) } }
+                                // Bounded: each decode can approach the per-page pixel cap.
+                                async(Dispatchers.IO) {
+                                    prefetchPermits.withPermit { runCatching { loadPage(page, width) } }
+                                }
                             }
                             .awaitAll()
                     }
@@ -255,6 +266,12 @@ private fun ComicSpreadPage(
     val loaded = remember(spread, decodeWidth) { mutableStateMapOf<Int, Bitmap>() }
     var offset by remember(spread) { mutableStateOf(Offset.Zero) }
     val currentZoom by rememberUpdatedState(zoomScale)
+    // The tap gesture outlives recompositions (its keys stay equal), so read the latest callbacks:
+    // tap-zone layout and inversion can change while this spread stays on screen.
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+    // Replaced when the decode width changes (e.g. a hinge update) while the spread stays the same.
+    val currentLoaded by rememberUpdatedState(loaded)
     val density = LocalDensity.current
     val pageDescription = if (spread.isPair) {
         "Pages ${spread.firstPage + 1} and ${spread.lastPage + 1}"
@@ -302,11 +319,11 @@ private fun ComicSpreadPage(
             .pointerInput(spread, readingDirection) {
                 detectTapGestures(
                     onTap = { position ->
-                        onTap(position, size.width.toFloat(), size.height.toFloat())
+                        currentOnTap(position, size.width.toFloat(), size.height.toFloat())
                     },
                     onLongPress = { position ->
                         val page = comicSpreadPageAt(spread, position.x, size.width.toFloat(), readingDirection)
-                        loaded[page]?.let { bitmap -> onLongPress(page, bitmap) }
+                        currentLoaded[page]?.let { bitmap -> currentOnLongPress(page, bitmap) }
                     }
                 )
             }

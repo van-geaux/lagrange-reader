@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -325,10 +326,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             enabled = !isPreview
         )
         windowTracker.start()
-        lifecycleScope.launch {
-            windowTracker.spreadChanges(::computeComicSpread).collect {
-                if (publication != null && computeComicSpread() != spreadActive) rebuildPublication()
-            }
+        windowTracker.observeSpreadChanges(::computeComicSpread) {
+            if (publication != null && computeComicSpread() != spreadActive) rebuildPublication()
         }
         configureSystemBars()
         createReaderViews()
@@ -935,6 +934,8 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         currentPage = initialPage
         comicSpreadView = ComposeView(this).apply {
             setContent {
+                // Observed so a hinge change re-measures the gutter without rebuilding the reader.
+                val windowState by windowTracker.state.collectAsState()
                 BookOrbitTheme {
                     ComicSpreadReader(
                         pageCount = openedPublication.readingOrder.size,
@@ -949,6 +950,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                             // Pages meet with no gap; only a separating hinge pushes them apart.
                             readerSpreadGutterPx(widthPx, windowTracker.state.value.hinge, minimumGapPx = 0)
                         },
+                        gutterKey = windowState.hinge,
                         animateNavigation = {
                             !AppPreferencesStore(this@ReadiumComicReaderActivity).read().reduceMotion
                         },
@@ -1182,7 +1184,12 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         )
     }
 
+    /** The spread-change handler's rebuild, for instrumented tests of its lifecycle guard. */
+    internal fun rebuildPublicationForTest() = rebuildPublication()
+
     private fun rebuildPublication() {
+        // Fragment transactions are illegal once state is saved; the next start re-checks the spread.
+        if (supportFragmentManager.isStateSaved) return
         val openedPublication = publication ?: return
         val locator = openedPublication.readingOrder.getOrNull(resumePageIndex())
             ?.let(openedPublication::locatorFromLink)
