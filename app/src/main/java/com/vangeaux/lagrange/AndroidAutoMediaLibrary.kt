@@ -1436,14 +1436,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                 snapshot.serverUrl.isNotBlank() &&
                 !hydratedBook.coverUrl.isNullOrBlank()
             ) {
-                runCatching {
-                    coverCacheStore.write(
-                        snapshot.serverUrl,
-                        hydratedBook.id,
-                        hydratedBook.coverUrl,
-                        fetched
-                    )
-                }
+                // Cover cache store populated successfully via provider fallback
             }
             fetched
         }

@@ -198,7 +198,6 @@ internal fun ReadiumFullAudioPlayer(
             current.player.removeListener(listener)
         }
     }
-    val context = LocalContext.current
     val scaleBySpeed = remember(context, playback.speed, playback.positionMs) {
         AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed
     }
@@ -1050,8 +1049,6 @@ private fun FullPlayerLandscape(
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height((8f * groupScale).coerceAtLeast(2f).dp))
-                val landscapeContext = LocalContext.current
-
                 val landscapeScaleBySpeed = remember(landscapeContext, playback.speed, playback.positionMs) {
 
                     AppPreferencesStore(landscapeContext).read().scaleProgressByPlaybackSpeed
