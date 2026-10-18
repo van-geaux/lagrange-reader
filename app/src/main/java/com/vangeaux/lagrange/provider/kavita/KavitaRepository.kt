@@ -79,16 +79,34 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
         catalogModule.refreshLibraryCatalog(libraryId, firstPage)
     override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
-    override suspend fun loadCachedHomeBooks(): List<BookSummary> =
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> = runCatching {
+        loadLibraries()
+            .flatMap { library -> loadBooks(library.id) }
+            .plus(loadLocalBooks())
+            .distinctBy { it.libraryId to (it.fileId ?: it.id) }
+    }.getOrElse {
         browserSnapshotStore.read(getServerUrl().orEmpty())?.booksByLibraryId?.values.orEmpty()
             .flatten()
             .plus(loadLocalBooks())
             .distinctBy { it.libraryId to (it.fileId ?: it.id) }
+    }
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         seriesModule.loadSeriesCatalog(filter, page)
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =
         seriesModule.loadSeriesDetail(seriesId)
-    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = detailModule.loadBookDetail(book)
+    override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo {
+        val detail = detailModule.loadBookDetail(book)
+        val localRecord = downloadStore.find(getServerUrl().orEmpty(), book.fileId ?: book.id)
+            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).isFile }
+        return localRecord?.let { record ->
+            detail.copy(
+                book = detail.book.copy(
+                    localPath = record.localPath,
+                    isLocalOnlyOverride = false
+                )
+            )
+        } ?: detail
+    }
     override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = detailModule.loadCachedBookDetail(book)
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
         detailModule.setBookUserRating(book, rating)
