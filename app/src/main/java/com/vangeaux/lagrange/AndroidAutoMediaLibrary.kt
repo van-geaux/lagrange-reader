@@ -2266,13 +2266,24 @@ internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean =
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
     val current = activeSession() ?: return false
+    val chapters = current.book.audioChapters.sortedBy { it.startMs }
+    if (chapters.isEmpty()) return false
+    val currentPos = current.absolutePositionMs()
+    val totalDur = current.totalDurationMs()
     val targetMs = resolveAndroidAutoChapterSkip(
-        chapters = current.book.audioChapters,
-        currentPositionMs = current.absolutePositionMs(),
-        totalDurationMs = current.totalDurationMs(),
+        chapters = chapters,
+        currentPositionMs = currentPos,
+        totalDurationMs = totalDur,
         direction = direction
     ) ?: return false
+    
     current.seekToAbsolutePosition(targetMs)
+    // Force a position discontinuity / refresh on library session player so M4B single-file timelines update instantly
+    librarySessionPlayer?.let { sessionPlayer ->
+        if (sessionPlayer.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) {
+            sessionPlayer.seekTo(sessionPlayer.currentPosition)
+        }
+    }
     return true
 }
 

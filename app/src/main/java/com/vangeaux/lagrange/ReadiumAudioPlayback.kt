@@ -182,12 +182,8 @@ internal fun audiobookExternalPlayerCommands(
 ): Player.Commands = commands.buildUpon()
     .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
     .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
-    .removeAll(
-        Player.COMMAND_SEEK_TO_PREVIOUS,
-        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-        Player.COMMAND_SEEK_TO_NEXT,
-        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
-    )
+    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+    .add(Player.COMMAND_SEEK_TO_NEXT)
     .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
