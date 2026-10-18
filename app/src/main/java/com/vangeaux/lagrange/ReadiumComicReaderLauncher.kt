@@ -70,9 +70,7 @@ internal suspend fun prepareReadiumComic(
             ?.let(::parseComicPageCount)
             ?.takeIf { it > 0 }
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit could not provide this " +
-                archiveExtension.orEmpty().uppercase(Locale.US) +
-                " file's page list."
+            "The comic could not provide its ${archiveExtension.orEmpty().uppercase(Locale.US)} page list."
         )
     val firstPage = runCatching { pageLoader(comicPageUrl(pagesUrl, 0)) }
         .getOrNull()

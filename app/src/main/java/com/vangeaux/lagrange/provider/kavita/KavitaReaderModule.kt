@@ -69,15 +69,18 @@ internal class KavitaReaderModuleImpl(
                 )
             }
             when (resolvedBook.mediaKind) {
-                MediaKind.COMIC -> ReaderState(
-                    book = resolvedBook,
-                    comicPagesUrl = "$base/api/Reader/image?chapterId=$chapterId&page={page}",
-                    comicPageCount = resolvedBook.readerPageCount,
-                    pageIndex = 0,
-                    readerPageIndex = book.progressPageIndex ?: 0,
-                    progressPercent = book.progressPercent,
-                    serverProgressAuthoritative = true
-                )
+                MediaKind.COMIC -> {
+                    val localFile = kavitaLocalFile(resolvedBook)
+                        ?: downloadModule.downloadBook(resolvedBook) { }
+                    ReaderState(
+                        book = resolvedBook.copy(localPath = localFile.absolutePath),
+                        localFile = localFile,
+                        pageIndex = 0,
+                        readerPageIndex = book.progressPageIndex ?: 0,
+                        progressPercent = book.progressPercent,
+                        serverProgressAuthoritative = true
+                    )
+                }
                 MediaKind.PDF -> ReaderState(
                     book = resolvedBook,
                     streamUrl = "$base/api/Reader/pdf?chapterId=$chapterId",
