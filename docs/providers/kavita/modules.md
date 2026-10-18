@@ -45,7 +45,7 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
 
 ## Unsupported capabilities
 
-Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, and offline-cache operations are supported. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, background cache warming, and server reading-session history remain unavailable or unsupported as described by their modules.
+Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, offline-cache operations, and background cache warming are supported. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, and server reading-session history remain unavailable or unsupported as described by their modules.
 
 ## Composition
 
