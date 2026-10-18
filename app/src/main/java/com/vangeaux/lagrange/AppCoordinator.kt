@@ -555,7 +555,9 @@ class AppCoordinator internal constructor(
             }
 
             if (startupCache == null) {
-                _screen.value = AppScreen.Startup("Connecting to BookOrbit…")
+                _screen.value = AppScreen.Startup(
+                    "Connecting to ${providerServerLabel(providerIdForLogin(repository.getServerUrl().orEmpty(), configuredServerProfiles()))}…"
+                )
             }
             val sessionState = loginModule()?.getSessionState() ?: repository.getSessionState()
             if (startupCache != null) {

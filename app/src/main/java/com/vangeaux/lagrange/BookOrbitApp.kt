@@ -484,7 +484,7 @@ private fun LoadingScreen() {
             )
             Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
             Text(
-                "a BookOrbit reader",
+                "a Lagrange reader",
                 color = MaterialTheme.colorScheme.secondary,
                 style = MaterialTheme.typography.titleMedium
             )
@@ -799,7 +799,7 @@ private fun ReaderScreen(
     if (state.book.mediaKind == MediaKind.COMIC) {
         ReaderMessage(
             "This comic container must be converted to CBZ before Readium can open it. " +
-                "Reconnect to BookOrbit to prepare it."
+                "Reconnect to the configured server to prepare it."
         )
         return
     }

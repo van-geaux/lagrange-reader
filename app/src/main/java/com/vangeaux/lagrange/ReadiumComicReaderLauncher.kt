@@ -75,11 +75,11 @@ internal suspend fun prepareReadiumComic(
     val firstPage = runCatching { pageLoader(comicPageUrl(pagesUrl, 0)) }
         .getOrNull()
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit could not provide the first comic page."
+            "The configured server could not provide the first comic page."
         )
     val mediaType = comicImageMediaType(firstPage)
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit returned an unsupported comic-page image."
+            "The configured server returned an unsupported comic-page image."
         )
     ReadiumComicPreparationResult.Remote(
         pagesUrl = pagesUrl.trimEnd('/'),

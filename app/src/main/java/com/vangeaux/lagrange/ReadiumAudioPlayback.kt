@@ -633,7 +633,7 @@ private suspend fun preparePlaylistMedia3Audio(
         } else {
             player.release()
             ReadiumAudioOpenResult.Error(
-                "Media3 could not open the audiobook stream from BookOrbit " +
+                "Media3 could not open the audiobook stream from the configured server " +
                     "(${playbackError.errorCodeName})."
             )
         }
@@ -692,7 +692,7 @@ private suspend fun prepareDirectMedia3Audio(
         } else {
             player.release()
             ReadiumAudioOpenResult.Error(
-                "Media3 could not open the audiobook stream from BookOrbit " +
+                "Media3 could not open the audiobook stream from the configured server " +
                     "(${playbackError.errorCodeName})."
             )
         }
