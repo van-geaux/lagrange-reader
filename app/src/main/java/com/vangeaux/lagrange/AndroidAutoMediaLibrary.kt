@@ -15,6 +15,8 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.CommandButton
 import androidx.media3.common.Player
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Timeline
 import androidx.media3.common.C
 import android.provider.MediaStore
 import android.app.Application
@@ -1064,21 +1066,19 @@ internal class AndroidAutoCatalogBridge private constructor(
             ?: runCatching { resolveProviderLibraryModule(repository).loadLibraries() }
                 .getOrDefault(emptyList())
 
-        val catalogBooks = if (cachedHomeBooks.isNotEmpty()) {
-            cachedHomeBooks
-        } else {
-            val fromSnapshot = snapshot?.booksByLibraryId?.values?.flatten().orEmpty()
-            fromSnapshot.ifEmpty {
-                libraries.flatMap { library ->
-                    runCatching {
-                        resolveProviderBookCatalogModule(repository)
-                            .loadCachedLibraryCatalog(library.id)
-                            ?.items
-                            .orEmpty()
-                    }.getOrDefault(emptyList())
-                }
-            }
+        val fromSnapshot = snapshot?.booksByLibraryId?.values?.flatten().orEmpty()
+        val fromLibraryCaches = libraries.flatMap { library ->
+            runCatching {
+                resolveProviderBookCatalogModule(repository)
+                    .loadCachedLibraryCatalog(library.id)
+                    ?.items
+                    .orEmpty()
+            }.getOrDefault(emptyList())
         }
+        val catalogBooks = mergeAndDeduplicateAudiobooks(
+            primary = cachedHomeBooks + fromSnapshot,
+            secondary = fromLibraryCaches
+        )
 
         AndroidAutoCatalogSnapshot(
             serverUrl = serverUrl,
@@ -1391,33 +1391,61 @@ internal class AndroidAutoCatalogBridge private constructor(
     suspend fun loadCoverBytes(bookId: String, libraryId: String? = null): ByteArray? =
         withContext(Dispatchers.IO) {
             val snapshot = loadSnapshot()
+            val repository = currentRepository()
             val cachedDetail = if (snapshot.serverUrl.isNotBlank()) {
                 runCatching { bookDetailCacheStore.readLatest(snapshot.serverUrl, bookId, null) }.getOrNull()
             } else {
                 null
             }
-            val baseBook = findBook(bookId, preferredFileId = null, snapshot = snapshot)
-                ?: cachedDetail?.book
-                ?: BookSummary(
+            val foundBook = findBook(bookId, preferredFileId = null, snapshot = snapshot)
+            val baseBook = when {
+                foundBook != null && cachedDetail?.book != null ->
+                    mergeAudiobookMetadata(foundBook, cachedDetail.book)
+                foundBook != null -> foundBook
+                cachedDetail?.book != null -> cachedDetail.book
+                else -> BookSummary(
                     libraryId = libraryId.orEmpty(),
                     id = bookId,
                     fileId = null,
                     title = ""
                 )
-            val book = if (baseBook.coverUrl.isNullOrBlank() && !cachedDetail?.book?.coverUrl.isNullOrBlank()) {
-                baseBook.copy(coverUrl = cachedDetail?.book?.coverUrl)
+            }
+            val hydratedBook = if (baseBook.coverUrl.isNullOrBlank()) {
+                val detailModule = resolveProviderBookDetailModule(repository)
+                val loadedDetail = runCatching { detailModule.loadCachedBookDetail(baseBook) }.getOrNull()
+                    ?: runCatching { detailModule.loadBookDetail(baseBook) }.getOrNull()
+                if (loadedDetail?.book != null) {
+                    mergeAudiobookMetadata(baseBook, loadedDetail.book)
+                } else {
+                    baseBook
+                }
             } else {
                 baseBook
             }
-            if (snapshot.serverUrl.isNotBlank() && !book.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(snapshot.serverUrl, book.id, book.coverUrl)?.let {
+            if (snapshot.serverUrl.isNotBlank() && !hydratedBook.coverUrl.isNullOrBlank()) {
+                coverCacheStore.read(snapshot.serverUrl, hydratedBook.id, hydratedBook.coverUrl)?.let {
                     return@withContext it
                 }
             }
-            val repository = currentRepository()
-            runCatching {
-                resolveProviderBookCoverModule(repository).loadBookCover(book)
+            val fetched = runCatching {
+                resolveProviderBookCoverModule(repository).loadBookCover(hydratedBook)
             }.getOrNull()
+            if (
+                fetched != null &&
+                fetched.isNotEmpty() &&
+                snapshot.serverUrl.isNotBlank() &&
+                !hydratedBook.coverUrl.isNullOrBlank()
+            ) {
+                runCatching {
+                    coverCacheStore.write(
+                        snapshot.serverUrl,
+                        hydratedBook.id,
+                        hydratedBook.coverUrl,
+                        fetched
+                    )
+                }
+            }
+            fetched
         }
 
     fun recordHeadlessProgress(
@@ -1642,29 +1670,22 @@ internal object AndroidAutoSpeedController {
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAutoMediaButtonPreferences(
-    hasChapters: Boolean = false,
+    hasChapters: Boolean = true,
     currentSpeed: Float = 1.0f,
     showSpeedPresets: Boolean = AndroidAutoSpeedController.isMenuExpanded
 ): List<CommandButton> = buildList {
     if (showSpeedPresets) {
-        // When the speed wireframe button is tapped, replace the primary bar actions
-        // with the speed presets so the user can directly tap their desired speed.
         addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = true))
     } else {
-        // Keep the collapsed button count <= 4 so Android Auto does not populate or
-        // activate the vertical '...' overflow menu!
-        // Slot 1 & 2: -10s and +30s
+        // Always keep 4 primary buttons: Replay 10s, Forward 30s, Next Chapter, and Speed
         addAll(audiobookMediaButtonPreferences())
-        // Slot 3: Next Chapter (when chapters are available)
-        if (hasChapters) {
-            add(
-                CommandButton.Builder(CommandButton.ICON_NEXT)
-                    .setSessionCommand(audiobookNextChapterSessionCommand)
-                    .setDisplayName("Next chapter")
-                    .build()
-            )
-        }
-        // Slot 4 (or 3): Wireframe speed button
+        add(
+            CommandButton.Builder(CommandButton.ICON_NEXT)
+                .setSessionCommand(audiobookNextChapterSessionCommand)
+                .setDisplayName("Next chapter")
+                .setEnabled(true)
+                .build()
+        )
         addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = false))
     }
 }
@@ -1683,10 +1704,22 @@ internal class LagrangeLibrarySessionPlayer(
         suppressNextSetMediaItems = true
     }
 
-    private fun currentSpeed(): Float =
-        playbackParameters.speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+    private fun actualSpeed(): Float =
+        super.getPlaybackParameters().speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
 
     private fun isScaled(): Boolean = scaleBySpeedProvider?.invoke() == true
+
+    override fun getPlaybackParameters(): PlaybackParameters {
+        val raw = super.getPlaybackParameters()
+        // When scaling progress by playback speed, report 1.0f speed to the MediaSession
+        // so Android Auto's head-unit advances the scaled timer at 1.0x real-world clock speed
+        // instead of multiplying an already-scaled position by 1.5x!
+        return if (isScaled() && kotlin.math.abs(raw.speed - 1.0f) >= 0.01f) {
+            PlaybackParameters(1.0f, raw.pitch)
+        } else {
+            raw
+        }
+    }
 
     private fun rawActiveChapterOrTrackBounds(): Pair<Long, Long>? {
         val active = sessionProvider?.invoke() ?: return null
@@ -1743,14 +1776,14 @@ internal class LagrangeLibrarySessionPlayer(
             ?: super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
             ?: sessionProvider?.invoke()?.totalDurationMs()?.takeIf { it > 0L }
             ?: return super.getDuration()
-        return scaleAudioTimeMs(rawDuration, currentSpeed(), isScaled())
+        return scaleAudioTimeMs(rawDuration, actualSpeed(), isScaled())
     }
 
     override fun getCurrentPosition(): Long {
         val bounds = rawActiveChapterOrTrackBounds()
         val rawPosition = bounds?.first
             ?: super.getCurrentPosition().coerceAtLeast(0L)
-        return scaleAudioTimeMs(rawPosition, currentSpeed(), isScaled())
+        return scaleAudioTimeMs(rawPosition, actualSpeed(), isScaled())
     }
 
     override fun getContentPosition(): Long = currentPosition
@@ -1760,7 +1793,7 @@ internal class LagrangeLibrarySessionPlayer(
     override fun getBufferedPosition(): Long {
         val dur = duration
         val pos = currentPosition
-        val rawBuf = scaleAudioTimeMs(super.getBufferedPosition().coerceAtLeast(0L), currentSpeed(), isScaled())
+        val rawBuf = scaleAudioTimeMs(super.getBufferedPosition().coerceAtLeast(0L), actualSpeed(), isScaled())
         return if (dur != C.TIME_UNSET && dur > 0L) {
             rawBuf.coerceIn(pos, dur)
         } else {
@@ -1768,8 +1801,56 @@ internal class LagrangeLibrarySessionPlayer(
         }
     }
 
+    override fun getCurrentTimeline(): Timeline {
+        val baseTimeline = super.getCurrentTimeline()
+        if (baseTimeline.isEmpty) return baseTimeline
+        val currentIdx = currentMediaItemIndex
+        val effectiveDurationMs = duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: return baseTimeline
+        val effectiveDurationUs = C.msToUs(effectiveDurationMs)
+        return object : Timeline() {
+            override fun getWindowCount(): Int = baseTimeline.windowCount
+
+            override fun getWindow(
+                windowIndex: Int,
+                window: Window,
+                defaultPositionProjectionUs: Long
+            ): Window {
+                baseTimeline.getWindow(windowIndex, window, defaultPositionProjectionUs)
+                if (windowIndex == currentIdx) {
+                    window.durationUs = effectiveDurationUs
+                    window.isSeekable = true
+                    window.isDynamic = false
+                } else if (isScaled() && window.durationUs != C.TIME_UNSET && window.durationUs > 0L) {
+                    window.durationUs = scaleAudioTimeMs(window.durationUs / 1_000L, actualSpeed(), true) * 1_000L
+                    window.isSeekable = true
+                }
+                return window
+            }
+
+            override fun getPeriodCount(): Int = baseTimeline.periodCount
+
+            override fun getPeriod(
+                periodIndex: Int,
+                period: Period,
+                setIds: Boolean
+            ): Period {
+                baseTimeline.getPeriod(periodIndex, period, setIds)
+                if (period.windowIndex == currentIdx) {
+                    period.durationUs = effectiveDurationUs
+                } else if (isScaled() && period.durationUs != C.TIME_UNSET && period.durationUs > 0L) {
+                    period.durationUs = scaleAudioTimeMs(period.durationUs / 1_000L, actualSpeed(), true) * 1_000L
+                }
+                return period
+            }
+
+            override fun getIndexOfPeriod(uid: Any): Int = baseTimeline.getIndexOfPeriod(uid)
+
+            override fun getUidOfPeriod(periodIndex: Int): Any = baseTimeline.getUidOfPeriod(periodIndex)
+        }
+    }
+
     override fun seekTo(positionMs: Long) {
-        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), currentSpeed(), isScaled())
+        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), actualSpeed(), isScaled())
         val active = sessionProvider?.invoke()
         if (active != null) {
             val totalMs = active.totalDurationMs()
@@ -1801,7 +1882,7 @@ internal class LagrangeLibrarySessionPlayer(
             seekTo(positionMs)
             return
         }
-        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), currentSpeed(), isScaled())
+        val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), actualSpeed(), isScaled())
         super.seekTo(mediaItemIndex, unscaledTargetMs)
     }
 
