@@ -1600,94 +1600,78 @@ internal class AndroidAutoCatalogBridge private constructor(
 }
 
 internal object AndroidAutoSpeedController {
-    const val ACTION_TOGGLE_SPEED_MENU = "com.vangeaux.lagrange.action.TOGGLE_SPEED_MENU"
-    const val ACTION_SET_SPEED_PREFIX = "com.vangeaux.lagrange.action.SET_SPEED_"
-    const val EXTRA_SPEED_VALUE = "extra_speed_value"
-
-    @Volatile
-    var isMenuExpanded: Boolean = false
+    const val ACTION_CYCLE_SPEED = "com.vangeaux.lagrange.action.CYCLE_SPEED"
 
     data class SpeedPreset(
         val speed: Float,
         val label: String,
-        val action: String,
         val iconResId: Int
     )
 
     val PRESETS = listOf(
-        SpeedPreset(0.8f, "0.8x", "${ACTION_SET_SPEED_PREFIX}0_8", R.drawable.ic_speed_0_8x),
-        SpeedPreset(1.0f, "1.0x", "${ACTION_SET_SPEED_PREFIX}1_0", R.drawable.ic_speed_1_0x),
-        SpeedPreset(1.2f, "1.2x", "${ACTION_SET_SPEED_PREFIX}1_2", R.drawable.ic_speed_1_2x),
-        SpeedPreset(1.5f, "1.5x", "${ACTION_SET_SPEED_PREFIX}1_5", R.drawable.ic_speed_1_5x),
-        SpeedPreset(1.8f, "1.8x", "${ACTION_SET_SPEED_PREFIX}1_8", R.drawable.ic_speed_1_8x),
-        SpeedPreset(2.0f, "2.0x", "${ACTION_SET_SPEED_PREFIX}2_0", R.drawable.ic_speed_2_0x)
+        SpeedPreset(0.8f, "0.8x", R.drawable.ic_speed_0_8x),
+        SpeedPreset(1.0f, "1.0x", R.drawable.ic_speed_1_0x),
+        SpeedPreset(1.2f, "1.2x", R.drawable.ic_speed_1_2x),
+        SpeedPreset(1.5f, "1.5x", R.drawable.ic_speed_1_5x),
+        SpeedPreset(1.8f, "1.8x", R.drawable.ic_speed_1_8x),
+        SpeedPreset(2.0f, "2.0x", R.drawable.ic_speed_2_0x)
     )
 
-    fun getAllSpeedSessionCommands(): List<SessionCommand> = buildList {
-        add(SessionCommand(ACTION_TOGGLE_SPEED_MENU, Bundle.EMPTY))
-        PRESETS.forEach { preset ->
-            add(SessionCommand(preset.action, Bundle.EMPTY))
-        }
-    }
+    fun getAllSpeedSessionCommands(): List<SessionCommand> = listOf(
+        SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY)
+    )
 
     fun findCurrentPreset(currentSpeed: Float): SpeedPreset =
         PRESETS.minByOrNull { kotlin.math.abs(it.speed - currentSpeed) } ?: PRESETS[1]
 
-    @androidx.annotation.OptIn(UnstableApi::class)
-    fun buildSpeedCommandButtons(
-        currentSpeed: Float,
-        showPresets: Boolean = isMenuExpanded
-    ): List<CommandButton> = buildList {
-        val activePreset = findCurrentPreset(currentSpeed)
-        if (!showPresets) {
-            // Single wireframe button showing current speed; tapping opens the preset list
-            add(
-                CommandButton.Builder()
-                    .setDisplayName("Speed: ${activePreset.label}")
-                    .setSessionCommand(SessionCommand(ACTION_TOGGLE_SPEED_MENU, Bundle.EMPTY))
-                    .setIconResId(activePreset.iconResId)
-                    .setEnabled(true)
-                    .build()
-            )
-        } else {
-            // Render each speed preset directly; selecting one applies it and collapses the menu
-            PRESETS.forEach { preset ->
-                val isSelected = kotlin.math.abs(preset.speed - activePreset.speed) < 0.05f
-                val displayLabel = if (isSelected) "✓ ${preset.label}" else preset.label
-                val extras = Bundle().apply { putFloat(EXTRA_SPEED_VALUE, preset.speed) }
-                add(
-                    CommandButton.Builder()
-                        .setDisplayName(displayLabel)
-                        .setSessionCommand(SessionCommand(preset.action, extras))
-                        .setIconResId(preset.iconResId)
-                        .setEnabled(true)
-                        .build()
-                )
-            }
+    fun findNextPreset(currentSpeed: Float): SpeedPreset {
+        val current = findCurrentPreset(currentSpeed)
+        val currentIndex = PRESETS.indexOfFirst {
+            kotlin.math.abs(it.speed - current.speed) < 0.05f
         }
+        val nextIndex = if (currentIndex in PRESETS.indices) {
+            (currentIndex + 1) % PRESETS.size
+        } else {
+            1
+        }
+        return PRESETS[nextIndex]
+    }
+
+    @androidx.annotation.OptIn(UnstableApi::class)
+    fun buildCycleSpeedCommandButton(currentSpeed: Float): CommandButton {
+        val activePreset = findCurrentPreset(currentSpeed)
+        return CommandButton.Builder()
+            .setDisplayName("Playback speed (${activePreset.label})")
+            .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+            .setIconResId(activePreset.iconResId)
+            .setEnabled(true)
+            .build()
     }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAutoMediaButtonPreferences(
     hasChapters: Boolean = true,
-    currentSpeed: Float = 1.0f,
-    showSpeedPresets: Boolean = AndroidAutoSpeedController.isMenuExpanded
+    currentSpeed: Float = 1.0f
 ): List<CommandButton> = buildList {
-    if (showSpeedPresets) {
-        addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = true))
-    } else {
-        // Always keep 4 primary buttons: Replay 10s, Forward 30s, Next Chapter, and Speed
-        addAll(audiobookMediaButtonPreferences())
-        add(
-            CommandButton.Builder(CommandButton.ICON_NEXT)
-                .setSessionCommand(audiobookNextChapterSessionCommand)
-                .setDisplayName("Next chapter")
-                .setEnabled(true)
-                .build()
-        )
-        addAll(AndroidAutoSpeedController.buildSpeedCommandButtons(currentSpeed, showPresets = false))
-    }
+    // Primary items alongside Play/Pause: Replay 10s, Forward 30s
+    addAll(audiobookMediaButtonPreferences())
+    // Secondary items: Prev. Chapter - Cycle Playback Speed - Next Chapter
+    add(
+        CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+            .setSessionCommand(audiobookPreviousChapterSessionCommand)
+            .setDisplayName("Previous chapter")
+            .setEnabled(true)
+            .build()
+    )
+    add(AndroidAutoSpeedController.buildCycleSpeedCommandButton(currentSpeed))
+    add(
+        CommandButton.Builder(CommandButton.ICON_NEXT)
+            .setSessionCommand(audiobookNextChapterSessionCommand)
+            .setDisplayName("Next chapter")
+            .setEnabled(true)
+            .build()
+    )
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -2027,19 +2011,12 @@ internal fun handleAudiobookCustomCommand(
             if (!handled) session.player.seekForward()
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
-        action == AndroidAutoSpeedController.ACTION_TOGGLE_SPEED_MENU -> {
-            AndroidAutoSpeedController.isMenuExpanded = !AndroidAutoSpeedController.isMenuExpanded
-            service?.refreshAndroidAutoCustomLayout()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
-        action.startsWith(AndroidAutoSpeedController.ACTION_SET_SPEED_PREFIX) -> {
-            val matchedPreset = AndroidAutoSpeedController.PRESETS.firstOrNull { it.action == action }
-            val targetSpeed = matchedPreset?.speed
-                ?: customCommand.customExtras.getFloat(AndroidAutoSpeedController.EXTRA_SPEED_VALUE, 1.0f)
-            AndroidAutoSpeedController.isMenuExpanded = false
-            service?.applyAndroidAutoPlaybackSpeed(targetSpeed)
-                ?: session.player.setPlaybackSpeed(targetSpeed)
-            service?.refreshAndroidAutoCustomLayout(targetSpeed)
+        action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
+            val currentSpeed = service?.activeSession()?.player?.playbackParameters?.speed
+                ?.takeIf { it > 0f }
+                ?: AppPreferencesStore(service ?: session.player.let { return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS)) }).readAudioPlaybackSpeed()
+            val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
+            service.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         else -> null
@@ -2310,7 +2287,6 @@ internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Bool
 internal fun ReadiumAudioPlaybackService.applyAndroidAutoPlaybackSpeed(speed: Float) {
     val normalized = normalizeAudioPlaybackSpeed(speed)
     AppPreferencesStore(applicationContext).saveAudioPlaybackSpeed(normalized)
-    AndroidAutoSpeedController.isMenuExpanded = false
     val player = activeSession()?.player ?: librarySessionPlayer
     player?.setPlaybackSpeed(normalized)
     refreshAndroidAutoCustomLayout(normalized)
@@ -2327,8 +2303,7 @@ internal fun ReadiumAudioPlaybackService.refreshAndroidAutoCustomLayout(
     session.setCustomLayout(
         audiobookAutoMediaButtonPreferences(
             hasChapters = activeSessionHasChapters(),
-            currentSpeed = currentSpeed,
-            showSpeedPresets = AndroidAutoSpeedController.isMenuExpanded
+            currentSpeed = currentSpeed
         )
     )
 }
