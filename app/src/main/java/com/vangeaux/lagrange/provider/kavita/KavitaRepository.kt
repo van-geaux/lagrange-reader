@@ -157,10 +157,15 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
 
     override suspend fun loadLocalBooks(): List<BookSummary> {
         val serverUrl = getServerUrl().orEmpty()
+        val snapshotBooks = browserSnapshotStore.read(serverUrl)?.booksByLibraryId?.values.orEmpty()
+            .flatten()
+        val metadataByKey = snapshotBooks
+            .flatMap { book -> listOfNotNull(book.fileId, book.id).map { it to book } }
+            .toMap()
         return downloadStore.readAll(serverUrl)
             .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).isFile }
             .map { record ->
-                BookSummary(
+                val fallback = BookSummary(
                     libraryId = "",
                     id = record.bookId,
                     fileId = record.fileId,
@@ -168,8 +173,14 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
                     filename = record.filename ?: File(record.localPath).name,
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
+                    updatedAtMillis = record.sourceUpdatedAtMillis
+                )
+                (metadataByKey[record.fileId] ?: metadataByKey[record.bookId] ?: fallback).copy(
+                    fileId = record.fileId,
+                    filename = record.filename ?: metadataByKey[record.fileId]?.filename ?: File(record.localPath).name,
                     localPath = record.localPath,
-                    updatedAtMillis = record.sourceUpdatedAtMillis,
+                    mediaKind = record.mediaKind,
+                    format = record.mimeType ?: metadataByKey[record.fileId]?.format,
                     isLocalOnlyOverride = true
                 )
             }
