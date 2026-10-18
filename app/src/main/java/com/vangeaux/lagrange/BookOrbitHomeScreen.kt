@@ -6148,8 +6148,13 @@ private fun LibraryReaderConfiguration(
             )
             ReaderSpreadSettings(
                 value = value,
-                layoutMode = ReaderLayoutMode.PAGINATED,
+                // Shared by EPUB and comics: spreads apply while either format is paginated.
+                layoutMode = if (
+                    value.epubLayoutMode == ReaderLayoutMode.PAGINATED ||
+                    value.comicLayoutMode == ReaderLayoutMode.PAGINATED
+                ) ReaderLayoutMode.PAGINATED else ReaderLayoutMode.CONTINUOUS,
                 testTagPrefix = "options-reading",
+                showComicOptions = true,
                 onPreferencesChange = { next -> onPreferencesChange(selectedLibrary.id, next) }
             )
         }
@@ -6876,6 +6881,7 @@ internal fun ReaderConfigurationControls(
                 value = value,
                 layoutMode = value.epubLayoutMode,
                 testTagPrefix = "$testTagPrefix-epub",
+                showComicOptions = false,
                 onPreferencesChange = onPreferencesChange
             )
             ReaderPageMarginsSettings(
@@ -6898,14 +6904,23 @@ internal fun ReaderConfigurationControls(
             invertColors = value.invertPdfColors,
             onInvertColorsChange = { onPreferencesChange(value.copy(invertPdfColors = it)) }
         )
-        ReaderConfigurationFormat.COMIC -> ReaderFormatLayoutSettings(
-            formatLabel = "CBR/CBZ",
-            layoutMode = value.comicLayoutMode,
-            pageGapDp = value.comicPageGapDp,
-            testTagPrefix = "$testTagPrefix-comic",
-            onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
-            onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
-        )
+        ReaderConfigurationFormat.COMIC -> {
+            ReaderFormatLayoutSettings(
+                formatLabel = "CBR/CBZ",
+                layoutMode = value.comicLayoutMode,
+                pageGapDp = value.comicPageGapDp,
+                testTagPrefix = "$testTagPrefix-comic",
+                onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
+                onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
+            )
+            ReaderSpreadSettings(
+                value = value,
+                layoutMode = value.comicLayoutMode,
+                testTagPrefix = "$testTagPrefix-comic",
+                showComicOptions = true,
+                onPreferencesChange = onPreferencesChange
+            )
+        }
     }
 }
 
@@ -6914,6 +6929,7 @@ private fun ReaderSpreadSettings(
     value: LibraryReaderPreferences,
     layoutMode: ReaderLayoutMode,
     testTagPrefix: String,
+    showComicOptions: Boolean,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit
 ) {
     val spreadEnabled = value.twoPageSpread == ReaderSpreadMode.AUTO
@@ -6934,6 +6950,28 @@ private fun ReaderSpreadSettings(
             )
         }
     )
+    if (showComicOptions) {
+        AppPreferenceSwitchRow(
+            title = "Show cover alone",
+            summary = "Keep the first page by itself so later pages pair like a printed book",
+            checked = value.comicSpreadCoverAlone,
+            enabled = spreadEnabled,
+            testTag = "$testTagPrefix-spread-cover-alone",
+            onCheckedChange = { enabled ->
+                onPreferencesChange(value.copy(comicSpreadCoverAlone = enabled))
+            }
+        )
+        AppPreferenceSwitchRow(
+            title = "Shift page pairs",
+            summary = "Move pairs by one page when two-page artwork is split across spreads",
+            checked = value.comicSpreadShift,
+            enabled = spreadEnabled,
+            testTag = "$testTagPrefix-spread-shift",
+            onCheckedChange = { enabled ->
+                onPreferencesChange(value.copy(comicSpreadShift = enabled))
+            }
+        )
+    }
 }
 
 @Composable

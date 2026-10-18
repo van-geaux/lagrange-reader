@@ -88,7 +88,7 @@ When the affected scope requires it, verify normal versus Preview launch isolati
 - On BookOrbit, open an EPUB, move to a saved mid-chapter point, and add a bookmark at the current CFI. Move elsewhere in the same chapter before selecting the bookmark, then use `Open` and verify the saved point or range CFI resolves through its text context and returns to the saved location rather than the chapter start. With repeated or otherwise ambiguous matching text, verify the reader uses the bookmark's snapped progression fallback; if no usable target can be resolved, verify the reader restores the location held before opening the bookmark. Also verify the bookmark control lists records for the active file, edit title/note (including clearing the note), delete with confirmation, and persists after reopening the reader. Repeat creation at the same CFI to confirm there is no duplicate live entry. Disable network access and confirm bookmark actions fail visibly without local success or queued mutations. Confirm the control is absent in Preview and on Komga.
 - On Kavita, open a downloaded EPUB and verify PToC bookmarks list/create/open/delete for the active chapter, including mapping Kavita's page number to the corresponding XHTML reading-order resource and `BookScrollId` to the saved Readium structural selector. Confirm an unmappable location fails visibly, title/note edit actions are absent, Preview does not expose bookmarks, and the action is absent on Komga.
 
-### Foldable EPUB spreads
+### Foldable spreads (EPUB and comics)
 
 Automated coverage: `ReaderSpreadPolicyTest`, `EpubSpreadPreferencesTest` (JVM); `EpubSpreadWebViewInstrumentedTest`, `EpubSpreadActivityInstrumentedTest` (connected). Spread assertions need a large horizontal window, such as the Android Studio Pixel Fold AVD unfolded (2208×1840, 420 dpi). On phone-sized devices they are skipped through a JUnit assumption. Run connected tests on a non-English host with `JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US"`: several existing parser tests assert `.`-formatted percentages.
 
@@ -100,7 +100,14 @@ On an unfolded foldable or a large landscape tablet:
 - A fixed-layout EPUB shows two facing pages, and the left/right margin setting still applies around the spread.
 - Line spacing, word spacing, font size and font family change both pages identically and reflow text across both columns.
 - Confirm the following still work: resume position after fold/unfold or rotation, TTS sentence highlighting and auto page-turn across columns, highlights spanning the column boundary, and tap zones.
-- Comics and PDF stay single-page.
+- PDF stays single-page.
+
+Comics (automated: `ComicSpreadPairingTest`, `ComicSpreadLayoutTest` (JVM); `ComicSpreadReaderInstrumentedTest`, `ComicSpreadPostureInstrumentedTest`, `ComicSpreadActivityInstrumentedTest` (connected)):
+
+- Unfolded, paginated CBZ/CBR shows the cover alone, then facing pairs. A double-page image is shown alone, and the pairs after it re-align.
+- Right-to-left libraries put the earlier page on the right and advance leftwards. `Shift page pairs` moves the pairing by one page; `Show cover alone` off pairs the cover too.
+- Pinch-zoom works on the spread; long-pressing a half exports that page. Tap zones, volume buttons and the page list all move by spread. The footer reads `Pages N–M of T`.
+- Folding reopens on the first page of the spread; unfolding reopens on the spread containing the saved page. Turning off `Two-page spread when unfolded` restores the single-page navigator immediately.
 
 ### OLED EPUB theme
 
