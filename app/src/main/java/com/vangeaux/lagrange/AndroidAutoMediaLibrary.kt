@@ -2009,7 +2009,7 @@ internal fun handleAudiobookCustomCommand(
                 ?.takeIf { it > 0f }
                 ?: AppPreferencesStore(service ?: session.player.let { return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS)) }).readAudioPlaybackSpeed()
             val nextPreset = AndroidAutoSpeedController.findNextPreset(currentSpeed)
-            service.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
+            service?.applyAndroidAutoPlaybackSpeed(nextPreset.speed)
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         else -> null

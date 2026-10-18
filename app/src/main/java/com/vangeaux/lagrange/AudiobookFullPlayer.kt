@@ -199,7 +199,7 @@ internal fun ReadiumFullAudioPlayer(
         }
     }
     val scaleBySpeed = remember(context, playback.speed, playback.positionMs) {
-        AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed
+        AppPreferencesStore(localContext).read().scaleProgressByPlaybackSpeed
     }
     val chapters = current.book.audioChapters
     val bounds = audiobookChapterBounds(chapters, playback.positionMs, playback.durationMs)
@@ -233,7 +233,7 @@ internal fun ReadiumFullAudioPlayer(
     }
     val sleepTimer by controller.sleepTimer.collectAsState()
     val context = LocalContext.current
-    val preferences = remember { AppPreferencesStore(context) }
+    val preferences = remember { AppPreferencesStore(localContext) }
     var skipBackSeconds by remember { mutableIntStateOf(preferences.readAudioSkipBackSeconds()) }
     var skipForwardSeconds by remember { mutableIntStateOf(preferences.readAudioSkipForwardSeconds()) }
     var intervalDirection by remember { mutableStateOf<SkipDirection?>(null) }
@@ -847,7 +847,7 @@ private fun FullPlayerLandscape(
     }
     BackHandler(onBack = { if (!playerLocked) onCollapse() })
     val context = LocalContext.current
-    val preferences = remember { AppPreferencesStore(context) }
+    val preferences = remember { AppPreferencesStore(localContext) }
     val sleepTimer by controller.sleepTimer.collectAsState()
     var showCoverViewer by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var chapterMenuExpanded by remember { mutableStateOf(false) }
