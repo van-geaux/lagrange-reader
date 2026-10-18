@@ -156,6 +156,10 @@ internal fun ReadiumFullAudioPlayer(
     confirmAudiobookSeek: Boolean = true,
     onConfirmAudiobookSeekChange: (Boolean) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val scaleBySpeed = remember(context, playback.speed, playback.positionMs) {
+        AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed
+    }
     val playerLocked by controller.playerLocked.collectAsState()
     val palette = fullPlayerPalette(MaterialTheme.colorScheme)
     val playerScope = rememberCoroutineScope()
@@ -199,7 +203,7 @@ internal fun ReadiumFullAudioPlayer(
         }
     }
     val scaleBySpeed = remember(context, playback.speed, playback.positionMs) {
-        AppPreferencesStore(localContext).read().scaleProgressByPlaybackSpeed
+        AppPreferencesStore(LocalContext.current).read().scaleProgressByPlaybackSpeed
     }
     val chapters = current.book.audioChapters
     val bounds = audiobookChapterBounds(chapters, playback.positionMs, playback.durationMs)
@@ -233,7 +237,7 @@ internal fun ReadiumFullAudioPlayer(
     }
     val sleepTimer by controller.sleepTimer.collectAsState()
     val context = LocalContext.current
-    val preferences = remember { AppPreferencesStore(localContext) }
+    val preferences = remember { AppPreferencesStore(LocalContext.current) }
     var skipBackSeconds by remember { mutableIntStateOf(preferences.readAudioSkipBackSeconds()) }
     var skipForwardSeconds by remember { mutableIntStateOf(preferences.readAudioSkipForwardSeconds()) }
     var intervalDirection by remember { mutableStateOf<SkipDirection?>(null) }
@@ -443,7 +447,7 @@ internal fun ReadiumFullAudioPlayer(
                 durationMs = playback.durationMs,
                 onSeeking = { isSeekingOverall = true; overallSeekPosition = it },
                 onSeekFinished = { requestSeek(overallSeekPosition.toLong()); isSeekingOverall = false },
-                leading = formatPlaybackTime(scaleAudioTimeMs(overallSeekPosition.toLong(), playback.speed, scaleBySpeed)),
+                leading = formatPlaybackTime(scaleAudioTimeMs(overallSeekPosition.toLong(), playback.speed, AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed)),
                 trailing = "−${formatPlaybackTime(scaleAudioTimeMs((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                 label = formatFullPlayerProgressLabel(
                     "Book progress",
@@ -460,7 +464,7 @@ internal fun ReadiumFullAudioPlayer(
                     requestSeek(chapterStartMs + chapterSeekPosition.toLong())
                     isSeekingChapter = false
                 },
-                leading = formatPlaybackTime(scaleAudioTimeMs(chapterSeekPosition.toLong(), playback.speed, scaleBySpeed)),
+                leading = formatPlaybackTime(scaleAudioTimeMs(chapterSeekPosition.toLong(), playback.speed, AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed)),
                 trailing = "−${formatPlaybackTime(scaleAudioTimeMs((chapterEndMs - chapterStartMs - chapterSeekPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                 label = formatFullPlayerProgressLabel(
                     "Chapter progress",
@@ -847,7 +851,7 @@ private fun FullPlayerLandscape(
     }
     BackHandler(onBack = { if (!playerLocked) onCollapse() })
     val context = LocalContext.current
-    val preferences = remember { AppPreferencesStore(localContext) }
+    val preferences = remember { AppPreferencesStore(LocalContext.current) }
     val sleepTimer by controller.sleepTimer.collectAsState()
     var showCoverViewer by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var chapterMenuExpanded by remember { mutableStateOf(false) }
@@ -1049,9 +1053,9 @@ private fun FullPlayerLandscape(
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height((8f * groupScale).coerceAtLeast(2f).dp))
-                val landscapeScaleBySpeed = remember(landscapeContext, playback.speed, playback.positionMs) {
+                val landscapeScaleBySpeed = remember(LocalContext.current, playback.speed, playback.positionMs) {
 
-                    AppPreferencesStore(landscapeContext).read().scaleProgressByPlaybackSpeed
+                    AppPreferencesStore(LocalContext.current).read().scaleProgressByPlaybackSpeed
 
                 }
 
@@ -1060,7 +1064,7 @@ private fun FullPlayerLandscape(
                     durationMs = playback.durationMs,
                     onSeeking = { isSeekingOverall = true; overallPosition = it },
                     onSeekFinished = { requestSeek(overallPosition.toLong()); isSeekingOverall = false },
-                    leading = formatPlaybackTime(scaleAudioTimeMs(overallPosition.toLong(), playback.speed, landscapeScaleBySpeed)),
+                    leading = formatPlaybackTime(scaleAudioTimeMs(overallPosition.toLong(), playback.speed, AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed)),
                     trailing = "−${formatPlaybackTime(scaleAudioTimeMs((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L), playback.speed, landscapeScaleBySpeed))}",
                     label = formatFullPlayerProgressLabel(
                         "Book progress",
@@ -1077,7 +1081,7 @@ private fun FullPlayerLandscape(
                         requestSeek(chapterStartMs + chapterPosition.toLong())
                         isSeekingChapter = false
                     },
-                    leading = formatPlaybackTime(scaleAudioTimeMs(chapterPosition.toLong(), playback.speed, landscapeScaleBySpeed)),
+                    leading = formatPlaybackTime(scaleAudioTimeMs(chapterPosition.toLong(), playback.speed, AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed)),
                     trailing = "−${formatPlaybackTime(scaleAudioTimeMs((chapterEndMs - chapterStartMs - chapterPosition).toLong().coerceAtLeast(0L), playback.speed, landscapeScaleBySpeed))}",
                     label = formatFullPlayerProgressLabel(
                         "Chapter progress",
