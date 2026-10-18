@@ -208,8 +208,56 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
     }
 
     val backgroundCache: BackgroundCacheModule = object : BackgroundCacheModule {
-        override val isAvailable: Boolean = false
-        override suspend fun warmCoverCacheBatch(expectedServerUrl: String, libraryId: String, startIndex: Int, maxDownloads: Int): Int? = null
-        override suspend fun warmOfflineCacheBatch(expectedServerUrl: String, libraryId: String, startIndex: Int, maxItems: Int, includeDetails: Boolean, includeCovers: Boolean): OfflineCacheBatchResult? = null
+        override val isAvailable: Boolean = true
+
+        override suspend fun warmCoverCacheBatch(
+            expectedServerUrl: String,
+            libraryId: String,
+            startIndex: Int,
+            maxDownloads: Int
+        ): Int? {
+            if (repository.getServerUrl() != expectedServerUrl) return null
+            val books = repository.loadBooks(libraryId).drop(startIndex).take(maxDownloads)
+            books.forEach { repository.loadBookCover(it) }
+            return if (startIndex + books.size < repository.loadBooks(libraryId).size) {
+                startIndex + books.size
+            } else {
+                null
+            }
+        }
+
+        override suspend fun warmOfflineCacheBatch(
+            expectedServerUrl: String,
+            libraryId: String,
+            startIndex: Int,
+            maxItems: Int,
+            includeDetails: Boolean,
+            includeCovers: Boolean
+        ): OfflineCacheBatchResult? {
+            if (repository.getServerUrl() != expectedServerUrl) return null
+            val allBooks = repository.loadBooks(libraryId)
+            val books = allBooks.drop(startIndex).take(maxItems)
+            var downloaded = 0
+            var skipped = 0
+            var failed = 0
+            books.forEach { book ->
+                try {
+                    if (includeDetails) repository.loadBookDetail(book)
+                    if (includeCovers) repository.loadBookCover(book)
+                    repository.downloadBook(book) { }
+                    downloaded++
+                } catch (_: Throwable) {
+                    failed++
+                }
+            }
+            return OfflineCacheBatchResult(
+                nextIndex = (startIndex + books.size).takeIf { it < allBooks.size },
+                processed = books.size,
+                downloaded = downloaded,
+                skipped = skipped,
+                unavailable = 0,
+                failed = failed
+            )
+        }
     }
 }
