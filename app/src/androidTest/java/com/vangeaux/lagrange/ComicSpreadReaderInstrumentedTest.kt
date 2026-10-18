@@ -4,10 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.click
@@ -17,6 +19,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -52,32 +57,35 @@ class ComicSpreadReaderInstrumentedTest {
         bitmapFor: (Int) -> Bitmap = { portrait },
         tapZoneLayout: () -> ReaderTapZoneLayout = { ReaderTapZoneLayout.CURRENT_EDGES },
         gutterForWidth: (Int) -> IntRange = { width -> readerSpreadGutterPx(width, null, 0) },
-        gutterKey: () -> Any? = { null }
+        gutterKey: () -> Any? = { null },
+        layoutDirection: LayoutDirection = LayoutDirection.Ltr
     ) {
         composeRule.setContent {
-            Box(modifier = Modifier.size(width = 900.dp, height = 600.dp)) {
-                ComicSpreadReader(
-                    pageCount = pageCount,
-                    initialPage = initialPage,
-                    coverAlone = true,
-                    shift = false,
-                    widePages = widePages(),
-                    readingDirection = readingDirection,
-                    tapZoneLayout = tapZoneLayout(),
-                    tapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
-                    gutterForWidth = gutterForWidth,
-                    gutterKey = gutterKey(),
-                    animateNavigation = { false },
-                    cachedPage = { _, _ -> null },
-                    loadPage = { page, width ->
-                        synchronized(recorder.loadRequests) { recorder.loadRequests += page to width }
-                        bitmapFor(page)
-                    },
-                    onSpreadChanged = { recorder.spreads += it },
-                    onTap = { recorder.taps += it },
-                    onLongPress = { page, _ -> recorder.longPressedPage = page },
-                    onNavigatorAvailable = { recorder.navigator = it }
-                )
+            CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                Box(modifier = Modifier.size(width = 900.dp, height = 600.dp)) {
+                    ComicSpreadReader(
+                        pageCount = pageCount,
+                        initialPage = initialPage,
+                        coverAlone = true,
+                        shift = false,
+                        widePages = widePages(),
+                        readingDirection = readingDirection,
+                        tapZoneLayout = tapZoneLayout(),
+                        tapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
+                        gutterForWidth = gutterForWidth,
+                        gutterKey = gutterKey(),
+                        animateNavigation = { false },
+                        cachedPage = { _, _ -> null },
+                        loadPage = { page, width ->
+                            synchronized(recorder.loadRequests) { recorder.loadRequests += page to width }
+                            bitmapFor(page)
+                        },
+                        onSpreadChanged = { recorder.spreads += it },
+                        onTap = { recorder.taps += it },
+                        onLongPress = { page, _ -> recorder.longPressedPage = page },
+                        onNavigatorAvailable = { recorder.navigator = it }
+                    )
+                }
             }
         }
         composeRule.waitForIdle()
@@ -196,6 +204,18 @@ class ComicSpreadReaderInstrumentedTest {
         )
     }
 
+    /** Long-presses at [xFraction] of the width; retried until the pressed page's bitmap has loaded. */
+    private fun longPressAt(recorder: Recorder, reader: SemanticsNodeInteraction, xFraction: Float): Int? {
+        repeat(20) {
+            recorder.longPressedPage = null
+            reader.performTouchInput { longClick(center.copy(x = width * xFraction)) }
+            composeRule.waitForIdle()
+            recorder.longPressedPage?.let { return it }
+            Thread.sleep(100)
+        }
+        return null
+    }
+
     @Test
     fun longPressExportsThePageUnderTheFingerInRightToLeftBooks() {
         val recorder = Recorder()
@@ -203,13 +223,28 @@ class ComicSpreadReaderInstrumentedTest {
 
         val reader = composeRule.onNodeWithContentDescription("Pages 2 and 3")
         // Right-to-left: the earlier page (index 1) sits on the right half.
-        reader.performTouchInput { longClick(centerRight.copy(x = width * 0.75f)) }
-        composeRule.waitForIdle()
-        assertEquals(1, recorder.longPressedPage)
+        assertEquals(1, longPressAt(recorder, reader, 0.75f))
+        assertEquals(2, longPressAt(recorder, reader, 0.25f))
+    }
 
-        reader.performTouchInput { longClick(centerLeft.copy(x = width * 0.25f)) }
+    @Test
+    fun rightToLeftDeviceLocaleDoesNotMirrorTheSpreadAgain() {
+        val recorder = Recorder()
+        setReader(
+            recorder,
+            initialPage = 2,
+            readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
+            layoutDirection = LayoutDirection.Rtl
+        )
+
+        val reader = composeRule.onNodeWithContentDescription("Pages 2 and 3")
+        // Same placement as on a left-to-right device: the earlier page (index 1) is on the right.
+        assertEquals(1, longPressAt(recorder, reader, 0.75f))
+
+        // A right-to-left book still advances with a rightward swipe.
+        reader.performTouchInput { swipeRight() }
         composeRule.waitForIdle()
-        assertEquals(2, recorder.longPressedPage)
+        composeRule.onNodeWithContentDescription("Pages 4 and 5").assertIsDisplayed()
     }
 
     @Test
