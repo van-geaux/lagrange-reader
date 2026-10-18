@@ -297,6 +297,30 @@ class ComicSpreadReaderInstrumentedTest {
     }
 
     @Test
+    fun discoveringAWidePageElsewhereKeepsTheCurrentSpreadZoomed() {
+        val recorder = Recorder()
+        var widePages by mutableStateOf(emptySet<Int>())
+        setReader(recorder, initialPage = 2, widePages = { widePages })
+        val reader = composeRule.onNodeWithContentDescription("Pages 2 and 3")
+        reader.performTouchInput {
+            pinch(
+                start0 = center - Offset(20f, 0f),
+                end0 = center - Offset(200f, 0f),
+                start1 = center + Offset(20f, 0f),
+                end1 = center + Offset(200f, 0f)
+            )
+        }
+        composeRule.waitForIdle()
+
+        // A later page turns out to be wide: the visible pair 2–3 is unchanged, so it stays zoomed.
+        composeRule.runOnIdle { widePages = setOf(7) }
+        composeRule.waitForIdle()
+        reader.performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+        assertEquals("still zoomed, so the swipe must not page", ComicSpread(listOf(1, 2)), recorder.spreads.last())
+    }
+
+    @Test
     fun discoveringAWidePageRepairsWithoutLosingTheCurrentPage() {
         val recorder = Recorder()
         var widePages by mutableStateOf(emptySet<Int>())

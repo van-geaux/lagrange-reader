@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -164,14 +165,20 @@ internal fun ComicSpreadReader(
 
     // Re-anchor first when pairing changes (e.g. a wide page was discovered), then report settles.
     LaunchedEffect(pagerState, spreads) {
-        val target = comicSpreadIndexAfterRepairing(anchor[0], spreads)
-        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+        if (pagerState.isScrollInProgress) {
+            // A page turn is in flight: let it land instead of jumping back to the old anchor.
+            snapshotFlow { pagerState.isScrollInProgress }.first { !it }
+        } else {
+            val target = comicSpreadIndexAfterRepairing(anchor[0], spreads)
+            if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+        }
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
             .collect { index ->
                 spreads.getOrNull(index)?.let { spread ->
+                    // Zoom and pan both belong to the visible spread: keep them while it is unchanged.
+                    if (spread != anchor[0]) zoomScale = 1f
                     anchor[0] = spread
-                    zoomScale = 1f
                     currentOnSpreadChanged(spread)
                 }
             }
