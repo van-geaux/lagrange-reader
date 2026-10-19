@@ -1027,6 +1027,23 @@ internal class AndroidAutoCatalogBridge private constructor(
     private val downloadStore = DownloadStore(application)
     private val coverCacheStore = CoverCacheStore(application)
     private val lastQueuedSnapshots = ConcurrentHashMap<String, ProgressSnapshot>()
+    private val knownBooksById = ConcurrentHashMap<String, BookSummary>()
+    @Volatile
+    private var cachedSnapshot: AndroidAutoCatalogSnapshot? = null
+    @Volatile
+    private var cachedSnapshotAtMs: Long = 0L
+
+    private fun indexBooks(books: Iterable<BookSummary>) {
+        for (book in books) {
+            if (book.id.isBlank()) continue
+            val existing = knownBooksById[book.id]
+            knownBooksById[book.id] = if (existing != null) {
+                mergeAudiobookMetadata(existing, book)
+            } else {
+                book
+            }
+        }
+    }
 
     private fun currentRepository(): BookOrbitDataSource {
         val activeProfile = ServerProfileStore(application).active()
@@ -1038,7 +1055,11 @@ internal class AndroidAutoCatalogBridge private constructor(
         }
     }
 
-    suspend fun loadSnapshot(): AndroidAutoCatalogSnapshot = withContext(Dispatchers.IO) {
+    suspend fun loadSnapshot(allowCached: Boolean = false): AndroidAutoCatalogSnapshot = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        if (allowCached) {
+            cachedSnapshot?.takeIf { now - cachedSnapshotAtMs < 5_000L }?.let { return@withContext it }
+        }
         val repository = currentRepository()
         runCatching {
             resolveProviderSessionModule(repository).restoreCurrentProfileSession()
@@ -1067,18 +1088,27 @@ internal class AndroidAutoCatalogBridge private constructor(
                 .getOrDefault(emptyList())
 
         val fromSnapshot = snapshot?.booksByLibraryId?.values?.flatten().orEmpty()
+        val catalogModule = resolveProviderBookCatalogModule(repository)
         val fromLibraryCaches = libraries.flatMap { library ->
-            runCatching {
-                resolveProviderBookCatalogModule(repository)
-                    .loadCachedLibraryCatalog(library.id)
-                    ?.items
-                    .orEmpty()
+            val cachedItems = runCatching {
+                catalogModule.loadCachedLibraryCatalog(library.id)?.items.orEmpty()
             }.getOrDefault(emptyList())
+            if (cachedItems.isNotEmpty()) {
+                cachedItems
+            } else {
+                runCatching {
+                    catalogModule.loadLibraryCatalog(library.id).items
+                }.getOrDefault(emptyList())
+            }
         }
         val catalogBooks = mergeAndDeduplicateAudiobooks(
             primary = cachedHomeBooks + fromSnapshot,
             secondary = fromLibraryCaches
         )
+
+        activeSessionBook?.let { indexBooks(listOf(it)) }
+        indexBooks(localBooks)
+        indexBooks(catalogBooks)
 
         AndroidAutoCatalogSnapshot(
             serverUrl = serverUrl,
@@ -1086,7 +1116,10 @@ internal class AndroidAutoCatalogBridge private constructor(
             libraries = libraries,
             catalogBooks = catalogBooks,
             localBooks = localBooks
-        )
+        ).also {
+            cachedSnapshot = it
+            cachedSnapshotAtMs = System.currentTimeMillis()
+        }
     }
 
     suspend fun resolveChildren(parentId: String): List<AndroidAutoNodeSpec> =
@@ -1390,18 +1423,22 @@ internal class AndroidAutoCatalogBridge private constructor(
 
     suspend fun loadCoverBytes(bookId: String, libraryId: String? = null): ByteArray? =
         withContext(Dispatchers.IO) {
-            val snapshot = loadSnapshot()
             val repository = currentRepository()
-            val cachedDetail = if (snapshot.serverUrl.isNotBlank()) {
-                runCatching { bookDetailCacheStore.readLatest(snapshot.serverUrl, bookId, null) }.getOrNull()
+            val serverUrl = cachedSnapshot?.serverUrl?.takeIf { it.isNotBlank() }
+                ?: ServerProfileStore(application).active()?.serverUrl.orEmpty()
+            val cachedDetail = if (serverUrl.isNotBlank()) {
+                runCatching { bookDetailCacheStore.readLatest(serverUrl, bookId, null) }.getOrNull()
             } else {
                 null
             }
-            val foundBook = findBook(bookId, preferredFileId = null, snapshot = snapshot)
+            val fastBook = knownBooksById[bookId]
+                ?: cachedSnapshot?.let { findBook(bookId, preferredFileId = null, snapshot = it) }
+                ?: findBook(bookId, preferredFileId = null, snapshot = loadSnapshot(allowCached = true))
+
             val baseBook = when {
-                foundBook != null && cachedDetail?.book != null ->
-                    mergeAudiobookMetadata(foundBook, cachedDetail.book)
-                foundBook != null -> foundBook
+                fastBook != null && cachedDetail?.book != null ->
+                    mergeAudiobookMetadata(fastBook, cachedDetail.book)
+                fastBook != null -> fastBook
                 cachedDetail?.book != null -> cachedDetail.book
                 else -> BookSummary(
                     libraryId = libraryId.orEmpty(),
@@ -1410,26 +1447,35 @@ internal class AndroidAutoCatalogBridge private constructor(
                     title = ""
                 )
             }
-            val hydratedBook = if (baseBook.coverUrl.isNullOrBlank()) {
-                val detailModule = resolveProviderBookDetailModule(repository)
-                val loadedDetail = runCatching { detailModule.loadCachedBookDetail(baseBook) }.getOrNull()
-                    ?: runCatching { detailModule.loadBookDetail(baseBook) }.getOrNull()
-                if (loadedDetail?.book != null) {
-                    mergeAudiobookMetadata(baseBook, loadedDetail.book)
-                } else {
-                    baseBook
+            if (serverUrl.isNotBlank() && !baseBook.coverUrl.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, baseBook.id, baseBook.coverUrl)?.let {
+                    return@withContext it
                 }
+            }
+            val coverModule = resolveProviderBookCoverModule(repository)
+            // Try loading directly if coverUrl is already present
+            if (!baseBook.coverUrl.isNullOrBlank()) {
+                runCatching { coverModule.loadBookCover(baseBook) }.getOrNull()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { return@withContext it }
+            }
+            // Otherwise hydrate via BookDetailModule so missing/expired coverUrl is populated
+            val detailModule = resolveProviderBookDetailModule(repository)
+            val loadedDetail = runCatching { detailModule.loadCachedBookDetail(baseBook) }.getOrNull()
+                ?: runCatching { detailModule.loadBookDetail(baseBook) }.getOrNull()
+            val hydratedBook = if (loadedDetail?.book != null) {
+                mergeAudiobookMetadata(baseBook, loadedDetail.book).also { indexBooks(listOf(it)) }
             } else {
                 baseBook
             }
-            if (snapshot.serverUrl.isNotBlank() && !hydratedBook.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(snapshot.serverUrl, hydratedBook.id, hydratedBook.coverUrl)?.let {
+            if (serverUrl.isNotBlank() && !hydratedBook.coverUrl.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, hydratedBook.id, hydratedBook.coverUrl)?.let {
                     return@withContext it
                 }
             }
             runCatching {
-                resolveProviderBookCoverModule(repository).loadBookCover(hydratedBook)
-            }.getOrNull()
+                coverModule.loadBookCover(hydratedBook)
+            }.getOrNull()?.takeIf { it.isNotEmpty() }
         }
 
     fun recordHeadlessProgress(
@@ -1663,7 +1709,8 @@ internal class LagrangeLibrarySessionPlayer(
     delegate: Player,
     private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null,
     private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
-    private val scaleBySpeedProvider: (() -> Boolean)? = null
+    private val scaleBySpeedProvider: (() -> Boolean)? = null,
+    private val chapterSkipper: ((Int) -> Boolean)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
@@ -1679,9 +1726,8 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun getPlaybackParameters(): PlaybackParameters {
         val raw = super.getPlaybackParameters()
-        // When scaling progress by playback speed, report 1.0f speed to the MediaSession
-        // so Android Auto's head-unit advances the scaled timer at 1.0x real-world clock speed
-        // instead of multiplying an already-scaled position by 1.5x!
+        // Report 1.0f speed to the MediaSession when speed-scaling is enabled so Android Auto's
+        // local timer ticks at 1.0x real-world clock speed rather than multiplying by 1.5x.
         return if (isScaled() && kotlin.math.abs(raw.speed - 1.0f) >= 0.01f) {
             PlaybackParameters(1.0f, raw.pitch)
         } else {
@@ -1689,42 +1735,78 @@ internal class LagrangeLibrarySessionPlayer(
         }
     }
 
-    private fun rawActiveChapterOrTrackBounds(): Pair<Long, Long>? {
+    private fun rawActiveBookOrTrackBounds(): Pair<Long, Long>? {
         val active = sessionProvider?.invoke() ?: return null
-        val totalMs = active.totalDurationMs().takeIf { it > 0L } ?: return null
-        val absPosMs = active.absolutePositionMs().coerceIn(0L, totalMs)
-        val chapters = active.book.audioChapters.sortedBy { it.startMs }
-        if (chapters.isNotEmpty() && active.audioFiles.size < 2) {
-            val idx = chapters.indexOfLast { it.startMs <= absPosMs }.coerceAtLeast(0)
-            val startMs = chapters[idx].startMs.coerceAtLeast(0L)
-            val endMs = (chapters.getOrNull(idx + 1)?.startMs ?: totalMs).coerceAtLeast(startMs)
-            if (endMs > startMs) {
-                return (absPosMs - startMs) to (endMs - startMs)
-            }
+        val totalMs = active.totalDurationMs().takeIf { it > 0L }
+        val absPosMs = active.absolutePositionMs().coerceAtLeast(0L)
+        // For single-file M4B or single-stream audiobooks, report overall book position & duration
+        // so skipping chapters jumps to the chapter marker within the overall book timeline
+        // rather than resetting the progress bar to 00:00:00.
+        if (active.audioFiles.size < 2 && totalMs != null) {
+            return absPosMs.coerceAtMost(totalMs) to totalMs
         }
         val rawTrackDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
         val rawTrackPos = super.getCurrentPosition().coerceAtLeast(0L)
         if (rawTrackDur != null) {
             return rawTrackPos.coerceAtMost(rawTrackDur) to rawTrackDur
         }
-        return absPosMs to totalMs
+        if (totalMs != null) {
+            return absPosMs.coerceAtMost(totalMs) to totalMs
+        }
+        return null
     }
 
     override fun getAvailableCommands(): Player.Commands {
         return super.getAvailableCommands().buildUpon()
             .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
             .build()
     }
 
     override fun isCommandAvailable(command: Int): Boolean {
         if (
             command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
-            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM
+            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_TO_PREVIOUS ||
+            command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_TO_NEXT ||
+            command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
         ) {
             return true
         }
         return super.isCommandAvailable(command)
+    }
+
+    override fun hasNextMediaItem(): Boolean = true
+
+    override fun hasPreviousMediaItem(): Boolean = true
+
+    override fun seekToNext() {
+        if (chapterSkipper?.invoke(1) != true) {
+            super.seekForward()
+        }
+    }
+
+    override fun seekToNextMediaItem() {
+        if (chapterSkipper?.invoke(1) != true) {
+            super.seekForward()
+        }
+    }
+
+    override fun seekToPrevious() {
+        if (chapterSkipper?.invoke(-1) != true) {
+            super.seekBack()
+        }
+    }
+
+    override fun seekToPreviousMediaItem() {
+        if (chapterSkipper?.invoke(-1) != true) {
+            super.seekBack()
+        }
     }
 
     override fun isCurrentMediaItemSeekable(): Boolean {
@@ -1739,7 +1821,7 @@ internal class LagrangeLibrarySessionPlayer(
     override fun isCurrentMediaItemDynamic(): Boolean = false
 
     override fun getDuration(): Long {
-        val bounds = rawActiveChapterOrTrackBounds()
+        val bounds = rawActiveBookOrTrackBounds()
         val rawDuration = bounds?.second
             ?: super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
             ?: sessionProvider?.invoke()?.totalDurationMs()?.takeIf { it > 0L }
@@ -1748,7 +1830,7 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     override fun getCurrentPosition(): Long {
-        val bounds = rawActiveChapterOrTrackBounds()
+        val bounds = rawActiveBookOrTrackBounds()
         val rawPosition = bounds?.first
             ?: super.getCurrentPosition().coerceAtLeast(0L)
         return scaleAudioTimeMs(rawPosition, actualSpeed(), isScaled())
@@ -1820,23 +1902,15 @@ internal class LagrangeLibrarySessionPlayer(
     override fun seekTo(positionMs: Long) {
         val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), actualSpeed(), isScaled())
         val active = sessionProvider?.invoke()
-        if (active != null) {
+        if (active != null && active.audioFiles.size < 2) {
             val totalMs = active.totalDurationMs()
-            val absPosMs = active.absolutePositionMs()
-            val chapters = active.book.audioChapters.sortedBy { it.startMs }
-            if (chapters.isNotEmpty() && active.audioFiles.size < 2 && totalMs > 0L) {
-                val idx = chapters.indexOfLast { it.startMs <= absPosMs }.coerceAtLeast(0)
-                val startMs = chapters[idx].startMs.coerceAtLeast(0L)
-                val endMs = (chapters.getOrNull(idx + 1)?.startMs ?: totalMs).coerceAtLeast(startMs)
-                val targetAbsMs = (startMs + unscaledTargetMs).coerceIn(startMs, endMs)
-                active.seekToAbsolutePosition(targetAbsMs)
-                return
+            val clampedTargetMs = if (totalMs > 0L) {
+                unscaledTargetMs.coerceIn(0L, totalMs)
+            } else {
+                unscaledTargetMs
             }
-            val rawTrackDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
-            if (rawTrackDur == null && totalMs > 0L) {
-                active.seekToAbsolutePosition(unscaledTargetMs.coerceIn(0L, totalMs))
-                return
-            }
+            active.seekToAbsolutePosition(clampedTargetMs)
+            return
         }
         super.seekTo(unscaledTargetMs)
     }
@@ -2258,24 +2332,14 @@ internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean =
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
     val current = activeSession() ?: return false
-    val chapters = current.book.audioChapters.sortedBy { it.startMs }
-    if (chapters.isEmpty()) return false
-    val currentPos = current.absolutePositionMs()
-    val totalDur = current.totalDurationMs()
+    val chapters = current.book.audioChapters
     val targetMs = resolveAndroidAutoChapterSkip(
         chapters = chapters,
-        currentPositionMs = currentPos,
-        totalDurationMs = totalDur,
+        currentPositionMs = current.absolutePositionMs(),
+        totalDurationMs = current.totalDurationMs(),
         direction = direction
     ) ?: return false
-    
     current.seekToAbsolutePosition(targetMs)
-    // Force a position discontinuity / refresh on library session player so M4B single-file timelines update instantly
-    librarySessionPlayer?.let { sessionPlayer ->
-        if (sessionPlayer.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) {
-            sessionPlayer.seekTo(sessionPlayer.currentPosition)
-        }
-    }
     return true
 }
 

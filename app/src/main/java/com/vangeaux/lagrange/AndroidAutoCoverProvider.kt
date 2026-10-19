@@ -94,9 +94,15 @@ class AndroidAutoCoverProvider : ContentProvider() {
 
         val cacheDir = File(appContext.cacheDir, AUTO_COVER_CACHE_DIR).apply { mkdirs() }
         val cacheFile = File(cacheDir, "${sha256Hex("$bookId|${libraryId.orEmpty()}")}.img")
-        if (cacheFile.isFile && cacheFile.length() > 0L) {
-            cacheFile.setLastModified(System.currentTimeMillis())
-            return ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
+        val fallbackCacheFile = File(cacheDir, "${sha256Hex("$bookId|")}.img")
+        val existingCacheFile = when {
+            cacheFile.isFile && cacheFile.length() > 0L -> cacheFile
+            fallbackCacheFile.isFile && fallbackCacheFile.length() > 0L -> fallbackCacheFile
+            else -> null
+        }
+        if (existingCacheFile != null) {
+            existingCacheFile.setLastModified(System.currentTimeMillis())
+            return ParcelFileDescriptor.open(existingCacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
         }
 
         val bytes = runBlocking(Dispatchers.IO) {
