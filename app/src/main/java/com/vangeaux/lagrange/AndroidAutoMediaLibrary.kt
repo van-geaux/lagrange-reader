@@ -1090,16 +1090,9 @@ internal class AndroidAutoCatalogBridge private constructor(
         val fromSnapshot = snapshot?.booksByLibraryId?.values?.flatten().orEmpty()
         val catalogModule = resolveProviderBookCatalogModule(repository)
         val fromLibraryCaches = libraries.flatMap { library ->
-            val cachedItems = runCatching {
+            runCatching {
                 catalogModule.loadCachedLibraryCatalog(library.id)?.items.orEmpty()
             }.getOrDefault(emptyList())
-            if (cachedItems.isNotEmpty()) {
-                cachedItems
-            } else {
-                runCatching {
-                    catalogModule.loadLibraryCatalog(library.id).items
-                }.getOrDefault(emptyList())
-            }
         }
         val catalogBooks = mergeAndDeduplicateAudiobooks(
             primary = cachedHomeBooks + fromSnapshot,
