@@ -1123,8 +1123,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             sessionProvider = ::activeSession,
             scaleBySpeedProvider = {
                 AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
-            },
-            chapterSkipper = ::skipActiveChapter
+            }
         ).also {
             librarySessionPlayer = it
         }
@@ -1184,6 +1183,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     override fun onPlaybackParametersChanged(
                         playbackParameters: androidx.media3.common.PlaybackParameters
                     ) {
+                        librarySessionPlayer?.notifyTimelineAndMetadataChanged()
                         refreshAndroidAutoCustomLayout(engine.player.playbackParameters.speed)
                     }
                 })

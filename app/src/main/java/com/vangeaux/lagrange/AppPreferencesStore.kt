@@ -70,7 +70,7 @@ data class AppPreferences(
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
     val pauseAudiobookForAudioInterruptions: Boolean = true,
-    val scaleProgressByPlaybackSpeed: Boolean = true, // Added preference field
+    val scaleProgressByPlaybackSpeed: Boolean = false, // Added preference field
     val epubImageMinimumDimensionPx: Int = DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
@@ -127,7 +127,7 @@ internal class AppPreferencesStore(context: Context) {
         pauseAudiobookForAudioInterruptions = audiobookAudioInterruptionPauseFromStorage(
             preferences.getBoolean(PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY, true)
         ),
-        scaleProgressByPlaybackSpeed = preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, true), // Read preference
+        scaleProgressByPlaybackSpeed = preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, false), // Read preference
         epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
             preferences.getInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
