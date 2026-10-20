@@ -50,6 +50,30 @@ class BookOrbitAppInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun failedComicPreparationOffersBackToLibrary() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Reader(
+                        ReaderState(
+                            book = BookSummary(
+                                libraryId = "library",
+                                id = "book",
+                                fileId = "file",
+                                title = "Broken book",
+                                mediaKind = MediaKind.COMIC
+                            )
+                        )
+                    ),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Back to library").assertIsDisplayed()
+    }
+
+    @Test
     fun openOnDeckSectionUpdatesWhenDelayedPreferenceArrives() {
         val read = BookSummary(
             libraryId = "library",

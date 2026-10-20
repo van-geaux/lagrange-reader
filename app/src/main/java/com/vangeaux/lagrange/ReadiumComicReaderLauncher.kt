@@ -130,6 +130,7 @@ internal fun ReadiumComicReaderLauncher(
     launchMode: ReaderLaunchMode,
     initialPage: Int,
     onProgress: (pageIndex: Int, pageCount: Int, percent: Float?) -> Unit,
+    onError: () -> Unit,
     onFinished: () -> Unit
 ) {
     val context = LocalContext.current
@@ -162,6 +163,10 @@ internal fun ReadiumComicReaderLauncher(
         )
     }
     LaunchedEffect(preparation, title, readerKey, launchMode) {
+        if (preparation is ReadiumComicPreparationResult.Error) {
+            onError()
+            return@LaunchedEffect
+        }
         val intent = when (val ready = preparation) {
             is ReadiumComicPreparationResult.Local ->
                 ReadiumComicReaderActivity.createIntent(

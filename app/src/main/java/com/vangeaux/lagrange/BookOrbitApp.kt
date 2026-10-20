@@ -427,6 +427,7 @@ private fun BookOrbitDestination(
         is AppScreen.Reader -> ReaderScreen(
             state = screen.readerState,
             onBack = coordinator::closeReader,
+            onReaderError = coordinator::onReaderPreparationFailed,
             onProgress = coordinator::onProgress,
             onPreviewProgress = coordinator::onPreviewProgress,
             comicPageLoader = coordinator::loadCatalogImage,
@@ -722,6 +723,7 @@ private fun LoadingRow(text: String) {
 private fun ReaderScreen(
     state: ReaderState,
     onBack: () -> Unit,
+    onReaderError: () -> Unit,
     onProgress: (BookSummary, Long, Int, Float?) -> Unit,
     onPreviewProgress: (BookSummary, Long, Int, Float?) -> Unit,
     comicPageLoader: suspend (String) -> ByteArray?,
@@ -729,6 +731,7 @@ private fun ReaderScreen(
     onAudioReady: () -> Unit,
     onAudioFailure: (BookSummary, String) -> Unit
 ) {
+    BackHandler(onBack = onBack)
     if (readerKeepsScreenAwake(state.book.mediaKind)) {
         KeepReaderScreenAwake()
     }
@@ -738,7 +741,7 @@ private fun ReaderScreen(
     if (shouldUseReadiumEpubReader(state.book.mediaKind)) {
         val readerFile = state.localFile
         if (readerFile == null || !readerFile.exists()) {
-            ReaderMessage("Unable to prepare this EPUB.")
+            ReaderMessage("Unable to prepare this EPUB.", onBack, onReaderError)
         } else {
             ReadiumEpubReaderLauncher(
                 file = readerFile,
@@ -792,6 +795,7 @@ private fun ReaderScreen(
             onProgress = { pageIndex, _, percent ->
                 readerProgress(state.book, 0L, pageIndex, percent)
             },
+            onError = onReaderError,
             onFinished = onBack
         )
         return
@@ -799,7 +803,9 @@ private fun ReaderScreen(
     if (state.book.mediaKind == MediaKind.COMIC) {
         ReaderMessage(
             "This comic container must be converted to CBZ before Readium can open it. " +
-                "Reconnect to the configured server to prepare it."
+                "Reconnect to the configured server to prepare it.",
+            onBack,
+            onReaderError
         )
         return
     }
@@ -839,6 +845,7 @@ private fun ReaderScreen(
                     state = state,
                     controller = audioPlaybackController,
                     onReady = onAudioReady,
+                    onBack = onBack,
                     onFailure = onAudioFailure
                 )
                 MediaKind.PDF -> UnsupportedReaderView(
@@ -957,6 +964,7 @@ private fun AudioReader(
     state: ReaderState,
     controller: ReadiumAudioPlaybackController?,
     onReady: () -> Unit,
+    onBack: () -> Unit,
     onFailure: (BookSummary, String) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1028,7 +1036,7 @@ private fun AudioReader(
         }
     }
     if (errorMessage != null) {
-        ReaderMessage(requireNotNull(errorMessage))
+        ReaderMessage(requireNotNull(errorMessage), onBack, onFailure = {})
     } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             LoadingRow("Preparing audiobook…")
@@ -2163,16 +2171,27 @@ private fun UnsupportedReaderView(
 }
 
 @Composable
-private fun ReaderMessage(message: String) {
+private fun ReaderMessage(
+    message: String,
+    onBack: () -> Unit,
+    onFailure: () -> Unit
+) {
+    LaunchedEffect(message) { onFailure() }
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = message,
-            modifier = Modifier.padding(24.dp),
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = message, style = MaterialTheme.typography.bodyMedium)
+            Button(
+                onClick = onBack,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("Back to library")
+            }
+        }
     }
 }
 

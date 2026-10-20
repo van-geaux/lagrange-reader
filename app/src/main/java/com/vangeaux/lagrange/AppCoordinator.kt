@@ -2446,6 +2446,10 @@ class AppCoordinator internal constructor(
         }
     }
 
+    fun onReaderPreparationFailed() {
+        scope.launch { clearActiveReader() }
+    }
+
     fun closeReader() {
         val reader = _screen.value as? AppScreen.Reader
         lastBrowserState?.let { browser ->
