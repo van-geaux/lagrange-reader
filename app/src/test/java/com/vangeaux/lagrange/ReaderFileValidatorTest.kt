@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +34,35 @@ class ReaderFileValidatorTest {
 
         assertTrue(ReaderFileValidator.isReadable(MediaKind.EPUB, valid))
         assertFalse(ReaderFileValidator.isReadable(MediaKind.EPUB, invalid))
+    }
+
+    @Test
+    fun `local media detection recognizes epub containers`() {
+        val dir = Files.createTempDirectory("reader-file-validator-detect-epub").toFile()
+        val epub = File(dir, "ambiguous.zip")
+        zip(epub, "META-INF/container.xml" to "<container/>")
+
+        assertEquals(MediaKind.EPUB, ReaderFileValidator.detectLocalMediaKind(epub))
+    }
+
+    @Test
+    fun `local media detection does not treat generic zip as comic`() {
+        val dir = Files.createTempDirectory("reader-file-validator-detect-zip").toFile()
+        val genericZip = File(dir, "ambiguous.zip")
+        val malformed = File(dir, "malformed.zip").apply { writeText("not an archive") }
+        zip(genericZip, "notes/readme.txt" to "not a publication")
+
+        assertEquals(null, ReaderFileValidator.detectLocalMediaKind(genericZip))
+        assertEquals(null, ReaderFileValidator.detectLocalMediaKind(malformed))
+    }
+
+    @Test
+    fun `local media detection recognizes comic image archives`() {
+        val dir = Files.createTempDirectory("reader-file-validator-detect-comic").toFile()
+        val cbz = File(dir, "comic.zip")
+        zip(cbz, "pages/001.jpg" to "fake image")
+
+        assertEquals(MediaKind.COMIC, ReaderFileValidator.detectLocalMediaKind(cbz))
     }
 
     @Test

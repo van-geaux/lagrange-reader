@@ -26,6 +26,17 @@ internal object ReaderFileValidator {
 
     fun canRenderComicLocally(file: File): Boolean = hasComicImageEntry(file)
 
+    fun detectLocalMediaKind(file: File): MediaKind? {
+        if (!file.exists() || file.length() <= 0L) return null
+        return when {
+            hasPdfHeader(file) -> MediaKind.PDF
+            hasEpubContainer(file) -> MediaKind.EPUB
+            canRenderComicLocally(file) || hasHeader(file, rar4Signature, rar5Signature, sevenZipSignature) ->
+                MediaKind.COMIC
+            else -> null
+        }
+    }
+
     private fun hasPdfHeader(file: File): Boolean {
         return runCatching {
             FileInputStream(file).use { input ->

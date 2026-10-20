@@ -1982,6 +1982,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val serverUrl = getServerUrl().orEmpty()
         val localResolution = resolveReadableFile(book, allowRemoteCache = !localOnly)
         val localFile = localResolution.file
+        val resolvedMediaKind = localFile
+            ?.let(ReaderFileValidator::detectLocalMediaKind)
+            ?.let { detected ->
+                if (book.mediaKind == MediaKind.UNKNOWN ||
+                    (book.mediaKind == MediaKind.COMIC && detected == MediaKind.EPUB)
+                ) {
+                    detected
+                } else {
+                    book.mediaKind
+                }
+            }
+            ?: book.mediaKind
+        val resolvedBook = if (resolvedMediaKind == book.mediaKind) {
+            book
+        } else {
+            book.copy(mediaKind = resolvedMediaKind)
+        }
         val streamUrl = buildReaderStreamUrl(
             fileId = book.fileId,
             serverBase = serverBase(),
@@ -1991,23 +2008,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             fileId = book.fileId,
             serverBase = serverBase(),
             localOnly = localOnly,
-            mediaKind = book.mediaKind
+            mediaKind = resolvedBook.mediaKind
         )
         ensureReaderCanOpen(
-            book = book,
+            book = resolvedBook,
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
             comicExtractionError = localResolution.comicExtractionError,
             localFileError = localResolution.localFileError
         )
-        val latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
+        val latestProgress = latestKnownProgress(serverUrl, resolvedBook.id, resolvedBook.fileId, resolvedBook.mediaKind)
         val restoredProgress = resolveRestoredReaderProgress(
-            book = book,
+            book = resolvedBook,
             latestProgress = latestProgress
         )
         ReaderState(
-            book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
+            book = if (localFile != null) resolvedBook.copy(localPath = localFile.absolutePath) else resolvedBook,
             localFile = localFile,
             streamUrl = streamUrl,
             comicPagesUrl = comicPagesUrl,
@@ -3405,7 +3422,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private suspend fun File.isReadableLocalReaderFile(book: BookSummary): Boolean {
-        val readable = ReaderFileValidator.isReadable(book.mediaKind, this)
+        val detectedMediaKind = ReaderFileValidator.detectLocalMediaKind(this)
+        val validationMediaKind = if (book.mediaKind == MediaKind.COMIC && detectedMediaKind == MediaKind.EPUB) {
+            MediaKind.EPUB
+        } else {
+            book.mediaKind
+        }
+        val readable = ReaderFileValidator.isReadable(validationMediaKind, this)
         if (!readable) {
             book.fileId?.let { fileId ->
                 downloadStore.delete(getServerUrl().orEmpty(), fileId)

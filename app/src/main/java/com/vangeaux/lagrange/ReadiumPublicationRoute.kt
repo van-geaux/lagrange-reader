@@ -21,7 +21,7 @@ internal fun readiumPublicationRoute(format: String?, title: String?): ReadiumPu
         parts.any { it == "cbr" || it == "cb7" } || token.contains("rar") || token.contains("7z") ->
             ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ
         token.contains("epub") || parts.any { it == "kepub" } -> ReadiumPublicationRoute.EPUB
-        parts.any { it == "cbz" } || token.contains("comic") || token.contains("zip") ->
+        parts.any { it == "cbz" } || token.contains("comic") ->
             ReadiumPublicationRoute.COMIC
         parts.any { it == "pdf" } -> ReadiumPublicationRoute.PDF
         token.contains("audio") || parts.any {

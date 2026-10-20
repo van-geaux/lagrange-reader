@@ -119,9 +119,14 @@ class BookOrbitRepositoryHelpersTest {
     @Test
     fun `readium routes distinguish direct and normalized publications`() {
         assertEquals(ReadiumPublicationRoute.EPUB, readiumPublicationRoute("kepub", "Novel.kepub.epub"))
+        assertEquals(ReadiumPublicationRoute.EPUB, readiumPublicationRoute("application/zip", "Novel.epub"))
+        assertEquals(ReadiumPublicationRoute.EPUB, readiumPublicationRoute("zip", "Novel.kepub.epub"))
+        assertEquals(ReadiumPublicationRoute.EPUB, readiumPublicationRoute("application/epub+zip", null))
+        assertEquals(ReadiumPublicationRoute.UNSUPPORTED, readiumPublicationRoute("application/zip", null))
         assertEquals(ReadiumPublicationRoute.PDF, readiumPublicationRoute("application/pdf", null))
         assertEquals(ReadiumPublicationRoute.AUDIO, readiumPublicationRoute("audio/flac", null))
         assertEquals(ReadiumPublicationRoute.COMIC, readiumPublicationRoute("cbz", null))
+        assertEquals(ReadiumPublicationRoute.COMIC, readiumPublicationRoute("application/zip", "Issue.cbz"))
         assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cbr", null))
         assertEquals(ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ, readiumPublicationRoute("cb7", null))
         assertEquals(ReadiumPublicationRoute.UNSUPPORTED_EBOOK, readiumPublicationRoute("mobi", null))
