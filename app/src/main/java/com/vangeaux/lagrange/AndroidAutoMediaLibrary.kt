@@ -1797,18 +1797,6 @@ internal class LagrangeLibrarySessionPlayer(
         notifyTimelineAndMetadataChanged()
     }
 
-    override fun getAvailableCommands(): Player.Commands {
-        return super.getAvailableCommands().buildUpon()
-            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_BACK)
-            .add(Player.COMMAND_SEEK_FORWARD)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            .build()
-    }
 
     override fun isCommandAvailable(command: Int): Boolean {
         if (
@@ -1826,9 +1814,7 @@ internal class LagrangeLibrarySessionPlayer(
         return super.isCommandAvailable(command)
     }
 
-    override fun hasNextMediaItem(): Boolean = true
 
-    override fun hasPreviousMediaItem(): Boolean = true
 
     override fun seekBack() {
         seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
@@ -1838,21 +1824,9 @@ internal class LagrangeLibrarySessionPlayer(
         seekRelativeRawMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
     }
 
-    override fun seekToPrevious() {
-        seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
-    }
 
-    override fun seekToPreviousMediaItem() {
-        seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
-    }
 
-    override fun seekToNext() {
-        seekRelativeRawMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
-    }
 
-    override fun seekToNextMediaItem() {
-        seekRelativeRawMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
-    }
 
     override fun isCurrentMediaItemSeekable(): Boolean {
         if (sessionProvider?.invoke() != null) return true
@@ -2070,6 +2044,123 @@ internal class LagrangeLibrarySessionPlayer(
         }
         return builder.build()
     }
+
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .build()
+
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .build()
+
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .build()
+
+    override fun getAvailableCommands(): Player.Commands =
+        super.getAvailableCommands().buildUpon()
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .build()
+
+    override fun hasPreviousMediaItem(): Boolean {
+        val active = sessionProvider()
+        if (active != null) {
+            if (active.book.audioChapters.isNotEmpty()) return true
+            if (active.audioFiles.size > 1) return true
+        }
+        return super.hasPreviousMediaItem()
+    }
+
+    override fun hasNextMediaItem(): Boolean {
+        val active = sessionProvider()
+        if (active != null) {
+            val chapters = active.book.audioChapters
+            if (chapters.isNotEmpty()) {
+                val absPos = active.absolutePositionMs()
+                return chapters.any { it.startMs > absPos + 1_000L }
+            }
+            if (active.audioFiles.size > 1) {
+                return super.getCurrentMediaItemIndex() + 1 < super.getMediaItemCount()
+            }
+        }
+        return super.hasNextMediaItem()
+    }
+
+    override fun seekToPreviousMediaItem() {
+        seekToPrevious()
+    }
+
+    override fun seekToNextMediaItem() {
+        seekToNext()
+    }
+
+    override fun seekToPrevious() {
+        val active = sessionProvider()
+        if (active != null) {
+            val chapters = active.book.audioChapters
+            val absPos = active.absolutePositionMs()
+            if (chapters.isNotEmpty()) {
+                val currentIdx = chapters.indexOfLast { it.startMs <= absPos + 1_000L }
+                val targetMs = when {
+                    currentIdx < 0 -> 0L
+                    absPos - chapters[currentIdx].startMs > 5_000L -> chapters[currentIdx].startMs
+                    currentIdx > 0 -> chapters[currentIdx - 1].startMs
+                    else -> 0L
+                }
+                active.seekToAbsolutePosition(targetMs)
+                notifyTimelineAndMetadataChanged()
+                return
+            }
+            if (active.audioFiles.size > 1 || super.getMediaItemCount() > 1) {
+                val filePos = super.getCurrentPosition().coerceAtLeast(0L)
+                val currentItemIdx = super.getCurrentMediaItemIndex()
+                if (filePos > 5_000L) {
+                    super.seekTo(currentItemIdx, 0L)
+                } else if (currentItemIdx > 0) {
+                    super.seekTo(currentItemIdx - 1, 0L)
+                } else {
+                    super.seekTo(0, 0L)
+                }
+                notifyTimelineAndMetadataChanged()
+                return
+            }
+        }
+        super.seekToPrevious()
+    }
+
+    override fun seekToNext() {
+        val active = sessionProvider()
+        if (active != null) {
+            val chapters = active.book.audioChapters
+            val absPos = active.absolutePositionMs()
+            if (chapters.isNotEmpty()) {
+                val nextChapter = chapters.firstOrNull { it.startMs > absPos + 1_500L }
+                if (nextChapter != null) {
+                    active.seekToAbsolutePosition(nextChapter.startMs)
+                    notifyTimelineAndMetadataChanged()
+                }
+                return
+            }
+            if (active.audioFiles.size > 1 || super.getMediaItemCount() > 1) {
+                val nextItemIdx = super.getCurrentMediaItemIndex() + 1
+                if (nextItemIdx < super.getMediaItemCount()) {
+                    super.seekTo(nextItemIdx, 0L)
+                    notifyTimelineAndMetadataChanged()
+                }
+                return
+            }
+        }
+        super.seekToNext()
+    }
 }
 
 private fun <T> CoroutineScope.futureResult(
@@ -2125,15 +2216,13 @@ internal fun handleAudiobookCustomCommand(
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         customCommand == audiobookPreviousChapterSessionCommand -> {
-            val handled = service?.skipActiveChapter(direction = -1) == true
-            if (!handled) session.player.seekBack()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+        session.player.seekToPrevious()
+        Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+    }
         customCommand == audiobookNextChapterSessionCommand -> {
-            val handled = service?.skipActiveChapter(direction = 1) == true
-            if (!handled) session.player.seekForward()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+        session.player.seekToNext()
+        Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+    }
         action == AndroidAutoSpeedController.ACTION_CYCLE_SPEED -> {
             val svc = service ?: return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             val currentSpeed = svc.activeSession()?.player?.playbackParameters?.speed
@@ -2391,8 +2480,10 @@ internal fun preloadSessionCoverBytes(
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
-internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean =
-    activeSession()?.book?.audioChapters?.isNotEmpty() == true
+internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean {
+    val active = activeSession() ?: return false
+    return active.book.audioChapters.isNotEmpty() || active.audioFiles.size > 1
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
