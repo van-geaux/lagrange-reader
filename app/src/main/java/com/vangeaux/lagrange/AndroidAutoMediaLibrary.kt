@@ -2045,24 +2045,6 @@ internal class LagrangeLibrarySessionPlayer(
         return builder.build()
     }
 
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            .build()
-
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            .build()
-
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            .build()
-
     override fun getAvailableCommands(): Player.Commands =
         super.getAvailableCommands().buildUpon()
             .add(Player.COMMAND_SEEK_TO_PREVIOUS)
@@ -2072,7 +2054,7 @@ internal class LagrangeLibrarySessionPlayer(
             .build()
 
     override fun hasPreviousMediaItem(): Boolean {
-        val active = sessionProvider()
+        val active = sessionProvider?.invoke()
         if (active != null) {
             if (active.book.audioChapters.isNotEmpty()) return true
             if (active.audioFiles.size > 1) return true
@@ -2081,7 +2063,7 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     override fun hasNextMediaItem(): Boolean {
-        val active = sessionProvider()
+        val active = sessionProvider?.invoke()
         if (active != null) {
             val chapters = active.book.audioChapters
             if (chapters.isNotEmpty()) {
@@ -2104,7 +2086,7 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     override fun seekToPrevious() {
-        val active = sessionProvider()
+        val active = sessionProvider?.invoke()
         if (active != null) {
             val chapters = active.book.audioChapters
             val absPos = active.absolutePositionMs()
@@ -2138,7 +2120,7 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     override fun seekToNext() {
-        val active = sessionProvider()
+        val active = sessionProvider?.invoke()
         if (active != null) {
             val chapters = active.book.audioChapters
             val absPos = active.absolutePositionMs()
@@ -2236,6 +2218,107 @@ internal fun handleAudiobookCustomCommand(
     }
 }
 
+private val KNOWN_AUTOMOTIVE_PACKAGES = setOf(
+    "com.google.android.projection.gearhead",
+    "com.google.android.googlequicksearchbox",
+    "com.android.car.media",
+    "com.android.car.carlauncher",
+    "com.google.android.carassistant"
+)
+
+private val KNOWN_GOOGLE_CERT_SHA256 = setOf(
+    "fdb00c43dbde8b51cb312aa81d3b5fa17713adb94b28f598d77f8eb89daceedf",
+    "f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83",
+    "3d7a1223019aa39d9ea0e3436ab7c0896bfb4fb679f4de5fe7c23f326c8f994a",
+    "7ce83c1b71f3d572fed04c8d40c5cb10ff75e6d87d9df6fbd53f0468c2905053"
+)
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun isAcceptedAudiobookController(
+    session: MediaSession,
+    service: ReadiumAudioPlaybackService?,
+    controller: MediaSession.ControllerInfo
+): Boolean {
+    val uid = controller.uid
+    if (uid == android.os.Process.myUid() ||
+        uid == android.os.Process.SYSTEM_UID ||
+        uid == android.os.Process.BLUETOOTH_UID ||
+        controller.isTrusted
+    ) {
+        return true
+    }
+    if (session.isAutoCompanionController(controller) ||
+        session.isAutomotiveController(controller)
+    ) {
+        return true
+    }
+    val context = service?.applicationContext ?: return false
+    val pkg = controller.packageName
+    if (pkg == context.packageName) return true
+    if (pkg in KNOWN_AUTOMOTIVE_PACKAGES && isSystemOrGoogleSignedPackage(context, pkg)) {
+        return true
+    }
+    return false
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun isAuthorizedBrowseOrPlaybackController(
+    service: ReadiumAudioPlaybackService?,
+    controller: MediaSession.ControllerInfo
+): Boolean {
+    val session = service?.mediaLibrarySession
+    if (session != null) {
+        return isAcceptedAudiobookController(session, service, controller)
+    }
+    val uid = controller.uid
+    if (uid == android.os.Process.myUid() ||
+        uid == android.os.Process.SYSTEM_UID ||
+        uid == android.os.Process.BLUETOOTH_UID ||
+        controller.isTrusted
+    ) {
+        return true
+    }
+    val context = service?.applicationContext ?: return false
+    val pkg = controller.packageName
+    return pkg == context.packageName ||
+        (pkg in KNOWN_AUTOMOTIVE_PACKAGES && isSystemOrGoogleSignedPackage(context, pkg))
+}
+
+private fun isSystemOrGoogleSignedPackage(
+    context: android.content.Context,
+    packageName: String
+): Boolean {
+    val pm = context.packageManager
+    val appInfo = runCatching { pm.getApplicationInfo(packageName, 0) }.getOrNull() ?: return false
+    val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 ||
+        (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+    if (isSystem) return true
+
+    val signatures = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val info = pm.getPackageInfo(
+                packageName,
+                android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+            )
+            val signingInfo = info.signingInfo
+            if (signingInfo?.hasMultipleSigners() == true) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo?.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures
+        }
+    }.getOrNull() ?: return false
+
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    return signatures.any { sig ->
+        val hex = md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+        hex in KNOWN_GOOGLE_CERT_SHA256
+    }
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun onGetAndroidAutoLibraryRoot(
     service: ReadiumAudioPlaybackService?,
@@ -2284,6 +2367,9 @@ internal fun onGetAndroidAutoChildren(
 ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
     val svc = service
         ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    if (!isAuthorizedBrowseOrPlaybackController(svc, browser)) {
+        return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED))
+    }
     return svc.libraryScope.futureResult {
         val specs = AndroidAutoCatalogBridge.getInstance(svc).resolveChildren(parentId)
         val pagedSpecs = paginateAndroidAutoSpecs(specs, page, pageSize)
@@ -2308,6 +2394,9 @@ internal fun onGetAndroidAutoItem(
 ): ListenableFuture<LibraryResult<MediaItem>> {
     val svc = service
         ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    if (!isAuthorizedBrowseOrPlaybackController(svc, browser)) {
+        return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED))
+    }
     return svc.libraryScope.futureResult {
         val spec = AndroidAutoCatalogBridge.getInstance(svc).resolveItem(mediaId)
             ?: return@futureResult LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
@@ -2331,6 +2420,9 @@ internal fun onSearchAndroidAuto(
 ): ListenableFuture<LibraryResult<Void>> {
     val svc = service
         ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    if (!isAcceptedAudiobookController(session, svc, browser)) {
+        return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED))
+    }
     return svc.libraryScope.futureResult {
         val results = AndroidAutoCatalogBridge.getInstance(svc).search(query)
         session.notifySearchResultChanged(browser, query, results.size, params)
@@ -2349,6 +2441,9 @@ internal fun onGetAndroidAutoSearchResult(
 ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
     val svc = service
         ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_INVALID_STATE))
+    if (!isAuthorizedBrowseOrPlaybackController(svc, browser)) {
+        return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED))
+    }
     return svc.libraryScope.futureResult {
         val results = AndroidAutoCatalogBridge.getInstance(svc)
             .search(query)
@@ -2374,6 +2469,9 @@ internal fun onAddAndroidAutoMediaItems(
     mediaItems: List<MediaItem>
 ): ListenableFuture<List<MediaItem>> {
     val svc = service ?: return Futures.immediateFuture(mediaItems)
+    if (!isAuthorizedBrowseOrPlaybackController(svc, controller)) {
+        return Futures.immediateFuture(emptyList())
+    }
     return svc.libraryScope.futureResult {
         svc.handleAndroidAutoSetMediaItems(
             controller = controller,
@@ -2396,6 +2494,9 @@ internal fun onSetAndroidAutoMediaItems(
         ?: return Futures.immediateFuture(
             MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
         )
+    if (!isAuthorizedBrowseOrPlaybackController(svc, browser)) {
+        return Futures.immediateFuture(MediaItemsWithStartPosition(emptyList(), 0, 0L))
+    }
     return svc.libraryScope.futureResult {
         svc.handleAndroidAutoSetMediaItems(
             controller = browser,

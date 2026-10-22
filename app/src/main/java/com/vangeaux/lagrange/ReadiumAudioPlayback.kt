@@ -345,6 +345,9 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
         session: MediaSession,
         controller: MediaSession.ControllerInfo
     ): MediaSession.ConnectionResult {
+        if (!controller.isTrusted && controller.uid != android.os.Process.myUid()) {
+            return MediaSession.ConnectionResult.reject()
+        }
         val commands = session.player.availableCommands.buildUpon()
             .remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
@@ -396,6 +399,9 @@ internal class AudiobookMediaSessionCallback(
         session: MediaSession,
         controller: MediaSession.ControllerInfo
     ): MediaSession.ConnectionResult {
+        if (!isAcceptedAudiobookController(session, serviceProvider(), controller)) {
+            return MediaSession.ConnectionResult.reject()
+        }
         val isAutoController = session.isAutoCompanionController(controller) ||
             session.isAutomotiveController(controller)
         val hasChapters = serviceProvider()?.activeSessionHasChapters() == true
