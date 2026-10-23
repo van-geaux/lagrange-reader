@@ -11,6 +11,7 @@ An offline-first Android reader for BookOrbit and Komga.
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 [![Version 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
+[![Downloads](https://img.shields.io/github/downloads/van-geaux/lagrange-reader/total?label=Downloads&logo=github)](https://github.com/van-geaux/lagrange-reader/releases)
 
 </div>
 
@@ -244,13 +245,9 @@ For machine setup details and the manual test matrix, see [`docs/setup.md`](docs
 
 Lagrange Reader's interface and interaction ideas were informed by the clarity and workflows of [Plex](https://www.plex.tv/), [Komga](https://komga.org/), [Audiobookshelf](https://www.audiobookshelf.org/), and [Suwayomi](https://suwayomi.org/). These projects are inspirations only; Lagrange Reader is independently developed and is not affiliated with, endorsed by, or sponsored by them.
 
-## Relationship with BookOrbit
-
-I contacted the BookOrbit maintainers on July 28, 2026 to ask permission to distribute or promote this client, and have not received a response yet. The app is independent, and its name, logo, and documentation should not be read as an endorsement by the BookOrbit maintainers.
-
 ## License and acknowledgements
 
-Lagrange Reader is licensed under the [GNU General Public License, version 3](LICENSE). The project may be distributed through both free GitHub releases and paid Google Play releases. A paid release remains subject to GPLv3: recipients receive the corresponding source and may redistribute the GPL-covered application under the license terms.
+Lagrange Reader is licensed under the [GNU General Public License, version 3](LICENSE). A Google Play release is planned.
 
 Third-party libraries and embedded assets remain under their respective licenses. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency and attribution inventory. See [`docs/privacy.md`](docs/privacy.md) for the app's local-data and network behavior.
 
