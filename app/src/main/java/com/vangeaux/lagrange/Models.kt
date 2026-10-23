@@ -705,6 +705,7 @@ data class LibraryBooksPage(
 
 data class BrowserState(
     val serverUrl: String,
+    val profileId: String? = null,
     val libraries: List<LibrarySummary>,
     val selectedLibraryId: String?,
     val books: List<BookSummary>,

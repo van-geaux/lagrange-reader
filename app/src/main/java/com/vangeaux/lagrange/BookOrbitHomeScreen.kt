@@ -1554,7 +1554,7 @@ internal fun NativeLibraryBrowserScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("New server") }
                     configuredServerProfiles.forEach { profile ->
-                            val isCurrent = serverUrlsMatch(profile.serverUrl, state.serverUrl)
+                            val isCurrent = profile.id == state.profileId
                             ConfiguredServerCard(
                                 profile = profile,
                                 isCurrent = isCurrent,

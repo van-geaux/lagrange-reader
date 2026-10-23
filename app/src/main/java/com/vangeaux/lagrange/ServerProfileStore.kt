@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /** A configured BookOrbit server. Credentials remain in the server session, not here. */
 data class ServerProfile(
@@ -113,3 +114,5 @@ class ServerProfileStore(context: Context) {
 
 internal fun serverProfileId(serverUrl: String): String =
     normalizeServerUrl(serverUrl)?.lowercase() ?: serverUrl.trim().lowercase()
+
+internal fun newServerProfileId(): String = "profile-${UUID.randomUUID()}"

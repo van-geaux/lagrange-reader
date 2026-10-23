@@ -10,28 +10,37 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DownloadStore private constructor(
-    private val file: File,
-    private val downloadDir: File,
-    private val attemptsFile: File,
-    private val queueFile: File
+    private val filesDir: File,
+    private val activeProfileId: () -> String?
 ) {
     private companion object {
         val mutex = Mutex()
     }
 
     constructor(context: Context) : this(
-        file = File(context.filesDir, "downloads.json"),
-        downloadDir = File(context.filesDir, "downloads"),
-        attemptsFile = File(context.filesDir, "download-attempts.json"),
-        queueFile = File(context.filesDir, "download-queue.json")
+        filesDir = context.filesDir,
+        activeProfileId = { ServerProfileStore(context).activeId() }
     )
 
-    internal constructor(filesDir: File) : this(
-        file = File(filesDir, "downloads.json"),
-        downloadDir = File(filesDir, "downloads"),
-        attemptsFile = File(filesDir, "download-attempts.json"),
-        queueFile = File(filesDir, "download-queue.json")
+    internal constructor(filesDir: File) : this(filesDir = filesDir, activeProfileId = { null })
+
+    internal constructor(filesDir: File, profileId: String) : this(
+        filesDir = filesDir,
+        activeProfileId = { profileId }
     )
+
+    private fun scopedDirectory(): File {
+        val profileId = activeProfileId()
+        if (profileId == null || !profileId.startsWith("profile-")) return filesDir
+        val safeId = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(profileId.toByteArray(Charsets.UTF_8))
+        return File(filesDir, "profiles/$safeId")
+    }
+
+    private val file: File get() = File(scopedDirectory(), "downloads.json")
+    private val downloadDir: File get() = File(scopedDirectory(), "downloads")
+    private val attemptsFile: File get() = File(scopedDirectory(), "download-attempts.json")
+    private val queueFile: File get() = File(scopedDirectory(), "download-queue.json")
 
     suspend fun save(record: DownloadRecord) = mutex.withLock {
         val records = readSanitizedUnlocked()

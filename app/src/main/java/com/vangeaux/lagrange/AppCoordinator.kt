@@ -417,7 +417,7 @@ class AppCoordinator internal constructor(
 
     fun switchToServerProfile(profileId: String) {
         val profile = serverProfileStore?.readAll()?.firstOrNull { it.id == profileId } ?: return
-        changeServer(profile.serverUrl, profile.providerId, profile.displayName)
+        changeServer(profile.serverUrl, profile.providerId, profile.displayName, profile.id)
     }
 
     fun removeServerProfile(profileId: String) {
@@ -629,7 +629,7 @@ class AppCoordinator internal constructor(
             audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(
-                    id = serverProfileId(serverUrl),
+                    id = newServerProfileId(),
                     serverUrl = serverUrl,
                     providerId = providerId,
                     displayName = serverName.trim().ifBlank { serverUrl },
@@ -643,11 +643,20 @@ class AppCoordinator internal constructor(
         }
     }
 
-    fun changeServer(serverUrl: String, providerId: String = PROVIDER_BOOKORBIT, serverName: String = "") {
+    fun changeServer(
+        serverUrl: String,
+        providerId: String = PROVIDER_BOOKORBIT,
+        serverName: String = "",
+        targetProfileId: String? = null
+    ) {
         scope.launch {
             val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             val oldProviderId = serverProfileStore?.active()?.providerId ?: PROVIDER_BOOKORBIT
-            if (oldServerUrl.isNotBlank() && serverUrlsMatch(oldServerUrl, serverUrl) && oldProviderId == providerId) {
+            if (oldServerUrl.isNotBlank() &&
+                serverUrlsMatch(oldServerUrl, serverUrl) &&
+                oldProviderId == providerId &&
+                (targetProfileId == null || serverProfileStore?.activeId() == targetProfileId)
+            ) {
                 // Already on this server (e.g. tapping it on the login screen while offline):
                 // reconnect with the usual offline fallback. Switching would clear its session,
                 // caches and unsynced progress before the server is even reachable.
@@ -694,7 +703,7 @@ class AppCoordinator internal constructor(
             audioPlaybackReconfigurer?.invoke(repository)
             serverProfileStore?.upsert(
                 ServerProfile(
-                    id = serverProfileId(serverUrl),
+                    id = targetProfileId ?: newServerProfileId(),
                     serverUrl = serverUrl,
                     providerId = providerId,
                     displayName = serverName.trim().ifBlank { serverUrl },
@@ -2534,12 +2543,15 @@ class AppCoordinator internal constructor(
     }
 
     private fun showBrowser(state: BrowserState) {
+        val profileScopedState = state.copy(
+            profileId = serverProfileStore?.activeId() ?: state.profileId
+        )
         val restored = restoredInterruptedDownloads
         val reconciledDownloads = reconciledActiveDownloadsByFileId
         val next = if (restored.isEmpty() && reconciledDownloads.isEmpty()) {
-            state
+            profileScopedState
         } else {
-            state.copy(
+            profileScopedState.copy(
                 downloadingFileIds = state.downloadingFileIds + reconciledDownloads.keys,
                 downloadBooksByFileId = state.downloadBooksByFileId + reconciledDownloads,
                 failedDownloadFileIds = state.failedDownloadFileIds + restored.keys,

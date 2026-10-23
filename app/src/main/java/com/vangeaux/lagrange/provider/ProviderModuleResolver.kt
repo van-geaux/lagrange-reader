@@ -46,7 +46,9 @@ internal fun resolveProviderDownloadModule(repository: BookOrbitDataSource): Dow
     }
 
 internal fun resolveProviderRepository(context: Context, serverUrl: String): BookOrbitDataSource {
-    val profile = ServerProfileStore(context).readAll().firstOrNull { it.serverUrl == serverUrl }
+    val profiles = ServerProfileStore(context)
+    val profile = profiles.active()?.takeIf { serverUrlsMatch(it.serverUrl, serverUrl) }
+        ?: profiles.readAll().firstOrNull { serverUrlsMatch(it.serverUrl, serverUrl) }
     return when (profile?.providerId) {
         PROVIDER_KOMGA -> KomgaRepository(context)
         PROVIDER_KAVITA -> KavitaRepository(context)
