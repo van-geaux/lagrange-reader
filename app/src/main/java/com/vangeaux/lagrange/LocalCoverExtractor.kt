@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -152,9 +153,17 @@ private fun compareNaturally(a: String, b: String): Int {
  * CBZ use an image inside the archive, PDF renders its first page. Returns a JPEG thumbnail, or null
  * when the file has no usable cover. Runs on the caller's (IO) thread.
  */
-internal fun extractLocalCover(file: File, maxEdgePx: Int = LOCAL_COVER_MAX_EDGE_PX): ByteArray? = runCatching {
+internal fun extractLocalCover(
+    file: File,
+    maxEdgePx: Int = LOCAL_COVER_MAX_EDGE_PX,
+    preferEmbeddedAudioCover: Boolean = false
+): ByteArray? = runCatching {
     if (!file.isFile) return null
-    val bitmap = if (isPdfFile(file)) renderPdfCover(file, maxEdgePx) else zipCoverBitmap(file, maxEdgePx)
+    val bitmap = when {
+        preferEmbeddedAudioCover -> embeddedAudioCoverBitmap(file, maxEdgePx) ?: zipCoverBitmap(file, maxEdgePx)
+        isPdfFile(file) -> renderPdfCover(file, maxEdgePx)
+        else -> zipCoverBitmap(file, maxEdgePx)
+    }
     bitmap ?: return null
     try {
         ByteArrayOutputStream().use { out ->
@@ -165,6 +174,16 @@ internal fun extractLocalCover(file: File, maxEdgePx: Int = LOCAL_COVER_MAX_EDGE
         bitmap.recycle()
     }
 }.getOrNull()
+
+private fun embeddedAudioCoverBitmap(file: File, maxEdgePx: Int): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(file.absolutePath)
+        retriever.embeddedPicture?.let { decodeSampledCover(it, maxEdgePx) }
+    } finally {
+        retriever.release()
+    }
+}
 
 private fun isPdfFile(file: File): Boolean =
     file.inputStream().use { input ->

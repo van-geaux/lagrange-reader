@@ -171,6 +171,7 @@ data class BookSummary(
     val audioManifestRevision: String? = null,
     val downloadUrl: String? = null,
     val coverUrl: String? = null,
+    val audiobookCoverUrl: String? = null,
     val localPath: String? = null,
     val downloadedSourceUpdatedAtMillis: Long? = null,
     val progressLabel: String? = null,

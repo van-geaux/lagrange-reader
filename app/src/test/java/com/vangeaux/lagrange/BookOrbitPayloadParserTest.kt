@@ -348,6 +348,58 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks preserves an audiobook-specific cover from the audio file`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "Multi-format book",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "files": [{
+                      "id": "audio-file",
+                      "format": "m4b",
+                      "role": "primary",
+                      "audiobookCoverUrl": "/covers/audio-square.jpg"
+                    }]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/covers/portrait.jpg", books.single().coverUrl)
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
+    }
+
+    @Test
+    fun `parseBooks selects audio-labeled cover from cover list`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "Multi-format book",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "covers": [
+                      {"type": "portrait", "url": "/covers/portrait.jpg"},
+                      {"type": "audiobook", "url": "/covers/audio-square.jpg"}
+                    ],
+                    "files": [{"id": "audio-file", "format": "m4b", "role": "primary"}]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
+    }
+
+    @Test
     fun `parseBooks projects every completed downloaded format available on the book`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-1",

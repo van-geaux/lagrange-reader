@@ -3918,6 +3918,10 @@ internal object BookOrbitPayloadParser {
                         streamUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/serve" },
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
+                        audiobookCoverUrl = obj.resolveAudiobookCoverUrl(
+                            serverBase = serverBase,
+                            primaryFile = primaryFile
+                        ),
                         localPath = fileId?.let { downloads[it]?.localPath },
                         downloadedSourceUpdatedAtMillis = fileId?.let {
                             downloads[it]?.sourceUpdatedAtMillis
@@ -4841,6 +4845,42 @@ internal object BookOrbitPayloadParser {
         }
     }
 
+    private fun JSONObject.resolveAudiobookCoverUrl(
+        serverBase: String,
+        primaryFile: JSONObject?
+    ): String? {
+        fun JSONObject.coverValue(): String? = sequenceOf(
+            stringValue("audiobookCoverUrl", "audioCoverUrl"),
+            optJSONObject("audiobookCover")?.stringValue("url", "href", "path"),
+            optJSONObject("audioCover")?.stringValue("url", "href", "path")
+        ).filterNotNull().firstOrNull { it.isNotBlank() }
+
+        fun resolve(value: String): String = when {
+            value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true) -> value
+            else -> "$serverBase/${value.trimStart('/')}"
+        }
+
+        val direct = sequenceOf(this, primaryFile)
+            .filterNotNull()
+            .mapNotNull { it.coverValue() }
+            .firstOrNull()
+        if (direct != null) return resolve(direct)
+
+        val covers = sequenceOf(this, primaryFile)
+            .filterNotNull()
+            .mapNotNull { it.optJSONArray("covers") ?: it.optJSONArray("coverImages") }
+            .firstOrNull()
+            ?: return null
+        for (index in 0 until covers.length()) {
+            val cover = covers.optJSONObject(index) ?: continue
+            val label = cover.stringValue("mediaKind", "media_kind", "kind", "type", "format").orEmpty()
+            if (!label.contains("audio", ignoreCase = true)) continue
+            val value = cover.stringValue("url", "href", "path", "coverUrl", "imageUrl") ?: continue
+            return resolve(value)
+        }
+        return null
+    }
+
     private fun JSONObject.resolveCatalogImageUrl(
         serverBase: String,
         fallbackPath: String?,
@@ -5218,6 +5258,12 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
 
 internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List<String> {
     return buildList {
+        if (book.mediaKind == MediaKind.AUDIO) {
+            book.audiobookCoverUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::coverThumbnailUrl)
+                ?.let(::add)
+        }
         book.coverUrl
             ?.takeIf { it.isNotBlank() }
             ?.let(::coverThumbnailUrl)
