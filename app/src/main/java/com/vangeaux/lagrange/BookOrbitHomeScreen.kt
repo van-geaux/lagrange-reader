@@ -4155,6 +4155,18 @@ private fun LibraryReaderConfiguration(
                 },
                 testTagPrefix = "options-reading-tap-zone"
             )
+            AppPreferenceSwitchRow(
+                title = "Prefer server progress when reopening",
+                summary = "Use newer server progress when reopening. Server progress can be approximate when BookOrbit does not provide an exact EPUB locator.",
+                checked = value.preferServerProgressOnReopen,
+                testTag = "options-reading-prefer-server-progress-on-reopen",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(preferServerProgressOnReopen = enabled)
+                    )
+                }
+            )
             Text("Typography", style = MaterialTheme.typography.titleMedium)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
