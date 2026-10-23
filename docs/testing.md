@@ -124,7 +124,9 @@ Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, sess
 
 With both a BookOrbit profile and a Komga profile configured, sign in to each provider, switch BookOrbit → Komga and back, then repeat Komga → BookOrbit and back. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting at least five minutes. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state. Issue #268 was user-confirmed on Samsung SM-S931B / Android 16 over ADB with `Lagrange-debug-202610092219.apk`; the five-minute Komga-to-BookOrbit return loaded BookOrbit Home without a login prompt.
 
-After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available as device-shared Local books. Repeat with compact/full audiobook playback and a preparing session.
+After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available to its owning profile's Local books. Repeat with compact/full audiobook playback and a preparing session.
+
+For two named profiles using the same provider and normalized server URL, confirm saving the second profile does not replace the first. Switch between the profiles and verify each account's credentials/session, browser state, downloads, and Local books remain isolated. Confirm a local book downloaded under one profile is absent from the other profile's Local books until it is downloaded there independently.
 
 ## Verification reporting
 
