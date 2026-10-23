@@ -93,6 +93,7 @@ data class LibraryReaderPreferences(
     val wordSpacing: Float = DEFAULT_EPUB_WORD_SPACING,
     val textAlignment: EpubTextAlignment = EpubTextAlignment.START,
     val hyphenation: EpubHyphenation = EpubHyphenation.AUTO,
+    val preferServerProgressOnReopen: Boolean = false,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
@@ -207,6 +208,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("wordSpacing", normalized.wordSpacing.toDouble())
             put("textAlignment", epubTextAlignmentStorageValue(normalized.textAlignment))
             put("hyphenation", epubHyphenationStorageValue(normalized.hyphenation))
+            put("preferServerProgressOnReopen", normalized.preferServerProgressOnReopen)
             put("top", normalized.padding.top.toDouble())
             put("bottom", normalized.padding.bottom.toDouble())
             put("left", normalized.padding.left.toDouble())
@@ -252,6 +254,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         ).toFloat(),
                         textAlignment = epubTextAlignmentFromStorage(item.optString("textAlignment")),
                         hyphenation = epubHyphenationFromStorage(item.optString("hyphenation")),
+                        preferServerProgressOnReopen = item.optBoolean("preferServerProgressOnReopen", false),
                         padding = EpubPaddingPercentages(
                             top = item.optDouble("top", EPUB_DEFAULT_TOP_PADDING_PERCENT.toDouble()).toFloat(),
                             bottom = item.optDouble("bottom", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),

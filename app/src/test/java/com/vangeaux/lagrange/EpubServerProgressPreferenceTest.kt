@@ -57,6 +57,18 @@ class EpubServerProgressPreferenceTest {
     }
 
     @Test
+    fun `disabled server preference keeps the exact local locator`() {
+        assertFalse(
+            shouldPreferServerProgress(
+                serverPercent = 90f,
+                lastReportedPercent = null,
+                locatorPercent = 40f,
+                preferServerProgress = false
+            )
+        )
+    }
+
+    @Test
     fun `progression is read from the positions of the same resource`() {
         val positions = listOf(0.0 to 0.30, 0.25 to 0.33, 0.5 to 0.36, 0.75 to 0.39)
         assertEquals(0.36, progressionFromPositions(0.6, positions)!!, 0.0001)

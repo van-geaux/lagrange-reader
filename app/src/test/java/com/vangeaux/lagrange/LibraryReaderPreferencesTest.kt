@@ -21,6 +21,7 @@ class LibraryReaderPreferencesTest {
             fontScale = 1.3f,
             lineSpacing = 1.4f,
             wordSpacing = 0.4f,
+            preferServerProgressOnReopen = true,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -131,6 +132,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
         assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
+        assertFalse(decoded.preferServerProgressOnReopen)
         assertFalse(decoded.volumeButtonPageNavigation)
     }
 

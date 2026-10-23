@@ -253,6 +253,15 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Text alignment").performScrollTo().assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertFalse(profile.value.preferServerProgressOnReopen)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-prefer-server-progress-on-reopen")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertTrue(profile.value.preferServerProgressOnReopen)
+        }
         composeRule.onNodeWithText("Auto hyphenates justified text only", substring = true)
             .performScrollTo()
             .assertIsDisplayed()

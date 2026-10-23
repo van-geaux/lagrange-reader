@@ -4553,6 +4553,15 @@ internal fun ReaderConfigurationControls(
         }
     }
     if (format == ReaderConfigurationFormat.EPUB) {
+        AppPreferenceSwitchRow(
+            title = "Prefer server progress when reopening",
+            summary = "Use newer server progress when reopening. Server progress can be approximate when BookOrbit does not provide an exact EPUB locator.",
+            checked = value.preferServerProgressOnReopen,
+            testTag = "$testTagPrefix-prefer-server-progress-on-reopen",
+            onCheckedChange = { enabled ->
+                onPreferencesChange(value.copy(preferServerProgressOnReopen = enabled))
+            }
+        )
         var fontMenuExpanded by remember { mutableStateOf(false) }
         val selectedFontLabel = value.customFont
             ?.takeIf { value.fontFamily == EpubReaderFontFamily.CUSTOM }

@@ -357,9 +357,10 @@ internal const val OWN_REPORT_TOLERANCE_PERCENT = 1f
 internal fun shouldPreferServerProgress(
     serverPercent: Float?,
     lastReportedPercent: Float?,
-    locatorPercent: Float?
+    locatorPercent: Float?,
+    preferServerProgress: Boolean = true
 ): Boolean {
-    if (serverPercent == null || locatorPercent == null) return false
+    if (!preferServerProgress || serverPercent == null || locatorPercent == null) return false
     if (lastReportedPercent != null &&
         abs(serverPercent - lastReportedPercent) <= OWN_REPORT_TOLERANCE_PERCENT
     ) {
@@ -2756,14 +2757,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             // The server value describes the moment the book was opened; later restarts of this
             // activity must not compare it with positions the user has since moved to.
             intent.removeExtra(EXTRA_SERVER_PROGRESS_PERCENT)
-            if (stored != null && serverPercent == null) return stored
+            if (stored != null && (!readerPreferences.preferServerProgressOnReopen || serverPercent == null)) {
+                return stored
+            }
             if (stored != null) {
                 val storedTotal = locatorTotalProgression(stored)
                 val serverProgressWins = shouldPreferServerProgress(
                     serverPercent = serverPercent,
                     lastReportedPercent = intent.getFloatExtra(EXTRA_LAST_REPORTED_PERCENT, Float.NaN)
                         .takeUnless(Float::isNaN),
-                    locatorPercent = storedTotal?.let { (it.coerceIn(0.0, 1.0) * 100.0).toFloat() }
+                    locatorPercent = storedTotal?.let { (it.coerceIn(0.0, 1.0) * 100.0).toFloat() },
+                    preferServerProgress = readerPreferences.preferServerProgressOnReopen
                 )
                 if (!serverProgressWins) return stored
                 // Another device read on: its position replaces this device's, including where
