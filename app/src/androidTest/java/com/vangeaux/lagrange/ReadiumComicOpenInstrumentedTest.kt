@@ -162,12 +162,14 @@ class ReadiumComicOpenInstrumentedTest {
         val readerKey = "instrumented-comic-recreate-${System.nanoTime()}"
         writeCbz(cbz, pageBytes(Color.RED), pageBytes(Color.BLUE))
 
+        withSinglePageComicProfile(context) { libraryId ->
         ActivityScenario.launch<ReadiumComicReaderActivity>(
             ReadiumComicReaderActivity.createIntent(
                 context = context,
                 file = cbz,
                 title = "Comic recreation",
                 readerKey = readerKey,
+                libraryId = libraryId,
                 launchMode = ReaderLaunchMode.NORMAL,
                 initialPage = 0
             )
@@ -189,20 +191,63 @@ class ReadiumComicOpenInstrumentedTest {
                 }
             }
         }
+        }
         cbz.delete()
     }
 
     @Test
     fun centerTapOpensComicChrome() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val cbz = File(context.cacheDir, "readium-comic-center-tap.cbz")
-        writeCbz(cbz, pageBytes(Color.MAGENTA), pageBytes(Color.GREEN))
+        withSinglePageComicProfile(context) { libraryId ->
+            assertCenterTapOpensChrome(context, libraryId, "single") { activity ->
+                activity.supportFragmentManager
+                    .findFragmentByTag("readium_comic_navigator") is ImageNavigatorFragment
+            }
+        }
+    }
+
+    @Test
+    fun centerTapOpensComicChromeInTwoPageSpread() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = AppPreferencesStore(context)
+        val original = store.read()
+        val libraryId = "instrumented-comic-spread-${System.nanoTime()}"
+        store.save(
+            original.copy(lockOrientation = true, lockedOrientation = LockedOrientation.LANDSCAPE)
+                .withReaderPreferences(libraryId, LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.AUTO))
+        )
+        try {
+            assertCenterTapOpensChrome(context, libraryId, "spread") { activity ->
+                org.junit.Assume.assumeTrue(
+                    "Requires a large horizontal window (unfolded foldable or tablet)",
+                    shouldUseTwoPageSpread(
+                        ReaderSpreadMode.AUTO,
+                        ReaderWindowState.fromConfiguration(activity.resources.configuration),
+                        ReaderLayoutMode.PAGINATED
+                    )
+                )
+                activity.isComicSpreadReaderVisible()
+            }
+        } finally {
+            store.save(original)
+        }
+    }
+
+    private fun assertCenterTapOpensChrome(
+        context: android.content.Context,
+        libraryId: String,
+        label: String,
+        isReady: (ReadiumComicReaderActivity) -> Boolean
+    ) {
+        val cbz = File(context.cacheDir, "readium-comic-center-tap-$label.cbz")
+        writeCbz(cbz, pageBytes(Color.MAGENTA), pageBytes(Color.GREEN), pageBytes(Color.BLUE))
         ActivityScenario.launch<ReadiumComicReaderActivity>(
             ReadiumComicReaderActivity.createIntent(
                 context = context,
                 file = cbz,
                 title = "Comic test",
-                readerKey = "instrumented-comic-center-tap",
+                readerKey = "instrumented-comic-center-tap-$label",
+                libraryId = libraryId,
                 launchMode = ReaderLaunchMode.NORMAL,
                 initialPage = 0
             )
@@ -211,13 +256,12 @@ class ReadiumComicOpenInstrumentedTest {
             var attempts = 0
             while (!navigatorReady && attempts < 40) {
                 scenario.onActivity { activity ->
-                    navigatorReady = activity.supportFragmentManager
-                        .findFragmentByTag("readium_comic_navigator") is ImageNavigatorFragment
+                    navigatorReady = isReady(activity)
                 }
                 if (!navigatorReady) SystemClock.sleep(250)
                 attempts += 1
             }
-            assertTrue("Readium comic navigator did not become ready", navigatorReady)
+            assertTrue("Comic reader ($label) did not become ready", navigatorReady)
             var tutorialWasShown = false
             var tutorialVisible = false
             scenario.onActivity { activity ->
@@ -262,6 +306,27 @@ class ReadiumComicOpenInstrumentedTest {
             assertEquals(false, optionsVisible)
         }
         cbz.delete()
+    }
+
+    /** Pins the Readium single-page image navigator regardless of device window size. */
+    private fun withSinglePageComicProfile(
+        context: android.content.Context,
+        block: (libraryId: String) -> Unit
+    ) {
+        val store = AppPreferencesStore(context)
+        val original = store.read()
+        val libraryId = "instrumented-comic-single-${System.nanoTime()}"
+        store.save(
+            original.withReaderPreferences(
+                libraryId,
+                LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.OFF)
+            )
+        )
+        try {
+            block(libraryId)
+        } finally {
+            store.save(original)
+        }
     }
 
     private fun awaitComicLocator(

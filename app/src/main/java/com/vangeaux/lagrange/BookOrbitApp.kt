@@ -2064,7 +2064,8 @@ private class EpubPageMeasurementBridge(
 internal fun ComicReaderProgressFooter(
     currentPage: Int,
     pageCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    spreadFirstPage: Int? = null
 ) {
     Surface(
         modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
@@ -2076,9 +2077,13 @@ internal fun ComicReaderProgressFooter(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Page ${currentPage + 1} of $pageCount",
+                text = comicReaderFooterLabel(currentPage, pageCount, spreadFirstPage),
                 modifier = Modifier.semantics {
-                    contentDescription = "Comic page ${currentPage + 1} of $pageCount"
+                    contentDescription = comicReaderFooterAccessibilityLabel(
+                        currentPage,
+                        pageCount,
+                        spreadFirstPage
+                    )
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
