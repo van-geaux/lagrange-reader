@@ -540,7 +540,11 @@ internal fun activeBookSummaryForActiveFile(
         audioManifestRevision = activeFile.book.audioManifestRevision,
         coverUrl = activeFile.book.coverUrl ?: book.coverUrl,
         audiobookCoverUrl = activeFile.book.audiobookCoverUrl ?: book.audiobookCoverUrl,
-        coverAspectRatio = activeFile.book.coverAspectRatio
+        coverAspectRatio = if (activeFile.mediaKind == MediaKind.AUDIO) {
+            CoverAspectRatio.SQUARE
+        } else {
+            activeFile.book.coverAspectRatio
+        }
     )
 }
 

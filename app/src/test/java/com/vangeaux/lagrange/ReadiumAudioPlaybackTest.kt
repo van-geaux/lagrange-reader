@@ -343,7 +343,7 @@ class ReadiumAudioPlaybackTest {
             book = file("f2", "https://server/stream/f2").book.copy(
                 coverUrl = "https://server/portrait.jpg",
                 audiobookCoverUrl = "https://server/square-audio.jpg",
-                coverAspectRatio = CoverAspectRatio.SQUARE
+                coverAspectRatio = CoverAspectRatio.PORTRAIT
             )
         )
 
