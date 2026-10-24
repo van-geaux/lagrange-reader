@@ -16,6 +16,7 @@ This is the active completion and validation checklist. Historical work orders a
 - [x] EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, navigation-bar controls, audiobook speed/progress controls, and grouped physical-file handling are included in 1.5.4.
 - [x] CBR/CB7 offline opening uses client-side RAR4/RAR5/7z extraction into a cached CBZ; MOBI, AZW, AZW3, and FB2 remain unsupported.
 - [x] Multiple named profiles may use the same provider and normalized server URL; profile-scoped browser state, downloads, and Local books prevent local content from bleeding between accounts ([#305](https://github.com/van-geaux/lagrange-reader/issues/305)).
+- [x] Audiobook playback prefers the `medium=audio` cover endpoint, falls back to the generic book cover, and renders the selected audiobook cover with its square aspect ratio ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).
 
 ## Active validation
 

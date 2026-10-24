@@ -9,6 +9,7 @@ This document contains current project direction only. Historical work orders an
 - Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit and Komga provider modules are the current integration surfaces; additional providers require a focused contract and validation plan.
 - Current release capabilities include EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, immersive reader controls, audiobook speed/progress controls, grouped physical-file downloads, and client-side offline CBR/CB7 extraction.
 - Multiple named accounts can now be saved for the same provider and normalized server URL, with profile-scoped local books, downloads, browser snapshots, and account state.
+- Audiobook playback now prefers the provider's `medium=audio` cover endpoint, falls back to the generic cover, and preserves the square audiobook-cover presentation in compact and full players ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).
 - MOBI, AZW, AZW3, and FB2 remain explicitly unsupported. Native AppAuth/Custom Tabs remains deferred until upstream mobile-redirect support is deployed.
 
 ## Active validation and follow-up
