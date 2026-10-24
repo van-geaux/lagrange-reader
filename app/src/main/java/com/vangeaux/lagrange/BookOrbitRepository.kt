@@ -5273,6 +5273,11 @@ internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List
                 ?.takeIf { it.isNotBlank() }
                 ?.let(::coverThumbnailUrl)
                 ?.let(::add)
+            serverBase
+                .trim()
+                .trimEnd('/')
+                .takeIf { it.isNotBlank() }
+                ?.let { add("$it/api/v1/books/${book.id}/cover?medium=audio") }
         }
         book.coverUrl
             ?.takeIf { it.isNotBlank() }

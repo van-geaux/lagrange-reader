@@ -20,6 +20,7 @@ class AudiobookCoverSelectionTest {
         assertEquals(
             listOf(
                 "https://server/audio-cover",
+                "https://server/api/v1/books/book/cover?medium=audio",
                 "https://server/book-cover",
                 "https://server/api/v1/books/book/thumbnail"
             ),
