@@ -5269,15 +5269,15 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
 internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List<String> {
     return buildList {
         if (book.mediaKind == MediaKind.AUDIO) {
-            book.audiobookCoverUrl
-                ?.takeIf { it.isNotBlank() }
-                ?.let(::coverThumbnailUrl)
-                ?.let(::add)
             serverBase
                 .trim()
                 .trimEnd('/')
                 .takeIf { it.isNotBlank() }
                 ?.let { add("$it/api/v1/books/${book.id}/cover?medium=audio") }
+            book.audiobookCoverUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::coverThumbnailUrl)
+                ?.let(::add)
         }
         book.coverUrl
             ?.takeIf { it.isNotBlank() }
