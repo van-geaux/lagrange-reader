@@ -5274,10 +5274,6 @@ internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List
                 .trimEnd('/')
                 .takeIf { it.isNotBlank() }
                 ?.let { add("$it/api/v1/books/${book.id}/cover?medium=audio") }
-            book.audiobookCoverUrl
-                ?.takeIf { it.isNotBlank() }
-                ?.let(::coverThumbnailUrl)
-                ?.let(::add)
         }
         book.coverUrl
             ?.takeIf { it.isNotBlank() }
