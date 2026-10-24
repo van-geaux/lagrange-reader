@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.core.ProviderSessionModule
+import com.vangeaux.lagrange.provider.resolveProviderHomeShelfModule
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -730,6 +731,45 @@ class AppCoordinatorTest {
         assertTrue(restored)
         assertTrue(coordinator.screen.value is AppScreen.Browser)
         assertTrue((coordinator.screen.value as AppScreen.Browser).browserState.isOfflineSnapshot)
+    }
+
+    @Test
+    fun `bootstrap does not expose cached account state when no profile session was restored`() = runTest {
+        val cached = BrowserState(
+            serverUrl = serverUrl,
+            libraries = listOf(library),
+            selectedLibraryId = library.id,
+            books = listOf(book)
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            sessionState = SessionState.Unavailable,
+            cachedBrowserState = cached,
+            restoreActiveReaderLocalOnlyResult = ReaderState(book)
+        )
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            providerSessionModuleResolver = {
+                object : ProviderSessionModule {
+                    override suspend fun saveCurrentProfileSession(): Boolean = false
+                    override suspend fun restoreCurrentProfileSession(): Boolean = false
+                }
+            }
+        )
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+        assertEquals(0, repository.cachedBrowserStateCalls)
+        assertTrue(repository.restoreActiveReaderCalls.isEmpty())
+
+        coordinator.refreshLoginState()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+        assertEquals(0, repository.cachedBrowserStateCalls)
     }
 
     @Test
@@ -2905,6 +2945,46 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `mark as read refreshes BookOrbit provider owned On Deck shelf`() = runTest {
+        val current = book.copy(
+            readStatus = BookReadStatus.READING,
+            progressPercent = 42f
+        )
+        val replacement = book.copy(id = "book-2", title = "Next book")
+        val repository = FakeBookOrbitDataSource(
+            homeShelvesResult = HomeShelfData(
+                booksBySection = mapOf(HomeSection.ON_DECK to listOf(replacement))
+            )
+        )
+        val coordinator = AppCoordinator(
+            repository,
+            StandardTestDispatcher(testScheduler),
+            homeShelfModuleResolver = { resolveProviderHomeShelfModule(it) }
+        )
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current),
+                homeShelves = HomeShelfData(
+                    booksBySection = mapOf(HomeSection.ON_DECK to listOf(current))
+                )
+            )
+        )
+
+        coordinator.markBookAsRead(current)
+        advanceUntilIdle()
+
+        val browser = coordinator.screen.value as AppScreen.Browser
+        assertEquals(1, repository.loadHomeShelvesCalls)
+        assertEquals(
+            listOf(replacement),
+            browser.browserState.homeShelves.booksBySection[HomeSection.ON_DECK]
+        )
+    }
+
+    @Test
     fun `selecting an intermediate status updates repository and browser without clearing progress`() = runTest {
         val current = book.copy(
             progressLabel = "42%",
@@ -3211,6 +3291,22 @@ class AppCoordinatorTest {
         assertTrue("screen=${coordinator.screen.value}", coordinator.screen.value is AppScreen.Browser)
         assertEquals(7, repository.sessionStateCalls)
     }
+
+    @Test
+    fun `BookOrbit Home resolver forwards authoritative server shelves`() = runTest {
+        val expected = HomeShelfData(
+            booksBySection = mapOf(
+                HomeSection.ON_DECK to listOf(book.copy(id = "on-deck"))
+            ),
+            isServerProvided = true
+        )
+        val repository = FakeBookOrbitDataSource(homeShelvesResult = expected)
+
+        val actual = resolveProviderHomeShelfModule(repository).loadHomeShelves()
+
+        assertSame(expected, actual)
+        assertEquals(1, repository.loadHomeShelvesCalls)
+    }
 }
 
 private class FakeBookOrbitDataSource(
@@ -3243,6 +3339,7 @@ private class FakeBookOrbitDataSource(
     var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
+    var homeShelvesResult: HomeShelfData = HomeShelfData(),
     var cachedLibraryCatalog: LibraryBooksPage? = null,
     var refreshLibraryCatalogResult: LibraryBooksPage? = null,
     var refreshLibraryCatalogResults: Map<String, LibraryBooksPage> = emptyMap(),
@@ -3287,7 +3384,9 @@ private class FakeBookOrbitDataSource(
     var clearActiveReaderCalls = 0
     var syncPendingProgressCalls = 0
     var sessionStateRequested = false
+    var cachedBrowserStateCalls = 0
     var sessionStateCalls = 0
+    var loadHomeShelvesCalls = 0
     var onSessionState: (() -> Unit)? = null
     var selectedLibraryId: String? = null
     val loginCalls = mutableListOf<Pair<String, String>>()
@@ -3347,6 +3446,11 @@ private class FakeBookOrbitDataSource(
 
     override suspend fun loadCachedHomeBooks(): List<BookSummary> = cachedBrowserState?.homeBooks.orEmpty()
 
+    override suspend fun loadHomeShelves(): HomeShelfData {
+        loadHomeShelvesCalls += 1
+        return homeShelvesResult
+    }
+
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
         firstPage: LibraryBooksPage?
@@ -3375,7 +3479,10 @@ private class FakeBookOrbitDataSource(
         return emptyList()
     }
 
-    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = cachedBrowserState
+    override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? {
+        cachedBrowserStateCalls += 1
+        return cachedBrowserState
+    }
 
     override suspend fun loadInterruptedDownloads(): List<DownloadRecord> = interruptedDownloads
 
@@ -3436,7 +3543,11 @@ private class FakeBookOrbitDataSource(
         return if (localOnly) restoreActiveReaderLocalOnlyResult else restoreActiveReaderResult
     }
 
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File {
         downloadedBooks += book
         concurrentDownloads += 1
         maxConcurrentDownloads = maxOf(maxConcurrentDownloads, concurrentDownloads)

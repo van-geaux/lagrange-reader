@@ -14,6 +14,7 @@ internal const val DOWNLOAD_NOTIFICATION_GROUP = "bookorbit-active-downloads"
 internal const val DOWNLOAD_NOTIFICATION_CANCEL_ACTION = "com.vangeaux.lagrange.CANCEL_DOWNLOAD"
 internal const val DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA = "file-id"
 internal const val DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA = "server-url"
+internal const val DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA = "storage-scope-id"
 private const val DOWNLOAD_NOTIFICATION_ID_BASE = 40_000
 private const val DOWNLOAD_SUMMARY_NOTIFICATION_ID = DOWNLOAD_NOTIFICATION_ID_BASE - 1
 
@@ -37,6 +38,7 @@ internal fun buildDownloadNotification(
     title: String,
     fileId: String,
     serverUrl: String,
+    storageScopeId: String,
     progress: Float?
 ): Notification {
     val openAppIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -54,6 +56,7 @@ internal fun buildDownloadNotification(
             action = DOWNLOAD_NOTIFICATION_CANCEL_ACTION
             putExtra(DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA, fileId)
             putExtra(DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA, serverUrl)
+            putExtra(DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA, storageScopeId)
         },
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
@@ -86,12 +89,20 @@ internal fun updateDownloadNotification(
     title: String,
     fileId: String,
     serverUrl: String,
+    storageScopeId: String,
     progress: Float?
 ) {
     try {
         context.getSystemService(NotificationManager::class.java)?.notify(
             downloadNotificationId(fileId),
-            buildDownloadNotification(context, title, fileId, serverUrl, progress)
+            buildDownloadNotification(
+                context,
+                title,
+                fileId,
+                serverUrl,
+                storageScopeId,
+                progress
+            )
         )
     } catch (_: SecurityException) {
         // POST_NOTIFICATIONS can be denied. Notifications are optional UI.
@@ -144,9 +155,14 @@ internal class DownloadNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != DOWNLOAD_NOTIFICATION_CANCEL_ACTION) return
         val serverUrl = intent.getStringExtra(DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA)
+        val storageScopeId = intent.getStringExtra(DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA)
         val fileId = intent.getStringExtra(DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA)
-        if (serverUrl.isNullOrBlank() || fileId.isNullOrBlank()) return
-        WorkManager.getInstance(context).cancelUniqueWork(downloadUniqueWorkName(serverUrl, fileId))
+        if (serverUrl.isNullOrBlank() || storageScopeId.isNullOrBlank() || fileId.isNullOrBlank()) {
+            return
+        }
+        WorkManager.getInstance(context).cancelUniqueWork(
+            downloadUniqueWorkName(serverUrl, storageScopeId, fileId)
+        )
         context.getSystemService(NotificationManager::class.java)?.cancel(downloadNotificationId(fileId))
         refreshDownloadNotificationSummary(context)
     }

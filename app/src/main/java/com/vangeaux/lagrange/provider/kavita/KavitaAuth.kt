@@ -4,10 +4,13 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.vangeaux.lagrange.AuthenticatedAccountPrincipal
+import com.vangeaux.lagrange.AuthenticatedAccountScopeStore
 import com.vangeaux.lagrange.ServerCheckResult
 import com.vangeaux.lagrange.ServerProfileStore
 import com.vangeaux.lagrange.SessionState
 import com.vangeaux.lagrange.UserFacingException
+import com.vangeaux.lagrange.authenticatedAccountPrincipal
 import com.vangeaux.lagrange.normalizeServerUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,6 +32,25 @@ internal fun kavitaLoginEndpoint(baseUrl: String): String =
 internal fun kavitaAuthResponseToken(payload: String): String? =
     runCatching { JSONObject(payload).optString("token").takeIf { it.isNotBlank() } }.getOrNull()
 
+internal fun kavitaAuthResponsePrincipal(payload: String): AuthenticatedAccountPrincipal? =
+    authenticatedAccountPrincipal(payload, stableFields = listOf("id"))
+
+internal fun kavitaJwtPrincipal(token: String): AuthenticatedAccountPrincipal? = runCatching {
+    val encodedPayload = token.split('.').getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
+    val payload = String(
+        java.util.Base64.getUrlDecoder().decode(encodedPayload),
+        Charsets.UTF_8
+    )
+    val value = JSONObject(payload)
+    val id = sequenceOf(
+        "nameid",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+    ).mapNotNull { field -> value.optString(field).trim().takeIf(String::isNotBlank) }
+        .firstOrNull()
+        ?: return null
+    AuthenticatedAccountPrincipal(canonical = "id:$id")
+}.getOrNull()
+
 internal fun kavitaSessionHeaders(token: String?): Map<String, String> =
     token?.takeIf { it.isNotBlank() }?.let { mapOf("Authorization" to "Bearer $it") } ?: emptyMap()
 
@@ -46,6 +68,7 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
     private val appContext = context.applicationContext
     private val client = OkHttpClient()
     private val credentialStore = KavitaCredentialStore(appContext)
+    private val accountScopeStore = AuthenticatedAccountScopeStore(appContext)
     private var serverUrl: String? = null
     private var token: String? = activeProfileId()?.let(credentialStore::read)
 
@@ -98,14 +121,25 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
             }
             val authenticatedToken = kavitaAuthResponseToken(payload)
                 ?: throw UserFacingException("Kavita returned no authentication token.")
+            val principal = kavitaAuthResponsePrincipal(payload)
+                ?: throw UserFacingException("Kavita returned no stable account identity.")
             this@KavitaAuthModuleImpl.serverUrl = base
             token = authenticatedToken
-            activeProfileId()?.let { credentialStore.write(it, authenticatedToken) }
+            activeProfileId()?.let { profileId ->
+                accountScopeStore.writeAuthoritative(
+                    profileId = profileId,
+                    providerId = "kavita",
+                    principal = principal.canonical,
+                    equivalentPrincipals = principal.provenAliases
+                )
+                credentialStore.write(profileId, authenticatedToken)
+            }
         }
     }
 
     override suspend fun sessionState(serverUrl: String): SessionState = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext SessionState.Unavailable
+        ensureAccountScopeFromToken()
         val headers = requestHeaders()
         if (headers.isEmpty()) return@withContext SessionState.Unauthenticated
         runCatching {
@@ -130,6 +164,7 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         serverUrl ?: ServerProfileStore(appContext).active()?.serverUrl
 
     override suspend fun clearSession() {
+        activeProfileId()?.let(accountScopeStore::deactivate)
         serverUrl = null
         token = null
         activeProfileId()?.let(credentialStore::clear)
@@ -137,13 +172,28 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 
     override suspend fun saveCurrentProfileSession() {
         activeProfileId()?.let { profileId ->
-            token?.let { credentialStore.write(profileId, it) }
+            token?.let {
+                ensureAccountScopeFromToken()
+                credentialStore.write(profileId, it)
+            }
         }
     }
 
     override suspend fun restoreCurrentProfileSession(): Boolean {
         token = activeProfileId()?.let(credentialStore::read)
+        ensureAccountScopeFromToken()
         return !token.isNullOrBlank()
+    }
+
+    private fun ensureAccountScopeFromToken() {
+        val profileId = activeProfileId() ?: return
+        if (accountScopeStore.read(profileId) != null) return
+        val principal = token?.let(::kavitaJwtPrincipal) ?: return
+        accountScopeStore.writeAuthoritative(
+            profileId = profileId,
+            providerId = "kavita",
+            principal = principal.canonical
+        )
     }
 
     private fun activeProfileId(): String? = ServerProfileStore(appContext).active()?.id

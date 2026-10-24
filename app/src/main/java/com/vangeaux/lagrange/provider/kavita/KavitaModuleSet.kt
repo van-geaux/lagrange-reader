@@ -126,8 +126,11 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         },
         downloads = object : DownloadModule {
             override val handlesDownloadsDirectly: Boolean = true
-            override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) =
-                repository.downloadBook(book, onProgress)
+            override suspend fun downloadBook(
+                book: BookSummary,
+                storageScopeId: String?,
+                onProgress: (Float?) -> Unit
+            ) = repository.downloadBook(book, storageScopeId, onProgress)
             override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = listOf(book)
             override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
             override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = repository.deleteLocalCopies(book)

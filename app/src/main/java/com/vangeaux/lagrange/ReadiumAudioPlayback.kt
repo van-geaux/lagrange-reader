@@ -942,6 +942,47 @@ internal suspend fun openReadiumAudio(
     }
 }
 
+private const val AUDIO_READER_LEASE = "audiobook-playback"
+private const val AUDIO_PREPARATION_READER_LEASE = "audiobook-preparation"
+private const val READ_ALONG_READER_LEASE = "epub-read-along"
+
+internal data class AudioReaderLeaseSpec(
+    val ownerId: String,
+    val fileId: String?,
+    val localPath: String?
+)
+
+internal fun audioReaderLeaseSpecs(
+    ownerPrefix: String,
+    book: BookSummary,
+    audioFiles: List<BookFileOption>,
+    singleFileOverride: File? = null
+): List<AudioReaderLeaseSpec> {
+    val books = audioFiles.map { it.book }.ifEmpty { listOf(book) }
+    return books.mapIndexed { index, activeBook ->
+        AudioReaderLeaseSpec(
+            ownerId = "$ownerPrefix:$index",
+            fileId = activeBook.fileId ?: book.fileId,
+            localPath = if (books.size == 1) {
+                singleFileOverride?.absolutePath ?: activeBook.localPath ?: book.localPath
+            } else {
+                activeBook.localPath
+            }
+        )
+    }
+}
+
+internal inline fun closeReaderResourceBeforeLeaseWake(
+    closeResource: () -> Unit,
+    releaseLease: () -> Unit
+) {
+    try {
+        closeResource()
+    } finally {
+        releaseLease()
+    }
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackService : MediaSessionService() {
@@ -1004,6 +1045,11 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         ): Session {
             closeSession()
             var mediaSession: MediaSession? = null
+            val readerLeases = audioReaderLeaseSpecs(
+                AUDIO_READER_LEASE,
+                book,
+                audioFiles
+            )
             try {
                 val createdSession = MediaSession.Builder(applicationContext, engine.player)
                     .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
@@ -1022,19 +1068,46 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                     aggregateDurationMs
                 ).also { session ->
                     mutableSession.value = session
+                    readerLeases.forEach { lease ->
+                        LocalBookReaderLeaseStore(applicationContext).acquire(
+                            ownerId = lease.ownerId,
+                            serverUrl = "",
+                            fileId = lease.fileId,
+                            localPath = lease.localPath
+                        )
+                    }
                 }
             } catch (error: Throwable) {
                 mediaSession?.release()
                 mutableSession.value = null
+                readerLeases.forEach { lease ->
+                    LocalBookReaderLeaseStore(applicationContext).release(lease.ownerId)
+                }
                 throw error
             }
         }
 
         fun closeSession() {
             mutableSession.value?.let { current ->
-                current.mediaSession.release()
-                current.engine.close()
                 mutableSession.value = null
+                closeReaderResourceBeforeLeaseWake(
+                    closeResource = {
+                        try {
+                            current.mediaSession.release()
+                        } finally {
+                            current.engine.close()
+                        }
+                    },
+                    releaseLease = {
+                        audioReaderLeaseSpecs(
+                            AUDIO_READER_LEASE,
+                            current.book,
+                            current.audioFiles
+                        ).forEach { lease ->
+                            LocalBookReaderLeaseStore(applicationContext).release(lease.ownerId)
+                        }
+                    }
+                )
             }
         }
 
@@ -1047,12 +1120,33 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                 .build()
             addSession(createdSession)
             mediaOverlaySession = createdSession
+            LocalBookReaderLeaseStore(applicationContext).acquire(
+                ownerId = READ_ALONG_READER_LEASE,
+                serverUrl = "",
+                fileId = book.fileId,
+                localPath = book.localPath
+            )
         }
 
         fun closeMediaOverlaySession(stopServiceIfIdle: Boolean = true) {
             ReadAlongMediaNotificationProvider.cancelSentenceNotification(applicationContext)
-            mediaOverlaySession?.release()
+            val closingSession = mediaOverlaySession
             mediaOverlaySession = null
+            closeReaderResourceBeforeLeaseWake(
+                closeResource = {
+                    val closingPlayer = closingSession?.player
+                    try {
+                        closingSession?.release()
+                    } finally {
+                        closingPlayer?.release()
+                    }
+                },
+                releaseLease = {
+                    LocalBookReaderLeaseStore(applicationContext).release(
+                        READ_ALONG_READER_LEASE
+                    )
+                }
+            )
             if (stopServiceIfIdle && mutableSession.value == null) {
                 ServiceCompat.stopForeground(
                     this@ReadiumAudioPlaybackService,
@@ -1427,6 +1521,25 @@ class ReadiumAudioPlaybackController internal constructor(
                 ReadiumAudioOpenResult.Error("Could not resume audiobook playback.")
             }
         }
+        val preparationLeases = audioReaderLeaseSpecs(
+            "$AUDIO_PREPARATION_READER_LEASE:$generation",
+            book,
+            preparedAudioFiles,
+            file
+        )
+        preparationLeases.forEach { lease ->
+            LocalBookReaderLeaseStore(application).acquire(
+                ownerId = lease.ownerId,
+                serverUrl = "",
+                fileId = lease.fileId,
+                localPath = lease.localPath
+            )
+        }
+        fun releasePreparationLeases() {
+            preparationLeases.forEach { lease ->
+                LocalBookReaderLeaseStore(application).release(lease.ownerId)
+            }
+        }
         val opened = try {
             withTimeoutOrNull(AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS) {
                 if (useSingleFileEngine) {
@@ -1451,15 +1564,18 @@ class ReadiumAudioPlaybackController internal constructor(
                     )
                 }
             } ?: run {
+                releasePreparationLeases()
                 resetPreparationIfCurrent(generation)
                 return ReadiumAudioOpenResult.Error(
                     "Timed out while preparing the audiobook."
                 )
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            releasePreparationLeases()
             resetPreparationIfCurrent(generation)
             throw cancelled
         } catch (error: Throwable) {
+            releasePreparationLeases()
             resetPreparationIfCurrent(generation)
             throw error
         }
@@ -1471,6 +1587,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         mutablePreparingSession.value = null
                     }
                 }
+                releasePreparationLeases()
                 opened
             }
             is ReadiumAudioOpenResult.Opened -> {
@@ -1484,8 +1601,13 @@ class ReadiumAudioPlaybackController internal constructor(
                         } else {
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
                             endReadingSession(serviceBinder.session.value)
+                            val sessionBook = if (book.localPath == null && file?.isFile == true) {
+                                book.copy(localPath = file.absolutePath)
+                            } else {
+                                book
+                            }
                             val session = serviceBinder.openSession(
-                                book,
+                                sessionBook,
                                 launchMode,
                                 opened.engine,
                                 preparedAudioFiles,
@@ -1507,6 +1629,8 @@ class ReadiumAudioPlaybackController internal constructor(
                     closeOpenedEngineAfterFailure(serviceBinder, opened.engine)
                     resetPreparationIfCurrent(generation)
                     ReadiumAudioOpenResult.Error("Could not start audiobook playback.")
+                } finally {
+                    releasePreparationLeases()
                 }
             }
         }

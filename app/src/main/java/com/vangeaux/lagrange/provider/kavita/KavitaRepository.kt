@@ -1,16 +1,37 @@
 package com.vangeaux.lagrange.provider.kavita
 
 import android.content.Context
+import android.util.Log
 import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.ActiveReaderSession
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+internal data class KavitaCleanupAction(
+    val name: String,
+    val cleanup: suspend () -> Unit
+)
+
+internal suspend fun runBestEffortKavitaCleanup(
+    actions: List<KavitaCleanupAction>,
+    onFailure: (String, Exception) -> Unit
+) {
+    actions.forEach { action ->
+        try {
+            action.cleanup()
+        } catch (error: Exception) {
+            onFailure(action.name, error)
+        }
+    }
+}
 
 internal class KavitaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
     private val appContext = context.applicationContext
@@ -41,14 +62,92 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     }
 
     override suspend fun clearServer() {
-        preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
-        authModule.clearSession()
+        val serverUrl = runCatching { getServerUrl() }.getOrNull()
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching {
+            activeAutomaticDownloadPolicy(profileId, serverUrl)
+        }.getOrNull()
+        try {
+            authModule.clearSession()
+        } finally {
+            clearAccountLocalState(
+                profileId = profileId,
+                automaticPolicy = automaticPolicy,
+                removeServerUrl = true
+            )
+        }
     }
 
     override suspend fun clearSession() {
-        // Per-book languages are kept per profile across profile switches; sign-out forgets them.
-        EpubBookLanguageStore(appContext).clearProfile()
-        authModule.clearSession()
+        val serverUrl = runCatching { getServerUrl() }.getOrNull()
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching {
+            activeAutomaticDownloadPolicy(profileId, serverUrl)
+        }.getOrNull()
+        try {
+            authModule.clearSession()
+        } finally {
+            withContext(NonCancellable) {
+                runBestEffortKavitaCleanup(
+                    listOf(
+                        KavitaCleanupAction("per-book languages") {
+                            // Per-book languages are kept across profile switches; sign-out forgets them.
+                            EpubBookLanguageStore(appContext).clearProfile()
+                        }
+                    ),
+                    ::logCleanupFailure
+                )
+            }
+            clearAccountLocalState(
+                profileId = profileId,
+                automaticPolicy = automaticPolicy,
+                removeServerUrl = false
+            )
+        }
+    }
+
+    private suspend fun clearAccountLocalState(
+        profileId: String?,
+        automaticPolicy: AutomaticDownloadPolicy?,
+        removeServerUrl: Boolean
+    ) = withContext(NonCancellable) {
+        val actions = mutableListOf(
+            KavitaCleanupAction("connection selection") {
+                val editor = preferences.edit().remove(SELECTED_LIBRARY_KEY)
+                if (removeServerUrl) editor.remove(SERVER_URL_KEY)
+                check(editor.commit()) { "Unable to clear Kavita connection selection." }
+            },
+            KavitaCleanupAction("browser snapshot") { browserSnapshotStore.clear() },
+            KavitaCleanupAction("reader positions") { EpubReaderPositionStore(appContext).clear() },
+            KavitaCleanupAction("locators") { ReadiumEpubLocatorStore(appContext).clear() },
+            KavitaCleanupAction("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
+        )
+        profileId?.let { activeProfileId ->
+            actions += KavitaCleanupAction("active account scope") {
+                AuthenticatedAccountScopeStore(appContext).deactivate(activeProfileId)
+            }
+        }
+        automaticPolicy?.let { policy ->
+            actions += KavitaCleanupAction("automatic downloads") {
+                AutomaticDownloadScheduler.pauseForInactiveProfile(appContext, policy)
+            }
+        }
+        runBestEffortKavitaCleanup(actions, ::logCleanupFailure)
+    }
+
+    private fun logCleanupFailure(name: String, error: Exception) =
+        Log.w("KavitaRepository", "Unable to clear account-owned $name", error)
+
+    private fun activeAutomaticDownloadPolicy(
+        profileId: String?,
+        serverUrl: String?
+    ): AutomaticDownloadPolicy? {
+        val base = serverUrl?.takeIf(String::isNotBlank) ?: return null
+        val resolvedProfileId = profileId ?: serverProfileId(base)
+        val storageScopeId = downloadStorageScopeId(appContext, base, resolvedProfileId)
+            ?: return null
+        return AutomaticDownloadPolicyStore(appContext)
+            .read(resolvedProfileId, base, storageScopeId)
     }
 
     override suspend fun getSelectedLibraryId(): String? =
@@ -136,8 +235,11 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         readingProgressModule.loadReaderProgress(book)
     override suspend fun markBookAsRead(book: BookSummary) = readingStatusModule.markBookAsRead(book)
     override suspend fun resetBookReadingState(book: BookSummary) = readingStatusModule.resetBookReadingState(book)
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File =
-        downloadModule.downloadBook(book, onProgress)
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File = downloadModule.downloadBook(book, storageScopeId, onProgress)
     override suspend fun deleteLocalCopy(book: BookSummary) = downloadModule.deleteLocalCopy(book)
     override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = downloadModule.deleteLocalCopies(book)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? {

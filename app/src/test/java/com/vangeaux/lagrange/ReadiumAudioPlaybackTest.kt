@@ -7,11 +7,45 @@ import java.nio.file.Files
 import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.readium.r2.shared.util.mediatype.MediaType
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackTest {
+
+    @Test
+    fun readerLeaseWakeRunsOnlyAfterPlayerResourcesCloseEvenOnFailure() {
+        val events = mutableListOf<String>()
+
+        val failure = runCatching {
+            closeReaderResourceBeforeLeaseWake(
+                closeResource = {
+                    events += "player-closed"
+                    throw IllegalStateException("close failed")
+                },
+                releaseLease = { events += "lease-released" }
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(listOf("player-closed", "lease-released"), events)
+    }
+
+    @Test
+    fun audiobookPreparationProtectsEveryLocalPlaylistFileBeforeOpen() {
+        val files = listOf(
+            file("part-1", null).copy(book = file("part-1", null).book.copy(localPath = "/books/1.mp3")),
+            file("part-2", null).copy(book = file("part-2", null).book.copy(localPath = "/books/2.mp3"))
+        )
+        val book = files.first().book.copy(fileId = "group")
+
+        val leases = audioReaderLeaseSpecs("preparing", book, files)
+
+        assertEquals(listOf("part-1", "part-2"), leases.map { it.fileId })
+        assertEquals(listOf("/books/1.mp3", "/books/2.mp3"), leases.map { it.localPath })
+        assertEquals(listOf("preparing:0", "preparing:1"), leases.map { it.ownerId })
+    }
 
     @Test
     fun audiobookPreviewBannerVisibilityFollowsCurrentEmittedSessionMode() {

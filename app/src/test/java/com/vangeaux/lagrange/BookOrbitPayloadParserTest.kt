@@ -7,7 +7,7 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
-    fun `synced BookOrbit up next setting enables generated On deck`() {
+    fun `synced BookOrbit up next setting is authoritative`() {
         val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(
             """
             {"user":{"settings":{"dashboardShelfConfig":{
@@ -21,21 +21,81 @@ class BookOrbitPayloadParserTest {
         )
 
         assertTrue(preferences.onDeckEnabled)
+        assertEquals(HomeShelfPreferenceSource.SERVER_SYNCHRONIZED, preferences.source)
+        assertTrue(preferences.effectiveOnDeckEnabled(localFallbackEnabled = false))
     }
 
     @Test
-    fun `missing malformed disabled and unsynced dashboard settings hide generated On deck`() {
+    fun `unsynchronized BookOrbit settings select the local default-on fallback`() {
         val payloads = listOf(
             "{}",
-            "not json",
-            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":false,"scrollers":[{"type":"up-next-in-series","enabled":true}]}}}""",
-            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}""",
-            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":{}}}}"""
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":false,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}"""
         )
 
         payloads.forEach { payload ->
-            assertTrue(!BookOrbitPayloadParser.parseHomeShelfPreferences(payload).onDeckEnabled)
+            val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(payload)
+            assertEquals(HomeShelfPreferenceSource.LOCAL_FALLBACK, preferences.source)
+            assertTrue(preferences.effectiveOnDeckEnabled(localFallbackEnabled = true))
+            assertTrue(!preferences.effectiveOnDeckEnabled(localFallbackEnabled = false))
         }
+    }
+
+    @Test
+    fun `synchronized disabled and unavailable settings do not become local fallback`() {
+        val disabled = BookOrbitPayloadParser.parseHomeShelfPreferences(
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}"""
+        )
+        val malformed = BookOrbitPayloadParser.parseHomeShelfPreferences("not json")
+
+        assertEquals(HomeShelfPreferenceSource.SERVER_SYNCHRONIZED, disabled.source)
+        assertTrue(!disabled.effectiveOnDeckEnabled(localFallbackEnabled = true))
+        assertEquals(HomeShelfPreferenceSource.UNAVAILABLE, malformed.source)
+        assertTrue(!malformed.effectiveOnDeckEnabled(localFallbackEnabled = true))
+    }
+
+    @Test
+    fun `an empty server On deck shelf remains server provided`() {
+        val shelves = HomeShelfData(booksBySection = mapOf(HomeSection.ON_DECK to emptyList()))
+
+        assertTrue(shelves.providesBooks(HomeSection.ON_DECK))
+        assertTrue(!shelves.providesBooks(HomeSection.CURRENTLY_READING))
+    }
+
+    @Test
+    fun `provider-owned shelves remain visible when BookOrbit preferences are unavailable`() {
+        val unavailable = HomeShelfPreferences()
+        val synchronizedDisabled = HomeShelfPreferences(
+            onDeckEnabled = false,
+            source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+        )
+        val localDisabled = HomeShelfPreferences(
+            source = HomeShelfPreferenceSource.LOCAL_FALLBACK
+        )
+
+        assertTrue(
+            unavailable.effectiveOnDeckEnabled(
+                localFallbackEnabled = false,
+                hasProviderOwnedShelves = true
+            )
+        )
+        assertTrue(
+            !unavailable.effectiveOnDeckEnabled(
+                localFallbackEnabled = true,
+                hasProviderOwnedShelves = false
+            )
+        )
+        assertTrue(
+            !synchronizedDisabled.effectiveOnDeckEnabled(
+                localFallbackEnabled = true,
+                hasProviderOwnedShelves = true
+            )
+        )
+        assertTrue(
+            !localDisabled.effectiveOnDeckEnabled(
+                localFallbackEnabled = false,
+                hasProviderOwnedShelves = true
+            )
+        )
     }
 
     @Test

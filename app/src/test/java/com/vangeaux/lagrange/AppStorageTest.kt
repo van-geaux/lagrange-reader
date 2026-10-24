@@ -8,6 +8,34 @@ import org.junit.Test
 
 class AppStorageTest {
     @Test
+    fun `storage usage includes legacy and every physical profile download root`() = runTest {
+        val filesDir = Files.createTempDirectory("app-storage-profile-roots").toFile()
+        val cacheDir = Files.createTempDirectory("app-storage-profile-cache").toFile()
+        filesDir.resolve("downloads/legacy.epub").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(11))
+        }
+        filesDir.resolve("profiles/known/downloads/known.epub").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(13))
+        }
+        filesDir.resolve("profiles/removed/downloads/orphan.epub").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(17))
+        }
+        filesDir.resolve("profiles/known/not-a-download.bin").apply {
+            requireNotNull(parentFile).mkdirs()
+            writeBytes(ByteArray(19))
+        }
+
+        val roots = managedDownloadStorageRoots(filesDir)
+        val usage = AppStorageManager(filesDir, cacheDir).usage()
+
+        assertEquals(3, roots.size)
+        assertEquals(41L, usage.downloadedBytes)
+    }
+
+    @Test
     fun `storage usage includes offline detail metadata without deleting downloads`() = runTest {
         val filesDir = Files.createTempDirectory("app-storage-files").toFile()
         val cacheDir = Files.createTempDirectory("app-storage-cache").toFile()
@@ -29,12 +57,18 @@ class AppStorageTest {
         }
         val manager = AppStorageManager(filesDir, cacheDir)
 
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 150), manager.usage())
+        val beforeClear = manager.usage()
+        assertEquals(100, beforeClear.downloadedBytes)
+        assertEquals(150, beforeClear.cacheBytes)
+        assertTrue(beforeClear.availableBytes > 0L)
 
         manager.clearDisposableCache()
 
         assertTrue(downloaded.isFile)
-        assertEquals(StorageUsage(downloadedBytes = 100, cacheBytes = 50), manager.usage())
+        val afterClear = manager.usage()
+        assertEquals(100, afterClear.downloadedBytes)
+        assertEquals(50, afterClear.cacheBytes)
+        assertTrue(afterClear.availableBytes > 0L)
     }
 
     @Test

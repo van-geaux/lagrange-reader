@@ -739,16 +739,35 @@ data class BrowserState(
 )
 
 /** Provider-owned Home shelf choices that can be safely reflected by the native client. */
+enum class HomeShelfPreferenceSource {
+    SERVER_SYNCHRONIZED,
+    LOCAL_FALLBACK,
+    UNAVAILABLE
+}
+
 data class HomeShelfPreferences(
-    val onDeckEnabled: Boolean = false
-)
+    val onDeckEnabled: Boolean = false,
+    val source: HomeShelfPreferenceSource = HomeShelfPreferenceSource.UNAVAILABLE
+) {
+    fun effectiveOnDeckEnabled(
+        localFallbackEnabled: Boolean,
+        hasProviderOwnedShelves: Boolean = false
+    ): Boolean = when (source) {
+        HomeShelfPreferenceSource.SERVER_SYNCHRONIZED -> onDeckEnabled
+        HomeShelfPreferenceSource.LOCAL_FALLBACK -> localFallbackEnabled
+        HomeShelfPreferenceSource.UNAVAILABLE -> hasProviderOwnedShelves || onDeckEnabled
+    }
+}
 
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val isServerProvided: Boolean = false,
     val isAggregatedAcrossLibraries: Boolean = false
-)
+) {
+    fun providesBooks(section: HomeSection): Boolean =
+        isServerProvided || booksBySection.containsKey(section)
+}
 
 enum class ReaderLaunchMode {
     NORMAL,
@@ -865,10 +884,18 @@ data class ReadingAttemptsResult(
     val status: ServerReadingHistoryStatus = ServerReadingHistoryStatus.AVAILABLE
 )
 
+enum class DownloadOrigin {
+    MANUAL,
+    AUTOMATIC
+}
+
 data class DownloadRecord(
     val serverUrl: String,
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
+    val libraryId: String = "",
     val title: String,
     val filename: String? = null,
     val localPath: String,
@@ -876,6 +903,10 @@ data class DownloadRecord(
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
     val downloadedAtMillis: Long = System.currentTimeMillis(),
+    val lastAccessedAtMillis: Long? = null,
+    val lastKnownCompleted: Boolean? = null,
+    val sizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
     val status: DownloadRecordStatus = DownloadRecordStatus.COMPLETE,
     val hasExistingLocalCopy: Boolean = false
 )
@@ -885,10 +916,21 @@ enum class DownloadRecordStatus {
     INTERRUPTED
 }
 
+enum class DownloadAttemptState {
+    QUEUED,
+    STAGING,
+    VERIFIED,
+    COMMITTING
+}
+
 data class DownloadAttempt(
     val serverUrl: String,
+    val requestId: String = "",
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
+    val libraryId: String = "",
     val title: String,
     val filename: String? = null,
     val targetPath: String,
@@ -896,11 +938,22 @@ data class DownloadAttempt(
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
-    val startedAtMillis: Long = System.currentTimeMillis()
+    val expectedSizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
+    val policyGeneration: Long? = null,
+    val requiresQueueOwnership: Boolean = true,
+    val startedAtMillis: Long = System.currentTimeMillis(),
+    val state: DownloadAttemptState = DownloadAttemptState.QUEUED,
+    val stagedPath: String? = null,
+    val verifiedSizeBytes: Long? = null,
+    val verifiedSha256: String? = null
 )
 
 data class DownloadQueueEntry(
     val serverUrl: String,
+    val requestId: String = "",
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
     val libraryId: String,
@@ -909,6 +962,11 @@ data class DownloadQueueEntry(
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
+    val expectedSizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
+    val requiresUnmeteredNetwork: Boolean = false,
+    val requiresCharging: Boolean = false,
+    val policyGeneration: Long? = null,
     val cellularConsentGranted: Boolean,
     val sequence: Long
 )

@@ -8,6 +8,11 @@ import org.junit.Test
 
 class AppPreferencesStoreTest {
     @Test
+    fun `local On deck fallback defaults to visible`() {
+        assertEquals(true, AppPreferences().showOnDeckWhenShelfSyncDisabled)
+    }
+
+    @Test
     fun `navigation bar hiding defaults to enabled`() {
         assertEquals(true, AppPreferences().hideNavigationBarWhileReading)
     }
