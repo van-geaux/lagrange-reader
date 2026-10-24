@@ -1620,12 +1620,15 @@ class AppCoordinator internal constructor(
                     }
                     else -> null
                 }
-                val readerBook = if (book.mediaKind == MediaKind.AUDIO && book.audioChapters.isEmpty()) {
+                val readerBook = if (book.mediaKind == MediaKind.AUDIO) {
                     detailForOpen?.let { detail ->
-                        val chapters = detail.audioChapters.ifEmpty {
-                            detail.book.audioChapters
-                        }
-                        book.copy(audioChapters = chapters)
+                        val chapters = detail.audioChapters
+                            .ifEmpty { detail.book.audioChapters }
+                            .ifEmpty { book.audioChapters }
+                        book.copy(
+                            audiobookCoverUrl = detail.book.audiobookCoverUrl ?: book.audiobookCoverUrl,
+                            audioChapters = chapters
+                        )
                     } ?: book
                 } else {
                     detailForOpen?.book?.copy(
