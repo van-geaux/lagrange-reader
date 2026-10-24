@@ -961,6 +961,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun activeBookSummary(): BookSummary =
             activeBookSummaryForActiveFile(book, audioFiles, currentFileId())
+                .copy(coverAspectRatio = CoverAspectRatio.SQUARE)
 
         fun currentFilePositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
 
