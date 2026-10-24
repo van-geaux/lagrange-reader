@@ -182,6 +182,7 @@ internal fun ReadiumFullAudioPlayer(
         }
         return
     }
+    val activeBook = current.activeBookSummary()
     val playback by produceState(fullAudioSnapshot(current), current.player) {
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -208,6 +209,7 @@ internal fun ReadiumFullAudioPlayer(
         FullPlayerLandscape(
             controller = controller,
             current = current,
+            activeBook = activeBook,
             playback = playback,
             chapters = chapters,
             activeChapterIndex = activeChapterIndex,
@@ -353,13 +355,13 @@ internal fun ReadiumFullAudioPlayer(
             ) {
                 val coverHeight = minOf(
                     maxHeight * coverFraction,
-                    maxWidth / current.book.coverAspectRatio.widthToHeight
+                    maxWidth / activeBook.coverAspectRatio.widthToHeight
                 )
                 CompactAudiobookCover(
-                    book = current.book,
+                    book = activeBook,
                     coverLoader = controller::loadCover,
                     modifier = Modifier
-                        .width(coverHeight * current.book.coverAspectRatio.widthToHeight)
+                        .width(coverHeight * activeBook.coverAspectRatio.widthToHeight)
                         .height(coverHeight)
                         .onGloballyPositioned { coordinates ->
                             val bounds = coordinates.boundsInWindow()
@@ -641,7 +643,7 @@ internal fun ReadiumFullAudioPlayer(
     }
     if (showCoverViewer) {
         FullScreenCoverViewer(
-            book = current.book,
+            book = activeBook,
             coverLoader = controller::loadCover,
             onDismiss = { showCoverViewer = false }
         )
@@ -816,6 +818,7 @@ private fun AudiobookChapterMenuItem(
 private fun FullPlayerLandscape(
     controller: ReadiumAudioPlaybackController,
     current: ReadiumAudioPlaybackService.Session,
+    activeBook: BookSummary,
     playback: FullAudioSnapshot,
     chapters: List<AudiobookChapter>,
     activeChapterIndex: Int,
@@ -924,13 +927,13 @@ private fun FullPlayerLandscape(
             ) {
                 val coverHeight = minOf(
                     maxHeight,
-                    maxWidth / current.book.coverAspectRatio.widthToHeight
+                    maxWidth / activeBook.coverAspectRatio.widthToHeight
                 )
                 CompactAudiobookCover(
-                    book = current.book,
+                    book = activeBook,
                     coverLoader = controller::loadCover,
                     modifier = Modifier
-                        .width(coverHeight * current.book.coverAspectRatio.widthToHeight)
+                        .width(coverHeight * activeBook.coverAspectRatio.widthToHeight)
                         .height(coverHeight)
                         .onGloballyPositioned { coordinates ->
                             val bounds = coordinates.boundsInWindow()
@@ -1225,7 +1228,7 @@ private fun FullPlayerLandscape(
         )
     }
     if (showCoverViewer) {
-        FullScreenCoverViewer(book = current.book, coverLoader = controller::loadCover) {
+        FullScreenCoverViewer(book = activeBook, coverLoader = controller::loadCover) {
             showCoverViewer = false
         }
     }

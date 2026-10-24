@@ -4144,7 +4144,11 @@ internal object BookOrbitPayloadParser {
                         add(
                             BookFileOption(
                                 book = fileBook.copy(
-                                    coverAspectRatio = book.coverAspectRatio,
+                                    coverAspectRatio = if (fileBook.mediaKind == MediaKind.AUDIO && fileBook.audiobookCoverUrl != null) {
+                                        CoverAspectRatio.SQUARE
+                                    } else {
+                                        book.coverAspectRatio
+                                    },
                                     audioChapters = if (fileBook.mediaKind == MediaKind.AUDIO) {
                                         audioChapters
                                     } else {

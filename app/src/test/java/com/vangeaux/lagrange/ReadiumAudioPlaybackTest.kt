@@ -272,7 +272,7 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
-    fun activeBookSummaryForActiveFileSwitchesFileIdAndStreamButKeepsBookLevelMetadata() {
+    fun activeBookSummaryForActiveFileSwitchesFileIdAndStreamAndFallsBackToBookMetadata() {
         val bookLevel = BookSummary(
             libraryId = "lib",
             id = "book-1",
@@ -324,6 +324,33 @@ class ReadiumAudioPlaybackTest {
         assertEquals("f2", active.fileId)
         assertEquals("aud_track_2", active.audioAssetId)
         assertEquals("manifest-rev-1", active.audioManifestRevision)
+    }
+
+    @Test
+    fun activeBookSummaryForActiveFileUsesTheActiveAudioCoverAndAspectRatio() {
+        val bookLevel = BookSummary(
+            libraryId = "lib",
+            id = "book-1",
+            fileId = "f1",
+            title = "Mixed format book",
+            author = "Author",
+            format = "epub",
+            mediaKind = MediaKind.AUDIO,
+            coverUrl = "https://server/portrait.jpg",
+            coverAspectRatio = CoverAspectRatio.PORTRAIT
+        )
+        val audioFile = file("f2", "https://server/stream/f2").copy(
+            book = file("f2", "https://server/stream/f2").book.copy(
+                coverUrl = "https://server/portrait.jpg",
+                audiobookCoverUrl = "https://server/square-audio.jpg",
+                coverAspectRatio = CoverAspectRatio.SQUARE
+            )
+        )
+
+        val active = activeBookSummaryForActiveFile(bookLevel, listOf(audioFile), "f2")
+
+        assertEquals("https://server/square-audio.jpg", active.audiobookCoverUrl)
+        assertEquals(CoverAspectRatio.SQUARE, active.coverAspectRatio)
     }
 
     private fun fileWithAsset(id: String, assetId: String): BookFileOption {

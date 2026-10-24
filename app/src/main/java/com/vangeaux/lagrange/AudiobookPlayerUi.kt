@@ -190,6 +190,7 @@ internal fun ReadiumCompactAudioPlayer(
             current.player.removeListener(listener)
         }
     }
+    val activeBook = current.activeBookSummary()
     val positionMs = playback.positionMs
     val durationMs = playback.durationMs
     val scope = rememberCoroutineScope()
@@ -244,9 +245,9 @@ internal fun ReadiumCompactAudioPlayer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             CompactAudiobookCover(
-                book = current.book,
+                book = activeBook,
                 coverLoader = controller::loadCover,
-                onClick = { onCoverClick(current.book) }
+                onClick = { onCoverClick(activeBook) }
             )
             Column(
                 modifier = Modifier

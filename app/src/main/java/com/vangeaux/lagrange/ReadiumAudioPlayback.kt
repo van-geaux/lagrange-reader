@@ -537,7 +537,10 @@ internal fun activeBookSummaryForActiveFile(
         format = activeFile.book.format,
         localPath = activeFile.book.localPath,
         audioAssetId = activeFile.book.audioAssetId,
-        audioManifestRevision = activeFile.book.audioManifestRevision
+        audioManifestRevision = activeFile.book.audioManifestRevision,
+        coverUrl = activeFile.book.coverUrl ?: book.coverUrl,
+        audiobookCoverUrl = activeFile.book.audiobookCoverUrl ?: book.audiobookCoverUrl,
+        coverAspectRatio = activeFile.book.coverAspectRatio
     )
 }
 
