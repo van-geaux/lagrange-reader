@@ -2071,6 +2071,7 @@ class AppCoordinator internal constructor(
                             message = "Marked ${book.title} as ${status.displayLabel()}."
                         )
                     )
+                    refreshProviderHomeShelves()
                 } catch (_: AuthenticationRequiredException) {
                     recoverExpiredSession()
                 } catch (error: Throwable) {
@@ -2123,7 +2124,7 @@ class AppCoordinator internal constructor(
                         message = "Marked ${book.title} as read."
                     )
                 )
-                refreshKomgaHomeShelves()
+                refreshProviderHomeShelves()
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
@@ -2175,7 +2176,7 @@ class AppCoordinator internal constructor(
                         message = successMessage
                     )
                 )
-                refreshKomgaHomeShelves()
+                refreshProviderHomeShelves()
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
@@ -2184,9 +2185,9 @@ class AppCoordinator internal constructor(
         }
     }
 
-    private suspend fun refreshKomgaHomeShelves() {
+    private suspend fun refreshProviderHomeShelves() {
         val shelves = runCatching { homeShelfModule()?.loadHomeShelves() }.getOrNull() ?: return
-        if (!shelves.isServerProvided) return
+        if (!shelves.providesBooks(HomeSection.ON_DECK)) return
         val current = lastBrowserState ?: return
         showBrowser(current.copy(homeShelves = mergeKnownProgress(shelves)))
     }

@@ -78,7 +78,10 @@ class BookOrbitAppInstrumentedTest {
                 libraries = listOf(LibrarySummary("library", "Library")),
                 selectedLibraryId = "library",
                 books = listOf(read, next),
-                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = false)
+                homeShelfPreferences = HomeShelfPreferences(
+                    onDeckEnabled = false,
+                    source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+                )
             )
         )
 
@@ -107,7 +110,10 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("No on deck books found.").assertIsDisplayed()
         composeRule.runOnIdle {
             screenState.value = screenState.value.copy(
-                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = true)
+                homeShelfPreferences = HomeShelfPreferences(
+                    onDeckEnabled = true,
+                    source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+                )
             )
         }
 
@@ -116,18 +122,67 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.runOnIdle {
             screenState.value = screenState.value.copy(
-                homeShelfPreferences = HomeShelfPreferences(onDeckEnabled = false)
+                homeShelfPreferences = HomeShelfPreferences(
+                    onDeckEnabled = false,
+                    source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+                )
             )
         }
         composeRule.onNodeWithText("No on deck books found.").assertIsDisplayed()
 
         composeRule.runOnIdle {
             screenState.value = screenState.value.copy(
-                homeShelves = HomeShelfData(isServerProvided = true)
+                homeShelfPreferences = HomeShelfPreferences(
+                    onDeckEnabled = true,
+                    source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+                ),
+                homeShelves = HomeShelfData(
+                    booksBySection = mapOf(HomeSection.ON_DECK to listOf(next))
+                )
             )
         }
         composeRule.onNodeWithText("Next on deck").assertIsDisplayed()
         composeRule.onAllNodesWithText("No on deck books found.").assertCountEquals(0)
+    }
+
+    @Test
+    fun unsynchronizedBookOrbitShelfOffersLocalOnDeckSetting() {
+        val preferences = mutableStateOf(AppPreferences())
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(
+                    preferences = preferences.value,
+                    homeShelfPreferences = HomeShelfPreferences(
+                        source = HomeShelfPreferenceSource.LOCAL_FALLBACK
+                    ),
+                    onPreferencesChange = { preferences.value = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("General").performClick()
+        composeRule.onNodeWithTag("options-show-local-on-deck").assertIsDisplayed().performClick()
+        composeRule.runOnIdle {
+            assertEquals(false, preferences.value.showOnDeckWhenShelfSyncDisabled)
+        }
+    }
+
+    @Test
+    fun synchronizedBookOrbitShelfDoesNotOfferLocalOnDeckOverride() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                OptionsScreen(
+                    preferences = AppPreferences(),
+                    homeShelfPreferences = HomeShelfPreferences(
+                        source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+                    ),
+                    onPreferencesChange = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("General").performClick()
+        composeRule.onAllNodesWithTag("options-show-local-on-deck").assertCountEquals(0)
     }
 
     @Test

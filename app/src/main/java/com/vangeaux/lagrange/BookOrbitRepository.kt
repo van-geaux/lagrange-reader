@@ -413,6 +413,7 @@ interface BookOrbitDataSource {
     ): LibraryBooksPage = (firstPage ?: loadBooksPage(libraryId, 0)).copy(isComplete = true)
     suspend fun loadCachedHomeBooks(): List<BookSummary> = emptyList()
     suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
+    suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData()
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -613,6 +614,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private var libraryCoverAspectRatios: Map<String, CoverAspectRatio> = emptyMap()
     @Volatile
     private var legacyFullMediaCachesPruned = false
+    @Volatile
+    private var lastHomeShelfPreferences: HomeShelfPreferences? = null
 
     private fun rememberLibraryCoverAspectRatios(libraries: List<LibrarySummary>) {
         libraryCoverAspectRatios = libraries.associate { it.id to it.coverAspectRatio }
@@ -757,6 +760,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
 
     override suspend fun setServerUrl(serverUrl: String) {
+        if (!serverUrlsMatch(getServerUrl().orEmpty(), serverUrl)) {
+            lastHomeShelfPreferences = null
+        }
         mutateCatalogImageSession {
             context.dataStore.edit { prefs ->
                 prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
@@ -765,6 +771,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun clearServer() {
+        lastHomeShelfPreferences = null
         // Covers stay on disk: they are scoped by server, profile and account, so switching
         // profiles (which goes through here) keeps each profile's covers for offline use.
         mutateCatalogImageSession {
@@ -783,6 +790,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun beginInteractiveSignIn() {
+        lastHomeShelfPreferences = null
         // The server sign-in page may sign in a different account than the last one on this
         // profile; forget the cover-cache account so it starts fresh on first authenticated use.
         mutateCatalogImageSession {
@@ -804,6 +812,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun clearSession() {
+        lastHomeShelfPreferences = null
         mutateCatalogImageSession(clearDiskCacheAfter = true) {
             catalogImageAccountScopeStore.clear(currentProfileId() ?: getServerUrl().orEmpty())
             CatalogImageCoordinator.interactiveSignInProfileKey = null
@@ -930,6 +939,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun login(username: String, password: String) = withContext(Dispatchers.IO) {
+        lastHomeShelfPreferences = null
         if (username.isBlank() || password.isBlank()) {
             throw InvalidCredentialsException()
         }
@@ -1139,7 +1149,29 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             BookOrbitPayloadParser.parseHomeShelfPreferences(
                 request("/api/v1/auth/me", "GET", null)
             )
-        }.getOrDefault(HomeShelfPreferences())
+        }.onSuccess { lastHomeShelfPreferences = it }
+            .getOrElse { lastHomeShelfPreferences ?: HomeShelfPreferences() }
+    }
+
+    override suspend fun loadHomeShelves(): HomeShelfData = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        val onDeck = runCatching {
+            BookOrbitPayloadParser.parseBooks(
+                libraryId = "",
+                payload = request(
+                    "/api/v1/dashboard/scrollers/up-next-in-series?limit=50",
+                    "GET",
+                    null
+                ),
+                downloads = downloads,
+                serverBase = serverUrl,
+                isLocalOnlyOverride = false
+            )
+        }.getOrDefault(emptyList())
+        HomeShelfData(
+            booksBySection = mapOf(HomeSection.ON_DECK to onDeck)
+        )
     }
 
     override suspend fun refreshLibraryCatalog(
@@ -3667,30 +3699,28 @@ private class WebViewCookieJar : CookieJar {
 }
 
 internal object BookOrbitPayloadParser {
-    /**
-     * BookOrbit only promises dashboard layout to other clients when the user
-     * explicitly enabled cross-session syncing. Optional native shelves stay off
-     * when that preference is unavailable or malformed.
-     */
     fun parseHomeShelfPreferences(payload: String): HomeShelfPreferences {
         val root = runCatching { JSONObject(payload) }.getOrNull() ?: return HomeShelfPreferences()
         val user = root.optJSONObject("user") ?: root
         val dashboardConfig = user.optJSONObject("settings")
             ?.optJSONObject("dashboardShelfConfig")
-            ?: return HomeShelfPreferences()
-        if (dashboardConfig.opt("syncAcrossSessions") !is Boolean ||
-            !dashboardConfig.optBoolean("syncAcrossSessions")
-        ) {
-            return HomeShelfPreferences()
+            ?: return HomeShelfPreferences(source = HomeShelfPreferenceSource.LOCAL_FALLBACK)
+        val syncValue = dashboardConfig.opt("syncAcrossSessions")
+        if (syncValue !is Boolean) return HomeShelfPreferences()
+        if (!dashboardConfig.optBoolean("syncAcrossSessions")) {
+            return HomeShelfPreferences(source = HomeShelfPreferenceSource.LOCAL_FALLBACK)
         }
-        val scrollers = dashboardConfig.optJSONArray("scrollers") ?: return HomeShelfPreferences()
+        val scrollers = dashboardConfig.optJSONArray("scrollers") ?: JSONArray()
         val onDeckEnabled = (0 until scrollers.length()).any { index ->
             val scroller = scrollers.optJSONObject(index) ?: return@any false
             scroller.optString("type") == "up-next-in-series" &&
                 scroller.opt("enabled") is Boolean &&
                 scroller.optBoolean("enabled")
         }
-        return HomeShelfPreferences(onDeckEnabled = onDeckEnabled)
+        return HomeShelfPreferences(
+            onDeckEnabled = onDeckEnabled,
+            source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+        )
     }
 
     fun parseSmartScopes(payload: String): List<SmartScope> {

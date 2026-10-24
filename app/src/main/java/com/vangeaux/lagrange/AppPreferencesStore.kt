@@ -67,6 +67,7 @@ data class AppPreferences(
     val offlineCacheDetailsEnabled: Boolean = true,
     val offlineCacheCoversEnabled: Boolean = false,
     val offlineCacheAutoRefreshEnabled: Boolean = false,
+    val showOnDeckWhenShelfSyncDisabled: Boolean = true,
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
     val pauseAudiobookForAudioInterruptions: Boolean = true,
@@ -121,6 +122,10 @@ internal class AppPreferencesStore(context: Context) {
         offlineCacheDetailsEnabled = preferences.getBoolean(OFFLINE_CACHE_DETAILS_KEY, true),
         offlineCacheCoversEnabled = preferences.getBoolean(OFFLINE_CACHE_COVERS_KEY, false),
         offlineCacheAutoRefreshEnabled = preferences.getBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, false),
+        showOnDeckWhenShelfSyncDisabled = preferences.getBoolean(
+            SHOW_ON_DECK_WHEN_SHELF_SYNC_DISABLED_KEY,
+            true
+        ),
         confirmDeleteLocalCopy = preferences.getBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, true),
         confirmAudiobookSeek = preferences.getBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, true),
         pauseAudiobookForAudioInterruptions = audiobookAudioInterruptionPauseFromStorage(
@@ -190,6 +195,10 @@ internal class AppPreferencesStore(context: Context) {
             .putBoolean(OFFLINE_CACHE_DETAILS_KEY, value.offlineCacheDetailsEnabled)
             .putBoolean(OFFLINE_CACHE_COVERS_KEY, value.offlineCacheCoversEnabled)
             .putBoolean(OFFLINE_CACHE_AUTO_REFRESH_KEY, value.offlineCacheAutoRefreshEnabled)
+            .putBoolean(
+                SHOW_ON_DECK_WHEN_SHELF_SYNC_DISABLED_KEY,
+                value.showOnDeckWhenShelfSyncDisabled
+            )
             .putBoolean(CONFIRM_DELETE_LOCAL_COPY_KEY, value.confirmDeleteLocalCopy)
             .putBoolean(CONFIRM_AUDIOBOOK_SEEK_KEY, value.confirmAudiobookSeek)
             .putBoolean(
@@ -373,6 +382,8 @@ internal class AppPreferencesStore(context: Context) {
         const val OFFLINE_CACHE_DETAILS_KEY = "offline_cache_details"
         const val OFFLINE_CACHE_COVERS_KEY = "offline_cache_covers"
         const val OFFLINE_CACHE_AUTO_REFRESH_KEY = "offline_cache_auto_refresh"
+        const val SHOW_ON_DECK_WHEN_SHELF_SYNC_DISABLED_KEY =
+            "show_on_deck_when_shelf_sync_disabled"
         const val CONFIRM_DELETE_LOCAL_COPY_KEY = "confirm_delete_local_copy"
         const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
         const val PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY =

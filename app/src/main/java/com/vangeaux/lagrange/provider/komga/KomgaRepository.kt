@@ -150,7 +150,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             }
     }
 
-    suspend fun loadHomeShelves(): HomeShelfData {
+    override suspend fun loadHomeShelves(): HomeShelfData {
         val shelves = homeModule.loadHomeShelves(getServerUrl().orEmpty())
         val downloads = downloadStore.readAll(getServerUrl().orEmpty()).associateBy { it.fileId }
         return shelves.copy(

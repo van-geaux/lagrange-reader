@@ -2081,6 +2081,7 @@ internal fun NativeLibraryBrowserScreen(
                 destination == BrowserDestination.OPTIONS -> OptionsScreen(
                     preferences = appPreferences,
                     libraries = state.libraries,
+                    homeShelfPreferences = state.homeShelfPreferences,
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
@@ -2144,6 +2145,7 @@ internal fun NativeLibraryBrowserScreen(
                         state.homeBooks
                     },
                     state = state,
+                    localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
                     recentBooksPageLoader = recentBooksPageLoader,
                     modifier = Modifier.padding(padding),
@@ -2162,6 +2164,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.HOME -> RefreshableHomeFeed(
                     state = state,
+                    localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     modifier = Modifier.padding(padding),
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
@@ -2239,6 +2242,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 else -> HomeFeed(
                     state = state,
+                    localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     modifier = Modifier.padding(padding),
                     coverLoader = coverLoader,
                     onBookSelected = { book -> selectedBook = book },
@@ -3505,6 +3509,7 @@ private fun BookPosterCard(
 internal fun OptionsScreen(
     preferences: AppPreferences,
     libraries: List<LibrarySummary> = emptyList(),
+    homeShelfPreferences: HomeShelfPreferences = HomeShelfPreferences(),
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
@@ -3640,6 +3645,22 @@ internal fun OptionsScreen(
                 summary = "Used the next time the app starts",
                 testTag = "options-opening-screen",
                 onClick = { openDialog = OptionsDialog.OPENING_SCREEN }
+            )
+        }
+        if (
+            selectedCategory == OptionsCategory.GENERAL &&
+            homeShelfPreferences.source == HomeShelfPreferenceSource.LOCAL_FALLBACK
+        ) item(key = "local-on-deck") {
+            AppPreferenceSwitchRow(
+                title = "Show On deck",
+                summary = "Used locally because BookOrbit shelf synchronization is off",
+                checked = preferences.showOnDeckWhenShelfSyncDisabled,
+                testTag = "options-show-local-on-deck",
+                onCheckedChange = {
+                    onPreferencesChange(
+                        preferences.copy(showOnDeckWhenShelfSyncDisabled = it)
+                    )
+                }
             )
         }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "reduce-motion") {
@@ -5059,6 +5080,7 @@ private suspend fun loadCatalogBitmap(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun RefreshableHomeFeed(
     state: BrowserState,
+    localOnDeckEnabled: Boolean,
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
@@ -5094,6 +5116,7 @@ private fun RefreshableHomeFeed(
     ) {
         HomeFeed(
             state = state,
+            localOnDeckEnabled = localOnDeckEnabled,
             books = state.homeBooks,
             downloadedLocalBooks = downloadedLocalBooks,
             modifier = Modifier.fillMaxSize(),
@@ -5118,6 +5141,7 @@ private fun RefreshableHomeFeed(
 @Composable
 private fun HomeFeed(
     state: BrowserState,
+    localOnDeckEnabled: Boolean = true,
     books: List<BookSummary> = state.books,
     downloadedLocalBooks: List<BookSummary>? = null,
     modifier: Modifier,
@@ -5144,6 +5168,10 @@ private fun HomeFeed(
     // Provider Home shelves are server-wide; filter them before rendering a
     // library Recommended feed instead of reusing aggregate contents.
     val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
+    val onDeckEnabled = state.homeShelfPreferences.effectiveOnDeckEnabled(
+        localFallbackEnabled = localOnDeckEnabled,
+        hasProviderOwnedShelves = serverShelves.isServerProvided
+    )
     val currentlyReadingAll = remember(libraryScopedBooks, serverShelves) {
         if (serverShelves.isServerProvided) {
             sortCurrentlyReadingBooks(
@@ -5156,12 +5184,14 @@ private fun HomeFeed(
     val onDeckAll = remember(
         libraryScopedBooks,
         serverShelves,
-        state.homeShelfPreferences.onDeckEnabled
+        onDeckEnabled
     ) {
-        if (serverShelves.isServerProvided) serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
-        else generatedOnDeckBooks(
+        if (!onDeckEnabled) emptyList()
+        else if (serverShelves.providesBooks(HomeSection.ON_DECK)) {
+            serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
+        } else generatedOnDeckBooks(
             books = libraryScopedBooks,
-            enabled = state.homeShelfPreferences.onDeckEnabled,
+            enabled = true,
             limit = null
         )
     }
@@ -5992,6 +6022,7 @@ private fun LibraryContentScreen(
             when (tab) {
                 LibraryTab.RECOMMENDED -> HomeFeed(
                     state = state,
+                    localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     downloadedLocalBooks = downloadedLocalBooks,
                     modifier = Modifier.weight(1f),
                     coverLoader = coverLoader,
@@ -6257,6 +6288,7 @@ internal fun HomeSectionScreen(
     section: HomeSection,
     books: List<BookSummary>,
     state: BrowserState,
+    localOnDeckEnabled: Boolean = true,
     serverWide: Boolean,
     recentBooksPageLoader: suspend (String, HomeSection, Int) -> LibraryBooksPage,
     modifier: Modifier,
@@ -6270,19 +6302,28 @@ internal fun HomeSectionScreen(
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?
 ) {
+    val scopedServerShelves = homeFeedShelves(
+        state.homeShelves,
+        state.selectedLibraryId.takeUnless { serverWide }
+    )
+    val onDeckEnabled = state.homeShelfPreferences.effectiveOnDeckEnabled(
+        localFallbackEnabled = localOnDeckEnabled,
+        hasProviderOwnedShelves = scopedServerShelves.isServerProvided
+    )
     val localSectionBooks = remember(
         books,
         section,
-        state.homeShelfPreferences.onDeckEnabled,
-        state.homeShelves.isServerProvided
+        onDeckEnabled,
+        scopedServerShelves
     ) {
         when (section) {
             HomeSection.CURRENTLY_READING -> currentlyReadingBooks(books, limit = null)
-            HomeSection.ON_DECK -> generatedOnDeckBooks(
-                books = books,
-                enabled = state.homeShelfPreferences.onDeckEnabled || state.homeShelves.isServerProvided,
-                limit = null
-            )
+            HomeSection.ON_DECK -> when {
+                !onDeckEnabled -> emptyList()
+                scopedServerShelves.providesBooks(HomeSection.ON_DECK) ->
+                    scopedServerShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
+                else -> generatedOnDeckBooks(books = books, enabled = true, limit = null)
+            }
             HomeSection.WANT_TO_READ -> wantToReadBooks(books, limit = null)
             HomeSection.RECENTLY_ADDED_BOOKS -> books.sortedWith(
                 compareByDescending<BookSummary> { it.addedAtMillis != null }

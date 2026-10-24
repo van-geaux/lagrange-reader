@@ -95,6 +95,34 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun onDeckShelfUsesBookOrbitUpNextEndpoint() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """{"books":[{"id":"next-1","libraryId":"library-1","title":"Next","files":[{"id":"file-1","format":"epub"}]}],"total":null}"""
+            )
+        )
+
+        val shelves = repository.loadHomeShelves()
+
+        assertEquals(listOf("next-1"), shelves.booksBySection[HomeSection.ON_DECK]?.map { it.id })
+        assertTrue(shelves.providesBooks(HomeSection.ON_DECK))
+        assertEquals(
+            "/api/v1/dashboard/scrollers/up-next-in-series?limit=50",
+            server.takeRequest(5, TimeUnit.SECONDS)?.path
+        )
+    }
+
+    @Test
+    fun failedOnDeckEndpointDoesNotFallBackToLocallyGeneratedBooks() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        val shelves = repository.loadHomeShelves()
+
+        assertTrue(shelves.providesBooks(HomeSection.ON_DECK))
+        assertTrue(shelves.booksBySection[HomeSection.ON_DECK].orEmpty().isEmpty())
+    }
+
+    @Test
     fun catalogImagesAuthenticateOnlyToTheConfiguredOrigin() = runBlocking {
         val external = MockWebServer().apply { start() }
         try {

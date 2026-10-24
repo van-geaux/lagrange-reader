@@ -739,16 +739,35 @@ data class BrowserState(
 )
 
 /** Provider-owned Home shelf choices that can be safely reflected by the native client. */
+enum class HomeShelfPreferenceSource {
+    SERVER_SYNCHRONIZED,
+    LOCAL_FALLBACK,
+    UNAVAILABLE
+}
+
 data class HomeShelfPreferences(
-    val onDeckEnabled: Boolean = false
-)
+    val onDeckEnabled: Boolean = false,
+    val source: HomeShelfPreferenceSource = HomeShelfPreferenceSource.UNAVAILABLE
+) {
+    fun effectiveOnDeckEnabled(
+        localFallbackEnabled: Boolean,
+        hasProviderOwnedShelves: Boolean = false
+    ): Boolean = when (source) {
+        HomeShelfPreferenceSource.SERVER_SYNCHRONIZED -> onDeckEnabled
+        HomeShelfPreferenceSource.LOCAL_FALLBACK -> localFallbackEnabled
+        HomeShelfPreferenceSource.UNAVAILABLE -> hasProviderOwnedShelves || onDeckEnabled
+    }
+}
 
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val isServerProvided: Boolean = false,
     val isAggregatedAcrossLibraries: Boolean = false
-)
+) {
+    fun providesBooks(section: HomeSection): Boolean =
+        isServerProvided || booksBySection.containsKey(section)
+}
 
 enum class ReaderLaunchMode {
     NORMAL,

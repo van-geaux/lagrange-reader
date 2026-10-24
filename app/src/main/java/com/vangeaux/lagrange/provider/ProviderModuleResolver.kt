@@ -158,10 +158,7 @@ internal fun resolveProviderHomeShelfModule(repository: BookOrbitDataSource): Ho
     when (repository) {
         is KomgaRepository -> KomgaModuleSet(repository).home
         is KavitaRepository -> KavitaModuleSet(repository).modules.home
-        else -> object : HomeShelfModule {
-        override suspend fun loadCachedHomeBooks() = repository.loadCachedHomeBooks()
-        override suspend fun loadHomeShelfPreferences() = repository.loadHomeShelfPreferences()
-        }
+        else -> BookOrbitModuleSet(repository).modules.home
     }
 
 internal fun resolveProviderLibraryModule(repository: BookOrbitDataSource): LibraryModule =

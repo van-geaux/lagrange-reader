@@ -39,6 +39,7 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
         home = object : HomeShelfModule {
             override suspend fun loadCachedHomeBooks() = source.loadCachedHomeBooks()
             override suspend fun loadHomeShelfPreferences() = source.loadHomeShelfPreferences()
+            override suspend fun loadHomeShelves() = source.loadHomeShelves()
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes() = source.loadSmartScopes()
