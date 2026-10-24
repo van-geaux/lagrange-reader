@@ -323,6 +323,7 @@ private enum class OptionsDialog {
 private enum class OptionsCategory(val title: String, val summary: String) {
     APPEARANCE("Appearance", "Theme, motion, and browsing presentation"),
     GENERAL("General", "Opening behavior, orientation, and general preferences"),
+    PLAYBACK("Playback", "Speed tracking, progress scaling, and Android Auto options"),
     LIBRARY("Library", "Browsing and library presentation"),
     DOWNLOADS_OFFLINE("Downloads & Offline", "Downloads, storage, and offline library data"),
     NETWORK_SYNC("Network & Sync", "Background network and playback behavior")
@@ -3517,6 +3518,8 @@ internal fun OptionsScreen(
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
     var selectedCategory by rememberSaveable { mutableStateOf<OptionsCategory?>(null) }
     BackHandler(enabled = selectedCategory != null) { selectedCategory = null }
+    var subDestination by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = subDestination != null) { subDestination = null }
     var readingLibraryId by rememberSaveable {
         mutableStateOf(libraries.firstOrNull()?.id)
     }
@@ -3552,9 +3555,15 @@ internal fun OptionsScreen(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (selectedCategory != null) {
+                if (selectedCategory != null || subDestination != null) {
                     IconButton(
-                        onClick = { selectedCategory = null },
+                        onClick = { 
+                            if (subDestination != null) {
+                                subDestination = null 
+                            } else {
+                                selectedCategory = null 
+                            }
+                        },
                         modifier = Modifier.testTag("options-back")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to settings")
@@ -3562,15 +3571,24 @@ internal fun OptionsScreen(
                 }
                 OrbitEyebrow("Options")
                 Text(
-                    when (selectedCategory) {
-                        OptionsCategory.APPEARANCE -> "Interface"
-                        null -> "Settings"
+                    when {                                           
+                        selectedCategory == OptionsCategory.APPEARANCE -> "Interface"
+                        selectedCategory == OptionsCategory.GENERAL -> "General"
+                        selectedCategory == OptionsCategory.PLAYBACK -> "Playback"
+                        subDestination == "android_auto" -> "Android Auto"
+                        selectedCategory == OptionsCategory.LIBRARY -> "Library"
+                        selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE -> "Downloads & Offline"
+                        selectedCategory == OptionsCategory.NETWORK_SYNC -> "Network & Sync"
+                        selectedCategory == null && subDestination == null -> "Settings"
                         else -> selectedCategory?.title ?: "Settings"
                     },
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Text(
-                    selectedCategory?.summary ?: "Choose a category to change application settings.",
+                    when {
+                        subDestination == "android_auto" -> "Configure playback speed buttons, skip increments, and vehicle controls"
+                        else -> selectedCategory?.summary ?: "Choose a category to change application settings."
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -3651,6 +3669,60 @@ internal fun OptionsScreen(
                 onCheckedChange = {
                     onPreferencesChange(preferences.copy(reduceMotion = it))
                 }
+            )
+        }
+if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
+            AppPreferenceSwitchRow(
+                title = "Scale Progress by Playback Speed",
+                summary = "Adjusts remaining time and progress bar tracking when listening above 1.0x speed.",
+                checked = preferences.scaleProgressByPlaybackSpeed,
+                testTag = "options-scale-progress-speed",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(scaleProgressByPlaybackSpeed = it))
+                }
+            )
+        }
+        if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "android-auto-menu-item") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { subDestination = "android_auto" }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("options-playback-android-auto"),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                OrbitEyebrow("Android Auto")
+                Text("Dashboard controls", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Customize playback speed buttons, skip intervals, and steering wheel actions.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        if (subDestination == "android_auto") item(key = "aa-skip-behavior-header") {
+            Column(
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OrbitEyebrow("Android Auto Controls")
+                Text("Steering wheel & skip behavior", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Define whether vehicle skip buttons jump chapters or perform timed skips.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        if (subDestination == "android_auto") item(key = "aa-vehicle-skip-mode") {
+            // Placeholder or preference toggle for steering wheel skip mode (Chapters vs Time-skip)
+            AppPreferenceSwitchRow(
+                title = "Vehicle Skip Buttons Jump Chapters",
+                summary = "When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.",
+                checked = false, // Map to your app preference key when ready
+                testTag = "options-aa-vehicle-skip-chapters",
+                onCheckedChange = { /* Save preference */ }
             )
         }
         if (selectedCategory == OptionsCategory.LIBRARY) item(key = "library-card-size") {
