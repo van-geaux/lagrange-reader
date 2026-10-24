@@ -400,6 +400,32 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks uses the audio file cover when ebook is primary`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "EPUB and audiobook",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "files": [
+                      {"id": "epub-file", "format": "epub", "role": "primary"},
+                      {"id": "audio-file", "format": "m4b", "filename": "book.m4b", "coverUrl": "/covers/audio-square.jpg"}
+                    ]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test",
+            preferredFileId = "audio-file"
+        )
+
+        assertEquals(MediaKind.AUDIO, books.single().mediaKind)
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
+    }
+
+    @Test
     fun `parseBooks projects every completed downloaded format available on the book`() {
         val books = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-1",

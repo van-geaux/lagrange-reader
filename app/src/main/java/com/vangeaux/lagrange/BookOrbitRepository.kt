@@ -4855,15 +4855,21 @@ internal object BookOrbitPayloadParser {
             optJSONObject("audioCover")?.stringValue("url", "href", "path")
         ).filterNotNull().firstOrNull { it.isNotBlank() }
 
+        fun JSONObject.fileCoverValue(): String? = sequenceOf(
+            stringValue("audiobookCoverUrl", "audioCoverUrl", "coverUrl", "cover", "coverImage"),
+            optJSONObject("audiobookCover")?.stringValue("url", "href", "path"),
+            optJSONObject("audioCover")?.stringValue("url", "href", "path"),
+            optJSONObject("cover")?.stringValue("url", "href", "path"),
+            optJSONObject("coverImage")?.stringValue("url", "href", "path")
+        ).filterNotNull().firstOrNull { it.isNotBlank() }
+
         fun resolve(value: String): String = when {
             value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true) -> value
             else -> "$serverBase/${value.trimStart('/')}"
         }
 
-        val direct = sequenceOf(this, primaryFile)
-            .filterNotNull()
-            .mapNotNull { it.coverValue() }
-            .firstOrNull()
+        val direct = primaryFile?.fileCoverValue()
+            ?: coverValue()
         if (direct != null) return resolve(direct)
 
         val covers = sequenceOf(this, primaryFile)
