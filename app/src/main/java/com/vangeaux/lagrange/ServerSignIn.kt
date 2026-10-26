@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +39,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.net.URI
+
+internal const val SERVER_SIGN_IN_WAIT_NOTICE =
+    "After successful sign-in, wait for Lagrange to verify your session. " +
+        "This sign-in window will close automatically when verification is complete."
 
 internal fun buildServerLoginUrl(serverUrl: String): String? {
     val trimmed = serverUrl.trim().trimEnd('/')
@@ -120,10 +126,29 @@ internal fun ServerSignInDialog(
                         tone = OrbitMessageTone.ERROR
                     )
                 } else {
-                    key(loginUrl, attempt) {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = { context ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            tonalElevation = 2.dp
+                        ) {
+                            Text(
+                                text = SERVER_SIGN_IN_WAIT_NOTICE,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            key(loginUrl, attempt) {
+                                AndroidView(
+                                    modifier = Modifier.fillMaxSize(),
+                                    factory = { context ->
                                 val container = FrameLayout(context)
                                 lateinit var chromeClient: WebChromeClient
 
@@ -218,43 +243,45 @@ internal fun ServerSignInDialog(
                                 )
                                 mainWebView.loadUrl(loginUrl)
                                 container
+                                    }
+                                )
                             }
-                        )
-                    }
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                    val message = loadError ?: state.error
-                    if (message != null) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OrbitMessage(message, tone = OrbitMessageTone.ERROR)
-                            Button(
-                                onClick = {
-                                    loadError = null
-                                    attempt += 1
-                                    onRetry()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Retry")
+                            if (isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                             }
-                        }
-                    } else if (state.isVerifying) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.padding(bottom = 8.dp))
-                            Text("Checking your sign-in with the server…")
+                            val message = loadError ?: state.error
+                            if (message != null) {
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OrbitMessage(message, tone = OrbitMessageTone.ERROR)
+                                    Button(
+                                        onClick = {
+                                            loadError = null
+                                            attempt += 1
+                                            onRetry()
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Retry")
+                                    }
+                                }
+                            } else if (state.isVerifying) {
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.padding(bottom = 8.dp))
+                                    Text("Checking your sign-in with the server…")
+                                }
+                            }
                         }
                     }
                 }

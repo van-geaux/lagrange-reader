@@ -8,6 +8,12 @@ import org.junit.Test
 
 class ServerSignInTest {
     @Test
+    fun `server sign-in notice tells users to wait for verification`() {
+        assertTrue(SERVER_SIGN_IN_WAIT_NOTICE.contains("wait for Lagrange to verify"))
+        assertTrue(SERVER_SIGN_IN_WAIT_NOTICE.contains("close automatically"))
+    }
+
+    @Test
     fun `buildServerLoginUrl preserves a server path prefix and removes trailing slash`() {
         assertEquals(
             "https://books.example.test/bookorbit/login",

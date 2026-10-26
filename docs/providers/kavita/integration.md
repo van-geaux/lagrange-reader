@@ -25,7 +25,7 @@ The adapter follows Kavita's upstream OpenAPI contract:
 Kavita profiles retain both supported authentication paths:
 
 - username/password login uses `POST /api/Account/login` and stores the returned Kavita JWT in the encrypted provider credential store;
-- server-hosted OIDC login opens Kavita's `/login` page in the existing Lagrange server-sign-in WebView. Kavita owns the identity-provider redirect and `/signin-oidc` callback, then establishes its own authentication cookie. Lagrange reuses that cookie for authenticated API, cover, reader, and download requests and verifies the resulting account through `GET /api/Account`.
+- server-hosted OIDC login opens Kavita's `/login` page in the existing Lagrange server-sign-in WebView. Kavita owns the identity-provider redirect and `/signin-oidc` callback, then establishes its own authentication cookie. Lagrange reuses that cookie for authenticated API, cover, reader, and download requests and verifies the resulting account through `GET /api/Account`. The WebView displays a reminder to wait while Lagrange verifies the session; it closes when verification completes.
 
 The OIDC action is provider-capability gated. It is shown for Kavita profiles without replacing username/password login, and no identity-provider authorization code, access token, refresh token, password, or cookie is copied into Lagrange logs or application credential storage. Native AppAuth/Custom Tabs remains outside this integration because Kavita owns the registered callback and OIDC client configuration.
 
