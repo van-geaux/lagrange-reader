@@ -472,7 +472,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                             currentPage = currentPage,
                             pageCount = currentPageCount,
                             preferences = readerPreferences,
-                            onContinueReading = ::hideOptions,
+                            onContinueReading = ::continueReading,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
                             showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
@@ -996,13 +996,17 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     }
 
     private fun showOptions() {
-        hideChrome()
         optionsView.visibility = View.VISIBLE
         optionsView.bringToFront()
     }
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun continueReading() {
+        hideOptions()
+        hideChrome()
     }
 
     private fun enableReadMode() {
@@ -1066,6 +1070,12 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     internal fun setShowPageProgressForTest(enabled: Boolean) {
         applyReaderPreferences(readerPreferences.copy(showPageProgress = enabled))
     }
+
+    internal fun showReaderOptionsForTest() = showOptions()
+
+    internal fun hideReaderOptionsForTest() = hideOptions()
+
+    internal fun readerContentBottomPaddingForTest(): Int = readerContainer.paddingBottom
 
     internal fun isContinuousComicReaderVisible(): Boolean =
         continuousComicView?.isAttachedToWindow == true

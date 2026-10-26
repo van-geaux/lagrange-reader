@@ -1183,7 +1183,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                             status = "Chapter ${currentChapter + 1}/${chapterTitles.size.coerceAtLeast(1)} · " +
                                 "Page ${currentPage + 1}/${currentPageCount.coerceAtLeast(1)}",
                             preferences = readerPreferences,
-                            onContinueReading = ::hideOptions,
+                            onContinueReading = ::continueReading,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
                             showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
@@ -3135,13 +3135,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun showOptions() {
-        hideChrome()
         optionsView.visibility = View.VISIBLE
         optionsView.bringToFront()
     }
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun continueReading() {
+        hideOptions()
+        hideChrome()
     }
 
     private fun enableReadMode() {
@@ -3198,6 +3202,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     internal fun setShowPageProgressForTest(enabled: Boolean) {
         applyReaderPreferences(readerPreferences.copy(showPageProgress = enabled))
     }
+
+    internal fun showReaderOptionsForTest() = showOptions()
+
+    internal fun hideReaderOptionsForTest() = hideOptions()
+
+    internal fun readerContentBottomPaddingForTest(): Int = readerContainer.paddingBottom
 
     internal fun isTwoPageSpreadActive(): Boolean = twoPageSpreadActive
 
