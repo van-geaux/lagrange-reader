@@ -147,6 +147,7 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
     }
 
     val featureAvailability = ProviderFeatureAvailability(
+        serverHostedSignIn = true,
         achievements = false,
         statistics = false,
         smartScopes = false,

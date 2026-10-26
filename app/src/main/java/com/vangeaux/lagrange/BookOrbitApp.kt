@@ -318,6 +318,7 @@ private fun BookOrbitDestination(
             LoginScreen(
                 serverUrl = screen.serverUrl,
                 providerId = screen.providerId,
+                serverHostedSignInAvailable = coordinator.serverHostedSignInAvailable(),
                 configuredServerProfiles = coordinator.configuredServerProfiles(),
                 message = screen.message,
                 isSubmitting = screen.isSubmitting,

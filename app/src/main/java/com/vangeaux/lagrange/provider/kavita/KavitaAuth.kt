@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange.provider.kavita
 
 import android.content.Context
+import android.webkit.CookieManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -13,6 +14,7 @@ import com.vangeaux.lagrange.UserFacingException
 import com.vangeaux.lagrange.authenticatedAccountPrincipal
 import com.vangeaux.lagrange.normalizeServerUrl
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -26,6 +28,7 @@ import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.net.ssl.SSLException
+import kotlin.coroutines.resume
 internal fun kavitaLoginEndpoint(baseUrl: String): String =
     "$baseUrl/api/Account/login"
 
@@ -51,8 +54,10 @@ internal fun kavitaJwtPrincipal(token: String): AuthenticatedAccountPrincipal? =
     AuthenticatedAccountPrincipal(canonical = "id:$id")
 }.getOrNull()
 
-internal fun kavitaSessionHeaders(token: String?): Map<String, String> =
-    token?.takeIf { it.isNotBlank() }?.let { mapOf("Authorization" to "Bearer $it") } ?: emptyMap()
+internal fun kavitaSessionHeaders(token: String?, cookie: String? = null): Map<String, String> = buildMap {
+    token?.takeIf { it.isNotBlank() }?.let { put("Authorization", "Bearer $it") }
+    cookie?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
+}
 
 internal interface KavitaAuthModule {
     suspend fun checkServer(serverUrl: String): ServerCheckResult
@@ -139,18 +144,33 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 
     override suspend fun sessionState(serverUrl: String): SessionState = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext SessionState.Unavailable
+        this@KavitaAuthModuleImpl.serverUrl = base
         ensureAccountScopeFromToken()
         val headers = requestHeaders()
         if (headers.isEmpty()) return@withContext SessionState.Unauthenticated
         runCatching {
             val request = Request.Builder()
-                .url("$base/api/Library/libraries")
+                .url("$base/api/Account")
                 .apply { headers.forEach { (name, value) -> header(name, value) } }
                 .get()
                 .build()
             client.newCall(request).execute().use { response ->
                 when {
-                    response.isSuccessful -> SessionState.Authenticated
+                    response.isSuccessful -> {
+                        val principal = kavitaAuthResponsePrincipal(response.body?.string().orEmpty())
+                        val profileId = activeProfileId()
+                        if (principal != null && profileId != null) {
+                            accountScopeStore.writeAuthoritative(
+                                profileId = profileId,
+                                providerId = "kavita",
+                                principal = principal.canonical,
+                                equivalentPrincipals = principal.provenAliases
+                            )
+                            SessionState.Authenticated
+                        } else {
+                            SessionState.Unavailable
+                        }
+                    }
                     response.code == 401 || response.code == 403 -> SessionState.Unauthenticated
                     else -> SessionState.Unavailable
                 }
@@ -158,7 +178,13 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         }.getOrDefault(SessionState.Unavailable)
     }
 
-    override fun requestHeaders(): Map<String, String> = kavitaSessionHeaders(token)
+    override fun requestHeaders(): Map<String, String> {
+        val origin = currentServerUrl()
+        return kavitaSessionHeaders(
+            token = token,
+            cookie = origin?.let { CookieManager.getInstance().getCookie(it) }
+        )
+    }
 
     internal fun currentServerUrl(): String? =
         serverUrl ?: ServerProfileStore(appContext).active()?.serverUrl
@@ -168,6 +194,14 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         serverUrl = null
         token = null
         activeProfileId()?.let(credentialStore::clear)
+        withContext(Dispatchers.Main.immediate) {
+            suspendCancellableCoroutine { continuation ->
+                CookieManager.getInstance().removeAllCookies {
+                    CookieManager.getInstance().flush()
+                    if (continuation.isActive) continuation.resume(Unit)
+                }
+            }
+        }
     }
 
     override suspend fun saveCurrentProfileSession() {
@@ -182,7 +216,12 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
     override suspend fun restoreCurrentProfileSession(): Boolean {
         token = activeProfileId()?.let(credentialStore::read)
         ensureAccountScopeFromToken()
-        return !token.isNullOrBlank()
+        val configuredServer = ServerProfileStore(appContext).active()?.serverUrl
+        val hasCookie = configuredServer?.let { CookieManager.getInstance().getCookie(it).isNullOrBlank().not() } == true
+        if (token.isNullOrBlank() && hasCookie && configuredServer != null) {
+            sessionState(configuredServer)
+        }
+        return !token.isNullOrBlank() || hasCookie
     }
 
     private fun ensureAccountScopeFromToken() {

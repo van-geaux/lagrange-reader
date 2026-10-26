@@ -60,6 +60,18 @@ class KavitaAuthContractTest {
     }
 
     @Test
+    fun `session headers support the server hosted cookie session`() {
+        assertEquals(
+            mapOf("Cookie" to "session=server-cookie"),
+            kavitaSessionHeaders(null, "session=server-cookie")
+        )
+        assertEquals(
+            mapOf("Authorization" to "Bearer jwt-token", "Cookie" to "session=server-cookie"),
+            kavitaSessionHeaders("jwt-token", "session=server-cookie")
+        )
+    }
+
+    @Test
     fun `account cleanup continues after an individual store fails`() = runBlocking<Unit> {
         val completed = mutableListOf<String>()
         val failures = mutableListOf<String>()

@@ -173,6 +173,7 @@ class AppCoordinator internal constructor(
     fun authorsAvailable(): Boolean = featureAvailability().authors
     fun userRatingAvailable(): Boolean = featureAvailability().userRating
     fun extendedReadingStatusesAvailable(): Boolean = featureAvailability().extendedReadingStatuses
+    fun serverHostedSignInAvailable(): Boolean = featureAvailability().serverHostedSignIn
     fun readingStatusOptions(): List<BookReadStatus> = featureAvailability().readingStatusOptions
 
     // fileIds this coordinator has re-attached to via DownloadScheduler.reconcile() (e.g. after
@@ -1049,7 +1050,7 @@ class AppCoordinator internal constructor(
             val current = _screen.value as? AppScreen.Login ?: return@launch
             oidcJob?.cancel()
             oidcJob = null
-            if (current.providerId == PROVIDER_KOMGA) {
+            if (serverHostedSignInAvailable()) {
                 loginModule()?.clearSession()
             }
             runCatching { repository.beginInteractiveSignIn() }

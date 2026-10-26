@@ -20,10 +20,19 @@ The adapter follows Kavita's upstream OpenAPI contract:
 - chapter download: `GET /api/Download/chapter?chapterId={chapterId}`;
 - series cover: `GET /api/Image/series-cover?seriesId={seriesId}`.
 
+## Authentication modes
+
+Kavita profiles retain both supported authentication paths:
+
+- username/password login uses `POST /api/Account/login` and stores the returned Kavita JWT in the encrypted provider credential store;
+- server-hosted OIDC login opens Kavita's `/login` page in the existing Lagrange server-sign-in WebView. Kavita owns the identity-provider redirect and `/signin-oidc` callback, then establishes its own authentication cookie. Lagrange reuses that cookie for authenticated API, cover, reader, and download requests and verifies the resulting account through `GET /api/Account`.
+
+The OIDC action is provider-capability gated. It is shown for Kavita profiles without replacing username/password login, and no identity-provider authorization code, access token, refresh token, password, or cookie is copied into Lagrange logs or application credential storage. Native AppAuth/Custom Tabs remains outside this integration because Kavita owns the registered callback and OIDC client configuration.
+
 The series/volume/chapter hierarchy is not treated as a Komga-style book identity. The shared catalog presents chapters as book-like entries while provider requests retain the Kavita chapter, volume, series, and library IDs required by the API.
 
 ## Capability state
 
 Implemented provider modules are wired through `KavitaModuleSet` and selected only for profiles with provider ID `kavita`. Unsupported actions remain explicit: EPUB reader routing, chapter unread, audiobook downloads, Home shelves, authors, annotations, statistics, achievements, Smart Scopes, cache warming, and server reading-session history.
 
-Compilation and parser/contract tests do not constitute authenticated demo-server or device validation. Manual validation requires locally supplied credentials through the secure local mechanism; credentials are not stored in profiles, source files, logs, fixtures, or documentation.
+Compilation and parser/contract tests do not constitute authenticated demo-server or device validation. Manual validation requires locally supplied credentials through the secure local mechanism; credentials are not stored in profiles, source files, logs, fixtures, or documentation. The Kavita OIDC browser/session path remains pending live device validation against a configured Kavita server.

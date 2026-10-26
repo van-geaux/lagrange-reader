@@ -279,6 +279,7 @@ internal fun ConfiguredServerCard(
 internal fun LoginScreen(
     serverUrl: String,
     providerId: String,
+    serverHostedSignInAvailable: Boolean,
     configuredServerProfiles: List<ServerProfile>,
     message: String?,
     isSubmitting: Boolean,
@@ -425,7 +426,7 @@ internal fun LoginScreen(
                             Text("Sign in")
                         }
                     }
-                    if (providerId == PROVIDER_KOMGA) {
+                    if (serverHostedSignInAvailable) {
                         OutlinedButton(
                             onClick = onOpenServerSignIn,
                             enabled = !isSubmitting,

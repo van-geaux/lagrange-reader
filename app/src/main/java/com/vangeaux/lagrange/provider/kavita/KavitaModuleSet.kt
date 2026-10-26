@@ -186,6 +186,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
     )
 
     val featureAvailability = ProviderFeatureAvailability(
+        serverHostedSignIn = true,
         achievements = false,
         statistics = false,
         smartScopes = false,
