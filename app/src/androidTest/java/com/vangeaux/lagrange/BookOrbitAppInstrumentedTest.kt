@@ -203,6 +203,8 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Server URL").performTextInput("httpx://books.example.test")
+        composeRule.onNodeWithText("Select server type").performClick()
+        composeRule.onNodeWithText("BookOrbit").performClick()
         composeRule.onNodeWithText("Continue").performClick()
 
         composeRule.onNodeWithText(invalidServerUrlMessage()).assertIsDisplayed()
@@ -221,9 +223,46 @@ class BookOrbitAppInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Server URL").performTextInput("http://books.example.test:8080")
+        composeRule.onNodeWithText("Select server type").performClick()
+        composeRule.onNodeWithText("BookOrbit").performClick()
         composeRule.onNodeWithText("Continue").performClick()
 
         composeRule.waitUntil { dataSource.savedServerUrls == listOf("http://books.example.test:8080") }
+    }
+
+    @Test
+    fun serverSetupRequiresProviderSelection() {
+        val dataSource = InstrumentedFakeDataSource()
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.ServerSetup(),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Server URL").performTextInput("https://books.example.test")
+        composeRule.onNodeWithText("Continue").performClick()
+
+        composeRule.onNodeWithText("Select a server type.").assertIsDisplayed()
+        composeRule.runOnIdle { assertTrue(dataSource.savedServerUrls.isEmpty()) }
+    }
+
+    @Test
+    fun serverSetupDropdownShowsAndSelectsProviders() {
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.ServerSetup(),
+                    coordinator = AppCoordinator(InstrumentedFakeDataSource(), Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Select server type").performClick()
+        composeRule.onNodeWithText("Komga").performClick()
+        composeRule.onNodeWithText("Komga").assertIsDisplayed()
     }
 
     @Test

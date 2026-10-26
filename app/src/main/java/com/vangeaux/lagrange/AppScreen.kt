@@ -9,7 +9,7 @@ sealed interface AppScreen {
         val serverUrl: String = "",
         val serverName: String = "",
         val message: String? = null,
-        val providerId: String = PROVIDER_BOOKORBIT
+        val providerId: String = ""
     ) : AppScreen
     data class Login(
         val serverUrl: String,

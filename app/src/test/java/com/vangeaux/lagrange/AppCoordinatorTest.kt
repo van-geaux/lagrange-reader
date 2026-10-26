@@ -2115,7 +2115,8 @@ class AppCoordinatorTest {
         assertEquals(
             AppScreen.ServerSetup(
                 serverUrl = "https://redirected.example.test",
-                message = "The server redirected this URL. Enter the final base URL directly."
+                message = "The server redirected this URL. Enter the final base URL directly.",
+                providerId = PROVIDER_BOOKORBIT
             ),
             coordinator.screen.value
         )
@@ -2356,7 +2357,8 @@ class AppCoordinatorTest {
         assertEquals(
             AppScreen.ServerSetup(
                 serverUrl = replacement,
-                message = "The server host could not be resolved."
+                message = "The server host could not be resolved.",
+                providerId = PROVIDER_BOOKORBIT
             ),
             coordinator.screen.value
         )

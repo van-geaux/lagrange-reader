@@ -19,6 +19,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -59,6 +61,22 @@ internal fun ServerSetupScreen(
     var serverName by remember(initialServerUrl, initialServerName) { mutableStateOf(initialServerName) }
     var providerId by remember(initialServerUrl, initialProviderId) { mutableStateOf(initialProviderId) }
     var error by remember { mutableStateOf<String?>(null) }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
+    val serverDescription = providerId.takeIf { it.isNotBlank() }?.let {
+        "your ${serverProviderDisplayName(it)} server"
+    } ?: "your server"
+    val submit = {
+        if (providerId.isBlank()) {
+            error = "Select a server type."
+        } else {
+            val normalized = normalizeServerUrl(server)
+            if (normalized == null) {
+                error = invalidServerUrlMessage()
+            } else {
+                onContinue(normalized, serverName.trim(), providerId)
+            }
+        }
+    }
 
     Scaffold(
         topBar = { BookOrbitTopBar(title = "Connect") },
@@ -81,7 +99,7 @@ internal fun ServerSetupScreen(
                 OrbitEyebrow("Private reader")
                 Text("Your library, in orbit.", style = MaterialTheme.typography.displaySmall)
                 Text(
-                    "Connect securely to your ${serverProviderDisplayName(providerId)} server. Your library stays on your server; this app is your reading window.",
+                    "Connect securely to $serverDescription. Your library stays on your server; this app is your reading window.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -113,56 +131,48 @@ internal fun ServerSetupScreen(
                     singleLine = true
                 )
                 Text("Server type", style = MaterialTheme.typography.titleMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (providerId == PROVIDER_BOOKORBIT) {
-                        Button(
-                            onClick = { providerId = PROVIDER_BOOKORBIT },
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { providerMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            providerId.takeIf { it.isNotBlank() }?.let(::serverProviderDisplayName)
+                                ?: "Select server type",
                             modifier = Modifier.weight(1f)
-                        ) { Text(serverProviderDisplayName(PROVIDER_BOOKORBIT)) }
-                    } else {
-                        OutlinedButton(
-                            onClick = { providerId = PROVIDER_BOOKORBIT },
-                            modifier = Modifier.weight(1f)
-                        ) { Text(serverProviderDisplayName(PROVIDER_BOOKORBIT)) }
+                        )
                     }
-                    if (providerId == PROVIDER_KOMGA) {
-                        Button(
-                            onClick = { providerId = PROVIDER_KOMGA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Komga") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { providerId = PROVIDER_KOMGA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Komga") }
+                    DropdownMenu(
+                        expanded = providerMenuExpanded,
+                        onDismissRequest = { providerMenuExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA).forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(serverProviderDisplayName(option)) },
+                                onClick = {
+                                    providerId = option
+                                    providerMenuExpanded = false
+                                    error = null
+                                }
+                            )
+                        }
                     }
-                    if (providerId == PROVIDER_KAVITA) {
-                        Button(
-                            onClick = { providerId = PROVIDER_KAVITA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Kavita") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { providerId = PROVIDER_KAVITA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Kavita") }
-                    }
+                }
+                if (providerId.isBlank() && error == "Select a server type.") {
+                    Text(
+                        text = error.orEmpty(),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 error?.let {
-                    OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                    if (it != "Select a server type.") {
+                        OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                    }
                 }
                 Button(
-                    onClick = {
-                        val normalized = normalizeServerUrl(server)
-                        if (normalized == null) {
-                            error = invalidServerUrlMessage()
-                        } else {
-                            onContinue(normalized, serverName.trim(), providerId)
-                        }
-                    },
+                    onClick = submit,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
@@ -171,7 +181,7 @@ internal fun ServerSetupScreen(
                 }
                 if (server.isNotBlank() && !message.isNullOrBlank()) {
                     OutlinedButton(
-                        onClick = { onContinue(server, serverName.trim(), providerId) },
+                        onClick = submit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
