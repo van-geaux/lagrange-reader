@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.content.Context
 import android.util.Base64
+import androidx.annotation.StringRes
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -389,8 +390,68 @@ internal data class AutomaticDownloadStatus(
     val failed: Int = 0,
     val cursorLibraryId: String? = null,
     val lastRunAtMillis: Long? = null,
-    val message: String? = null
+    val message: String? = null,
+    /** Transient string/plurals resource id hint; not persisted. */
+    val messageRes: Int? = null,
+    val messageArgs: List<Any> = emptyList(),
+    val messageQuantity: Int? = null
 )
+
+/**
+ * UI-side localized variant of [message].
+ *
+ * The English [message] is kept as the persisted fallback (JVM tests and pre-localization
+ * callers keep seeing it); [messageRes] is a transient hint set by the writer. Status values
+ * restored from [AutomaticDownloadStatusStore] have no hint, so the fixed messages are then
+ * mapped from the stored English text; parameterised messages keep their English fallback.
+ */
+internal fun AutomaticDownloadStatus.localizedMessage(context: Context?): String? {
+    if (context == null) return message
+    val resId = messageRes ?: messageResFromStoredMessage() ?: return message
+    return runCatching {
+        if (messageQuantity != null) {
+            context.resources.getQuantityString(
+                resId,
+                messageQuantity,
+                *messageArgs.toTypedArray()
+            )
+        } else {
+            context.getString(resId, *messageArgs.toTypedArray())
+        }
+    }.getOrNull() ?: message
+}
+
+private fun AutomaticDownloadStatus.messageResFromStoredMessage(): Int? = when (message) {
+    "Automatic-download scan completed." -> R.string.error_auto_download_scan_completed
+    "Automatic-download settings changed during this pass." ->
+        R.string.error_auto_download_settings_changed
+    "Automatic downloads are paused until you sign in again." ->
+        R.string.error_auto_download_paused_sign_in
+    "Automatic downloads are paused until this server profile is active." ->
+        R.string.error_auto_download_paused_profile_active
+    "Automatic downloads are paused while this server profile is inactive." ->
+        R.string.error_auto_download_paused_profile_inactive
+    "Automatic download planning cancelled. Completed files were kept." ->
+        R.string.error_auto_download_cancelled
+    "Automatic download planning failed." -> R.string.error_auto_download_planning_failed
+    "Scanning selected libraries." -> R.string.error_auto_download_scanning
+    "Select at least one library." -> R.string.error_auto_download_select_library
+    "Waiting for the selected network and charging conditions." ->
+        R.string.error_auto_download_waiting_conditions
+    "No additional storage is available for this download." ->
+        R.string.error_auto_download_no_storage
+    "The automatic-download policy changed before removal completed." ->
+        R.string.error_auto_download_policy_changed_removal
+    else -> null
+}
+
+/** Localizes a message where a [Context] is available, keeping the English literal as fallback. */
+internal fun localizedUiMessage(
+    context: Context?,
+    @StringRes id: Int,
+    fallback: String,
+    vararg args: Any
+): String = runCatching { context?.getString(id, *args) }.getOrNull() ?: fallback
 
 internal class AutomaticDownloadStatusStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
@@ -1386,7 +1447,11 @@ internal object AutomaticDownloadStorage {
             if (additional.maximumAdditionalBytes <= 0L) {
                 capacity = AutomaticCapacityResult(
                     allowed = false,
-                    message = "No additional storage is available for this download."
+                    message = localizedUiMessage(
+                        context,
+                        R.string.error_auto_download_no_storage,
+                        "No additional storage is available for this download."
+                    )
                 )
             }
         }
@@ -1426,7 +1491,7 @@ internal object AutomaticDownloadStorage {
         if (!allowRemoval || !storagePolicy.automaticRemovalEnabled) {
             return@withContext AutomaticCapacityResult(
                 allowed = false,
-                message = capacityMessage(admission)
+                message = capacityMessage(context, admission)
             )
         }
 
@@ -1461,7 +1526,7 @@ internal object AutomaticDownloadStorage {
         if (!evictionPlanCanSatisfy(plan, admission.requiredReclaimBytes)) {
             return@withContext AutomaticCapacityResult(
                 allowed = false,
-                message = capacityMessage(admission)
+                message = capacityMessage(context, admission)
             )
         }
         val removed = mutableSetOf<String>()
@@ -1512,7 +1577,11 @@ internal object AutomaticDownloadStorage {
                 return@withContext AutomaticCapacityResult(
                     allowed = false,
                     removedFileIds = removed,
-                    message = "The automatic-download policy changed before removal completed."
+                    message = localizedUiMessage(
+                        context,
+                        R.string.error_auto_download_policy_changed_removal,
+                        "The automatic-download policy changed before removal completed."
+                    )
                 )
             }
             if (deletion == null) continue
@@ -1573,16 +1642,28 @@ internal object AutomaticDownloadStorage {
         AutomaticCapacityResult(
             allowed = admission.allowedWithoutReclaim,
             removedFileIds = removed,
-            message = capacityMessage(admission).takeUnless { admission.allowedWithoutReclaim }
+            message = capacityMessage(context, admission).takeUnless { admission.allowedWithoutReclaim }
         )
     }
 
-    private fun capacityMessage(admission: AutomaticStorageAdmission): String = when {
+    private fun capacityMessage(context: Context, admission: AutomaticStorageAdmission): String = when {
         admission.reserveShortfallBytes > 0L && admission.maximumExceededByBytes > 0L ->
-            "The free-space reserve and maximum local-book storage limit would be exceeded."
+            localizedUiMessage(
+                context,
+                R.string.error_storage_reserve_and_limit,
+                "The free-space reserve and maximum local-book storage limit would be exceeded."
+            )
         admission.reserveShortfallBytes > 0L ->
-            "The configured free-space reserve would be exceeded."
-        else -> "The maximum local-book storage limit would be exceeded."
+            localizedUiMessage(
+                context,
+                R.string.error_storage_reserve,
+                "The configured free-space reserve would be exceeded."
+            )
+        else -> localizedUiMessage(
+            context,
+            R.string.error_storage_limit,
+            "The maximum local-book storage limit would be exceeded."
+        )
     }
 }
 
@@ -1761,7 +1842,8 @@ class AutomaticDownloadPlannerWorker(
                 profileId, storageScopeId,
                 AutomaticDownloadStatus(
                     state = AutomaticDownloadRunState.PAUSED,
-                    message = "Automatic downloads are paused until this server profile is active."
+                    message = "Automatic downloads are paused until this server profile is active.",
+                    messageRes = R.string.error_auto_download_paused_profile_active
                 )
             )
             return Result.success()
@@ -1772,7 +1854,8 @@ class AutomaticDownloadPlannerWorker(
                 profileId, storageScopeId,
                 AutomaticDownloadStatus(
                     state = AutomaticDownloadRunState.PAUSED,
-                    message = "Automatic downloads are paused until you sign in again."
+                    message = "Automatic downloads are paused until you sign in again.",
+                    messageRes = R.string.error_auto_download_paused_sign_in
                 )
             )
             return Result.success()
@@ -1794,7 +1877,8 @@ class AutomaticDownloadPlannerWorker(
             profileId, storageScopeId,
             cycleStatus.copy(
                 state = AutomaticDownloadRunState.RUNNING,
-                message = "Scanning selected libraries."
+                message = "Scanning selected libraries.",
+                messageRes = R.string.error_auto_download_scanning
             )
         )
         return try {
@@ -1809,7 +1893,8 @@ class AutomaticDownloadPlannerWorker(
                     profileId, storageScopeId,
                     AutomaticDownloadStatus(
                         state = AutomaticDownloadRunState.PAUSED,
-                        message = "Select at least one library."
+                        message = "Select at least one library.",
+                        messageRes = R.string.error_auto_download_select_library
                     )
                 )
                 return Result.success()
@@ -1961,7 +2046,8 @@ class AutomaticDownloadPlannerWorker(
                             profileId, storageScopeId,
                             AutomaticDownloadStatus(
                                 state = AutomaticDownloadRunState.CANCELLED,
-                                message = "Automatic-download settings changed during this pass."
+                                message = "Automatic-download settings changed during this pass.",
+                                messageRes = R.string.error_auto_download_settings_changed
                             )
                         )
                         return Result.success()
@@ -2031,7 +2117,20 @@ class AutomaticDownloadPlannerWorker(
                         baselineOnly -> "Recorded the current ${library.name} catalog as the new-books baseline."
                         queued > 0 -> "Queued $queued file${if (queued == 1) "" else "s"} from ${library.name}."
                         else -> "No eligible downloads found in this ${library.name} batch."
-                    }
+                    },
+                    messageRes = when {
+                        cycleComplete -> R.string.error_auto_download_scan_completed
+                        baselineOnly -> R.string.error_auto_download_baseline_recorded
+                        queued > 0 -> R.plurals.error_auto_download_queued
+                        else -> R.string.error_auto_download_none_eligible
+                    },
+                    messageArgs = when {
+                        cycleComplete -> emptyList()
+                        baselineOnly -> listOf(library.name)
+                        queued > 0 -> listOf(queued, library.name)
+                        else -> listOf(library.name)
+                    },
+                    messageQuantity = if (!cycleComplete && !baselineOnly && queued > 0) queued else null
                 )
             )
             val automaticQueueRemains = DownloadStore(applicationContext)
@@ -2046,7 +2145,8 @@ class AutomaticDownloadPlannerWorker(
                 profileId, storageScopeId,
                 AutomaticDownloadStatus(
                     state = AutomaticDownloadRunState.PAUSED,
-                    message = "Automatic downloads are paused until you sign in again."
+                    message = "Automatic downloads are paused until you sign in again.",
+                    messageRes = R.string.error_auto_download_paused_sign_in
                 )
             )
             Result.success()
@@ -2057,7 +2157,12 @@ class AutomaticDownloadPlannerWorker(
                     state = AutomaticDownloadRunState.FAILED,
                     failed = 1,
                     lastRunAtMillis = System.currentTimeMillis(),
-                    message = error.message ?: "Automatic download planning failed."
+                    message = error.message ?: "Automatic download planning failed.",
+                    messageRes = if (error.message == null) {
+                        R.string.error_auto_download_planning_failed
+                    } else {
+                        null
+                    }
                 )
             )
             if (runAttemptCount < 4) Result.retry() else Result.failure()
@@ -2228,7 +2333,8 @@ internal object AutomaticDownloadScheduler {
             policy.storageScopeId,
             AutomaticDownloadStatus(
                 state = AutomaticDownloadRunState.RUNNING,
-                message = "Waiting for the selected network and charging conditions."
+                message = "Waiting for the selected network and charging conditions.",
+                messageRes = R.string.error_auto_download_waiting_conditions
             )
         )
         val request = OneTimeWorkRequestBuilder<AutomaticDownloadPlannerWorker>()
@@ -2295,7 +2401,8 @@ internal object AutomaticDownloadScheduler {
             policy.storageScopeId,
             AutomaticDownloadStatus(
                 state = AutomaticDownloadRunState.CANCELLED,
-                message = "Automatic download planning cancelled. Completed files were kept."
+                message = "Automatic download planning cancelled. Completed files were kept.",
+                messageRes = R.string.error_auto_download_cancelled
             )
         )
         return nextPolicy
@@ -2317,7 +2424,8 @@ internal object AutomaticDownloadScheduler {
             policy.storageScopeId,
             AutomaticDownloadStatus(
                 state = AutomaticDownloadRunState.PAUSED,
-                message = "Automatic downloads are paused while this server profile is inactive."
+                message = "Automatic downloads are paused while this server profile is inactive.",
+                messageRes = R.string.error_auto_download_paused_profile_inactive
             )
         )
     }
@@ -2476,3 +2584,80 @@ internal fun automaticQueueEntryIsStale(
     entry.profileId == currentPolicy.profileId &&
     entry.storageScopeId == currentPolicy.storageScopeId &&
     (entry.policyGeneration == null || entry.policyGeneration < currentPolicy.generation)
+
+/**
+ * Localized UI variant of [automaticDownloadReviewLines]. The English implementation stays the
+ * source of truth for JVM tests; pass the current [Context] from the settings UI.
+ */
+internal fun automaticDownloadReviewLinesLocalized(
+    context: Context?,
+    policy: AutomaticDownloadPolicy,
+    libraries: List<LibrarySummary>
+): List<String> {
+    if (context == null) return automaticDownloadReviewLines(policy, libraries)
+    val libraryNames = libraries.associate { it.id to it.name }
+    val scopeSummary = if (policy.scope == AutomaticDownloadScope.ALL_LIBRARIES) {
+        context.getString(R.string.error_auto_review_libraries_all)
+    } else {
+        val selected = policy.selectedLibraryIds.sorted().map { libraryNames[it] ?: it }
+        context.getString(R.string.error_auto_review_libraries_selected, selected.joinToString())
+    }
+    val books = context.getString(
+        if (policy.initialMode == AutomaticDownloadInitialMode.EXISTING_AND_FUTURE) {
+            R.string.error_auto_review_books_existing_future
+        } else {
+            R.string.error_auto_review_books_new_only
+        }
+    )
+    val copies = context.getString(
+        if (policy.allReadableCopies) {
+            R.string.error_auto_review_copies_every
+        } else {
+            R.string.error_auto_review_copies_preferred
+        }
+    )
+    val network = context.getString(
+        if (policy.unmeteredOnly) {
+            R.string.error_auto_review_network_unmetered
+        } else {
+            R.string.error_auto_review_network_any
+        }
+    )
+    val power = context.getString(
+        if (policy.chargingRequired) {
+            R.string.error_auto_review_power_charging_only
+        } else {
+            R.string.error_auto_review_power_not_required
+        }
+    )
+    val cleanup = context.getString(
+        if (policy.automaticRemovalEnabled) {
+            R.string.error_auto_review_cleanup_enabled
+        } else {
+            R.string.error_auto_review_cleanup_disabled
+        }
+    )
+    return listOf(
+        scopeSummary,
+        context.getString(R.string.error_auto_review_books, books),
+        context.getString(R.string.error_auto_review_copies, copies),
+        context.getString(R.string.error_auto_review_network, network),
+        context.getString(R.string.error_auto_review_power, power),
+        context.getString(
+            R.string.error_auto_review_max_storage,
+            localizedAutomaticDownloadLimit(context, policy.maximumBytes)
+        ),
+        context.getString(
+            R.string.error_auto_review_reserved_space,
+            localizedAutomaticDownloadLimit(context, policy.reserveBytes)
+        ),
+        context.getString(R.string.error_auto_review_cleanup, cleanup)
+    )
+}
+
+private fun localizedAutomaticDownloadLimit(context: Context, bytes: Long): String =
+    if (bytes <= 0L) {
+        context.getString(R.string.error_auto_review_limit_no_limit)
+    } else {
+        context.getString(R.string.error_auto_review_limit_gb, formatAutomaticDownloadGiB(bytes))
+    }

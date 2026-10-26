@@ -405,7 +405,11 @@ class BookDownloadWorker(
             return Result.failure(
                 workDataOf(
                     KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                    KEY_ERROR_MESSAGE to "Cellular download policy requires confirmation on the current network."
+                    KEY_ERROR_MESSAGE to localizedUiMessage(
+                        applicationContext,
+                        R.string.error_download_cellular_policy,
+                        "Cellular download policy requires confirmation on the current network."
+                    )
                 )
             )
         }
@@ -422,7 +426,11 @@ class BookDownloadWorker(
                 return Result.failure(
                     workDataOf(
                         KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                        KEY_ERROR_MESSAGE to "This file is larger than the maximum local-book storage limit."
+                        KEY_ERROR_MESSAGE to localizedUiMessage(
+                            applicationContext,
+                            R.string.error_download_file_too_large,
+                            "This file is larger than the maximum local-book storage limit."
+                        )
                     )
                 )
             }
@@ -454,7 +462,13 @@ class BookDownloadWorker(
                 return Result.failure(
                     workDataOf(
                         KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                        KEY_ERROR_MESSAGE to (capacity.message ?: "The storage limit would be exceeded.")
+                        KEY_ERROR_MESSAGE to (
+                            capacity.message ?: localizedUiMessage(
+                                applicationContext,
+                                R.string.error_storage_limit_generic,
+                                "The storage limit would be exceeded."
+                            )
+                        )
                     )
                 )
             }
@@ -516,7 +530,11 @@ class BookDownloadWorker(
                                 KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
                                 KEY_ERROR_MESSAGE to (
                                     postDownloadCapacity.message
-                                        ?: "The completed file could not fit within the storage limits."
+                                        ?: localizedUiMessage(
+                                            applicationContext,
+                                            R.string.error_download_completed_too_large,
+                                            "The completed file could not fit within the storage limits."
+                                        )
                                     )
                             )
                         )
@@ -543,7 +561,8 @@ class BookDownloadWorker(
                     storageScopeId,
                     AutomaticDownloadStatus(
                         state = AutomaticDownloadRunState.PAUSED,
-                        message = "Automatic downloads are paused until you sign in again."
+                        message = "Automatic downloads are paused until you sign in again.",
+                        messageRes = R.string.error_auto_download_paused_sign_in
                     )
                 )
             }
@@ -571,7 +590,14 @@ class BookDownloadWorker(
                 Result.failure(
                     workDataOf(
                         KEY_OUTCOME to OUTCOME_FAILED,
-                        KEY_ERROR_MESSAGE to (http.message ?: "Download failed for $title.")
+                        KEY_ERROR_MESSAGE to (
+                            http.message ?: localizedUiMessage(
+                                applicationContext,
+                                R.string.error_download_failed,
+                                "Download failed for $title.",
+                                title
+                            )
+                        )
                     )
                 )
             }
@@ -595,7 +621,14 @@ class BookDownloadWorker(
             Result.failure(
                 workDataOf(
                     KEY_OUTCOME to OUTCOME_FAILED,
-                    KEY_ERROR_MESSAGE to (error.message ?: "Download failed for $title.")
+                    KEY_ERROR_MESSAGE to (
+                        error.message ?: localizedUiMessage(
+                            applicationContext,
+                            R.string.error_download_failed,
+                            "Download failed for $title.",
+                            title
+                        )
+                    )
                 )
             )
         } finally {
@@ -714,7 +747,13 @@ class BookDownloadWorker(
         return Result.failure(
             workDataOf(
                 KEY_OUTCOME to OUTCOME_FAILED,
-                KEY_ERROR_MESSAGE to (message ?: "Download stopped after five attempts.")
+                KEY_ERROR_MESSAGE to (
+                    message ?: localizedUiMessage(
+                        applicationContext,
+                        R.string.notif_download_attempts_exhausted,
+                        "Download stopped after five attempts."
+                    )
+                )
             )
         )
     }
@@ -741,15 +780,16 @@ class BookDownloadWorker(
 
     private fun ensureNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val appContext = context.applicationContext
+        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(DOWNLOAD_NOTIFICATION_CHANNEL_ID) != null) return
         runCatching { manager.createNotificationChannel(
             NotificationChannel(
                 DOWNLOAD_NOTIFICATION_CHANNEL_ID,
-                "Book downloads",
+                appContext.getString(R.string.notif_channel_downloads_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows progress while a book is downloading."
+                description = appContext.getString(R.string.notif_channel_downloads_description)
             }
         ) }
     }
@@ -1638,7 +1678,11 @@ internal class WorkManagerDownloadScheduler(
                     OUTCOME_PERMISSION_DENIED -> onOutcome(DownloadOutcome.PermissionDenied)
                     else -> {
                         val message = info.outputData.getString(KEY_ERROR_MESSAGE)
-                            ?: "Download failed."
+                            ?: localizedUiMessage(
+                                context,
+                                R.string.error_download_failed_generic,
+                                "Download failed."
+                            )
                         onOutcome(DownloadOutcome.Failed(UserFacingException(message)))
                     }
                 }

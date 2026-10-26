@@ -1348,7 +1348,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
         if (!libraryCatalogPagesAreStable(pages, books)) {
             throw UserFacingException(
-                "The library changed while it was refreshing. Pull to refresh again."
+                providerErrorMessage(context, R.string.perror_bookorbit_library_changed_refresh, "The library changed while it was refreshing. Pull to refresh again.")
             )
         }
         val reportedTotal = pages.mapNotNull { it.total }.lastOrNull()
@@ -1756,7 +1756,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
         if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
-            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_annotation_syncing, "This annotation has not finished syncing yet. Try again once it syncs."))
         }
         request(annotationRestorePath(resolvedAnnotationId), "POST", JSONObject().toString().toRequestBody(JSON))
         Unit
@@ -1767,7 +1767,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
         if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
-            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_annotation_syncing, "This annotation has not finished syncing yet. Try again once it syncs."))
         }
         request(annotationPurgePath(resolvedAnnotationId), "DELETE", null)
         Unit
@@ -2204,7 +2204,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val detail = fetchAuthoritativeBookDetail(book)
         if (detail.userRating != rating) {
             throw UserFacingException(
-                "BookOrbit did not accept the rating; rating metadata may be locked."
+                providerErrorMessage(context, R.string.perror_bookorbit_rating_rejected, "BookOrbit did not accept the rating; rating metadata may be locked.")
             )
         }
         detail
@@ -2361,7 +2361,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     ): EpubImageLibrarySourceResult = withContext(Dispatchers.IO) {
         if (book.mediaKind != MediaKind.EPUB) {
             return@withContext EpubImageLibrarySourceResult.Unavailable(
-                "The selected file is not an EPUB."
+                context.getString(R.string.polish_selected_file_not_epub)
             )
         }
         val resolution = resolveReadableFile(book, allowRemoteCache = allowRemoteCache)
@@ -2369,7 +2369,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             localFile = resolution.file,
             localFileError = resolution.localFileError,
             fileId = book.fileId,
-            allowRemoteCache = allowRemoteCache
+            allowRemoteCache = allowRemoteCache,
+            context = context
         )
     }
 
@@ -2485,7 +2486,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val serverUrl = getServerUrl().orEmpty()
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val progressResetRequest = buildProgressResetRequest(book)
-            ?: throw UserFacingException("Unable to reset progress because this book has no valid file ID.")
+            ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_reset_progress_no_file, "Unable to reset progress because this book has no valid file ID."))
 
         // A worker may already be replaying an older progress event. Serialize the clear
         // behind that replay, then remove every queued/acknowledged marker before another
@@ -2700,7 +2701,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         expectedStorageScopeId: String?,
         onProgress: (Float?) -> Unit
     ): File = withContext(Dispatchers.IO) {
-        val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
+        val fileId = book.fileId ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_missing_download_file, "This title is missing a downloadable file."))
         val serverUrl = getServerUrl().orEmpty()
         val profileId = currentProfileId().orEmpty()
         val currentStorageScopeId = downloadStorageScopeId(context, serverUrl, profileId)
@@ -2761,7 +2762,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             val parent = target.parentFile
             parent?.mkdirs()
             if (parent != null && !parent.exists()) {
-                throw UserFacingException("Unable to prepare local storage for this download.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_download_storage_prepare, "Unable to prepare local storage for this download."))
             }
             val stagingId = scheduledAttempt?.requestId?.takeIf(String::isNotBlank)
                 ?: UUID.randomUUID().toString()
@@ -2779,7 +2780,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 throw CancellationException("This download was replaced by a newer request.")
             }
             if (staged.exists() && !staged.delete()) {
-                throw UserFacingException("Unable to replace the interrupted download stage.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_download_stage_replace, "Unable to replace the interrupted download stage."))
             }
             val downloadContext = currentCoroutineContext()
             try {
@@ -2795,7 +2796,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     action = "download this title"
                 ) { response ->
                     val body = response.body
-                        ?: throw UserFacingException("The server returned an empty download.")
+                        ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_empty_download, "The server returned an empty download."))
                     val input = body.byteStream()
                     val totalBytes = body.contentLength().takeIf { it > 0L }
                     if (totalBytes != null) {
@@ -2895,17 +2896,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                         }
                     } catch (error: IOException) {
                         if (error.isLikelyLocalStorageFailure()) {
-                            throw UserFacingException("Local storage could not save this download. Check free space and file access, then try again.")
+                            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_local_storage_save, "Local storage could not save this download. Check free space and file access, then try again."))
                         }
                         throw error
                     }
                     ensureNonEmptyFile(
                         target = staged,
-                        message = "The server returned an empty download."
+                        message = providerErrorMessage(context, R.string.perror_bookorbit_empty_download, "The server returned an empty download.")
                     )
                     if (!downloadedFilePassesIntegrity(book, staged)) {
                         val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
-                        throw UserFacingException("The downloaded file did not pass integrity checks.$suffix")
+                        throw UserFacingException(providerErrorMessage(context, if (hadUsableExisting) R.string.perror_download_integrity_kept else R.string.perror_download_integrity, "The downloaded file did not pass integrity checks.$suffix"))
                     }
                     onProgress(1f)
                 }
@@ -3017,11 +3018,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
-        val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
+        val fileId = book.fileId ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_remove_missing_file, "This title does not have a removable local file."))
         val serverUrl = getServerUrl().orEmpty()
         val deleted = downloadStore.delete(serverUrl, fileId)
         if (!deleted) {
-            throw UserFacingException("Unable to remove the local copy for this title.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_remove_failed, "Unable to remove the local copy for this title."))
         }
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
@@ -3481,7 +3482,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (direct != null && !direct.isReadableLocalReaderFile(book)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The local reader file failed integrity checks."
+                localFileError = providerErrorMessage(context, R.string.perror_bookorbit_local_reader_integrity, "The local reader file failed integrity checks.")
             )
         }
         if (direct != null) {
@@ -3495,7 +3496,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (downloaded != null && !downloaded.isReadableLocalReaderFile(book)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The local reader file failed integrity checks."
+                localFileError = providerErrorMessage(context, R.string.perror_bookorbit_local_reader_integrity, "The local reader file failed integrity checks.")
             )
         }
         if (downloaded != null) {
@@ -3543,7 +3544,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val cacheDir = File(context.cacheDir, "comic-extraction-cache")
         return when (val outcome = ComicArchiveCache.resolve(identity, rawLocal, cacheDir)) {
             is ComicArchiveCache.Outcome.Ready -> LocalReaderResolution(outcome.file)
-            is ComicArchiveCache.Outcome.Failed -> LocalReaderResolution(null, outcome.message)
+            is ComicArchiveCache.Outcome.Failed -> LocalReaderResolution(
+                null,
+                providerErrorMessage(context, outcome.messageRes, outcome.message)
+            )
         }
     }
 
@@ -3569,31 +3573,49 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         when (book.mediaKind) {
             MediaKind.AUDIO -> {
                 if (localFile == null && streamUrl.isNullOrBlank()) {
-                    throw UserFacingException("This audiobook is missing both a local file and a playable stream.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_audio_missing),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.PDF -> {
                 if (localFile == null) {
-                    throw UserFacingException("This PDF could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_pdf_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.EPUB -> {
                 if (localFile == null) {
-                    throw UserFacingException("This EPUB could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_epub_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.COMIC -> {
                 if (comicExtractionError != null) {
-                    throw UserFacingException(comicExtractionError)
+                    throw UserFacingException(
+                        comicExtractionError,
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
                 val localComicReady = localFile?.let(ReaderFileValidator::canRenderComicLocally) == true
                 if (!localComicReady && comicPagesUrl.isNullOrBlank()) {
-                    throw UserFacingException("This comic could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_comic_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.UNKNOWN -> {
                 if (localFile == null && streamUrl.isNullOrBlank()) {
-                    throw UserFacingException("This title does not expose a readable local file or stream.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_unknown_format),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
         }
@@ -3635,9 +3657,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 true
             }
             if (!fetched) return null
-            ensureNonEmptyFile(staged, "The server returned an empty reader file.")
+            ensureNonEmptyFile(staged, providerErrorMessage(context, R.string.perror_bookorbit_empty_reader_file, "The server returned an empty reader file."))
             if (!ReaderFileValidator.isReadable(book.mediaKind, staged)) {
-                throw UserFacingException("The reader file did not pass integrity checks.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_reader_integrity, "The reader file did not pass integrity checks."))
             }
             atomicReplaceDownloadedFile(staged, target)
             target
@@ -3698,7 +3720,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private fun request(path: String, method: String, body: RequestBody?): String {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         return executeAuthenticated(
             requestFactory = {
                 Request.Builder()
@@ -3715,7 +3737,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private suspend fun requestLogin(body: RequestBody) {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         val request = Request.Builder()
             .url(base.trimEnd('/') + "/api/v1/auth/login")
             .post(body)
@@ -3750,7 +3772,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private fun requestUnauthenticated(path: String, method: String, body: RequestBody?): String {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         val request = Request.Builder()
             .url(base.trimEnd('/') + path)
             .method(method, body)
@@ -3815,7 +3837,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                         url = it.request.url.toString(),
                         serverUrl = responseScope.serverUrl
                     ),
-                    checkActive = { requestContext.ensureActive() }
+                    checkActive = { requestContext.ensureActive() },
+                    context = context
                 )
             }
             requireCurrentCatalogImageScope(responseScope)
@@ -4042,7 +4065,16 @@ enum class ServerCheckResult {
 }
 
 class AuthenticationRequiredException : IllegalStateException("Authentication required.")
-class UserFacingException(message: String) : IllegalStateException(message)
+enum class UserFacingReason {
+    GENERIC,
+    LOCAL_READER_UNAVAILABLE,
+    CAPABILITY_UNAVAILABLE
+}
+
+class UserFacingException(
+    message: String,
+    val reason: UserFacingReason = UserFacingReason.GENERIC
+) : IllegalStateException(message)
 class InvalidCredentialsException : IOException("Invalid credentials.")
 class LoginRateLimitedException : IOException("Login rate limited.")
 class LoginVerificationException : IOException("The server did not confirm the new session.")
@@ -5887,11 +5919,15 @@ internal fun readBoundedCatalogImageBytes(
     input: InputStream,
     declaredLength: Long,
     maxBytes: Long = MAX_COVER_IMAGE_RESPONSE_BYTES,
-    checkActive: () -> Unit = {}
+    checkActive: () -> Unit = {},
+    context: Context? = null
 ): ByteArray {
     require(maxBytes in 1..Int.MAX_VALUE.toLong())
     if (declaredLength > maxBytes) {
-        throw UserFacingException("The image response is too large.")
+        throw UserFacingException(
+            context?.getString(R.string.perror_catalog_image_too_large)
+                ?: "The image response is too large."
+        )
     }
     val maximum = maxBytes.toInt()
     var output = ByteArray(minOf(DEFAULT_CATALOG_IMAGE_BUFFER_BYTES, maximum))
@@ -5901,7 +5937,10 @@ internal fun readBoundedCatalogImageBytes(
         if (total == output.size) {
             if (total == maximum) {
                 if (input.read() >= 0) {
-                    throw UserFacingException("The image response is too large.")
+                    throw UserFacingException(
+                        context?.getString(R.string.perror_catalog_image_too_large)
+                            ?: "The image response is too large."
+                    )
                 }
                 break
             }

@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -58,6 +61,7 @@ internal fun EpubTtsControls(
     modifier: Modifier = Modifier
 ) {
     var settingsVisible by remember { mutableStateOf(false) }
+    val settingsDescription = stringResource(R.string.tts_settings_cd)
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
@@ -70,7 +74,7 @@ internal fun EpubTtsControls(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Text to speech",
+                    stringResource(R.string.tts_controls_title),
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     style = MaterialTheme.typography.labelLarge
@@ -79,12 +83,15 @@ internal fun EpubTtsControls(
                     onClick = { settingsVisible = true },
                     modifier = Modifier
                         .testTag("epub-tts-settings")
-                        .semantics { contentDescription = "Text-to-speech settings" }
+                        .semantics { contentDescription = settingsDescription }
                 ) {
                     Icon(Icons.Default.Settings, contentDescription = null)
                 }
                 IconButton(onClick = onPrevious, enabled = canGoPrevious) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous spoken sentence")
+                    Icon(
+                        Icons.Default.SkipPrevious,
+                        contentDescription = stringResource(R.string.tts_previous_sentence_cd)
+                    )
                 }
                 IconButton(
                     onClick = onPlayPause,
@@ -93,17 +100,23 @@ internal fun EpubTtsControls(
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) {
-                            "Pause text to speech"
+                            stringResource(R.string.tts_pause_cd)
                         } else {
-                            "Play text to speech"
+                            stringResource(R.string.tts_play_cd)
                         }
                     )
                 }
                 IconButton(onClick = onNext, enabled = canGoNext) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next spoken sentence")
+                    Icon(
+                        Icons.Default.SkipNext,
+                        contentDescription = stringResource(R.string.tts_next_sentence_cd)
+                    )
                 }
                 IconButton(onClick = onClose, modifier = Modifier.testTag("epub-tts-close")) {
-                    Icon(Icons.Default.Close, contentDescription = "Close text to speech")
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.tts_close_cd)
+                    )
                 }
             }
         }
@@ -175,6 +188,7 @@ private fun EpubTtsSettingsDialog(
     val parsedEmDash = parseEpubTtsPauseMillis(emDashText)
     val parsedEllipsis = parseEpubTtsPauseMillis(ellipsisText)
     val parsedParentheses = parseEpubTtsPauseMillis(parenthesesText)
+    val localContext = LocalContext.current
 
     fun applyImmediateRate(speed: Float? = null, pitch: Float? = null) {
         speed?.let { speedText = formatEpubTtsRate(it) }
@@ -184,7 +198,7 @@ private fun EpubTtsSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Text-to-speech settings") },
+        title = { Text(stringResource(R.string.tts_settings_title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -194,23 +208,23 @@ private fun EpubTtsSettingsDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 PlaybackRateAdjustmentSetting(
-                    title = "Speed",
+                    title = stringResource(R.string.tts_speed),
                     value = normalized.speed,
                     minHundredths = EPUB_TTS_RATE_MIN_HUNDREDTHS,
                     maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
-                    rateDescription = "text-to-speech speed",
+                    rateDescription = stringResource(R.string.tts_speed_description),
                     onValueChange = { applyImmediateRate(speed = it) }
                 )
                 PlaybackRateAdjustmentSetting(
-                    title = "Pitch",
+                    title = stringResource(R.string.tts_pitch),
                     value = normalized.pitch,
                     minHundredths = EPUB_TTS_RATE_MIN_HUNDREDTHS,
                     maxHundredths = EPUB_TTS_RATE_MAX_HUNDREDTHS,
-                    rateDescription = "text-to-speech pitch",
+                    rateDescription = stringResource(R.string.tts_pitch_description),
                     onValueChange = { applyImmediateRate(pitch = it) }
                 )
                 HorizontalDivider()
-                Text("Voice", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.tts_voice_section), style = MaterialTheme.typography.titleSmall)
                 val selectedVoiceId = voiceLanguageTag?.let(normalized.voiceIds::get)
                 val selectedVoice = voices.firstOrNull { it.id == selectedVoiceId }
                 TextButton(
@@ -220,28 +234,31 @@ private fun EpubTtsSettingsDialog(
                 ) {
                     Text(
                         when {
-                            selectedVoice != null -> selectedVoice.displayName()
-                            voices.isNotEmpty() -> "Default Android voice"
-                            else -> "No compatible voices available"
+                            selectedVoice != null -> selectedVoice.displayName(localContext)
+                            voices.isNotEmpty() -> stringResource(R.string.tts_default_android_voice)
+                            else -> stringResource(R.string.tts_no_compatible_voices)
                         }
                     )
                 }
                 Text(
-                    "Voices are filtered to this EPUB's language. Network voices may send spoken text to their provider.",
+                    stringResource(R.string.tts_voices_filtered_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
                 HorizontalDivider()
                 Text(
-                    "Speed and pitch changes apply immediately. Settings below require Apply.",
+                    stringResource(R.string.tts_apply_immediately_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text("Extra punctuation pauses", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.tts_punctuation_pauses),
+                    style = MaterialTheme.typography.titleSmall
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Use custom punctuation pauses",
+                        stringResource(R.string.tts_use_custom_pauses),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -253,53 +270,51 @@ private fun EpubTtsSettingsDialog(
                 }
                 if (customPausesEnabled) {
                     Text(
-                        "Values are measured at 1× and scale with reading speed. Android voices " +
-                            "may add their own latency between chunks.",
+                        stringResource(R.string.tts_pauses_hint),
                         style = MaterialTheme.typography.bodySmall
                     )
                     TtsPauseSetting(
-                        label = "Comma",
+                        label = stringResource(R.string.tts_pause_comma),
                         value = commaText,
                         isError = showValidationErrors && parsedComma == null,
                         enabled = true,
                         onValueChange = { commaText = it },
-                        supportingText = "Use 0 if the pause sounds too long."
+                        supportingText = stringResource(R.string.tts_pause_zero_hint)
                     )
                     TtsPauseSetting(
-                        label = "Semicolon",
+                        label = stringResource(R.string.tts_pause_semicolon),
                         value = semicolonText,
                         isError = showValidationErrors && parsedSemicolon == null,
                         enabled = true,
                         onValueChange = { semicolonText = it }
                     )
                     TtsPauseSetting(
-                        label = "Colon",
+                        label = stringResource(R.string.tts_pause_colon),
                         value = colonText,
                         isError = showValidationErrors && parsedColon == null,
                         enabled = true,
                         onValueChange = { colonText = it }
                     )
                     TtsPauseSetting(
-                        label = "Em dash",
+                        label = stringResource(R.string.tts_pause_em_dash),
                         value = emDashText,
                         isError = showValidationErrors && parsedEmDash == null,
                         enabled = true,
                         onValueChange = { emDashText = it }
                     )
                     TtsPauseSetting(
-                        label = "Ellipsis (… or ...)",
+                        label = stringResource(R.string.tts_pause_ellipsis),
                         value = ellipsisText,
                         isError = showValidationErrors && parsedEllipsis == null,
                         enabled = true,
                         onValueChange = { ellipsisText = it }
                     )
                     Text(
-                        "Grouping marks applies to opening and closing parentheses, square " +
-                            "brackets, and braces.",
+                        stringResource(R.string.tts_pause_grouping_hint),
                         style = MaterialTheme.typography.bodySmall
                     )
                     TtsPauseSetting(
-                        label = "Grouping marks: ( ) [ ] { }",
+                        label = stringResource(R.string.tts_pause_grouping),
                         value = parenthesesText,
                         isError = showValidationErrors && parsedParentheses == null,
                         enabled = true,
@@ -307,13 +322,13 @@ private fun EpubTtsSettingsDialog(
                     )
                 }
                 HorizontalDivider()
-                Text("Images", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.tts_images_section), style = MaterialTheme.typography.titleSmall)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Read image descriptions",
+                        stringResource(R.string.tts_read_image_descriptions),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -324,7 +339,7 @@ private fun EpubTtsSettingsDialog(
                     )
                 }
                 Text(
-                    "Speak EPUB alternative text and accessibility descriptions. Off by default.",
+                    stringResource(R.string.tts_read_image_descriptions_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(
@@ -332,7 +347,7 @@ private fun EpubTtsSettingsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Read full image resource names",
+                        stringResource(R.string.tts_read_image_resource_names),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -343,16 +358,19 @@ private fun EpubTtsSettingsDialog(
                     )
                 }
                 Text(
-                    "Speak the full EPUB-relative folder, filename, and extension. Off by default and independent of descriptions.",
+                    stringResource(R.string.tts_read_image_resource_names_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text("Lock-screen privacy", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.tts_lockscreen_privacy),
+                    style = MaterialTheme.typography.titleSmall
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Show book title on lock screen",
+                        stringResource(R.string.tts_show_book_title_lockscreen),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -362,7 +380,7 @@ private fun EpubTtsSettingsDialog(
                     )
                 }
                 Text(
-                    "When enabled, the book title is shown in the lock-screen media controls.",
+                    stringResource(R.string.tts_show_book_title_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -406,16 +424,16 @@ private fun EpubTtsSettingsDialog(
                         onDismiss()
                     }
                 }
-            ) { Text("Apply") }
+            ) { Text(stringResource(R.string.tts_apply)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         }
     )
     if (voiceDialogVisible) {
         AlertDialog(
             onDismissRequest = { voiceDialogVisible = false },
-            title = { Text("Text-to-speech voice") },
+            title = { Text(stringResource(R.string.tts_voice_dialog_title)) },
             text = {
                 Column(
                     modifier = Modifier
@@ -431,7 +449,7 @@ private fun EpubTtsSettingsDialog(
                             voiceDialogVisible = false
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Default Android voice") }
+                    ) { Text(stringResource(R.string.tts_default_android_voice)) }
                     voices.forEach { voice ->
                         TextButton(
                             onClick = {
@@ -441,41 +459,51 @@ private fun EpubTtsSettingsDialog(
                                 voiceDialogVisible = false
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(voice.displayName()) }
+                        ) { Text(voice.displayName(localContext)) }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { voiceDialogVisible = false }) { Text("Cancel") }
+                TextButton(onClick = { voiceDialogVisible = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
     }
 }
 
-internal fun EpubTtsVoice.displayName(): String = buildString {
+internal fun EpubTtsVoice.displayName(context: Context): String = buildString {
+    val displayLocale = context.resources.configuration.locales[0]
     val localeName = Locale.forLanguageTag(languageTag)
-        .getDisplayName(Locale.getDefault())
+        .getDisplayName(displayLocale)
         .takeIf(String::isNotBlank)
         ?: languageTag
     append(localeName)
     append(" · ")
-    append(if (requiresNetwork) "Network" else "Local")
+    append(
+        context.getString(
+            if (requiresNetwork) R.string.tts_voice_network else R.string.tts_voice_local
+        )
+    )
     append(" · ")
     append(quality.lowercase().replaceFirstChar(Char::uppercase))
     append(" · ")
-    append(voiceVariantLabel())
+    append(voiceVariantLabel(context))
 }
 
-private fun EpubTtsVoice.voiceVariantLabel(): String {
+private fun EpubTtsVoice.voiceVariantLabel(context: Context): String {
     val normalizedId = id.lowercase(Locale.ROOT)
     val variantStart = normalizedId.indexOf("-x-")
     val variantEnd = listOf("-local", "-network")
         .mapNotNull { suffix -> normalizedId.indexOf(suffix, variantStart + 3).takeIf { it >= 0 } }
         .minOrNull()
     if (variantStart >= 0 && variantEnd != null && variantEnd > variantStart + 3) {
-        return "Variant " + id.substring(variantStart + 3, variantEnd).uppercase(Locale.ROOT)
+        return context.getString(
+            R.string.tts_voice_variant,
+            id.substring(variantStart + 3, variantEnd).uppercase(Locale.ROOT)
+        )
     }
-    return "Voice " + id.substringAfterLast('-').ifBlank { id }
+    return context.getString(R.string.tts_voice_name, id.substringAfterLast('-').ifBlank { id })
 }
 
 @Composable
@@ -492,7 +520,7 @@ private fun TtsPauseSetting(
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
-        suffix = { Text("ms") },
+        suffix = { Text(stringResource(R.string.tts_pause_unit)) },
         singleLine = true,
         enabled = enabled,
         isError = isError,
@@ -500,9 +528,9 @@ private fun TtsPauseSetting(
         supportingText = {
             Text(
                 when {
-                    isError -> "Enter a whole number from 0 to 2000"
+                    isError -> stringResource(R.string.tts_pause_range_error)
                     supportingText != null -> supportingText
-                    else -> "0 to 2000 ms"
+                    else -> stringResource(R.string.tts_pause_range)
                 }
             )
         }

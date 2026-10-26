@@ -1,37 +1,53 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
 import org.json.JSONObject
 
-enum class LibraryReadingDirection(val displayName: String) {
-    LEFT_TO_RIGHT("Left to right"),
-    RIGHT_TO_LEFT("Right to left")
+enum class LibraryReadingDirection(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    LEFT_TO_RIGHT("Left to right", R.string.label_reading_direction_ltr),
+    RIGHT_TO_LEFT("Right to left", R.string.label_reading_direction_rtl)
 }
 
-enum class ReaderLayoutMode(val displayName: String) {
-    PAGINATED("Paginated"),
-    CONTINUOUS("Continuous")
+enum class ReaderLayoutMode(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    PAGINATED("Paginated", R.string.label_layout_paginated),
+    CONTINUOUS("Continuous", R.string.label_layout_continuous)
 }
 
-enum class EpubReaderFontFamily(val displayName: String) {
-    PUBLISHER_DEFAULT("Publisher default"),
-    SYSTEM_SERIF("System serif"),
-    SYSTEM_SANS_SERIF("System sans-serif"),
-    SYSTEM_MONOSPACE("System monospace"),
-    ACCESSIBLE_DFA("AccessibleDFA"),
-    OPEN_DYSLEXIC("OpenDyslexic"),
-    CUSTOM("Custom font")
+enum class EpubReaderFontFamily(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    PUBLISHER_DEFAULT("Publisher default", R.string.label_font_publisher_default),
+    SYSTEM_SERIF("System serif", R.string.label_font_system_serif),
+    SYSTEM_SANS_SERIF("System sans-serif", R.string.label_font_system_sans_serif),
+    SYSTEM_MONOSPACE("System monospace", R.string.label_font_system_monospace),
+    ACCESSIBLE_DFA("AccessibleDFA", R.string.label_font_accessible_dfa),
+    OPEN_DYSLEXIC("OpenDyslexic", R.string.label_font_open_dyslexic),
+    CUSTOM("Custom font", R.string.label_font_custom)
 }
 
-enum class EpubTextAlignment(val displayName: String) {
-    START("Left"),
-    JUSTIFY("Justified")
+enum class EpubTextAlignment(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    START("Left", R.string.label_align_left),
+    JUSTIFY("Justified", R.string.label_align_justified)
 }
 
 /** AUTO hyphenates justified text only, which is when ragged gaps would otherwise appear. */
-enum class EpubHyphenation(val displayName: String) {
-    AUTO("Auto"),
-    ON("On"),
-    OFF("Off")
+enum class EpubHyphenation(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    AUTO("Auto", R.string.label_hyphenation_auto),
+    ON("On", R.string.label_hyphenation_on),
+    OFF("Off", R.string.label_hyphenation_off)
 }
 
 internal fun epubHyphenationActive(alignment: EpubTextAlignment, hyphenation: EpubHyphenation): Boolean =

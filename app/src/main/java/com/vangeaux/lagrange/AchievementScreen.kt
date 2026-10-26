@@ -73,6 +73,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,16 +121,19 @@ internal fun AchievementsScreen(
         when (val loaded = catalogue) {
             null -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
                 CircularProgressIndicator()
-                Text("Loading achievements…")
+                Text(stringResource(R.string.secondary_achievements_loading))
             }
             else -> when (loaded.status) {
                 AchievementCatalogueStatus.UNSUPPORTED -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
                     Icon(Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(48.dp))
-                    Text("Achievements aren't available on this server version.")
+                    Text(stringResource(R.string.secondary_achievements_unavailable))
                 }
                 AchievementCatalogueStatus.ERROR -> AchievementCenteredState(modifier = Modifier.fillMaxSize()) {
-                    Text("Achievements couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
-                    Button(onClick = onRefresh) { Text("Try again") }
+                    Text(
+                        stringResource(R.string.secondary_achievements_error),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Button(onClick = onRefresh) { Text(stringResource(R.string.secondary_try_again)) }
                 }
                 AchievementCatalogueStatus.AVAILABLE -> AchievementCatalogueGrid(
                     catalogue = loaded,
@@ -166,6 +170,11 @@ private fun AchievementCatalogueGrid(
         0f
     }
 
+    val unlockedTitle = stringResource(R.string.secondary_achievements_unlocked)
+    val unlockedEmpty = stringResource(R.string.secondary_achievements_no_unlocked)
+    val lockedTitle = stringResource(R.string.secondary_achievements_locked)
+    val lockedEmpty = stringResource(R.string.secondary_achievements_all_unlocked)
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 260.dp),
         modifier = modifier.fillMaxSize(),
@@ -185,9 +194,16 @@ private fun AchievementCatalogueGrid(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Your achievements", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                "${catalogue.totalEarned} of ${catalogue.totalAvailable} unlocked",
+                                stringResource(R.string.secondary_achievements_title),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                stringResource(
+                                    R.string.secondary_achievements_summary,
+                                    catalogue.totalEarned,
+                                    catalogue.totalAvailable
+                                ),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                             )
                         }
@@ -206,13 +222,13 @@ private fun AchievementCatalogueGrid(
         }
 
         achievementSection(
-            title = "Unlocked",
-            emptyMessage = "No achievements unlocked yet.",
+            title = unlockedTitle,
+            emptyMessage = unlockedEmpty,
             items = unlocked
         )
         achievementSection(
-            title = "Locked",
-            emptyMessage = "Everything is unlocked.",
+            title = lockedTitle,
+            emptyMessage = lockedEmpty,
             items = locked
         )
     }
@@ -279,7 +295,10 @@ private fun AchievementCard(achievement: AchievementItem) {
             ) {
                 Icon(
                     imageVector = achievementIcon(achievement.iconName),
-                    contentDescription = "${achievement.name} achievement symbol",
+                    contentDescription = stringResource(
+                        R.string.secondary_achievements_symbol,
+                        achievement.name
+                    ),
                     tint = symbolColor,
                     modifier = Modifier.size(22.dp)
                 )
@@ -293,7 +312,11 @@ private fun AchievementCard(achievement: AchievementItem) {
                 )
                 Icon(
                     imageVector = if (locked) Icons.Default.Lock else Icons.Default.CheckCircle,
-                    contentDescription = if (locked) "Locked" else "Unlocked",
+                    contentDescription = if (locked) {
+                        stringResource(R.string.secondary_achievements_locked)
+                    } else {
+                        stringResource(R.string.secondary_achievements_unlocked)
+                    },
                     tint = symbolColor,
                     modifier = Modifier.size(20.dp)
                 )
@@ -324,7 +347,10 @@ private fun AchievementCard(achievement: AchievementItem) {
                 )
             } else if (achievement.earned && !achievement.awardedAt.isNullOrBlank()) {
                 Text(
-                    "Unlocked ${achievement.awardedAt.take(10)}",
+                    stringResource(
+                        R.string.secondary_achievements_unlocked_on,
+                        achievement.awardedAt.take(10)
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -1,7 +1,10 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
+
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -133,6 +136,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -243,7 +247,7 @@ private fun ReleaseUpdateDialog(
 ) {
     AlertDialog(
         onDismissRequest = onIgnore,
-        title = { Text(update.title + " is available") },
+        title = { Text(stringResource(R.string.shell_update_available, update.title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -251,7 +255,7 @@ private fun ReleaseUpdateDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Version " + update.versionName + " is ready to download.")
+                Text(stringResource(R.string.shell_update_ready, update.versionName))
                 if (update.notes.isNotBlank()) {
                     Markdown(update.notes)
                 }
@@ -269,7 +273,7 @@ private fun ReleaseUpdateDialog(
             TextButton(
                 onClick = onIgnore,
                 modifier = Modifier.testTag("release-update-ignore")
-            ) { Text("Ignore") }
+            ) { Text(stringResource(R.string.shell_update_ignore)) }
         }
     )
 }
@@ -451,9 +455,15 @@ private fun ReaderLoadingScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(if (launchMode == ReaderLaunchMode.PREVIEW) "Preview · ${book.title}" else book.title)
+                    Text(
+                        if (launchMode == ReaderLaunchMode.PREVIEW) {
+                            stringResource(R.string.reader_preview_title, book.title)
+                        } else {
+                            book.title
+                        }
+                    )
                 },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.shell_back)) } }
             )
         }
     ) { padding ->
@@ -482,17 +492,17 @@ private fun LoadingScreen() {
         ) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = "Lagrange logo",
+                contentDescription = stringResource(R.string.cd_lagrange_logo),
                 modifier = Modifier.size(96.dp)
             )
             Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
             Text(
-                "a Lagrange reader",
+                stringResource(R.string.shell_tagline),
                 color = MaterialTheme.colorScheme.secondary,
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                "Loading your library…",
+                stringResource(R.string.shell_loading_library),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -513,7 +523,7 @@ private fun StartupScreen(message: String) {
         ) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = "Lagrange logo",
+                contentDescription = stringResource(R.string.cd_lagrange_logo),
                 modifier = Modifier.size(80.dp)
             )
             Text("Lagrange", style = MaterialTheme.typography.headlineSmall)
@@ -542,16 +552,20 @@ private fun LibraryBrowserScreen(
     Scaffold(
         topBar = {
             BookOrbitTopBar(
-                title = "Libraries",
+                title = stringResource(R.string.shell_libraries_title),
                 actions = {
                     TextButton(
                         onClick = onRefresh,
                         enabled = !state.isRefreshing
                     ) {
-                        Text("Refresh")
+                        Text(stringResource(R.string.shell_refresh))
                     }
                     TextButton(onClick = onSessionAction) {
-                        Text(if (state.isOfflineSnapshot) "Sign in" else "Sign out")
+                        Text(
+                            stringResource(
+                                if (state.isOfflineSnapshot) R.string.common_sign_in else R.string.shell_sign_out
+                            )
+                        )
                     }
                 }
             )
@@ -566,13 +580,13 @@ private fun LibraryBrowserScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                OrbitEyebrow("Connected server")
+                OrbitEyebrow(stringResource(R.string.shell_connected_server))
                 Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
             }
             if (isDebugBuild) {
                 item {
                     Text(
-                        text = "Pending sync queue: ${state.debugPendingProgressCount}",
+                        text = stringResource(R.string.shell_pending_sync_queue, state.debugPendingProgressCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -593,9 +607,9 @@ private fun LibraryBrowserScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
-                        state.isLoadingLibraries -> LoadingRow("Loading libraries...")
+                        state.isLoadingLibraries -> LoadingRow(stringResource(R.string.shell_loading_libraries))
                         state.libraries.isEmpty() -> Text(
-                            text = "No libraries found.",
+                            text = stringResource(R.string.shell_no_libraries),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.outline
                         )
@@ -612,18 +626,20 @@ private fun LibraryBrowserScreen(
             }
             item {
                 Text(
-                    text = if (state.selectedLibraryId == null) "Select a library" else "Books",
+                    text = stringResource(
+                        if (state.selectedLibraryId == null) R.string.shell_select_library else R.string.shell_books
+                    ),
                     style = MaterialTheme.typography.titleMedium
                 )
             }
             if (state.isLoadingBooks) {
                 item {
-                    LoadingRow("Loading books...")
+                    LoadingRow(stringResource(R.string.shell_loading_books))
                 }
             } else if (state.selectedLibraryId != null && state.books.isEmpty()) {
                 item {
                     Text(
-                        text = "No books found in this library.",
+                        text = stringResource(R.string.shell_no_books_in_library),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -651,7 +667,7 @@ private fun LibraryBrowserScreen(
                         )
                         book.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         Text(
-                            text = bookStatus(book, state.isOfflineSnapshot),
+                            text = localizedBookStatus(context, book, state.isOfflineSnapshot),
                             style = MaterialTheme.typography.bodySmall
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -660,11 +676,13 @@ private fun LibraryBrowserScreen(
                                 enabled = !isDownloading && !unavailableOffline
                             ) {
                                 Text(
-                                    when {
-                                        book.isDownloaded -> "Open local"
-                                        unavailableOffline -> "Unavailable offline"
-                                        else -> "Read / Listen"
-                                    }
+                                    stringResource(
+                                        when {
+                                            book.isDownloaded -> R.string.shell_open_local
+                                            unavailableOffline -> R.string.shell_unavailable_offline
+                                            else -> R.string.shell_read_or_listen
+                                        }
+                                    )
                                 )
                             }
                             if (book.isDownloaded) {
@@ -672,7 +690,7 @@ private fun LibraryBrowserScreen(
                                     onClick = { onDeleteLocalCopy(book) },
                                     enabled = !isDownloading
                                 ) {
-                                    Text("Delete local")
+                                    Text(stringResource(R.string.shell_delete_local))
                                 }
                             } else if (fileId != null && !state.isOfflineSnapshot) {
                                 if (isDownloading) {
@@ -685,16 +703,20 @@ private fun LibraryBrowserScreen(
                                             strokeWidth = 2.dp
                                         )
                                         Text(
-                                            text = "Downloading",
+                                            text = stringResource(R.string.shell_downloading),
                                             modifier = Modifier.padding(start = 8.dp)
                                         )
                                     }
                                     OutlinedButton(onClick = { onCancelDownload(book) }) {
-                                        Text("Cancel")
+                                        Text(stringResource(R.string.common_cancel))
                                     }
                                 } else {
                                     OutlinedButton(onClick = { onDownload(book) }) {
-                                        Text(if (downloadFailed) "Retry" else "Download")
+                                        Text(
+                                            stringResource(
+                                                if (downloadFailed) R.string.common_retry else R.string.shell_download
+                                            )
+                                        )
                                     }
                                 }
                             }
@@ -741,7 +763,7 @@ private fun ReaderScreen(
     if (shouldUseReadiumEpubReader(state.book.mediaKind)) {
         val readerFile = state.localFile
         if (readerFile == null || !readerFile.exists()) {
-            ReaderMessage("Unable to prepare this EPUB.")
+            ReaderMessage(stringResource(R.string.shell_reader_epub_unpreparable))
         } else {
             ReadiumEpubReaderLauncher(
                 file = readerFile,
@@ -800,10 +822,7 @@ private fun ReaderScreen(
         return
     }
     if (state.book.mediaKind == MediaKind.COMIC) {
-        ReaderMessage(
-            "This comic container must be converted to CBZ before Readium can open it. " +
-                "Reconnect to the configured server to prepare it."
-        )
+        ReaderMessage(stringResource(R.string.shell_reader_comic_needs_cbz))
         return
     }
     if (shouldUseReadiumPdfReader(state.book.mediaKind, state.localFile)) {
@@ -826,9 +845,15 @@ private fun ReaderScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(if (isPreview) "Preview · ${state.book.title}" else state.book.title)
+                    Text(
+                        if (isPreview) {
+                            stringResource(R.string.reader_preview_title, state.book.title)
+                        } else {
+                            state.book.title
+                        }
+                    )
                 },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.shell_back)) } }
             )
         }
     ) { padding ->
@@ -846,13 +871,13 @@ private fun ReaderScreen(
                 )
                 MediaKind.PDF -> UnsupportedReaderView(
                     title = state.book.title,
-                    message = "Unable to prepare this PDF for Readium."
+                    message = stringResource(R.string.shell_reader_pdf_unpreparable)
                 )
                 MediaKind.EPUB -> Unit
                 MediaKind.COMIC -> Unit
                 MediaKind.UNKNOWN -> UnsupportedReaderView(
                     title = state.book.title,
-                    message = "This file format is not supported."
+                    message = stringResource(R.string.shell_reader_format_unsupported)
                 )
             }
         }
@@ -966,6 +991,10 @@ private fun AudioReader(
     var errorMessage by remember(state.book.id, state.book.fileId, state.launchMode) {
         mutableStateOf<String?>(null)
     }
+    val audiobookUnavailableMessage = stringResource(R.string.shell_audiobook_unavailable)
+    val audiobookTimeoutMessage = stringResource(R.string.shell_audiobook_timeout)
+    val audiobookFailedMessage = stringResource(R.string.shell_audiobook_failed)
+    val audiobookPreparingMessage = stringResource(R.string.shell_audiobook_preparing)
     LaunchedEffect(
         state.book.id,
         state.book.fileId,
@@ -977,7 +1006,7 @@ private fun AudioReader(
         val file = state.localFile?.takeIf { it.isFile }
         val streamUrl = state.streamUrl?.takeIf { it.isNotBlank() }
         if (audioController == null || (file == null && streamUrl == null)) {
-            val message = "Unable to prepare this audiobook for playback."
+            val message = audiobookUnavailableMessage
             errorMessage = message
             onFailure(state.book, message)
             return@LaunchedEffect
@@ -994,13 +1023,13 @@ private fun AudioReader(
                     aggregateDurationMs = state.audioTotalDurationMs
                 )
             } ?: ReadiumAudioOpenResult.Error(
-                "Audiobook preparation timed out. Try opening it again."
+                audiobookTimeoutMessage
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
             Log.e("ReadiumAudio", "Audiobook preparation failed for ${state.book.id}", error)
-            ReadiumAudioOpenResult.Error("Audiobook preparation failed safely.")
+            ReadiumAudioOpenResult.Error(audiobookFailedMessage)
         }
         when (result) {
             is ReadiumAudioOpenResult.Error -> errorMessage = result.message
@@ -1034,7 +1063,7 @@ private fun AudioReader(
         ReaderMessage(requireNotNull(errorMessage))
     } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LoadingRow("Preparing audiobook…")
+            LoadingRow(audiobookPreparingMessage)
         }
     }
 }
@@ -1054,10 +1083,46 @@ internal fun EpubReaderProgressFooter(
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
+            val bookPages = if (status.bookPageNumber != null && status.bookPageCount != null) {
+                stringResource(
+                    R.string.chrome_progress_book_pages,
+                    status.bookPageNumber,
+                    status.bookPageCount
+                )
+            } else {
+                stringResource(R.string.chrome_progress_book_pages_calculating)
+            }
+            val bookPagesAccessibility = if (status.bookPageNumber != null && status.bookPageCount != null) {
+                stringResource(
+                    R.string.chrome_progress_a11y_book_pages,
+                    status.bookPageNumber,
+                    status.bookPageCount
+                )
+            } else {
+                stringResource(R.string.chrome_progress_a11y_book_pages_calculating)
+            }
+            val displayText = stringResource(
+                R.string.chrome_progress_summary,
+                status.completionPercent.roundToInt(),
+                status.chapterNumber,
+                status.chapterCount,
+                status.chapterPageNumber,
+                status.chapterPageCount,
+                bookPages
+            )
+            val accessibilityText = stringResource(
+                R.string.chrome_progress_a11y_summary,
+                status.completionPercent.roundToInt(),
+                status.chapterNumber,
+                status.chapterCount,
+                status.chapterPageNumber,
+                status.chapterPageCount,
+                bookPagesAccessibility
+            )
             Text(
-                text = status.displayText(),
+                text = displayText,
                 modifier = Modifier.semantics {
-                    contentDescription = status.accessibilityText()
+                    contentDescription = accessibilityText
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1072,7 +1137,7 @@ internal fun EpubReaderProgressFooter(
 internal fun EpubReaderDismissScrim(
     modifier: Modifier = Modifier,
     backgroundAlpha: Float = 0.32f,
-    contentDescription: String = "Dismiss reader options and continue reading",
+    contentDescription: String = stringResource(R.string.chrome_dismiss_options),
     onDismiss: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1144,6 +1209,7 @@ internal fun readerOptionsHeightFractionAfterDrag(
 
 internal data class ReaderTapZoneTutorialRegion(
     val label: String,
+    @StringRes val labelRes: Int,
     val rect: ReaderTapZoneRect,
     val red: Int,
     val green: Int,
@@ -1159,6 +1225,7 @@ private fun readerTapZoneTutorialRegion(region: ReaderTapZoneRegion): ReaderTapZ
     }
     return ReaderTapZoneTutorialRegion(
         label = region.action.displayName,
+        labelRes = region.action.displayNameRes,
         rect = region.rect,
         red = red,
         green = green,
@@ -1215,11 +1282,12 @@ internal fun ReaderTapZoneTutorial(
     ) {
         List(regions.size) { MutableInteractionSource() }
     }
+    val tutorialDescription = stringResource(R.string.tutorial_content_description)
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         val containerModifier = modifier
             .fillMaxSize()
             .testTag("reader-tap-zone-tutorial")
-            .semantics { contentDescription = "Reader tap regions tutorial" }
+            .semantics { contentDescription = tutorialDescription }
         BoxWithConstraints(modifier = containerModifier) {
             regions.forEachIndexed { index, region ->
                 val rect = region.rect
@@ -1238,7 +1306,7 @@ internal fun ReaderTapZoneTutorial(
             }
             if (continuous) {
                 Text(
-                    text = "Swipe vertically to scroll",
+                    text = stringResource(R.string.tutorial_swipe_hint),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
@@ -1264,6 +1332,10 @@ private fun ReaderTapZoneTutorialRegion(
     modifier: Modifier,
     onDismiss: () -> Unit
 ) {
+    val tapRegionDescription = stringResource(
+        R.string.tutorial_tap_region_description,
+        stringResource(region.labelRes)
+    )
     Box(
         modifier = modifier
             .background(Color(region.red, region.green, region.blue).copy(alpha = region.alpha))
@@ -1273,11 +1345,11 @@ private fun ReaderTapZoneTutorialRegion(
                 onClick = onDismiss
             )
             .testTag("reader-tap-zone-${region.label.lowercase().replace(' ', '-')}")
-            .semantics { contentDescription = "${region.label} tap region" },
+            .semantics { contentDescription = tapRegionDescription },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = region.label,
+            text = stringResource(region.labelRes),
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
@@ -1285,18 +1357,16 @@ private fun ReaderTapZoneTutorialRegion(
     }
 }
 
-internal const val BOOK_PREVIEW_MODE_LABEL = "Preview mode · Tap to enable reading progress"
-
 @Composable
 internal fun ViewOnlyModeBanner(
     onConfirmReadMode: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
     onPrepareConfirmation: () -> Unit = {},
-    bannerText: String = BOOK_PREVIEW_MODE_LABEL,
-    contentDescription: String = "Preview mode. Tap to enable reading progress.",
-    dialogText: String = "You’ll switch to reading mode, remain on this page, and start saving reading progress.",
-    confirmText: String = "Switch to reading mode"
+    bannerText: String = stringResource(R.string.preview_banner_label),
+    contentDescription: String = stringResource(R.string.preview_banner_content_description),
+    dialogText: String = stringResource(R.string.preview_dialog_text),
+    confirmText: String = stringResource(R.string.preview_switch_to_reading)
 ) {
     var showConfirmation by remember { mutableStateOf(false) }
     Surface(
@@ -1325,7 +1395,7 @@ internal fun ViewOnlyModeBanner(
     if (showConfirmation) {
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
-            title = { Text("Leave preview mode?") },
+            title = { Text(stringResource(R.string.preview_leave_title)) },
             text = { Text(dialogText) },
             confirmButton = {
                 TextButton(
@@ -1340,7 +1410,7 @@ internal fun ViewOnlyModeBanner(
                 TextButton(
                     onClick = { showConfirmation = false },
                     modifier = Modifier.testTag("view-only-cancel-read-mode")
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.common_cancel)) }
             },
             modifier = Modifier.testTag("view-only-confirmation-dialog")
         )
@@ -1388,6 +1458,25 @@ internal fun ReaderLightweightChrome(
     }
     val hasContinuousProgression = progressionState.enabled
     var showPositionList by remember { mutableStateOf(false) }
+    val chapterKind = stringResource(R.string.chrome_chapter_kind)
+    val closeBookDescription = stringResource(R.string.chrome_close_book)
+    val previousPositionDescription = stringResource(R.string.chrome_previous_position, positionKind.lowercase())
+    val nextPositionDescription = stringResource(R.string.chrome_next_position, positionKind.lowercase())
+    val progressionJumpBarDescription = stringResource(R.string.chrome_progression_jump_bar, positionKind.lowercase())
+    val jumpBarDescription = stringResource(R.string.chrome_jump_bar, positionKind.lowercase())
+    val positionStateDescription = stringResource(
+        R.string.chrome_position_state,
+        position.currentIndex + 1,
+        position.itemCount
+    )
+    val secondaryPreviousDescription = if (secondaryPositionKind != null) {
+        stringResource(R.string.chrome_previous_position, secondaryPositionKind.lowercase())
+    } else null
+    val secondaryNextDescription = if (secondaryPositionKind != null) {
+        stringResource(R.string.chrome_next_position, secondaryPositionKind.lowercase())
+    } else null
+    val listenNarrationDescription = stringResource(R.string.chrome_listen_narration)
+    val readerSettingsDescription = stringResource(R.string.chrome_reader_settings)
     val palette = theme.readerOptionsPalette()
     val parentTypography = MaterialTheme.typography
     val parentShapes = MaterialTheme.shapes
@@ -1434,7 +1523,7 @@ internal fun ReaderLightweightChrome(
                 .coerceAtMost(maxHeight)
             EpubReaderDismissScrim(
                 backgroundAlpha = 0f,
-                contentDescription = "Dismiss reader controls and continue reading",
+                contentDescription = stringResource(R.string.chrome_dismiss_scrim),
                 onDismiss = onBackToReading
             )
             Surface(
@@ -1453,11 +1542,11 @@ internal fun ReaderLightweightChrome(
                 ) {
                     TextButton(
                         onClick = onCloseBook,
-                        modifier = Modifier.semantics { contentDescription = "Close book" },
+                        modifier = Modifier.semantics { contentDescription = closeBookDescription },
                         contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null)
-                        Text("Exit", modifier = Modifier.padding(start = 4.dp))
+                        Text(stringResource(R.string.chrome_exit), modifier = Modifier.padding(start = 4.dp))
                     }
                     Text(
                         text = title,
@@ -1492,7 +1581,7 @@ internal fun ReaderLightweightChrome(
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Previous ${positionKind.lowercase()}"
+                                contentDescription = previousPositionDescription
                             )
                         }
                     }
@@ -1513,7 +1602,7 @@ internal fun ReaderLightweightChrome(
                                         .requiredWidth(maxHeight)
                                         .rotate(90f)
                                         .semantics {
-                                            contentDescription = "$positionKind progression jump bar"
+                                            contentDescription = progressionJumpBarDescription
                                             stateDescription = "${(sliderProgression * 100).roundToInt()}%"
                                         }
                                 )
@@ -1531,8 +1620,8 @@ internal fun ReaderLightweightChrome(
                                         .requiredWidth(maxHeight)
                                         .rotate(90f)
                                         .semantics {
-                                            contentDescription = "$positionKind jump bar"
-                                            stateDescription = "${position.currentIndex + 1} of ${position.itemCount}"
+                                            contentDescription = jumpBarDescription
+                                            stateDescription = positionStateDescription
                                         }
                                 )
                             }
@@ -1554,7 +1643,7 @@ internal fun ReaderLightweightChrome(
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Next ${positionKind.lowercase()}"
+                                contentDescription = nextPositionDescription
                             )
                         }
                     }
@@ -1572,11 +1661,15 @@ internal fun ReaderLightweightChrome(
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Previous ${secondaryPositionKind.lowercase()}"
+                                contentDescription = secondaryPreviousDescription
                             )
                         }
                         Text(
-                            "Chapter ${secondaryPosition.currentIndex + 1}/${secondaryPosition.itemCount}",
+                            stringResource(
+                                R.string.chrome_chapter_position,
+                                secondaryPosition.currentIndex + 1,
+                                secondaryPosition.itemCount
+                            ),
                             maxLines = 1,
                             style = MaterialTheme.typography.labelSmall
                         )
@@ -1588,7 +1681,7 @@ internal fun ReaderLightweightChrome(
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Next ${secondaryPositionKind.lowercase()}"
+                                contentDescription = secondaryNextDescription
                             )
                         }
                     }
@@ -1613,7 +1706,13 @@ internal fun ReaderLightweightChrome(
                     OutlinedButton(onClick = { showPositionList = true }) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
                         Text(
-                            text = if (listPositionKind == "Chapter") "Chapters" else "Pages",
+                            text = stringResource(
+                                if (listPositionKind == "Chapter" || listPositionKind == chapterKind) {
+                                    R.string.chrome_chapters
+                                } else {
+                                    R.string.chrome_pages
+                                }
+                            ),
                             modifier = Modifier.padding(start = 8.dp)
                         )
                     }
@@ -1622,15 +1721,15 @@ internal fun ReaderLightweightChrome(
                             onClick = { onListenToNarration() },
                             modifier = Modifier
                                 .testTag("reader-lightweight-listen")
-                                .semantics { contentDescription = "Listen to narration" },
+                                .semantics { contentDescription = listenNarrationDescription },
                             contentPadding = PaddingValues(horizontal = 10.dp)
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Text("Listen", modifier = Modifier.padding(start = 4.dp))
+                            Text(stringResource(R.string.chrome_listen), modifier = Modifier.padding(start = 4.dp))
                         }
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Reader settings")
+                        Icon(Icons.Default.Settings, contentDescription = readerSettingsDescription)
                     }
                 }
             }
@@ -1659,6 +1758,8 @@ private fun ReaderPositionListDialog(
     onDismiss: () -> Unit,
     onPositionSelected: (Int) -> Unit
 ) {
+    val chapterKind = stringResource(R.string.chrome_chapter_kind)
+    val currentStateDescription = stringResource(R.string.chrome_current)
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1676,21 +1777,33 @@ private fun ReaderPositionListDialog(
         ) {
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
-                    text = if (positionKind == "Chapter") "Chapters" else "Pages",
+                    text = stringResource(
+                        if (positionKind == "Chapter" || positionKind == chapterKind) {
+                            R.string.chrome_chapters
+                        } else {
+                            R.string.chrome_pages
+                        }
+                    ),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.titleLarge
                 )
                 LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
                     items(entries.indices.toList(), key = { it }) { index ->
                         val selected = index == currentPosition
+                        val itemDescription = stringResource(
+                            R.string.chrome_select_position,
+                            positionKind.lowercase(),
+                            index + 1,
+                            entries[index]
+                        )
                         Surface(
                             onClick = { onPositionSelected(index) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                                 .semantics {
-                                    contentDescription = "Select ${positionKind.lowercase()} ${index + 1}: ${entries[index]}"
-                                    if (selected) stateDescription = "Current"
+                                    contentDescription = itemDescription
+                                    if (selected) stateDescription = currentStateDescription
                                 },
                             color = if (selected) {
                                 MaterialTheme.colorScheme.primaryContainer
@@ -1704,7 +1817,7 @@ private fun ReaderPositionListDialog(
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                 Text(
-                                    "$positionKind ${index + 1}",
+                                    stringResource(R.string.chrome_position_with_number, positionKind, index + 1),
                                     color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -1894,7 +2007,7 @@ internal fun EpubReaderOptionsBottomSheet(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                "Reader options",
+                                stringResource(R.string.sheet_reader_options),
                                 modifier = Modifier.semantics { heading() },
                                 style = MaterialTheme.typography.titleLarge
                             )
@@ -1918,13 +2031,13 @@ internal fun EpubReaderOptionsBottomSheet(
                                 onClick = onContinueReading,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Continue reading")
+                                Text(stringResource(R.string.sheet_continue_reading))
                             }
                             OutlinedButton(
                                 onClick = onCloseBook,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Close book")
+                                Text(stringResource(R.string.sheet_close_book))
                             }
                         }
                         if (bookLanguage != null) {
@@ -1932,7 +2045,10 @@ internal fun EpubReaderOptionsBottomSheet(
                             EpubBookLanguageSettings(bookLanguage, onBookLanguageChange)
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                        Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.sheet_reading_configuration),
+                            style = MaterialTheme.typography.titleMedium
+                        )
                         ReaderConfigurationControls(
                             value = preferences,
                             onPreferencesChange = onPreferencesChange,
@@ -1957,9 +2073,12 @@ private fun EpubBookLanguageSettings(
     var expanded by remember { mutableStateOf(false) }
     val isOverride = choice.resolved.source == EpubContentLanguageSource.OVERRIDE
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("This book", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Language for read-aloud voices and hyphenation",
+            stringResource(R.string.sheet_this_book),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_book_language_description),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1971,7 +2090,7 @@ private fun EpubBookLanguageSettings(
                     .testTag("reader-options-book-language-dropdown")
             ) {
                 Text(
-                    "Book language: ${choice.summary}",
+                    stringResource(R.string.sheet_book_language_with_value, choice.summary),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1990,12 +2109,20 @@ private fun EpubBookLanguageSettings(
         // A dialog with a lazy list: the full language list is a couple of hundred entries.
         AlertDialog(
             onDismissRequest = { expanded = false },
-            title = { Text("Book language") },
+            title = { Text(stringResource(R.string.sheet_book_language_title)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                     item(key = "auto") {
                         DropdownMenuItem(
-                            text = { Text(if (isOverride) "Auto (book, else device language)" else "✓ ${choice.summary}") },
+                            text = {
+                                Text(
+                                    if (isOverride) {
+                                        stringResource(R.string.sheet_book_language_auto)
+                                    } else {
+                                        "✓ ${choice.summary}"
+                                    }
+                                )
+                            },
                             onClick = { pick(null) },
                             modifier = Modifier.testTag("reader-options-book-language-auto")
                         )
@@ -2012,7 +2139,7 @@ private fun EpubBookLanguageSettings(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { expanded = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { expanded = false }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 }
@@ -2076,10 +2203,15 @@ internal fun ComicReaderProgressFooter(
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
+            val comicFooterDescription = stringResource(
+                R.string.chrome_footer_comic_page_of,
+                currentPage + 1,
+                pageCount
+            )
             Text(
-                text = "Page ${currentPage + 1} of $pageCount",
+                text = stringResource(R.string.chrome_footer_page_of, currentPage + 1, pageCount),
                 modifier = Modifier.semantics {
-                    contentDescription = "Comic page ${currentPage + 1} of $pageCount"
+                    contentDescription = comicFooterDescription
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -2155,7 +2287,7 @@ internal fun ComicReaderOptionsBottomSheet(
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Reader options",
+                        stringResource(R.string.sheet_reader_options),
                         modifier = Modifier.semantics { heading() },
                         style = MaterialTheme.typography.titleLarge
                     )
@@ -2166,7 +2298,7 @@ internal fun ComicReaderOptionsBottomSheet(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        "Page ${currentPage + 1} of $pageCount",
+                        stringResource(R.string.sheet_comic_page_of, currentPage + 1, pageCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2176,14 +2308,17 @@ internal fun ComicReaderOptionsBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(onClick = onContinueReading, modifier = Modifier.weight(1f)) {
-                        Text("Continue reading")
+                        Text(stringResource(R.string.sheet_continue_reading))
                     }
                     OutlinedButton(onClick = onCloseBook, modifier = Modifier.weight(1f)) {
-                        Text("Close book")
+                        Text(stringResource(R.string.sheet_close_book))
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                Text("Reading configuration", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.sheet_reading_configuration),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 ReaderConfigurationControls(
                     value = preferences,
                     onPreferencesChange = onPreferencesChange,
@@ -2273,6 +2408,22 @@ private fun bookStatus(book: BookSummary, isOfflineSnapshot: Boolean): String {
         parts += "downloaded"
     } else if (isOfflineSnapshot) {
         parts += "not available offline"
+    }
+    return parts.joinToString(" | ")
+}
+
+/** Localized variant of [bookStatus] for UI; [bookStatus] stays the plain-text test/helper form. */
+private fun localizedBookStatus(
+    context: Context,
+    book: BookSummary,
+    isOfflineSnapshot: Boolean
+): String {
+    val parts = mutableListOf(book.mediaKind.name.lowercase(Locale.US))
+    book.progressLabel?.takeIf { it.isNotBlank() }?.let(parts::add)
+    if (book.isDownloaded) {
+        parts += context.getString(R.string.shell_status_downloaded)
+    } else if (isOfflineSnapshot) {
+        parts += context.getString(R.string.shell_status_not_available_offline)
     }
     return parts.joinToString(" | ")
 }
@@ -2721,6 +2872,7 @@ internal val EPUB_THEME_OPTIONS = listOf(
 
 enum class EpubReaderTheme(
     val label: String,
+    @StringRes val labelRes: Int,
     val backgroundColor: Int,
     val backgroundCss: String,
     val foregroundCss: String,
@@ -2728,6 +2880,7 @@ enum class EpubReaderTheme(
 ) {
     Light(
         label = "Light",
+        labelRes = R.string.label_theme_light,
         backgroundColor = 0xFFF7F4EE.toInt(),
         backgroundCss = "#F7F4EE",
         foregroundCss = "#1F1C17",
@@ -2735,6 +2888,7 @@ enum class EpubReaderTheme(
     ),
     Sepia(
         label = "Sepia",
+        labelRes = R.string.label_theme_sepia,
         backgroundColor = 0xFFF1E6D2.toInt(),
         backgroundCss = "#F1E6D2",
         foregroundCss = "#3B2E1E",
@@ -2742,6 +2896,7 @@ enum class EpubReaderTheme(
     ),
     Dark(
         label = "Dark",
+        labelRes = R.string.label_theme_dark,
         backgroundColor = 0xFF181512.toInt(),
         backgroundCss = "#181512",
         foregroundCss = "#ECE4D8",
@@ -2749,6 +2904,7 @@ enum class EpubReaderTheme(
     ),
     OledBlack(
         label = "OLED black",
+        labelRes = R.string.label_theme_oled_black,
         backgroundColor = 0xFF000000.toInt(),
         backgroundCss = "#000000",
         foregroundCss = "#FFFFFF",

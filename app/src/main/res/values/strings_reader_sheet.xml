@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Reader options bottom sheet (EPUB and comic/PDF) -->
+    <string name="sheet_reader_options">Reader options</string>
+    <string name="sheet_continue_reading">Continue reading</string>
+    <string name="sheet_close_book">Close book</string>
+    <string name="sheet_reading_configuration">Reading configuration</string>
+    <string name="sheet_this_book">This book</string>
+    <string name="sheet_book_language_description">Language for read-aloud voices and hyphenation</string>
+    <string name="sheet_book_language_with_value">Book language: %1$s</string>
+    <string name="sheet_book_language_title">Book language</string>
+    <string name="sheet_book_language_auto">Auto (book, else device language)</string>
+    <string name="sheet_comic_page_of">Page %1$d of %2$d</string>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 阅读选项面板（EPUB 与漫画/PDF） -->
+    <string name="sheet_reader_options">阅读选项</string>
+    <string name="sheet_continue_reading">继续阅读</string>
+    <string name="sheet_close_book">关闭书籍</string>
+    <string name="sheet_reading_configuration">阅读设置</string>
+    <string name="sheet_this_book">本书</string>
+    <string name="sheet_book_language_description">朗读语音与断字所使用的语言</string>
+    <string name="sheet_book_language_with_value">书籍语言：%1$s</string>
+    <string name="sheet_book_language_title">书籍语言</string>
+    <string name="sheet_book_language_auto">自动（优先书籍，其次设备语言）</string>
+    <string name="sheet_comic_page_of">第 %1$d 页，共 %2$d 页</string>
+</resources>

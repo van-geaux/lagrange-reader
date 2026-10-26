@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.res.stringResource
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -107,12 +109,16 @@ internal fun ReadiumCompactAudioPlayer(
     if (currentSession == null) {
         val preparing = preparingSession ?: return
         val scope = rememberCoroutineScope()
+        val preparingDescription = stringResource(
+            R.string.audio_preparing_for,
+            preparing.book.title
+        )
         Surface(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
                 .semantics {
-                    contentDescription = "Preparing audiobook player for ${preparing.book.title}"
+                    contentDescription = preparingDescription
                 },
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -142,7 +148,7 @@ internal fun ReadiumCompactAudioPlayer(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Preparing audiobook…",
+                        stringResource(R.string.audio_preparing),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -167,13 +173,17 @@ internal fun ReadiumCompactAudioPlayer(
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close audiobook player")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.audio_close_player_a11y))
                 }
             }
         }
         return
     }
     val current = requireNotNull(currentSession)
+    val playerDescription = stringResource(R.string.audio_player_for, current.book.title)
+    val playingStateDescription = stringResource(R.string.audio_playing)
+    val pausedStateDescription = stringResource(R.string.audio_paused)
+    val selectPlaybackSpeedDescription = stringResource(R.string.audio_select_speed)
     val playback by produceState(audioPlayerSnapshot(current), current.player) {
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -230,8 +240,12 @@ internal fun ReadiumCompactAudioPlayer(
                     )
                 }
                 .semantics {
-                    contentDescription = "Audiobook player for ${current.book.title}"
-                    stateDescription = if (playback.playWhenReady) "Playing" else "Paused"
+                    contentDescription = playerDescription
+                    stateDescription = if (playback.playWhenReady) {
+                        playingStateDescription
+                    } else {
+                        pausedStateDescription
+                    }
                 },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -295,7 +309,7 @@ internal fun ReadiumCompactAudioPlayer(
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close audiobook player")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.audio_close_player_a11y))
                     }
                 }
 
@@ -349,11 +363,9 @@ internal fun ReadiumCompactAudioPlayer(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.List,
-                                contentDescription = if (chapters.isEmpty()) {
-                                    "No audiobook chapters available"
-                                } else {
-                                    "Select audiobook chapter"
-                                }
+                                contentDescription = stringResource(
+                                    if (chapters.isEmpty()) R.string.audio_no_chapters else R.string.audio_select_chapter
+                                )
                             )
                         }
                     }
@@ -365,7 +377,7 @@ internal fun ReadiumCompactAudioPlayer(
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.Replay10, contentDescription = "Skip back 10 seconds")
+                        Icon(Icons.Default.Replay10, contentDescription = stringResource(R.string.audio_skip_back_10))
                     }
                     IconButton(
                         onClick = {
@@ -375,7 +387,7 @@ internal fun ReadiumCompactAudioPlayer(
                     ) {
                         Icon(
                             imageVector = if (playback.playWhenReady) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playback.playWhenReady) "Pause audiobook" else "Play audiobook"
+                            contentDescription = stringResource(if (playback.playWhenReady) R.string.audio_pause else R.string.audio_play)
                         )
                     }
                     IconButton(
@@ -387,14 +399,14 @@ internal fun ReadiumCompactAudioPlayer(
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.Forward30, contentDescription = "Skip forward 30 seconds")
+                        Icon(Icons.Default.Forward30, contentDescription = stringResource(R.string.audio_skip_forward_30))
                     }
                     Box {
                         TextButton(
                             onClick = { speedOverlayVisible = true },
                             modifier = Modifier
                                 .height(40.dp)
-                                .semantics { contentDescription = "Select playback speed" },
+                                .semantics { contentDescription = selectPlaybackSpeedDescription },
                             contentPadding = PaddingValues(horizontal = 6.dp)
                         ) {
                             Text("${formatPlaybackSpeed(playback.speed.toDouble())}×")
@@ -482,19 +494,19 @@ internal fun AudiobookPlaybackSpeedOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Playback speed",
+                            text = stringResource(R.string.audio_playback_speed),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleLarge
                         )
                         IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close playback speed controls")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.audio_close_speed_controls))
                         }
                     }
                     PlaybackRateAdjustmentRow(
                         value = selectedSpeed,
                         minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
                         maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
-                        rateDescription = "playback speed",
+                        rateDescription = stringResource(R.string.audio_playback_speed),
                         onValueChange = { adjustedSpeed ->
                             selectedSpeed = adjustedSpeed
                             onSpeedChange(adjustedSpeed)
@@ -532,6 +544,7 @@ internal fun CompactAudiobookCover(
             ?.takeIf { it.isNotEmpty() }
             ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
     }
+    val detailsDescription = stringResource(R.string.audio_open_details, book.title)
     Box(
         modifier = modifier
             .then(coverHeight?.let(Modifier::height) ?: Modifier)
@@ -541,13 +554,13 @@ internal fun CompactAudiobookCover(
                 shape = RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Open details for ${book.title}" },
+            .semantics { contentDescription = detailsDescription },
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
             Image(
                 bitmap = requireNotNull(bitmap).asImageBitmap(),
-                contentDescription = "Cover for ${book.title}",
+                contentDescription = stringResource(R.string.audio_cover_for, book.title),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )

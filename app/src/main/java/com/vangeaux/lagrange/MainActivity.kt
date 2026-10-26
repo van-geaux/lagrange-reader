@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -48,6 +49,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferencesStore: AppPreferencesStore
     private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
 
     override fun onResume() {
         super.onResume()

@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
+
 import com.github.junrar.Archive
 import com.github.junrar.exception.RarException
 import com.github.junrar.exception.UnsupportedRarEncryptedException
@@ -55,7 +57,8 @@ internal sealed interface ComicArchiveExtractionResult {
     data class Success(val file: File) : ComicArchiveExtractionResult
     data class Failure(
         val reason: ComicArchiveExtractionFailureReason,
-        val userMessage: String
+        val userMessage: String,
+        @StringRes val userMessageRes: Int
     ) : ComicArchiveExtractionResult
 }
 
@@ -98,7 +101,8 @@ internal object ComicArchiveExtractor {
             ComicArchiveKind.SEVEN_ZIP -> extractSevenZip(source, output, bounds)
             null -> ComicArchiveExtractionResult.Failure(
                 ComicArchiveExtractionFailureReason.UNSUPPORTED_FORMAT,
-                "This file is not a supported CBR or CB7 comic archive."
+                "This file is not a supported CBR or CB7 comic archive.",
+                R.string.perror_comic_unsupported_file
             )
         }
         if (result is ComicArchiveExtractionResult.Failure && output.exists()) {
@@ -174,7 +178,8 @@ internal object ComicArchiveExtractor {
         } catch (io: IOException) {
             ComicArchiveExtractionResult.Failure(
                 ComicArchiveExtractionFailureReason.IO_ERROR,
-                "This CBR could not be read from local storage."
+                "This CBR could not be read from local storage.",
+                R.string.perror_comic_unreadable
             )
         }
     }
@@ -264,36 +269,43 @@ internal object ComicArchiveExtractor {
 
     private fun encryptedFailure(label: String) = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.ENCRYPTED,
-        "This $label is password-protected. BookOrbit cannot open encrypted comic archives yet."
+        "This $label is password-protected. BookOrbit cannot open encrypted comic archives yet.",
+        R.string.perror_comic_encrypted
     )
 
     private fun unsupportedFormatFailure(message: String) = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.UNSUPPORTED_FORMAT,
-        message
+        message,
+        R.string.perror_comic_unsupported_format
     )
 
     private fun invalidArchiveFailure(message: String) = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.INVALID_ARCHIVE,
-        message
+        message,
+        R.string.perror_comic_invalid_archive
     )
 
     private fun noSupportedImagesFailure() = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.NO_SUPPORTED_IMAGES,
-        "This comic archive does not contain any supported comic page images."
+        "This comic archive does not contain any supported comic page images.",
+        R.string.perror_comic_no_supported_images
     )
 
     private fun tooManyEntriesFailure() = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.TOO_MANY_ENTRIES,
-        "This comic archive has too many entries for BookOrbit to safely extract."
+        "This comic archive has too many entries for BookOrbit to safely extract.",
+        R.string.perror_comic_too_many_entries
     )
 
     private fun entryTooLargeFailure() = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.ENTRY_TOO_LARGE,
-        "This comic archive contains a page image that is too large for BookOrbit to safely extract."
+        "This comic archive contains a page image that is too large for BookOrbit to safely extract.",
+        R.string.perror_comic_entry_too_large
     )
 
     private fun totalSizeExceededFailure() = ComicArchiveExtractionResult.Failure(
         ComicArchiveExtractionFailureReason.TOTAL_SIZE_EXCEEDED,
-        "This comic archive is too large for BookOrbit to safely extract."
+        "This comic archive is too large for BookOrbit to safely extract.",
+        R.string.perror_comic_too_large
     )
 }

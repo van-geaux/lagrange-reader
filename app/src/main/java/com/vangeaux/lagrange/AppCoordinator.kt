@@ -14,6 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.coroutineScope
 import java.io.IOException
@@ -134,7 +135,10 @@ class AppCoordinator internal constructor(
     , private val featureAvailabilityResolver: ((BookOrbitDataSource) -> ProviderFeatureAvailability)? = null
     , private val providerSessionModuleResolver: ((BookOrbitDataSource) -> ProviderSessionModule)? = null
     , private val bookOrbitOidcModuleResolver: ((BookOrbitDataSource) -> BookOrbitOidcModule?)? = null
+    , private val uiContext: Context? = null
 ) {
+    private fun uiText(id: Int, fallback: String, vararg args: Any): String =
+        uiContext?.getString(id, *args) ?: fallback
     // WorkManager (or any other durable executor) is the execution authority for downloads.
     // AppCoordinator only mutates its BrowserState UI projection from scheduler callbacks; the
     // default in-process scheduler preserves the historical in-memory behavior used by tests.
@@ -229,7 +233,9 @@ class AppCoordinator internal constructor(
         book: BookSummary,
         allowRemoteCache: Boolean
     ): EpubImageLibrarySourceResult = loadWithSessionRecovery(
-        EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
+        EpubImageLibrarySourceResult.Error(
+            uiText(R.string.error_unable_prepare_epub, "Unable to prepare the selected EPUB.")
+        )
     ) {
         readerModule()?.prepareEpubImageLibrarySource(book, allowRemoteCache)
             ?: repository.prepareEpubImageLibrarySource(book, allowRemoteCache)
@@ -285,7 +291,13 @@ class AppCoordinator internal constructor(
             recoverExpiredSession()
             null
         } catch (_: Throwable) {
-            showBrowserMessage("Unable to update the rating for ${book.title}.")
+            showBrowserMessage(
+                uiText(
+                    R.string.error_unable_update_rating,
+                    "Unable to update the rating for ${book.title}.",
+                    book.title
+                )
+            )
             null
         }
     }
@@ -565,12 +577,24 @@ class AppCoordinator internal constructor(
                     )
                 )
             } else {
-                _screen.value = AppScreen.Startup()
+                _screen.value = AppScreen.Startup(uiText(R.string.notif_connecting, "Connecting…"))
             }
 
             if (startupCache == null) {
+                val loginProviderId = providerIdForLogin(
+                    repository.getServerUrl().orEmpty(),
+                    configuredServerProfiles()
+                )
+                val providerLabel = uiContext?.getString(
+                    R.string.provider_server_label,
+                    serverProviderDisplayName(loginProviderId)
+                ) ?: providerServerLabel(loginProviderId)
                 _screen.value = AppScreen.Startup(
-                    "Connecting to ${providerServerLabel(providerIdForLogin(repository.getServerUrl().orEmpty(), configuredServerProfiles()))}…"
+                    uiText(
+                        R.string.setup_connecting,
+                        "Connecting to $providerLabel…",
+                        providerLabel
+                    )
                 )
             }
             val sessionState = loginModule()?.getSessionState() ?: repository.getSessionState()
@@ -598,7 +622,10 @@ class AppCoordinator internal constructor(
                 SessionState.Unauthenticated -> {
                     allowCachedLoginFallback = false
                     showLogin(
-                        message = "Your saved session is no longer authenticated. Sign in to continue.",
+                        message = uiText(
+                            R.string.error_session_saved_expired,
+                            "Your saved session is no longer authenticated. Sign in to continue."
+                        ),
                         destination = PostLoginDestination.Browser
                     )
                 }
@@ -613,12 +640,18 @@ class AppCoordinator internal constructor(
                         showBrowser(
                             cached.copy(
                                 isOfflineSnapshot = true,
-                                message = "Showing the last cached library snapshot while the server is unavailable."
+                                message = uiText(
+                                    R.string.error_cached_snapshot_server_unavailable,
+                                    "Showing the last cached library snapshot while the server is unavailable."
+                                )
                             )
                         )
                     } else {
                         showLogin(
-                            message = "The server is unavailable. Keep the login page open or retry when the connection recovers.",
+                            message = uiText(
+                                R.string.error_server_unavailable_retry_login,
+                                "The server is unavailable. Keep the login page open or retry when the connection recovers."
+                            ),
                             destination = PostLoginDestination.Browser
                         )
                     }
@@ -655,7 +688,10 @@ class AppCoordinator internal constructor(
                 )
             )
             showLogin(
-                message = "Connect to the server and complete sign in.",
+                message = uiText(
+                    R.string.error_connect_complete_sign_in,
+                    "Connect to the server and complete sign in."
+                ),
                 destination = PostLoginDestination.Browser
             )
         }
@@ -684,7 +720,9 @@ class AppCoordinator internal constructor(
             // Remove the old provider's browser composition immediately. Keeping the
             // old Browser screen mounted while the target is validated lets stale
             // catalog/local-book state remain visible during the switch.
-            _screen.value = AppScreen.Startup("Switching server…")
+            _screen.value = AppScreen.Startup(
+                uiText(R.string.error_switching_server, "Switching server…")
+            )
             // Validate the target before touching the current server's state: an unreachable
             // or mistyped server must leave the current session, caches and queues intact.
             val targetRepository = repositoryResolver?.invoke(serverUrl, providerId, repository) ?: repository
@@ -752,12 +790,18 @@ class AppCoordinator internal constructor(
                 SessionState.Unauthenticated -> {
                     if (restoredProfileSession) loginModule()?.clearSession() ?: repository.clearSession()
                     showLogin(
-                        message = "Server changed. Sign in to access your libraries.",
+                        message = uiText(
+                            R.string.error_server_changed_sign_in,
+                            "Server changed. Sign in to access your libraries."
+                        ),
                         destination = PostLoginDestination.Browser
                     )
                 }
                 SessionState.Unavailable -> showLogin(
-                    message = "Server changed. Sign in to access your libraries.",
+                    message = uiText(
+                            R.string.error_server_changed_sign_in,
+                            "Server changed. Sign in to access your libraries."
+                        ),
                     destination = PostLoginDestination.Browser
                 )
             }
@@ -821,12 +865,18 @@ class AppCoordinator internal constructor(
                         showBrowser(
                             cached.copy(
                                 isOfflineSnapshot = true,
-                                message = "Showing the last cached library snapshot while waiting for an authenticated session."
+                                message = uiText(
+                                    R.string.error_cached_snapshot_waiting_session,
+                                    "Showing the last cached library snapshot while waiting for an authenticated session."
+                                )
                             )
                         )
                     } else {
                         showLogin(
-                            message = "Waiting for an authenticated session.",
+                            message = uiText(
+                                R.string.error_waiting_authenticated_session,
+                                "Waiting for an authenticated session."
+                            ),
                             destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
                         )
                     }
@@ -841,12 +891,18 @@ class AppCoordinator internal constructor(
                         showBrowser(
                             cached.copy(
                                 isOfflineSnapshot = true,
-                                message = "Showing the last cached library snapshot while the server is unavailable."
+                                message = uiText(
+                                    R.string.error_cached_snapshot_server_unavailable,
+                                    "Showing the last cached library snapshot while the server is unavailable."
+                                )
                             )
                         )
                     } else {
                         showLogin(
-                            message = "Waiting for the server connection to recover.",
+                            message = uiText(
+                                R.string.error_waiting_connection_recover,
+                                "Waiting for the server connection to recover."
+                            ),
                             destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
                         )
                     }
@@ -881,7 +937,10 @@ class AppCoordinator internal constructor(
                 throw error
             } catch (error: Throwable) {
                 showLogin(
-                    message = userMessage(error, "Unable to sign in."),
+                    message = userMessage(
+                        error,
+                        uiText(R.string.error_unable_sign_in, "Unable to sign in.")
+                    ),
                     destination = pendingPostLoginDestination ?: PostLoginDestination.Browser
                 )
             } finally {
@@ -901,13 +960,18 @@ class AppCoordinator internal constructor(
         oidcJob = scope.launch {
             try {
                 val providers = bookOrbitOidcModule()?.loadProviders()
-                    ?: throw UserFacingException("SSO is not available for this provider.")
+                    ?: throw UserFacingException(
+                        uiText(R.string.error_sso_unavailable, "SSO is not available for this provider.")
+                    )
                 updateOidcState { it.copy(providers = providers, isLoading = false) }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
                 updateOidcState {
-                    it.copy(isLoading = false, error = userMessage(error, "Unable to load SSO providers."))
+                    it.copy(isLoading = false, error = userMessage(
+                        error,
+                        uiText(R.string.error_unable_load_sso_providers, "Unable to load SSO providers.")
+                    ))
                 }
             }
         }
@@ -937,12 +1001,19 @@ class AppCoordinator internal constructor(
             try {
                 val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
                 val serverState = bookOrbitOidcModule()?.requestState(provider.slug)
-                    ?: throw UserFacingException("SSO is not available for this provider.")
+                    ?: throw UserFacingException(
+                        uiText(R.string.error_sso_unavailable, "SSO is not available for this provider.")
+                    )
                 val transaction = BookOrbitOidc.buildTransaction(
                     provider = provider,
                     serverUrl = serverUrl,
                     state = serverState
-                ) ?: throw BookOrbitOidcException("The SSO server did not provide an authorization endpoint.")
+                ) ?: throw BookOrbitOidcException(
+                    uiText(
+                        R.string.error_sso_missing_authorization_endpoint,
+                        "The SSO server did not provide an authorization endpoint."
+                    )
+                )
                 updateOidcState { it.copy(isLoading = false, transaction = transaction) }
             } catch (error: CancellationException) {
                 throw error
@@ -951,7 +1022,10 @@ class AppCoordinator internal constructor(
                     it.copy(
                         isLoading = false,
                         transaction = null,
-                        error = userMessage(error, "Unable to start SSO sign-in.")
+                        error = userMessage(
+                            error,
+                            uiText(R.string.error_unable_start_sso, "Unable to start SSO sign-in.")
+                        )
                     )
                 }
             }
@@ -975,7 +1049,9 @@ class AppCoordinator internal constructor(
                     expectedState = transaction.state
                 ).getOrThrow()
                 bookOrbitOidcModule()?.exchangeCallback(transaction, callback)
-                    ?: throw UserFacingException("SSO is not available for this provider.")
+                    ?: throw UserFacingException(
+                        uiText(R.string.error_sso_unavailable, "SSO is not available for this provider.")
+                    )
                 providerSessionModule()?.saveCurrentProfileSession()
                 when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
                     SessionState.Authenticated -> {
@@ -989,7 +1065,10 @@ class AppCoordinator internal constructor(
                 throw error
             } catch (error: Throwable) {
                 updateOidcState {
-                    it.copy(isExchanging = false, error = userMessage(error, "Unable to complete SSO sign-in."))
+                    it.copy(isExchanging = false, error = userMessage(
+                            error,
+                            uiText(R.string.error_unable_complete_sso, "Unable to complete SSO sign-in.")
+                        ))
                 }
             }
         }
@@ -1007,7 +1086,10 @@ class AppCoordinator internal constructor(
             if (current?.isOfflineSnapshot == true) {
                 allowCachedLoginFallback = false
                 showLogin(
-                    message = "Sign in again to refresh libraries or open online content.",
+                    message = uiText(
+                    R.string.error_sign_in_again_refresh,
+                    "Sign in again to refresh libraries or open online content."
+                ),
                     destination = PostLoginDestination.Browser
                 )
                 return@launch
@@ -1020,7 +1102,10 @@ class AppCoordinator internal constructor(
         scope.launch {
             allowCachedLoginFallback = false
             showLogin(
-                message = "Sign in to refresh your libraries and online content.",
+                message = uiText(
+                    R.string.error_sign_in_refresh_libraries,
+                    "Sign in to refresh your libraries and online content."
+                ),
                 destination = PostLoginDestination.Browser
             )
         }
@@ -1039,7 +1124,10 @@ class AppCoordinator internal constructor(
             allowCachedLoginFallback = false
             loginModule()?.clearSession() ?: repository.clearSession()
             showLogin(
-                message = "Signed out. Sign in to access your libraries.",
+                message = uiText(
+                    R.string.error_signed_out,
+                    "Signed out. Sign in to access your libraries."
+                ),
                 destination = PostLoginDestination.Browser
             )
         }
@@ -1131,7 +1219,7 @@ class AppCoordinator internal constructor(
         catalogLoadJob = scope.launch {
             val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             acceptAudioProgress = true
-            showStartup("Loading libraries…")
+            showStartup(uiText(R.string.error_loading_libraries, "Loading libraries…"))
             restoredInterruptedDownloads = runCatching {
                 repository.loadInterruptedDownloads().associateBy { it.fileId }
             }.getOrDefault(emptyMap())
@@ -1179,11 +1267,11 @@ class AppCoordinator internal constructor(
                 // Flush queued reader progress before loading the first page. This makes
                 // the first Home render reflect progress that was created in an earlier
                 // session instead of showing Continue reading only after a second open.
-                showStartup("Syncing reading progress…")
+                showStartup(uiText(R.string.error_syncing_reading_progress, "Syncing reading progress…"))
                 val progressSyncResult = runCatching {
                     readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress()
                 }.getOrElse { error ->
-                    if (error is UserFacingException && error.message?.contains("not available") == true) {
+                    if (isCapabilityUnavailableError(error)) {
                         SyncAttemptResult.TransientFailure
                     } else {
                         throw error
@@ -1192,7 +1280,7 @@ class AppCoordinator internal constructor(
                 val pendingProgressCount = runCatching {
                     readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount()
                 }.getOrElse { error ->
-                    if (error is UserFacingException && error.message?.contains("not available") == true) 0 else throw error
+                    if (isCapabilityUnavailableError(error)) 0 else throw error
                 }
                 if (selectedLibrary == null) {
 
@@ -1226,7 +1314,7 @@ class AppCoordinator internal constructor(
                 var homeBooks = homeShelfModule()?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
-                showStartup("Loading your library…")
+                showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
                 val firstPage = cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
 
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
@@ -1316,7 +1404,11 @@ class AppCoordinator internal constructor(
                         current.copy(
                             isRefreshing = false,
                             message = failedLibraries.takeIf { it.isNotEmpty() }?.let { failed ->
-                                "Home is showing cached results for ${failed.joinToString()}."
+                                uiText(
+                                    R.string.error_home_cached_results,
+                                    "Home is showing cached results for ${failed.joinToString()}.",
+                                    failed.joinToString()
+                                )
                             }
                         )
                     )
@@ -1325,7 +1417,10 @@ class AppCoordinator internal constructor(
 
                 if (error is AuthenticationRequiredException) {
                     showLogin(
-                        message = "Your session expired. Sign in again to continue browsing.",
+                        message = uiText(
+                        R.string.error_session_expired_browsing,
+                        "Your session expired. Sign in again to continue browsing."
+                    ),
                         destination = PostLoginDestination.Browser
                     )
                     return@onFailure
@@ -1338,17 +1433,31 @@ class AppCoordinator internal constructor(
                             isLoadingLibraries = false,
                             isLoadingBooks = false,
                             isCatalogSyncing = false,
-                            message = userMessage(error, "Unable to finish refreshing the library catalog.")
+                            message = userMessage(
+                                error,
+                                uiText(
+                                    R.string.error_unable_finish_refresh_catalog,
+                                    "Unable to finish refreshing the library catalog."
+                                )
+                            )
                         )
                     )
                     return@onFailure
                 }
                 val cached = (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState())
                 if (cached != null) {
+                    val refreshDetail = userMessage(
+                        error,
+                        uiText(R.string.error_refresh_failed, "Refresh failed.")
+                    )
                     showBrowser(
                         cached.copy(
                             isOfflineSnapshot = true,
-                            message = "Showing the last cached library snapshot. ${userMessage(error, "Refresh failed.")}"
+                            message = uiText(
+                                R.string.error_cached_snapshot_refresh_failed,
+                                "Showing the last cached library snapshot. $refreshDetail",
+                                refreshDetail
+                            )
                         )
                     )
                 } else if (previous != null) {
@@ -1358,7 +1467,10 @@ class AppCoordinator internal constructor(
                             isRefreshing = false,
                             isLoadingLibraries = false,
                             isLoadingBooks = false,
-                            message = userMessage(error, "Unable to refresh libraries.")
+                            message = userMessage(
+                                error,
+                                uiText(R.string.error_unable_refresh_libraries, "Unable to refresh libraries.")
+                            )
                         )
                     )
                 } else {
@@ -1371,7 +1483,10 @@ class AppCoordinator internal constructor(
                             isRefreshing = false,
                             isLoadingLibraries = false,
                             isLoadingBooks = false,
-                            message = userMessage(error, "Unable to load libraries.")
+                            message = userMessage(
+                                error,
+                                uiText(R.string.error_unable_load_libraries, "Unable to load libraries.")
+                            )
                         )
                     )
                 }
@@ -1444,7 +1559,10 @@ class AppCoordinator internal constructor(
             }.onFailure { error ->
                 if (error is AuthenticationRequiredException) {
                     showLogin(
-                        message = "Your session expired. Sign in again to continue in this library.",
+                        message = uiText(
+                            R.string.error_session_expired_library,
+                            "Your session expired. Sign in again to continue in this library."
+                        ),
                         destination = PostLoginDestination.SelectLibrary(libraryId)
                     )
                     return@onFailure
@@ -1458,7 +1576,13 @@ class AppCoordinator internal constructor(
                             isRefreshing = false,
                             isLoadingBooks = false,
                             isCatalogSyncing = false,
-                            message = userMessage(error, "Unable to finish refreshing the selected library.")
+                            message = userMessage(
+                                error,
+                                uiText(
+                                    R.string.error_unable_finish_refresh_library,
+                                    "Unable to finish refreshing the selected library."
+                                )
+                            )
                         )
                     )
                     return@onFailure
@@ -1475,9 +1599,26 @@ class AppCoordinator internal constructor(
                         isLoadingBooks = false,
                         isOfflineSnapshot = cachedForLibrary != null,
                         message = if (cachedForLibrary != null) {
-                            "Showing cached books for this library. ${userMessage(error, "Unable to load the selected library.")}"
+                            val cachedDetail = userMessage(
+                                error,
+                                uiText(
+                                    R.string.error_unable_load_selected_library,
+                                    "Unable to load the selected library."
+                                )
+                            )
+                            uiText(
+                                R.string.error_cached_books_library,
+                                "Showing cached books for this library. $cachedDetail",
+                                cachedDetail
+                            )
                         } else {
-                            userMessage(error, "Unable to load the selected library.")
+                            userMessage(
+                                error,
+                                uiText(
+                                    R.string.error_unable_load_selected_library,
+                                    "Unable to load the selected library."
+                                )
+                            )
                         }
                     )
                 )
@@ -1495,7 +1636,7 @@ class AppCoordinator internal constructor(
 
     fun openAnnotation(annotation: BookAnnotation) {
         openBook(
-            book = annotation.toBookSummary(),
+            book = annotation.toBookSummary(uiContext),
             launchMode = ReaderLaunchMode.PREVIEW,
             position = ReaderOpenPosition(
                 cfi = annotation.cfi,
@@ -1613,7 +1754,9 @@ class AppCoordinator internal constructor(
                 }
                 if (book.mediaKind == MediaKind.AUDIO) {
                     val opener = audioPlaybackOpener
-                        ?: throw UserFacingException("Audiobook playback is unavailable.")
+                        ?: throw UserFacingException(
+                        uiText(R.string.error_audiobook_unavailable, "Audiobook playback is unavailable.")
+                    )
                     saveActiveReader(readerState.book, launchMode)
                     if (!opener(readerState, true)) {
                         clearActiveReader()
@@ -1712,7 +1855,11 @@ class AppCoordinator internal constructor(
                 }
                 if (error is AuthenticationRequiredException) {
                     showLogin(
-                        message = "Your session expired. Sign in again to reopen ${book.title}.",
+                        message = uiText(
+                            R.string.error_session_expired_reopen_book,
+                            "Your session expired. Sign in again to reopen ${book.title}.",
+                            book.title
+                        ),
                         destination = PostLoginDestination.OpenBook(book, launchMode)
                     )
                     return@onFailure
@@ -1742,7 +1889,11 @@ class AppCoordinator internal constructor(
                 }
                 if (finalError is AuthenticationRequiredException) {
                     showLogin(
-                        message = "Your session expired. Sign in again to reopen ${book.title}.",
+                        message = uiText(
+                            R.string.error_session_expired_reopen_book,
+                            "Your session expired. Sign in again to reopen ${book.title}.",
+                            book.title
+                        ),
                         destination = PostLoginDestination.OpenBook(book, launchMode)
                     )
                     return@onFailure
@@ -1751,7 +1902,14 @@ class AppCoordinator internal constructor(
                 if (fallback != null) {
                     navigateToBrowser(
                         fallback.copy(
-                            message = userMessage(finalError, "Unable to open ${book.title}.")
+                            message = userMessage(
+                                finalError,
+                                uiText(
+                                    R.string.error_unable_open_book,
+                                    "Unable to open ${book.title}.",
+                                    book.title
+                                )
+                            )
                         )
                     )
                 } else {
@@ -1772,7 +1930,12 @@ class AppCoordinator internal constructor(
 
     fun downloadBook(book: BookSummary, expandGroup: Boolean = true) {
         val requestedFileId = book.fileId ?: run {
-            showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
+            showBrowserMessage(
+                uiText(
+                    R.string.error_download_no_file,
+                    "This title cannot be downloaded because it does not expose a file."
+                )
+            )
             return
         }
         scope.launch {
@@ -1785,7 +1948,15 @@ class AppCoordinator internal constructor(
                 }
             }
                 .getOrElse { error ->
-                    showBrowserMessage(userMessage(error, "Unable to inspect the audiobook files."))
+                    showBrowserMessage(
+                        userMessage(
+                            error,
+                            uiText(
+                                R.string.error_unable_inspect_audiobook_files,
+                                "Unable to inspect the audiobook files."
+                            )
+                        )
+                    )
                     return@launch
                 }
             val downloads = mutableListOf<ScheduledDownload>()
@@ -1843,7 +2014,12 @@ class AppCoordinator internal constructor(
 
     fun downloadBookForEpubImageLibrary(book: BookSummary, onSuccess: (BookSummary) -> Unit) {
         val fileId = book.fileId ?: run {
-            showBrowserMessage("This title cannot be downloaded because it does not expose a file.")
+            showBrowserMessage(
+                uiText(
+                    R.string.error_download_no_file,
+                    "This title cannot be downloaded because it does not expose a file."
+                )
+            )
             return
         }
         epubImageLibraryDownloadCallbacks[fileId] = onSuccess
@@ -1883,18 +2059,26 @@ class AppCoordinator internal constructor(
                     fileId = fileId,
                     isDownloading = false,
                     failed = false,
-                    message = "Download canceled."
+                    message = uiText(R.string.error_download_canceled, "Download canceled.")
                 )
             }
             DownloadOutcome.PermissionDenied -> {
                 epubImageLibraryDownloadCallbacks.remove(fileId)
-                val label = book?.title ?: "this title"
                 updateDownloadState(
                     fileId = fileId,
                     isDownloading = false,
                     failed = false,
                     permissionDenied = true,
-                    message = "You don’t have permission to download $label."
+                    message = book?.let { deniedBook ->
+                        uiText(
+                            R.string.error_download_permission_denied,
+                            "You don’t have permission to download ${deniedBook.title}.",
+                            deniedBook.title
+                        )
+                    } ?: uiText(
+                        R.string.error_download_permission_denied_this_title,
+                        "You don’t have permission to download this title."
+                    )
                 )
             }
             DownloadOutcome.AuthRequired -> {
@@ -1905,19 +2089,38 @@ class AppCoordinator internal constructor(
                     message = null
                 )
                 showLogin(
-                    message = "Your session expired. Sign in again to continue downloading" +
-                        (book?.let { " ${it.title}." } ?: "."),
+                    message = book?.let { expiredBook ->
+                        uiText(
+                            R.string.error_session_expired_downloading_book,
+                            "Your session expired. Sign in again to continue downloading ${expiredBook.title}.",
+                            expiredBook.title
+                        )
+                    } ?: uiText(
+                        R.string.error_session_expired_downloading,
+                        "Your session expired. Sign in again to continue downloading."
+                    ),
                     destination = book?.let(PostLoginDestination::DownloadBook) ?: PostLoginDestination.Browser
                 )
             }
             is DownloadOutcome.Failed -> {
                 epubImageLibraryDownloadCallbacks.remove(fileId)
-                val label = book?.title ?: "this title"
                 updateDownloadState(
                     fileId = fileId,
                     isDownloading = false,
                     failed = true,
-                    message = userMessage(outcome.error, "Download failed for $label.")
+                    message = book?.let { failedBook ->
+                        userMessage(
+                            outcome.error,
+                            uiText(
+                                R.string.error_download_failed,
+                                "Download failed for ${failedBook.title}.",
+                                failedBook.title
+                            )
+                        )
+                    } ?: userMessage(
+                        outcome.error,
+                        uiText(R.string.error_download_failed_this_title, "Download failed for this title.")
+                    )
                 )
             }
         }
@@ -1945,7 +2148,7 @@ class AppCoordinator internal constructor(
             fileId = fileId,
             isDownloading = false,
             failed = false,
-            message = "Download canceled."
+            message = uiText(R.string.error_download_canceled, "Download canceled.")
         )
         scope.launch {
             val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
@@ -2002,7 +2205,12 @@ class AppCoordinator internal constructor(
             }.onSuccess {
                 it.forEach { fileId -> updateLocalFileState(fileId, null) }
             }.onFailure { error ->
-                showBrowserMessage(userMessage(error, "Unable to remove the local copy."))
+                showBrowserMessage(
+                    userMessage(
+                        error,
+                        uiText(R.string.error_unable_remove_local_copy, "Unable to remove the local copy.")
+                    )
+                )
             }
         }
     }
@@ -2015,7 +2223,12 @@ class AppCoordinator internal constructor(
             }.onSuccess {
                 updateLocalFileState(fileId, null)
             }.onFailure { error ->
-                showBrowserMessage(userMessage(error, "Unable to remove the local file."))
+                showBrowserMessage(
+                    userMessage(
+                        error,
+                        uiText(R.string.error_unable_remove_local_file, "Unable to remove the local file.")
+                    )
+                )
             }
         }
     }
@@ -2037,9 +2250,17 @@ class AppCoordinator internal constructor(
             }
             val message = when {
                 failureCount == 0 -> null
-                deletedFileIds.isEmpty() -> "Unable to remove the selected local copies."
-                else -> "Removed ${deletedFileIds.size} of ${books.size} local copies. " +
-                    "$failureCount could not be removed."
+                deletedFileIds.isEmpty() -> uiText(
+                    R.string.error_unable_remove_local_copies,
+                    "Unable to remove the selected local copies."
+                )
+                else -> uiText(
+                    R.string.error_removed_some_local_copies,
+                    "Removed ${deletedFileIds.size} of ${books.size} local copies. $failureCount could not be removed.",
+                    deletedFileIds.size,
+                    books.size,
+                    failureCount
+                )
             }
             if (deletedFileIds.isNotEmpty()) {
                 clearLocalFileStates(deletedFileIds, message)
@@ -2052,8 +2273,16 @@ class AppCoordinator internal constructor(
     fun removeFromCurrentlyReading(book: BookSummary) {
         resetBookReadingState(
             book = book,
-            successMessage = "Removed ${book.title} from Currently reading and reset its progress.",
-            failureMessage = "Unable to remove ${book.title} from Currently reading."
+            successMessage = uiText(
+                R.string.error_removed_from_currently_reading,
+                "Removed ${book.title} from Currently reading and reset its progress.",
+                book.title
+            ),
+            failureMessage = uiText(
+                R.string.error_unable_remove_from_currently_reading,
+                "Unable to remove ${book.title} from Currently reading.",
+                book.title
+            )
         )
     }
 
@@ -2094,7 +2323,12 @@ class AppCoordinator internal constructor(
                             books = current.books.map(updatedBook),
                             homeBooks = current.homeBooks.map(updatedBook),
                             debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
-                            message = "Marked ${book.title} as ${status.displayLabel()}."
+                            message = uiText(
+                            R.string.error_marked_as_status,
+                            "Marked ${book.title} as ${status.displayLabel()}.",
+                            book.title,
+                            status.displayLabel()
+                        )
                         )
                     )
                     refreshProviderHomeShelves()
@@ -2102,7 +2336,14 @@ class AppCoordinator internal constructor(
                     recoverExpiredSession()
                 } catch (error: Throwable) {
                     showBrowserMessage(
-                        userMessage(error, "Unable to update ${book.title}'s reading status.")
+                        userMessage(
+                            error,
+                            uiText(
+                                R.string.error_unable_update_reading_status,
+                                "Unable to update ${book.title}'s reading status.",
+                                book.title
+                            )
+                        )
                     )
                 }
             }
@@ -2147,14 +2388,27 @@ class AppCoordinator internal constructor(
                             }
                         },
                         debugPendingProgressCount = readingProgressModule()?.pendingProgressCount() ?: repository.pendingProgressCount(),
-                        message = "Marked ${book.title} as read."
+                        message = uiText(
+                        R.string.error_marked_as_read,
+                        "Marked ${book.title} as read.",
+                        book.title
+                    )
                     )
                 )
                 refreshProviderHomeShelves()
             } catch (_: AuthenticationRequiredException) {
                 recoverExpiredSession()
             } catch (error: Throwable) {
-                showBrowserMessage(userMessage(error, "Unable to mark ${book.title} as read."))
+                showBrowserMessage(
+                userMessage(
+                    error,
+                    uiText(
+                        R.string.error_unable_mark_as_read,
+                        "Unable to mark ${book.title} as read.",
+                        book.title
+                    )
+                )
+            )
             }
         }
     }
@@ -2162,8 +2416,16 @@ class AppCoordinator internal constructor(
     fun markBookAsUnread(book: BookSummary) {
         resetBookReadingState(
             book = book,
-            successMessage = "Marked ${book.title} as unread and reset its progress.",
-            failureMessage = "Unable to mark ${book.title} as unread."
+            successMessage = uiText(
+                R.string.error_marked_as_unread,
+                "Marked ${book.title} as unread and reset its progress.",
+                book.title
+            ),
+            failureMessage = uiText(
+                R.string.error_unable_mark_as_unread,
+                "Unable to mark ${book.title} as unread.",
+                book.title
+            )
         )
     }
 
@@ -2320,37 +2582,86 @@ class AppCoordinator internal constructor(
         }
         allowCachedLoginFallback = false
         showLogin(
-            message = "Your session expired. Sign in again to continue.",
+            message = uiText(
+            R.string.error_session_expired_continue,
+            "Your session expired. Sign in again to continue."
+        ),
             destination = PostLoginDestination.Browser
         )
     }
 
-    private fun isMissingLocalReaderError(error: Throwable): Boolean {
-        val message = error.message.orEmpty()
-        return error is UserFacingException && (
-            message.contains("Download it first or reconnect to the server.") ||
-                message.contains("missing both a local file and a playable stream.") ||
-                message.contains("does not expose a readable local file or stream.")
+    private fun isMissingLocalReaderError(error: Throwable): Boolean =
+        error is UserFacingException && (
+            error.reason == UserFacingReason.LOCAL_READER_UNAVAILABLE ||
+                legacyMissingLocalReaderMessage(error.message.orEmpty())
             )
-    }
+
+    /** Keeps compatibility with callers/tests that construct plain [UserFacingException]s. */
+    private fun legacyMissingLocalReaderMessage(message: String): Boolean =
+        message.contains("Download it first or reconnect to the server.") ||
+            message.contains("missing both a local file and a playable stream.") ||
+            message.contains("does not expose a readable local file or stream.")
+
+    private fun isCapabilityUnavailableError(error: Throwable): Boolean =
+        error is UserFacingException && (
+            error.reason == UserFacingReason.CAPABILITY_UNAVAILABLE ||
+                error.message?.contains("not available") == true
+            )
 
     private fun userMessage(error: Throwable, fallback: String): String {
         return when (error) {
-            is AuthenticationRequiredException -> "Your session expired. Sign in again."
-            is InvalidCredentialsException -> "The username or password was not accepted."
-            is LoginRateLimitedException -> "The server is rate limiting sign-in attempts. Try again shortly."
-            is LoginVerificationException -> "The server did not confirm the new sign-in. Check the server and try again."
-            is UserFacingException -> error.message ?: fallback
-            is HttpRequestException -> when {
-                error.code == 404 -> "The server could not find the requested content."
-                error.code == 429 -> "The server is rate limiting requests. Try again shortly."
-                error.code in 500..599 -> "The server failed while trying to ${error.action}."
-                else -> "The server could not ${error.action}."
+            is AuthenticationRequiredException -> uiText(R.string.error_session_expired, "Your session expired. Sign in again.")
+            is InvalidCredentialsException -> uiText(R.string.error_invalid_credentials, "The username or password was not accepted.")
+            is LoginRateLimitedException -> uiText(
+                R.string.error_login_rate_limited,
+                "The server is rate limiting sign-in attempts. Try again shortly."
+            )
+            is LoginVerificationException -> uiText(
+                R.string.error_login_not_confirmed,
+                "The server did not confirm the new sign-in. Check the server and try again."
+            )
+            is UserFacingException -> {
+                val message = error.message.orEmpty()
+                when {
+                    message == AUDIO_OPEN_CANCELLED_MESSAGE -> uiText(
+                        R.string.notif_audio_open_cancelled,
+                        AUDIO_OPEN_CANCELLED_MESSAGE
+                    )
+                    // Parser errors are produced without a Context; localize them here, where
+                    // the coordinator's UI context is available, keeping the English fallback.
+                    message == "BookOrbit returned no audiobook asset identity." -> uiText(
+                        R.string.perror_audiobook_asset_identity_missing,
+                        message
+                    )
+                    message == "The server returned malformed data while trying to load smart scopes." -> uiText(
+                        R.string.perror_smart_scopes_malformed,
+                        message
+                    )
+                    message.startsWith("The server returned malformed data while trying to ") -> uiText(
+                        R.string.perror_malformed_data,
+                        message
+                    )
+                    else -> error.message ?: fallback
+                }
             }
-            is UnknownHostException -> "The server host could not be resolved."
-            is SocketTimeoutException -> "The server took too long to respond."
-            is SSLException -> "The server's TLS configuration could not be validated."
-            is IOException -> "A network error interrupted the request."
+            is HttpRequestException -> when {
+                error.code == 404 -> uiText(R.string.error_not_found, "The server could not find the requested content.")
+                error.code == 429 -> uiText(R.string.error_rate_limited, "The server is rate limiting requests. Try again shortly.")
+                error.code in 500..599 -> uiText(
+                    R.string.error_server_failed_action,
+                    "The server failed while trying to ${error.action}.",
+                    error.action
+                )
+                else -> uiText(
+                    R.string.error_server_could_not_action,
+                    "The server could not ${error.action}.",
+                    error.action
+                )
+            }
+            is UnknownHostException -> uiText(R.string.error_host_unresolved, "The server host could not be resolved.")
+            is SocketTimeoutException -> uiText(R.string.error_timeout, "The server took too long to respond.")
+            is SSLException -> uiText(R.string.error_tls_invalid, "The server's TLS configuration could not be validated.")
+            is IOException -> uiText(R.string.error_network_interrupted, "A network error interrupted the request.")
             else -> fallback
         }
     }
@@ -2470,7 +2781,12 @@ class AppCoordinator internal constructor(
                     browser.copy(
                         books = mergeKnownProgress(browser.books, browser.selectedLibraryId),
                         homeBooks = mergeKnownProgress(browser.homeBooks, null),
-                        message = "Unable to open ${book.title} with Readium. $message"
+                        message = uiText(
+                            R.string.error_unable_open_with_readium,
+                            "Unable to open ${book.title} with Readium. $message",
+                            book.title,
+                            message
+                        )
                     )
                 )
             } else {
@@ -2756,13 +3072,34 @@ class AppCoordinator internal constructor(
     ): AppScreen.ServerSetup? {
         val message = when (result) {
             ServerCheckResult.Reachable -> return null
-            ServerCheckResult.MalformedUrl -> invalidServerUrlMessage()
-            ServerCheckResult.UnreachableHost -> "The server host could not be resolved."
-            ServerCheckResult.Timeout -> "The server took too long to respond. Retry or check the network."
-            ServerCheckResult.TlsFailure -> "The server TLS certificate could not be validated."
-            ServerCheckResult.Redirected -> "The server redirected this URL. Enter the final base URL directly."
-            ServerCheckResult.HttpFailure -> "The server responded, but the base URL did not open correctly."
-            ServerCheckResult.NetworkFailure -> "Unable to reach that server. Check the URL and try again."
+            ServerCheckResult.MalformedUrl -> uiText(
+                R.string.setup_invalid_server_url,
+                invalidServerUrlMessage()
+            )
+            ServerCheckResult.UnreachableHost -> uiText(
+                R.string.setup_error_host_unresolved,
+                "The server host could not be resolved."
+            )
+            ServerCheckResult.Timeout -> uiText(
+                R.string.setup_error_timeout,
+                "The server took too long to respond. Retry or check the network."
+            )
+            ServerCheckResult.TlsFailure -> uiText(
+                R.string.setup_error_tls,
+                "The server TLS certificate could not be validated."
+            )
+            ServerCheckResult.Redirected -> uiText(
+                R.string.setup_error_redirected,
+                "The server redirected this URL. Enter the final base URL directly."
+            )
+            ServerCheckResult.HttpFailure -> uiText(
+                R.string.setup_error_http,
+                "The server responded, but the base URL did not open correctly."
+            )
+            ServerCheckResult.NetworkFailure -> uiText(
+                R.string.setup_error_network,
+                "Unable to reach that server. Check the URL and try again."
+            )
         }
         return AppScreen.ServerSetup(
             serverUrl = serverUrl,

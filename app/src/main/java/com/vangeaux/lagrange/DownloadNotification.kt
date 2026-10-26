@@ -24,6 +24,10 @@ internal fun downloadNotificationId(fileId: String): Int =
 
 internal fun downloadNotificationTitle(title: String): String = "Downloading $title"
 
+/** Localized variant for the notification UI; [downloadNotificationTitle] stays the plain-text form. */
+internal fun downloadNotificationTitle(context: Context, title: String): String =
+    context.getString(R.string.notif_download_title, title)
+
 internal fun downloadNotificationProgress(progress: Float?): DownloadNotificationProgress =
     progress?.let { DownloadNotificationProgress.Determinate((it * 100f).toInt().coerceIn(0, 100)) }
         ?: DownloadNotificationProgress.Indeterminate
@@ -61,17 +65,21 @@ internal fun buildDownloadNotification(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
     return NotificationCompat.Builder(context, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
-        .setContentTitle(downloadNotificationTitle(title))
+        .setContentTitle(downloadNotificationTitle(context, title))
         .setSmallIcon(android.R.drawable.stat_sys_download)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
         .setContentIntent(contentIntent)
-        .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelIntent)
+        .addAction(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            context.getString(R.string.common_cancel),
+            cancelIntent
+        )
         .apply {
             when (val presentation = downloadNotificationProgress(progress)) {
                 DownloadNotificationProgress.Indeterminate -> {
-                    setContentText("Downloading")
+                    setContentText(context.getString(R.string.notif_downloading))
                     setProgress(0, 0, true)
                 }
                 is DownloadNotificationProgress.Determinate -> {
@@ -130,8 +138,8 @@ internal fun refreshDownloadNotificationSummary(context: Context, currentWorkId:
                 DOWNLOAD_SUMMARY_NOTIFICATION_ID,
                 NotificationCompat.Builder(context, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_download)
-                    .setContentTitle("Downloading $activeCount books")
-                    .setContentText("Book downloads are in progress")
+                    .setContentTitle(context.getString(R.string.notif_summary_title, activeCount))
+                    .setContentText(context.getString(R.string.notif_summary_text))
                     .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
                     .setGroupSummary(true)
                     .setOnlyAlertOnce(true)

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用外壳：更新提示 -->
+    <string name="shell_update_available">%1$s 已发布</string>
+    <string name="shell_update_ready">版本 %1$s 已可下载。</string>
+    <string name="shell_update_ignore">忽略</string>
+
+    <!-- 应用外壳：启动与加载 -->
+    <string name="shell_tagline">一款 Lagrange 阅读器</string>
+    <string name="shell_loading_library">正在加载你的书库…</string>
+    <string name="shell_back">返回</string>
+
+    <!-- 应用外壳：书库浏览器 -->
+    <string name="shell_libraries_title">书库</string>
+    <string name="shell_refresh">刷新</string>
+    <string name="shell_sign_out">退出登录</string>
+    <string name="shell_connected_server">已连接的服务器</string>
+    <string name="shell_pending_sync_queue">待同步队列：%1$d</string>
+    <string name="shell_loading_libraries">正在加载书库…</string>
+    <string name="shell_no_libraries">未找到书库。</string>
+    <string name="shell_select_library">选择书库</string>
+    <string name="shell_books">图书</string>
+    <string name="shell_loading_books">正在加载图书…</string>
+    <string name="shell_no_books_in_library">此书库中未找到图书。</string>
+    <string name="shell_open_local">打开本地文件</string>
+    <string name="shell_unavailable_offline">离线不可用</string>
+    <string name="shell_read_or_listen">阅读 / 收听</string>
+    <string name="shell_delete_local">删除本地文件</string>
+    <string name="shell_downloading">下载中</string>
+    <string name="shell_download">下载</string>
+    <string name="shell_status_downloaded">已下载</string>
+    <string name="shell_status_not_available_offline">离线不可用</string>
+
+    <!-- 应用外壳：阅读器准备失败提示 -->
+    <string name="shell_reader_epub_unpreparable">无法准备此 EPUB 文件。</string>
+    <string name="shell_reader_comic_needs_cbz">此漫画文件需先转换为 CBZ 才能由 Readium 打开。请重新连接已配置的服务器以进行准备。</string>
+    <string name="shell_reader_pdf_unpreparable">无法为 Readium 准备此 PDF 文件。</string>
+    <string name="shell_reader_format_unsupported">不支持此文件格式。</string>
+
+    <!-- 应用外壳：有声书准备 -->
+    <string name="shell_audiobook_unavailable">无法准备此有声书进行播放。</string>
+    <string name="shell_audiobook_timeout">有声书准备超时，请重新打开。</string>
+    <string name="shell_audiobook_failed">有声书准备失败，已安全退出。</string>
+    <string name="shell_audiobook_preparing">正在准备有声书…</string>
+</resources>

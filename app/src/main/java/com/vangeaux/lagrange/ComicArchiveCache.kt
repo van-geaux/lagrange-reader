@@ -13,7 +13,7 @@ import java.util.UUID
 internal object ComicArchiveCache {
     sealed interface Outcome {
         data class Ready(val file: File) : Outcome
-        data class Failed(val message: String) : Outcome
+        data class Failed(val message: String, val messageRes: Int) : Outcome
     }
 
     fun resolve(identity: String, source: File, cacheDir: File): Outcome {
@@ -38,7 +38,8 @@ internal object ComicArchiveCache {
                     atomicReplaceDownloadedFile(staged, target)
                     Outcome.Ready(target)
                 }
-                is ComicArchiveExtractionResult.Failure -> Outcome.Failed(result.userMessage)
+                is ComicArchiveExtractionResult.Failure ->
+                Outcome.Failed(result.userMessage, result.userMessageRes)
             }
         } finally {
             if (staged.exists()) staged.delete()

@@ -33,6 +33,7 @@ import android.widget.ArrayAdapter
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -124,7 +127,9 @@ internal suspend fun openReadiumEpub(
     ttsImageSettings: EpubTtsImageSettings? = null
 ): ReadiumEpubOpenResult = withContext(Dispatchers.IO) {
     if (!file.isFile || file.length() <= 0L) {
-        return@withContext ReadiumEpubOpenResult.Error("The EPUB file is unavailable.")
+        return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_file_unavailable)
+        )
     }
 
     val appContext = context.applicationContext
@@ -132,7 +137,9 @@ internal suspend fun openReadiumEpub(
     val assetRetriever = AssetRetriever(appContext.contentResolver, httpClient)
     val assetResult = assetRetriever.retrieve(file, MediaType.EPUB)
     val asset = assetResult.getOrNull()
-        ?: return@withContext ReadiumEpubOpenResult.Error("Readium could not read this EPUB file.")
+        ?: return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_read_failed)
+        )
     val publicationParser = DefaultPublicationParser(
         context = appContext,
         httpClient = httpClient,
@@ -155,10 +162,14 @@ internal suspend fun openReadiumEpub(
         }
     )
     val publication = publicationResult.getOrNull()
-        ?: return@withContext ReadiumEpubOpenResult.Error("Readium could not open this EPUB publication.")
+        ?: return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_open_failed)
+        )
     if (!publication.conformsTo(Publication.Profile.EPUB)) {
         publication.close()
-        return@withContext ReadiumEpubOpenResult.Error("Readium did not recognize this file as an EPUB publication.")
+        return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_not_epub)
+        )
     }
     ReadiumEpubOpenResult.Opened(publication)
 }
@@ -511,17 +522,18 @@ internal fun shouldOpenEpubImageViewer(gesture: String): Boolean = gesture == "l
 
 internal data class HighlightChoice(
     val label: String,
+    @StringRes val labelRes: Int,
     val color: String,
     val style: String,
     val previewColor: Int
 )
 
 internal fun epubHighlightChoices() = listOf(
-    HighlightChoice("Yellow highlight", "yellow", "highlight", 0xFFFFEB3B.toInt()),
-    HighlightChoice("Green highlight", "green", "highlight", 0xFF4CAF50.toInt()),
-    HighlightChoice("Blue highlight", "blue", "highlight", 0xFF2196F3.toInt()),
-    HighlightChoice("Pink highlight", "pink", "highlight", 0xFFE91E63.toInt()),
-    HighlightChoice("Yellow underline", "yellow", "underline", 0xFFFFEB3B.toInt())
+    HighlightChoice("Yellow highlight", R.string.epub_highlight_yellow, "yellow", "highlight", 0xFFFFEB3B.toInt()),
+    HighlightChoice("Green highlight", R.string.epub_highlight_green, "green", "highlight", 0xFF4CAF50.toInt()),
+    HighlightChoice("Blue highlight", R.string.epub_highlight_blue, "blue", "highlight", 0xFF2196F3.toInt()),
+    HighlightChoice("Pink highlight", R.string.epub_highlight_pink, "pink", "highlight", 0xFFE91E63.toInt()),
+    HighlightChoice("Yellow underline", R.string.epub_highlight_yellow_underline, "yellow", "underline", 0xFFFFEB3B.toInt())
 )
 
 internal enum class EpubSelectionActionPresentation {
@@ -755,6 +767,10 @@ internal fun shouldLoadNextAnnotationPage(
 
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumEpubReaderActivity : FragmentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private var publication: Publication? = null
     private var navigator: EpubNavigatorFragment? = null
     private var lastRecordedVisualLocator: Locator? = null
@@ -870,7 +886,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     appPreferencesStore.save(appPreferencesStore.read().withReaderPreferences(libraryId, next))
                     recreate()
                 }
-                is CustomFontImportResult.Rejected -> showError(result.reason)
+                is CustomFontImportResult.Rejected -> showError(getString(result.reasonRes))
             }
         }
     }
@@ -986,7 +1002,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
         if (file == null) {
-            showError("The EPUB reader file is unavailable.")
+            showError(getString(R.string.epub_reader_file_unavailable))
             return
         }
         lifecycleScope.launch {
@@ -1004,7 +1020,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val readerFile = when (preparation) {
                 is CustomFontEpubPreparationResult.Prepared -> preparation.file
                 is CustomFontEpubPreparationResult.Rejected -> {
-                    showError(preparation.message)
+                    showError(getString(preparation.messageRes))
                     return@launch
                 }
             }
@@ -1128,12 +1144,18 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             visibility = View.GONE
             setContent {
                 EpubReaderMaterialTheme(selectedTheme) {
+                    val context = LocalContext.current
+                    val pagePositionCount = currentPageCount.coerceAtLeast(1)
                     ReaderLightweightChrome(
-                        title = if (isPreview) "Preview · $displayTitle" else displayTitle,
+                        title = if (isPreview) {
+                            stringResource(R.string.epub_preview_title, displayTitle)
+                        } else {
+                            displayTitle
+                        },
                         theme = selectedTheme,
-                        positionKind = "Page",
-                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index ->
-                            "Page ${index + 1}"
+                        positionKind = stringResource(R.string.epub_page_kind),
+                        positionTitles = List(pagePositionCount) { index ->
+                            context.getString(R.string.epub_page_position, index + 1)
                         },
                         currentPosition = currentPage,
                         currentProgression = currentResourceProgression.takeIf {
@@ -1144,11 +1166,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         onOpenSettings = ::showOptions,
                         onPositionSelected = ::goToPage,
                         onProgressionSelected = ::goToProgression,
-                        listPositionKind = "Chapter",
+                        listPositionKind = stringResource(R.string.epub_chapter_kind),
                         listPositionTitles = chapterTitles,
                         currentListPosition = currentChapter,
                         onListPositionSelected = ::goToChapter,
-                        secondaryPositionKind = "Chapter",
+                        secondaryPositionKind = stringResource(R.string.epub_chapter_kind),
                         secondaryCurrentPosition = currentChapter,
                         secondaryPositionCount = chapterTitles.size,
                         onSecondaryPositionSelected = ::goToChapter,
@@ -1177,11 +1199,25 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             setContent {
                 EpubReaderMaterialTheme(selectedTheme) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        EpubReaderDismissScrim(onDismiss = ::hideOptions)
+                        EpubReaderDismissScrim(
+                            contentDescription = stringResource(
+                                R.string.epub_dismiss_reader_options_cd
+                            ),
+                            onDismiss = ::hideOptions
+                        )
                         EpubReaderOptionsBottomSheet(
-                            title = if (isPreview) "Preview · $displayTitle" else displayTitle,
-                            status = "Chapter ${currentChapter + 1}/${chapterTitles.size.coerceAtLeast(1)} · " +
-                                "Page ${currentPage + 1}/${currentPageCount.coerceAtLeast(1)}",
+                            title = if (isPreview) {
+                                stringResource(R.string.epub_preview_title, displayTitle)
+                            } else {
+                                displayTitle
+                            },
+                            status = stringResource(
+                                R.string.epub_options_status,
+                                currentChapter + 1,
+                                chapterTitles.size.coerceAtLeast(1),
+                                currentPage + 1,
+                                currentPageCount.coerceAtLeast(1)
+                            ),
                             preferences = readerPreferences,
                             onContinueReading = ::continueReading,
                             onCloseBook = ::finishReader,
@@ -1364,7 +1400,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         if (openedPublication.readingOrder.isEmpty()) {
             openedPublication.close()
-            showError("This EPUB has no readable content.")
+            showError(getString(R.string.epub_no_readable_content))
             return
         }
         publication = openedPublication
@@ -1372,7 +1408,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         fallbackContentLanguage = epubNavigatorLanguage(currentContentLanguage())
         ttsAvailable = !isPreview && AndroidTtsNavigatorFactory(application, openedPublication) != null
         chapterTitles = openedPublication.readingOrder.mapIndexed { index, link ->
-            chapterTitle(openedPublication.tableOfContents, link) ?: link.title ?: "Chapter ${index + 1}"
+            chapterTitle(openedPublication.tableOfContents, link) ?: link.title
+                ?: getString(R.string.epub_chapter_fallback, index + 1)
         }
         val initialLocator = requestedLocator
             ?.takeIf { saved ->
@@ -1480,7 +1517,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             canKeepListening = canKeepListening
         )
         if (choices.isEmpty()) {
-            Toast.makeText(this, "No readable text or narration is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.epub_listen_nothing_available), Toast.LENGTH_LONG)
+                .show()
             return
         }
         if (choices.size == 1) {
@@ -1488,18 +1526,18 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Listen")
+            .setTitle(getString(R.string.epub_listen_title))
             .setItems(choices.map(::listenChoiceLabel).toTypedArray()) { _, index ->
                 performListenChoice(choices[index])
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
     private fun listenChoiceLabel(choice: EpubListenChoice): String = when (choice) {
-        EpubListenChoice.PUBLISHER_NARRATION -> "Publisher narration"
-        EpubListenChoice.TTS_FROM_HERE -> "Listen from here"
-        EpubListenChoice.TTS_KEEP_LISTENING -> "Keep listening"
+        EpubListenChoice.PUBLISHER_NARRATION -> getString(R.string.epub_listen_publisher_narration)
+        EpubListenChoice.TTS_FROM_HERE -> getString(R.string.epub_listen_from_here)
+        EpubListenChoice.TTS_KEEP_LISTENING -> getString(R.string.epub_listen_keep_listening)
     }
 
     private fun performListenChoice(choice: EpubListenChoice) {
@@ -1528,12 +1566,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Text-to-speech privacy")
-            .setMessage(
-                "Lagrange uses the Android text-to-speech engine selected on this device. " +
-                    "Some voices use a network service and may send the book text they speak to that provider."
-            )
-            .setPositiveButton("Continue") { _, _ ->
+            .setTitle(getString(R.string.tts_privacy_title))
+            .setMessage(getString(R.string.tts_privacy_message))
+            .setPositiveButton(getString(R.string.common_continue)) { _, _ ->
                 preferences.edit().putBoolean(TTS_PRIVACY_ACKNOWLEDGED, true).apply()
                 startTtsPlayback(
                     choice,
@@ -1542,7 +1577,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     playWhenReady = playWhenReady
                 )
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -1565,7 +1600,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         val visualNavigator = navigator
         if (!ttsAvailable || visualNavigator == null) {
-            Toast.makeText(this, "Text to speech is unavailable for this EPUB.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.tts_unavailable_for_epub), Toast.LENGTH_LONG).show()
             return
         }
         val requestedLocator = restoredLocator ?: when (choice) {
@@ -1636,7 +1671,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             } catch (_: Throwable) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to find a readable position in this EPUB.",
+                    getString(R.string.tts_no_readable_position),
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
@@ -1842,12 +1877,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (error == EpubTtsFailureKind.LANGUAGE_DATA) {
             closeTtsPlayback()
             AlertDialog.Builder(this)
-                .setTitle("Voice data is missing")
-                .setMessage("Android needs voice data for this book's language before it can read aloud.")
-                .setPositiveButton("Install voice") { _, _ ->
+                .setTitle(getString(R.string.tts_voice_data_missing_title))
+                .setMessage(getString(R.string.tts_voice_data_missing_message))
+                .setPositiveButton(getString(R.string.tts_install_voice)) { _, _ ->
                     AndroidTtsEngine.requestInstallVoice(applicationContext)
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.common_cancel), null)
                 .show()
         } else if (voiceLanguageTag != null && failedVoiceId != null) {
             val nextSettings = ttsSettings.copy(
@@ -1861,25 +1896,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 playWhenReady = false
             )
             AlertDialog.Builder(this)
-                .setTitle("Text-to-speech voice failed")
-                .setMessage(
-                    "The selected voice could not read this text. " +
-                        "Default Android voice is selected and paused."
-                )
-                .setPositiveButton("OK", null)
+                .setTitle(getString(R.string.tts_voice_failed_title))
+                .setMessage(getString(R.string.tts_voice_failed_default_message))
+                .setPositiveButton(getString(R.string.epub_ok), null)
                 .show()
         } else if (voiceLanguageTag != null && alternativeVoices.isNotEmpty()) {
             val choices = listOf<EpubTtsVoice?>(null) + alternativeVoices
             val message = if (error == EpubTtsFailureKind.NETWORK) {
-                "The selected voice could not reach its network service. Choose another voice."
+                getString(R.string.tts_voice_failed_network_alternative)
             } else {
-                "The selected voice could not read this text. Choose another voice."
+                getString(R.string.tts_voice_failed_alternative)
             }
             AlertDialog.Builder(this)
-                .setTitle("Text-to-speech voice failed")
+                .setTitle(getString(R.string.tts_voice_failed_title))
                 .setMessage(message)
                 .setItems(
-                    choices.map { voice -> voice?.displayName() ?: "Default Android voice" }.toTypedArray()
+                    choices.map { voice ->
+                        voice?.displayName(this) ?: getString(R.string.tts_default_android_voice)
+                    }.toTypedArray()
                 ) { _, index ->
                     val selectedVoice = choices[index]
                     val nextSettings = ttsSettings.copy(
@@ -1895,14 +1929,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         restoredLocator = recoveryLocator
                     )
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.common_cancel), null)
                 .show()
         } else {
             closeTtsPlayback()
             val message = if (error == EpubTtsFailureKind.NETWORK) {
-                "The selected text-to-speech voice could not reach its network service."
+                getString(R.string.tts_voice_failed_network)
             } else {
-                "Text to speech stopped because the book text or Android speech engine could not be read."
+                getString(R.string.tts_voice_failed_generic)
             }
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
@@ -1945,7 +1979,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 mediaOverlayPlayback.playableClips.indexOfFirst { it.clip.index == requested }
             }
             if (targetIndex != null && targetIndex < 0) {
-                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    getString(R.string.epub_narration_sentence_unavailable),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             retainedPlayer.pause()
@@ -1955,7 +1993,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val clip = mediaOverlayPlayback.playableClips.getOrNull(activeIndex)?.clip
             if (clip == null) {
                 mediaOverlayStartupNavigationPending = false
-                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    getString(R.string.epub_narration_sentence_unavailable),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             mediaOverlayPlayback.updateClip(clip)
@@ -1971,7 +2013,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     } else {
                         Toast.makeText(
                             this@ReadiumEpubReaderActivity,
-                            "Unable to open the narration location.",
+                            getString(R.string.epub_narration_location_failed),
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -1984,7 +2026,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
         val source = file?.takeIf(File::isFile)
         if (source == null || mediaOverlayPlaylist.isEmpty()) {
-            Toast.makeText(this, "No EPUB narration is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.epub_narration_none_available), Toast.LENGTH_LONG)
+                .show()
             return
         }
         lifecycleScope.launch {
@@ -1997,7 +2040,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 )
             }.getOrDefault(emptyList())
             if (playable.isEmpty() || isFinishing || isDestroyed) {
-                Toast.makeText(this@ReadiumEpubReaderActivity, "Unable to prepare EPUB narration.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    getString(R.string.epub_narration_prepare_failed),
+                    Toast.LENGTH_LONG
+                ).show()
                 return@launch
             }
             val resumeIndex = epubMediaOverlayStartIndex(
@@ -2010,7 +2057,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (targetClipIndex != null && requestedIndex == null) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Narration is unavailable for this sentence.",
+                    getString(R.string.epub_narration_sentence_unavailable),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2036,7 +2083,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 player.release()
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "EPUB narration controls are unavailable.",
+                    getString(R.string.epub_narration_controls_unavailable),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2045,7 +2092,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val savedSpeed = AppPreferencesStore(this@ReadiumEpubReaderActivity).readAudioPlaybackSpeed()
             playbackController.setPlaybackSpeed(player, savedSpeed)
             player.setMediaItems(
-                playable.map { epubMediaOverlayMediaItem(it, displayTitle) },
+                playable.map {
+                    epubMediaOverlayMediaItem(it, displayTitle, this@ReadiumEpubReaderActivity)
+                },
                 startIndex,
                 0L
             )
@@ -2083,7 +2132,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 closeMediaOverlayPlayback()
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to open the narration location.",
+                    getString(R.string.epub_narration_location_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2116,7 +2165,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 mediaOverlayPlayback.updatePlaying(false)
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to play this EPUB narration.",
+                    getString(R.string.epub_narration_play_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2267,7 +2316,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             } else {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "This EPUB image could not be opened.",
+                    getString(R.string.epub_image_open_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2357,22 +2406,25 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         runCatching { fragment.applyDecorations(decorations, HIGHLIGHT_DECORATION_GROUP) }
     }
 
+    private fun selectionActionMenu(action: EpubSelectionAction): Pair<Int, Int> = when (action.label) {
+        "Copy" -> ACTION_COPY to R.string.epub_selection_copy
+        "Share" -> ACTION_SHARE to R.string.epub_selection_share
+        "Play narration" -> ACTION_PLAY_NARRATION to R.string.epub_selection_play_narration
+        "Listen from here" -> ACTION_TTS_FROM_SELECTION to R.string.epub_selection_listen_from_here
+        "Web search" -> ACTION_WEB_SEARCH to R.string.epub_selection_web_search
+        "Highlight" -> ACTION_HIGHLIGHT to R.string.epub_selection_highlight
+        else -> ACTION_HIGHLIGHT_WITH_NOTE to R.string.epub_selection_highlight_note
+    }
+
     private fun highlightActionModeCallback(): ActionMode.Callback = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
             epubSelectionActions(
                 mediaOverlayAvailable = !isPreview && mediaOverlayPlaylist.isNotEmpty(),
                 textToSpeechAvailable = !isPreview && ttsAvailable
             ).forEachIndexed { order, action ->
-                val actionId = when (action.label) {
-                    "Copy" -> ACTION_COPY
-                    "Share" -> ACTION_SHARE
-                    "Play narration" -> ACTION_PLAY_NARRATION
-                    "Listen from here" -> ACTION_TTS_FROM_SELECTION
-                    "Web search" -> ACTION_WEB_SEARCH
-                    "Highlight" -> ACTION_HIGHLIGHT
-                    else -> ACTION_HIGHLIGHT_WITH_NOTE
-                }
-                val menuItem = menu?.add(0, actionId, order, action.label) ?: return@forEachIndexed
+                val (actionId, labelRes) = selectionActionMenu(action)
+                val menuItem = menu?.add(0, actionId, order, getString(labelRes))
+                    ?: return@forEachIndexed
                 val showAsAction = when (action.presentation) {
                     EpubSelectionActionPresentation.ALWAYS -> MenuItem.SHOW_AS_ACTION_ALWAYS
                     EpubSelectionActionPresentation.IF_ROOM -> MenuItem.SHOW_AS_ACTION_IF_ROOM
@@ -2452,11 +2504,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (!captured) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    if (requireCfi) {
-                        "This text selection cannot be highlighted. Please try selecting it again."
-                    } else {
-                        "The selected text is no longer available. Please select it again."
-                    },
+                    getString(
+                        if (requireCfi) {
+                            R.string.epub_selection_highlight_failed
+                        } else {
+                            R.string.epub_selection_unavailable
+                        }
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2543,7 +2597,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showNarrationSelectionUnavailable() {
         Toast.makeText(
             this,
-            "No narration sentence matches this text selection.",
+            getString(R.string.epub_narration_selection_no_match),
             Toast.LENGTH_LONG
         ).show()
     }
@@ -2555,8 +2609,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val selection = captured.selection
         val text = selectedText(selection) ?: return
         getSystemService(ClipboardManager::class.java)
-            ?.setPrimaryClip(ClipData.newPlainText("Selected text", text))
-        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+            ?.setPrimaryClip(
+                ClipData.newPlainText(getString(R.string.epub_clipboard_selected_text), text)
+            )
+        Toast.makeText(this, getString(R.string.epub_selection_copied), Toast.LENGTH_SHORT).show()
     }
 
     private fun shareSelection(captured: CapturedEpubSelection) {
@@ -2568,7 +2624,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
                 },
-                "Share selected text"
+                getString(R.string.epub_share_selected_text)
             )
         )
     }
@@ -2579,7 +2635,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         runCatching {
             startActivity(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, text))
         }.onFailure {
-            Toast.makeText(this, "No web search app is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                getString(R.string.epub_selection_web_search_unavailable),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -2594,7 +2654,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val view = super.getView(position, convertView, parent) as TextView
                 val choice = getItem(position) ?: return view
-                view.text = choice.label
+                view.text = getString(choice.labelRes)
                 view.setPadding(dpToPx(20), view.paddingTop, dpToPx(20), view.paddingBottom)
                 val swatch = if (choice.style == "underline") {
                     ColorDrawable(choice.previewColor).apply {
@@ -2614,7 +2674,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
         AlertDialog.Builder(this)
-            .setTitle("Highlight style")
+            .setTitle(getString(R.string.epub_highlight_style_title))
             .setAdapter(adapter) { _, which ->
                 choices.getOrNull(which)?.let { choice ->
                     createHighlightFromSelection(
@@ -2625,7 +2685,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     )
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -2643,7 +2703,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 Log.w(TAG, "The captured EPUB selection did not produce text and a range CFI.")
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "This text selection cannot be highlighted. Please try selecting it again.",
+                    getString(R.string.epub_selection_highlight_failed),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2665,7 +2725,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (annotation == null) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "The highlight could not be saved.",
+                    getString(R.string.epub_highlight_save_failed),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2690,8 +2750,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showHighlightActionsDialog(annotation: BookAnnotation) {
         if (isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
-            .setTitle(if (annotation.note.isNullOrBlank()) "Highlight" else "Highlight note")
-            .setItems(arrayOf("Edit note", "Delete highlight", "Cancel")) { _, which ->
+            .setTitle(
+                getString(
+                    if (annotation.note.isNullOrBlank()) {
+                        R.string.epub_highlight_actions_title
+                    } else {
+                        R.string.epub_highlight_note_actions_title
+                    }
+                )
+            )
+            .setItems(
+                arrayOf(
+                    getString(R.string.epub_highlight_edit_note),
+                    getString(R.string.epub_highlight_delete),
+                    getString(R.string.common_cancel)
+                )
+            ) { _, which ->
                 when (which) {
                     0 -> promptForNote(existingNote = annotation.note) { note -> updateHighlightNote(annotation, note) }
                     1 -> deleteHighlight(annotation)
@@ -2704,12 +2778,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (isFinishing || isDestroyed) return
         val input = EditText(this).apply { setText(existingNote.orEmpty()) }
         AlertDialog.Builder(this)
-            .setTitle("Note")
+            .setTitle(getString(R.string.epub_note_title))
             .setView(input)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(getString(R.string.epub_note_save)) { _, _ ->
                 onSave(input.text?.toString()?.trim()?.takeIf { it.isNotBlank() })
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -3049,7 +3123,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun bookLanguageChoice(): EpubBookLanguageChoice? =
         publication?.let {
-            epubBookLanguageChoice(bookLanguageOverride, publicationLanguages, Locale.getDefault())
+            epubBookLanguageChoice(
+                bookLanguageOverride,
+                publicationLanguages,
+                Locale.getDefault(),
+                context = this
+            )
         }
 
     /** Sets or clears (null = Auto) this book's language for hyphenation and read-aloud. */
@@ -3259,7 +3338,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val root = findViewById<FrameLayout>(android.R.id.content)
         root.addView(
             TextView(this).apply {
-                text = "$message\n\nPress Back to return."
+                text = "$message\n\n${this@ReadiumEpubReaderActivity.getString(R.string.epub_error_press_back)}"
                 setTextColor(Color.WHITE)
                 textSize = 16f
                 gravity = Gravity.CENTER

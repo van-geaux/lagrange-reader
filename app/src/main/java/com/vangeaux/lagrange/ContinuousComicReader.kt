@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.res.stringResource
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -291,7 +293,7 @@ private fun ContinuousComicPage(
         ) { CircularProgressIndicator(color = Color.White) }
         is ContinuousComicPageState.Loaded -> Image(
             bitmap = pageState.bitmap.asImageBitmap(),
-            contentDescription = "Page ${pageIndex + 1}",
+            contentDescription = stringResource(R.string.reader_page_number, pageIndex + 1),
             contentScale = ContentScale.FillWidth,
             modifier = modifier.pointerInput(pageIndex) {
                 detectTapGestures(
@@ -305,8 +307,8 @@ private fun ContinuousComicPage(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Page ${pageIndex + 1} could not be loaded", color = Color.White)
-                androidx.compose.material3.TextButton(onClick = { retryKey++ }) { Text("Retry") }
+                Text(stringResource(R.string.chrome_page_load_failed, pageIndex + 1), color = Color.White)
+                androidx.compose.material3.TextButton(onClick = { retryKey++ }) { Text(stringResource(R.string.common_retry)) }
             }
         }
     }

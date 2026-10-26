@@ -13,7 +13,7 @@ internal class KavitaLibraryModuleImpl(private val auth: KavitaAuthModule) : Lib
     private val client = OkHttpClient()
 
     override suspend fun loadLibraries(): List<LibrarySummary> = withContext(Dispatchers.IO) {
-        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         val request = Request.Builder()
             .url("$base/api/Library/libraries")
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
@@ -22,7 +22,7 @@ internal class KavitaLibraryModuleImpl(private val auth: KavitaAuthModule) : Lib
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita libraries (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_libraries_http, "Unable to load Kavita libraries (HTTP ${response.code}).", response.code))
             }
             val array = runCatching { JSONArray(payload) }.getOrElse {
                 JSONObject(payload).optJSONArray("libraries") ?: JSONArray()

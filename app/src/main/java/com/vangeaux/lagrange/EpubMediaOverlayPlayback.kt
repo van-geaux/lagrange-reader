@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.AudioAttributes
@@ -255,15 +256,16 @@ internal suspend fun prepareEpubMediaOverlayThenNavigateAndPlay(
 
 internal fun epubMediaOverlayMediaItem(
     clip: EpubMediaOverlayPlayableClip,
-    bookTitle: String
+    bookTitle: String,
+    context: Context
 ): MediaItem {
     return MediaItem.Builder()
         .setMediaId(clip.clip.index.toString())
         .setUri(clip.audioFile.toURI().toString())
         .setMediaMetadata(
             MediaMetadata.Builder()
-                .setTitle("Read-along · $bookTitle")
-                .setArtist(clip.sentenceText ?: "EPUB narration")
+                .setTitle(context.getString(R.string.extras_readalong_media_title, bookTitle))
+                .setArtist(clip.sentenceText ?: context.getString(R.string.extras_epub_narration))
                 .build()
         )
         .setClippingConfiguration(epubMediaOverlayClippingConfiguration(clip.clip))
@@ -319,15 +321,26 @@ internal fun EpubMediaOverlayControls(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Read-along", modifier = Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(R.string.extras_readalong_title),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelLarge
+                )
                 IconButton(
                     onClick = { settingsVisible = true },
                     modifier = Modifier.testTag("epub-readalong-settings")
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Read-along settings")
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = stringResource(R.string.extras_readalong_settings)
+                    )
                 }
                 IconButton(onClick = onPrevious, enabled = canGoPrevious) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous narration sentence")
+                    Icon(
+                        Icons.Default.SkipPrevious,
+                        contentDescription = stringResource(R.string.extras_readalong_previous_sentence_cd)
+                    )
                 }
                 IconButton(
                     onClick = onPlayPause,
@@ -335,17 +348,27 @@ internal fun EpubMediaOverlayControls(
                 ) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause narration" else "Play narration"
+                        contentDescription = if (isPlaying) {
+                            stringResource(R.string.extras_readalong_pause_cd)
+                        } else {
+                            stringResource(R.string.extras_readalong_play_cd)
+                        }
                     )
                 }
                 IconButton(onClick = onNext, enabled = canGoNext) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next narration sentence")
+                    Icon(
+                        Icons.Default.SkipNext,
+                        contentDescription = stringResource(R.string.extras_readalong_next_sentence_cd)
+                    )
                 }
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier.testTag("epub-readalong-close")
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close read-along")
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.extras_readalong_close_cd)
+                    )
                 }
             }
         }
@@ -368,20 +391,24 @@ private fun EpubMediaOverlaySettingsDialog(
     val normalized = normalizeAudioPlaybackSpeed(speed)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Read-along settings") },
+        title = { Text(stringResource(R.string.extras_readalong_settings)) },
         text = {
             PlaybackRateAdjustmentSetting(
-                title = "Speed",
+                title = stringResource(R.string.extras_readalong_speed),
                 value = normalized,
                 minHundredths = AUDIO_PLAYBACK_SPEED_MIN_HUNDREDTHS,
                 maxHundredths = AUDIO_PLAYBACK_SPEED_MAX_HUNDREDTHS,
-                rateDescription = "read-along speed",
+                rateDescription = stringResource(R.string.extras_readalong_speed_description),
                 onValueChange = onSpeedChange
             )
         },
         confirmButton = {
-            TextButton(onClick = {}, enabled = false) { Text("Apply") }
+            TextButton(onClick = {}, enabled = false) {
+                Text(stringResource(R.string.extras_apply))
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        }
     )
 }

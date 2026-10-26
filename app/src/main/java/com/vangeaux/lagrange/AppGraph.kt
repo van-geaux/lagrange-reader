@@ -16,7 +16,14 @@ class AppGraph private constructor(
     private val sessionHistoryStore = dependencies.sessionHistoryStore
     val coordinator = dependencies.coordinator
 
-    constructor(context: Context) : this(createDependencies(context.applicationContext))
+    constructor(context: Context) : this(
+        createDependencies(
+            context.applicationContext,
+            // The Application context is created once, so re-wrap it with the currently selected
+            // app locale for coordinator messages shown after an in-app language change.
+            AppLocale.wrap(context.applicationContext)
+        )
+    )
 
     internal constructor(coordinator: AppCoordinator) : this(
         Dependencies(repository = null, sessionHistoryStore = null, coordinator = coordinator)
@@ -61,7 +68,7 @@ class AppGraph private constructor(
     )
 
     companion object {
-        private fun createDependencies(context: Context): Dependencies {
+        private fun createDependencies(context: Context, uiContext: Context): Dependencies {
             val serverProfileStore = ServerProfileStore(context)
             val activeProfile = serverProfileStore.active()
             val repository: BookOrbitDataSource = when (activeProfile?.providerId) {
@@ -105,6 +112,7 @@ class AppGraph private constructor(
                 , featureAvailabilityResolver = ::resolveProviderFeatureAvailability
                 , providerSessionModuleResolver = ::resolveProviderSessionModule
                 , bookOrbitOidcModuleResolver = ::resolveProviderBookOrbitOidcModule
+                , uiContext = uiContext
             ).also {
                 it.setSessionHistoryStore(sessionHistoryStore)
                 it.setEpubTtsPlaybackCloser {

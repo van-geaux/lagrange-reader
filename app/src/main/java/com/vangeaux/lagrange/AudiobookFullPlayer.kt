@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -177,7 +179,7 @@ internal fun ReadiumFullAudioPlayer(
             contentColor = palette.content
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text("Preparing audiobook player…")
+                Text(stringResource(R.string.audio_preparing))
             }
         }
         return
@@ -307,10 +309,10 @@ internal fun ReadiumFullAudioPlayer(
         ) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onCollapse, enabled = !playerLocked) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse audiobook player")
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.audio_collapse_player))
                 }
                 Text(
-                    text = if (current.book.isDownloaded) "LOCAL FILE" else "STREAM",
+                    text = stringResource(if (current.book.isDownloaded) R.string.audio_local_file else R.string.audio_stream),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.titleMedium,
@@ -318,28 +320,28 @@ internal fun ReadiumFullAudioPlayer(
                 )
                 Box {
                     IconButton(onClick = { overflowExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More audiobook actions")
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.audio_more_actions))
                     }
                     DropdownMenu(
                         expanded = overflowExpanded,
                         onDismissRequest = { overflowExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Play session history") },
+                            text = { Text(stringResource(R.string.audio_session_history)) },
                             onClick = {
                                 overflowExpanded = false
                                 showSessionHistory = true
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (playerLocked) "Unlock player" else "Lock player") },
+                            text = { Text(stringResource(if (playerLocked) R.string.audio_unlock_player else R.string.audio_lock_player)) },
                             onClick = {
                                 overflowExpanded = false
                                 controller.setPlayerLocked(!playerLocked)
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Close player") },
+                            text = { Text(stringResource(R.string.audio_close_player)) },
                             onClick = {
                                 overflowExpanded = false
                                 closePlayer()
@@ -424,7 +426,7 @@ internal fun ReadiumFullAudioPlayer(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = chapters.getOrNull(activeChapterIndex)?.title ?: "Audiobook",
+                text = chapters.getOrNull(activeChapterIndex)?.title ?: stringResource(R.string.audio_audiobook),
                 modifier = Modifier
                     .fillMaxWidth()
                     .basicMarquee(iterations = Int.MAX_VALUE),
@@ -445,11 +447,11 @@ internal fun ReadiumFullAudioPlayer(
                 leading = formatPlaybackTime(overallSeekPosition.toLong()),
                 trailing = "−${formatPlaybackTime((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L))}",
                 label = formatFullPlayerProgressLabel(
-                    "Book progress",
+                    stringResource(R.string.audio_book_progress),
                     absoluteProgressPercent(overallSeekPosition.toLong(), playback.durationMs)
                 ),
                 layoutScale = groupScale,
-                description = "Seek through audiobook"
+                description = stringResource(R.string.audio_seek_audiobook)
             )
             AudioSeekBar(
                 positionMs = chapterSeekPosition,
@@ -462,14 +464,14 @@ internal fun ReadiumFullAudioPlayer(
                 leading = formatPlaybackTime(chapterSeekPosition.toLong()),
                 trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterSeekPosition).toLong().coerceAtLeast(0L))}",
                 label = formatFullPlayerProgressLabel(
-                    "Chapter progress",
+                    stringResource(R.string.audio_chapter_progress),
                     chapterProgressPercent(
                         chapterSeekPosition.toLong(),
                         (chapterEndMs - chapterStartMs).coerceAtLeast(0L)
                     )
                 ),
                 layoutScale = groupScale,
-                description = "Seek through current chapter",
+                description = stringResource(R.string.audio_seek_chapter),
                 enabled = bounds != null
             )
             Spacer(Modifier.height(controlGap))
@@ -480,7 +482,7 @@ internal fun ReadiumFullAudioPlayer(
             ) {
                 if (!playerLocked) FullPlayerIconButton(
                     icon = Icons.Default.SkipPrevious,
-                    description = "Previous audiobook chapter",
+                    description = stringResource(R.string.audio_previous_chapter),
                     onClick = {
                         val previous = chapters.getOrNull(activeChapterIndex - 1)?.startMs
                         if (previous != null) current.seekToAbsolutePosition(previous) else current.seekToAbsolutePosition(chapterStartMs)
@@ -488,7 +490,7 @@ internal fun ReadiumFullAudioPlayer(
                 )
                 if (!playerLocked) FullPlayerIconButton(
                     icon = Icons.Default.Replay10,
-                    description = "Skip back $skipBackSeconds seconds",
+                    description = stringResource(R.string.audio_skip_back_seconds, skipBackSeconds),
                     onClick = {
                         current.seekToAbsolutePosition((current.absolutePositionMs() - skipBackSeconds * 1000L).coerceAtLeast(0L))
                     },
@@ -500,13 +502,13 @@ internal fun ReadiumFullAudioPlayer(
                 ) {
                     Icon(
                         if (playback.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playback.isPlaying) "Pause audiobook" else "Play audiobook",
+                        contentDescription = stringResource(if (playback.isPlaying) R.string.audio_pause else R.string.audio_play),
                         modifier = Modifier.size((38f * groupScale).coerceAtLeast(32f).dp)
                     )
                 }
                 if (!playerLocked) FullPlayerIconButton(
                     icon = Icons.Default.Forward30,
-                    description = "Skip forward $skipForwardSeconds seconds",
+                    description = stringResource(R.string.audio_skip_forward_seconds, skipForwardSeconds),
                     onClick = {
                         current.seekToAbsolutePosition(
                             (current.absolutePositionMs() + skipForwardSeconds * 1000L)
@@ -517,7 +519,7 @@ internal fun ReadiumFullAudioPlayer(
                 )
                 if (!playerLocked) FullPlayerIconButton(
                     icon = Icons.Default.SkipNext,
-                    description = "Next audiobook chapter",
+                    description = stringResource(R.string.audio_next_chapter),
                     onClick = {
                         chapters.getOrNull(activeChapterIndex + 1)?.startMs?.let(current::seekToAbsolutePosition)
                     }
@@ -533,7 +535,7 @@ internal fun ReadiumFullAudioPlayer(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
-                            Text("Chapter", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.audio_chapter), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     DropdownMenu(expanded = chapterMenuExpanded, onDismissRequest = { chapterMenuExpanded = false }) {
@@ -561,7 +563,7 @@ internal fun ReadiumFullAudioPlayer(
                                 "${formatPlaybackSpeed(playback.speed.toDouble())}×",
                                 style = MaterialTheme.typography.bodyLarge
                             )
-                            Text("Speed", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.audio_speed), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -572,7 +574,7 @@ internal fun ReadiumFullAudioPlayer(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Bedtime, contentDescription = null)
-                            Text("Sleep", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.audio_sleep), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     DropdownMenu(expanded = sleepMenuExpanded, onDismissRequest = { sleepMenuExpanded = false }) {
@@ -582,9 +584,9 @@ internal fun ReadiumFullAudioPlayer(
                                     val remaining = sleepTimer.remainingMs
                                     Text(
                                         if (option == sleepTimer.option && remaining != null) {
-                                            "${option.label} · ${formatPlaybackTime(remaining)}"
+                                            "${stringResource(option.labelRes)} · ${formatPlaybackTime(remaining)}"
                                         } else {
-                                            option.label
+                                            stringResource(option.labelRes)
                                         }
                                     )
                                 },
@@ -596,7 +598,11 @@ internal fun ReadiumFullAudioPlayer(
             }
             if (sleepTimer.option != AudioSleepTimerOption.OFF) {
                 Text(
-                    text = "Sleep timer: ${sleepTimer.option.label} · ${sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()}",
+                    text = stringResource(
+                        R.string.audio_sleep_timer_status,
+                        stringResource(sleepTimer.option.labelRes),
+                        sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()
+                    ),
                     color = palette.secondaryContent,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -652,7 +658,7 @@ internal fun ReadiumFullAudioPlayer(
     intervalDirection?.let { direction ->
         AlertDialog(
             onDismissRequest = { intervalDirection = null },
-            title = { Text(if (direction == SkipDirection.BACK) "Rewind interval" else "Forward interval") },
+            title = { Text(stringResource(if (direction == SkipDirection.BACK) R.string.audio_rewind_interval else R.string.audio_forward_interval)) },
             text = {
                 Column {
                     AUDIO_SKIP_SECONDS_OPTIONS.forEach { seconds ->
@@ -668,11 +674,11 @@ internal fun ReadiumFullAudioPlayer(
                                 intervalDirection = null
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("$seconds seconds") }
+                        ) { Text(stringResource(R.string.audio_seconds, seconds)) }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { intervalDirection = null }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { intervalDirection = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 }
@@ -750,10 +756,10 @@ internal fun FullPlayerChapterListSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close chapter list")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.audio_close_chapter_list))
                 }
                 Text(
-                    text = "Chapters",
+                    text = stringResource(R.string.audio_chapters),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleLarge
                 )
@@ -798,12 +804,12 @@ private fun AudiobookChapterMenuItem(
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
-                "Chapter ${index + 1}",
+                stringResource(R.string.audio_chapter_number, index + 1),
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium
             )
             Text(
-                title.ifBlank { "Chapter ${index + 1}" },
+                title.ifBlank { stringResource(R.string.audio_chapter_number, index + 1) },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyLarge,
@@ -967,35 +973,35 @@ private fun FullPlayerLandscape(
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCollapse, enabled = !playerLocked) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse audiobook player")
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.audio_collapse_player))
                     }
                     Text(
-                        text = if (current.book.isDownloaded) "LOCAL FILE" else "STREAM",
+                        text = stringResource(if (current.book.isDownloaded) R.string.audio_local_file else R.string.audio_stream),
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleMedium
                     )
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More audiobook actions")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.audio_more_actions))
                         }
                         DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
                             DropdownMenuItem(
-                                text = { Text("Play session history") },
+                                text = { Text(stringResource(R.string.audio_session_history)) },
                                 onClick = {
                                     overflowExpanded = false
                                     showSessionHistory = true
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text(if (playerLocked) "Unlock player" else "Lock player") },
+                                text = { Text(stringResource(if (playerLocked) R.string.audio_unlock_player else R.string.audio_lock_player)) },
                                 onClick = {
                                     overflowExpanded = false
                                     controller.setPlayerLocked(!playerLocked)
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Close player") },
+                                text = { Text(stringResource(R.string.audio_close_player)) },
                                 onClick = {
                                     overflowExpanded = false
                                     closePlayer()
@@ -1036,7 +1042,7 @@ private fun FullPlayerLandscape(
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = chapters.getOrNull(activeChapterIndex)?.title ?: "Audiobook",
+                    text = chapters.getOrNull(activeChapterIndex)?.title ?: stringResource(R.string.audio_audiobook),
                     modifier = Modifier
                         .fillMaxWidth()
                         .basicMarquee(iterations = Int.MAX_VALUE),
@@ -1057,11 +1063,11 @@ private fun FullPlayerLandscape(
                     leading = formatPlaybackTime(overallPosition.toLong()),
                     trailing = "−${formatPlaybackTime((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L))}",
                     label = formatFullPlayerProgressLabel(
-                        "Book progress",
+                        stringResource(R.string.audio_book_progress),
                         absoluteProgressPercent(overallPosition.toLong(), playback.durationMs)
                     ),
                     layoutScale = groupScale,
-                    description = "Seek through audiobook"
+                    description = stringResource(R.string.audio_seek_audiobook)
                 )
                 AudioSeekBar(
                     positionMs = chapterPosition,
@@ -1074,14 +1080,14 @@ private fun FullPlayerLandscape(
                     leading = formatPlaybackTime(chapterPosition.toLong()),
                     trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterPosition).toLong().coerceAtLeast(0L))}",
                     label = formatFullPlayerProgressLabel(
-                        "Chapter progress",
+                        stringResource(R.string.audio_chapter_progress),
                         chapterProgressPercent(
                             chapterPosition.toLong(),
                             (chapterEndMs - chapterStartMs).coerceAtLeast(0L)
                         )
                     ),
                     layoutScale = groupScale,
-                    description = "Seek through current chapter",
+                    description = stringResource(R.string.audio_seek_chapter),
                     enabled = chapterBoundsAvailable
                 )
                 Row(
@@ -1091,14 +1097,14 @@ private fun FullPlayerLandscape(
                 ) {
                     if (!playerLocked) FullPlayerIconButton(
                         icon = Icons.Default.SkipPrevious,
-                        description = "Previous audiobook chapter",
+                        description = stringResource(R.string.audio_previous_chapter),
                         onClick = {
                             chapters.getOrNull(activeChapterIndex - 1)?.startMs?.let(current::seekToAbsolutePosition)
                         }
                     )
                     if (!playerLocked) FullPlayerIconButton(
                         icon = Icons.Default.Replay10,
-                        description = "Skip back $skipBackSeconds seconds",
+                        description = stringResource(R.string.audio_skip_back_seconds, skipBackSeconds),
                         onClick = {
                             current.seekToAbsolutePosition((current.absolutePositionMs() - skipBackSeconds * 1000L).coerceAtLeast(0L))
                         },
@@ -1110,13 +1116,13 @@ private fun FullPlayerLandscape(
                     ) {
                         Icon(
                             if (playback.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playback.isPlaying) "Pause audiobook" else "Play audiobook",
+                            contentDescription = stringResource(if (playback.isPlaying) R.string.audio_pause else R.string.audio_play),
                             modifier = Modifier.size((36f * groupScale).coerceAtLeast(30f).dp)
                         )
                     }
                     if (!playerLocked) FullPlayerIconButton(
                         icon = Icons.Default.Forward30,
-                        description = "Skip forward $skipForwardSeconds seconds",
+                        description = stringResource(R.string.audio_skip_forward_seconds, skipForwardSeconds),
                         onClick = {
                             current.seekToAbsolutePosition((current.absolutePositionMs() + skipForwardSeconds * 1000L).coerceAtMost(playback.durationMs))
                         },
@@ -1124,7 +1130,7 @@ private fun FullPlayerLandscape(
                     )
                     if (!playerLocked) FullPlayerIconButton(
                         icon = Icons.Default.SkipNext,
-                        description = "Next audiobook chapter",
+                        description = stringResource(R.string.audio_next_chapter),
                         onClick = { chapters.getOrNull(activeChapterIndex + 1)?.startMs?.let(current::seekToAbsolutePosition) }
                     )
                 }
@@ -1133,7 +1139,7 @@ private fun FullPlayerLandscape(
                         IconButton(onClick = { showChapterList = true }, enabled = chapters.isNotEmpty(), modifier = Modifier.size(secondaryControlSize)) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
-                                Text("Chapter", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.audio_chapter), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         DropdownMenu(expanded = chapterMenuExpanded, onDismissRequest = { chapterMenuExpanded = false }) {
@@ -1157,7 +1163,7 @@ private fun FullPlayerLandscape(
                                     "${formatPlaybackSpeed(playback.speed.toDouble())}×",
                                     style = MaterialTheme.typography.bodyLarge
                                 )
-                                Text("Speed", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.audio_speed), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -1165,13 +1171,13 @@ private fun FullPlayerLandscape(
                         IconButton(onClick = { sleepMenuExpanded = true }, modifier = Modifier.size(secondaryControlSize)) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Bedtime, contentDescription = null)
-                                Text("Sleep", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.audio_sleep), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         DropdownMenu(expanded = sleepMenuExpanded, onDismissRequest = { sleepMenuExpanded = false }) {
                             AudioSleepTimerOption.entries.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option.label) },
+                                    text = { Text(stringResource(option.labelRes)) },
                                     onClick = { sleepMenuExpanded = false; controller.setSleepTimer(option) }
                                 )
                             }
@@ -1180,7 +1186,11 @@ private fun FullPlayerLandscape(
                 }
                 if (sleepTimer.option != AudioSleepTimerOption.OFF) {
                     Text(
-                        text = "Sleep timer: ${sleepTimer.option.label} · ${sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()}",
+                        text = stringResource(
+                        R.string.audio_sleep_timer_status,
+                        stringResource(sleepTimer.option.labelRes),
+                        sleepTimer.remainingMs?.let(::formatPlaybackTime).orEmpty()
+                    ),
                         color = palette.secondaryContent,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.fillMaxWidth(),
@@ -1235,7 +1245,7 @@ private fun FullPlayerLandscape(
     intervalDirection?.let { direction ->
         AlertDialog(
             onDismissRequest = { intervalDirection = null },
-            title = { Text(if (direction == SkipDirection.BACK) "Rewind interval" else "Forward interval") },
+            title = { Text(stringResource(if (direction == SkipDirection.BACK) R.string.audio_rewind_interval else R.string.audio_forward_interval)) },
             text = {
                 Column {
                     AUDIO_SKIP_SECONDS_OPTIONS.forEach { seconds ->
@@ -1251,11 +1261,11 @@ private fun FullPlayerLandscape(
                                 intervalDirection = null
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("$seconds seconds") }
+                        ) { Text(stringResource(R.string.audio_seconds, seconds)) }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { intervalDirection = null }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { intervalDirection = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 }

@@ -1,10 +1,11 @@
 package com.vangeaux.lagrange
 
 import android.content.res.Configuration
+import androidx.annotation.StringRes
 
-enum class ReaderSpreadMode(val displayName: String) {
-    AUTO("Automatic"),
-    OFF("Off")
+enum class ReaderSpreadMode(val displayName: String, @StringRes val displayNameRes: Int) {
+    AUTO("Automatic", R.string.label_spread_auto),
+    OFF("Off", R.string.label_spread_off)
 }
 
 /** Smallest window side, in dp, that identifies an unfolded inner display rather than a cover screen. */

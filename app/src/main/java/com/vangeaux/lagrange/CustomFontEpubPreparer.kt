@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import androidx.annotation.StringRes
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -58,7 +59,10 @@ private data class SourceEntry(
 
 internal sealed interface CustomFontEpubPreparationResult {
     data class Prepared(val file: File) : CustomFontEpubPreparationResult
-    data class Rejected(val message: String) : CustomFontEpubPreparationResult
+    data class Rejected(
+        val message: String,
+        @StringRes val messageRes: Int
+    ) : CustomFontEpubPreparationResult
 }
 
 /** Creates a cached EPUB copy with an imported font injected into every reflowable resource. */
@@ -95,7 +99,8 @@ internal fun captureCustomFontEpubPreparation(
     throw cancelled
 } catch (_: Exception) {
     CustomFontEpubPreparationResult.Rejected(
-        "This EPUB could not be prepared with the selected custom font."
+        message = "This EPUB could not be prepared with the selected custom font.",
+        messageRes = R.string.extras_custom_font_prepare_failed
     )
 }
 

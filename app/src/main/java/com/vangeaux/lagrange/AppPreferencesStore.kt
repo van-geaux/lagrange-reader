@@ -1,33 +1,46 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import androidx.annotation.StringRes
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
-enum class AppThemeMode(val displayName: String) {
-    FOLLOW_SYSTEM("Follow system"),
-    LIGHT("Light"),
-    CHARCOAL("Charcoal"),
-    WARM_BLACK("Warm black"),
-    OLED_BLACK("OLED black")
+enum class AppThemeMode(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    FOLLOW_SYSTEM("Follow system", R.string.settings_theme_system),
+    LIGHT("Light", R.string.settings_theme_light),
+    CHARCOAL("Charcoal", R.string.settings_theme_charcoal),
+    WARM_BLACK("Warm black", R.string.settings_theme_warm_black),
+    OLED_BLACK("OLED black", R.string.settings_theme_oled_black)
 }
 
-enum class DefaultOpeningScreen(val displayName: String) {
-    HOME("Home"),
-    LIBRARY("Library"),
-    LOCAL_BOOKS("Local books")
+enum class DefaultOpeningScreen(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    HOME("Home", R.string.settings_opening_home),
+    LIBRARY("Library", R.string.settings_opening_library),
+    LOCAL_BOOKS("Local books", R.string.settings_opening_local_books)
 }
 
-enum class CellularDownloadPolicy(val displayName: String) {
-    ALWAYS("Always"),
-    NEVER("Never"),
-    ASK_FOR_CONFIRMATION("Ask for confirmation")
+enum class CellularDownloadPolicy(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    ALWAYS("Always", R.string.settings_cellular_always),
+    NEVER("Never", R.string.settings_cellular_never),
+    ASK_FOR_CONFIRMATION("Ask for confirmation", R.string.settings_cellular_ask)
 }
 
-enum class BackgroundRefreshNetworkPolicy(val displayName: String) {
-    ANY_NETWORK("Any network"),
-    WIFI_ONLY("Wi-Fi only"),
-    DISABLED("Disabled")
+enum class BackgroundRefreshNetworkPolicy(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    ANY_NETWORK("Any network", R.string.settings_background_any),
+    WIFI_ONLY("Wi-Fi only", R.string.settings_background_wifi),
+    DISABLED("Disabled", R.string.settings_background_disabled)
 }
 
 enum class SeriesGroupingMode {
@@ -36,10 +49,13 @@ enum class SeriesGroupingMode {
     FORMAT
 }
 
-enum class LibraryCardSize(val displayName: String) {
-    SMALL("Small"),
-    MEDIUM("Medium"),
-    LARGE("Large")
+enum class LibraryCardSize(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    SMALL("Small", R.string.settings_card_small),
+    MEDIUM("Medium", R.string.settings_card_medium),
+    LARGE("Large", R.string.settings_card_large)
 }
 
 internal const val DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX = 250

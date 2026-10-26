@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- EPUB 阅读器：打开与空状态 -->
+    <string name="epub_open_error_file_unavailable">EPUB 文件不可用。</string>
+    <string name="epub_open_error_read_failed">Readium 无法读取此 EPUB 文件。</string>
+    <string name="epub_open_error_open_failed">Readium 无法打开此 EPUB 出版物。</string>
+    <string name="epub_open_error_not_epub">Readium 无法将此文件识别为 EPUB 出版物。</string>
+    <string name="epub_reader_file_unavailable">EPUB 阅读器文件不可用。</string>
+    <string name="epub_no_readable_content">此 EPUB 没有可阅读的内容。</string>
+    <string name="epub_preview_title">预览 · %1$s</string>
+    <string name="epub_chapter_fallback">第 %1$d 章</string>
+    <string name="epub_page_kind">页</string>
+    <string name="epub_chapter_kind">章节</string>
+    <string name="epub_page_position">第 %1$d 页</string>
+    <string name="epub_options_status">第 %1$d/%2$d 章 · 第 %3$d/%4$d 页</string>
+    <string name="epub_error_press_back">请按返回键返回。</string>
+    <string name="epub_dismiss_reader_options_cd">关闭阅读选项并继续阅读</string>
+
+    <!-- EPUB 阅读器：朗读方式选择 -->
+    <string name="epub_listen_title">朗读</string>
+    <string name="epub_listen_nothing_available">没有可朗读的文字或旁白。</string>
+    <string name="epub_listen_publisher_narration">出版方旁白</string>
+    <string name="epub_listen_from_here">从这里开始朗读</string>
+    <string name="epub_listen_keep_listening">继续朗读</string>
+
+    <!-- EPUB 阅读器：语音朗读 -->
+    <string name="tts_privacy_title">语音朗读隐私</string>
+    <string name="tts_privacy_message">Lagrange 使用此设备上选择的 Android 文字转语音引擎。部分语音使用网络服务，可能会将其朗读的书籍文本发送给该服务提供商。</string>
+    <string name="tts_unavailable_for_epub">此 EPUB 无法使用语音朗读。</string>
+    <string name="tts_no_readable_position">无法在此 EPUB 中找到可阅读的位置。</string>
+    <string name="tts_voice_data_missing_title">缺少语音数据</string>
+    <string name="tts_voice_data_missing_message">在朗读之前，Android 需要此书籍语言的语音数据。</string>
+    <string name="tts_install_voice">安装语音</string>
+    <string name="tts_voice_failed_title">语音朗读失败</string>
+    <string name="tts_voice_failed_default_message">所选语音无法朗读此文本。已改用默认 Android 语音并暂停。</string>
+    <string name="tts_voice_failed_network_alternative">所选语音无法连接其网络服务，请选择其他语音。</string>
+    <string name="tts_voice_failed_alternative">所选语音无法朗读此文本，请选择其他语音。</string>
+    <string name="tts_voice_failed_network">所选语音无法连接其网络服务。</string>
+    <string name="tts_voice_failed_generic">无法读取书籍文本或 Android 语音引擎，语音朗读已停止。</string>
+    <string name="tts_default_android_voice">默认 Android 语音</string>
+    <string name="epub_ok">确定</string>
+
+    <!-- EPUB 阅读器：朗读旁白 -->
+    <string name="epub_narration_sentence_unavailable">此句无法朗读。</string>
+    <string name="epub_narration_location_failed">无法打开朗读位置。</string>
+    <string name="epub_narration_none_available">此 EPUB 没有可用的朗读旁白。</string>
+    <string name="epub_narration_prepare_failed">无法准备 EPUB 朗读。</string>
+    <string name="epub_narration_controls_unavailable">EPUB 朗读控件不可用。</string>
+    <string name="epub_narration_play_failed">无法播放此 EPUB 朗读。</string>
+
+    <!-- EPUB 阅读器：图片图库 -->
+    <string name="epub_image_open_failed">无法打开此 EPUB 图片。</string>
+    <string name="epub_image_loading">正在查找 EPUB 图片…</string>
+    <string name="epub_image_gallery_item_cd">EPUB 图库中的第 %1$d 张图片</string>
+    <string name="epub_image_export_title">%1$s - 图片 %2$d</string>
+
+    <!-- EPUB 阅读器：文本选区操作 -->
+    <string name="epub_selection_copy">复制</string>
+    <string name="epub_selection_share">分享</string>
+    <string name="epub_selection_play_narration">播放旁白</string>
+    <string name="epub_selection_listen_from_here">从这里开始朗读</string>
+    <string name="epub_selection_web_search">网络搜索</string>
+    <string name="epub_selection_highlight">高亮</string>
+    <string name="epub_selection_highlight_note">高亮 + 笔记</string>
+    <string name="epub_selection_highlight_failed">无法高亮此文本选区，请重新选择后再试。</string>
+    <string name="epub_selection_unavailable">所选文本已不可用，请重新选择。</string>
+    <string name="epub_selection_web_search_unavailable">没有可用的网络搜索应用。</string>
+    <string name="epub_selection_copied">已复制</string>
+    <string name="epub_clipboard_selected_text">所选文本</string>
+    <string name="epub_share_selected_text">分享所选文本</string>
+    <string name="epub_narration_selection_no_match">没有与该文本选区匹配的朗读句子。</string>
+
+    <!-- EPUB 阅读器：高亮与笔记 -->
+    <string name="epub_highlight_style_title">高亮样式</string>
+    <string name="epub_highlight_yellow">黄色高亮</string>
+    <string name="epub_highlight_green">绿色高亮</string>
+    <string name="epub_highlight_blue">蓝色高亮</string>
+    <string name="epub_highlight_pink">粉色高亮</string>
+    <string name="epub_highlight_yellow_underline">黄色下划线</string>
+    <string name="epub_highlight_actions_title">高亮</string>
+    <string name="epub_highlight_note_actions_title">高亮笔记</string>
+    <string name="epub_highlight_edit_note">编辑笔记</string>
+    <string name="epub_highlight_delete">删除高亮</string>
+    <string name="epub_highlight_save_failed">无法保存高亮。</string>
+    <string name="epub_note_title">笔记</string>
+    <string name="epub_note_save">保存</string>
+
+    <!-- EPUB 语音朗读控件 -->
+    <string name="tts_controls_title">语音朗读</string>
+    <string name="tts_settings_cd">语音朗读设置</string>
+    <string name="tts_previous_sentence_cd">上一句朗读</string>
+    <string name="tts_next_sentence_cd">下一句朗读</string>
+    <string name="tts_pause_cd">暂停语音朗读</string>
+    <string name="tts_play_cd">播放语音朗读</string>
+    <string name="tts_close_cd">关闭语音朗读</string>
+    <string name="tts_settings_title">语音朗读设置</string>
+    <string name="tts_speed">语速</string>
+    <string name="tts_pitch">音调</string>
+    <string name="tts_speed_description">语音朗读语速</string>
+    <string name="tts_pitch_description">语音朗读音调</string>
+    <string name="tts_voice_section">语音</string>
+    <string name="tts_no_compatible_voices">没有兼容的语音</string>
+    <string name="tts_voices_filtered_hint">语音已按此 EPUB 的语言筛选。网络语音可能会将其朗读的文本发送给提供商。</string>
+    <string name="tts_apply_immediately_hint">语速和音调的改动会立即生效。下方设置需要点击“应用”后才能保存。</string>
+    <string name="tts_punctuation_pauses">额外标点停顿</string>
+    <string name="tts_use_custom_pauses">使用自定义标点停顿</string>
+    <string name="tts_pauses_hint">数值以 1× 为基准，并随朗读速度缩放。Android 语音可能会在片段之间加入自身的延迟。</string>
+    <string name="tts_pause_comma">逗号</string>
+    <string name="tts_pause_semicolon">分号</string>
+    <string name="tts_pause_colon">冒号</string>
+    <string name="tts_pause_em_dash">破折号</string>
+    <string name="tts_pause_ellipsis">省略号（… 或 ...）</string>
+    <string name="tts_pause_grouping_hint">分组符号适用于左、右圆括号、方括号和花括号。</string>
+    <string name="tts_pause_grouping">分组符号：( ) [ ] { }</string>
+    <string name="tts_images_section">图片</string>
+    <string name="tts_read_image_descriptions">朗读图片描述</string>
+    <string name="tts_read_image_descriptions_hint">朗读 EPUB 替代文本和无障碍描述。默认关闭。</string>
+    <string name="tts_read_image_resource_names">朗读完整图片资源名称</string>
+    <string name="tts_read_image_resource_names_hint">朗读 EPUB 内的完整文件夹、文件名和扩展名。默认关闭，且与描述选项相互独立。</string>
+    <string name="tts_lockscreen_privacy">锁屏隐私</string>
+    <string name="tts_show_book_title_lockscreen">在锁屏上显示书名</string>
+    <string name="tts_show_book_title_hint">启用后，书名会显示在锁屏媒体控件中。</string>
+    <string name="tts_apply">应用</string>
+    <string name="tts_voice_dialog_title">朗读语音</string>
+    <string name="tts_pause_zero_hint">如果停顿听起来太长，请使用 0。</string>
+    <string name="tts_pause_range_error">请输入 0 到 2000 之间的整数</string>
+    <string name="tts_pause_range">0 到 2000 ms</string>
+    <string name="tts_pause_unit">ms</string>
+    <string name="tts_voice_network">网络</string>
+    <string name="tts_voice_local">本地</string>
+    <string name="tts_voice_variant">变体 %1$s</string>
+    <string name="tts_voice_name">语音 %1$s</string>
+
+    <!-- EPUB 语音朗读通知与媒体会话 -->
+    <string name="tts_state_text_to_speech">语音朗读</string>
+    <string name="tts_state_attention">语音朗读需要关注</string>
+    <string name="tts_state_preparing">正在准备语音朗读</string>
+    <string name="tts_state_reading_aloud">正在朗读</string>
+    <string name="tts_state_paused">语音朗读已暂停</string>
+    <string name="tts_notification_previous">上一句朗读</string>
+    <string name="tts_notification_next">下一句朗读</string>
+    <string name="tts_notification_pause_narration">暂停朗读</string>
+    <string name="tts_notification_play_narration">播放朗读</string>
+    <string name="tts_notification_previous_short">上一句</string>
+    <string name="tts_notification_next_short">下一句</string>
+    <string name="tts_notification_pause_short">暂停</string>
+    <string name="tts_notification_play_short">播放</string>
+    <string name="tts_notification_epub_narration">EPUB 朗读</string>
+    <string name="tts_media_artist">EPUB 语音朗读</string>
+    <string name="tts_channel_name">EPUB 朗读</string>
+    <string name="tts_channel_description">在屏幕关闭时保持书籍朗读播放</string>
+</resources>

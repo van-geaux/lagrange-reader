@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Provider and repository layer: user-facing errors surfaced through
+         AppCoordinator.userMessage() for UserFacingException. Keep the English values
+         byte-for-byte identical to the original literals (tests may rely on them). -->
+
+    <!-- BookOrbit repository -->
+    <string name="perror_bookorbit_library_changed_refresh">The library changed while it was refreshing. Pull to refresh again.</string>
+    <string name="perror_bookorbit_annotation_syncing">This annotation has not finished syncing yet. Try again once it syncs.</string>
+    <string name="perror_bookorbit_rating_rejected">BookOrbit did not accept the rating; rating metadata may be locked.</string>
+    <string name="perror_bookorbit_reset_progress_no_file">Unable to reset progress because this book has no valid file ID.</string>
+    <string name="perror_bookorbit_missing_download_file">This title is missing a downloadable file.</string>
+    <string name="perror_bookorbit_download_storage_prepare">Unable to prepare local storage for this download.</string>
+    <string name="perror_download_stage_replace">Unable to replace the interrupted download stage.</string>
+    <string name="perror_bookorbit_empty_download">The server returned an empty download.</string>
+    <string name="perror_bookorbit_local_storage_save">Local storage could not save this download. Check free space and file access, then try again.</string>
+    <string name="perror_download_integrity">The downloaded file did not pass integrity checks.</string>
+    <string name="perror_download_integrity_kept">The downloaded file did not pass integrity checks. The previous local copy was kept.</string>
+    <string name="perror_bookorbit_remove_missing_file">This title does not have a removable local file.</string>
+    <string name="perror_bookorbit_remove_failed">Unable to remove the local copy for this title.</string>
+    <string name="perror_bookorbit_reader_integrity">The reader file did not pass integrity checks.</string>
+    <string name="perror_bookorbit_local_reader_integrity">The local reader file failed integrity checks.</string>
+    <string name="perror_bookorbit_empty_reader_file">The server returned an empty reader file.</string>
+    <string name="perror_bookorbit_no_server">No BookOrbit server is configured.</string>
+
+    <!-- Komga -->
+    <string name="perror_komga_server_url">Enter a valid Komga server URL.</string>
+    <string name="perror_komga_server_url_first">Enter a Komga server URL first.</string>
+    <string name="perror_komga_not_downloaded">This Komga book is not downloaded for offline reading.</string>
+    <string name="perror_komga_credentials">Komga did not accept this username or password.</string>
+    <string name="perror_komga_signin_http">Komga sign-in failed with HTTP %1$d.</string>
+    <string name="perror_komga_libraries_http">Unable to load Komga libraries (HTTP %1$d).</string>
+    <string name="perror_komga_books_http">Unable to load Komga books (HTTP %1$d).</string>
+    <string name="perror_komga_home_http">Unable to load Komga Home shelf (HTTP %1$d).</string>
+    <string name="perror_komga_progress_url_unavailable">Komga server URL is unavailable for progress synchronization.</string>
+    <string name="perror_komga_progress_http">Unable to synchronize Komga reading progress (HTTP %1$d).</string>
+    <string name="perror_komga_status_unsupported">Komga supports only read and unread book status.</string>
+    <string name="perror_komga_status_url_unavailable">Komga server URL is unavailable for reading-status synchronization.</string>
+    <string name="perror_komga_status_http">Unable to synchronize Komga reading status (HTTP %1$d).</string>
+    <string name="perror_komga_details_http">Unable to load Komga book details (HTTP %1$d).</string>
+    <string name="perror_komga_empty_file">Komga returned an empty book file.</string>
+    <string name="perror_komga_download_integrity">The downloaded Komga file did not pass integrity checks.</string>
+    <string name="perror_komga_download_integrity_kept">The downloaded Komga file did not pass integrity checks. The previous local copy was kept.</string>
+
+    <!-- Kavita -->
+    <string name="perror_kavita_server_url">Enter a valid Kavita server URL.</string>
+    <string name="perror_kavita_username_required">Enter your Kavita username.</string>
+    <string name="perror_kavita_password_required">Enter your Kavita password.</string>
+    <string name="perror_kavita_credentials">Kavita did not accept this username or password.</string>
+    <string name="perror_kavita_auth_http">Kavita authentication failed with HTTP %1$d.</string>
+    <string name="perror_kavita_no_token">Kavita returned no authentication token.</string>
+    <string name="perror_kavita_no_identity">Kavita returned no stable account identity.</string>
+    <string name="perror_kavita_series_http">Unable to load Kavita series (HTTP %1$d).</string>
+    <string name="perror_kavita_series_details_http">Unable to load Kavita series details (HTTP %1$d).</string>
+    <string name="perror_kavita_chapter_details_http">Unable to load Kavita chapter details (HTTP %1$d).</string>
+    <string name="perror_kavita_invalid_chapter">Kavita returned an invalid chapter response.</string>
+    <string name="perror_kavita_ratings_unimplemented">Kavita book ratings are not implemented yet.</string>
+    <string name="perror_kavita_empty_chapter">Kavita returned an empty chapter file.</string>
+    <string name="perror_kavita_download_integrity">The downloaded Kavita file did not pass integrity checks.</string>
+    <string name="perror_kavita_download_integrity_kept">The downloaded Kavita file did not pass integrity checks. The previous local copy was kept.</string>
+    <string name="perror_kavita_chapter_identity">Kavita chapter identity is unavailable.</string>
+    <string name="perror_kavita_libraries_http">Unable to load Kavita libraries (HTTP %1$d).</string>
+    <string name="perror_kavita_progress_http">Unable to load Kavita reading progress (HTTP %1$d).</string>
+    <string name="perror_kavita_hierarchy_http">Unable to resolve Kavita chapter hierarchy (HTTP %1$d).</string>
+    <string name="perror_kavita_hierarchy_incomplete">Kavita returned incomplete chapter hierarchy information.</string>
+    <string name="perror_kavita_progress_sync_http">Unable to synchronize Kavita reading progress (HTTP %1$d).</string>
+    <string name="perror_kavita_status_unsupported">Kavita supports only read and unread chapter status.</string>
+    <string name="perror_kavita_unread_scope">Kavita exposes unread status at series scope, not chapter scope.</string>
+    <string name="perror_kavita_status_sync_http">Unable to synchronize Kavita reading status (HTTP %1$d).</string>
+    <string name="perror_kavita_reader_info_http">Unable to load Kavita reader information (HTTP %1$d).</string>
+    <string name="perror_kavita_not_implemented">Kavita catalog and reading support are not implemented yet.</string>
+    <!-- local reader availability -->
+    <string name="perror_local_reader_audio_missing">This audiobook is missing both a local file and a playable stream.</string>
+    <string name="perror_local_reader_pdf_unprepared">This PDF could not be prepared for reading. Download it first or reconnect to the server.</string>
+    <string name="perror_local_reader_epub_unprepared">This EPUB could not be prepared for reading. Download it first or reconnect to the server.</string>
+    <string name="perror_local_reader_comic_unprepared">This comic could not be prepared for reading. Download it first or reconnect to the server.</string>
+    <string name="perror_local_reader_unknown_format">This title does not expose a readable local file or stream.</string>
+    <!-- provider capabilities -->
+    <string name="perror_komga_ratings_unavailable">Book ratings are not available for Komga.</string>
+    <string name="perror_komga_reading_sessions_unavailable">Komga reading-session synchronization is not available.</string>
+    <string name="perror_komga_annotations_unavailable">Komga annotations are not available.</string>
+    <string name="perror_komga_smart_scopes_unavailable">Smart scopes are not available for Komga.</string>
+    <string name="perror_komga_authors_unavailable">Authors are not available for Komga.</string>
+    <string name="perror_kavita_reader_unavailable">Kavita reader support is not available for %1$s chapters.</string>
+    <!-- malformed data / bounded responses -->
+    <string name="perror_malformed_data">The server returned malformed data.</string>
+    <string name="perror_audiobook_asset_identity_missing">BookOrbit returned no audiobook asset identity.</string>
+    <string name="perror_catalog_image_too_large">The image response is too large.</string>
+    <!-- comic archive extraction -->
+    <string name="perror_comic_encrypted">This comic archive is password-protected. BookOrbit cannot open encrypted comic archives yet.</string>
+    <string name="perror_comic_unsupported_format">This comic archive uses a compression format that is not supported yet.</string>
+    <string name="perror_comic_invalid_archive">This comic archive could not be read. It may be corrupt.</string>
+    <string name="perror_comic_no_supported_images">This comic archive does not contain any supported comic page images.</string>
+    <string name="perror_comic_too_many_entries">This comic archive has too many entries to safely extract.</string>
+    <string name="perror_comic_entry_too_large">This comic archive contains a page image that is too large to safely extract.</string>
+    <string name="perror_comic_too_large">This comic archive is too large to safely extract.</string>
+    <string name="perror_comic_unreadable">This comic archive could not be read from local storage.</string>
+    <string name="perror_comic_unsupported_file">This file is not a supported CBR or CB7 comic archive.</string>
+    <string name="perror_smart_scopes_malformed">The server returned malformed data while trying to load smart scopes.</string>
+</resources>

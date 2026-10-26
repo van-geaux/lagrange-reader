@@ -93,7 +93,7 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
             val payload = response.body?.string().orEmpty()
             if (response.code == 404 || response.code == 204) return@withContext book
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita reading progress (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_progress_http, "Unable to load Kavita reading progress (HTTP ${response.code}).", response.code))
             }
             kavitaProgressBook(book, JSONObject(payload))
         }
@@ -109,14 +109,14 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
         return client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_hierarchy_http, "Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).", response.code))
             }
             kavitaChapterContext(
                 JSONObject(payload),
                 fallbackSeriesId = book.seriesId?.toIntOrNull(),
                 fallbackLibraryId = book.libraryId.toIntOrNull()
             )
-                ?: throw UserFacingException("Kavita returned incomplete chapter hierarchy information.")
+                ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_hierarchy_incomplete, "Kavita returned incomplete chapter hierarchy information."))
         }
     }
 
@@ -129,19 +129,19 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to synchronize Kavita reading progress (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_progress_sync_http, "Unable to synchronize Kavita reading progress (HTTP ${response.code}).", response.code))
             }
         }
     }
 
     private val serverBase: String
-        get() = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        get() = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
 
     private fun chapterId(book: BookSummary): Int = book.id.removePrefix("chapter:")
         .substringBefore(':')
         .toIntOrNull()
         ?: book.fileId?.toIntOrNull()
-        ?: throw UserFacingException("Kavita chapter identity is unavailable.")
+        ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_chapter_identity, "Kavita chapter identity is unavailable."))
 }
 
 internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule) : ReadingStatusModule {
@@ -152,12 +152,12 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
         when (status) {
             BookReadStatus.READ -> markBookAsRead(book)
             BookReadStatus.UNREAD -> resetBookReadingState(book)
-            else -> throw UserFacingException("Kavita supports only read and unread chapter status.")
+            else -> throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_status_unsupported, "Kavita supports only read and unread chapter status."))
         }
     }
 
     override suspend fun markBookAsRead(book: BookSummary) = withContext(Dispatchers.IO) {
-        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         val context = loadChapterContext(book)
         execute("$base/api/Reader/mark-chapter-read", JSONObject()
             .put("seriesId", context.seriesId)
@@ -178,24 +178,24 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) {
-        throw UserFacingException("Kavita exposes unread status at series scope, not chapter scope.")
+        throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_unread_scope, "Kavita exposes unread status at series scope, not chapter scope."))
     }
 
     private suspend fun loadChapterContext(book: BookSummary): KavitaChapterContext {
-        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         val request = Request.Builder()
             .url("$base/api/Series/chapter?chapterId=${book.id.removePrefix("chapter:").substringBefore(':')}")
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
             .get().build()
         return client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw UserFacingException("Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_hierarchy_http, "Unable to resolve Kavita chapter hierarchy (HTTP ${response.code}).", response.code))
             kavitaChapterContext(
                 JSONObject(payload),
                 fallbackSeriesId = book.seriesId?.toIntOrNull(),
                 fallbackLibraryId = book.libraryId.toIntOrNull()
             )
-                ?: throw UserFacingException("Kavita returned incomplete chapter hierarchy information.")
+                ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_hierarchy_incomplete, "Kavita returned incomplete chapter hierarchy information."))
         }
     }
 
@@ -206,7 +206,7 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
             .post(payload.toString().toRequestBody(jsonMediaType)).build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to synchronize Kavita reading status (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_status_sync_http, "Unable to synchronize Kavita reading status (HTTP ${response.code}).", response.code))
         }
     }
 }

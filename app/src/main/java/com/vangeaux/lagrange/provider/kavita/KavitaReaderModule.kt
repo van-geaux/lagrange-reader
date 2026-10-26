@@ -37,7 +37,7 @@ internal class KavitaReaderModuleImpl(
                     )
                 }
             }
-            val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+            val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
             val chapterId = book.id.removePrefix("chapter:").substringBefore(':').ifBlank {
                 book.fileId ?: book.id.substringAfterLast(':')
             }
@@ -89,7 +89,14 @@ internal class KavitaReaderModuleImpl(
                     progressPercent = book.progressPercent,
                     serverProgressAuthoritative = true
                 )
-                else -> throw UserFacingException("Kavita reader support is not available for ${resolvedBook.format ?: "this format"} chapters.")
+                else -> throw UserFacingException(
+                    auth.localizedMessage(
+                        R.string.perror_kavita_reader_unavailable,
+                        "Kavita reader support is not available for ${resolvedBook.format ?: "this format"} chapters.",
+                        resolvedBook.format ?: "this format"
+                    ),
+                    UserFacingReason.CAPABILITY_UNAVAILABLE
+                )
             }
         }
 
@@ -132,7 +139,7 @@ internal class KavitaReaderModuleImpl(
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita reader information (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_reader_info_http, "Unable to load Kavita reader information (HTTP ${response.code}).", response.code))
             }
             return JSONObject(payload)
         }

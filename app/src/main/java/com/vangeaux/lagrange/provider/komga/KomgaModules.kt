@@ -245,6 +245,10 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
     private var serverUrl: String? = null
     private var authorization: String? = ServerProfileStore(appContext).active()?.id?.let(credentialStore::read)
 
+    /** Localizes a provider error message, falling back to the original English text. */
+    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
+
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext ServerCheckResult.MalformedUrl
         runCatching {
@@ -269,7 +273,12 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     override suspend fun login(serverUrl: String, username: String, password: String) = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Komga server URL.")
+            ?: throw UserFacingException(
+                localizedMessage(
+                    R.string.perror_komga_server_url,
+                    "Enter a valid Komga server URL."
+                )
+            )
         val request = Request.Builder()
             .url("$base/api/v2/users/me")
             .header("Authorization", Credentials.basic(username, password))
@@ -278,10 +287,10 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
         var authenticatedPrincipal: AuthenticatedAccountPrincipal? = null
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
-                throw UserFacingException("Komga did not accept this username or password.")
+                throw UserFacingException(localizedMessage(R.string.perror_komga_credentials, "Komga did not accept this username or password."))
             }
             if (!response.isSuccessful) {
-                throw UserFacingException("Komga sign-in failed with HTTP ${response.code}.")
+                throw UserFacingException(localizedMessage(R.string.perror_komga_signin_http, "Komga sign-in failed with HTTP ${response.code}.", response.code))
             }
             authenticatedPrincipal = komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
         }
@@ -418,13 +427,13 @@ class KomgaLibraryModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaLibra
     private val client = KomgaHttpClient().client
 
     override suspend fun loadLibraries(serverUrl: String): List<LibrarySummary> = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val request = Request.Builder().url("$base/api/v1/libraries").get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga libraries (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_libraries_http, "Unable to load Komga libraries (HTTP ${response.code}).", response.code))
             val array = runCatching { JSONArray(payload) }.getOrElse {
                 val root = JSONObject(payload)
                 root.optJSONArray("libraries")
@@ -448,14 +457,14 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
     private val client = KomgaHttpClient().client
 
     override suspend fun loadBooks(serverUrl: String, libraryId: String, page: Int): LibraryBooksPage = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val url = "$base/api/v1/books?library_id=$libraryId&page=$page&size=$PAGE_SIZE&sort=metadata.title,asc"
         val request = Request.Builder().url(url).get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga books (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_books_http, "Unable to load Komga books (HTTP ${response.code}).", response.code))
             val root = JSONObject(payload)
             val content = root.optJSONArray("content") ?: JSONArray()
             val items = buildList {
@@ -510,7 +519,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
     private val client = KomgaHttpClient().client
 
     suspend fun loadHomeShelves(serverUrl: String): HomeShelfData = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         HomeShelfData(
             booksBySection = buildMap {
                 listOf(
@@ -540,7 +549,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "response code=${response.code} items=${content.length()}")
             buildList {
@@ -579,7 +588,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 Log.w("KomgaHome", "recently released error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             }
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "recently released code=${response.code} items=${content.length()}")
@@ -596,7 +605,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "response code=${response.code} items=${content.length()}")
             buildList {
@@ -660,7 +669,7 @@ class KomgaReadingProgressModuleImpl(
         progressPercent: Float?
     ) = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrlProvider())
-            ?: throw UserFacingException("Komga server URL is unavailable for progress synchronization.")
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_progress_url_unavailable, "Komga server URL is unavailable for progress synchronization."))
         val page = (pageIndex + 1).coerceAtLeast(1)
         val completed = progressPercent != null && progressPercent >= 99.5f
         val locator = book.readerLocatorJson
@@ -688,7 +697,7 @@ class KomgaReadingProgressModuleImpl(
             Log.d("KomgaProgress", "book=${book.id} endpoint=${endpoint.substringAfter("/api/v1/")} code=${response.code} page=$page completed=$completed")
             if (!response.isSuccessful) {
                 Log.w("KomgaProgress", "error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to synchronize Komga reading progress (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_progress_http, "Unable to synchronize Komga reading progress (HTTP ${response.code}).", response.code))
             }
         }
     }
@@ -709,7 +718,7 @@ class KomgaReadingStatusModuleImpl(
         when (status) {
             BookReadStatus.READ -> markBookAsRead(book)
             BookReadStatus.UNREAD -> resetBookReadingState(book)
-            else -> throw UserFacingException("Komga supports only read and unread book status.")
+            else -> throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_unsupported, "Komga supports only read and unread book status."))
         }
     }
 
@@ -738,14 +747,14 @@ class KomgaReadingStatusModuleImpl(
 
     private suspend fun requireServerUrl(): String =
         normalizeServerUrl(serverUrlProvider())
-            ?: throw UserFacingException("Komga server URL is unavailable for reading-status synchronization.")
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_url_unavailable, "Komga server URL is unavailable for reading-status synchronization."))
 
     private fun execute(endpoint: String, request: Request) {
         client.newCall(request).execute().use { response ->
             Log.d("KomgaReadingStatus", "endpoint=${endpoint.substringAfter("/api/v1/")} code=${response.code}")
             if (!response.isSuccessful) {
                 Log.w("KomgaReadingStatus", "error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to synchronize Komga reading status (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_http, "Unable to synchronize Komga reading status (HTTP ${response.code}).", response.code))
             }
         }
     }
@@ -815,12 +824,12 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
     private val client = KomgaHttpClient().client
 
     override suspend fun loadBookDetail(serverUrl: String, book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val request = Request.Builder().url("$base/api/v1/books/${book.id}").get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga book details (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_details_http, "Unable to load Komga book details (HTTP ${response.code}).", response.code))
             val root = JSONObject(response.body?.string().orEmpty())
             val metadata = root.optJSONObject("metadata") ?: JSONObject()
             val media = root.optJSONObject("media") ?: JSONObject()
@@ -985,7 +994,7 @@ class KomgaDownloadModuleImpl(
         expectedStorageScopeId: String?,
         onProgress: (Float?) -> Unit
     ): File = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         if (!auth.hasSession(base)) {
             auth.restoreCurrentProfileSession()
         }
@@ -1072,7 +1081,7 @@ class KomgaDownloadModuleImpl(
             throw CancellationException("This download was replaced by a newer request.")
         }
         if (temporary.exists() && !temporary.delete()) {
-            throw UserFacingException("Unable to replace the interrupted download stage.")
+            throw UserFacingException(auth.localizedMessage(R.string.perror_download_stage_replace, "Unable to replace the interrupted download stage."))
         }
         requireCapturedAccountScope()
         val request = Request.Builder().url("$base/api/v1/books/${book.id}/file").get()
@@ -1081,7 +1090,7 @@ class KomgaDownloadModuleImpl(
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw HttpRequestException(response.code, "download the Komga book")
-                val body = response.body ?: throw UserFacingException("Komga returned an empty book file.")
+                val body = response.body ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_empty_file, "Komga returned an empty book file."))
                 val total = body.contentLength().takeIf { it > 0L }
                 if (total != null) {
                     if (downloadIsIndividuallyOverCap(
@@ -1171,11 +1180,11 @@ class KomgaDownloadModuleImpl(
                     }
                 }
                 if (!temporary.isFile || temporary.length() <= 0L) {
-                    throw UserFacingException("Komga returned an empty book file.")
+                    throw UserFacingException(auth.localizedMessage(R.string.perror_komga_empty_file, "Komga returned an empty book file."))
                 }
                 if (!downloadedFilePassesIntegrity(book, temporary)) {
                     val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
-                    throw UserFacingException("The downloaded Komga file did not pass integrity checks.$suffix")
+                    throw UserFacingException(auth.localizedMessage(if (hadUsableExisting) R.string.perror_komga_download_integrity_kept else R.string.perror_komga_download_integrity, "The downloaded Komga file did not pass integrity checks.$suffix"))
                 }
                 onProgress(1f)
             }

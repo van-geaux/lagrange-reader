@@ -80,6 +80,9 @@ internal fun komgaDownloadedEpubFile(record: DownloadRecord?, fallbackPath: Stri
     komgaDownloadedLocalFile(record, fallbackPath)
 
 class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
+    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
+
     private val appContext = context.applicationContext
     private val preferences = context.getSharedPreferences("komga_connection", Context.MODE_PRIVATE)
     private val authModule = KomgaAuthModuleImpl(appContext)
@@ -99,7 +102,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun setServerUrl(serverUrl: String) {
         val normalized = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Komga server URL.")
+            ?: throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         preferences.edit().putString(SERVER_URL_KEY, normalized).apply()
     }
 
@@ -188,7 +191,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun getSessionState(): SessionState = authModule.sessionState(getServerUrl().orEmpty())
 
     override suspend fun login(username: String, password: String) {
-        val url = getServerUrl() ?: throw UserFacingException("Enter a Komga server URL first.")
+        val url = getServerUrl() ?: throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_server_url_first, "Enter a Komga server URL first."))
         authModule.login(url, username, password)
     }
 
@@ -345,7 +348,8 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             localFile = komgaDownloadedEpubFile(record, book.localPath),
             localFileError = null,
             fileId = book.fileId,
-            allowRemoteCache = allowRemoteCache
+            allowRemoteCache = allowRemoteCache,
+            context = appContext
         )
     }
 
@@ -411,7 +415,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             )
         }
         if (localOnly) {
-            throw UserFacingException("This Komga book is not downloaded for offline reading.")
+            throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_not_downloaded, "This Komga book is not downloaded for offline reading."))
         }
         val detail = loadBookDetail(book)
         val resolvedBook = detail.book

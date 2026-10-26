@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- EPUB 同步朗读（媒体叠加）控件 -->
+    <string name="extras_readalong_title">同步朗读</string>
+    <string name="extras_readalong_settings">同步朗读设置</string>
+    <string name="extras_readalong_previous_sentence_cd">上一句朗读</string>
+    <string name="extras_readalong_next_sentence_cd">下一句朗读</string>
+    <string name="extras_readalong_pause_cd">暂停朗读</string>
+    <string name="extras_readalong_play_cd">播放朗读</string>
+    <string name="extras_readalong_close_cd">关闭同步朗读</string>
+    <string name="extras_readalong_speed">语速</string>
+    <string name="extras_readalong_speed_description">同步朗读速度</string>
+    <string name="extras_apply">应用</string>
+
+    <!-- 同步朗读通知与媒体会话 -->
+    <string name="extras_readalong_media_title">同步朗读 · %1$s</string>
+    <string name="extras_epub_narration">EPUB 朗读</string>
+    <string name="extras_close_narration">关闭朗读</string>
+    <string name="extras_notification_play_pause_cd">播放或暂停朗读</string>
+    <string name="extras_readalong_playback_channel">同步朗读播放</string>
+    <string name="extras_readalong_playback_channel_description">显示 EPUB 中当前正在朗读的句子。</string>
+
+    <!-- EPUB 书籍语言选择 -->
+    <string name="extras_book_language_auto_from_book">自动 · %1$s（来自书籍）</string>
+    <string name="extras_book_language_auto_from_device">自动 · %1$s（设备语言；书籍未声明）</string>
+    <string name="extras_book_language_auto_unknown">自动 · 未知（书籍未声明）</string>
+
+    <!-- 自定义字体导入与准备错误 -->
+    <string name="extras_custom_font_choose_type">请选择 .ttf 或 .otf 字体文件。</string>
+    <string name="extras_custom_font_open_failed">无法打开所选字体文件。</string>
+    <string name="extras_custom_font_empty">所选字体文件为空。</string>
+    <string name="extras_custom_font_too_large">所选字体文件过大（最大 20 MB）。</string>
+    <string name="extras_custom_font_invalid">所选文件不是有效的 TrueType 或 OpenType 字体。</string>
+    <string name="extras_custom_font_prepare_failed">无法使用所选自定义字体准备此 EPUB。</string>
+
+    <!-- 阅读器图片查看器（EPUB 图片图库也使用） -->
+    <string name="extras_comic_export_title">%1$s - 第 %2$d 页</string>
+    <string name="extras_comic_default_title">漫画</string>
+    <string name="extras_could_not_read_image">无法读取图片</string>
+    <string name="extras_storage_permission_required">保存页面需要存储权限</string>
+    <string name="extras_image_page_cd">第 %1$d 页图片。</string>
+    <string name="extras_image_tap_controls_hint">单击可切换查看器控件。</string>
+    <string name="extras_image_gesture_hint">双指捏合或双击可缩放。点击图片外部或按返回键可关闭。长按图片可打开下载选项。</string>
+    <string name="extras_page_number">第 %1$d 页</string>
+    <string name="extras_close_image_viewer">关闭图片查看器</string>
+    <string name="extras_download_page">下载页面</string>
+    <string name="extras_export_saved">图片已保存到 Downloads/Lagrange Reader</string>
+    <string name="extras_export_failed">无法保存图片</string>
+</resources>

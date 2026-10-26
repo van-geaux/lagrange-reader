@@ -34,15 +34,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.net.URI
-
-internal const val SERVER_SIGN_IN_WAIT_NOTICE =
-    "After successful sign-in, wait for Lagrange to verify your session. " +
-        "This sign-in window will close automatically when verification is complete."
 
 internal fun buildServerLoginUrl(serverUrl: String): String? {
     val trimmed = serverUrl.trim().trimEnd('/')
@@ -108,9 +105,9 @@ internal fun ServerSignInDialog(
         Scaffold(
             topBar = {
                 BookOrbitTopBar(
-                    title = "Server sign-in",
+                    title = stringResource(R.string.signin_server_title),
                     showBrand = false,
-                    actions = { TextButton(onClick = onClose) { Text("Close") } }
+                    actions = { TextButton(onClick = onClose) { Text(stringResource(R.string.common_close)) } }
                 )
             }
         ) { padding ->
@@ -121,7 +118,7 @@ internal fun ServerSignInDialog(
             ) {
                 if (loginUrl == null) {
                     OrbitMessage(
-                        "The server address is not configured correctly.",
+                        stringResource(R.string.signin_server_address_invalid),
                         modifier = Modifier.padding(16.dp),
                         tone = OrbitMessageTone.ERROR
                     )
@@ -135,7 +132,7 @@ internal fun ServerSignInDialog(
                             tonalElevation = 2.dp
                         ) {
                             Text(
-                                text = SERVER_SIGN_IN_WAIT_NOTICE,
+                                text = stringResource(R.string.signin_wait_notice),
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -178,7 +175,7 @@ internal fun ServerSignInDialog(
                                             super.onReceivedError(view, request, error)
                                             if (request.isForMainFrame) {
                                                 isLoading = false
-                                                loadError = "The sign-in page could not be loaded. Check your connection and try again."
+                                                loadError = context.getString(R.string.signin_page_load_failed)
                                             }
                                         }
 
@@ -190,7 +187,7 @@ internal fun ServerSignInDialog(
                                             super.onReceivedHttpError(view, request, errorResponse)
                                             if (request.isForMainFrame) {
                                                 isLoading = false
-                                                loadError = "The sign-in page returned HTTP ${errorResponse.statusCode}."
+                                                loadError = context.getString(R.string.signin_http_error, errorResponse.statusCode)
                                             }
                                         }
 
@@ -201,7 +198,7 @@ internal fun ServerSignInDialog(
                                         ) {
                                             handler.cancel()
                                             isLoading = false
-                                            loadError = "The server's TLS certificate could not be validated."
+                                            loadError = context.getString(R.string.signin_tls_error)
                                         }
                                     }
                                 }
@@ -267,7 +264,7 @@ internal fun ServerSignInDialog(
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Retry")
+                                        Text(stringResource(R.string.common_retry))
                                     }
                                 }
                             } else if (state.isVerifying) {
@@ -279,7 +276,7 @@ internal fun ServerSignInDialog(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.padding(bottom = 8.dp))
-                                    Text("Checking your sign-in with the server…")
+                                    Text(stringResource(R.string.signin_checking))
                                 }
                             }
                         }
@@ -312,9 +309,9 @@ internal fun OidcSignInDialog(
         Scaffold(
             topBar = {
                 BookOrbitTopBar(
-                    title = "SSO sign-in",
+                    title = stringResource(R.string.signin_sso_title),
                     showBrand = false,
-                    actions = { TextButton(onClick = onClose) { Text("Close") } }
+                    actions = { TextButton(onClick = onClose) { Text(stringResource(R.string.common_close)) } }
                 )
             }
         ) { padding ->
@@ -335,31 +332,31 @@ internal fun OidcSignInDialog(
                         when {
                             state.isExchanging -> {
                                 CircularProgressIndicator()
-                                Text("Completing sign-in…")
+                                Text(stringResource(R.string.signin_completing))
                             }
                             state.isLoading -> {
                                 CircularProgressIndicator()
-                                Text("Loading available sign-in providers…")
+                                Text(stringResource(R.string.signin_loading_providers))
                             }
                             state.providers.isNotEmpty() -> {
-                                Text("Choose a sign-in provider.")
+                                Text(stringResource(R.string.signin_choose_provider))
                                 state.providers.forEach { provider ->
                                     Button(
                                         onClick = { onProviderSelected(provider) },
                                         enabled = !state.isExchanging,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Sign in with ${provider.label}")
+                                        Text(stringResource(R.string.signin_sign_in_with_provider, provider.label))
                                     }
                                 }
                             }
                             else -> {
                                 OrbitMessage(
-                                    state.error ?: "No SSO provider is enabled on this server.",
+                                    state.error ?: stringResource(R.string.signin_no_sso_provider),
                                     tone = OrbitMessageTone.ERROR
                                 )
                                 Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Retry")
+                                    Text(stringResource(R.string.common_retry))
                                 }
                             }
                         }
@@ -421,7 +418,7 @@ internal fun OidcSignInDialog(
                                         super.onReceivedError(view, request, error)
                                         if (request.isForMainFrame) {
                                             isLoading = false
-                                            loadError = "The SSO sign-in page could not be loaded. Check your connection and try again."
+                                            loadError = context.getString(R.string.signin_sso_page_load_failed)
                                         }
                                     }
 
@@ -432,7 +429,7 @@ internal fun OidcSignInDialog(
                                     ) {
                                         handler.cancel()
                                         isLoading = false
-                                        loadError = "The server's TLS certificate could not be validated."
+                                        loadError = context.getString(R.string.signin_tls_error)
                                     }
                                 }
                             }
@@ -483,7 +480,10 @@ internal fun OidcSignInDialog(
                         ) {
                             CircularProgressIndicator()
                             if (state.isExchanging) {
-                                Text("Completing sign-in…", modifier = Modifier.padding(top = 8.dp))
+                                Text(
+                                    stringResource(R.string.signin_completing),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
                             }
                         }
                     }
@@ -498,7 +498,7 @@ internal fun OidcSignInDialog(
                         ) {
                             OrbitMessage(message, tone = OrbitMessageTone.ERROR)
                             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
-                                Text("Retry")
+                                Text(stringResource(R.string.common_retry))
                             }
                         }
                     }

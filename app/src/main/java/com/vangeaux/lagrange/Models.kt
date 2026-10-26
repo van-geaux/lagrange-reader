@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import android.content.Context
+import androidx.annotation.StringRes
 import java.io.File
 import java.util.Locale
 
@@ -96,6 +98,18 @@ internal val KOMGA_READ_STATUS_OPTIONS: List<BookReadStatus> = listOf(
     BookReadStatus.UNREAD,
     BookReadStatus.READ
 )
+
+@StringRes
+internal fun BookReadStatus.displayLabelRes(): Int = when (this) {
+    BookReadStatus.UNREAD -> R.string.browse_status_unread
+    BookReadStatus.WANT_TO_READ -> R.string.browse_want_to_read
+    BookReadStatus.READING -> R.string.browse_reading
+    BookReadStatus.REREADING -> R.string.browse_status_rereading
+    BookReadStatus.ON_HOLD -> R.string.browse_status_on_hold
+    BookReadStatus.ABANDONED -> R.string.browse_abandoned
+    BookReadStatus.READ -> R.string.browse_read
+    BookReadStatus.SKIMMED -> R.string.browse_skimmed
+}
 
 internal fun BookReadStatus.displayLabel(): String = when (this) {
     BookReadStatus.UNREAD -> "Unread"
@@ -439,6 +453,35 @@ data class AvailableFileLabel(
     val metadata: String
 )
 
+@StringRes
+internal fun availableFileUnknownFormatRes(): Int = R.string.browse_file_unknown_format
+
+@StringRes
+internal fun availableFileUnnamedRes(): Int = R.string.browse_file_unnamed
+
+@StringRes
+internal fun availableFileUnknownNameRes(): Int = R.string.browse_unknown_file
+
+@StringRes
+internal fun availableFileRoleLabelRes(role: String?): Int =
+    if (role.equals("primary", ignoreCase = true)) {
+        R.string.browse_file_role_primary
+    } else {
+        R.string.browse_file_role_alternate
+    }
+
+@StringRes
+internal fun availableFileSizeUnavailableRes(): Int = R.string.browse_file_size_unavailable
+
+@StringRes
+internal fun availableFileDuplicateSuffixRes(): Int = R.string.browse_file_duplicate_suffix
+
+@StringRes
+internal fun availableFileCountOneRes(): Int = R.string.browse_file_count_one
+
+@StringRes
+internal fun availableFileCountManyRes(): Int = R.string.browse_file_count_many
+
 internal fun availableFileDisplayLabels(options: List<BookFileOption>): Map<String, AvailableFileLabel> {
     val baseLabels = options.associateWith { option ->
         val format = option.format
@@ -617,13 +660,15 @@ data class BookAnnotationsPage(
     val pageSize: Int? = null
 )
 
-internal fun BookAnnotation.toBookSummary(): BookSummary {
+internal fun BookAnnotation.toBookSummary(context: Context? = null): BookSummary {
     val format = jumpFileFormat?.takeIf { it.isNotBlank() }
     return BookSummary(
         libraryId = "",
         id = bookId,
         fileId = jumpFileId,
-        title = bookTitle ?: "Unknown book",
+        title = bookTitle
+            ?: context?.getString(R.string.polish_unknown_book)
+            ?: "Unknown book",
         author = author,
         format = format,
         mediaKind = BookOrbitPayloadParser.inferMediaKind(format, bookTitle),

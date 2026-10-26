@@ -34,7 +34,7 @@ internal class KavitaDownloadModuleImpl(
         onProgress: (Float?) -> Unit
     ): File =
         withContext(Dispatchers.IO) {
-            val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+            val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
             val fileId = book.fileId ?: chapterId(book)
             val profileId = ServerProfileStore(appContext).activeId().orEmpty()
             val currentStorageScopeId = downloadStorageScopeId(appContext, base, profileId)
@@ -116,7 +116,7 @@ internal class KavitaDownloadModuleImpl(
                 throw CancellationException("This download was replaced by a newer request.")
             }
             if (temporary.exists() && !temporary.delete()) {
-                throw UserFacingException("Unable to replace the interrupted download stage.")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_download_stage_replace, "Unable to replace the interrupted download stage."))
             }
             requireCapturedAccountScope()
             val request = Request.Builder()
@@ -133,7 +133,7 @@ internal class KavitaDownloadModuleImpl(
                         throw HttpRequestException(response.code, "download the Kavita chapter")
                     }
                     val body = response.body
-                        ?: throw UserFacingException("Kavita returned an empty chapter file.")
+                        ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_empty_chapter, "Kavita returned an empty chapter file."))
                     val total = body.contentLength().takeIf { it > 0L }
                     if (total != null && downloadIsIndividuallyOverCap(
                             total,
@@ -222,12 +222,12 @@ internal class KavitaDownloadModuleImpl(
                         }
                     }
                     if (!temporary.isFile || temporary.length() <= 0L) {
-                        throw UserFacingException("Kavita returned an empty chapter file.")
+                        throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_empty_chapter, "Kavita returned an empty chapter file."))
                     }
                     if (!downloadedFilePassesIntegrity(book, temporary)) {
                         val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
                         throw UserFacingException(
-                            "The downloaded Kavita file did not pass integrity checks.$suffix"
+                            auth.localizedMessage(if (hadUsableExisting) R.string.perror_kavita_download_integrity_kept else R.string.perror_kavita_download_integrity, "The downloaded Kavita file did not pass integrity checks.$suffix")
                         )
                     }
                     onProgress(1f)
@@ -304,5 +304,5 @@ internal class KavitaDownloadModuleImpl(
 
     private fun chapterId(book: BookSummary): String = book.id.removePrefix("chapter:")
         .substringBefore(':')
-        .ifBlank { throw UserFacingException("Kavita chapter identity is unavailable.") }
+        .ifBlank { throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_chapter_identity, "Kavita chapter identity is unavailable.")) }
 }

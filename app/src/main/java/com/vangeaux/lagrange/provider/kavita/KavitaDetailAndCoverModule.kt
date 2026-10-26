@@ -14,7 +14,7 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
     private val client = OkHttpClient()
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
-        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         val chapterId = book.id.removePrefix("chapter:").substringBefore(':').ifBlank {
             book.fileId ?: book.id.substringAfterLast(':')
         }
@@ -26,11 +26,11 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita chapter details (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_chapter_details_http, "Unable to load Kavita chapter details (HTTP ${response.code}).", response.code))
             }
             val chapter = JSONObject(payload)
             val projection = kavitaChapterProjection(chapter)
-                ?: throw UserFacingException("Kavita returned an invalid chapter response.")
+                ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_invalid_chapter, "Kavita returned an invalid chapter response."))
             val resolvedBook = book.copy(
                 id = book.id,
                 fileId = projection.fileId,
@@ -104,7 +104,7 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
     override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = null
 
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
-        throw UserFacingException("Kavita book ratings are not implemented yet.")
+        throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_ratings_unimplemented, "Kavita book ratings are not implemented yet."))
 }
 
 internal class KavitaCoverModuleImpl(private val auth: KavitaAuthModule) : BookCoverModule {

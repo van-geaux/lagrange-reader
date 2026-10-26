@@ -13,6 +13,7 @@ import android.util.DisplayMetrics
 import android.util.LruCache
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
@@ -161,6 +162,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.layout.WindowInsets
@@ -227,15 +229,15 @@ internal enum class BrowserDestination {
     OPTIONS,
     ABOUT
 }
-enum class HomeSection(val title: String) {
-    CURRENTLY_READING("Currently reading"),
-    ON_DECK("On deck"),
-    WANT_TO_READ("Want to read"),
-    RECENTLY_ADDED_BOOKS("Recently added books"),
-    RECENTLY_RELEASED_BOOKS("Recently released books"),
-    RECENTLY_ADDED_SERIES("Recently added series"),
-    RECENTLY_UPDATED_SERIES("Recently updated series"),
-    RECENTLY_READ("Recently read books")
+enum class HomeSection(val title: String, @StringRes val titleRes: Int) {
+    CURRENTLY_READING("Currently reading", R.string.browse_currently_reading),
+    ON_DECK("On deck", R.string.browse_on_deck),
+    WANT_TO_READ("Want to read", R.string.browse_want_to_read),
+    RECENTLY_ADDED_BOOKS("Recently added books", R.string.browse_recently_added_books),
+    RECENTLY_RELEASED_BOOKS("Recently released books", R.string.browse_recently_released_books),
+    RECENTLY_ADDED_SERIES("Recently added series", R.string.browse_recently_added_series),
+    RECENTLY_UPDATED_SERIES("Recently updated series", R.string.browse_recently_updated_series),
+    RECENTLY_READ("Recently read books", R.string.browse_recently_read_books)
 }
 
 internal fun HomeSection.recentBooksFilter(): BookBrowseFilter = when (this) {
@@ -321,15 +323,34 @@ private enum class OptionsDialog {
     LIBRARY_CARD_SIZE,
     CELLULAR_DOWNLOADS,
     BACKGROUND_REFRESH,
+    LANGUAGE,
     CLEAR_CACHE
 }
 
-private enum class OptionsCategory(val title: String, val summary: String) {
-    APPEARANCE("Appearance", "Theme, motion, and browsing presentation"),
-    GENERAL("General", "Opening behavior, orientation, and general preferences"),
-    LIBRARY("Library", "Browsing and library presentation"),
-    DOWNLOADS_OFFLINE("Downloads & Offline", "Downloads, storage, and offline library data"),
-    NETWORK_SYNC("Network & Sync", "Background network and playback behavior")
+private enum class OptionsCategory(
+    @StringRes val titleRes: Int,
+    @StringRes val summaryRes: Int
+) {
+    APPEARANCE(
+        R.string.settings_category_appearance,
+        R.string.settings_category_appearance_summary
+    ),
+    GENERAL(
+        R.string.settings_category_general,
+        R.string.settings_category_general_summary
+    ),
+    LIBRARY(
+        R.string.settings_category_library,
+        R.string.settings_category_library_summary
+    ),
+    DOWNLOADS_OFFLINE(
+        R.string.settings_category_downloads,
+        R.string.settings_category_downloads_summary
+    ),
+    NETWORK_SYNC(
+        R.string.settings_category_network,
+        R.string.settings_category_network_summary
+    )
 }
 
 internal enum class ReaderConfigurationFormat {
@@ -338,11 +359,13 @@ internal enum class ReaderConfigurationFormat {
     COMIC
 }
 
-internal fun ReaderConfigurationFormat.tapZoneTutorialPreferenceTitle(): String = when (this) {
-    ReaderConfigurationFormat.EPUB -> "Show EPUB tap-zone tutorial after changes"
-    ReaderConfigurationFormat.PDF -> "Show PDF tap-zone tutorial after changes"
-    ReaderConfigurationFormat.COMIC -> "Show comic tap-zone tutorial after changes"
+@StringRes
+internal fun ReaderConfigurationFormat.tapZoneTutorialPreferenceTitleRes(): Int = when (this) {
+    ReaderConfigurationFormat.EPUB -> R.string.settings_tap_zone_tutorial_epub
+    ReaderConfigurationFormat.PDF -> R.string.settings_tap_zone_tutorial_pdf
+    ReaderConfigurationFormat.COMIC -> R.string.settings_tap_zone_tutorial_comic
 }
+
 private val CATALOG_GRID_PADDING = 16.dp
 private val CATALOG_JUMP_RAIL_END_PADDING = 32.dp
 
@@ -661,7 +684,7 @@ private fun SeriesFileSelectionDialog(
     onSelectedFileIdsChange: (Set<String>) -> Unit,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
-    title: String = "Select downloads"
+    title: String? = null
 ) {
     val libraryNames = remember(libraries) { libraries.associate { it.id to it.name } }
     val groups = remember(candidates, libraryNames) {
@@ -690,20 +713,27 @@ private fun SeriesFileSelectionDialog(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
             Text(
-                "$selectedCount of ${selectableIds.size} files selected",
+                title ?: stringResource(R.string.browse_select_downloads),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                stringResource(
+                    R.string.browse_files_selected,
+                    selectedCount,
+                    selectableIds.size
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = { onSelectedFileIdsChange(selectableIds) },
                     modifier = Modifier.testTag("bulk-download-select-all")
-                ) { Text("Select all") }
+                ) { Text(stringResource(R.string.browse_select_all)) }
                 TextButton(
                     onClick = { onSelectedFileIdsChange(emptySet()) },
                     modifier = Modifier.testTag("bulk-download-clear-all")
-                ) { Text("Clear all") }
+                ) { Text(stringResource(R.string.browse_clear_all)) }
             }
             if (groupingMode != SeriesGroupingMode.NONE) {
                 SeriesGroupingControls(groupingMode, onGroupingModeChange)
@@ -734,7 +764,13 @@ private fun SeriesFileSelectionDialog(
                                 )
                             },
                             supportingContent = {
-                                Text(if (selectable) group.label else "Downloaded")
+                                Text(
+                                    if (selectable) {
+                                        group.label
+                                    } else {
+                                        stringResource(R.string.browse_downloaded)
+                                    }
+                                )
                             },
                             leadingContent = {
                                 Checkbox(
@@ -756,7 +792,7 @@ private fun SeriesFileSelectionDialog(
                 onClick = onConfirm,
                 enabled = selectedCount > 0,
                 modifier = Modifier.fillMaxWidth().testTag("bulk-download-continue")
-            ) { Text("Continue") }
+            ) { Text(stringResource(R.string.common_continue)) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -774,9 +810,23 @@ private fun CollectionDownloadProgressIndicator(
     ) {
         Text(
             state.progress?.let { progress ->
-                "Downloading ${state.totalCount} ${if (state.totalCount == 1) "file" else "files"} · " +
-                    "${(progress * 100).toInt()}%"
-            } ?: "Downloading ${state.totalCount} ${if (state.totalCount == 1) "file" else "files"}…",
+                stringResource(
+                    if (state.totalCount == 1) {
+                        R.string.browse_downloading_file_progress
+                    } else {
+                        R.string.browse_downloading_files_progress
+                    },
+                    state.totalCount,
+                    (progress * 100).toInt()
+                )
+            } ?: stringResource(
+                if (state.totalCount == 1) {
+                    R.string.browse_downloading_file
+                } else {
+                    R.string.browse_downloading_files
+                },
+                state.totalCount
+            ),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -799,6 +849,10 @@ internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, In
 
 internal fun seriesBookCountLabel(count: Int): String =
     "$count ${if (count == 1) "book" else "books"}"
+
+@StringRes
+internal fun seriesBookCountLabelRes(count: Int): Int =
+    if (count == 1) R.string.browse_book_count_one else R.string.browse_books_count
 
 internal fun localBooksShelf(
     books: List<BookSummary>,
@@ -1035,7 +1089,7 @@ internal fun NativeLibraryBrowserScreen(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     epubImageLibrarySourceLoader: suspend (BookSummary, Boolean) -> EpubImageLibrarySourceResult =
-        { _, _ -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.") },
+        { _, _ -> EpubImageLibrarySourceResult.Unavailable("") },
     onDownloadForEpubImageLibrary: (BookSummary, (BookSummary) -> Unit) -> Unit = { _, _ -> },
     sessionHistoryLoader: suspend (BookSummary) -> List<AudiobookSessionEvent> = { emptyList() },
     onSessionHistoryEntryClick: (BookSummary, Long) -> Unit = { _, _ -> },
@@ -1293,7 +1347,11 @@ internal fun NativeLibraryBrowserScreen(
         selectedSeriesKey = null
         selectedAuthor = null
     }
-    val sessionActionLabel = if (state.isOfflineSnapshot) "Sign in" else "Log out"
+    val sessionActionLabel = if (state.isOfflineSnapshot) {
+        stringResource(R.string.common_sign_in)
+    } else {
+        stringResource(R.string.browse_log_out)
+    }
     val openOptions = {
         showProfileMenu = false
         showMoreMenu = false
@@ -1464,10 +1522,25 @@ internal fun NativeLibraryBrowserScreen(
         val isUpdate = book.hasDownloadUpdate
         AlertDialog(
             onDismissRequest = { pendingCellularDownload = null },
-            title = { Text(if (isUpdate) "Update local copy using cellular data?" else "Download using cellular data?") },
-            text = {
+            title = {
                 Text(
-                    "${if (isUpdate) "Updating" else "Downloading"} ${book.title} may use a significant amount of mobile data."
+                    if (isUpdate) {
+                        stringResource(R.string.browse_update_over_cellular_title)
+                    } else {
+                        stringResource(R.string.browse_download_over_cellular_title)
+                    }
+                )
+            },
+            text = {
+                val actionLabel = stringResource(
+                    if (isUpdate) R.string.browse_updating else R.string.browse_downloading
+                )
+                Text(
+                    stringResource(
+                        R.string.browse_cellular_message,
+                        actionLabel,
+                        book.title
+                    )
                 )
             },
             confirmButton = {
@@ -1478,21 +1551,32 @@ internal fun NativeLibraryBrowserScreen(
                         onDownload = onDownload,
                         onDownloadSingleFile = onDownloadSingleFile
                     )
-                }) { Text(if (isUpdate) "Update local" else "Download") }
+                }) {
+                    Text(
+                        if (isUpdate) {
+                            stringResource(R.string.browse_update_local)
+                        } else {
+                            stringResource(R.string.browse_download)
+                        }
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { pendingCellularDownload = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingCellularDownload = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
     pendingCellularBulkDownload?.let { pending ->
         AlertDialog(
             onDismissRequest = { pendingCellularBulkDownload = null },
-            title = { Text("Download using cellular data?") },
+            title = { Text(stringResource(R.string.browse_download_over_cellular_title)) },
             text = {
                 Text(
-                    "Downloading ${pending.books.size} ${if (pending.books.size == 1) "file" else "files"} for ${pending.scopeLabel} " +
-                        "may use a significant amount of mobile data."
+                    stringResource(
+                        R.string.browse_cellular_bulk_message,
+                        pending.books.size,
+                        pending.scopeLabel
+                    )
                 )
             },
             confirmButton = {
@@ -1502,28 +1586,30 @@ internal fun NativeLibraryBrowserScreen(
                         pending.books.forEach(onDownload)
                     },
                     modifier = Modifier.testTag("confirm-bulk-cellular-download")
-                ) { Text("Download") }
+                ) { Text(stringResource(R.string.browse_download)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingCellularBulkDownload = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingCellularBulkDownload = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
     if (showCellularDownloadBlocked) {
         AlertDialog(
             onDismissRequest = { showCellularDownloadBlocked = false },
-            title = { Text("Cellular downloads are disabled") },
-            text = { Text("Change Downloads over cellular in Options to download on this network.") },
+            title = { Text(stringResource(R.string.browse_cellular_disabled)) },
+            text = { Text(stringResource(R.string.browse_cellular_disabled_summary)) },
             confirmButton = {
-                TextButton(onClick = { showCellularDownloadBlocked = false }) { Text("OK") }
+                TextButton(onClick = { showCellularDownloadBlocked = false }) { Text(stringResource(R.string.browse_ok)) }
             }
         )
     }
     pendingLocalDelete?.let { book ->
         AlertDialog(
             onDismissRequest = { pendingLocalDelete = null },
-            title = { Text("Delete local copy?") },
-            text = { Text("${book.title} will be removed from this device. Your BookOrbit book is not deleted.") },
+            title = { Text(stringResource(R.string.browse_delete_local_copy_title)) },
+            text = {
+                Text(stringResource(R.string.browse_remove_book_message, book.title))
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1536,27 +1622,27 @@ internal fun NativeLibraryBrowserScreen(
                         pendingSingleLocalDelete = false
                     },
                     modifier = Modifier.testTag("confirm-delete-local-copy")
-                ) { Text("Delete local") }
+                ) { Text(stringResource(R.string.browse_delete_local)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingLocalDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingLocalDelete = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
     if (showChangeServerEditor) {
         AlertDialog(
             onDismissRequest = { showChangeServerEditor = false },
-            title = { Text("Change server") },
+            title = { Text(stringResource(R.string.common_change_server)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Choose a configured server or add a new one.")
+                    Text(stringResource(R.string.browse_choose_server))
                     Button(
                         onClick = {
                             showChangeServerEditor = false
                             onNewServer()
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("New server") }
+                    ) { Text(stringResource(R.string.browse_new_server)) }
                     configuredServerProfiles.forEach { profile ->
                             val isCurrent = profile.id == state.profileId
                             ConfiguredServerCard(
@@ -1574,15 +1660,22 @@ internal fun NativeLibraryBrowserScreen(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showChangeServerEditor = false }) { Text("Cancel") }
+                TextButton(onClick = { showChangeServerEditor = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
     pendingServerRemoval?.let { profile ->
         AlertDialog(
             onDismissRequest = { pendingServerRemoval = null },
-            title = { Text("Remove configured server?") },
-            text = { Text("Remove ${profile.displayName} from the configured server list?") },
+            title = { Text(stringResource(R.string.browse_remove_server_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.browse_remove_server_message,
+                        profile.displayName
+                    )
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1591,10 +1684,10 @@ internal fun NativeLibraryBrowserScreen(
                         serverProfilesRevision += 1
                     },
                     modifier = Modifier.testTag("confirm-remove-server")
-                ) { Text("Remove") }
+                ) { Text(stringResource(R.string.browse_remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingServerRemoval = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingServerRemoval = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -1609,12 +1702,12 @@ internal fun NativeLibraryBrowserScreen(
         topBar = {
             when {
                 isSearchOpen -> BrowserTopBar(
-                    title = "Search",
+                    title = stringResource(R.string.browse_search),
                     navigationIcon = {
                         TextButton(onClick = {
                             isSearchOpen = false
                             query = ""
-                        }) { Text("Back") }
+                        }) { Text(stringResource(R.string.browse_back)) }
                     },
                     onSearch = {},
                     onProfile = { showProfileMenu = true },
@@ -1636,13 +1729,16 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 activeBookGenre != null -> BrowserTopBar(
-                    title = "Books · ${activeBookGenre!!}",
+                    title = stringResource(
+                        R.string.browse_books_genre_title,
+                        activeBookGenre!!
+                    ),
                     navigationIcon = {
                         TextButton(onClick = {
                             activeBookGenre = null
                             selectedBook = genreSourceBook
                             genreSourceBook = null
-                        }) { Text("Back") }
+                        }) { Text(stringResource(R.string.browse_back)) }
                     },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
@@ -1660,13 +1756,16 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 activeSeriesGenre != null -> BrowserTopBar(
-                    title = "Series · ${activeSeriesGenre!!}",
+                    title = stringResource(
+                        R.string.browse_series_genre_title,
+                        activeSeriesGenre!!
+                    ),
                     navigationIcon = {
                         TextButton(onClick = {
                             activeSeriesGenre = null
                             selectedSeriesKey = genreSourceSeriesKey
                             genreSourceSeriesKey = null
-                        }) { Text("Back") }
+                        }) { Text(stringResource(R.string.browse_back)) }
                     },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
@@ -1684,9 +1783,9 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 selectedBook == null && destination.toHomeSection() != null -> BrowserTopBar(
-                    title = destination.toHomeSection()!!.title,
+                    title = stringResource(destination.toHomeSection()!!.titleRes),
                     navigationIcon = {
-                        TextButton(onClick = { destination = homeSectionReturnDestination }) { Text("Back") }
+                        TextButton(onClick = { destination = homeSectionReturnDestination }) { Text(stringResource(R.string.browse_back)) }
                     },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
@@ -1707,8 +1806,8 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 selectedBook != null -> BrowserTopBar(
-                    title = "Book details",
-                    navigationIcon = { TextButton(onClick = { selectedBook = null }) { Text("Back") } },
+                    title = stringResource(R.string.browse_book_details),
+                    navigationIcon = { TextButton(onClick = { selectedBook = null }) { Text(stringResource(R.string.browse_back)) } },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
                     profileExpanded = showProfileMenu,
@@ -1728,8 +1827,8 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 selectedSeriesKey != null -> BrowserTopBar(
-                    title = "Series",
-                    navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text("Back") } },
+                    title = stringResource(R.string.browse_series),
+                    navigationIcon = { TextButton(onClick = { selectedSeriesKey = null }) { Text(stringResource(R.string.browse_back)) } },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
                     profileExpanded = showProfileMenu,
@@ -1749,8 +1848,8 @@ internal fun NativeLibraryBrowserScreen(
                     onChangeServer = openChangeServerEditor
                 )
                 selectedAuthor != null -> BrowserTopBar(
-                    title = "Author",
-                    navigationIcon = { TextButton(onClick = { selectedAuthor = null; destination = BrowserDestination.AUTHORS }) { Text("Back") } },
+                    title = stringResource(R.string.browse_author),
+                    navigationIcon = { TextButton(onClick = { selectedAuthor = null; destination = BrowserDestination.AUTHORS }) { Text(stringResource(R.string.browse_back)) } },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
                     profileExpanded = showProfileMenu,
@@ -1772,18 +1871,19 @@ internal fun NativeLibraryBrowserScreen(
                 else -> BrowserTopBar(
                     title = when {
                         destination == BrowserDestination.LIBRARY && !showLibraryPicker ->
-                            state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name ?: "Library"
-                        destination == BrowserDestination.LIBRARY -> "Libraries"
+                            state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
+                                ?: stringResource(R.string.browse_library)
+                        destination == BrowserDestination.LIBRARY -> stringResource(R.string.browse_libraries)
                         destination == BrowserDestination.SERIES && selectedSmartScope != null -> selectedSmartScope!!.name
-                        destination == BrowserDestination.SERIES -> "Series"
-                        destination == BrowserDestination.SMART_SCOPES -> "Smart scopes"
-                        destination == BrowserDestination.AUTHORS -> "Authors"
-                        destination == BrowserDestination.ANNOTATIONS -> "Annotations"
-                        destination == BrowserDestination.LOCAL_BOOKS -> "Local books"
-                        destination == BrowserDestination.ACHIEVEMENTS -> "Achievements"
-                        destination == BrowserDestination.OPTIONS -> "Options"
-                        destination == BrowserDestination.ABOUT -> "About"
-                        else -> "Home"
+                        destination == BrowserDestination.SERIES -> stringResource(R.string.browse_series)
+                        destination == BrowserDestination.SMART_SCOPES -> stringResource(R.string.browse_smart_scopes)
+                        destination == BrowserDestination.AUTHORS -> stringResource(R.string.browse_authors)
+                        destination == BrowserDestination.ANNOTATIONS -> stringResource(R.string.browse_annotations)
+                        destination == BrowserDestination.LOCAL_BOOKS -> stringResource(R.string.browse_local_books)
+                        destination == BrowserDestination.ACHIEVEMENTS -> stringResource(R.string.browse_achievements)
+                        destination == BrowserDestination.OPTIONS -> stringResource(R.string.browse_options)
+                        destination == BrowserDestination.ABOUT -> stringResource(R.string.browse_about)
+                        else -> stringResource(R.string.browse_home)
                     },
                     onSearch = { isSearchOpen = true },
                     onProfile = { showProfileMenu = true },
@@ -2314,12 +2414,12 @@ private fun BrowserTopBar(
         actions = {
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
+                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.browse_search))
                 }
             }
             Box {
                 IconButton(onClick = onProfile) {
-                    Icon(Icons.Default.Person, contentDescription = "User profile")
+                    Icon(Icons.Default.Person, contentDescription = stringResource(R.string.browse_user_profile))
                 }
                 DropdownMenu(
                     expanded = profileExpanded,
@@ -2327,7 +2427,7 @@ private fun BrowserTopBar(
                 ) {
                     if (showStatistics) {
                         DropdownMenuItem(
-                            text = { Text("Statistics") },
+                            text = { Text(stringResource(R.string.browse_statistics)) },
                             leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
                             onClick = {
                                 onDismissProfile()
@@ -2337,7 +2437,7 @@ private fun BrowserTopBar(
                     }
                     if (showAchievements) {
                         DropdownMenuItem(
-                            text = { Text("Achievements") },
+                            text = { Text(stringResource(R.string.browse_achievements)) },
                             leadingIcon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
                             onClick = {
                                 onDismissProfile()
@@ -2346,7 +2446,7 @@ private fun BrowserTopBar(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("FAQ") },
+                        text = { Text(stringResource(R.string.browse_faq)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null) },
                         onClick = {
                             onDismissProfile()
@@ -2354,9 +2454,9 @@ private fun BrowserTopBar(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Options") },
+                        text = { Text(stringResource(R.string.browse_options)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Settings, contentDescription = "Options icon")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.browse_cd_options))
                         },
                         onClick = {
                             onDismissProfile()
@@ -2364,7 +2464,7 @@ private fun BrowserTopBar(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("About") },
+                        text = { Text(stringResource(R.string.browse_about)) },
                         leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
                         onClick = {
                             onDismissProfile()
@@ -2377,7 +2477,7 @@ private fun BrowserTopBar(
                             .testTag("profile-session-divider")
                     )
                     DropdownMenuItem(
-                        text = { Text("Change server") },
+                        text = { Text(stringResource(R.string.common_change_server)) },
                         leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
                         onClick = onChangeServer
                     )
@@ -2404,13 +2504,13 @@ private fun BrowserBottomNavigation(
             selected = destination == BrowserDestination.HOME,
             onClick = onHome,
             icon = { Icon(Icons.Default.Home, contentDescription = null) },
-            label = { Text("Home") }
+            label = { Text(stringResource(R.string.browse_home)) }
         )
         NavigationBarItem(
             selected = destination == BrowserDestination.LIBRARY,
             onClick = onLibraries,
-            icon = { Icon(Icons.Default.LocalLibrary, contentDescription = "Libraries icon") },
-            label = { Text("Libraries") }
+            icon = { Icon(Icons.Default.LocalLibrary, contentDescription = stringResource(R.string.browse_cd_libraries)) },
+            label = { Text(stringResource(R.string.browse_libraries)) }
         )
         NavigationBarItem(
             selected = destination == BrowserDestination.SERIES ||
@@ -2423,7 +2523,7 @@ private fun BrowserBottomNavigation(
                 destination == BrowserDestination.ABOUT,
             onClick = onMore,
             icon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
-            label = { Text("More") }
+            label = { Text(stringResource(R.string.browse_more)) }
         )
     }
 }
@@ -2444,37 +2544,37 @@ private fun MoreMenu(
             .padding(top = 16.dp, bottom = 72.dp)
     ) {
         Text(
-            "More",
+            stringResource(R.string.browse_more),
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             style = MaterialTheme.typography.headlineSmall
         )
         ListItem(
-            headlineContent = { Text("Series") },
-            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Series icon") },
+            headlineContent = { Text(stringResource(R.string.browse_series)) },
+            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_series)) },
             modifier = Modifier.clickable(onClick = onSeries)
         )
         if (smartScopesAvailable) {
             ListItem(
-                headlineContent = { Text("Smart scopes") },
-                leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Smart scopes icon") },
+                headlineContent = { Text(stringResource(R.string.browse_smart_scopes)) },
+                leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_smart_scopes)) },
                 modifier = Modifier.clickable(onClick = onSmartScopes)
             )
         }
         if (authorsAvailable) {
             ListItem(
-                headlineContent = { Text("Authors") },
-                leadingContent = { Icon(Icons.Default.Groups, contentDescription = "Authors icon") },
+                headlineContent = { Text(stringResource(R.string.browse_authors)) },
+                leadingContent = { Icon(Icons.Default.Groups, contentDescription = stringResource(R.string.browse_cd_authors)) },
                 modifier = Modifier.clickable(onClick = onAuthors)
             )
         }
         ListItem(
-            headlineContent = { Text("Annotations") },
-            leadingContent = { Icon(Icons.Default.Highlight, contentDescription = "Annotations icon") },
+            headlineContent = { Text(stringResource(R.string.browse_annotations)) },
+            leadingContent = { Icon(Icons.Default.Highlight, contentDescription = stringResource(R.string.browse_cd_annotations)) },
             modifier = Modifier.clickable(onClick = onAnnotations)
         )
         ListItem(
-            headlineContent = { Text("Local books") },
-            leadingContent = { Icon(Icons.Default.DownloadForOffline, contentDescription = "Local books icon") },
+            headlineContent = { Text(stringResource(R.string.browse_local_books)) },
+            leadingContent = { Icon(Icons.Default.DownloadForOffline, contentDescription = stringResource(R.string.browse_cd_local_books)) },
             modifier = Modifier
                 .testTag("more-menu-last-item")
                 .clickable(onClick = onLocalBooks)
@@ -2505,14 +2605,14 @@ private fun SearchLayerContent(
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            placeholder = { Text("Search your library") },
+            placeholder = { Text(stringResource(R.string.browse_search_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
         )
         if (query.isBlank()) {
             Text(
-                "Search across all accessible books.",
+                stringResource(R.string.browse_search_summary),
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -2548,17 +2648,17 @@ private fun LibraryPickerScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Choose a library", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.browse_choose_library), style = MaterialTheme.typography.headlineSmall)
             Text(
-                "Select which library to browse.",
+                stringResource(R.string.browse_choose_library_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (state.isLoadingLibraries) {
-            item { LoadingFeedRow("Loading libraries...") }
+            item { LoadingFeedRow(stringResource(R.string.browse_loading_libraries)) }
         }
         if (!state.isLoadingLibraries && state.libraries.isEmpty()) {
-            item { Text("No libraries found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(stringResource(R.string.browse_no_libraries_found), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(state.libraries, key = { "library-picker-${it.id}" }) { library ->
             Card(
@@ -2598,11 +2698,11 @@ private fun SmartScopesScreen(
             .onFailure { error = true }
     }
     LazyColumn(modifier = modifier.fillMaxSize().testTag("smart_scopes_screen"), contentPadding = PaddingValues(16.dp)) {
-        item { Text("Smart scopes", style = MaterialTheme.typography.headlineSmall) }
+        item { Text(stringResource(R.string.browse_smart_scopes), style = MaterialTheme.typography.headlineSmall) }
         when {
-            scopes == null && !error -> item { LoadingFeedRow("Loading smart scopes...") }
-            error -> item { Text("Unable to load smart scopes.", color = MaterialTheme.colorScheme.error) }
-            scopes.orEmpty().isEmpty() -> item { Text("No smart scopes found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            scopes == null && !error -> item { LoadingFeedRow(stringResource(R.string.browse_loading_smart_scopes)) }
+            error -> item { Text(stringResource(R.string.browse_smart_scopes_load_failed), color = MaterialTheme.colorScheme.error) }
+            scopes.orEmpty().isEmpty() -> item { Text(stringResource(R.string.browse_no_smart_scopes), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             else -> items(scopes.orEmpty(), key = { "smart-scope-${it.id}" }) { scope ->
                 ListItem(headlineContent = { Text(scope.name) }, modifier = Modifier.testTag("smart_scope_${scope.id}").clickable { onSelected(scope) })
             }
@@ -2730,11 +2830,23 @@ private fun SeriesCatalogScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                if (selectedScope != null) "${selectedScope.name} · $total series" else if (total > 0) "$total series" else "Browse every accessible series",
+                if (selectedScope != null) {
+                    stringResource(R.string.browse_scope_series_count, selectedScope.name, total)
+                } else if (total > 0) {
+                    stringResource(R.string.browse_series_count, total)
+                } else {
+                    stringResource(R.string.browse_browse_every_series)
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedButton(onClick = { showFilter = true }) {
-                Text(if (filter.isActive) "Filter · active" else "Filter")
+                Text(
+                    if (filter.isActive) {
+                        stringResource(R.string.browse_filter_active)
+                    } else {
+                        stringResource(R.string.browse_filter)
+                    }
+                )
             }
         }
         Box(
@@ -2755,11 +2867,15 @@ private fun SeriesCatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading series...") }
+        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow(stringResource(R.string.browse_loading_series)) }
         if (!isLoading && items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
-                    if (loadError) "Unable to load series." else "No series found.",
+                    if (loadError) {
+                        stringResource(R.string.browse_series_load_failed)
+                    } else {
+                        stringResource(R.string.browse_no_series)
+                    },
                     color = if (loadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -2778,7 +2894,7 @@ private fun SeriesCatalogScreen(
                 ) {
                     CatalogImage(
                         url = series.coverUrl,
-                        label = "Cover for ${series.name}",
+                        label = stringResource(R.string.browse_cover_for, series.name),
                         loader = imageLoader,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
                     )
@@ -2791,7 +2907,11 @@ private fun SeriesCatalogScreen(
                         Text(series.authors.joinToString(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(
-                        "${series.bookCount} books · ${series.readCount} read",
+                        stringResource(
+                            R.string.browse_series_books_read,
+                            series.bookCount,
+                            series.readCount
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2848,6 +2968,22 @@ private fun BookFilterSheet(
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
     var locked by remember(initialLocked) { mutableStateOf(initialLocked) }
+    val readStatusLabels = preferenceChoiceLabels(
+        BookReadFilter.entries.toList(),
+        BookReadFilter::labelRes
+    )
+    val formatLabels = preferenceChoiceLabels(
+        BookFormatFilter.entries.toList(),
+        BookFormatFilter::labelRes
+    )
+    val sortLabels = preferenceChoiceLabels(
+        BookSortOption.entries.toList(),
+        BookSortOption::labelRes
+    )
+    val directionLabels = preferenceChoiceLabels(
+        SortDirection.entries.toList(),
+        SortDirection::labelRes
+    )
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2856,71 +2992,71 @@ private fun BookFilterSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Filter books", style = MaterialTheme.typography.titleLarge)
-            Text("These controls map to BookOrbit's readProgress, format, and sort fields.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.browse_filter_books), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.browse_filter_books_summary), color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = draft.title.orEmpty(),
                 onValueChange = { draft = draft.copy(title = it) },
-                label = { Text("Title contains") },
+                label = { Text(stringResource(R.string.browse_title_contains)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = draft.author.orEmpty(),
                 onValueChange = { draft = draft.copy(author = it) },
-                label = { Text("Author contains") },
+                label = { Text(stringResource(R.string.browse_author_contains)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = draft.series.orEmpty(),
                 onValueChange = { draft = draft.copy(series = it) },
-                label = { Text("Series contains") },
+                label = { Text(stringResource(R.string.browse_series_contains)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Text("Reading status", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browse_reading_status), style = MaterialTheme.typography.titleMedium)
             FilterChoiceRow(
                 options = BookReadFilter.entries,
                 selected = draft.readStatus,
-                label = { it.label },
+                label = { readStatusLabels.getValue(it) },
                 onSelected = { draft = draft.copy(readStatus = it) }
             )
-            Text("Format", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browse_format), style = MaterialTheme.typography.titleMedium)
             FilterChoiceRow(
                 options = BookFormatFilter.entries,
                 selected = draft.format,
-                label = { it.label },
+                label = { formatLabels.getValue(it) },
                 onSelected = { draft = draft.copy(format = it) }
             )
-            Text("Sort", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browse_sort), style = MaterialTheme.typography.titleMedium)
             FilterChoiceRow(
                 options = BookSortOption.entries,
                 selected = draft.sort,
-                label = { it.label },
+                label = { sortLabels.getValue(it) },
                 onSelected = { draft = draft.copy(sort = it) }
             )
             if (draft.sort != BookSortOption.SERVER_DEFAULT) {
                 FilterChoiceRow(
                     options = SortDirection.entries,
                     selected = draft.direction,
-                    label = { it.label },
+                    label = { directionLabels.getValue(it) },
                     onSelected = { draft = draft.copy(direction = it) }
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Lock filter", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.browse_lock_filter), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Restore this filter when returning to this screen.",
+                        stringResource(R.string.browse_lock_filter_summary),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(checked = locked, onCheckedChange = { locked = it })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { draft = BookBrowseFilter() }) { Text("Reset") }
-                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+                OutlinedButton(onClick = { draft = BookBrowseFilter() }) { Text(stringResource(R.string.browse_reset)) }
+                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.browse_apply)) }
             }
         }
     }
@@ -2937,6 +3073,19 @@ private fun SeriesFilterSheet(
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
     var locked by remember(initialLocked) { mutableStateOf(initialLocked) }
+    val completionLabels = preferenceChoiceLabels(
+        SeriesCompletionFilter.entries.toList(),
+        SeriesCompletionFilter::labelRes
+    )
+    val seriesSortLabels = preferenceChoiceLabels(
+        SeriesSortOption.entries.toList(),
+        SeriesSortOption::labelRes
+    )
+    val directionLabels = preferenceChoiceLabels(
+        SortDirection.entries.toList(),
+        SortDirection::labelRes
+    )
+    val allLibrariesLabel = stringResource(R.string.browse_all_libraries)
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2945,65 +3094,65 @@ private fun SeriesFilterSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Filter series", style = MaterialTheme.typography.titleLarge)
-            Text("These controls map to BookOrbit's completionStatus, author, and series sort fields.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.browse_filter_series), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.browse_filter_series_summary), color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = draft.author.orEmpty(),
                 onValueChange = { draft = draft.copy(author = it) },
-                label = { Text("Author") },
+                label = { Text(stringResource(R.string.browse_author)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = draft.genre.orEmpty(),
                 onValueChange = { draft = draft.copy(genre = it) },
-                label = { Text("Genre") },
+                label = { Text(stringResource(R.string.browse_genre)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             if (libraries.isNotEmpty()) {
-                Text("Library", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.browse_library), style = MaterialTheme.typography.titleMedium)
                 val libraryIds = listOf<String?>(null) + libraries.map { it.id }
                 FilterChoiceRow(
                     options = libraryIds,
                     selected = draft.libraryId,
-                    label = { id -> libraries.firstOrNull { it.id == id }?.name ?: "All libraries" },
+                    label = { id -> libraries.firstOrNull { it.id == id }?.name ?: allLibrariesLabel },
                     onSelected = { draft = draft.copy(libraryId = it) }
                 )
             }
-            Text("Completion", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browse_completion), style = MaterialTheme.typography.titleMedium)
             FilterChoiceRow(
                 options = SeriesCompletionFilter.entries,
                 selected = draft.completion,
-                label = { it.label },
+                label = { completionLabels.getValue(it) },
                 onSelected = { draft = draft.copy(completion = it) }
             )
-            Text("Sort", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browse_sort), style = MaterialTheme.typography.titleMedium)
             FilterChoiceRow(
                 options = SeriesSortOption.entries,
                 selected = draft.sort,
-                label = { it.label },
+                label = { seriesSortLabels.getValue(it) },
                 onSelected = { draft = draft.copy(sort = it) }
             )
             FilterChoiceRow(
                 options = SortDirection.entries,
                 selected = draft.direction,
-                label = { it.label },
+                label = { directionLabels.getValue(it) },
                 onSelected = { draft = draft.copy(direction = it) }
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Lock filter", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.browse_lock_filter), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Restore this filter when returning to this screen.",
+                        stringResource(R.string.browse_lock_filter_summary),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(checked = locked, onCheckedChange = { locked = it })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { draft = SeriesCatalogFilter(query = draft.query) }) { Text("Reset") }
-                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text("Apply") }
+                OutlinedButton(onClick = { draft = SeriesCatalogFilter(query = draft.query) }) { Text(stringResource(R.string.browse_reset)) }
+                Button(onClick = { onApply(draft, locked) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.browse_apply)) }
             }
         }
     }
@@ -3096,7 +3245,11 @@ private fun AuthorsCatalogScreen(
     ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            if (total > 0) "$total authors" else "Browse every accessible author",
+            if (total > 0) {
+                stringResource(R.string.browse_authors_count, total)
+            } else {
+                stringResource(R.string.browse_browse_every_author)
+            },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
@@ -3125,10 +3278,10 @@ private fun AuthorsCatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading authors...") }
+        if (isLoading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow(stringResource(R.string.browse_loading_authors)) }
         if (!isLoading && items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("No authors found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.browse_no_authors), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         gridItems(items, key = { "catalog-author-${it.id}" }) { author ->
@@ -3145,13 +3298,13 @@ private fun AuthorsCatalogScreen(
                 ) {
                     CatalogImage(
                         url = author.photoUrl,
-                        label = "Photo of ${author.name}",
+                        label = stringResource(R.string.browse_cover_photo, author.name),
                         loader = imageLoader,
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                     )
                     Text(author.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "${author.bookCount} books",
+                        stringResource(R.string.browse_books_count, author.bookCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3210,18 +3363,21 @@ private fun AuthorDetails(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OrbitEyebrow("Author")
+                OrbitEyebrow(stringResource(R.string.browse_author))
                 Text(author.name, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "${page?.total ?: author.bookCount} books",
+                    stringResource(
+                        R.string.browse_books_count,
+                        page?.total ?: author.bookCount
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        if (page == null) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
+        if (page == null) item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
         if (page != null && page!!.items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.browse_no_books), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         gridItems(page?.items.orEmpty(), key = { "author-book-${it.id}" }) { book ->
@@ -3262,11 +3418,12 @@ private fun AvailableFormatsLabel(
     modifier: Modifier = Modifier
 ) {
     if (formats.isEmpty()) return
+    val downloadedAltText = stringResource(R.string.browse_downloaded)
     val label = buildAnnotatedString {
         formats.forEachIndexed { index, format ->
             if (index > 0) append(" · ")
             if (format in downloadedFormats) {
-                appendInlineContent("download-$format", "Downloaded")
+                appendInlineContent("download-$format", downloadedAltText)
                 append(" ")
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)) {
                     append(format)
@@ -3288,6 +3445,18 @@ private fun AvailableFormatsLabel(
             )
         }
     }.values.associate { (id, content) -> id to content }
+    val availableFormatsDescription = stringResource(
+        R.string.browse_available_formats_cd,
+        formats.joinToString(", ")
+    )
+    val downloadedFormatsDescription = if (downloadedFormats.isNotEmpty()) {
+        stringResource(
+            R.string.browse_downloaded_locally_cd,
+            downloadedFormats.joinToString(", ")
+        )
+    } else {
+        null
+    }
     Text(
         text = label,
         inlineContent = inlineContent,
@@ -3296,10 +3465,8 @@ private fun AvailableFormatsLabel(
             .then(if (LocalReduceMotion.current) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE))
             .semantics {
                 contentDescription = buildString {
-                    append("Available formats: ${formats.joinToString(", ")}")
-                    if (downloadedFormats.isNotEmpty()) {
-                        append(". Downloaded locally: ${downloadedFormats.joinToString(", ")}")
-                    }
+                    append(availableFormatsDescription)
+                    downloadedFormatsDescription?.let { append(" ").append(it) }
                 }
             }
             .testTag(testTagId),
@@ -3340,14 +3507,20 @@ private fun BookPosterCard(
     val hasActions = enabled && (onMarkAsStatus != null || onMarkAsRead != null || onMarkAsUnread != null || (book.isDownloaded && onDeleteLocalCopy != null) || hasDownloadAction || isDownloading || downloadFailed)
     var showActions by remember(book.id) { mutableStateOf(false) }
     var showStatusMenu by remember(book.id) { mutableStateOf(false) }
+    val selectedStateDescription = if (isSelected) {
+        stringResource(R.string.browse_selected)
+    } else {
+        null
+    }
     val status = when {
-        book.isLocalOnly -> "Local only"
-        book.isServerMissing -> "Missing on server"
-        !enabled -> "Unavailable offline"
-        book.isRead && book.isDownloaded -> "Read · Offline"
-        book.isRead -> "Read"
-        book.isDownloaded -> "Offline"
-        book.progressPercent?.let { it > 0f } == true -> "In progress"
+        book.isLocalOnly -> stringResource(R.string.browse_local_only)
+        book.isServerMissing -> stringResource(R.string.browse_missing_on_server)
+        !enabled -> stringResource(R.string.browse_unavailable_offline)
+        book.isRead && book.isDownloaded -> stringResource(R.string.browse_read_offline)
+        book.isRead -> stringResource(R.string.browse_read)
+        book.isDownloaded -> stringResource(R.string.browse_offline)
+        book.progressPercent?.let { it > 0f } == true ->
+            stringResource(R.string.browse_in_progress)
         else -> null
     }
     Card(
@@ -3365,7 +3538,7 @@ private fun BookPosterCard(
                     status?.let { append(", $it") }
                 }
                 if (!enabled) disabled()
-                if (isSelected) stateDescription = "Selected"
+                selectedStateDescription?.let { stateDescription = it }
             },
         colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
         border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
@@ -3383,7 +3556,7 @@ private fun BookPosterCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options for ${book.title}"
+                                contentDescription = stringResource(R.string.browse_more_options_for, book.title)
                             )
                         }
                         DropdownMenu(
@@ -3392,7 +3565,7 @@ private fun BookPosterCard(
                         ) {
                             onMarkAsStatus?.let { markAsStatus ->
                                 DropdownMenuItem(
-                                    text = { Text(bookDetailReadingStatusActionLabel()) },
+                                    text = { Text(stringResource(R.string.browse_mark_as)) },
                                     onClick = {
                                         showActions = false
                                         showStatusMenu = true
@@ -3401,7 +3574,7 @@ private fun BookPosterCard(
                             }
                             if (onMarkAsStatus == null) onMarkAsRead?.let { markAsRead ->
                                 DropdownMenuItem(
-                                    text = { Text("Mark as read") },
+                                    text = { Text(stringResource(R.string.browse_mark_as_read)) },
                                     onClick = {
                                         showActions = false
                                         markAsRead()
@@ -3410,7 +3583,7 @@ private fun BookPosterCard(
                             }
                             if (onMarkAsStatus == null) onMarkAsUnread?.let { markAsUnread ->
                                 DropdownMenuItem(
-                                    text = { Text("Mark as unread") },
+                                    text = { Text(stringResource(R.string.browse_mark_as_unread)) },
                                     onClick = {
                                         showActions = false
                                         markAsUnread()
@@ -3419,24 +3592,32 @@ private fun BookPosterCard(
                             }
                             if (isDownloading) {
                                 onCancelDownload?.let { cancel ->
-                                    DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.common_cancel)) }, onClick = { showActions = false; cancel() })
                                 }
                             } else if (downloadFailed) {
                                 if (!book.isServerMissing) onDownload?.let { retry ->
                                     DropdownMenuItem(
-                                    text = { Text(if (book.isDownloaded) "Update local" else "Retry") },
+                                    text = {
+                                        Text(
+                                            if (book.isDownloaded) {
+                                                stringResource(R.string.browse_update_local)
+                                            } else {
+                                                stringResource(R.string.common_retry)
+                                            }
+                                        )
+                                    },
                                     onClick = { showActions = false; retry() }
                                 )
                                 }
                                 onClearFailedDownload?.let { clear ->
-                                    DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.browse_clear)) }, onClick = { showActions = false; clear() })
                                 }
                             } else if (!book.isDownloaded && !book.isServerMissing && downloadState?.isOfflineSnapshot != true) {
                                 onDownload?.let { download ->
-                                    DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.browse_download_local)) }, onClick = { showActions = false; download() })
                                 }
                             }
-                            if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; deleteLocal() }) }
+                            if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_delete_local)) }, onClick = { showActions = false; deleteLocal() }) }
                         }
                         onMarkAsStatus?.let { markAsStatus ->
                             BookDetailReadingStatusMenu(
@@ -3512,6 +3693,18 @@ private fun BookPosterCard(
 }
 
 @Composable
+private fun <T> preferenceChoiceLabels(
+    values: List<T>,
+    labelRes: (T) -> Int
+): Map<T, String> {
+    val labels = LinkedHashMap<T, String>(values.size)
+    for (value in values) {
+        labels[value] = stringResource(labelRes(value))
+    }
+    return labels
+}
+
+@Composable
 internal fun OptionsScreen(
     preferences: AppPreferences,
     libraries: List<LibrarySummary> = emptyList(),
@@ -3547,6 +3740,30 @@ internal fun OptionsScreen(
     var isClearingDownloadedBooks by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var languageTag by remember { mutableStateOf(AppLocale.readTag(context)) }
+    val languageLabels = AppLocale.languages.associate { language ->
+        language.tag to stringResource(language.labelRes)
+    }
+    val themeLabels = preferenceChoiceLabels(
+        AppThemeMode.values().toList(),
+        AppThemeMode::displayNameRes
+    )
+    val openingScreenLabels = preferenceChoiceLabels(
+        DefaultOpeningScreen.values().toList(),
+        DefaultOpeningScreen::displayNameRes
+    )
+    val libraryCardSizeLabels = preferenceChoiceLabels(
+        LibraryCardSize.values().toList(),
+        LibraryCardSize::displayNameRes
+    )
+    val cellularDownloadLabels = preferenceChoiceLabels(
+        CellularDownloadPolicy.values().toList(),
+        CellularDownloadPolicy::displayNameRes
+    )
+    val backgroundRefreshLabels = preferenceChoiceLabels(
+        BackgroundRefreshNetworkPolicy.values().toList(),
+        BackgroundRefreshNetworkPolicy::displayNameRes
+    )
     val automaticProfileId = profileId ?: serverProfileId(serverUrl)
     val automaticStorageScopeId =
         downloadStorageScopeId(context, serverUrl, automaticProfileId) ?: "unresolved-account"
@@ -3599,7 +3816,7 @@ internal fun OptionsScreen(
             AutomaticDownloadScheduler.reconfigure(context, saved)
             automaticDownloadRefreshKey += 1
         } else {
-            storageMessage = "The active profile or signed-in account changed. Review the setting again."
+            storageMessage = context.getString(R.string.settings_profile_changed)
         }
     }
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
@@ -3629,20 +3846,31 @@ internal fun OptionsScreen(
                         onClick = { selectedCategory = null },
                         modifier = Modifier.testTag("options-back")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to settings")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            stringResource(R.string.settings_back_to_settings)
+                        )
                     }
                 }
-                OrbitEyebrow("Options")
+                OrbitEyebrow(stringResource(R.string.settings_options_eyebrow))
+                val categoryForHeader = selectedCategory
+                val headerTitle = when (categoryForHeader) {
+                    OptionsCategory.APPEARANCE ->
+                        stringResource(R.string.settings_interface_title)
+                    null -> stringResource(R.string.settings_title)
+                    else -> stringResource(categoryForHeader.titleRes)
+                }
+                val headerSummary = if (categoryForHeader != null) {
+                    stringResource(categoryForHeader.summaryRes)
+                } else {
+                    stringResource(R.string.settings_choose_category_summary)
+                }
                 Text(
-                    when (selectedCategory) {
-                        OptionsCategory.APPEARANCE -> "Interface"
-                        null -> "Settings"
-                        else -> selectedCategory?.title ?: "Settings"
-                    },
+                    headerTitle,
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Text(
-                    selectedCategory?.summary ?: "Choose a category to change application settings.",
+                    headerSummary,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -3652,9 +3880,14 @@ internal fun OptionsScreen(
             OptionsCategory.values().forEach { category ->
                 item(key = "category-${category.name}") {
                     ListItem(
-                        headlineContent = { Text(category.title) },
-                        supportingContent = { Text(category.summary) },
-                        trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, category.title) },
+                        headlineContent = { Text(stringResource(category.titleRes)) },
+                        supportingContent = { Text(stringResource(category.summaryRes)) },
+                        trailingContent = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                stringResource(category.titleRes)
+                            )
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { selectedCategory = category }
@@ -3666,8 +3899,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.GENERAL) item(key = "lock-orientation") {
             AppPreferenceSwitchRow(
-                title = "Lock orientation",
-                summary = "Keep the orientation currently in use",
+                title = stringResource(R.string.settings_lock_orientation),
+                summary = stringResource(R.string.settings_lock_orientation_summary),
                 checked = preferences.lockOrientation,
                 testTag = "options-lock-orientation",
                 onCheckedChange = {
@@ -3677,8 +3910,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.GENERAL) item(key = "immersive-reading-navigation") {
             AppPreferenceSwitchRow(
-                title = "Immersive reading: hide navigation bar",
-                summary = "Apply this setting to EPUB, PDF, and comic readers across all libraries.",
+                title = stringResource(R.string.settings_immersive_hide_nav),
+                summary = stringResource(R.string.settings_immersive_hide_nav_summary),
                 checked = preferences.hideNavigationBarWhileReading,
                 testTag = "options-hide-navigation-bar-reading",
                 onCheckedChange = {
@@ -3688,8 +3921,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.GENERAL) item(key = "immersive-reading-status") {
             AppPreferenceSwitchRow(
-                title = "Immersive reading: hide status bar",
-                summary = "Expand EPUB, PDF, and comic readers into the status-bar area. Off by default.",
+                title = stringResource(R.string.settings_immersive_hide_status),
+                summary = stringResource(R.string.settings_immersive_hide_status_summary),
                 checked = preferences.hideStatusBarWhileReading,
                 testTag = "options-hide-status-bar-reading",
                 onCheckedChange = {
@@ -3697,19 +3930,28 @@ internal fun OptionsScreen(
                 }
             )
         }
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "language") {
+            AppPreferenceSelectionRow(
+                title = stringResource(R.string.settings_language),
+                value = languageLabels[languageTag] ?: languageTag,
+                summary = stringResource(R.string.settings_language_summary),
+                testTag = "options-language",
+                onClick = { openDialog = OptionsDialog.LANGUAGE }
+            )
+        }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "theme") {
             AppPreferenceSelectionRow(
-                title = "Theme",
-                value = preferences.themeMode.displayName,
+                title = stringResource(R.string.settings_theme),
+                value = themeLabels.getValue(preferences.themeMode),
                 testTag = "options-theme",
                 onClick = { openDialog = OptionsDialog.THEME }
             )
         }
         if (selectedCategory == OptionsCategory.GENERAL) item(key = "opening-screen") {
             AppPreferenceSelectionRow(
-                title = "Default opening screen",
-                value = preferences.defaultOpeningScreen.displayName,
-                summary = "Used the next time the app starts",
+                title = stringResource(R.string.settings_opening_screen),
+                value = openingScreenLabels.getValue(preferences.defaultOpeningScreen),
+                summary = stringResource(R.string.settings_opening_screen_summary),
                 testTag = "options-opening-screen",
                 onClick = { openDialog = OptionsDialog.OPENING_SCREEN }
             )
@@ -3719,8 +3961,8 @@ internal fun OptionsScreen(
             homeShelfPreferences.source == HomeShelfPreferenceSource.LOCAL_FALLBACK
         ) item(key = "local-on-deck") {
             AppPreferenceSwitchRow(
-                title = "Show On deck",
-                summary = "Used locally because BookOrbit shelf synchronization is off",
+                title = stringResource(R.string.settings_show_on_deck),
+                summary = stringResource(R.string.settings_show_on_deck_summary),
                 checked = preferences.showOnDeckWhenShelfSyncDisabled,
                 testTag = "options-show-local-on-deck",
                 onCheckedChange = {
@@ -3732,8 +3974,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "reduce-motion") {
             AppPreferenceSwitchRow(
-                title = "Reduce motion",
-                summary = "Use immediate catalog jumps instead of animated scrolling",
+                title = stringResource(R.string.settings_reduce_motion),
+                summary = stringResource(R.string.settings_reduce_motion_summary),
                 checked = preferences.reduceMotion,
                 testTag = "options-reduce-motion",
                 onCheckedChange = {
@@ -3743,9 +3985,9 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.LIBRARY) item(key = "library-card-size") {
             AppPreferenceSelectionRow(
-                title = "Library card size",
-                value = preferences.libraryCardSize.displayName,
-                summary = "Apply one card size across libraries and content types",
+                title = stringResource(R.string.settings_library_card_size),
+                value = libraryCardSizeLabels.getValue(preferences.libraryCardSize),
+                summary = stringResource(R.string.settings_library_card_size_summary),
                 testTag = "options-library-card-size",
                 onClick = { openDialog = OptionsDialog.LIBRARY_CARD_SIZE }
             )
@@ -3759,16 +4001,19 @@ internal fun OptionsScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    "EPUB Image Library minimum size",
+                    stringResource(R.string.settings_epub_image_min_size),
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    "${preferences.epubImageMinimumDimensionPx} x " +
-                        "${preferences.epubImageMinimumDimensionPx} px; both width and height apply " +
-                        "across all libraries",
+                    stringResource(
+                        R.string.settings_epub_image_min_size_summary,
+                        preferences.epubImageMinimumDimensionPx
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )
+                val imageMinimumSizeDescription =
+                    stringResource(R.string.settings_epub_image_min_size_content_description)
                 Slider(
                     value = preferences.epubImageMinimumDimensionPx.toFloat(),
                     onValueChange = { next ->
@@ -3788,8 +4033,7 @@ internal fun OptionsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics {
-                            contentDescription =
-                                "Minimum EPUB image width and height in pixels"
+                            contentDescription = imageMinimumSizeDescription
                         }
                 )
             }
@@ -3812,10 +4056,13 @@ internal fun OptionsScreen(
                 modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                OrbitEyebrow("Data")
-                Text("Network and storage", style = MaterialTheme.typography.headlineSmall)
+                OrbitEyebrow(stringResource(R.string.settings_data_eyebrow))
                 Text(
-                    "Control automatic network use and local files.",
+                    stringResource(R.string.settings_network_storage),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    stringResource(R.string.settings_network_storage_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -3823,23 +4070,29 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "cellular-downloads") {
             AppPreferenceSelectionRow(
-                title = "Downloads over cellular",
-                value = preferences.cellularDownloadPolicy.displayName,
-                summary = "Metered non-Wi-Fi networks are treated as cellular",
+                title = stringResource(R.string.settings_cellular_downloads),
+                value = cellularDownloadLabels.getValue(preferences.cellularDownloadPolicy),
+                summary = stringResource(R.string.settings_cellular_downloads_summary),
                 testTag = "options-cellular-downloads",
                 onClick = { openDialog = OptionsDialog.CELLULAR_DOWNLOADS }
             )
         }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "storage") {
             ListItem(
-                headlineContent = { Text("Storage") },
+                headlineContent = { Text(stringResource(R.string.settings_storage)) },
                 supportingContent = {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            storageUsage?.let {
-                                "Downloads ${formatByteSize(it.downloadedBytes)} · Cache ${formatByteSize(it.cacheBytes)}"
-                            } ?: "Calculating storage use…"
-                        )
+                        val usage = storageUsage
+                        val usageLine = if (usage != null) {
+                            stringResource(
+                                R.string.settings_storage_usage,
+                                formatByteSize(usage.downloadedBytes),
+                                formatByteSize(usage.cacheBytes)
+                            )
+                        } else {
+                            stringResource(R.string.settings_storage_calculating)
+                        }
+                        Text(usageLine)
                         storageMessage?.let {
                             Text(
                                 it,
@@ -3848,7 +4101,7 @@ internal fun OptionsScreen(
                             )
                         }
                         Text(
-                            "Clear cache never deletes downloaded books",
+                            stringResource(R.string.settings_storage_clear_hint),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -3859,7 +4112,15 @@ internal fun OptionsScreen(
                         enabled = !isClearingCache,
                         modifier = Modifier.testTag("options-clear-cache")
                     ) {
-                        Text(if (isClearingCache) "Clearing…" else "Clear cache")
+                        Text(
+                            stringResource(
+                                if (isClearingCache) {
+                                    R.string.settings_clearing
+                                } else {
+                                    R.string.settings_clear_cache
+                                }
+                            )
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth().testTag("options-storage")
@@ -3875,7 +4136,8 @@ internal fun OptionsScreen(
                 onStart = {
                     scope.launch {
                         if (!onStartOfflineCacheUpdate()) {
-                            storageMessage = "Select a library and at least one cache type"
+                            storageMessage =
+                                context.getString(R.string.settings_offline_cache_scope_required)
                         }
                         offlineCacheRefreshKey += 1
                     }
@@ -3924,11 +4186,11 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "clear-downloaded-books") {
             ListItem(
-                headlineContent = { Text("Remove downloaded books") },
+                headlineContent = {
+                    Text(stringResource(R.string.settings_remove_downloaded_books))
+                },
                 supportingContent = {
-                    Text(
-                        "Remove local book files for this server. Server copies and reading progress are kept."
-                    )
+                    Text(stringResource(R.string.settings_remove_downloaded_books_summary))
                 },
                 trailingContent = {
                     TextButton(
@@ -3936,7 +4198,15 @@ internal fun OptionsScreen(
                         enabled = !isClearingDownloadedBooks,
                         modifier = Modifier.testTag("options-clear-downloaded-books")
                     ) {
-                        Text(if (isClearingDownloadedBooks) "Removing..." else "Remove")
+                        Text(
+                            stringResource(
+                                if (isClearingDownloadedBooks) {
+                                    R.string.settings_removing
+                                } else {
+                                    R.string.settings_remove
+                                }
+                            )
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -3945,8 +4215,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "confirm-local-delete") {
             AppPreferenceSwitchRow(
-                title = "Confirm before deleting local copy",
-                summary = "Ask before removing a downloaded file from this device",
+                title = stringResource(R.string.settings_confirm_local_delete),
+                summary = stringResource(R.string.settings_confirm_local_delete_summary),
                 checked = preferences.confirmDeleteLocalCopy,
                 testTag = "options-confirm-local-delete",
                 onCheckedChange = {
@@ -3956,8 +4226,8 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "confirm-audiobook-seek") {
             AppPreferenceSwitchRow(
-                title = "Confirm audiobook seek jumps",
-                summary = "Ask before keeping a new position after tapping a seek bar",
+                title = stringResource(R.string.settings_confirm_audiobook_seek),
+                summary = stringResource(R.string.settings_confirm_audiobook_seek_summary),
                 checked = preferences.confirmAudiobookSeek,
                 testTag = "options-confirm-audiobook-seek",
                 onCheckedChange = {
@@ -3967,17 +4237,19 @@ internal fun OptionsScreen(
         }
         if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "background-refresh") {
             AppPreferenceSelectionRow(
-                title = "Background metadata and covers",
-                value = preferences.backgroundRefreshNetworkPolicy.displayName,
-                summary = "Choose which networks may refresh metadata and covers",
+                title = stringResource(R.string.settings_background_refresh),
+                value = backgroundRefreshLabels.getValue(
+                    preferences.backgroundRefreshNetworkPolicy
+                ),
+                summary = stringResource(R.string.settings_background_refresh_summary),
                 testTag = "options-background-refresh",
                 onClick = { openDialog = OptionsDialog.BACKGROUND_REFRESH }
             )
         }
         if (selectedCategory == OptionsCategory.NETWORK_SYNC) item(key = "pause-audiobook-interruptions") {
             AppPreferenceSwitchRow(
-                title = "Pause audiobook for audio interruptions",
-                summary = "Pause briefly when another app or system sound takes audio focus",
+                title = stringResource(R.string.settings_pause_audiobook),
+                summary = stringResource(R.string.settings_pause_audiobook_summary),
                 checked = preferences.pauseAudiobookForAudioInterruptions,
                 testTag = "options-pause-audiobook-interruptions",
                 onCheckedChange = {
@@ -3989,10 +4261,10 @@ internal fun OptionsScreen(
 
     when (openDialog) {
         OptionsDialog.THEME -> AppPreferenceChoiceDialog(
-            title = "Theme",
+            title = stringResource(R.string.settings_theme),
             choices = AppThemeMode.values().toList(),
             selected = preferences.themeMode,
-            label = AppThemeMode::displayName,
+            label = { themeLabels.getValue(it) },
             onSelect = {
                 onPreferencesChange(preferences.copy(themeMode = it))
                 openDialog = null
@@ -4000,10 +4272,10 @@ internal fun OptionsScreen(
             onDismiss = { openDialog = null }
         )
         OptionsDialog.OPENING_SCREEN -> AppPreferenceChoiceDialog(
-            title = "Default opening screen",
+            title = stringResource(R.string.settings_opening_screen),
             choices = DefaultOpeningScreen.values().toList(),
             selected = preferences.defaultOpeningScreen,
-            label = DefaultOpeningScreen::displayName,
+            label = { openingScreenLabels.getValue(it) },
             onSelect = {
                 onPreferencesChange(preferences.copy(defaultOpeningScreen = it))
                 openDialog = null
@@ -4011,10 +4283,10 @@ internal fun OptionsScreen(
             onDismiss = { openDialog = null }
         )
         OptionsDialog.LIBRARY_CARD_SIZE -> AppPreferenceChoiceDialog(
-            title = "Library card size",
+            title = stringResource(R.string.settings_library_card_size),
             choices = LibraryCardSize.values().toList(),
             selected = preferences.libraryCardSize,
-            label = LibraryCardSize::displayName,
+            label = { libraryCardSizeLabels.getValue(it) },
             onSelect = {
                 onPreferencesChange(preferences.copy(libraryCardSize = it))
                 openDialog = null
@@ -4022,10 +4294,10 @@ internal fun OptionsScreen(
             onDismiss = { openDialog = null }
         )
         OptionsDialog.CELLULAR_DOWNLOADS -> AppPreferenceChoiceDialog(
-            title = "Downloads over cellular",
+            title = stringResource(R.string.settings_cellular_downloads),
             choices = CellularDownloadPolicy.values().toList(),
             selected = preferences.cellularDownloadPolicy,
-            label = CellularDownloadPolicy::displayName,
+            label = { cellularDownloadLabels.getValue(it) },
             onSelect = {
                 onPreferencesChange(preferences.copy(cellularDownloadPolicy = it))
                 openDialog = null
@@ -4033,20 +4305,33 @@ internal fun OptionsScreen(
             onDismiss = { openDialog = null }
         )
         OptionsDialog.BACKGROUND_REFRESH -> AppPreferenceChoiceDialog(
-            title = "Background metadata and covers",
+            title = stringResource(R.string.settings_background_refresh),
             choices = BackgroundRefreshNetworkPolicy.values().toList(),
             selected = preferences.backgroundRefreshNetworkPolicy,
-            label = BackgroundRefreshNetworkPolicy::displayName,
+            label = { backgroundRefreshLabels.getValue(it) },
             onSelect = {
                 onPreferencesChange(preferences.copy(backgroundRefreshNetworkPolicy = it))
                 openDialog = null
             },
             onDismiss = { openDialog = null }
         )
+        OptionsDialog.LANGUAGE -> AppPreferenceChoiceDialog(
+            title = stringResource(R.string.settings_language),
+            choices = AppLocale.choices,
+            selected = languageTag,
+            label = { tag -> languageLabels[tag] ?: tag },
+            onSelect = { tag ->
+                AppLocale.writeTag(context, tag)
+                languageTag = tag
+                openDialog = null
+                context.findActivity()?.recreate()
+            },
+            onDismiss = { openDialog = null }
+        )
         OptionsDialog.CLEAR_CACHE -> AlertDialog(
             onDismissRequest = { openDialog = null },
-            title = { Text("Clear cache?") },
-            text = { Text("Cached covers and temporary reader files will be removed. Downloaded books are kept.") },
+            title = { Text(stringResource(R.string.settings_clear_cache_title)) },
+            text = { Text(stringResource(R.string.settings_clear_cache_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -4056,18 +4341,24 @@ internal fun OptionsScreen(
                         scope.launch {
                             runCatching { onClearCache() }
                                 .onSuccess {
-                                    storageMessage = "Cache cleared"
+                                    storageMessage =
+                                        context.getString(R.string.settings_cache_cleared)
                                     storageRefreshKey += 1
                                 }
-                                .onFailure { storageMessage = "Unable to clear cache" }
+                                .onFailure {
+                                    storageMessage =
+                                        context.getString(R.string.settings_cache_clear_failed)
+                                }
                             isClearingCache = false
                         }
                     },
                     modifier = Modifier.testTag("confirm-clear-cache")
-                ) { Text("Clear cache") }
+                ) { Text(stringResource(R.string.settings_clear_cache)) }
             },
             dismissButton = {
-                TextButton(onClick = { openDialog = null }) { Text("Cancel") }
+                TextButton(onClick = { openDialog = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
         null -> Unit
@@ -4076,11 +4367,9 @@ internal fun OptionsScreen(
     if (showClearDownloadedBooks) {
         AlertDialog(
             onDismissRequest = { showClearDownloadedBooks = false },
-            title = { Text("Remove downloaded books?") },
+            title = { Text(stringResource(R.string.settings_remove_downloaded_books_title)) },
             text = {
-                Text(
-                    "This removes local book files for the current server. Active readers and transfers are kept. Automatic-download settings stay configured, but cleared versions are not fetched again until they change or you request them."
-                )
+                Text(stringResource(R.string.settings_remove_downloaded_books_message))
             },
             confirmButton = {
                 TextButton(
@@ -4090,19 +4379,41 @@ internal fun OptionsScreen(
                         scope.launch {
                             val result = clearLocalCopiesForServer(context, serverUrl)
                             storageMessage = buildString {
-                                append("Removed ${result.removedCount} files (${formatByteSize(result.removedBytes)})")
-                                if (result.keptActiveCount > 0) append("; kept ${result.keptActiveCount} active")
-                                if (result.failedCount > 0) append("; ${result.failedCount} failed")
+                                append(
+                                    context.getString(
+                                        R.string.settings_removed_files,
+                                        result.removedCount,
+                                        formatByteSize(result.removedBytes)
+                                    )
+                                )
+                                if (result.keptActiveCount > 0) {
+                                    append(
+                                        context.getString(
+                                            R.string.settings_removed_kept_active,
+                                            result.keptActiveCount
+                                        )
+                                    )
+                                }
+                                if (result.failedCount > 0) {
+                                    append(
+                                        context.getString(
+                                            R.string.settings_removed_failed,
+                                            result.failedCount
+                                        )
+                                    )
+                                }
                             }
                             isClearingDownloadedBooks = false
                             storageRefreshKey += 1
                         }
                     },
                     modifier = Modifier.testTag("confirm-clear-downloaded-books")
-                ) { Text("Remove local copies") }
+                ) { Text(stringResource(R.string.settings_remove_local_copies)) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDownloadedBooks = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearDownloadedBooks = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
     }
@@ -4120,6 +4431,7 @@ internal fun AutomaticBookDownloadConfiguration(
     onCancel: () -> Unit
 ) {
     val ownerKey = policy.ownerKey()
+    val context = LocalContext.current
     var reserveText by remember(ownerKey) {
         mutableStateOf(formatAutomaticDownloadGiB(policy.reserveBytes))
     }
@@ -4159,8 +4471,7 @@ internal fun AutomaticBookDownloadConfiguration(
             !ownerIsCurrent(candidateOwner)
         ) {
             pendingConfirmation = null
-            activationError =
-                "The active profile or signed-in account changed. Review the setting again."
+            activationError = context.getString(R.string.settings_profile_changed)
             return
         }
         onPolicyChange(candidate)
@@ -4179,15 +4490,18 @@ internal fun AutomaticBookDownloadConfiguration(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Automatic book downloads", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Download readable book files in small background batches. Completed files remain when syncing is disabled.",
+                stringResource(R.string.settings_auto_download_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                stringResource(R.string.settings_auto_download_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
             AppPreferenceSwitchRow(
-                title = "Enable automatic book downloads",
-                summary = "Off by default; existing downloads are never removed by this switch",
+                title = stringResource(R.string.settings_auto_download_enable),
+                summary = stringResource(R.string.settings_auto_download_enable_summary),
                 checked = policy.enabled,
                 testTag = "automatic-download-enabled",
                 onCheckedChange = { enabled ->
@@ -4200,7 +4514,9 @@ internal fun AutomaticBookDownloadConfiguration(
                         when {
                             candidate == null -> Unit
                             !candidate.hasAutomaticDownloadScope() -> {
-                                activationError = "Select at least one library before enabling automatic downloads."
+                                activationError = context.getString(
+                                    R.string.settings_auto_download_scope_required
+                                )
                             }
                             else -> {
                                 pendingConfirmation = AutomaticDownloadConfirmation.EnableReview(candidate)
@@ -4217,7 +4533,10 @@ internal fun AutomaticBookDownloadConfiguration(
                     modifier = Modifier.testTag("automatic-download-activation-error")
                 )
             }
-            Text("Library scope", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_auto_download_scope),
+                style = MaterialTheme.typography.titleMedium
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -4227,7 +4546,9 @@ internal fun AutomaticBookDownloadConfiguration(
                     onClick = {
                         onPolicyChange(policy.copy(scope = AutomaticDownloadScope.SELECTED_LIBRARIES))
                     },
-                    label = { Text("Selected libraries") },
+                    label = {
+                        Text(stringResource(R.string.settings_auto_download_scope_selected))
+                    },
                     modifier = Modifier.testTag("automatic-download-scope-selected")
                 )
                 FilterChip(
@@ -4235,13 +4556,16 @@ internal fun AutomaticBookDownloadConfiguration(
                     onClick = {
                         onPolicyChange(policy.copy(scope = AutomaticDownloadScope.ALL_LIBRARIES))
                     },
-                    label = { Text("All libraries") },
+                    label = { Text(stringResource(R.string.settings_auto_download_scope_all)) },
                     modifier = Modifier.testTag("automatic-download-scope-all")
                 )
             }
             if (policy.scope == AutomaticDownloadScope.SELECTED_LIBRARIES) {
                 if (libraries.isEmpty()) {
-                    Text("No libraries available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.settings_no_libraries),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 } else {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -4268,12 +4592,15 @@ internal fun AutomaticBookDownloadConfiguration(
                 }
             } else {
                 Text(
-                    "New libraries added to the server are included automatically.",
+                    stringResource(R.string.settings_auto_download_new_libraries),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text("Initial behavior", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_auto_download_initial),
+                style = MaterialTheme.typography.titleMedium
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -4288,7 +4615,9 @@ internal fun AutomaticBookDownloadConfiguration(
                             )
                         )
                     },
-                    label = { Text("Existing and future") }
+                    label = {
+                        Text(stringResource(R.string.settings_auto_download_existing_and_future))
+                    }
                 )
                 FilterChip(
                     selected = policy.initialMode == AutomaticDownloadInitialMode.NEW_BOOKS_ONLY,
@@ -4297,48 +4626,53 @@ internal fun AutomaticBookDownloadConfiguration(
                             policy.copy(initialMode = AutomaticDownloadInitialMode.NEW_BOOKS_ONLY)
                         )
                     },
-                    label = { Text("New books only") }
+                    label = { Text(stringResource(R.string.settings_auto_download_new_books)) }
                 )
             }
             if (policy.initialMode == AutomaticDownloadInitialMode.NEW_BOOKS_ONLY) {
                 Text(
-                    "The first complete scan records a baseline without downloading existing books.",
+                    stringResource(R.string.settings_auto_download_new_books_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             AppPreferenceSwitchRow(
-                title = "Download every readable copy",
-                summary = "Off by default. When enabled, alternate formats and multipart audio count toward storage limits.",
+                title = stringResource(R.string.settings_auto_download_every_copy),
+                summary = stringResource(R.string.settings_auto_download_every_copy_summary),
                 checked = policy.allReadableCopies,
                 testTag = "automatic-download-all-copies",
                 onCheckedChange = { onPolicyChange(policy.copy(allReadableCopies = it)) }
             )
             AppPreferenceSwitchRow(
-                title = "Unmetered networks only",
-                summary = "Recommended for background book downloads",
+                title = stringResource(R.string.settings_auto_download_unmetered),
+                summary = stringResource(R.string.settings_auto_download_unmetered_summary),
                 checked = policy.unmeteredOnly,
                 testTag = "automatic-download-unmetered",
                 onCheckedChange = { requestRiskyChange(policy.copy(unmeteredOnly = it)) }
             )
             AppPreferenceSwitchRow(
-                title = "Only while charging",
-                summary = "Enabled by default",
+                title = stringResource(R.string.settings_auto_download_charging),
+                summary = stringResource(R.string.settings_auto_download_charging_summary),
                 checked = policy.chargingRequired,
                 testTag = "automatic-download-charging",
                 onCheckedChange = { requestRiskyChange(policy.copy(chargingRequired = it)) }
             )
             HorizontalDivider()
-            Text("Storage limits", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Use 0 to disable either limit.",
+                stringResource(R.string.settings_auto_download_storage_limits),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                stringResource(R.string.settings_auto_download_zero_disables),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedTextField(
                 value = reserveText,
                 onValueChange = { reserveText = it; limitError = false },
-                label = { Text("Reserved minimum free space on this device") },
+                label = {
+                    Text(stringResource(R.string.settings_auto_download_reserve_label))
+                },
                 suffix = { Text("GB") },
                 singleLine = true,
                 isError = limitError,
@@ -4348,7 +4682,9 @@ internal fun AutomaticBookDownloadConfiguration(
             OutlinedTextField(
                 value = maximumText,
                 onValueChange = { maximumText = it; limitError = false },
-                label = { Text("Maximum local books on this device") },
+                label = {
+                    Text(stringResource(R.string.settings_auto_download_maximum_label))
+                },
                 suffix = { Text("GB") },
                 singleLine = true,
                 isError = limitError,
@@ -4370,17 +4706,17 @@ internal fun AutomaticBookDownloadConfiguration(
                     }
                 },
                 modifier = Modifier.testTag("automatic-download-save-limits")
-            ) { Text("Save limits") }
+            ) { Text(stringResource(R.string.settings_auto_download_save_limits)) }
             if (limitError) {
                 Text(
-                    "Enter 0 (disabled) or a value up to 2048 GB.",
+                    stringResource(R.string.settings_auto_download_limit_error),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             AppPreferenceSwitchRow(
-                title = "Remove older local copies automatically",
-                summary = "Off by default. If either device-wide limit is crossed, completed books are removed first, then the least recently used. This also applies when automatic syncing is off, but never removes an active book or transfer.",
+                title = stringResource(R.string.settings_auto_download_removal),
+                summary = stringResource(R.string.settings_auto_download_removal_summary),
                 checked = policy.automaticRemovalEnabled,
                 testTag = "automatic-download-removal",
                 onCheckedChange = { enabled ->
@@ -4395,7 +4731,7 @@ internal fun AutomaticBookDownloadConfiguration(
             if (isRunning) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            status.message?.let { message ->
+            status.localizedMessage(context)?.let { message ->
                 Text(
                     message,
                     color = if (status.state == AutomaticDownloadRunState.FAILED) {
@@ -4408,7 +4744,13 @@ internal fun AutomaticBookDownloadConfiguration(
             }
             if (status.checked > 0 || status.queued > 0 || status.failed > 0) {
                 Text(
-                    "Checked ${status.checked} - Queued ${status.queued} - Skipped ${status.skipped} - Failed ${status.failed}",
+                    stringResource(
+                        R.string.settings_auto_download_progress,
+                        status.checked,
+                        status.queued,
+                        status.skipped,
+                        status.failed
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -4421,16 +4763,16 @@ internal fun AutomaticBookDownloadConfiguration(
                     onClick = onSyncNow,
                     enabled = policy.enabled && hasScope && !isRunning,
                     modifier = Modifier.testTag("automatic-download-sync-now")
-                ) { Text("Sync next batch") }
+                ) { Text(stringResource(R.string.settings_auto_download_sync_next)) }
                 if (isRunning) {
                     OutlinedButton(
                         onClick = onCancel,
                         modifier = Modifier.testTag("automatic-download-cancel")
-                    ) { Text("Cancel") }
+                    ) { Text(stringResource(R.string.common_cancel)) }
                 }
             }
             Text(
-                "Each pass checks at most one catalog page and queues at most five files, so a very large library cannot create thousands of transfers at once.",
+                stringResource(R.string.settings_auto_download_pass_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -4441,13 +4783,16 @@ internal fun AutomaticBookDownloadConfiguration(
         is AutomaticDownloadConfirmation.EnableReview -> {
             AlertDialog(
                 onDismissRequest = { pendingConfirmation = null },
-                title = { Text("Review automatic downloads") },
+                title = { Text(stringResource(R.string.settings_auto_download_review_title)) },
                 text = {
                     Column(
                         modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        automaticDownloadReviewLines(confirmation.policy, libraries).forEach { line ->
+                        automaticDownloadLocalizedReviewLines(
+                            confirmation.policy,
+                            libraries
+                        ).forEach { line ->
                             Text(line)
                         }
                     }
@@ -4460,10 +4805,12 @@ internal fun AutomaticBookDownloadConfiguration(
                             )
                         },
                         modifier = Modifier.testTag("automatic-download-review-continue")
-                    ) { Text("Continue") }
+                    ) { Text(stringResource(R.string.common_continue)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingConfirmation = null }) { Text("Cancel") }
+                    TextButton(onClick = { pendingConfirmation = null }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
                 },
                 modifier = Modifier.testTag("automatic-download-review-dialog")
             )
@@ -4471,11 +4818,9 @@ internal fun AutomaticBookDownloadConfiguration(
         is AutomaticDownloadConfirmation.EnableConsent -> {
             AlertDialog(
                 onDismissRequest = { pendingConfirmation = null },
-                title = { Text("Enable automatic downloads?") },
+                title = { Text(stringResource(R.string.settings_auto_download_consent_title)) },
                 text = {
-                    Text(
-                        "I understand that automatic downloads may use storage, network data, battery, and background processing."
-                    )
+                    Text(stringResource(R.string.settings_auto_download_consent_text))
                 },
                 confirmButton = {
                     TextButton(
@@ -4483,10 +4828,12 @@ internal fun AutomaticBookDownloadConfiguration(
                             applyConfirmedPolicy(confirmation.policy)
                         },
                         modifier = Modifier.testTag("automatic-download-confirm-enable")
-                    ) { Text("I understand - enable") }
+                    ) { Text(stringResource(R.string.settings_auto_download_consent_confirm)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingConfirmation = null }) { Text("Cancel") }
+                    TextButton(onClick = { pendingConfirmation = null }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
                 },
                 modifier = Modifier.testTag("automatic-download-consent-dialog")
             )
@@ -4494,10 +4841,12 @@ internal fun AutomaticBookDownloadConfiguration(
         is AutomaticDownloadConfirmation.RiskyChange -> {
             AlertDialog(
                 onDismissRequest = { pendingConfirmation = null },
-                title = { Text("Confirm automatic-download change") },
+                title = { Text(stringResource(R.string.settings_auto_download_risky_title)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        confirmation.risks.forEach { Text(it.description) }
+                        confirmation.risks.forEach { risk ->
+                            Text(stringResource(risk.descriptionRes))
+                        }
                     }
                 },
                 confirmButton = {
@@ -4506,10 +4855,12 @@ internal fun AutomaticBookDownloadConfiguration(
                             applyConfirmedPolicy(confirmation.policy)
                         },
                         modifier = Modifier.testTag("automatic-download-confirm-risky-change")
-                    ) { Text("Apply change") }
+                    ) { Text(stringResource(R.string.settings_auto_download_apply)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingConfirmation = null }) { Text("Cancel") }
+                    TextButton(onClick = { pendingConfirmation = null }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
                 },
                 modifier = Modifier.testTag("automatic-download-risk-dialog")
             )
@@ -4533,16 +4884,10 @@ private sealed interface AutomaticDownloadConfirmation {
     ) : AutomaticDownloadConfirmation
 }
 
-internal enum class AutomaticDownloadRisk(val description: String) {
-    AUTOMATIC_REMOVAL(
-        "Automatic cleanup can remove completed local copies when a storage limit is crossed."
-    ),
-    METERED_NETWORK(
-        "Automatic downloads may use metered or cellular network data."
-    ),
-    NOT_CHARGING(
-        "Automatic downloads may use battery power while the device is not charging."
-    )
+internal enum class AutomaticDownloadRisk(@StringRes val descriptionRes: Int) {
+    AUTOMATIC_REMOVAL(R.string.settings_auto_download_risk_removal),
+    METERED_NETWORK(R.string.settings_auto_download_risk_metered),
+    NOT_CHARGING(R.string.settings_auto_download_risk_charging)
 }
 
 internal fun automaticDownloadRiskyChanges(
@@ -4568,6 +4913,81 @@ internal fun automaticDownloadChangeRequiresConfirmation(
 
 internal fun AutomaticDownloadPolicy.hasAutomaticDownloadScope(): Boolean =
     scope == AutomaticDownloadScope.ALL_LIBRARIES || selectedLibraryIds.isNotEmpty()
+
+@Composable
+private fun automaticDownloadLocalizedReviewLines(
+    policy: AutomaticDownloadPolicy,
+    libraries: List<LibrarySummary>
+): List<String> {
+    val libraryNames = libraries.associate { it.id to it.name }
+    val scopeLine = if (policy.scope == AutomaticDownloadScope.ALL_LIBRARIES) {
+        stringResource(R.string.settings_auto_download_review_libraries_all)
+    } else {
+        val selected = policy.selectedLibraryIds.sorted().map { libraryNames[it] ?: it }
+        stringResource(
+            R.string.settings_auto_download_review_libraries_selected,
+            selected.joinToString()
+        )
+    }
+    val maximumLimit = localizedAutomaticDownloadLimit(policy.maximumBytes)
+    val reserveLimit = localizedAutomaticDownloadLimit(policy.reserveBytes)
+    return listOf(
+        scopeLine,
+        stringResource(
+            if (policy.initialMode == AutomaticDownloadInitialMode.EXISTING_AND_FUTURE) {
+                R.string.settings_auto_download_review_books_existing
+            } else {
+                R.string.settings_auto_download_review_books_new
+            }
+        ),
+        stringResource(
+            if (policy.allReadableCopies) {
+                R.string.settings_auto_download_review_copies_all
+            } else {
+                R.string.settings_auto_download_review_copies_preferred
+            }
+        ),
+        stringResource(
+            if (policy.unmeteredOnly) {
+                R.string.settings_auto_download_review_network_unmetered
+            } else {
+                R.string.settings_auto_download_review_network_any
+            }
+        ),
+        stringResource(
+            if (policy.chargingRequired) {
+                R.string.settings_auto_download_review_power_charging
+            } else {
+                R.string.settings_auto_download_review_power_any
+            }
+        ),
+        stringResource(
+            R.string.settings_auto_download_review_max_storage,
+            maximumLimit
+        ),
+        stringResource(
+            R.string.settings_auto_download_review_reserved_space,
+            reserveLimit
+        ),
+        stringResource(
+            if (policy.automaticRemovalEnabled) {
+                R.string.settings_auto_download_review_cleanup_enabled
+            } else {
+                R.string.settings_auto_download_review_cleanup_disabled
+            }
+        )
+    )
+}
+
+@Composable
+private fun localizedAutomaticDownloadLimit(bytes: Long): String = if (bytes <= 0L) {
+    stringResource(R.string.settings_auto_download_review_no_limit)
+} else {
+    stringResource(
+        R.string.settings_auto_download_review_limit_gb,
+        formatAutomaticDownloadGiB(bytes)
+    )
+}
 
 internal fun automaticDownloadReviewLines(
     policy: AutomaticDownloadPolicy,
@@ -4633,6 +5053,7 @@ private fun OfflineLibraryCacheConfiguration(
     onCancel: () -> Unit,
     onClear: () -> Unit
 ) {
+    val context = LocalContext.current
     val selectedIds = preferences.offlineCacheLibraryIds
     val hasContentType = preferences.offlineCacheDetailsEnabled || preferences.offlineCacheCoversEnabled
     val isRunning = status.state == OfflineCacheRunState.RUNNING
@@ -4647,15 +5068,24 @@ private fun OfflineLibraryCacheConfiguration(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Offline library cache", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Keep selected library metadata and thumbnails available offline. This never downloads readable book files.",
+                stringResource(R.string.settings_offline_cache_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                stringResource(R.string.settings_offline_cache_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text("Libraries", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_libraries),
+                style = MaterialTheme.typography.titleMedium
+            )
             if (libraries.isEmpty()) {
-                Text("No libraries available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.settings_no_libraries),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             } else {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -4679,8 +5109,8 @@ private fun OfflineLibraryCacheConfiguration(
                 }
             }
             AppPreferenceSwitchRow(
-                title = "Book details",
-                summary = "Synopsis, authors, genres, tags, series, and file metadata",
+                title = stringResource(R.string.settings_offline_cache_book_details),
+                summary = stringResource(R.string.settings_offline_cache_book_details_summary),
                 checked = preferences.offlineCacheDetailsEnabled,
                 testTag = "offline-cache-details",
                 onCheckedChange = {
@@ -4688,8 +5118,8 @@ private fun OfflineLibraryCacheConfiguration(
                 }
             )
             AppPreferenceSwitchRow(
-                title = "Cover thumbnails",
-                summary = "Browsing-size images with a 256 MB device cache limit",
+                title = stringResource(R.string.settings_offline_cache_covers),
+                summary = stringResource(R.string.settings_offline_cache_covers_summary),
                 checked = preferences.offlineCacheCoversEnabled,
                 testTag = "offline-cache-covers",
                 onCheckedChange = {
@@ -4697,8 +5127,8 @@ private fun OfflineLibraryCacheConfiguration(
                 }
             )
             AppPreferenceSwitchRow(
-                title = "Automatically refresh",
-                summary = "Approximately daily on unmetered networks",
+                title = stringResource(R.string.settings_offline_cache_auto_refresh),
+                summary = stringResource(R.string.settings_offline_cache_auto_refresh_summary),
                 checked = preferences.offlineCacheAutoRefreshEnabled,
                 testTag = "offline-cache-auto-refresh",
                 onCheckedChange = {
@@ -4711,14 +5141,24 @@ private fun OfflineLibraryCacheConfiguration(
                         progress = { (status.processed.toFloat() / status.total).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().testTag("offline-cache-progress")
                     )
-                    Text("${status.processed} of ${status.total} books checked")
+                    Text(
+                        stringResource(
+                            R.string.settings_offline_cache_progress,
+                            status.processed,
+                            status.total
+                        )
+                    )
                 } else {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text("Refreshing selected library catalogs…")
+                    Text(stringResource(R.string.settings_offline_cache_refreshing))
                 }
             } else if (status.state != OfflineCacheRunState.IDLE) {
+                val checkedFallback = stringResource(
+                    R.string.settings_offline_cache_books_checked,
+                    status.processed
+                )
                 Text(
-                    status.message ?: "${status.processed} books checked",
+                    status.localizedMessage(context) ?: checkedFallback,
                     color = if (status.state == OfflineCacheRunState.FAILED) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -4727,7 +5167,11 @@ private fun OfflineLibraryCacheConfiguration(
                 )
                 if (status.unavailable > 0 || status.failed > 0) {
                     Text(
-                        "Unavailable ${status.unavailable} · Failed ${status.failed}",
+                        stringResource(
+                            R.string.settings_offline_cache_unavailable_failed,
+                            status.unavailable,
+                            status.failed
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -4741,19 +5185,68 @@ private fun OfflineLibraryCacheConfiguration(
                     onClick = onStart,
                     enabled = !isRunning && selectedIds.isNotEmpty() && hasContentType,
                     modifier = Modifier.testTag("offline-cache-update")
-                ) { Text("Download/update now") }
+                ) { Text(stringResource(R.string.settings_offline_cache_update_now)) }
                 if (isRunning) {
                     OutlinedButton(
                         onClick = onCancel,
                         modifier = Modifier.testTag("offline-cache-cancel")
-                    ) { Text("Cancel") }
+                    ) { Text(stringResource(R.string.common_cancel)) }
                 }
                 TextButton(
                     onClick = onClear,
                     enabled = !isRunning,
                     modifier = Modifier.testTag("offline-cache-clear")
-                ) { Text("Clear offline cache") }
+                ) { Text(stringResource(R.string.settings_offline_cache_clear)) }
             }
+        }
+    }
+}
+
+private enum class PageMarginSide(@StringRes val labelRes: Int) {
+    TOP(R.string.settings_margin_top),
+    BOTTOM(R.string.settings_margin_bottom),
+    LEFT(R.string.settings_margin_left),
+    RIGHT(R.string.settings_margin_right)
+}
+
+@Composable
+private fun ReaderPageMarginsSettings(
+    padding: EpubPaddingPercentages,
+    testTagPrefix: String,
+    onPaddingChange: (EpubPaddingPercentages) -> Unit
+) {
+    Text(
+        stringResource(R.string.settings_page_margins),
+        style = MaterialTheme.typography.titleMedium
+    )
+    PageMarginSide.values().forEach { side ->
+        val margin = when (side) {
+            PageMarginSide.TOP -> padding.top
+            PageMarginSide.BOTTOM -> padding.bottom
+            PageMarginSide.LEFT -> padding.left
+            PageMarginSide.RIGHT -> padding.right
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val sideLabel = stringResource(side.labelRes)
+            Text(
+                stringResource(R.string.settings_margin_percent, sideLabel, margin.toInt()),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Slider(
+                value = margin,
+                onValueChange = { next ->
+                    val updated = when (side) {
+                        PageMarginSide.TOP -> padding.copy(top = next)
+                        PageMarginSide.BOTTOM -> padding.copy(bottom = next)
+                        PageMarginSide.LEFT -> padding.copy(left = next)
+                        PageMarginSide.RIGHT -> padding.copy(right = next)
+                    }
+                    onPaddingChange(updated)
+                },
+                valueRange = 0f..100f,
+                steps = 19,
+                modifier = Modifier.testTag("$testTagPrefix-margin-${side.name.lowercase()}")
+            )
         }
     }
 }
@@ -4774,10 +5267,13 @@ private fun LibraryReaderConfiguration(
         modifier = Modifier.padding(start = 4.dp, top = 26.dp, end = 4.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        OrbitEyebrow("Reading configuration")
-        Text("Library reader profile", style = MaterialTheme.typography.headlineSmall)
+        OrbitEyebrow(stringResource(R.string.settings_reading_config_eyebrow))
         Text(
-            "Direction, typography, margins, and format layouts are saved independently for each library.",
+            stringResource(R.string.settings_library_reader_profile),
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Text(
+            stringResource(R.string.settings_library_reader_profile_summary),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium
         )
@@ -4787,8 +5283,9 @@ private fun LibraryReaderConfiguration(
                 enabled = libraries.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().testTag("options-reading-library")
             ) {
+                val noLibrariesLabel = stringResource(R.string.settings_no_libraries)
                 Text(
-                    selectedLibrary?.name ?: "No libraries available",
+                    selectedLibrary?.name ?: noLibrariesLabel,
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Start
                 )
@@ -4811,7 +5308,10 @@ private fun LibraryReaderConfiguration(
             }
         }
         if (selectedLibrary != null) {
-            Text("Reading direction", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_reading_direction),
+                style = MaterialTheme.typography.titleMedium
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -4825,7 +5325,9 @@ private fun LibraryReaderConfiguration(
                                 value.copy(readingDirection = direction)
                             )
                         },
-                        label = { Text(direction.displayName) },
+                        label = {
+                            Text(stringResource(direction.displayNameRes))
+                        },
                         modifier = Modifier.testTag(
                             "options-reading-direction-${direction.name.lowercase()}"
                         )
@@ -4840,8 +5342,8 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading-tap-zone"
             )
             AppPreferenceSwitchRow(
-                title = "Prefer server progress when reopening",
-                summary = "Use newer server progress when reopening. Server progress can be approximate when BookOrbit does not provide an exact EPUB locator.",
+                title = stringResource(R.string.settings_prefer_server_progress),
+                summary = stringResource(R.string.settings_prefer_server_progress_summary),
                 checked = value.preferServerProgressOnReopen,
                 testTag = "options-reading-prefer-server-progress-on-reopen",
                 onCheckedChange = { enabled ->
@@ -4851,7 +5353,10 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            Text("Typography", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_typography),
+                style = MaterialTheme.typography.titleMedium
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -4862,7 +5367,7 @@ private fun LibraryReaderConfiguration(
                         onClick = {
                             onPreferencesChange(selectedLibrary.id, value.copy(theme = theme))
                         },
-                        label = { Text(theme.label) }
+                        label = { Text(stringResource(theme.labelRes)) }
                     )
                 }
             }
@@ -4880,7 +5385,10 @@ private fun LibraryReaderConfiguration(
                     }
                 ) { Text("A-") }
                 Text(
-                    "Text size ${formatEpubFontScale(value.fontScale)}",
+                    stringResource(
+                        R.string.settings_text_size,
+                        formatEpubFontScale(value.fontScale)
+                    ),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -4905,34 +5413,13 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            Text("Page margins", style = MaterialTheme.typography.titleMedium)
-            listOf(
-                "Top" to value.padding.top,
-                "Bottom" to value.padding.bottom,
-                "Left" to value.padding.left,
-                "Right" to value.padding.right
-            ).forEach { (label, margin) ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
-                    Slider(
-                        value = margin,
-                        onValueChange = { next ->
-                            val padding = when (label) {
-                                "Top" -> value.padding.copy(top = next)
-                                "Bottom" -> value.padding.copy(bottom = next)
-                                "Left" -> value.padding.copy(left = next)
-                                else -> value.padding.copy(right = next)
-                            }
-                            onPreferencesChange(selectedLibrary.id, value.copy(padding = padding))
-                        },
-                        valueRange = 0f..100f,
-                        steps = 19,
-                        modifier = Modifier.testTag(
-                            "options-reading-margin-${label.lowercase()}"
-                        )
-                    )
+            ReaderPageMarginsSettings(
+                padding = value.padding,
+                testTagPrefix = "options-reading",
+                onPaddingChange = { padding ->
+                    onPreferencesChange(selectedLibrary.id, value.copy(padding = padding))
                 }
-            }
+            )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ReaderFormatLayoutSettings(
                 formatLabel = "PDF",
@@ -4979,14 +5466,20 @@ private fun LibraryReaderConfiguration(
                 }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text("EPUB text", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_epub_text),
+                style = MaterialTheme.typography.titleMedium
+            )
             EpubTypesettingSettings(
                 value = value,
                 testTagPrefix = "options-reading-epub",
                 onPreferencesChange = { next -> onPreferencesChange(selectedLibrary.id, next) }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text("Unfolded screens", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_unfolded_screens),
+                style = MaterialTheme.typography.titleMedium
+            )
             ReaderSpreadSettings(
                 value = value,
                 layoutMode = ReaderLayoutMode.PAGINATED,
@@ -5006,7 +5499,10 @@ private fun EpubTypesettingSettings(
     testTagPrefix: String,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit
 ) {
-    Text("Text alignment", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_text_alignment),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5015,12 +5511,15 @@ private fun EpubTypesettingSettings(
             FilterChip(
                 selected = value.textAlignment == alignment,
                 onClick = { onPreferencesChange(value.copy(textAlignment = alignment)) },
-                label = { Text(alignment.displayName) },
+                label = { Text(stringResource(alignment.displayNameRes)) },
                 modifier = Modifier.testTag("$testTagPrefix-text-align-${alignment.name.lowercase()}")
             )
         }
     }
-    Text("Hyphenation", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_hyphenation),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5029,17 +5528,19 @@ private fun EpubTypesettingSettings(
             FilterChip(
                 selected = value.hyphenation == hyphenation,
                 onClick = { onPreferencesChange(value.copy(hyphenation = hyphenation)) },
-                label = { Text(hyphenation.displayName) },
+                label = { Text(stringResource(hyphenation.displayNameRes)) },
                 modifier = Modifier.testTag("$testTagPrefix-hyphenation-${hyphenation.name.lowercase()}")
             )
         }
     }
     Text(
-        if (value.hyphenation == EpubHyphenation.AUTO) {
-            "Auto hyphenates justified text only. Uses the book's language, or the device language if the book declares none."
-        } else {
-            "Uses the book's language, or the device language if the book declares none."
-        },
+        stringResource(
+            if (value.hyphenation == EpubHyphenation.AUTO) {
+                R.string.settings_hyphenation_auto_note
+            } else {
+                R.string.settings_hyphenation_note
+            }
+        ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -5066,7 +5567,7 @@ private fun ReaderFormatLayoutSettings(
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
-            "Continuous page gap ${pageGapDp.toInt()} dp",
+            stringResource(R.string.settings_continuous_page_gap, pageGapDp.toInt()),
             style = MaterialTheme.typography.bodySmall,
             color = if (layoutMode == ReaderLayoutMode.CONTINUOUS) {
                 MaterialTheme.colorScheme.onSurface
@@ -5085,8 +5586,8 @@ private fun ReaderFormatLayoutSettings(
     }
     if (joinFacingPages != null && onJoinFacingPagesChange != null) {
         AppPreferenceSwitchRow(
-            title = "Remove gap between pages",
-            summary = "Use native PDFium navigation with no gap between paginated pages",
+            title = stringResource(R.string.settings_remove_page_gap),
+            summary = stringResource(R.string.settings_remove_page_gap_summary),
             checked = joinFacingPages,
             enabled = layoutMode == ReaderLayoutMode.PAGINATED,
             testTag = "$testTagPrefix-join-facing-pages",
@@ -5095,8 +5596,8 @@ private fun ReaderFormatLayoutSettings(
     }
     if (invertColors != null && onInvertColorsChange != null) {
         AppPreferenceSwitchRow(
-            title = "Invert PDF colors",
-            summary = "Invert page colors and images for accessibility",
+            title = stringResource(R.string.settings_invert_pdf_colors),
+            summary = stringResource(R.string.settings_invert_pdf_colors_summary),
             checked = invertColors,
             testTag = "$testTagPrefix-invert-colors",
             onCheckedChange = onInvertColorsChange
@@ -5112,7 +5613,10 @@ private fun ReaderLayoutModeSettings(
     testTagPrefix: String,
     onLayoutModeChange: (ReaderLayoutMode) -> Unit
 ) {
-    Text("$formatLabel layout", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_format_layout, formatLabel),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5121,7 +5625,7 @@ private fun ReaderLayoutModeSettings(
             FilterChip(
                 selected = layoutMode == mode,
                 onClick = { onLayoutModeChange(mode) },
-                label = { Text(mode.displayName) },
+                label = { Text(stringResource(mode.displayNameRes)) },
                 modifier = Modifier.testTag(
                     "$testTagPrefix-layout-${mode.name.lowercase()}"
                 )
@@ -5137,7 +5641,10 @@ private fun ReaderTapZoneSettings(
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     testTagPrefix: String
 ) {
-    Text("Tap zones", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_tap_zones),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5146,14 +5653,17 @@ private fun ReaderTapZoneSettings(
             FilterChip(
                 selected = value.tapZoneLayout == layout,
                 onClick = { onPreferencesChange(value.copy(tapZoneLayout = layout)) },
-                label = { Text(layout.displayName) },
+                label = { Text(stringResource(layout.displayNameRes)) },
                 modifier = Modifier.testTag(
                     "$testTagPrefix-layout-${layout.name.lowercase()}"
                 )
             )
         }
     }
-    Text("Tap-zone inversion", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_tap_zone_inversion),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5162,7 +5672,7 @@ private fun ReaderTapZoneSettings(
             FilterChip(
                 selected = value.tapZoneInvertMode == invertMode,
                 onClick = { onPreferencesChange(value.copy(tapZoneInvertMode = invertMode)) },
-                label = { Text(invertMode.displayName) },
+                label = { Text(stringResource(invertMode.displayNameRes)) },
                 modifier = Modifier.testTag(
                     "$testTagPrefix-invert-${invertMode.name.lowercase()}"
                 )
@@ -5184,8 +5694,8 @@ internal fun ReaderConfigurationControls(
     onCustomFontRemove: () -> Unit = {}
 ) {
     AppPreferenceSwitchRow(
-        title = "Turn pages with volume buttons",
-        summary = "Use Volume Up and Volume Down for reader navigation instead of changing volume.",
+        title = stringResource(R.string.settings_volume_page_navigation),
+        summary = stringResource(R.string.settings_volume_page_navigation_summary),
         checked = value.volumeButtonPageNavigation,
         testTag = "$testTagPrefix-volume-button-navigation",
         onCheckedChange = { enabled ->
@@ -5193,8 +5703,8 @@ internal fun ReaderConfigurationControls(
         }
     )
     AppPreferenceSwitchRow(
-        title = "Swap volume button actions",
-        summary = "Use Volume Down for previous and Volume Up for next",
+        title = stringResource(R.string.settings_swap_volume_buttons),
+        summary = stringResource(R.string.settings_swap_volume_buttons_summary),
         checked = value.reverseVolumeButtonNavigation,
         enabled = value.volumeButtonPageNavigation,
         testTag = "$testTagPrefix-reverse-volume-button-navigation",
@@ -5202,7 +5712,10 @@ internal fun ReaderConfigurationControls(
             onPreferencesChange(value.copy(reverseVolumeButtonNavigation = reversed))
         }
     )
-    Text("Reading direction", style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_reading_direction),
+        style = MaterialTheme.typography.titleMedium
+    )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5211,7 +5724,7 @@ internal fun ReaderConfigurationControls(
             FilterChip(
                 selected = value.readingDirection == direction,
                 onClick = { onPreferencesChange(value.copy(readingDirection = direction)) },
-                label = { Text(direction.displayName) },
+                label = { Text(stringResource(direction.displayNameRes)) },
                 modifier = Modifier.testTag(
                     "$testTagPrefix-direction-${direction.name.lowercase()}"
                 )
@@ -5225,8 +5738,8 @@ internal fun ReaderConfigurationControls(
     )
     if (format != ReaderConfigurationFormat.PDF) {
         AppPreferenceSwitchRow(
-            title = "Show page progress",
-            summary = "Show the page counter while reading and with reader controls.",
+            title = stringResource(R.string.settings_show_page_progress),
+            summary = stringResource(R.string.settings_show_page_progress_summary),
             checked = value.showPageProgress,
             testTag = "$testTagPrefix-show-page-progress",
             onCheckedChange = { enabled ->
@@ -5235,14 +5748,17 @@ internal fun ReaderConfigurationControls(
         )
     }
     AppPreferenceSwitchRow(
-        title = format.tapZoneTutorialPreferenceTitle(),
-        summary = "Show this format's tap-zone guide again when the layout or inversion changes.",
+        title = stringResource(format.tapZoneTutorialPreferenceTitleRes()),
+        summary = stringResource(R.string.settings_tap_zone_tutorial_summary),
         checked = showTapZoneTutorialAfterChanges,
         testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
         onCheckedChange = onShowTapZoneTutorialAfterChangesChange
     )
     if (format != ReaderConfigurationFormat.COMIC) {
-        Text("Typography", style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.settings_typography),
+            style = MaterialTheme.typography.titleMedium
+        )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -5251,7 +5767,7 @@ internal fun ReaderConfigurationControls(
                 FilterChip(
                     selected = value.theme == theme,
                     onClick = { onPreferencesChange(value.copy(theme = theme)) },
-                    label = { Text(theme.label) },
+                    label = { Text(stringResource(theme.labelRes)) },
                     modifier = Modifier.testTag(
                         "$testTagPrefix-theme-${theme.name.lowercase()}"
                     )
@@ -5261,8 +5777,8 @@ internal fun ReaderConfigurationControls(
     }
     if (format == ReaderConfigurationFormat.EPUB) {
         AppPreferenceSwitchRow(
-            title = "Prefer server progress when reopening",
-            summary = "Use newer server progress when reopening. Server progress can be approximate when BookOrbit does not provide an exact EPUB locator.",
+            title = stringResource(R.string.settings_prefer_server_progress),
+            summary = stringResource(R.string.settings_prefer_server_progress_summary),
             checked = value.preferServerProgressOnReopen,
             testTag = "$testTagPrefix-prefer-server-progress-on-reopen",
             onCheckedChange = { enabled ->
@@ -5270,11 +5786,18 @@ internal fun ReaderConfigurationControls(
             }
         )
         var fontMenuExpanded by remember { mutableStateOf(false) }
-        val selectedFontLabel = value.customFont
+        val customFontLabel = value.customFont
             ?.takeIf { value.fontFamily == EpubReaderFontFamily.CUSTOM }
             ?.displayName
-            ?: value.fontFamily.displayName
-        Text("Fonts", style = MaterialTheme.typography.titleMedium)
+        val selectedFontLabel = if (customFontLabel != null) {
+            customFontLabel
+        } else {
+            stringResource(value.fontFamily.displayNameRes)
+        }
+        Text(
+            stringResource(R.string.settings_fonts),
+            style = MaterialTheme.typography.titleMedium
+        )
         Box {
             OutlinedButton(
                 onClick = { fontMenuExpanded = true },
@@ -5290,14 +5813,16 @@ internal fun ReaderConfigurationControls(
                 onDismissRequest = { fontMenuExpanded = false }
             ) {
                 Text(
-                    "Normal fonts",
+                    stringResource(R.string.settings_normal_fonts),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 EPUB_NORMAL_FONT_FAMILY_OPTIONS.forEach { fontFamily ->
                     DropdownMenuItem(
-                        text = { Text(fontFamily.displayName) },
+                        text = {
+                            Text(stringResource(fontFamily.displayNameRes))
+                        },
                         onClick = {
                             fontMenuExpanded = false
                             onPreferencesChange(value.copy(fontFamily = fontFamily))
@@ -5308,14 +5833,16 @@ internal fun ReaderConfigurationControls(
                     )
                 }
                 Text(
-                    "Accessibility fonts",
+                    stringResource(R.string.settings_accessibility_fonts),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 EPUB_ACCESSIBILITY_FONT_FAMILY_OPTIONS.forEach { fontFamily ->
                     DropdownMenuItem(
-                        text = { Text(fontFamily.displayName) },
+                        text = {
+                            Text(stringResource(fontFamily.displayNameRes))
+                        },
                         onClick = {
                             fontMenuExpanded = false
                             onPreferencesChange(value.copy(fontFamily = fontFamily))
@@ -5326,13 +5853,13 @@ internal fun ReaderConfigurationControls(
                     )
                 }
                 Text(
-                    "Custom font",
+                    stringResource(R.string.settings_custom_font),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 DropdownMenuItem(
-                    text = { Text("Choose custom font…") },
+                    text = { Text(stringResource(R.string.settings_choose_custom_font)) },
                     onClick = {
                         fontMenuExpanded = false
                         onCustomFontRequest()
@@ -5341,7 +5868,14 @@ internal fun ReaderConfigurationControls(
                 )
                 if (value.customFont != null) {
                     DropdownMenuItem(
-                        text = { Text("Remove ${value.customFont.displayName}") },
+                        text = {
+                            Text(
+                                stringResource(
+                                    R.string.settings_remove_custom_font,
+                                    value.customFont.displayName
+                                )
+                            )
+                        },
                         onClick = {
                             fontMenuExpanded = false
                             onCustomFontRemove()
@@ -5353,7 +5887,10 @@ internal fun ReaderConfigurationControls(
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Line spacing ${formatEpubLineSpacing(value.lineSpacing)}",
+                stringResource(
+                    R.string.settings_line_spacing,
+                    formatEpubLineSpacing(value.lineSpacing)
+                ),
                 style = MaterialTheme.typography.bodySmall
             )
             Slider(
@@ -5366,7 +5903,10 @@ internal fun ReaderConfigurationControls(
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Word spacing ${formatEpubWordSpacing(value.wordSpacing)}",
+                stringResource(
+                    R.string.settings_word_spacing,
+                    formatEpubWordSpacing(value.wordSpacing)
+                ),
                 style = MaterialTheme.typography.bodySmall
             )
             Slider(
@@ -5390,7 +5930,10 @@ internal fun ReaderConfigurationControls(
                 modifier = Modifier.testTag("$testTagPrefix-font-decrease")
             ) { Text("A-") }
             Text(
-                "Text size ${formatEpubFontScale(value.fontScale)}",
+                stringResource(
+                    R.string.settings_text_size,
+                    formatEpubFontScale(value.fontScale)
+                ),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -5415,32 +5958,13 @@ internal fun ReaderConfigurationControls(
                 testTagPrefix = "$testTagPrefix-epub",
                 onPreferencesChange = onPreferencesChange
             )
-            Text("Page margins", style = MaterialTheme.typography.titleMedium)
-            listOf(
-                "Top" to value.padding.top,
-                "Bottom" to value.padding.bottom,
-                "Left" to value.padding.left,
-                "Right" to value.padding.right
-            ).forEach { (label, margin) ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("$label ${margin.toInt()}%", style = MaterialTheme.typography.bodySmall)
-                    Slider(
-                        value = margin,
-                        onValueChange = { next ->
-                            val padding = when (label) {
-                                "Top" -> value.padding.copy(top = next)
-                                "Bottom" -> value.padding.copy(bottom = next)
-                                "Left" -> value.padding.copy(left = next)
-                                else -> value.padding.copy(right = next)
-                            }
-                            onPreferencesChange(value.copy(padding = padding))
-                        },
-                        valueRange = 0f..100f,
-                        steps = 19,
-                        modifier = Modifier.testTag("$testTagPrefix-margin-${label.lowercase()}")
-                    )
+            ReaderPageMarginsSettings(
+                padding = value.padding,
+                testTagPrefix = testTagPrefix,
+                onPaddingChange = { padding ->
+                    onPreferencesChange(value.copy(padding = padding))
                 }
-            }
+            )
         }
         ReaderConfigurationFormat.PDF -> ReaderFormatLayoutSettings(
             formatLabel = "PDF",
@@ -5474,12 +5998,14 @@ private fun ReaderSpreadSettings(
 ) {
     val spreadEnabled = value.twoPageSpread == ReaderSpreadMode.AUTO
     AppPreferenceSwitchRow(
-        title = "Two-page spread when unfolded",
-        summary = if (layoutMode == ReaderLayoutMode.PAGINATED) {
-            "On a large screen held horizontally, show two pages side by side"
-        } else {
-            "Applies to paginated layout on a large screen held horizontally"
-        },
+        title = stringResource(R.string.settings_two_page_spread),
+        summary = stringResource(
+            if (layoutMode == ReaderLayoutMode.PAGINATED) {
+                R.string.settings_two_page_spread_summary_paginated
+            } else {
+                R.string.settings_two_page_spread_summary_other
+            }
+        ),
         checked = spreadEnabled,
         testTag = "$testTagPrefix-two-page-spread",
         onCheckedChange = { enabled ->
@@ -5575,7 +6101,9 @@ private fun <T> AppPreferenceChoiceDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        }
     )
 }
 
@@ -5597,15 +6125,16 @@ private fun AboutScreen(
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OrbitEyebrow("About")
-                Text("Lagrange Reader", style = MaterialTheme.typography.headlineSmall)
+                OrbitEyebrow(stringResource(R.string.settings_about_eyebrow))
                 Text(
-                    "An independent Android app for reading and listening to books hosted on BookOrbit.",
+                    stringResource(R.string.settings_about_title),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    stringResource(R.string.settings_about_intro),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    "Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. BookOrbit supplies the authenticated server and library data; Lagrange provides the Android interface, local state, reading, listening, and offline behavior."
-                )
+                Text(stringResource(R.string.settings_about_description))
             }
         }
         item {
@@ -5614,15 +6143,30 @@ private fun AboutScreen(
                 modifier = Modifier.padding(top = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("Build information", style = MaterialTheme.typography.titleMedium)
-                Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                Text("Connected server", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    stringResource(R.string.settings_about_build_info),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    stringResource(
+                        R.string.settings_about_version,
+                        BuildConfig.VERSION_NAME,
+                        BuildConfig.VERSION_CODE
+                    )
+                )
+                Text(
+                    stringResource(R.string.settings_about_connected_server),
+                    style = MaterialTheme.typography.labelMedium
+                )
                 Text(state.serverUrl, style = MaterialTheme.typography.bodySmall)
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("App updates", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.settings_about_updates),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 OutlinedButton(
                     onClick = onCheckForUpdates,
                     enabled = releaseCheckStatus != ReleaseCheckStatus.CHECKING,
@@ -5635,15 +6179,21 @@ private fun AboutScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text("Check for updates")
+                    Text(stringResource(R.string.settings_about_check_updates))
                 }
-                val result = when (releaseCheckStatus) {
-                    ReleaseCheckStatus.UP_TO_DATE -> "You are up to date."
-                    ReleaseCheckStatus.UPDATE_AVAILABLE -> "An update is available."
-                    ReleaseCheckStatus.ERROR -> "Unable to check for updates."
+                val updateStatusRes = when (releaseCheckStatus) {
+                    ReleaseCheckStatus.UP_TO_DATE -> R.string.settings_about_up_to_date
+                    ReleaseCheckStatus.UPDATE_AVAILABLE ->
+                        R.string.settings_about_update_available
+                    ReleaseCheckStatus.ERROR -> R.string.settings_about_update_error
                     else -> null
                 }
-                result?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                updateStatusRes?.let {
+                    Text(
+                        stringResource(it),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         item {
@@ -5652,41 +6202,44 @@ private fun AboutScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Not an official BookOrbit application", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Lagrange Reader is an independent community project. It is not affiliated with, endorsed by, or sponsored by the BookOrbit maintainers. BookOrbit remains the source of the server and library experience used by this app."
+                        stringResource(R.string.settings_about_not_official),
+                        style = MaterialTheme.typography.titleMedium
                     )
+                    Text(stringResource(R.string.settings_about_not_official_body))
                 }
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Acknowledgements", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Thanks to the BookOrbit maintainers and contributors, the Readium Foundation, the Android and Kotlin open-source communities, and everyone who tests Lagrange Reader and reports issues."
+                    stringResource(R.string.settings_about_acknowledgements),
+                    style = MaterialTheme.typography.titleMedium
                 )
-                Text(
-                    "The app uses BookOrbit, Readium, AndroidX, Jetpack Compose, Kotlin, Media3, OkHttp, Room, and other open-source libraries. Their respective licenses and notices remain authoritative."
-                )
+                Text(stringResource(R.string.settings_about_acknowledgements_body))
+                Text(stringResource(R.string.settings_about_acknowledgements_libraries))
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Project links", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.settings_about_project_links),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader") }) {
-                    Text("Lagrange Reader on GitHub")
+                    Text(stringResource(R.string.settings_about_link_github))
                 }
                 TextButton(onClick = { openLink("https://github.com/BookOrbit") }) {
-                    Text("BookOrbit on GitHub")
+                    Text(stringResource(R.string.settings_about_link_bookorbit))
                 }
                 TextButton(onClick = { openLink("https://readium.org/") }) {
-                    Text("Readium Foundation")
+                    Text(stringResource(R.string.settings_about_link_readium))
                 }
                 TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader/blob/main/LICENSE") }) {
-                    Text("GPLv3 license")
+                    Text(stringResource(R.string.settings_about_link_license))
                 }
                 TextButton(onClick = { openLink("https://github.com/van-geaux/lagrange-reader/blob/main/THIRD_PARTY_NOTICES.md") }) {
-                    Text("Third-party notices")
+                    Text(stringResource(R.string.settings_about_link_notices))
                 }
             }
         }
@@ -5968,10 +6521,10 @@ private fun HomeFeed(
         if (showHeader) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text("Home", style = MaterialTheme.typography.headlineSmall)
+                    Text(stringResource(R.string.browse_home), style = MaterialTheme.typography.headlineSmall)
                     Text(
                         state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
-                            ?: "Your library",
+                            ?: stringResource(R.string.browse_your_library),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -5981,7 +6534,11 @@ private fun HomeFeed(
         if (currentlyReading.isNotEmpty()) {
             item {
                 BookShelf(
-                    title = if (serverShelves.isServerProvided) "Continue reading" else "Currently reading",
+                    title = if (serverShelves.isServerProvided) {
+                        stringResource(R.string.browse_continue_reading)
+                    } else {
+                        stringResource(R.string.browse_currently_reading)
+                    },
                     books = currentlyReading,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
@@ -6001,25 +6558,25 @@ private fun HomeFeed(
             }
         }
         if (onDeck.isNotEmpty()) item {
-            BookShelf("On deck", onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
+            BookShelf(stringResource(R.string.browse_on_deck), onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
         }
         if (wantToRead.isNotEmpty()) item {
-            BookShelf("Want to read", wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) })
+            BookShelf(stringResource(R.string.browse_want_to_read), wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) })
         }
         if (recentlyAddedBooks.isNotEmpty()) item {
-            BookShelf("Recently added books", recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) })
+            BookShelf(stringResource(R.string.browse_recently_added_books), recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) })
         }
         if (recentlyReleasedBooks.isNotEmpty()) item {
-            BookShelf("Recently released books", recentlyReleasedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_RELEASED_BOOKS) })
+            BookShelf(stringResource(R.string.browse_recently_released_books), recentlyReleasedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_RELEASED_BOOKS) })
         }
-        if (recentSeries.isNotEmpty()) item { SeriesShelf("Recently added series", recentSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) }) }
-        if (updatedSeries.isNotEmpty()) item { SeriesShelf("Recently updated series", updatedSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) }) }
+        if (recentSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_added_series), recentSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) }) }
+        if (updatedSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_updated_series), updatedSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) }) }
         if (recentlyRead.isNotEmpty()) item {
-            BookShelf("Recently read books", recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_READ) })
+            BookShelf(stringResource(R.string.browse_recently_read_books), recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_READ) })
         }
         if (localBooks.isNotEmpty()) item {
             BookShelf(
-                title = "Local books",
+                title = stringResource(R.string.browse_local_books),
                 books = localBooks,
                 coverLoader = coverLoader,
                 onBookSelected = onBookSelected,
@@ -6033,11 +6590,11 @@ private fun HomeFeed(
                 onSeeAll = onLocalBooksSelected
             )
         }
-        if (state.isLoadingBooks) item { LoadingFeedRow("Loading books...") }
+        if (state.isLoadingBooks) item { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item {
                 Text(
-                    "No books found in this library.",
+                    stringResource(R.string.browse_no_books_in_library),
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -6139,7 +6696,7 @@ private fun ShelfTitle(title: String, onSeeAll: (() -> Unit)? = null) {
             TextButton(
                 onClick = onSeeAll,
                 modifier = Modifier.testTag("home_see_all_${title.lowercase().replace(' ', '_')}")
-            ) { Text("See all") }
+            ) { Text(stringResource(R.string.browse_see_all)) }
         }
     }
 }
@@ -6190,7 +6747,7 @@ private fun ShelfBookCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options for ${book.title}"
+                            contentDescription = stringResource(R.string.browse_more_options_for, book.title)
                         )
                     }
                     DropdownMenu(
@@ -6199,7 +6756,7 @@ private fun ShelfBookCard(
                     ) {
                         onMarkAsStatus?.let { markAsStatus ->
                             DropdownMenuItem(
-                                text = { Text(bookDetailReadingStatusActionLabel()) },
+                                text = { Text(stringResource(R.string.browse_mark_as)) },
                                 onClick = {
                                     showActions = false
                                     showStatusMenu = true
@@ -6208,7 +6765,7 @@ private fun ShelfBookCard(
                         }
                         if (onMarkAsStatus == null) onMarkAsRead?.let { markAsRead ->
                             DropdownMenuItem(
-                                text = { Text("Mark as read") },
+                                text = { Text(stringResource(R.string.browse_mark_as_read)) },
                                 onClick = {
                                     showActions = false
                                     markAsRead()
@@ -6217,7 +6774,7 @@ private fun ShelfBookCard(
                         }
                         if (onMarkAsStatus == null) onMarkAsUnread?.let { markAsUnread ->
                             DropdownMenuItem(
-                                text = { Text("Mark as unread") },
+                                text = { Text(stringResource(R.string.browse_mark_as_unread)) },
                                 onClick = {
                                     showActions = false
                                     markAsUnread()
@@ -6226,19 +6783,19 @@ private fun ShelfBookCard(
                         }
                         onRemoveFromCurrentlyReading?.let { remove ->
                             DropdownMenuItem(
-                                text = { Text("Remove from Currently reading") },
+                                text = { Text(stringResource(R.string.browse_remove_from_currently_reading)) },
                                 onClick = {
                                     showActions = false
                                     remove()
                                 }
                             )
                         }
-                        if (isDownloading) onCancelDownload?.let { cancel -> DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; cancel() }) }
+                        if (isDownloading) onCancelDownload?.let { cancel -> DropdownMenuItem(text = { Text(stringResource(R.string.common_cancel)) }, onClick = { showActions = false; cancel() }) }
                         else if (failed) {
-                            if (!book.isServerMissing) onDownload?.let { retry -> DropdownMenuItem(text = { Text("Retry") }, onClick = { showActions = false; retry() }) }
-                            onClearFailedDownload?.let { clear -> DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; clear() }) }
-                        } else if (!book.isDownloaded && !book.isServerMissing && downloadState?.isOfflineSnapshot != true) onDownload?.let { download -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; download() }) }
-                        if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; deleteLocal() }) }
+                            if (!book.isServerMissing) onDownload?.let { retry -> DropdownMenuItem(text = { Text(stringResource(R.string.common_retry)) }, onClick = { showActions = false; retry() }) }
+                            onClearFailedDownload?.let { clear -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_clear)) }, onClick = { showActions = false; clear() }) }
+                        } else if (!book.isDownloaded && !book.isServerMissing && downloadState?.isOfflineSnapshot != true) onDownload?.let { download -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_download_local)) }, onClick = { showActions = false; download() }) }
+                        if (book.isDownloaded) onDeleteLocalCopy?.let { deleteLocal -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_delete_local)) }, onClick = { showActions = false; deleteLocal() }) }
                     }
                     onMarkAsStatus?.let { markAsStatus ->
                         BookDetailReadingStatusMenu(
@@ -6324,12 +6881,13 @@ private fun BookCardCoverSlot(
                 overlay()
                 if (book.isUnread() && !book.isServerMissing) {
                     val markerSize = minOf(28.dp, maxWidth * 0.18f).coerceAtLeast(20.dp)
+                    val unreadMarkerDescription = stringResource(R.string.browse_unread_book)
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .size(markerSize)
                             .testTag("unread-book-marker")
-                            .semantics { contentDescription = "Unread book" }
+                            .semantics { contentDescription = unreadMarkerDescription }
                     ) {
                         Canvas(Modifier.fillMaxSize()) {
                             val fold = size.width * 0.56f
@@ -6363,19 +6921,20 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.tertiaryContainer
     )
+    val coverDescription = stringResource(R.string.browse_cover_for, book.title)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(book.coverAspectRatio.widthToHeight)
             .clip(MaterialTheme.shapes.small)
             .background(Brush.linearGradient(colors))
-            .semantics { contentDescription = "Cover for ${book.title}" },
+            .semantics { contentDescription = coverDescription },
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
             Image(
                 bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Cover for ${book.title}",
+                contentDescription = coverDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
@@ -6396,17 +6955,19 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
             )
         }
         if (book.isServerMissing) {
+            val missingBookDescription =
+                stringResource(R.string.browse_missing_cd, book.title)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xCCFFC107))
                     .semantics {
-                        contentDescription = "Missing! ${book.title} is missing on the server"
+                        contentDescription = missingBookDescription
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Missing!",
+                    text = stringResource(R.string.browse_missing),
                     color = Color(0xFF3E2723),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
@@ -6507,7 +7068,7 @@ private fun SearchResults(
     onClearFailedDownload: (BookSummary) -> Unit = {}
 ) {
     LibraryBookList(
-        title = "Search results",
+        title = stringResource(R.string.browse_search_results),
         books = books,
         state = state,
         modifier = modifier,
@@ -6564,6 +7125,7 @@ private fun LibraryContentScreen(
     }
     var showLibraryFileSelection by remember(state.selectedLibraryId) { mutableStateOf(false) }
     val browseOptionsExpanded = appPreferences.libraryBrowseOptionsExpanded[state.selectedLibraryId] ?: false
+    val libraryDownloadScopeLabel = stringResource(R.string.browse_the_selected_library)
     var librarySelectedFileIds by remember(state.selectedLibraryId) { mutableStateOf(emptySet<String>()) }
     var libraryFrozenSelection by remember(state.selectedLibraryId) { mutableStateOf<List<BookSummary>>(emptyList()) }
     var libraryDownloadConfirmStep by remember(state.selectedLibraryId) { mutableStateOf(0) }
@@ -6591,7 +7153,7 @@ private fun LibraryContentScreen(
     )
     if (showLibraryFileSelection) {
         SeriesFileSelectionDialog(
-            title = "Select library downloads",
+            title = stringResource(R.string.browse_select_library_downloads),
             candidates = libraryDownloadCandidates,
             libraries = state.libraries,
             groupingMode = SeriesGroupingMode.NONE,
@@ -6609,57 +7171,60 @@ private fun LibraryContentScreen(
     if (libraryDownloadConfirmStep == 1) {
         AlertDialog(
             onDismissRequest = { libraryDownloadConfirmStep = 0 },
-            title = { Text("Download this library?") },
+            title = { Text(stringResource(R.string.browse_download_library_title)) },
             text = {
                 Text(
-                    "This will download ${libraryFrozenSelection.size} " +
-                        "${if (libraryFrozenSelection.size == 1) "file" else "files"} to this device. " +
-                        "This may use a significant amount of storage and data."
+                    stringResource(
+                        R.string.browse_download_files_message,
+                        libraryFrozenSelection.size
+                    )
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = { libraryDownloadConfirmStep = 2 },
                     modifier = Modifier.testTag("confirm-download-library-step1")
-                ) { Text("Continue") }
+                ) { Text(stringResource(R.string.common_continue)) }
             },
             dismissButton = {
-                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text("Cancel") }
+                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     } else if (libraryDownloadConfirmStep == 2) {
         AlertDialog(
             onDismissRequest = { libraryDownloadConfirmStep = 0 },
-            title = { Text("Are you sure?") },
+            title = { Text(stringResource(R.string.browse_are_you_sure)) },
             text = {
-                Text(
-                    "Downloading the entire library may use a significant amount of storage " +
-                        "and mobile data, and cannot be paused as one operation."
-                )
+                Text(stringResource(R.string.browse_download_library_full_message))
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         libraryDownloadConfirmStep = 0
-                        onBulkDownload?.invoke("the selected library", libraryFrozenSelection)
+                        onBulkDownload?.invoke(libraryDownloadScopeLabel, libraryFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-library-step2")
-                ) { Text("Download library") }
+                ) { Text(stringResource(R.string.browse_download_library)) }
             },
             dismissButton = {
-                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text("Cancel") }
+                TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
     pendingLibraryLocalDeletes?.let { books ->
         AlertDialog(
             onDismissRequest = { pendingLibraryLocalDeletes = null },
-            title = { Text("Delete ${books.size} local ${if (books.size == 1) "copy" else "copies"}?") },
-            text = {
+            title = {
                 Text(
-                    "The selected files will be removed from this device. " +
-                        "Your BookOrbit books are not deleted."
+                    if (books.size == 1) {
+                        stringResource(R.string.browse_delete_local_copy_title)
+                    } else {
+                        stringResource(R.string.browse_delete_local_copies_title, books.size)
+                    }
                 )
+            },
+            text = {
+                Text(stringResource(R.string.browse_delete_files_full_message))
             },
             confirmButton = {
                 TextButton(
@@ -6668,10 +7233,10 @@ private fun LibraryContentScreen(
                         onDeleteLocalCopies(books)
                     },
                     modifier = Modifier.testTag("confirm-delete-library-local-copies")
-                ) { Text("Delete local") }
+                ) { Text(stringResource(R.string.browse_delete_local)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingLibraryLocalDeletes = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingLibraryLocalDeletes = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -6685,12 +7250,12 @@ private fun LibraryContentScreen(
                 Tab(
                     selected = tab == LibraryTab.RECOMMENDED,
                     onClick = { onTabChange(LibraryTab.RECOMMENDED) },
-                    text = { Text("Recommended") }
+                    text = { Text(stringResource(R.string.browse_recommended)) }
                 )
                 Tab(
                     selected = tab == LibraryTab.BROWSE,
                     onClick = { onTabChange(LibraryTab.BROWSE) },
-                    text = { Text("Browse") }
+                    text = { Text(stringResource(R.string.browse_browse)) }
                 )
             }
             when (tab) {
@@ -6769,14 +7334,14 @@ private fun LibraryContentScreen(
                                             },
                                             enabled = libraryActiveFileIds.isEmpty(),
                                             modifier = Modifier.testTag("download-library")
-                                        ) { Text("Download library") }
+                                        ) { Text(stringResource(R.string.browse_download_library)) }
                                     }
                                     if (libraryLocalCopies.isNotEmpty()) {
                                         OutlinedButton(
                                             onClick = { pendingLibraryLocalDeletes = libraryLocalCopies },
                                             enabled = libraryActiveFileIds.isEmpty(),
                                             modifier = Modifier.testTag("delete-library-local-copies")
-                                        ) { Text("Delete local books") }
+                                        ) { Text(stringResource(R.string.browse_delete_local_books)) }
                                     }
                                     }
                                 }
@@ -6907,7 +7472,11 @@ private fun HomeSeriesSectionScreen(
     ) {
         if (series.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("No ${section.title.lowercase()} found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val sectionTitle = stringResource(section.titleRes)
+                Text(
+                    stringResource(R.string.browse_no_section_found, sectionTitle),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         gridItems(displaySeries, key = { "home-series-${section.name}-${it.id}" }) { item ->
@@ -6924,7 +7493,7 @@ private fun HomeSeriesSectionScreen(
                 ) {
                     CatalogImage(
                         url = item.coverUrl,
-                        label = "Cover for ${item.name}",
+                        label = stringResource(R.string.browse_cover_for, item.name),
                         loader = imageLoader,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
                     )
@@ -6937,7 +7506,11 @@ private fun HomeSeriesSectionScreen(
                         Text(item.authors.joinToString(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(
-                        "${item.bookCount} books · ${item.readCount} read",
+                        stringResource(
+                            R.string.browse_series_books_read,
+                            item.bookCount,
+                            item.readCount
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -7039,6 +7612,7 @@ internal fun HomeSectionScreen(
             }
         }
     }
+    val sectionTitle = stringResource(section.titleRes)
     LibraryBooks(
         state = state.copy(
             books = sectionBooks,
@@ -7049,8 +7623,8 @@ internal fun HomeSectionScreen(
         modifier = modifier,
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
-        titleOverride = section.title,
-        emptyMessage = "No ${section.title.lowercase()} books found.",
+        titleOverride = sectionTitle,
+        emptyMessage = stringResource(R.string.browse_no_section_books_found, sectionTitle),
         allowSeriesCollapse = false,
         totalBooks = sectionBooks.size,
         jumpRailEnabled = false,
@@ -7204,13 +7778,14 @@ private fun GenreBooksScreen(
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?
 ) {
+    val context = LocalContext.current
     val libraryId = state.selectedLibraryId
     var loadError by remember(libraryId, genre) { mutableStateOf<String?>(null) }
     val books by produceState<List<BookSummary>?>(initialValue = null, libraryId, genre) {
         loadError = null
         if (libraryId == null) {
             value = emptyList()
-            loadError = "Select a library before filtering books by genre."
+            loadError = context.getString(R.string.browse_select_library_for_genre)
             return@produceState
         }
         try {
@@ -7222,7 +7797,8 @@ private fun GenreBooksScreen(
             throw error
         } catch (error: Throwable) {
             value = emptyList()
-            loadError = error.message ?: "Unable to load books in this genre."
+            loadError = error.message
+                ?: context.getString(R.string.browse_genre_load_failed)
         }
     }
     val filteredBooks = books.orEmpty()
@@ -7242,7 +7818,7 @@ private fun GenreBooksScreen(
         onClearFailedDownload = onClearFailedDownload,
         onDeleteLocalCopy = onDeleteLocalCopy,
         titleOverride = genre,
-        emptyMessage = "No books found in $genre.",
+        emptyMessage = stringResource(R.string.browse_genre_no_books, genre),
         allowSeriesCollapse = false,
         totalBooks = filteredBooks.size,
         filter = BookBrowseFilter(genre = genre),
@@ -7261,7 +7837,7 @@ private fun LibraryBooks(
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit = {},
     titleOverride: String? = null,
-    emptyMessage: String = "No books found.",
+    emptyMessage: String? = null,
     allowSeriesCollapse: Boolean = true,
     totalBooks: Int? = null,
     totalSeries: Int? = null,
@@ -7285,7 +7861,8 @@ private fun LibraryBooks(
 ) {
     val title = titleOverride
         ?: state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
-        ?: "Library"
+        ?: stringResource(R.string.browse_library)
+    val resolvedEmptyMessage = emptyMessage ?: stringResource(R.string.browse_no_books)
     var seriesCollapsed by rememberSaveable(title) { mutableStateOf(false) }
     var selectedBookIds by remember(title) { mutableStateOf<Set<String>>(emptySet()) }
     var pendingLocalDeletes by remember(title) { mutableStateOf<List<BookSummary>?>(null) }
@@ -7414,18 +7991,22 @@ private fun LibraryBooks(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
         if (state.isLoadingBooks) {
-            item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow("Loading books...") }
+            item(span = { GridItemSpan(maxLineSpan) }) { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
         }
         if (state.isCatalogSyncing) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LoadingFeedRow(
-                    if (state.isCatalogComplete) "Updating cached catalog..." else "Caching full library..."
+                    if (state.isCatalogComplete) {
+                        stringResource(R.string.browse_updating_cached_catalog)
+                    } else {
+                        stringResource(R.string.browse_caching_full_library)
+                    }
                 )
             }
         }
         if (!state.isLoadingBooks && state.books.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(resolvedEmptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         gridItems(displayedBooks, key = { (book, seriesKey) -> localBookItemKey(book, seriesKey) }) { (book, seriesKey) ->
@@ -7434,9 +8015,13 @@ private fun LibraryBooks(
                 book = book,
                 coverLoader = coverLoader,
                 enabled = !unavailableOffline,
-                displayTitle = if (seriesKey != null) book.seriesName ?: "Series" else book.title,
+                displayTitle = if (seriesKey != null) {
+                    book.seriesName ?: stringResource(R.string.browse_series)
+                } else {
+                    book.title
+                },
                 supportingText = seriesKey?.let { key ->
-                    seriesBookCountLabel(seriesBookCounts[key] ?: 1)
+                    stringResource(seriesBookCountLabelRes(seriesBookCounts[key] ?: 1))
                 },
                 onMarkAsRead = if (seriesKey == null && !state.isOfflineSnapshot) {
                     onMarkAsRead?.let { mark -> { mark(book) } }
@@ -7487,25 +8072,26 @@ private fun LibraryBooks(
         OutlinedButton(
             onClick = loadMore,
             modifier = Modifier.fillMaxWidth().padding(horizontal = CATALOG_GRID_PADDING)
-        ) { Text("Load more") }
+        ) { Text(stringResource(R.string.browse_load_more)) }
     }
     pendingLocalDeletes?.let { books ->
         AlertDialog(
             onDismissRequest = { pendingLocalDeletes = null },
             title = {
                 Text(
-                    if (books.size == 1) "Delete local copy?"
-                    else "Delete ${books.size} local copies?"
+                    if (books.size == 1) {
+                        stringResource(R.string.browse_delete_local_copy_title)
+                    } else {
+                        stringResource(R.string.browse_delete_local_copies_title, books.size)
+                    }
                 )
             },
             text = {
                 Text(
                     if (books.size == 1) {
-                        "The selected file will be removed from this device. " +
-                            "Your BookOrbit book is not deleted."
+                        stringResource(R.string.browse_delete_file_full_message)
                     } else {
-                        "The selected files will be removed from this device. " +
-                            "Your BookOrbit books are not deleted."
+                        stringResource(R.string.browse_delete_files_full_message)
                     }
                 )
             },
@@ -7517,10 +8103,10 @@ private fun LibraryBooks(
                         selectedBookIds = emptySet()
                     },
                     modifier = Modifier.testTag("confirm-delete-local-copies")
-                ) { Text("Delete local") }
+                ) { Text(stringResource(R.string.browse_delete_local)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingLocalDeletes = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingLocalDeletes = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -7556,7 +8142,10 @@ private fun LibraryBooksToolbar(
     ) {
         if (selectedBooks.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("${selectedBooks.size} selected", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.browse_selected_count, selectedBooks.size),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -7566,19 +8155,19 @@ private fun LibraryBooksToolbar(
                             selectedBooks.forEach { onMarkAsRead?.invoke(it) }
                             onClearSelection()
                         }
-                    ) { Text("Mark read") }
+                    ) { Text(stringResource(R.string.browse_mark_read)) }
                     TextButton(
                         onClick = {
                             selectedBooks.forEach { onMarkAsUnread?.invoke(it) }
                             onClearSelection()
                         }
-                    ) { Text("Mark unread") }
+                    ) { Text(stringResource(R.string.browse_mark_unread)) }
                     if (onDeleteLocalCopies != null) {
                         TextButton(onClick = { onDeleteLocalCopies(selectedBooks) }) {
-                            Text("Delete local")
+                            Text(stringResource(R.string.browse_delete_local))
                         }
                     }
-                    TextButton(onClick = onClearSelection) { Text("Clear selection") }
+                    TextButton(onClick = onClearSelection) { Text(stringResource(R.string.browse_clear_selection)) }
                 }
             }
         } else if (onBrowseOptionsExpandedChange == null) {
@@ -7611,23 +8200,33 @@ private fun LibraryBooksToolbar(
                     seriesCount = seriesCount,
                     modifier = Modifier.weight(1f)
                 )
+                val browseOptionsContentDescription = stringResource(
+                    if (browseOptionsExpanded) {
+                        R.string.browse_collapse_browse_options
+                    } else {
+                        R.string.browse_expand_browse_options
+                    }
+                )
+                val browseOptionsStateDescription = stringResource(
+                    if (browseOptionsExpanded) {
+                        R.string.browse_expanded
+                    } else {
+                        R.string.browse_collapsed
+                    }
+                )
                 Row(
                     modifier = Modifier
                         .clickable { onBrowseOptionsExpandedChange(!browseOptionsExpanded) }
                         .testTag("library_browse_options_toggle")
                         .semantics {
-                            contentDescription = if (browseOptionsExpanded) {
-                                "Collapse Browse options"
-                            } else {
-                                "Expand Browse options"
-                            }
-                            stateDescription = if (browseOptionsExpanded) "Expanded" else "Collapsed"
+                            contentDescription = browseOptionsContentDescription
+                            stateDescription = browseOptionsStateDescription
                         }
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text("Browse options", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.browse_browse_options), style = MaterialTheme.typography.labelLarge)
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
                         contentDescription = null,
@@ -7666,9 +8265,14 @@ private fun LibraryBooksCount(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            buildString {
-                append("$bookCount ${if (bookCount == 1) "book" else "books"}")
-                if (seriesCount != null && seriesCount > 0) append(" · $seriesCount series")
+            when {
+                seriesCount != null && seriesCount > 0 -> stringResource(
+                    R.string.browse_books_and_series_count,
+                    bookCount,
+                    seriesCount
+                )
+                bookCount == 1 -> stringResource(R.string.browse_book_count_one, bookCount)
+                else -> stringResource(R.string.browse_books_count, bookCount)
             },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -7687,17 +8291,30 @@ private fun LibraryBooksFilterAndCollapse(
 ) {
     if (onFilterClick != null) {
         OutlinedButton(onClick = onFilterClick) {
-            Text(if (filterActive) "Filter · active" else "Filter")
+            Text(
+                if (filterActive) {
+                    stringResource(R.string.browse_filter_active)
+                } else {
+                    stringResource(R.string.browse_filter)
+                }
+            )
         }
     }
     if (showSeriesCollapse) {
+        val seriesCollapseLabel = stringResource(
+            if (seriesCollapsed) {
+                R.string.browse_expand_series
+            } else {
+                R.string.browse_collapse_series
+            }
+        )
         TextButton(
             onClick = onToggleSeriesCollapse,
             modifier = Modifier.semantics {
-                contentDescription = if (seriesCollapsed) "Expand series" else "Collapse series"
+                contentDescription = seriesCollapseLabel
             }
         ) {
-            Text(if (seriesCollapsed) "Expand series" else "Collapse series")
+            Text(seriesCollapseLabel)
         }
     }
 }
@@ -7722,15 +8339,20 @@ private fun LibraryJumpRail(
     ) {
         catalogJumpRailLabels(direction).forEach { label ->
             val index = targetsByLabel[label]
+            val jumpDescription = stringResource(R.string.browse_jump_to, label.toString())
+            val unavailableDescription = stringResource(
+                R.string.browse_jump_unavailable,
+                label.toString()
+            )
             Box(
                 modifier = Modifier.size(20.dp).then(
                     if (index != null) {
                         Modifier
                             .clickable { onJump(index) }
-                            .semantics { contentDescription = "Jump to $label" }
+                            .semantics { contentDescription = jumpDescription }
                     } else {
                         Modifier.semantics {
-                            contentDescription = "$label unavailable"
+                            contentDescription = unavailableDescription
                             disabled()
                         }
                     }
@@ -7863,13 +8485,22 @@ private fun DownloadTransfersSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.browse_downloads), style = MaterialTheme.typography.titleLarge)
                     if (activeCount > 0 || waitingCount > 0) {
+                        val transferCountLabel = listOfNotNull(
+                            if (activeCount > 0) {
+                                stringResource(R.string.browse_downloading_count, activeCount)
+                            } else {
+                                null
+                            },
+                            if (waitingCount > 0) {
+                                stringResource(R.string.browse_waiting_count, waitingCount)
+                            } else {
+                                null
+                            }
+                        ).joinToString(" · ")
                         Text(
-                            text = buildList {
-                                if (activeCount > 0) add("$activeCount downloading")
-                                if (waitingCount > 0) add("$waitingCount waiting")
-                            }.joinToString(" · "),
+                            text = transferCountLabel,
                             modifier = Modifier.testTag("local-downloads-active-count"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -7878,7 +8509,7 @@ private fun DownloadTransfersSection(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (failedRows.isNotEmpty()) {
-                        TextButton(onClick = onClearAllFailedDownloads) { Text("Clear all") }
+                        TextButton(onClick = onClearAllFailedDownloads) { Text(stringResource(R.string.browse_clear_all)) }
                     }
                     IconButton(
                         onClick = { isExpanded = !isExpanded },
@@ -7886,7 +8517,11 @@ private fun DownloadTransfersSection(
                     ) {
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Collapse downloads" else "Expand downloads"
+                            contentDescription = if (isExpanded) {
+                                stringResource(R.string.browse_collapse_downloads)
+                            } else {
+                                stringResource(R.string.browse_expand_downloads)
+                            }
                         )
                     }
                 }
@@ -7907,7 +8542,13 @@ private fun DownloadTransfersSection(
                             onAction = {
                                 if (row.isActive || row.isQueued) onCancelDownload(row.book) else onDownload(row.book)
                             },
-                            actionLabel = if (row.isActive || row.isQueued) "Cancel" else "Retry",
+                            actionLabel = stringResource(
+                                if (row.isActive || row.isQueued) {
+                                    R.string.common_cancel
+                                } else {
+                                    R.string.common_retry
+                                }
+                            ),
                             onClear = if (row.isActive || row.isQueued) null else ({ onClearFailedDownload(row.book) })
                         )
                     }
@@ -7915,6 +8556,15 @@ private fun DownloadTransfersSection(
             }
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@StringRes
+internal fun downloadProgressLabelRes(isQueued: Boolean, hasProgress: Boolean): Int = when {
+    isQueued && hasProgress -> R.string.browse_waiting_progress
+    isQueued -> R.string.browse_waiting
+    hasProgress -> R.string.browse_downloading_progress
+    else -> R.string.browse_downloading_ellipsis
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -7956,13 +8606,22 @@ private fun DownloadTransferRowItem(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         row.progress?.let { progress ->
-                            Text(downloadProgressLabel(row.isQueued, progress), style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                stringResource(
+                                    downloadProgressLabelRes(row.isQueued, true),
+                                    (progress * 100).toInt()
+                                ),
+                                style = MaterialTheme.typography.bodySmall
+                            )
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
                             )
                         } ?: run {
-                            Text(downloadProgressLabel(row.isQueued, null), style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                stringResource(downloadProgressLabelRes(row.isQueued, false)),
+                                style = MaterialTheme.typography.bodySmall
+                            )
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth().testTag("download-row-${row.fileId}-progress")
                             )
@@ -7974,14 +8633,14 @@ private fun DownloadTransferRowItem(
                     ) { Text(actionLabel) }
                 }
             } else {
-                Text("Download failed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.browse_download_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onAction,
                         modifier = Modifier.testTag("download-row-${row.fileId}-action")
                     ) { Text(actionLabel) }
                     onClear?.let { clear ->
-                        TextButton(onClick = clear) { Text("Clear") }
+                        TextButton(onClick = clear) { Text(stringResource(R.string.browse_clear)) }
                     }
                 }
             }
@@ -8063,6 +8722,12 @@ private fun LocalBooksScreen(
             )
         }
         Box(modifier = Modifier.weight(1f)) {
+            val localLibraryName = state.libraries.firstOrNull { it.id == libraryId }?.name
+            val localBooksTitle = if (localLibraryName != null) {
+                stringResource(R.string.browse_local_books_title, localLibraryName)
+            } else {
+                stringResource(R.string.browse_local_books)
+            }
             LibraryBooks(
                 state = state.copy(
                     books = filteredBooks,
@@ -8075,10 +8740,8 @@ private fun LocalBooksScreen(
                 onDownload = onDownload,
                 onCancelDownload = onCancelDownload,
                 onClearFailedDownload = onClearFailedDownload,
-                titleOverride = state.libraries.firstOrNull { it.id == libraryId }
-                    ?.let { "Local books · ${it.name}" }
-                    ?: "Local books",
-                emptyMessage = "No local books found.",
+                titleOverride = localBooksTitle,
+                emptyMessage = stringResource(R.string.browse_no_local_books),
                 allowSeriesCollapse = false,
                 totalBooks = filteredBooks.size,
                 filter = filter,
@@ -8132,9 +8795,9 @@ private fun LibraryBookList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Text(title, style = MaterialTheme.typography.headlineSmall) }
-        if (isLoading) item { LoadingFeedRow("Loading books...") }
+        if (isLoading) item { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
         if (!isLoading && books.isEmpty()) {
-            item { Text("No books found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(stringResource(R.string.browse_no_books), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(books, key = { localBookItemKey(it, null) }) { book ->
             LibraryBookCard(
@@ -8223,16 +8886,28 @@ private fun LibraryBookCard(
                         onClick = { onBookSelected(book) },
                         enabled = !isDownloading && !unavailableOffline
                     ) {
-                        Text(if (unavailableOffline) "Unavailable offline" else "Details")
+                        Text(
+                            if (unavailableOffline) {
+                                stringResource(R.string.browse_unavailable_offline)
+                            } else {
+                                stringResource(R.string.browse_details)
+                            }
+                        )
                     }
                     when {
                         book.isDownloaded -> OutlinedButton(
                             onClick = { onDeleteLocalCopy(book) },
                             enabled = !isDownloading
-                        ) { Text("Delete local") }
-                        isDownloading -> OutlinedButton(onClick = { onCancelDownload(book) }) { Text("Cancel") }
+                        ) { Text(stringResource(R.string.browse_delete_local)) }
+                        isDownloading -> OutlinedButton(onClick = { onCancelDownload(book) }) { Text(stringResource(R.string.common_cancel)) }
                         fileId != null && !book.isServerMissing && !state.isOfflineSnapshot -> OutlinedButton(onClick = { onDownload(book) }) {
-                            Text(if (failed) "Retry" else "Download")
+                            Text(
+                                if (failed) {
+                                    stringResource(R.string.common_retry)
+                                } else {
+                                    stringResource(R.string.browse_download)
+                                }
+                            )
                         }
                     }
                 }
@@ -8242,7 +8917,7 @@ private fun LibraryBookCard(
                     IconButton(onClick = { showActions = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options for ${book.title}"
+                            contentDescription = stringResource(R.string.browse_more_options_for, book.title)
                         )
                     }
                     DropdownMenu(
@@ -8251,7 +8926,7 @@ private fun LibraryBookCard(
                     ) {
                         onMarkAsStatus?.let { markAsStatus ->
                             DropdownMenuItem(
-                                text = { Text(bookDetailReadingStatusActionLabel()) },
+                                text = { Text(stringResource(R.string.browse_mark_as)) },
                                 onClick = {
                                     showActions = false
                                     showStatusMenu = true
@@ -8259,30 +8934,38 @@ private fun LibraryBookCard(
                             )
                         }
                         if (onMarkAsStatus == null) DropdownMenuItem(
-                            text = { Text("Mark as read") },
+                            text = { Text(stringResource(R.string.browse_mark_as_read)) },
                             onClick = {
                                 showActions = false
                                 onMarkAsRead(book)
                             }
                         )
                         if (onMarkAsStatus == null) DropdownMenuItem(
-                            text = { Text("Mark as unread") },
+                            text = { Text(stringResource(R.string.browse_mark_as_unread)) },
                             onClick = {
                                 showActions = false
                                 onMarkAsUnread(book)
                             }
                         )
                         when {
-                            isDownloading -> DropdownMenuItem(text = { Text("Cancel") }, onClick = { showActions = false; onCancelDownload(book) })
+                            isDownloading -> DropdownMenuItem(text = { Text(stringResource(R.string.common_cancel)) }, onClick = { showActions = false; onCancelDownload(book) })
                             failed -> {
                                 DropdownMenuItem(
-                                    text = { Text(if (book.isDownloaded) "Update local" else "Retry") },
+                                    text = {
+                                        Text(
+                                            if (book.isDownloaded) {
+                                                stringResource(R.string.browse_update_local)
+                                            } else {
+                                                stringResource(R.string.common_retry)
+                                            }
+                                        )
+                                    },
                                     onClick = { showActions = false; onDownload(book) }
                                 )
-                                DropdownMenuItem(text = { Text("Clear") }, onClick = { showActions = false; onClearFailedDownload(book) })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.browse_clear)) }, onClick = { showActions = false; onClearFailedDownload(book) })
                             }
-                            book.isDownloaded -> DropdownMenuItem(text = { Text("Delete local") }, onClick = { showActions = false; onDeleteLocalCopy(book) })
-                            fileId != null && !book.isServerMissing && !state.isOfflineSnapshot -> DropdownMenuItem(text = { Text("Download local") }, onClick = { showActions = false; onDownload(book) })
+                            book.isDownloaded -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_delete_local)) }, onClick = { showActions = false; onDeleteLocalCopy(book) })
+                            fileId != null && !book.isServerMissing && !state.isOfflineSnapshot -> DropdownMenuItem(text = { Text(stringResource(R.string.browse_download_local)) }, onClick = { showActions = false; onDownload(book) })
                         }
                     }
                     onMarkAsStatus?.let { markAsStatus ->
@@ -8336,6 +9019,7 @@ private fun BookDetails(
     onBookSelected: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val canonicalStateBook = state.books.firstOrNull {
         it.id == book.id && (book.fileId == null || it.fileId == book.fileId)
     } ?: state.homeBooks.firstOrNull {
@@ -8473,7 +9157,9 @@ private fun BookDetails(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Throwable) {
-                EpubImageLibrarySourceResult.Error("Unable to prepare the selected EPUB.")
+                EpubImageLibrarySourceResult.Error(
+                    context.getString(R.string.browse_epub_prepare_failed)
+                )
             }
             when (source) {
                 is EpubImageLibrarySourceResult.Ready -> {
@@ -8490,12 +9176,14 @@ private fun BookDetails(
                         null
                     }
                     if (catalog == null) {
-                        epubImageLibraryMessage = "The selected EPUB could not be inspected."
-                    } else if (catalog.entries.isEmpty()) {
                         epubImageLibraryMessage =
-                            "No raster images meet the current minimum size of " +
-                                "${appPreferences.epubImageMinimumDimensionPx} x " +
-                                "${appPreferences.epubImageMinimumDimensionPx} pixels."
+                            context.getString(R.string.browse_epub_inspect_failed)
+                    } else if (catalog.entries.isEmpty()) {
+                        epubImageLibraryMessage = context.getString(
+                            R.string.browse_no_raster_images,
+                            appPreferences.epubImageMinimumDimensionPx,
+                            appPreferences.epubImageMinimumDimensionPx
+                        )
                     } else {
                         epubImageCatalog = catalog
                         showEpubImageLibrary = true
@@ -8504,13 +9192,15 @@ private fun BookDetails(
                 EpubImageLibrarySourceResult.RemoteConsentRequired -> {
                     if (state.isOfflineSnapshot) {
                         epubImageLibraryMessage =
-                            "The selected EPUB is not downloaded and is unavailable offline."
+                            context.getString(R.string.browse_epub_not_downloaded_offline)
                     } else {
                         showEpubRemoteConsent = true
                     }
                 }
                 is EpubImageLibrarySourceResult.Unavailable -> {
-                    epubImageLibraryMessage = source.message
+                    epubImageLibraryMessage = source.message.ifBlank {
+                        context.getString(R.string.browse_epub_not_local)
+                    }
                 }
                 is EpubImageLibrarySourceResult.Error -> {
                     epubImageLibraryMessage = source.message
@@ -8608,29 +9298,51 @@ private fun BookDetails(
     val libraryNamesById = remember(state.libraries) {
         state.libraries.associate { it.id to it.name }
     }
+    val publisherLabel = stringResource(R.string.browse_publisher)
+    val publishedLabel = stringResource(R.string.browse_published)
+    val languageLabel = stringResource(R.string.browse_language)
+    val pagesLabel = stringResource(R.string.browse_pages)
+    val libraryLabel = stringResource(R.string.browse_library)
+    val formatLabel = stringResource(R.string.browse_format)
+    val durationLabel = stringResource(R.string.browse_duration)
+    val fileSizeLabel = stringResource(R.string.browse_file_size)
+    val filesLabel = stringResource(R.string.browse_files)
+    val offlineLabel = stringResource(R.string.browse_offline)
+    val availableLabel = stringResource(R.string.browse_available)
     val publicationMetadata = buildList {
-        detail.publisher?.let { add("Publisher" to it) }
-        detail.publishedDate?.let { add("Published" to it) }
-        detail.language?.let { add("Language" to it) }
-        detail.pageCount?.let { add("Pages" to it.toString()) }
+        detail.publisher?.let { add(publisherLabel to it) }
+        detail.publishedDate?.let { add(publishedLabel to it) }
+        detail.language?.let { add(languageLabel to it) }
+        detail.pageCount?.let { add(pagesLabel to it.toString()) }
     }
     val identifierMetadata = buildList {
         detail.isbn13?.let { add("ISBN-13" to it) }
         detail.isbn10?.let { add("ISBN-10" to it) }
     }
     val fileMetadata = buildList {
-        detail.libraryName?.let { add("Library" to it) }
-        displayBook.format?.let { add("Format" to it.uppercase()) }
+        detail.libraryName?.let { add(libraryLabel to it) }
+        displayBook.format?.let { add(formatLabel to it.uppercase()) }
         detail.durationSeconds?.takeIf { it > 0 }?.let {
-            add("Duration" to formatDetailDuration(it))
+            add(durationLabel to formatDetailDuration(it))
         }
         detail.totalSizeBytes?.takeIf { it > 0 }?.let {
-            add("File size" to formatFileSize(it))
+            add(fileSizeLabel to formatFileSize(it))
         }
-        if (detail.fileCount > 1) add("Files" to detail.fileCount.toString())
-        if (displayBook.isDownloaded) add("Offline" to "Available")
+        if (detail.fileCount > 1) add(filesLabel to detail.fileCount.toString())
+        if (displayBook.isDownloaded) add(offlineLabel to availableLabel)
     }
-    val readingProgressLabel = bookDetailReadingProgressLabel(displayBook)
+    val readingProgressStatusRes = bookDetailReadingProgressStatusRes(displayBook)
+    val readingProgressLabel = if (readingProgressStatusRes != null) {
+        val statusLabel = stringResource(readingProgressStatusRes)
+        val progressPercent = bookDetailProgressPercentText(displayBook)
+        if (progressPercent != null) {
+            stringResource(R.string.browse_reading_progress, statusLabel, progressPercent)
+        } else {
+            statusLabel
+        }
+    } else {
+        null
+    }
 
     if (showCoverViewer) {
         FullScreenCoverViewer(
@@ -8653,6 +9365,10 @@ private fun BookDetails(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
+            val openCoverDescription = stringResource(
+                R.string.browse_open_fullscreen_cover,
+                displayBook.title
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Column(
                     modifier = Modifier.width(116.dp),
@@ -8663,7 +9379,7 @@ private fun BookDetails(
                             .fillMaxWidth()
                             .clickable { showCoverViewer = true }
                             .semantics {
-                                contentDescription = "Open full-screen cover for ${displayBook.title}"
+                                contentDescription = openCoverDescription
                             }
                     ) {
                         BookCover(displayBook, coverLoader)
@@ -8710,13 +9426,17 @@ private fun BookDetails(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     displayBook.seriesName?.let { seriesName ->
+                        val openSeriesDescription = stringResource(
+                            R.string.browse_open_series,
+                            seriesName
+                        )
                         OrbitEyebrow(
                             text = "$seriesName${displayBook.seriesIndex?.let(::formatSeriesIndex)?.let { " #$it" }.orEmpty()}  ›",
                             modifier = if (seriesKey != null) {
                                 Modifier
                                     .clickable { onSeriesSelected(seriesKey) }
                                     .semantics {
-                                        contentDescription = "Open series $seriesName"
+                                        contentDescription = openSeriesDescription
                                     }
                             } else {
                                 Modifier
@@ -8725,7 +9445,7 @@ private fun BookDetails(
                     }
                     displayBook.seriesIndex?.let { index ->
                         Text(
-                            "Book ${formatSeriesIndex(index)}",
+                            stringResource(R.string.browse_book_number, formatSeriesIndex(index)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -8734,17 +9454,24 @@ private fun BookDetails(
                     detail.subtitle?.let {
                         Text(it, style = MaterialTheme.typography.titleMedium)
                     }
-                    displayBook.author?.let {
+                    displayBook.author?.let { authorName ->
+                        val openAuthorDescription = stringResource(
+                            R.string.browse_open_author,
+                            authorName
+                        )
                         Text(
-                            text = "by $it",
+                            text = stringResource(R.string.browse_by_authors, authorName),
                             modifier = Modifier
-                                .clickable { onAuthorSelected(it) }
-                                .semantics { contentDescription = "Open author $it" },
+                                .clickable { onAuthorSelected(authorName) }
+                                .semantics { contentDescription = openAuthorDescription },
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     detail.narrators.takeIf { it.isNotEmpty() }?.let {
-                        Text("Narrated by ${it.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            stringResource(R.string.browse_narrated_by, it.joinToString()),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                     Text(
                         bookDetailIdentityStatus(
@@ -8769,7 +9496,8 @@ private fun BookDetails(
         if (seriesNeighbors.total > 1) {
             item {
                 SeriesNeighborNavigation(
-                    seriesName = displayBook.seriesName ?: "Series",
+                    seriesName = displayBook.seriesName
+                        ?: stringResource(R.string.browse_series),
                     neighbors = seriesNeighbors,
                     onBookSelected = onBookSelected
                 )
@@ -8787,7 +9515,7 @@ private fun BookDetails(
                 isOfflineSnapshot = state.isOfflineSnapshot,
                 isServerMissing = displayBook.isServerMissing
             )
-            val statusActionLabel = bookDetailReadingStatusActionLabel()
+            val statusActionLabel = stringResource(R.string.browse_mark_as)
             var showActionMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
             var showStatusMenu by rememberSaveable(displayBook.id) { mutableStateOf(false) }
             val textMeasurer = rememberTextMeasurer()
@@ -8797,9 +9525,9 @@ private fun BookDetails(
                 val textWidth = textMeasurer.measure(label, style = labelStyle, maxLines = 1).size.width.toDp()
                 maxOf(minimumDp.dp, 8.dp + 24.dp + 2.dp + textWidth).value
             }
-            val primaryActionLabel = bookDetailPrimaryActionLabel(displayBook)
+            val primaryActionLabel = stringResource(bookDetailPrimaryActionLabelRes(displayBook))
             val readWidth = actionWidth(primaryActionLabel, 72f)
-            val previewWidth = actionWidth("Preview", 84f)
+            val previewWidth = actionWidth(stringResource(R.string.browse_preview), 84f)
             val markWidth = actionWidth(statusActionLabel, 100f)
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -8821,9 +9549,19 @@ private fun BookDetails(
                         hasSessionHistory = showSessionHistoryButton,
                         sessionHistoryWidth = 32f
                     )
-                    val transferOverflowLabel = actionState.overflowTransferLabel ?: actionState.inlineTransfer
-                        ?.contentDescription
-                        ?.takeIf { !layout.showInlineTransferAction }
+                    val transferOverflowRes = actionState.overflowTransferRes
+                        ?: actionState.inlineTransfer?.descriptionRes
+                    val transferOverflowLabel = transferOverflowRes
+                        ?.takeIf {
+                            actionState.overflowTransferRes != null || !layout.showInlineTransferAction
+                        }
+                        ?.let { stringResource(it) }
+                    val transferOverflowCancels = actionState.overflowTransferIsCancel ||
+                        (
+                            actionState.overflowTransferRes == null &&
+                                actionState.inlineTransfer ==
+                                BookDetailInlineTransfer.CANCEL_DOWNLOAD
+                            )
                     Row(
                         modifier = Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically
@@ -8835,7 +9573,7 @@ private fun BookDetails(
                         ) {
                             if (showSessionHistoryButton) {
                                 DetailActionTile(
-                                    label = "Open audiobook session history",
+                                    label = stringResource(R.string.browse_cd_audiobook_history),
                                     icon = Icons.Default.History,
                                     modifier = Modifier
                                         .width(32.dp)
@@ -8858,7 +9596,7 @@ private fun BookDetails(
                             onClick = { onRead(displayBook) }
                             )
                             DetailActionTile(
-                            label = "Preview",
+                            label = stringResource(R.string.browse_preview),
                             icon = Icons.Default.Visibility,
                             showLabel = true,
                             enabled = !isDownloading && !unavailableOffline && !displayBook.isServerMissing,
@@ -8870,7 +9608,7 @@ private fun BookDetails(
                                 ?.takeIf { layout.showInlineTransferAction }
                                 ?.let { transfer ->
                                 DetailActionTile(
-                                label = transfer.contentDescription,
+                                label = stringResource(transfer.descriptionRes),
                                 icon = if (transfer == BookDetailInlineTransfer.CANCEL_DOWNLOAD) {
                                     Icons.Default.Close
                                 } else {
@@ -8920,7 +9658,7 @@ private fun BookDetails(
                             Spacer(modifier = Modifier.width(4.dp))
                             Box {
                                 DetailActionTile(
-                                    label = "More book actions",
+                                    label = stringResource(R.string.browse_more_book_actions),
                                     icon = Icons.Default.MoreVert,
                                     modifier = Modifier.size(40.dp).testTag("book-detail-more"),
                                     applyDefaultSize = false,
@@ -8935,13 +9673,13 @@ private fun BookDetails(
                                             text = { Text(transferLabel) },
                                             leadingIcon = {
                                                 Icon(
-                                                    if (transferLabel.startsWith("Cancel")) Icons.Default.Close else Icons.Default.Download,
+                                                    if (transferOverflowCancels) Icons.Default.Close else Icons.Default.Download,
                                                     contentDescription = null
                                                 )
                                             },
                                             onClick = {
                                                 showActionMenu = false
-                                                if (transferLabel.startsWith("Cancel")) {
+                                                if (transferOverflowCancels) {
                                                     cancelSelectedGroupDownloads()
                                                 } else {
                                                     onDownload(displayBook)
@@ -8951,7 +9689,7 @@ private fun BookDetails(
                                     }
                                     if (actionState.showDeleteLocal) {
                                         DropdownMenuItem(
-                                            text = { Text("Delete local") },
+                                            text = { Text(stringResource(R.string.browse_delete_local)) },
                                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                             onClick = {
                                                 showActionMenu = false
@@ -9000,10 +9738,19 @@ private fun BookDetails(
                         .testTag("book-download-status"),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    val transferVerb = if (displayBook.isDownloaded && !selectedGroupIsMultipart) {
+                        stringResource(R.string.browse_updating_local)
+                    } else {
+                        stringResource(R.string.browse_downloading)
+                    }
                     Text(
-                        downloadProgress?.let {
-                            "${if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local" else "Downloading"} · ${(it * 100).toInt()}%"
-                        } ?: if (displayBook.isDownloaded && !selectedGroupIsMultipart) "Updating local…" else "Downloading…",
+                        downloadProgress?.let { progressValue ->
+                            stringResource(
+                                R.string.browse_progress_percent,
+                                transferVerb,
+                                (progressValue * 100).toInt()
+                            )
+                        } ?: stringResource(R.string.browse_progress_ellipsis, transferVerb),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -9016,7 +9763,7 @@ private fun BookDetails(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                     Text(
-                        "Use the × action above to cancel.",
+                        stringResource(R.string.browse_cancel_hint),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -9025,9 +9772,9 @@ private fun BookDetails(
             item {
                 Text(
                     if (displayBook.isDownloaded) {
-                        "Update failed. Your previous local copy is still available; use More > Update local to retry."
+                        stringResource(R.string.browse_update_failed)
                     } else {
-                        "Download failed. Tap the download action to retry."
+                        stringResource(R.string.browse_download_failed_hint)
                     },
                     modifier = Modifier.testTag("book-download-status"),
                     color = MaterialTheme.colorScheme.error,
@@ -9050,7 +9797,12 @@ private fun BookDetails(
             }
         }
         detail.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
-            item { ExpandableDescription("Synopsis", plainText(synopsis)) }
+            item {
+                ExpandableDescription(
+                    stringResource(R.string.browse_synopsis),
+                    plainText(synopsis)
+                )
+            }
         }
         if (detail.providerIds.isNotEmpty()) {
             item { BookDetailProviderLinks(detail.providerIds) }
@@ -9069,7 +9821,7 @@ private fun BookDetails(
         if (detail.genres.isNotEmpty()) {
             item {
                 DetailLabelGroup(
-                    title = "Genres",
+                    title = stringResource(R.string.browse_genres),
                     labels = detail.genres,
                     onLabelClick = onGenreSelected
                 )
@@ -9078,7 +9830,7 @@ private fun BookDetails(
         if (detail.tags.isNotEmpty()) {
             item {
                 DetailLabelGroup(
-                    title = "Tags",
+                    title = stringResource(R.string.browse_tags),
                     labels = detail.tags
                 )
             }
@@ -9088,18 +9840,27 @@ private fun BookDetails(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     HorizontalDivider()
                     Text(
-                        "Book details",
+                        stringResource(R.string.browse_book_details),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     if (publicationMetadata.isNotEmpty()) {
-                        DetailMetadataGroup("Publication", publicationMetadata)
+                        DetailMetadataGroup(
+                            stringResource(R.string.browse_publication),
+                            publicationMetadata
+                        )
                     }
                     if (identifierMetadata.isNotEmpty()) {
-                        DetailMetadataGroup("Identifiers", identifierMetadata)
+                        DetailMetadataGroup(
+                            stringResource(R.string.browse_identifiers),
+                            identifierMetadata
+                        )
                     }
                     if (fileMetadata.isNotEmpty()) {
-                        DetailMetadataGroup("Library and file", fileMetadata)
+                        DetailMetadataGroup(
+                            stringResource(R.string.browse_library_and_file),
+                            fileMetadata
+                        )
                     }
                 }
             }
@@ -9109,12 +9870,9 @@ private fun BookDetails(
     if (showEpubRemoteConsent) {
         AlertDialog(
             onDismissRequest = { showEpubRemoteConsent = false },
-            title = { Text("Download EPUB for Image Library?") },
+            title = { Text(stringResource(R.string.browse_download_for_image_library_title)) },
             text = {
-                Text(
-                    "The selected EPUB is not downloaded. Continuing will download the selected " +
-                        "file to this device for offline use and may use network data."
-                )
+                Text(stringResource(R.string.browse_image_library_consent_message))
             },
             confirmButton = {
                 TextButton(
@@ -9128,12 +9886,12 @@ private fun BookDetails(
                         }
                     }
                 ) {
-                    Text("Yes, continue")
+                    Text(stringResource(R.string.browse_yes_continue))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEpubRemoteConsent = false }) {
-                    Text("No")
+                    Text(stringResource(R.string.browse_no))
                 }
             }
         )
@@ -9141,11 +9899,11 @@ private fun BookDetails(
     epubImageLibraryMessage?.let { message ->
         AlertDialog(
             onDismissRequest = { epubImageLibraryMessage = null },
-            title = { Text("Image Library unavailable") },
+            title = { Text(stringResource(R.string.browse_image_library_unavailable)) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { epubImageLibraryMessage = null }) {
-                    Text("Close")
+                    Text(stringResource(R.string.common_close))
                 }
             }
         )
@@ -9219,8 +9977,8 @@ private fun BookDetails(
     if (showClearSessionHistory) {
         AlertDialog(
             onDismissRequest = { showClearSessionHistory = false },
-            title = { Text("Clear session history?") },
-            text = { Text("This removes the local audiobook play and pause history for this book.") },
+            title = { Text(stringResource(R.string.browse_clear_session_history_title)) },
+            text = { Text(stringResource(R.string.browse_clear_session_history_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -9229,12 +9987,12 @@ private fun BookDetails(
                         onClearSessionHistory(displayBook)
                     }
                 ) {
-                    Text("Clear")
+                    Text(stringResource(R.string.browse_clear))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearSessionHistory = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -9266,7 +10024,7 @@ internal fun AudiobookSessionHistory(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Session history", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.browse_session_history), style = MaterialTheme.typography.titleLarge)
                 Text(
                     bookTitle,
                     maxLines = 2,
@@ -9276,13 +10034,13 @@ internal fun AudiobookSessionHistory(
                 )
             }
             TextButton(onClick = onClearClick) {
-                Text("Clear")
+                Text(stringResource(R.string.browse_clear))
             }
             IconButton(
                 onClick = onCloseClick,
                 modifier = Modifier.testTag("audiobook-session-history-close")
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Close session history")
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.browse_close_session_history))
             }
         }
         Column(
@@ -9328,23 +10086,27 @@ private fun LocalListeningHistorySection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Local listening history",
+                    stringResource(R.string.browse_local_listening_history),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse local listening history" else "Expand local listening history"
+                    contentDescription = if (expanded) {
+                        stringResource(R.string.browse_collapse_local_history)
+                    } else {
+                        stringResource(R.string.browse_expand_local_history)
+                    }
                 )
             }
             if (expanded) {
                 Text(
-                    "Local history shows play and pause events on this device and can seek to the exact position.",
+                    stringResource(R.string.browse_local_history_summary),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (events.isEmpty()) {
-                    Text("No local listening activity recorded.", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.browse_no_local_history), style = MaterialTheme.typography.bodyMedium)
                 } else {
                     events.forEachIndexed { index, event ->
                         ListItem(
@@ -9352,7 +10114,13 @@ private fun LocalListeningHistorySection(
                                 .clickable { onEventClick(event) }
                                 .testTag("audiobook-session-history-event-$index"),
                             headlineContent = {
-                                Text(if (event.type == AudiobookSessionEventType.PLAY) "Played" else "Paused")
+                                Text(
+                                    if (event.type == AudiobookSessionEventType.PLAY) {
+                                        stringResource(R.string.browse_played)
+                                    } else {
+                                        stringResource(R.string.browse_paused)
+                                    }
+                                )
                             },
                             supportingContent = {
                                 Text(
@@ -9392,43 +10160,64 @@ private fun ServerReadingHistorySection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Server reading history",
+                    stringResource(R.string.browse_server_reading_history),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse server reading history" else "Expand server reading history"
+                    contentDescription = if (expanded) {
+                        stringResource(R.string.browse_collapse_server_history)
+                    } else {
+                        stringResource(R.string.browse_expand_server_history)
+                    }
                 )
             }
             if (expanded) {
                 Text(
-                    "Server history shows reading activity and analytics. It does not contain exact audio positions.",
+                    stringResource(R.string.browse_server_history_summary),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 when {
-                    isLoading -> Text("Loading server history…", style = MaterialTheme.typography.bodyMedium)
+                    isLoading -> Text(stringResource(R.string.browse_loading_server_history), style = MaterialTheme.typography.bodyMedium)
                     sessions?.status == ServerReadingHistoryStatus.UNSUPPORTED &&
                         attempts?.status == ServerReadingHistoryStatus.UNSUPPORTED ->
-                        Text("This BookOrbit server does not provide reading history.", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.browse_server_history_unsupported), style = MaterialTheme.typography.bodyMedium)
                     sessions?.status == ServerReadingHistoryStatus.ERROR &&
                         attempts?.status == ServerReadingHistoryStatus.ERROR ->
-                        Text("Server reading history could not be loaded.", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.browse_server_history_failed), style = MaterialTheme.typography.bodyMedium)
                     sessions?.items.isNullOrEmpty() && attempts?.items.isNullOrEmpty() ->
-                        Text("No server reading activity recorded.", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.browse_no_server_history), style = MaterialTheme.typography.bodyMedium)
                     else -> {
                         sessions?.items.orEmpty().forEach { session ->
                             ListItem(
                                 headlineContent = {
-                                    Text("Reading session · ${formatServerReadingDuration(session.durationSeconds)}")
+                                    val sessionDuration =
+                                        formatServerReadingDuration(session.durationSeconds)
+                                    Text(
+                                        stringResource(
+                                            R.string.browse_reading_session,
+                                            sessionDuration
+                                        )
+                                    )
                                 },
                                 supportingContent = {
                                     Text(
                                         listOfNotNull(
                                             formatServerDateRange(session.startedAt, session.endedAt),
-                                            session.progressDelta?.let { "Progress change ${formatServerProgress(it)}" },
-                                            session.endProgress?.let { "Ended at ${formatServerProgress(it)}" },
+                                            session.progressDelta?.let {
+                                                stringResource(
+                                                    R.string.browse_progress_change,
+                                                    formatServerProgress(it)
+                                                )
+                                            },
+                                            session.endProgress?.let {
+                                                stringResource(
+                                                    R.string.browse_ended_at,
+                                                    formatServerProgress(it)
+                                                )
+                                            },
                                             session.format,
                                             session.source
                                         ).joinToString(" · ")
@@ -9439,13 +10228,25 @@ private fun ServerReadingHistorySection(
                         attempts?.items.orEmpty().forEach { attempt ->
                             ListItem(
                                 headlineContent = {
-                                    Text("Reading attempt · ${formatReadingAttemptOutcome(attempt.outcome)}")
+                                    val outcomeLabel =
+                                        formatReadingAttemptOutcome(attempt.outcome)
+                                    Text(
+                                        stringResource(
+                                            R.string.browse_reading_attempt,
+                                            outcomeLabel
+                                        )
+                                    )
                                 },
                                 supportingContent = {
                                     Text(
                                         listOfNotNull(
                                             formatServerDateRange(attempt.startedOn, attempt.endedOn),
-                                            attempt.totalSessions?.let { "$it sessions" },
+                                            attempt.totalSessions?.let {
+                                                stringResource(
+                                                    R.string.browse_sessions_count,
+                                                    it
+                                                )
+                                            },
                                             attempt.totalSeconds?.let { formatServerReadingDuration(it) },
                                             attempt.origin
                                         ).joinToString(" · ")
@@ -9460,8 +10261,10 @@ private fun ServerReadingHistorySection(
     }
 }
 
+@Composable
 private fun formatServerReadingDuration(seconds: Long?): String =
-    seconds?.takeIf { it >= 0 }?.let(::formatDetailDuration) ?: "Duration unavailable"
+    seconds?.takeIf { it >= 0 }?.let(::formatDetailDuration)
+        ?: stringResource(R.string.browse_duration_unavailable)
 
 private fun formatServerProgress(progress: Double): String =
     "${"%.1f".format(Locale.US, progress.coerceIn(0.0, 100.0))}%"
@@ -9471,11 +10274,12 @@ private fun formatServerDateRange(start: String?, end: String?): String? =
         .takeIf { it.isNotEmpty() }
         ?.joinToString(" → ")
 
+@Composable
 private fun formatReadingAttemptOutcome(outcome: ReadingAttemptOutcome?): String = when (outcome) {
-    null -> "In progress"
-    ReadingAttemptOutcome.COMPLETED -> "Completed"
-    ReadingAttemptOutcome.SKIMMED -> "Skimmed"
-    ReadingAttemptOutcome.ABANDONED -> "Abandoned"
+    null -> stringResource(R.string.browse_in_progress)
+    ReadingAttemptOutcome.COMPLETED -> stringResource(R.string.browse_completed)
+    ReadingAttemptOutcome.SKIMMED -> stringResource(R.string.browse_skimmed)
+    ReadingAttemptOutcome.ABANDONED -> stringResource(R.string.browse_abandoned)
 }
 
 private fun formatSessionHistoryTimestamp(timestampMillis: Long): String =
@@ -9496,6 +10300,21 @@ private fun BookUserRatingStars(
     ) {
         (1..5).forEach { star ->
             val isCurrentRating = rating == star
+            val currentRatingDescription = stringResource(
+                R.string.browse_clear_star_rating,
+                star
+            )
+            val setRatingDescription = stringResource(
+                R.string.browse_set_star_rating,
+                star
+            )
+            val ratingStateDescription = stringResource(
+                if (isCurrentRating) {
+                    R.string.browse_selected
+                } else {
+                    R.string.browse_not_selected
+                }
+            )
             IconButton(
                 onClick = { onRatingSelected(star) },
                 enabled = enabled,
@@ -9504,11 +10323,11 @@ private fun BookUserRatingStars(
                     .testTag("book-detail-user-rating-$star")
                     .semantics {
                         contentDescription = if (isCurrentRating) {
-                            "Clear $star-star rating"
+                            currentRatingDescription
                         } else {
-                            "Set rating to $star ${if (star == 1) "star" else "stars"}"
+                            setRatingDescription
                         }
-                        stateDescription = if (isCurrentRating) "Selected" else "Not selected"
+                        stateDescription = ratingStateDescription
                     }
             ) {
                 Icon(
@@ -9550,13 +10369,100 @@ internal fun availableFileSummaryName(
 ): String = group?.takeIf { it.options.size > 1 }?.groupName
     ?: availableFilename(option, label)
 
-private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileLabel?): String = buildList {
+@Composable
+private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileLabel?): String {
+    val parts = mutableListOf<String>()
     label?.metadata?.takeIf { it.isNotBlank() }?.let { value ->
-        val parts = value.split(" · ")
-        add(if (parts.size > 1) "${parts.drop(1).joinToString(" · ")} · ${parts.first()}" else value)
+        val segments = value.split(" · ")
+        parts.add(
+            if (segments.size > 1) {
+                "${segments.drop(1).joinToString(" · ")} · ${segments.first()}"
+            } else {
+                value
+            }
+        )
     }
-    if (!option?.localPath.isNullOrBlank()) add("Available offline")
-}.joinToString(" · ")
+    if (!option?.localPath.isNullOrBlank()) {
+        parts.add(stringResource(R.string.browse_available_offline))
+    }
+    return parts.joinToString(" · ")
+}
+
+@Composable
+private fun availableFileLabelsLocalized(
+    options: List<BookFileOption>
+): Map<String, AvailableFileLabel> {
+    val unknownFormat = stringResource(availableFileUnknownFormatRes())
+    val unnamedFile = stringResource(availableFileUnnamedRes())
+    val sizeUnavailable = stringResource(availableFileSizeUnavailableRes())
+    val baseLabels = LinkedHashMap<BookFileOption, AvailableFileLabel>()
+    for (option in options) {
+        val format = option.format
+            ?.substringAfterLast('/')
+            ?.uppercase(Locale.US)
+            ?: unknownFormat
+        val filename = option.filename?.takeIf { it.isNotBlank() } ?: unnamedFile
+        val role = stringResource(availableFileRoleLabelRes(option.role))
+        val size = option.sizeBytes?.let(::formatByteSize) ?: sizeUnavailable
+        baseLabels[option] = AvailableFileLabel(
+            title = "$format · $filename",
+            metadata = "$role · $size"
+        )
+    }
+    val duplicateKeys = baseLabels.values.groupingBy { it }.eachCount()
+    val labels = LinkedHashMap<String, AvailableFileLabel>()
+    for (option in options) {
+        val fileId = option.fileId ?: continue
+        val label = baseLabels.getValue(option)
+        val title = if (duplicateKeys[label] == 1) {
+            label.title
+        } else {
+            label.title + stringResource(
+                availableFileDuplicateSuffixRes(),
+                fileId.takeLast(6)
+            )
+        }
+        labels[fileId] = label.copy(title = title)
+    }
+    return labels
+}
+
+@Composable
+private fun availableFileGroupLabelLocalized(group: AvailableFileGroup): AvailableFileLabel {
+    val option = group.options.firstOrNull()
+    val format = option?.format
+        ?.substringAfterLast('/')
+        ?.uppercase(Locale.US)
+        ?: option?.filename
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.takeIf { it.isNotBlank() }
+            ?.uppercase(Locale.US)
+        ?: stringResource(availableFileUnknownFormatRes())
+    val count = group.options.size
+    val countLabel = if (count == 1) {
+        stringResource(availableFileCountOneRes())
+    } else {
+        stringResource(availableFileCountManyRes(), count)
+    }
+    val sizeLabel = group.totalSizeBytes?.let(::formatByteSize)
+        ?: stringResource(availableFileSizeUnavailableRes())
+    return AvailableFileLabel(
+        title = "$format · ${group.groupName}",
+        metadata = "$countLabel · $sizeLabel"
+    )
+}
+
+@Composable
+private fun availableFilenameLocalized(
+    option: BookFileOption?,
+    label: AvailableFileLabel?
+): String {
+    val unknownName = stringResource(availableFileUnknownNameRes())
+    val filename = option?.filename?.takeIf { it.isNotBlank() }
+    if (filename != null) return filename
+    val labelled = label?.title?.substringAfter(" · ", unknownName)
+    return labelled ?: unknownName
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -9566,16 +10472,18 @@ internal fun BookDetailAvailableFileSummary(
     onOpenSheet: () -> Unit,
     onOpenEpubImageLibrary: (() -> Unit)? = null
 ) {
-    val labels = availableFileDisplayLabels(options)
+    val labels = availableFileLabelsLocalized(options)
     val groups = availableFileGroups(options)
     val selectedOption = options.firstOrNull { it.fileId == selectedFileId } ?: options.firstOrNull()
     val selectedGroup = groups.firstOrNull { group ->
         selectedOption?.fileId in group.options.map { it.fileId }
     }
-    val selectedLabel = selectedGroup
+    val selectedGroupLabel = selectedGroup
         ?.takeIf { it.options.size > 1 }
-        ?.let(::availableFileGroupDisplayLabel)
-        ?: selectedOption?.fileId?.let(labels::get)
+        ?.let { group -> availableFileGroupLabelLocalized(group) }
+    val selectedLabel = selectedGroupLabel ?: selectedOption?.fileId?.let(labels::get)
+    val selectedSummaryName = selectedGroup?.takeIf { it.options.size > 1 }?.groupName
+        ?: availableFilenameLocalized(selectedOption, selectedLabel)
     val canChooseFile = options.size > 1
 
     Row(
@@ -9612,7 +10520,7 @@ internal fun BookDetailAvailableFileSummary(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = availableFileSummaryName(selectedOption, selectedLabel, selectedGroup),
+                        text = selectedSummaryName,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -9635,7 +10543,7 @@ internal fun BookDetailAvailableFileSummary(
                 if (canChooseFile) {
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Choose available file"
+                        contentDescription = stringResource(R.string.browse_cd_choose_file)
                     )
                 }
             }
@@ -9648,7 +10556,7 @@ internal fun BookDetailAvailableFileSummary(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CollectionsBookmark,
-                        contentDescription = "Open EPUB image library"
+                        contentDescription = stringResource(R.string.browse_cd_open_image_library)
                     )
                 }
             }
@@ -9665,7 +10573,7 @@ internal fun BookDetailAvailableFileSheet(
     onGroupLongPressed: (AvailableFileGroup) -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
-    val labels = availableFileDisplayLabels(options)
+    val labels = availableFileLabelsLocalized(options)
     val groups = availableFileGroups(options)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -9678,7 +10586,7 @@ internal fun BookDetailAvailableFileSheet(
                 .padding(bottom = 12.dp)
         ) {
             Text(
-                "Available files",
+                stringResource(R.string.browse_available_files),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             )
@@ -9690,24 +10598,39 @@ internal fun BookDetailAvailableFileSheet(
                     ?: group.options.firstOrNull { it.role.equals("primary", ignoreCase = true) }
                     ?: option
                 val label = selectedFile.fileId?.let(labels::get)
-                val groupLabel = availableFileGroupDisplayLabel(group)
+                val groupLabel = availableFileGroupLabelLocalized(group)
                 val isSelected = selectedOption != null
                 val title = if (group.options.size > 1) {
-                    "${availableFileType(option, option.fileId?.let(labels::get))} · ${group.options.size} files · ${group.groupName}"
+                    stringResource(
+                        R.string.browse_file_group_entry_title,
+                        availableFileType(option, option.fileId?.let(labels::get)),
+                        group.options.size,
+                        group.groupName
+                    )
                 } else {
-                    availableFilename(option, option.fileId?.let(labels::get))
+                    availableFilenameLocalized(option, option.fileId?.let(labels::get))
+                }
+                val groupProgressDescription = if (group.options.size > 1) {
+                    bookDetailGroupProgressLabel(availableFileGroupDownloadProgress(group))
+                } else {
+                    null
+                }
+                val singleFileMetadata = if (group.options.size <= 1) {
+                    availableFileMetadata(selectedFile, label)
+                } else {
+                    ""
                 }
                 val metadata = buildList {
                     if (group.options.size > 1) {
                         add(
                             listOf(
                                 groupLabel.metadata ?: group.groupName,
-                                bookDetailGroupProgressLabel(availableFileGroupDownloadProgress(group))
+                                groupProgressDescription
                             ).joinToString(" · ")
                         )
                     } else {
                         group.groupingPath?.let(::add)
-                        availableFileMetadata(selectedFile, label).takeIf { it.isNotBlank() }?.let(::add)
+                        singleFileMetadata.takeIf { it.isNotBlank() }?.let(::add)
                     }
                 }.joinToString(" · ")
                 ListItem(
@@ -9748,11 +10671,11 @@ internal fun BookDetailAvailableFileSheet(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (group.options.size > 1) {
                                 IconButton(onClick = { onGroupLongPressed(group) }) {
-                                    Icon(Icons.Default.Visibility, contentDescription = "View files")
+                                    Icon(Icons.Default.Visibility, contentDescription = stringResource(R.string.browse_view_files))
                                 }
                             }
                             if (isSelected) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = "Selected")
+                                Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.browse_selected))
                             }
                         }
                     }
@@ -9769,10 +10692,10 @@ internal fun BookDetailAvailableFileSheet(
 internal fun singleFileDownloadBook(option: BookFileOption): BookSummary =
     option.book.copy(filename = option.filename ?: option.book.filename)
 
-internal enum class GroupedFileAction {
-    DOWNLOAD,
-    DOWNLOADING,
-    DELETE
+internal enum class GroupedFileAction(@StringRes val labelRes: Int) {
+    DOWNLOAD(R.string.browse_not_downloaded),
+    DOWNLOADING(R.string.browse_downloading),
+    DELETE(R.string.browse_downloaded)
 }
 
 internal fun groupedFileAction(
@@ -9801,7 +10724,13 @@ private fun BookDetailAvailableFileDetails(
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
-            Text("${group.groupName} · ${group.options.size} files")
+            Text(
+                stringResource(
+                    R.string.browse_file_group_title,
+                    group.groupName,
+                    group.options.size
+                )
+            )
         },
         text = {
             Column {
@@ -9811,6 +10740,9 @@ private fun BookDetailAvailableFileDetails(
                     itemsIndexed(group.options, key = { index, option ->
                         option.fileId ?: option.filename?.ifBlank { "file-$index" } ?: "file-$index"
                     }) { _, option ->
+                        val fileLabel = option.filename
+                            ?: option.fileId
+                            ?: stringResource(R.string.browse_unknown_file)
                         val action = groupedFileAction(
                             option = option,
                             downloadingFileIds = downloadingFileIds,
@@ -9819,7 +10751,7 @@ private fun BookDetailAvailableFileDetails(
                         ListItem(
                             headlineContent = {
                                 Text(
-                                    option.filename ?: option.fileId ?: "Unknown file",
+                                    fileLabel,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -9827,11 +10759,7 @@ private fun BookDetailAvailableFileDetails(
                             supportingContent = {
                                 Text(
                                     listOfNotNull(
-                                        when (action) {
-                                            GroupedFileAction.DELETE -> "Downloaded"
-                                            GroupedFileAction.DOWNLOADING -> "Downloading"
-                                            GroupedFileAction.DOWNLOAD -> "Not downloaded"
-                                        },
+                                        stringResource(action.labelRes),
                                         option.sizeBytes?.let { size -> formatFileSize(size) }
                                     ).joinToString(" · ")
                                 )
@@ -9841,15 +10769,15 @@ private fun BookDetailAvailableFileDetails(
                                     GroupedFileAction.DOWNLOAD -> OutlinedButton(
                                         onClick = { onDownload(singleFileDownloadBook(option)) },
                                         enabled = !isOffline
-                                    ) { Text("Download") }
+                                    ) { Text(stringResource(R.string.browse_download)) }
                                     GroupedFileAction.DOWNLOADING -> Text(
-                                        "Downloading",
+                                        stringResource(R.string.browse_downloading),
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     GroupedFileAction.DELETE -> OutlinedButton(
                                         onClick = { onDeleteLocalCopy(singleFileDownloadBook(option)) },
                                         enabled = !isOffline
-                                    ) { Text("Delete") }
+                                    ) { Text(stringResource(R.string.browse_delete)) }
                                 }
                             }
                         )
@@ -9858,7 +10786,7 @@ private fun BookDetailAvailableFileDetails(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismissRequest) { Text("Close") }
+            TextButton(onClick = onDismissRequest) { Text(stringResource(R.string.common_close)) }
         },
         modifier = Modifier.testTag("book-detail-available-file-details")
     )
@@ -9878,7 +10806,7 @@ private fun BookDetailOtherVersions(
             .testTag("book-detail-other-versions"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Other versions", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.browse_other_versions), style = MaterialTheme.typography.titleLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(versions, key = { "other-version-${it.id}" }) { version ->
                 val format = version.format
@@ -9907,6 +10835,14 @@ private fun BookDetailOtherVersions(
     }
 }
 
+private enum class SeriesNeighborDirection(
+    @StringRes val labelRes: Int,
+    @StringRes val emptyLabelRes: Int
+) {
+    PREVIOUS(R.string.browse_previous, R.string.browse_start_of_series),
+    NEXT(R.string.browse_next, R.string.browse_end_of_series)
+}
+
 @Composable
 private fun SeriesNeighborNavigation(
     seriesName: String,
@@ -9919,25 +10855,23 @@ private fun SeriesNeighborNavigation(
             .testTag("series-neighbor-navigation"),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        OrbitEyebrow("Series navigation")
+        OrbitEyebrow(stringResource(R.string.browse_series_navigation))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SeriesNeighborButton(
-                direction = "Previous",
+                direction = SeriesNeighborDirection.PREVIOUS,
                 book = neighbors.previous,
                 seriesName = seriesName,
-                emptyLabel = "Start of series",
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 modifier = Modifier.weight(1f).testTag("series-previous-book"),
                 onClick = onBookSelected
             )
             SeriesNeighborButton(
-                direction = "Next",
+                direction = SeriesNeighborDirection.NEXT,
                 book = neighbors.next,
                 seriesName = seriesName,
-                emptyLabel = "End of series",
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
                 modifier = Modifier.weight(1f).testTag("series-next-book"),
                 onClick = onBookSelected
@@ -9948,10 +10882,9 @@ private fun SeriesNeighborNavigation(
 
 @Composable
 private fun SeriesNeighborButton(
-    direction: String,
+    direction: SeriesNeighborDirection,
     book: BookSummary?,
     seriesName: String,
-    emptyLabel: String,
     icon: ImageVector,
     modifier: Modifier,
     onClick: (BookSummary) -> Unit
@@ -9962,17 +10895,25 @@ private fun SeriesNeighborButton(
             neighbor.title
         ).joinToString(" \u00B7 ")
     }
+    val directionLabel = stringResource(direction.labelRes)
+    val emptyLabel = stringResource(direction.emptyLabelRes)
+    val neighborDescription = if (bookLabel != null) {
+        stringResource(
+            R.string.browse_neighbor_book_cd,
+            directionLabel,
+            seriesName,
+            bookLabel
+        )
+    } else {
+        stringResource(R.string.browse_neighbor_none_cd, directionLabel, seriesName)
+    }
     Card(
         onClick = { book?.let(onClick) },
         enabled = book != null,
         modifier = modifier
             .height(46.dp)
             .semantics {
-                contentDescription = if (bookLabel != null) {
-                    "$direction book in $seriesName: $bookLabel"
-                } else {
-                    "No ${direction.lowercase()} book in $seriesName"
-                }
+                contentDescription = neighborDescription
             },
         colors = CardDefaults.cardColors(
             containerColor = Color.Transparent,
@@ -9986,14 +10927,18 @@ private fun SeriesNeighborButton(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (direction == "Previous") {
+            if (direction == SeriesNeighborDirection.PREVIOUS) {
                 Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
             }
             Column(
                 modifier = Modifier.weight(1f),
-                horizontalAlignment = if (direction == "Previous") Alignment.Start else Alignment.End
+                horizontalAlignment = if (direction == SeriesNeighborDirection.PREVIOUS) {
+                    Alignment.Start
+                } else {
+                    Alignment.End
+                }
             ) {
-                Text(direction, style = MaterialTheme.typography.labelLarge)
+                Text(directionLabel, style = MaterialTheme.typography.labelLarge)
                 Text(
                     text = bookLabel ?: emptyLabel,
                     style = MaterialTheme.typography.labelSmall,
@@ -10001,7 +10946,7 @@ private fun SeriesNeighborButton(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (direction == "Next") {
+            if (direction == SeriesNeighborDirection.NEXT) {
                 Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
             }
         }
@@ -10023,7 +10968,7 @@ private fun BookDetailReadingStatusMenu(
     ) {
         options.forEach { status ->
             DropdownMenuItem(
-                text = { Text(status.displayLabel()) },
+                text = { Text(stringResource(status.displayLabelRes())) },
                 leadingIcon = {
                     RadioButton(
                         selected = status == currentStatus,
@@ -10046,6 +10991,10 @@ internal fun showAudiobookSessionHistoryButton(book: BookSummary): Boolean =
 internal fun bookDetailPrimaryActionLabel(book: BookSummary): String =
     if (book.mediaKind == MediaKind.AUDIO) "Play" else "Read"
 
+@StringRes
+internal fun bookDetailPrimaryActionLabelRes(book: BookSummary): Int =
+    if (book.mediaKind == MediaKind.AUDIO) R.string.browse_play else R.string.browse_read
+
 internal fun bookDetailReadingProgressLabel(book: BookSummary): String? {
     val progress = normalizeStoredProgressPercent(book.progressPercent?.takeIf { it.isFinite() })
     val completed = book.isRead || progress?.let { it >= 99.5f } == true
@@ -10057,22 +11006,41 @@ internal fun bookDetailReadingProgressLabel(book: BookSummary): String? {
     return "$status \u00B7 $percentage%"
 }
 
+@StringRes
+internal fun bookDetailReadingProgressStatusRes(book: BookSummary): Int? {
+    val progress = normalizeStoredProgressPercent(book.progressPercent?.takeIf { it.isFinite() })
+    val completed = book.isRead || progress?.let { it >= 99.5f } == true
+    val currentlyReading = !completed && book.hasReadingActivity() && book.isStillInProgress()
+    if (!completed && !currentlyReading) return null
+    return if (completed) R.string.browse_read else R.string.browse_reading
+}
+
+internal fun bookDetailProgressPercentText(book: BookSummary): String? {
+    val progress = normalizeStoredProgressPercent(book.progressPercent?.takeIf { it.isFinite() })
+    return progress?.let(::formatBookDetailProgressPercent)
+}
+
 private fun formatBookDetailProgressPercent(progress: Float): String =
     String.format(java.util.Locale.US, "%.2f", progress.coerceIn(0f, 100f))
         .trimEnd('0')
         .trimEnd('.')
 
-internal enum class BookDetailInlineTransfer(val contentDescription: String) {
-    DOWNLOAD("Download"),
-    DOWNLOAD_REMAINING("Download remaining"),
-    RETRY_DOWNLOAD("Retry download"),
-    CANCEL_DOWNLOAD("Cancel download")
+internal enum class BookDetailInlineTransfer(
+    val contentDescription: String,
+    @StringRes val descriptionRes: Int
+) {
+    DOWNLOAD("Download", R.string.browse_download),
+    DOWNLOAD_REMAINING("Download remaining", R.string.browse_download_remaining),
+    RETRY_DOWNLOAD("Retry download", R.string.browse_retry_download),
+    CANCEL_DOWNLOAD("Cancel download", R.string.browse_cancel_download)
 }
 
 internal data class BookDetailActionState(
     val inlineTransfer: BookDetailInlineTransfer?,
     val overflowTransferLabel: String?,
-    val showDeleteLocal: Boolean
+    val showDeleteLocal: Boolean,
+    @StringRes val overflowTransferRes: Int? = null,
+    val overflowTransferIsCancel: Boolean = false
 ) {
     val hasFixedOverflow: Boolean
         get() = overflowTransferLabel != null || showDeleteLocal
@@ -10113,7 +11081,14 @@ internal fun bookDetailActionState(
             (hasDownloadUpdate || downloadFailed) && !isOfflineSnapshot -> "Update local"
             else -> null
         },
-        showDeleteLocal = true
+        showDeleteLocal = true,
+        overflowTransferRes = when {
+            isDownloading -> R.string.browse_cancel_update
+            (hasDownloadUpdate || downloadFailed) && !isOfflineSnapshot ->
+                R.string.browse_update_local
+            else -> null
+        },
+        overflowTransferIsCancel = isDownloading
     )
 }
 
@@ -10224,20 +11199,24 @@ private fun BookDetailProviderLinks(providerIds: List<BookProviderId>) {
     if (links.isEmpty()) return
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text("Metadata sources", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.browse_metadata_sources), style = MaterialTheme.typography.titleMedium)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             links.forEach { (providerId, url) ->
                 val name = providerDisplayName(providerId.provider)
+                val providerPageDescription = stringResource(
+                    R.string.browse_open_provider_page,
+                    name
+                )
                 Card(
                     modifier = Modifier
                         .clickable {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                             runCatching { context.startActivity(intent) }
                         }
-                        .semantics { contentDescription = "Open $name page for this book" },
+                        .semantics { contentDescription = providerPageDescription },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     ),
@@ -10277,11 +11256,12 @@ private fun DetailLabelGroup(
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             distinctLabels.forEach { label ->
+                val filterDescription = stringResource(R.string.browse_filter_by, title, label)
                 Card(
                     modifier = if (onLabelClick != null) {
                         Modifier
                             .clickable { onLabelClick(label) }
-                            .semantics { contentDescription = "Filter $title by $label" }
+                            .semantics { contentDescription = filterDescription }
                     } else {
                         Modifier
                     },
@@ -10315,7 +11295,13 @@ private fun ExpandableBookTitle(title: String) {
         )
         if (overflow || expanded) {
             TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
-                Text(if (expanded) "Collapse" else "Expand title")
+                Text(
+                    if (expanded) {
+                        stringResource(R.string.browse_collapse)
+                    } else {
+                        stringResource(R.string.browse_expand_title)
+                    }
+                )
             }
         }
     }
@@ -10426,13 +11412,23 @@ internal fun FullScreenCoverViewer(
         if (granted && bytes != null) {
             export(bytes)
         } else if (!granted) {
-            showExportResult(CoverExportResult(false, "Storage permission is required to save the cover"))
+            showExportResult(
+                CoverExportResult(
+                    false,
+                    context.getString(R.string.browse_cover_export_permission)
+                )
+            )
         }
     }
     fun requestExport() {
         val bytes = coverBytes
         if (bytes == null) {
-            showExportResult(CoverExportResult(false, "Cover image is not available"))
+            showExportResult(
+                CoverExportResult(
+                    false,
+                    context.getString(R.string.browse_cover_export_unavailable)
+                )
+            )
         } else if (
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -10478,6 +11474,10 @@ internal fun FullScreenCoverViewer(
     val minScale = 1f
     val maxScale = 4f
     val presetZoomScale = 2.5f
+    val fullscreenCoverDescription = stringResource(
+        R.string.browse_fullscreen_cover_description,
+        book.title
+    )
 
     fun boundedPan(candidate: Offset, currentScale: Float): Offset {
         if (currentScale <= minScale || coverLayoutSize == IntSize.Zero) return Offset.Zero
@@ -10565,7 +11565,7 @@ internal fun FullScreenCoverViewer(
                 }
                 .transformable(state = transformableState)
                 .semantics {
-                    contentDescription = "Full-screen cover for ${book.title}. Pinch or double-tap to zoom. Tap the cover to reset zoom. Tap outside the cover or use back to close. Long-press the cover for options"
+                    contentDescription = fullscreenCoverDescription
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -10627,7 +11627,7 @@ internal fun FullScreenCoverViewer(
                     offset = anchorOffset
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Download") },
+                        text = { Text(stringResource(R.string.browse_download)) },
                         onClick = {
                             menuAnchor = null
                             requestExport()
@@ -10638,6 +11638,8 @@ internal fun FullScreenCoverViewer(
         }
     }
 }
+
+private const val UNKNOWN_FORMAT_TITLE = "Unknown format"
 
 internal data class SeriesBookSection(
     val key: String,
@@ -10680,7 +11682,7 @@ internal fun seriesBookSections(
                     ?.uppercase()
                     ?: book.mediaKind.name
                         .takeUnless { book.mediaKind == MediaKind.UNKNOWN }
-                        ?: "Unknown format"
+                        ?: UNKNOWN_FORMAT_TITLE
                 Triple(title.lowercase(), title, book)
             }
             SeriesGroupingMode.NONE -> error("Handled above")
@@ -10717,7 +11719,7 @@ private fun SeriesGroupingControls(
         modifier = Modifier.fillMaxWidth().testTag("series-grouping-controls"),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text("Separate by", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.browse_separate_by), style = MaterialTheme.typography.titleMedium)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -10729,7 +11731,7 @@ private fun SeriesGroupingControls(
                         toggledSeriesGroupingMode(groupingMode, SeriesGroupingMode.LIBRARY)
                     )
                 },
-                label = { Text("Library") },
+                label = { Text(stringResource(R.string.browse_library)) },
                 modifier = Modifier.testTag("series-group-by-library")
             )
             FilterChip(
@@ -10739,7 +11741,7 @@ private fun SeriesGroupingControls(
                         toggledSeriesGroupingMode(groupingMode, SeriesGroupingMode.FORMAT)
                     )
                 },
-                label = { Text("File format") },
+                label = { Text(stringResource(R.string.browse_file_format)) },
                 modifier = Modifier.testTag("series-group-by-format")
             )
         }
@@ -10769,12 +11771,15 @@ private fun SeriesDetails(
     onMarkAsUnread: (BookSummary) -> Unit,
     onGenreSelected: (String) -> Unit
 ) {
+    val seriesDownloadScopeLabel = stringResource(R.string.browse_this_series)
     val localBooks = books
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
         .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
+    val seriesDisplayName = localBooks.firstOrNull()?.seriesName
+        ?: stringResource(R.string.browse_series)
     val localDetail = SeriesDetailInfo(
         id = seriesKey,
-        name = localBooks.firstOrNull()?.seriesName ?: "Series",
+        name = seriesDisplayName,
         bookCount = localBooks.size,
         readCount = localBooks.count { it.isRead },
         authors = localBooks.mapNotNull { it.author }.distinct(),
@@ -10848,25 +11853,26 @@ private fun SeriesDetails(
     if (showSeriesDownloadConfirm) {
         AlertDialog(
             onDismissRequest = { showSeriesDownloadConfirm = false },
-            title = { Text("Download this series?") },
+            title = { Text(stringResource(R.string.browse_download_series_title)) },
             text = {
                 Text(
-                    "This will download ${seriesFrozenSelection.size} " +
-                        "${if (seriesFrozenSelection.size == 1) "file" else "files"} to this device. " +
-                        "This may use a significant amount of storage and data."
+                    stringResource(
+                        R.string.browse_download_files_message,
+                        seriesFrozenSelection.size
+                    )
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showSeriesDownloadConfirm = false
-                        onBulkDownload?.invoke("this series", seriesFrozenSelection)
+                        onBulkDownload?.invoke(seriesDownloadScopeLabel, seriesFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-series")
-                ) { Text("Download series") }
+                ) { Text(stringResource(R.string.browse_download_series)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSeriesDownloadConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showSeriesDownloadConfirm = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -10875,15 +11881,18 @@ private fun SeriesDetails(
             onDismissRequest = { pendingSeriesLocalDeletes = null },
             title = {
                 Text(
-                    "Delete ${booksToDelete.size} local " +
-                        "${if (booksToDelete.size == 1) "copy" else "copies"}?"
+                    if (booksToDelete.size == 1) {
+                        stringResource(R.string.browse_delete_local_copy_title)
+                    } else {
+                        stringResource(
+                            R.string.browse_delete_local_copies_title,
+                            booksToDelete.size
+                        )
+                    }
                 )
             },
             text = {
-                Text(
-                    "The selected files will be removed from this device. " +
-                        "Your BookOrbit books are not deleted."
-                )
+                Text(stringResource(R.string.browse_delete_files_full_message))
             },
             confirmButton = {
                 TextButton(
@@ -10892,10 +11901,10 @@ private fun SeriesDetails(
                         onDeleteLocalCopies(booksToDelete)
                     },
                     modifier = Modifier.testTag("confirm-delete-series-local-copies")
-                ) { Text("Delete local") }
+                ) { Text(stringResource(R.string.browse_delete_local)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingSeriesLocalDeletes = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingSeriesLocalDeletes = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -10915,13 +11924,20 @@ private fun SeriesDetails(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OrbitEyebrow("Series")
+                OrbitEyebrow(stringResource(R.string.browse_series))
                 Text(detail.name, style = MaterialTheme.typography.headlineSmall)
                 detail.authors.takeIf { it.isNotEmpty() }?.let {
-                    Text("by ${it.joinToString()}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.browse_by_authors, it.joinToString()),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(
-                    "${detail.bookCount} ${if (detail.bookCount == 1) "book" else "books"} · ${detail.readCount} read",
+                    stringResource(
+                        R.string.browse_series_books_read,
+                        detail.bookCount,
+                        detail.readCount
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 LinearProgressIndicator(
@@ -10944,14 +11960,14 @@ private fun SeriesDetails(
                                 },
                                 enabled = seriesActiveFileIds.isEmpty(),
                                 modifier = Modifier.testTag("download-series")
-                            ) { Text("Download series") }
+                            ) { Text(stringResource(R.string.browse_download_series)) }
                         }
                         if (seriesLocalCopies.isNotEmpty()) {
                             OutlinedButton(
                                 onClick = { pendingSeriesLocalDeletes = seriesLocalCopies },
                                 enabled = seriesActiveFileIds.isEmpty(),
                                 modifier = Modifier.testTag("delete-series-local-copies")
-                            ) { Text("Delete local books") }
+                            ) { Text(stringResource(R.string.browse_delete_local_books)) }
                         }
                     }
                 }
@@ -10968,7 +11984,10 @@ private fun SeriesDetails(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Text(
-                        "Possible missing positions: ${detail.possibleGaps.joinToString { formatSeriesIndex(it) }}",
+                        stringResource(
+                            R.string.browse_possible_missing_positions,
+                            detail.possibleGaps.joinToString { formatSeriesIndex(it) }
+                        ),
                         modifier = Modifier.padding(14.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -10978,12 +11997,19 @@ private fun SeriesDetails(
         detail.firstBook?.let { first ->
             first.synopsis?.takeIf { it.isNotBlank() }?.let { synopsis ->
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    ExpandableDescription("About this series", plainText(synopsis))
+                    ExpandableDescription(
+                        stringResource(R.string.browse_about_this_series),
+                        plainText(synopsis)
+                    )
                 }
             }
             if (first.genres.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    DetailLabelGroup("Genres", first.genres, onGenreSelected)
+                    DetailLabelGroup(
+                        stringResource(R.string.browse_genres),
+                        first.genres,
+                        onGenreSelected
+                    )
                 }
             }
         }
@@ -10996,12 +12022,12 @@ private fun SeriesDetails(
         detail.firstBook?.let { first ->
             if (first.tags.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    DetailLabelGroup("Tags", first.tags)
+                    DetailLabelGroup(stringResource(R.string.browse_tags), first.tags)
                 }
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text("Books", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
+            Text(stringResource(R.string.browse_books), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
         }
         bookSections.forEach { section ->
             section.title?.let { title ->
@@ -11009,6 +12035,11 @@ private fun SeriesDetails(
                     key = "series-section-${section.key}",
                     span = { GridItemSpan(maxLineSpan) }
                 ) {
+                    val sectionLabel = if (title == UNKNOWN_FORMAT_TITLE) {
+                        stringResource(R.string.browse_unknown_format)
+                    } else {
+                        title
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -11016,7 +12047,7 @@ private fun SeriesDetails(
                             .testTag("series-section-${section.key}"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(title, style = MaterialTheme.typography.titleMedium)
+                        Text(sectionLabel, style = MaterialTheme.typography.titleMedium)
                         HorizontalDivider(
                             modifier = Modifier
                                 .padding(start = 12.dp)
@@ -11057,6 +12088,17 @@ internal fun ExpandableDescription(
     var expanded by remember(body) { mutableStateOf(false) }
     var hasOverflow by remember(body) { mutableStateOf(false) }
     val toggle = { expanded = !expanded }
+    val expandedStateDescription = stringResource(
+        if (expanded) R.string.browse_expanded else R.string.browse_collapsed
+    )
+    val descriptionContentDescription = stringResource(
+        R.string.browse_description_suffix,
+        title
+    )
+    val toggleContentDescription = stringResource(
+        if (expanded) R.string.browse_collapse_title else R.string.browse_expand_title_arg,
+        title
+    )
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -11072,8 +12114,8 @@ internal fun ExpandableDescription(
                         Modifier
                             .clickable(onClick = toggle)
                             .semantics {
-                                contentDescription = "$title description"
-                                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                                contentDescription = descriptionContentDescription
+                                stateDescription = expandedStateDescription
                             }
                     } else {
                         Modifier
@@ -11093,10 +12135,16 @@ internal fun ExpandableDescription(
                 onClick = toggle,
                 contentPadding = PaddingValues(0.dp),
                 modifier = Modifier.semantics {
-                    contentDescription = if (expanded) "Collapse $title" else "Expand $title"
+                    contentDescription = toggleContentDescription
                 }
             ) {
-                Text(if (expanded) "Collapse" else "Expand")
+                Text(
+                    if (expanded) {
+                        stringResource(R.string.browse_collapse)
+                    } else {
+                        stringResource(R.string.browse_expand)
+                    }
+                )
             }
         }
     }
@@ -11425,25 +12473,32 @@ internal fun recentSeries(
         .let { result -> limit?.let(result::take) ?: result }
 }
 
+@Composable
 private fun nativeBookStatus(book: BookSummary, offline: Boolean): String {
     return when {
-        book.isDownloaded -> "Downloaded"
-        offline -> "Online only"
-        book.isRead -> "Read"
+        book.isDownloaded -> stringResource(R.string.browse_downloaded)
+        offline -> stringResource(R.string.browse_online_only)
+        book.isRead -> stringResource(R.string.browse_read)
         !book.progressLabel.isNullOrBlank() -> book.progressLabel
         !book.format.isNullOrBlank() -> book.format.uppercase()
         else -> book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
     }
 }
 
+@Composable
 internal fun bookDetailGroupProgressLabel(progress: AvailableFileGroupDownloadProgress): String {
-    val files = "${progress.downloadedFileCount}/${progress.totalFileCount} files"
+    val files = stringResource(
+        R.string.browse_group_progress_files,
+        progress.downloadedFileCount,
+        progress.totalFileCount
+    )
     val bytes = progress.totalKnownBytes?.let { total ->
         "${formatFileSize(progress.downloadedKnownBytes ?: 0L)} / ${formatFileSize(total)}"
     }
     return listOfNotNull(files, bytes).joinToString(" · ")
 }
 
+@Composable
 private fun bookDetailIdentityStatus(
     book: BookSummary,
     offline: Boolean,
@@ -11452,18 +12507,34 @@ private fun bookDetailIdentityStatus(
 ): String {
     val format = book.format?.takeIf { it.isNotBlank() }?.uppercase()
         ?: book.mediaKind.name.lowercase().replaceFirstChar { it.uppercase() }
+    val downloadingLabel = stringResource(R.string.browse_downloading)
+    val downloadedLabel = stringResource(R.string.browse_downloaded)
     val downloadState = groupProgress?.state?.let {
         when (it) {
-            AvailableFileGroupDownloadState.NOT_DOWNLOADED -> "Not downloaded"
-            AvailableFileGroupDownloadState.PARTIAL -> "Partially downloaded"
-            AvailableFileGroupDownloadState.COMPLETE -> "Downloaded"
+            AvailableFileGroupDownloadState.NOT_DOWNLOADED ->
+                stringResource(R.string.browse_not_downloaded)
+            AvailableFileGroupDownloadState.PARTIAL ->
+                stringResource(R.string.browse_partially_downloaded)
+            AvailableFileGroupDownloadState.COMPLETE -> downloadedLabel
         }
     }
     return when {
-        groupProgress != null && isDownloading -> "$format · Downloading"
-        downloadState != null -> "$format · $downloadState"
-        book.isDownloaded -> "$format · Downloaded"
-        offline -> "Online only"
+        groupProgress != null && isDownloading -> stringResource(
+            R.string.browse_format_status,
+            format,
+            downloadingLabel
+        )
+        downloadState != null -> stringResource(
+            R.string.browse_format_status,
+            format,
+            downloadState
+        )
+        book.isDownloaded -> stringResource(
+            R.string.browse_format_status,
+            format,
+            downloadedLabel
+        )
+        offline -> stringResource(R.string.browse_online_only)
         else -> format
     }
 }

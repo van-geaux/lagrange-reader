@@ -84,13 +84,30 @@ internal fun epubLanguageDisplayName(tag: String, displayLocale: Locale): String
     return name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(displayLocale) else it.toString() }
 }
 
-internal fun epubContentLanguageSummary(language: EpubContentLanguage, displayLocale: Locale): String {
+internal fun epubContentLanguageSummary(
+    language: EpubContentLanguage,
+    displayLocale: Locale,
+    context: Context? = null
+): String {
     val name = language.tag?.let { epubLanguageDisplayName(it, displayLocale) }
+    fun text(resourceId: Int, fallback: String, vararg args: Any): String =
+        context?.getString(resourceId, *args) ?: fallback
     return when (language.source) {
         EpubContentLanguageSource.OVERRIDE -> name.orEmpty()
-        EpubContentLanguageSource.BOOK -> "Auto · $name (from book)"
-        EpubContentLanguageSource.DEVICE -> "Auto · $name (device; book declares none)"
-        EpubContentLanguageSource.NONE -> "Auto · unknown (book declares none)"
+        EpubContentLanguageSource.BOOK -> text(
+            R.string.extras_book_language_auto_from_book,
+            "Auto · $name (from book)",
+            name.orEmpty()
+        )
+        EpubContentLanguageSource.DEVICE -> text(
+            R.string.extras_book_language_auto_from_device,
+            "Auto · $name (device; book declares none)",
+            name.orEmpty()
+        )
+        EpubContentLanguageSource.NONE -> text(
+            R.string.extras_book_language_auto_unknown,
+            "Auto · unknown (book declares none)"
+        )
     }
 }
 
@@ -112,9 +129,11 @@ internal fun epubBookLanguageChoice(
     override: String?,
     publicationLanguages: List<String>,
     deviceLocale: Locale,
-    availableLanguages: List<String> = Locale.getAvailableLocales().map { it.language }
+    availableLanguages: List<String> = Locale.getAvailableLocales().map { it.language },
+    context: Context? = null
 ): EpubBookLanguageChoice {
-    fun option(tag: String) = EpubLanguageOption(tag, epubLanguageDisplayName(tag, deviceLocale))
+    val displayLocale = context?.resources?.configuration?.locales?.get(0) ?: deviceLocale
+    fun option(tag: String) = EpubLanguageOption(tag, epubLanguageDisplayName(tag, displayLocale))
     val suggestedTags = (
         publicationLanguages.map { Locale.forLanguageTag(it.trim()).language } +
             deviceLocale.language +
@@ -131,7 +150,8 @@ internal fun epubBookLanguageChoice(
         resolved = resolveEpubContentLanguage(override, publicationLanguages, deviceLocale),
         summary = epubContentLanguageSummary(
             resolveEpubContentLanguage(override, publicationLanguages, deviceLocale),
-            deviceLocale
+            displayLocale,
+            context
         ),
         suggested = suggestedTags.map(::option),
         all = all

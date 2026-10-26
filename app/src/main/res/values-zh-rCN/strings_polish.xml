@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 模型缺少标题时的兜底文案 -->
+    <string name="polish_unknown_book">未知书籍</string>
+    <string name="polish_epub_not_local">所选 EPUB 不在本地。</string>
+    <string name="polish_selected_file_not_epub">所选文件不是 EPUB。</string>
+</resources>

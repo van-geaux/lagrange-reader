@@ -7,12 +7,14 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.vangeaux.lagrange.AuthenticatedAccountPrincipal
 import com.vangeaux.lagrange.AuthenticatedAccountScopeStore
+import com.vangeaux.lagrange.R
 import com.vangeaux.lagrange.ServerCheckResult
 import com.vangeaux.lagrange.ServerProfileStore
 import com.vangeaux.lagrange.SessionState
 import com.vangeaux.lagrange.UserFacingException
 import com.vangeaux.lagrange.authenticatedAccountPrincipal
 import com.vangeaux.lagrange.normalizeServerUrl
+import com.vangeaux.lagrange.providerErrorMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -67,6 +69,9 @@ internal interface KavitaAuthModule {
     suspend fun saveCurrentProfileSession()
     suspend fun restoreCurrentProfileSession(): Boolean
     fun requestHeaders(): Map<String, String>
+
+    /** Localizes a provider error message, falling back to the original English text. */
+    fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String
 }
 
 internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
@@ -76,6 +81,9 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
     private val accountScopeStore = AuthenticatedAccountScopeStore(appContext)
     private var serverUrl: String? = null
     private var token: String? = activeProfileId()?.let(credentialStore::read)
+
+    override fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
 
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext ServerCheckResult.MalformedUrl
@@ -101,9 +109,24 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 
     override suspend fun authenticate(serverUrl: String, username: String, password: String): Unit = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Kavita server URL.")
-        if (username.isBlank()) throw UserFacingException("Enter your Kavita username.")
-        if (password.isBlank()) throw UserFacingException("Enter your Kavita password.")
+            ?: throw UserFacingException(
+                localizedMessage(
+                    R.string.perror_kavita_server_url,
+                    "Enter a valid Kavita server URL."
+                )
+            )
+        if (username.isBlank()) throw UserFacingException(
+            localizedMessage(
+                R.string.perror_kavita_username_required,
+                "Enter your Kavita username."
+            )
+        )
+        if (password.isBlank()) throw UserFacingException(
+            localizedMessage(
+                R.string.perror_kavita_password_required,
+                "Enter your Kavita password."
+            )
+        )
         val request = Request.Builder()
             .url(kavitaLoginEndpoint(base))
             .header("Content-Type", "application/json")
@@ -119,15 +142,36 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (response.code == 401 || response.code == 403) {
-                throw UserFacingException("Kavita did not accept this username or password.")
+                throw UserFacingException(
+                    localizedMessage(
+                        R.string.perror_kavita_credentials,
+                        "Kavita did not accept this username or password."
+                    )
+                )
             }
             if (!response.isSuccessful) {
-                throw UserFacingException("Kavita authentication failed with HTTP ${response.code}.")
+                throw UserFacingException(
+                    localizedMessage(
+                        R.string.perror_kavita_auth_http,
+                        "Kavita authentication failed with HTTP ${response.code}.",
+                        response.code
+                    )
+                )
             }
             val authenticatedToken = kavitaAuthResponseToken(payload)
-                ?: throw UserFacingException("Kavita returned no authentication token.")
+                ?: throw UserFacingException(
+                    localizedMessage(
+                        R.string.perror_kavita_no_token,
+                        "Kavita returned no authentication token."
+                    )
+                )
             val principal = kavitaAuthResponsePrincipal(payload)
-                ?: throw UserFacingException("Kavita returned no stable account identity.")
+                ?: throw UserFacingException(
+                    localizedMessage(
+                        R.string.perror_kavita_no_identity,
+                        "Kavita returned no stable account identity."
+                    )
+                )
             this@KavitaAuthModuleImpl.serverUrl = base
             token = authenticatedToken
             activeProfileId()?.let { profileId ->

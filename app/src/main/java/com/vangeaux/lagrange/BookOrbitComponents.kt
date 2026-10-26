@@ -28,6 +28,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
@@ -51,7 +52,7 @@ internal fun BookOrbitTopBar(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_launcher_foreground),
-                        contentDescription = "Lagrange logo",
+                        contentDescription = stringResource(R.string.cd_lagrange_logo),
                         modifier = Modifier.size(28.dp)
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -73,7 +74,7 @@ internal fun BookOrbitTopBar(
                         Text(text = title, style = MaterialTheme.typography.titleLarge)
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Open library selector"
+                            contentDescription = stringResource(R.string.cd_open_library_selector)
                         )
                     }
                 } else {
@@ -147,7 +148,7 @@ internal fun OrbitMessage(
                 )
                 if (onDismiss != null) {
                     IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Dismiss message")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_dismiss_message))
                     }
                 }
             }

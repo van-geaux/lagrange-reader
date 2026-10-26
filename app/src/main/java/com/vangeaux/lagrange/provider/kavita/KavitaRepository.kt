@@ -53,11 +53,15 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val offlineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var offlineCacheJob: Job? = null
 
+    /** Localizes a provider error message, falling back to the original English text. */
+    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
+
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
 
     override suspend fun setServerUrl(serverUrl: String) {
         val normalized = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Kavita server URL.")
+            ?: throw UserFacingException(localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         preferences.edit().putString(SERVER_URL_KEY, normalized).apply()
     }
 
@@ -375,7 +379,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         authModule.restoreCurrentProfileSession()
 
     private fun <T> unavailable(): T =
-        throw UserFacingException("Kavita catalog and reading support are not implemented yet.")
+        throw UserFacingException(localizedMessage(R.string.perror_kavita_not_implemented, "Kavita catalog and reading support are not implemented yet."))
 
     private companion object {
         const val SERVER_URL_KEY = "server_url"

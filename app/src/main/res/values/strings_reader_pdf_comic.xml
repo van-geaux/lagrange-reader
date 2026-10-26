@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared reader strings -->
+    <string name="reader_preview_title">Preview \u00b7 %1$s</string>
+    <string name="reader_page_kind">Page</string>
+    <string name="reader_page_number">Page %1$d</string>
+    <string name="reader_error_with_back">%1$s\n\nPress Back to return.</string>
+
+    <!-- PDF reader -->
+    <string name="pdf_error_file_unavailable">The PDF file is unavailable.</string>
+    <string name="pdf_error_not_readable">This file does not contain a readable PDF document.</string>
+    <string name="pdf_could_not_read">Readium could not read this PDF file.</string>
+    <string name="pdf_could_not_open">Readium could not open this PDF publication.</string>
+    <string name="pdf_not_pdf">Readium did not recognize this file as a PDF publication.</string>
+    <string name="pdf_reader_file_unavailable">The PDF reader file is unavailable.</string>
+    <string name="pdf_no_readable_pages">This PDF has no readable pages.</string>
+    <string name="pdf_no_app_for_link">No app is available to open this link.</string>
+
+    <!-- Comic reader -->
+    <string name="comic_error_file_unavailable">The comic file is unavailable.</string>
+    <string name="comic_error_requires_cbz">Readium requires a CBZ image archive.</string>
+    <string name="comic_could_not_read">Readium could not read this comic file.</string>
+    <string name="comic_could_not_open">Readium could not open this comic publication.</string>
+    <string name="comic_not_image_publication">Readium did not recognize this file as an image publication.</string>
+    <string name="comic_server_no_pages">The configured server reported no comic pages.</string>
+    <string name="comic_page_url_invalid">The comic page URL is invalid.</string>
+    <string name="comic_some_page_url_invalid">A comic page URL is invalid.</string>
+    <string name="comic_remote_not_image_publication">Readium did not recognize the remote comic as an image publication.</string>
+    <string name="comic_reader_source_unavailable">The comic reader source is unavailable.</string>
+    <string name="comic_no_readable_images">This comic has no readable images.</string>
+    <string name="comic_page_open_failed">This comic page could not be opened.</string>
+</resources>

@@ -5,7 +5,7 @@ import com.vangeaux.lagrange.core.*
 
 internal class KavitaModuleSet(private val repository: KavitaRepository) {
     private fun unavailable(): Nothing =
-        throw UserFacingException("Kavita catalog and reading support are not implemented yet.")
+        throw UserFacingException(repository.localizedMessage(R.string.perror_kavita_not_implemented, "Kavita catalog and reading support are not implemented yet."))
 
     val modules: ProviderModules = ProviderModules(
         serverSelection = object : ServerSelectionModule {

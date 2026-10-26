@@ -156,13 +156,13 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
     internal suspend fun loadAllBooksForSeriesCatalog(libraryId: String?): List<BookSummary> =
         filterBooksForSeriesCatalog(
             loadAllBooksForServer(
-                auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+                auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
             ),
             libraryId
         )
 
     private suspend fun loadAllBooks(libraryId: String): List<BookSummary> {
-        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
         return loadAllBooksForServer(base).filter { it.libraryId == libraryId }
     }
 
@@ -191,7 +191,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita series (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
             }
             val array = runCatching { JSONArray(payload) }.getOrElse { JSONArray() }
             return buildList {
@@ -233,7 +233,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw UserFacingException("Unable to load Kavita series details (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_details_http, "Unable to load Kavita series details (HTTP ${response.code}).", response.code))
             }
             val root = JSONObject(payload)
             val chapters = kavitaSeriesChapters(root)

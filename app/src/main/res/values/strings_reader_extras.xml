@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Read-along (EPUB media overlay) controls -->
+    <string name="extras_readalong_title">Read-along</string>
+    <string name="extras_readalong_settings">Read-along settings</string>
+    <string name="extras_readalong_previous_sentence_cd">Previous narration sentence</string>
+    <string name="extras_readalong_next_sentence_cd">Next narration sentence</string>
+    <string name="extras_readalong_pause_cd">Pause narration</string>
+    <string name="extras_readalong_play_cd">Play narration</string>
+    <string name="extras_readalong_close_cd">Close read-along</string>
+    <string name="extras_readalong_speed">Speed</string>
+    <string name="extras_readalong_speed_description">read-along speed</string>
+    <string name="extras_apply">Apply</string>
+
+    <!-- Read-along media notification and media session -->
+    <string name="extras_readalong_media_title">Read-along · %1$s</string>
+    <string name="extras_epub_narration">EPUB narration</string>
+    <string name="extras_close_narration">Close narration</string>
+    <string name="extras_notification_play_pause_cd">Play or pause narration</string>
+    <string name="extras_readalong_playback_channel">Read-along playback</string>
+    <string name="extras_readalong_playback_channel_description">Shows the sentence currently narrated in an EPUB.</string>
+
+    <!-- EPUB book language picker -->
+    <string name="extras_book_language_auto_from_book">Auto · %1$s (from book)</string>
+    <string name="extras_book_language_auto_from_device">Auto · %1$s (device; book declares none)</string>
+    <string name="extras_book_language_auto_unknown">Auto · unknown (book declares none)</string>
+
+    <!-- Custom font import and preparation errors -->
+    <string name="extras_custom_font_choose_type">Choose a .ttf or .otf font file.</string>
+    <string name="extras_custom_font_open_failed">The selected font file could not be opened.</string>
+    <string name="extras_custom_font_empty">The selected font file is empty.</string>
+    <string name="extras_custom_font_too_large">The selected font file is too large (max 20 MB).</string>
+    <string name="extras_custom_font_invalid">The selected file is not a valid TrueType or OpenType font.</string>
+    <string name="extras_custom_font_prepare_failed">This EPUB could not be prepared with the selected custom font.</string>
+
+    <!-- Reader image viewer (also used by the EPUB image gallery) -->
+    <string name="extras_comic_export_title">%1$s - Page %2$d</string>
+    <string name="extras_comic_default_title">comic</string>
+    <string name="extras_could_not_read_image">Could not read the image</string>
+    <string name="extras_storage_permission_required">Storage permission is required to save the page</string>
+    <string name="extras_image_page_cd">Page image %1$d.</string>
+    <string name="extras_image_tap_controls_hint">Single tap toggles viewer controls.</string>
+    <string name="extras_image_gesture_hint">Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options.</string>
+    <string name="extras_page_number">Page %1$d</string>
+    <string name="extras_close_image_viewer">Close image viewer</string>
+    <string name="extras_download_page">Download page</string>
+    <string name="extras_export_saved">Image saved to Downloads/Lagrange Reader</string>
+    <string name="extras_export_failed">Could not save the image</string>
+</resources>
