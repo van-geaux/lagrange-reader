@@ -220,6 +220,7 @@ class ReadiumComicOpenInstrumentedTest {
             assertTrue("Readium comic navigator did not become ready", navigatorReady)
             var tutorialWasShown = false
             var tutorialVisible = false
+            var normalReadingPadding = 0
             scenario.onActivity { activity ->
                 tutorialWasShown = activity.hasShownTapZoneTutorial()
                 tutorialVisible = activity.isTapZoneTutorialVisible()
@@ -230,6 +231,8 @@ class ReadiumComicOpenInstrumentedTest {
                 tutorialVisible = activity.isTapZoneTutorialVisible()
                 activity.setShowPageProgressForTest(false)
                 assertEquals(false, activity.isProgressFooterVisible())
+                activity.setShowPageProgressForTest(true)
+                normalReadingPadding = activity.readerContentBottomPaddingForTest()
             }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
@@ -260,6 +263,7 @@ class ReadiumComicOpenInstrumentedTest {
                 controlsVisible = activity.areLightweightControlsVisible()
                 optionsVisible = activity.areReaderOptionsVisible()
                 assertTrue("Comic progress footer did not overlay reader controls", activity.isProgressFooterVisible())
+                assertEquals(normalReadingPadding, activity.readerContentBottomPaddingForTest())
                 val paddingBeforeOptions = activity.readerContentBottomPaddingForTest()
                 activity.showReaderOptionsForTest()
                 assertEquals(true, activity.areReaderOptionsVisible())

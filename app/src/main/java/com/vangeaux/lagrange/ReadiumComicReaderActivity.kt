@@ -546,7 +546,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             readerContainer.paddingLeft,
             readerContainer.paddingTop,
             readerContainer.paddingRight,
-            if (readerPreferences.showPageProgress && !controlsVisible) {
+            if (readerPreferences.showPageProgress) {
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
             } else {
                 0

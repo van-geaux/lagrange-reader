@@ -3096,10 +3096,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             horizontal(leftPercent),
             effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
             horizontal(rightPercent),
-            vertical(padding.bottom) + if (
-                readerPreferences.showPageProgress &&
-                (!::chromeView.isInitialized || chromeView.visibility != View.VISIBLE)
-            ) {
+            vertical(padding.bottom) + if (readerPreferences.showPageProgress) {
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
             } else {
                 0

@@ -757,6 +757,7 @@ class ReadiumEpubOpenInstrumentedTest {
             assertTrue("Readium navigator did not become ready", navigatorReady)
             var tutorialWasShown = false
             var tutorialVisible = false
+            var normalReadingPadding = 0
             scenario.onActivity { activity ->
                 tutorialWasShown = activity.hasShownTapZoneTutorial()
                 tutorialVisible = activity.isTapZoneTutorialVisible()
@@ -767,6 +768,8 @@ class ReadiumEpubOpenInstrumentedTest {
                 tutorialVisible = it.isTapZoneTutorialVisible()
                 it.setShowPageProgressForTest(false)
                 assertEquals(false, it.isProgressFooterVisible())
+                it.setShowPageProgressForTest(true)
+                normalReadingPadding = it.readerContentBottomPaddingForTest()
             }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
@@ -797,6 +800,7 @@ class ReadiumEpubOpenInstrumentedTest {
                 controlsVisible = activity.areLightweightControlsVisible()
                 optionsVisible = activity.areReaderOptionsVisible()
                 assertTrue("EPUB progress footer did not overlay reader controls", activity.isProgressFooterVisible())
+                assertEquals(normalReadingPadding, activity.readerContentBottomPaddingForTest())
                 val paddingBeforeOptions = activity.readerContentBottomPaddingForTest()
                 activity.showReaderOptionsForTest()
                 assertEquals(true, activity.areReaderOptionsVisible())
