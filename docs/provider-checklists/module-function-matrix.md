@@ -123,10 +123,11 @@ For every provider-exclusive row, manually verify all of the following:
 
 ## Kavita implementation checkpoint
 
-This provider is implemented but has not received authenticated device/manual validation. Use `V` for implemented behavior pending manual validation, `N` for not yet implemented, and `U` for a provider contract that does not expose the shared operation.
+This provider is implemented. The OIDC/server-sign-in row below is user-confirmed; other Kavita functions remain pending separate manual validation. Use `V` for implemented behavior pending manual validation, `N` for not yet implemented, and `U` for a provider contract that does not expose the shared operation.
 
 | Function group | Kavita status | Endpoint/source evidence | UI/capability note |
 |---|---:|---|---|
+| Authentication: server-hosted OIDC login | S | Kavita `/api/Settings/oidc`, `/Oidc/login`, and `/signin-oidc`; Lagrange `ServerSignInDialog` and cookie-backed session verification | User-confirmed on 2026-10-26 against `https://kavita.alredho.com` with `Lagrange-debug-202610261650.apk`. Native AppAuth/Custom Tabs are not included. |
 | Server selection and username/password login | V | `POST /api/Account/login`, JSON username/password body | Kavita returns a JWT; credentials are not persisted. |
 | Library discovery | V | `GET /api/Library/libraries` | Provider-specific library module is wired. |
 | Book catalog and chapter projection | V | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters are projected into shared book entries. |

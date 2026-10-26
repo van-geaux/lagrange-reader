@@ -1,20 +1,20 @@
 # Kavita provider checklist
 
-This checklist covers the Kavita provider. The implementation includes username/password JWT login and server-hosted OIDC login through Kavita's WebView-compatible login page. It is not a manual pass record yet; complete the validation record after device testing.
+This checklist covers the Kavita provider. The implementation includes username/password JWT login and server-hosted OIDC login through Kavita's WebView-compatible login page. The authentication items marked below record the user's manual confirmation; the remaining provider functions still require separate validation.
 
 ## Validation record
 
 - Provider/server type: `Kavita`
-- Server base URL: `[non-secret URL or redacted label]`
-- App build/version: `[version]`
-- APK path: `[path or release URL]`
-- Maintainer: `[name]`
-- User/reporter: `[name]`
-- Device/emulator: `[model and Android version]`
-- Date: `[YYYY-MM-DD]`
-- Account/library fixture: `[description]`
+- Server base URL: `https://kavita.alredho.com`
+- App build/version: `Lagrange-debug-202610261650.apk`
+- APK path: `/projects/bookorbit-android-issue-319/app/build/outputs/apk/debug/Lagrange-debug-202610261650.apk`
+- Maintainer: `Project maintainer`
+- User/reporter: `User confirmation in session`
+- Device/emulator: `[not supplied]`
+- Date: `2026-10-26`
+- Account/library fixture: `Configured Kavita OIDC server; exact account/library details not recorded`
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `[locations]`
+- Evidence links/screenshots/logs: `User confirmation in session; no screenshot or log supplied`
 
 Use these result markers for every item:
 
@@ -40,11 +40,11 @@ For every failure or blocked item, record the observed behavior, expected behavi
 - [ ] Invalid username/password produces a provider-appropriate error without crashing or logging out another profile.
 - [ ] Login loading, retry, cancellation, and Back behavior are correct.
 - [ ] Credentials are not visible in the URL, profile list, logs, screenshots, or ordinary local profile data.
-- [ ] OIDC/SSO entry point is present when supported by this provider. (Implemented as provider-capability-gated `Open server sign-in`.)
-- [ ] Kavita's login page exposes the configured OIDC action.
-- [ ] OIDC provider selection, browser/WebView handoff, Kavita `/signin-oidc` callback, cancellation, failure, and successful return work.
+- [x] OIDC/SSO entry point is present when supported by this provider. (Implemented as provider-capability-gated `Open server sign-in`.)
+- [x] Kavita's login page exposes the configured OIDC action.
+- [x] OIDC provider selection, browser/WebView handoff, Kavita `/signin-oidc` callback, cancellation, failure, and successful return work. (User-confirmed.)
 - [ ] OIDC state/nonce/PKCE or provider-equivalent protections do not expose secrets and reject invalid callbacks. (Kavita owns these protocol protections; Lagrange must not log or persist their values.)
-- [ ] Login resumes the intended destination after authentication.
+- [x] Login resumes the intended destination after authentication. (User-confirmed.)
 - [ ] Logout clears the provider session and does not delete device-shared downloaded media.
 - [ ] Session expiration returns to the correct provider login screen.
 
@@ -418,4 +418,5 @@ These checks were derived from repository issues and should be applied when the 
 
 - Kavita server-hosted OIDC uses the server's own redirect and callback. Lagrange verifies the resulting authenticated account through `GET /api/Account` and sends the Kavita session cookie with provider requests.
 - Username/password and Auth Key/JWT authentication remain supported.
-- Automated contract coverage exists for JWT headers and cookie-backed headers. Device and live-server validation are still required before marking the authentication items passed.
+- Automated contract coverage exists for JWT headers and cookie-backed headers.
+- User-confirmed on 2026-10-26 against `https://kavita.alredho.com` using `Lagrange-debug-202610261650.apk`. The device identity and screenshot/log evidence were not supplied, so they remain placeholders above.
