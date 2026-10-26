@@ -5223,6 +5223,17 @@ internal fun ReaderConfigurationControls(
         onPreferencesChange = onPreferencesChange,
         testTagPrefix = "$testTagPrefix-tap-zone"
     )
+    if (format != ReaderConfigurationFormat.PDF) {
+        AppPreferenceSwitchRow(
+            title = "Show page progress",
+            summary = "Show the page counter while reading and with reader controls.",
+            checked = value.showPageProgress,
+            testTag = "$testTagPrefix-show-page-progress",
+            onCheckedChange = { enabled ->
+                onPreferencesChange(value.copy(showPageProgress = enabled))
+            }
+        )
+    }
     AppPreferenceSwitchRow(
         title = format.tapZoneTutorialPreferenceTitle(),
         summary = "Show this format's tap-zone guide again when the layout or inversion changes.",

@@ -11,6 +11,17 @@ import java.io.File
 
 class LibraryReaderPreferencesTest {
     @Test
+    fun `page progress is enabled by default and legacy profiles keep it enabled`() {
+        assertTrue(LibraryReaderPreferences().showPageProgress)
+
+        val legacy = libraryReaderPreferencesFromStorage(
+            """{"version":2,"profiles":{"library":{"theme":"dark"}}}"""
+        ).getValue("library")
+
+        assertTrue(legacy.showPageProgress)
+    }
+
+    @Test
     fun `reader profile storage uses a versioned envelope`() {
         val profile = LibraryReaderPreferences(
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
@@ -71,6 +82,7 @@ class LibraryReaderPreferencesTest {
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 4f,
+            showPageProgress = false,
             comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
             comicPageGapDp = 24f
         )

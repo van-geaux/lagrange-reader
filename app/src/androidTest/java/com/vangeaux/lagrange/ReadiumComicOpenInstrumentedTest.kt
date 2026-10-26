@@ -228,6 +228,8 @@ class ReadiumComicOpenInstrumentedTest {
             SystemClock.sleep(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS + 250L)
             scenario.onActivity { activity ->
                 tutorialVisible = activity.isTapZoneTutorialVisible()
+                activity.setShowPageProgressForTest(false)
+                assertEquals(false, activity.isProgressFooterVisible())
             }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
@@ -257,6 +259,7 @@ class ReadiumComicOpenInstrumentedTest {
             scenario.onActivity { activity ->
                 controlsVisible = activity.areLightweightControlsVisible()
                 optionsVisible = activity.areReaderOptionsVisible()
+                assertTrue("Comic progress footer did not overlay reader controls", activity.isProgressFooterVisible())
             }
             assertTrue("Center tap did not open comic reader chrome", controlsVisible)
             assertEquals(false, optionsVisible)

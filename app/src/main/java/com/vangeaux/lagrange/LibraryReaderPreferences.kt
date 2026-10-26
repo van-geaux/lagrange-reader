@@ -76,7 +76,7 @@ internal const val MAX_EPUB_LINE_SPACING = 2f
 internal const val DEFAULT_EPUB_WORD_SPACING = 0f
 internal const val MAX_EPUB_WORD_SPACING = 1f
 
-private const val READER_PREFERENCES_STORAGE_VERSION = 2
+private const val READER_PREFERENCES_STORAGE_VERSION = 3
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
 data class LibraryReaderPreferences(
@@ -96,6 +96,7 @@ data class LibraryReaderPreferences(
     val preferServerProgressOnReopen: Boolean = false,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
+    val showPageProgress: Boolean = true,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
     val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
     val joinPdfFacingPages: Boolean = false,
@@ -214,6 +215,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("left", normalized.padding.left.toDouble())
             put("right", normalized.padding.right.toDouble())
             put("epubLayout", readerLayoutModeStorageValue(normalized.epubLayoutMode))
+            put("showPageProgress", normalized.showPageProgress)
             put("pdfLayout", readerLayoutModeStorageValue(normalized.pdfLayoutMode))
             put("pdfPageGapDp", normalized.pdfPageGapDp.toDouble())
             put("joinPdfFacingPages", normalized.joinPdfFacingPages)
@@ -265,6 +267,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             item.optString("epubLayout"),
                             ReaderLayoutMode.PAGINATED
                         ),
+                        showPageProgress = item.optBoolean("showPageProgress", true),
                         pdfLayoutMode = readerLayoutModeFromStorage(
                             item.optString("pdfLayout"),
                             ReaderLayoutMode.CONTINUOUS

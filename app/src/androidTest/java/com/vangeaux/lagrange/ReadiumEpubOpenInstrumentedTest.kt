@@ -763,7 +763,11 @@ class ReadiumEpubOpenInstrumentedTest {
             }
             assertTrue("EPUB tap-zone tutorial was not shown on reader entry", tutorialWasShown)
             SystemClock.sleep(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS + 250L)
-            scenario.onActivity { activity -> tutorialVisible = activity.isTapZoneTutorialVisible() }
+            scenario.onActivity {
+                tutorialVisible = it.isTapZoneTutorialVisible()
+                it.setShowPageProgressForTest(false)
+                assertEquals(false, it.isProgressFooterVisible())
+            }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
             var tapY = 0f
@@ -792,6 +796,7 @@ class ReadiumEpubOpenInstrumentedTest {
             scenario.onActivity { activity ->
                 controlsVisible = activity.areLightweightControlsVisible()
                 optionsVisible = activity.areReaderOptionsVisible()
+                assertTrue("EPUB progress footer did not overlay reader controls", activity.isProgressFooterVisible())
             }
             assertTrue("Center tap did not open the lightweight reader chrome", controlsVisible)
             assertEquals(false, optionsVisible)
