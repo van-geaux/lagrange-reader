@@ -98,6 +98,9 @@ internal const val MAX_EPUB_PARAGRAPH_SPACING = 2f
 private const val READER_PREFERENCES_STORAGE_VERSION = 4
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
+/** Fallback profile used for libraries that have no explicit profile yet (and for local books). */
+internal const val DEFAULT_READER_PROFILE_KEY = "__default__"
+
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val volumeButtonPageNavigation: Boolean = false,
@@ -232,15 +235,137 @@ internal fun readerHeaderReservedTopSpace(
     }
 )
 
+private const val READER_PREFERENCES_SCOPE_SEPARATOR = "::"
+
+/** Profile-aware key for a library reader profile. */
+internal fun readerPreferencesStorageKey(profileId: String, libraryId: String): String =
+    if (profileId.isBlank()) libraryId else "$profileId$READER_PREFERENCES_SCOPE_SEPARATOR$libraryId"
+
+internal fun defaultReaderPreferencesStorageKey(profileId: String): String =
+    readerPreferencesStorageKey(profileId, DEFAULT_READER_PROFILE_KEY)
+
+/** Profile of the currently selected server; blank for local books and unconfigured installs. */
+internal fun activeReaderProfileId(context: Context): String =
+    ServerProfileStore(context.applicationContext).active()?.id.orEmpty()
+
+internal fun AppPreferences.hasReaderPreferences(profileId: String, libraryId: String): Boolean {
+    val scoped = readerPreferencesStorageKey(profileId, libraryId)
+    val fallback = defaultReaderPreferencesStorageKey(profileId)
+    return libraryReaderPreferences.containsKey(scoped) ||
+        libraryReaderPreferences.containsKey(fallback) ||
+        (profileId.isBlank() && (
+            libraryReaderPreferences.containsKey(libraryId) ||
+                libraryReaderPreferences.containsKey(DEFAULT_READER_PROFILE_KEY)
+            ))
+}
+
+internal fun AppPreferences.readerPreferencesFor(
+    profileId: String,
+    libraryId: String
+): LibraryReaderPreferences {
+    val scoped = libraryReaderPreferences[readerPreferencesStorageKey(profileId, libraryId)]
+    val scopedFallback = libraryReaderPreferences[defaultReaderPreferencesStorageKey(profileId)]
+    // Legacy unscoped settings have no owning profile and must not leak into a profile.
+    // They are migrated only when AppPreferencesStore can identify a single owner.
+    val legacy = if (profileId.isBlank()) libraryReaderPreferences[libraryId] else null
+    val legacyFallback = if (profileId.isBlank()) {
+        libraryReaderPreferences[DEFAULT_READER_PROFILE_KEY]
+    } else {
+        null
+    }
+    return (scoped ?: scopedFallback ?: legacy ?: legacyFallback)?.normalized()
+        ?: LibraryReaderPreferences()
+}
+
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
-    libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
+    readerPreferencesFor(profileId = "", libraryId = libraryId)
 
 internal fun AppPreferences.withReaderPreferences(
+    profileId: String,
     libraryId: String,
     value: LibraryReaderPreferences
 ): AppPreferences {
     if (libraryId.isBlank()) return this
-    return copy(libraryReaderPreferences = libraryReaderPreferences + (libraryId to value.normalized()))
+    val key = readerPreferencesStorageKey(profileId, libraryId)
+    return copy(libraryReaderPreferences = libraryReaderPreferences + (key to value.normalized()))
+}
+
+internal fun AppPreferences.withReaderPreferences(
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences = withReaderPreferences(profileId = "", libraryId = libraryId, value = value)
+
+/**
+ * Copies [value] into every known library profile for [profileId] and into the scoped fallback,
+ * so libraries that have never been opened inherit the same settings too. Other server profiles
+ * and the legacy unscoped entries are never modified.
+ */
+internal fun AppPreferences.withReaderPreferencesForAllLibraries(
+    profileId: String,
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences {
+    val normalized = value.normalized()
+    val profilePrefix = if (profileId.isBlank()) null else "$profileId$READER_PREFERENCES_SCOPE_SEPARATOR"
+    val targetKeys = buildSet {
+        if (profilePrefix == null) {
+            libraryReaderPreferences.keys
+                .filterTo(this) { !it.contains(READER_PREFERENCES_SCOPE_SEPARATOR) }
+        } else {
+            libraryReaderPreferences.keys.filterTo(this) { it.startsWith(profilePrefix) }
+        }
+        add(readerPreferencesStorageKey(profileId, libraryId))
+        add(defaultReaderPreferencesStorageKey(profileId))
+    }
+    return copy(
+        libraryReaderPreferences = libraryReaderPreferences + targetKeys.associateWith { normalized }
+    )
+}
+
+/**
+ * Migrates legacy unscoped reader profiles to [ownerProfileId] only when the caller knows the
+ * owning server profile (for example, a single configured profile on upgrade). The unscoped
+ * entries are removed so a different profile can never inherit them later.
+ */
+internal fun AppPreferences.hasLegacyReaderPreferences(): Boolean =
+    libraryReaderPreferences.keys.any { !it.contains(READER_PREFERENCES_SCOPE_SEPARATOR) }
+
+internal enum class LegacyReaderMigrationAction { NONE, MIGRATE, BLOCK }
+
+/**
+ * Decides whether legacy unscoped reader profiles can be migrated. Migration is one-shot:
+ * when ownership is ambiguous (zero or multiple profiles), the caller persists a blocked marker
+ * and must not retry after a profile is later removed.
+ */
+internal fun legacyReaderMigrationAction(
+    hasLegacyPreferences: Boolean,
+    profileCount: Int,
+    migrationBlocked: Boolean
+): LegacyReaderMigrationAction = when {
+    !hasLegacyPreferences -> LegacyReaderMigrationAction.NONE
+    migrationBlocked -> LegacyReaderMigrationAction.NONE
+    profileCount == 1 -> LegacyReaderMigrationAction.MIGRATE
+    else -> LegacyReaderMigrationAction.BLOCK
+}
+
+internal fun AppPreferences.migrateLegacyReaderPreferences(
+    ownerProfileId: String?,
+    migrationBlocked: Boolean = false
+): AppPreferences {
+    if (migrationBlocked || ownerProfileId.isNullOrBlank()) return this
+    val unscoped = libraryReaderPreferences.filterKeys {
+        !it.contains(READER_PREFERENCES_SCOPE_SEPARATOR)
+    }
+    if (unscoped.isEmpty()) return this
+    val migrated = libraryReaderPreferences
+        .filterKeys { it.contains(READER_PREFERENCES_SCOPE_SEPARATOR) }
+        .toMutableMap()
+    unscoped.forEach { (libraryId, value) ->
+        if (libraryId.isBlank()) return@forEach
+        val key = readerPreferencesStorageKey(ownerProfileId, libraryId)
+        migrated.putIfAbsent(key, value.normalized())
+    }
+    return copy(libraryReaderPreferences = migrated)
 }
 
 internal fun libraryReadingDirectionStorageValue(value: LibraryReadingDirection): String =

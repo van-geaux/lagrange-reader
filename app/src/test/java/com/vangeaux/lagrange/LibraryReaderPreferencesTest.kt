@@ -495,4 +495,264 @@ class LibraryReaderPreferencesTest {
             )
         )
     }
+
+    @Test
+    fun `apply to all libraries only touches the active server profile`() {
+        val profileA = "profile-a"
+        val profileB = "profile-b"
+        val source = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            customTextColor = 0xFFB8B8B8.toInt(),
+            fontScale = 1.25f
+        )
+        val otherServerProfile = LibraryReaderPreferences(theme = EpubReaderTheme.Sepia)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                readerPreferencesStorageKey(profileA, "library-a") to
+                    LibraryReaderPreferences(theme = EpubReaderTheme.Light),
+                readerPreferencesStorageKey(profileA, "library-b") to
+                    LibraryReaderPreferences(theme = EpubReaderTheme.Sepia),
+                readerPreferencesStorageKey(profileB, "library-a") to otherServerProfile,
+                defaultReaderPreferencesStorageKey(profileB) to otherServerProfile
+            )
+        )
+
+        val updated = preferences.withReaderPreferencesForAllLibraries(
+            profileId = profileA,
+            libraryId = "library-a",
+            value = source
+        )
+
+        val expected = source.normalized()
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileA, "library-a")))
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileA, "library-b")))
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(defaultReaderPreferencesStorageKey(profileA)))
+        assertEquals(otherServerProfile, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileB, "library-a")))
+        assertEquals(otherServerProfile, updated.libraryReaderPreferences.getValue(defaultReaderPreferencesStorageKey(profileB)))
+    }
+
+    @Test
+    fun `reader preferences fall back to the active server default for unknown libraries`() {
+        val profileA = "profile-a"
+        val profileB = "profile-b"
+        val fallbackA = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            customBackgroundColor = 0xFF101010.toInt()
+        )
+        val fallbackB = LibraryReaderPreferences(theme = EpubReaderTheme.Sepia)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                defaultReaderPreferencesStorageKey(profileA) to fallbackA,
+                defaultReaderPreferencesStorageKey(profileB) to fallbackB
+            )
+        )
+
+        assertEquals(fallbackA.normalized(), preferences.readerPreferencesFor(profileA, "never-opened-library"))
+        assertEquals(fallbackB.normalized(), preferences.readerPreferencesFor(profileB, "never-opened-library"))
+
+        val onlyServerB = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                defaultReaderPreferencesStorageKey(profileB) to fallbackB
+            )
+        )
+        assertEquals(LibraryReaderPreferences(), onlyServerB.readerPreferencesFor(profileA, "new-library"))
+    }
+
+    @Test
+    fun `an explicit library profile wins over the active server default`() {
+        val profileId = "profile-a"
+        val explicit = LibraryReaderPreferences(theme = EpubReaderTheme.Light)
+        val fallback = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                readerPreferencesStorageKey(profileId, "library-a") to explicit,
+                defaultReaderPreferencesStorageKey(profileId) to fallback
+            )
+        )
+
+        assertEquals(explicit.normalized(), preferences.readerPreferencesFor(profileId, "library-a"))
+    }
+
+
+    @Test
+    fun `legacy profiles migrate to a known owner without leaking to another profile`() {
+        val legacy = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val legacyFallback = LibraryReaderPreferences(theme = EpubReaderTheme.Sepia)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                "shared-library" to legacy,
+                DEFAULT_READER_PROFILE_KEY to legacyFallback
+            )
+        )
+
+        val migrated = preferences.migrateLegacyReaderPreferences("profile-a")
+
+        assertEquals(legacy.normalized(), migrated.readerPreferencesFor("profile-a", "shared-library"))
+        assertEquals(legacyFallback.normalized(), migrated.readerPreferencesFor("profile-a", "new-library"))
+        assertEquals(
+            LibraryReaderPreferences(),
+            migrated.readerPreferencesFor("profile-b", "shared-library")
+        )
+        assertFalse(migrated.libraryReaderPreferences.containsKey("shared-library"))
+        assertFalse(migrated.libraryReaderPreferences.containsKey(DEFAULT_READER_PROFILE_KEY))
+    }
+
+    @Test
+    fun `legacy profiles stay unscoped and are not reused when the owner is unknown`() {
+        val legacy = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf("shared-library" to legacy)
+        )
+
+        val unmigrated = preferences.migrateLegacyReaderPreferences(null)
+
+        assertEquals(
+            LibraryReaderPreferences(),
+            unmigrated.readerPreferencesFor("profile-a", "shared-library")
+        )
+        assertEquals(
+            LibraryReaderPreferences(),
+            unmigrated.readerPreferencesFor("profile-b", "shared-library")
+        )
+        // Local, unscoped books still retain the legacy setting.
+        assertEquals(legacy.normalized(), unmigrated.readerPreferencesFor("", "shared-library"))
+    }
+
+    @Test
+    fun `legacy migration keeps an existing scoped profile`() {
+        val scoped = LibraryReaderPreferences(theme = EpubReaderTheme.Light)
+        val legacy = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                readerPreferencesStorageKey("profile-a", "shared-library") to scoped,
+                "shared-library" to legacy
+            )
+        )
+
+        val migrated = preferences.migrateLegacyReaderPreferences("profile-a")
+
+        assertEquals(scoped.normalized(), migrated.readerPreferencesFor("profile-a", "shared-library"))
+        assertFalse(migrated.libraryReaderPreferences.containsKey("shared-library"))
+    }
+
+    @Test
+    fun `unowned legacy settings are not persisted into a scoped profile`() {
+        val legacy = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf("shared-library" to legacy)
+        )
+
+        val resolved = preferences.readerPreferencesFor("profile-a", "shared-library")
+        val withResolved = preferences.withReaderPreferences(
+            profileId = "profile-a",
+            libraryId = "shared-library",
+            value = resolved
+        )
+
+        assertEquals(LibraryReaderPreferences(), resolved)
+        assertEquals(
+            LibraryReaderPreferences(),
+            withResolved.libraryReaderPreferences.getValue(
+                readerPreferencesStorageKey("profile-a", "shared-library")
+            )
+        )
+        assertEquals(
+            LibraryReaderPreferences(),
+            withResolved.readerPreferencesFor("profile-b", "shared-library")
+        )
+    }
+
+    @Test
+    fun `legacy migration is blocked after multiple profiles and does not retry after removal`() {
+        val legacy = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+
+        assertEquals(
+            LegacyReaderMigrationAction.BLOCK,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 2,
+                migrationBlocked = false
+            )
+        )
+
+        // The first ambiguous read persists the blocked marker. Removing one profile must not
+        // make the same legacy values eligible for the remaining profile.
+        val blockedAfterAmbiguity = legacyReaderMigrationAction(
+            hasLegacyPreferences = true,
+            profileCount = 2,
+            migrationBlocked = false
+        ) == LegacyReaderMigrationAction.BLOCK
+        assertTrue(blockedAfterAmbiguity)
+        assertEquals(
+            LegacyReaderMigrationAction.NONE,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 1,
+                migrationBlocked = blockedAfterAmbiguity
+            )
+        )
+
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf("shared-library" to legacy)
+        )
+        val result = preferences.migrateLegacyReaderPreferences(
+            ownerProfileId = "remaining-profile",
+            migrationBlocked = blockedAfterAmbiguity
+        )
+
+        assertEquals(legacy.normalized(), result.libraryReaderPreferences.getValue("shared-library"))
+        assertFalse(
+            result.libraryReaderPreferences.containsKey(
+                readerPreferencesStorageKey("remaining-profile", "shared-library")
+            )
+        )
+        assertEquals(
+            LibraryReaderPreferences(),
+            result.readerPreferencesFor("remaining-profile", "shared-library")
+        )
+    }
+
+    @Test
+    fun `legacy migration decision requires one unambiguous owner`() {
+        assertEquals(
+            LegacyReaderMigrationAction.NONE,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = false,
+                profileCount = 0,
+                migrationBlocked = false
+            )
+        )
+        assertEquals(
+            LegacyReaderMigrationAction.MIGRATE,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 1,
+                migrationBlocked = false
+            )
+        )
+        assertEquals(
+            LegacyReaderMigrationAction.BLOCK,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 0,
+                migrationBlocked = false
+            )
+        )
+        assertEquals(
+            LegacyReaderMigrationAction.BLOCK,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 3,
+                migrationBlocked = false
+            )
+        )
+        assertEquals(
+            LegacyReaderMigrationAction.NONE,
+            legacyReaderMigrationAction(
+                hasLegacyPreferences = true,
+                profileCount = 1,
+                migrationBlocked = true
+            )
+        )
+    }
 }
