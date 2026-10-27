@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -160,7 +161,9 @@ class ReaderLightweightChromeInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText(BOOK_PREVIEW_MODE_LABEL).assertIsDisplayed()
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(targetContext.getString(R.string.preview_banner_label))
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("view-only-mode-banner").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("view-only-confirmation-dialog").assertIsDisplayed()
         composeRule.onNodeWithText("Leave preview mode?").assertIsDisplayed()
