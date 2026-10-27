@@ -98,6 +98,9 @@ internal const val MAX_EPUB_PARAGRAPH_SPACING = 2f
 private const val READER_PREFERENCES_STORAGE_VERSION = 3
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
+/** Fallback profile used for libraries that have no explicit profile yet (and for local books). */
+internal const val DEFAULT_READER_PROFILE_KEY = "__default__"
+
 data class LibraryReaderPreferences(
     val readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     val volumeButtonPageNavigation: Boolean = false,
@@ -226,15 +229,89 @@ internal fun readerHeaderReservedTopSpace(
     }
 )
 
+private const val READER_PREFERENCES_SCOPE_SEPARATOR = "::"
+
+/** Profile-aware key for a library reader profile. */
+internal fun readerPreferencesStorageKey(profileId: String, libraryId: String): String =
+    if (profileId.isBlank()) libraryId else "$profileId$READER_PREFERENCES_SCOPE_SEPARATOR$libraryId"
+
+internal fun defaultReaderPreferencesStorageKey(profileId: String): String =
+    readerPreferencesStorageKey(profileId, DEFAULT_READER_PROFILE_KEY)
+
+/** Profile of the currently selected server; blank for local books and unconfigured installs. */
+internal fun activeReaderProfileId(context: Context): String =
+    ServerProfileStore(context.applicationContext).active()?.id.orEmpty()
+
+internal fun AppPreferences.hasReaderPreferences(profileId: String, libraryId: String): Boolean {
+    val scoped = readerPreferencesStorageKey(profileId, libraryId)
+    val fallback = defaultReaderPreferencesStorageKey(profileId)
+    return libraryReaderPreferences.containsKey(scoped) ||
+        libraryReaderPreferences.containsKey(fallback) ||
+        libraryReaderPreferences.containsKey(libraryId) ||
+        (profileId.isBlank() && libraryReaderPreferences.containsKey(DEFAULT_READER_PROFILE_KEY))
+}
+
+internal fun AppPreferences.readerPreferencesFor(
+    profileId: String,
+    libraryId: String
+): LibraryReaderPreferences {
+    val scoped = libraryReaderPreferences[readerPreferencesStorageKey(profileId, libraryId)]
+    val scopedFallback = libraryReaderPreferences[defaultReaderPreferencesStorageKey(profileId)]
+    val legacy = libraryReaderPreferences[libraryId]
+    val legacyFallback = if (profileId.isBlank()) {
+        libraryReaderPreferences[DEFAULT_READER_PROFILE_KEY]
+    } else {
+        null
+    }
+    // A server-scoped default is authoritative for that profile; a legacy raw profile is
+    // read only until the active server has its own scoped profile/default.
+    return (scoped ?: scopedFallback ?: legacy ?: legacyFallback)?.normalized()
+        ?: LibraryReaderPreferences()
+}
+
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
-    libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
+    readerPreferencesFor(profileId = "", libraryId = libraryId)
 
 internal fun AppPreferences.withReaderPreferences(
+    profileId: String,
     libraryId: String,
     value: LibraryReaderPreferences
 ): AppPreferences {
     if (libraryId.isBlank()) return this
-    return copy(libraryReaderPreferences = libraryReaderPreferences + (libraryId to value.normalized()))
+    val key = readerPreferencesStorageKey(profileId, libraryId)
+    return copy(libraryReaderPreferences = libraryReaderPreferences + (key to value.normalized()))
+}
+
+internal fun AppPreferences.withReaderPreferences(
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences = withReaderPreferences(profileId = "", libraryId = libraryId, value = value)
+
+/**
+ * Copies [value] into every known library profile for [profileId] and into the scoped fallback,
+ * so libraries that have never been opened inherit the same settings too. Other server profiles
+ * and the legacy unscoped entries are never modified.
+ */
+internal fun AppPreferences.withReaderPreferencesForAllLibraries(
+    profileId: String,
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences {
+    val normalized = value.normalized()
+    val profilePrefix = if (profileId.isBlank()) null else "$profileId$READER_PREFERENCES_SCOPE_SEPARATOR"
+    val targetKeys = buildSet {
+        if (profilePrefix == null) {
+            libraryReaderPreferences.keys
+                .filterTo(this) { !it.contains(READER_PREFERENCES_SCOPE_SEPARATOR) }
+        } else {
+            libraryReaderPreferences.keys.filterTo(this) { it.startsWith(profilePrefix) }
+        }
+        add(readerPreferencesStorageKey(profileId, libraryId))
+        add(defaultReaderPreferencesStorageKey(profileId))
+    }
+    return copy(
+        libraryReaderPreferences = libraryReaderPreferences + targetKeys.associateWith { normalized }
+    )
 }
 
 internal fun libraryReadingDirectionStorageValue(value: LibraryReadingDirection): String =

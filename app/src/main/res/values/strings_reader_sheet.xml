@@ -36,4 +36,10 @@
     <string name="sheet_custom_background_custom">Custom</string>
     <string name="sheet_text_color_custom">Custom</string>
     <string name="sheet_text_color_custom_summary">Choose a custom EPUB text color (RGB)</string>
+    <string name="sheet_apply_to_all_libraries">Apply to all libraries</string>
+    <string name="sheet_apply_to_all_libraries_summary">Copy these reading settings to every library on this server.</string>
+    <string name="sheet_apply_to_all_libraries_confirm_title">Apply to all libraries?</string>
+    <string name="sheet_apply_to_all_libraries_confirm_message">This replaces the reading settings of every library with the current book’s settings. You can adjust individual libraries afterwards.</string>
+    <string name="sheet_apply_to_all_libraries_confirm">Apply</string>
+    <string name="sheet_apply_to_all_libraries_applied">Reading settings applied to all libraries</string>
 </resources>

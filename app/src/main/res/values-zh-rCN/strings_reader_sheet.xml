@@ -36,4 +36,10 @@
     <string name="sheet_custom_background_custom">自定义</string>
     <string name="sheet_text_color_custom">自定义</string>
     <string name="sheet_text_color_custom_summary">自定义 EPUB 文字颜色（RGB）</string>
+    <string name="sheet_apply_to_all_libraries">应用到所有书库</string>
+    <string name="sheet_apply_to_all_libraries_summary">将当前阅读设置复制到该服务器上的所有书库。</string>
+    <string name="sheet_apply_to_all_libraries_confirm_title">应用到所有书库？</string>
+    <string name="sheet_apply_to_all_libraries_confirm_message">这会用当前书籍的阅读设置覆盖所有书库。之后仍可单独调整各书库。</string>
+    <string name="sheet_apply_to_all_libraries_confirm">应用</string>
+    <string name="sheet_apply_to_all_libraries_applied">已将阅读设置应用到所有书库</string>
 </resources>

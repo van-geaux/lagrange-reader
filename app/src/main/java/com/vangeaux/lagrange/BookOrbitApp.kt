@@ -2147,6 +2147,7 @@ internal fun EpubReaderOptionsBottomSheet(
     onShowTapZoneTutorialAfterChangesChange: (Boolean) -> Unit = {},
     onCustomFontRequest: () -> Unit = {},
     onCustomFontRemove: () -> Unit = {},
+    onApplyToAllLibraries: (() -> Unit)? = null,
     bookLanguage: EpubBookLanguageChoice? = null,
     onBookLanguageChange: (String?) -> Unit = {},
     modifier: Modifier = Modifier
@@ -2305,7 +2306,8 @@ internal fun EpubReaderOptionsBottomSheet(
                             onShowTapZoneTutorialAfterChangesChange = onShowTapZoneTutorialAfterChangesChange,
                             format = ReaderConfigurationFormat.EPUB,
                             onCustomFontRequest = onCustomFontRequest,
-                            onCustomFontRemove = onCustomFontRemove
+                            onCustomFontRemove = onCustomFontRemove,
+                            onApplyToAllLibraries = onApplyToAllLibraries
                         )
                     }
                 }
@@ -2490,6 +2492,7 @@ internal fun ComicReaderOptionsBottomSheet(
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     showTapZoneTutorialAfterChanges: Boolean = true,
     onShowTapZoneTutorialAfterChangesChange: (Boolean) -> Unit = {},
+    onApplyToAllLibraries: (() -> Unit)? = null,
     format: ReaderConfigurationFormat = ReaderConfigurationFormat.COMIC,
     modifier: Modifier = Modifier
 ) {
@@ -2581,7 +2584,8 @@ internal fun ComicReaderOptionsBottomSheet(
                     onPreferencesChange = onPreferencesChange,
                     showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
                     onShowTapZoneTutorialAfterChangesChange = onShowTapZoneTutorialAfterChangesChange,
-                    format = format
+                    format = format,
+                    onApplyToAllLibraries = onApplyToAllLibraries
                 )
             }
         }
