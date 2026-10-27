@@ -37,6 +37,9 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Validate Android localization resources
+        run: python3 tools/validate_android_localizations.py
+
       - name: Run JVM unit tests
         run: ./gradlew testDebugUnitTest
 
