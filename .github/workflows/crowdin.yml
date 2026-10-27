@@ -25,8 +25,8 @@ jobs:
           upload_translations: true
           download_translations: true
           push_translations: true
-          skip_untranslated_strings: false
-          skip_untranslated_files: false
+          skip_untranslated_strings: true
+          skip_untranslated_files: true
           export_only_approved: true
           localization_branch_name: l10n_crowdin_translations
           create_pull_request: true
