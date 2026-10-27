@@ -1,45 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 应用外壳：更新提示 -->
-    <string name="shell_update_available">%1$s 已发布</string>
-    <string name="shell_update_ready">版本 %1$s 已可下载。</string>
-    <string name="shell_update_ignore">忽略</string>
-
-    <!-- 应用外壳：启动与加载 -->
-    <string name="shell_tagline">一款 Lagrange 阅读器</string>
-    <string name="shell_loading_library">正在加载你的书库…</string>
-    <string name="shell_back">返回</string>
-
-    <!-- 应用外壳：书库浏览器 -->
-    <string name="shell_libraries_title">书库</string>
-    <string name="shell_refresh">刷新</string>
-    <string name="shell_sign_out">退出登录</string>
-    <string name="shell_connected_server">已连接的服务器</string>
-    <string name="shell_pending_sync_queue">待同步队列：%1$d</string>
-    <string name="shell_loading_libraries">正在加载书库…</string>
-    <string name="shell_no_libraries">未找到书库。</string>
-    <string name="shell_select_library">选择书库</string>
-    <string name="shell_books">图书</string>
-    <string name="shell_loading_books">正在加载图书…</string>
-    <string name="shell_no_books_in_library">此书库中未找到图书。</string>
-    <string name="shell_open_local">打开本地文件</string>
-    <string name="shell_unavailable_offline">离线不可用</string>
-    <string name="shell_read_or_listen">阅读 / 收听</string>
-    <string name="shell_delete_local">删除本地文件</string>
-    <string name="shell_downloading">下载中</string>
-    <string name="shell_download">下载</string>
-    <string name="shell_status_downloaded">已下载</string>
-    <string name="shell_status_not_available_offline">离线不可用</string>
-
-    <!-- 应用外壳：阅读器准备失败提示 -->
-    <string name="shell_reader_epub_unpreparable">无法准备此 EPUB 文件。</string>
-    <string name="shell_reader_comic_needs_cbz">此漫画文件需先转换为 CBZ 才能由 Readium 打开。请重新连接已配置的服务器以进行准备。</string>
-    <string name="shell_reader_pdf_unpreparable">无法为 Readium 准备此 PDF 文件。</string>
-    <string name="shell_reader_format_unsupported">不支持此文件格式。</string>
-
-    <!-- 应用外壳：有声书准备 -->
-    <string name="shell_audiobook_unavailable">无法准备此有声书进行播放。</string>
-    <string name="shell_audiobook_timeout">有声书准备超时，请重新打开。</string>
-    <string name="shell_audiobook_failed">有声书准备失败，已安全退出。</string>
-    <string name="shell_audiobook_preparing">正在准备有声书…</string>
+    <!-- App shell: update dialog -->
+    <string name="shell_update_available">%1$s is available</string>
+    <string name="shell_update_ready">Version %1$s is ready to download.</string>
+    <string name="shell_update_ignore">Ignore</string>
+    <!-- App shell: startup and loading -->
+    <string name="shell_tagline">a Lagrange reader</string>
+    <string name="shell_loading_library">Loading your library…</string>
+    <string name="shell_back">Back</string>
+    <!-- App shell: library browser -->
+    <string name="shell_libraries_title">Libraries</string>
+    <string name="shell_refresh">Refresh</string>
+    <string name="shell_sign_out">Sign out</string>
+    <string name="shell_connected_server">Connected server</string>
+    <string name="shell_pending_sync_queue">Pending sync queue: %1$d</string>
+    <string name="shell_loading_libraries">Loading libraries...</string>
+    <string name="shell_no_libraries">No libraries found.</string>
+    <string name="shell_select_library">Select a library</string>
+    <string name="shell_books">Books</string>
+    <string name="shell_loading_books">Loading books...</string>
+    <string name="shell_no_books_in_library">No books found in this library.</string>
+    <string name="shell_open_local">Open local</string>
+    <string name="shell_unavailable_offline">Unavailable offline</string>
+    <string name="shell_read_or_listen">Read / Listen</string>
+    <string name="shell_delete_local">Delete local</string>
+    <string name="shell_downloading">Downloading</string>
+    <string name="shell_download">Download</string>
+    <string name="shell_status_downloaded">downloaded</string>
+    <string name="shell_status_not_available_offline">not available offline</string>
+    <!-- App shell: reader preparation errors -->
+    <string name="shell_reader_epub_unpreparable">Unable to prepare this EPUB.</string>
+    <string name="shell_reader_comic_needs_cbz">This comic container must be converted to CBZ before Readium can open it. Reconnect to the configured server to prepare it.</string>
+    <string name="shell_reader_pdf_unpreparable">Unable to prepare this PDF for Readium.</string>
+    <string name="shell_reader_format_unsupported">This file format is not supported.</string>
+    <!-- App shell: audiobook preparation -->
+    <string name="shell_audiobook_unavailable">Unable to prepare this audiobook for playback.</string>
+    <string name="shell_audiobook_timeout">Audiobook preparation timed out. Try opening it again.</string>
+    <string name="shell_audiobook_failed">Audiobook preparation failed safely.</string>
+    <string name="shell_audiobook_preparing">Preparing audiobook…</string>
 </resources>
