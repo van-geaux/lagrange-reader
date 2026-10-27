@@ -1,6 +1,6 @@
 # Translation Guide
 
-Lagrange Reader uses Crowdin for translation work. English Android resources remain the source of truth in Git, and approved translations return through generated pull requests.
+Lagrange Reader uses [Crowdin](https://crowdin.com/project/lagrange-reader) for translation work. English Android resources remain the source of truth in Git, and approved translations return through generated pull requests.
 
 ## For translators
 
