@@ -40,6 +40,9 @@ jobs:
       - name: Validate Android localization resources
         run: python3 tools/validate_android_localizations.py
 
+      - name: Test Android localization validator
+        run: python3 -m unittest tools/test_validate_android_localizations.py
+
       - name: Run JVM unit tests
         run: ./gradlew testDebugUnitTest
 

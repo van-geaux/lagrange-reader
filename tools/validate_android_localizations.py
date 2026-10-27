@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "app" / "src" / "main" / "res"
 SOURCE_DIR = ROOT / "values"
 FORMAT_RE = re.compile(r"%(?:\d+\$)?[a-zA-Z]")
+PLURAL_QUANTITIES = {"zero", "one", "two", "few", "many", "other"}
 
 
 def resource_entries(path: Path) -> tuple[dict[tuple[str, str], ET.Element], list[str]]:
@@ -43,8 +44,68 @@ def placeholders(element: ET.Element) -> list[str]:
     return sorted(FORMAT_RE.findall(element_text(element)))
 
 
-def plural_quantities(element: ET.Element) -> list[str]:
-    return sorted(item.attrib.get("quantity", "") for item in element if item.tag == "item")
+def plural_items(element: ET.Element) -> dict[str, ET.Element]:
+    return {
+        item.attrib.get("quantity", ""): item
+        for item in element
+        if item.tag == "item"
+    }
+
+
+def validate_entries(
+    source_entries: dict[tuple[str, str], ET.Element],
+    translated: dict[tuple[str, str], ET.Element],
+    translation_path: Path,
+) -> list[str]:
+    errors: list[str] = []
+    expected = {
+        key
+        for key, element in source_entries.items()
+        if element.attrib.get("translatable", "true") != "false"
+    }
+    actual = set(translated)
+    for key in sorted(expected - actual):
+        errors.append(f"{translation_path}: missing {key[0]} {key[1]!r}")
+    for key in sorted(actual - expected):
+        errors.append(f"{translation_path}: unexpected {key[0]} {key[1]!r}")
+
+    for key in sorted(expected & actual):
+        source_element = source_entries[key]
+        translated_element = translated[key]
+        if key[0] == "plurals":
+            source_items = plural_items(source_element)
+            translated_items = plural_items(translated_element)
+            invalid_quantities = set(translated_items) - PLURAL_QUANTITIES
+            if invalid_quantities:
+                errors.append(
+                    f"{translation_path}: invalid plural quantities for {key[1]!r}: "
+                    f"{sorted(invalid_quantities)!r}"
+                )
+            if not translated_items:
+                errors.append(f"{translation_path}: plural {key[1]!r} has no items")
+                continue
+            for quantity, translated_item in translated_items.items():
+                expected_item = source_items.get(quantity)
+                if expected_item is None:
+                    expected_item = source_items.get("other")
+                if expected_item is None and source_items:
+                    expected_item = next(iter(source_items.values()))
+                if expected_item is not None and placeholders(expected_item) != placeholders(
+                    translated_item
+                ):
+                    errors.append(
+                        f"{translation_path}: placeholder mismatch for {key[1]!r} "
+                        f"quantity {quantity!r}: source={placeholders(expected_item)!r}, "
+                        f"translation={placeholders(translated_item)!r}"
+                    )
+            continue
+        if placeholders(source_element) != placeholders(translated_element):
+            errors.append(
+                f"{translation_path}: placeholder mismatch for {key[1]!r}: "
+                f"source={placeholders(source_element)!r}, "
+                f"translation={placeholders(translated_element)!r}"
+            )
+    return errors
 
 
 def main() -> int:
@@ -55,6 +116,7 @@ def main() -> int:
 
     source: dict[Path, dict[tuple[str, str], ET.Element]] = {}
     errors: list[str] = []
+    translated_files = 0
     for path in source_files:
         entries, parse_errors = resource_entries(path)
         source[path] = entries
@@ -71,46 +133,20 @@ def main() -> int:
         for source_path, source_entries in source.items():
             translation_path = locale_dir / source_path.name
             if not translation_path.exists():
-                errors.append(f"{translation_path}: missing translation file")
+                # Android falls back to the default resource when Crowdin has
+                # not exported a file for a locale yet.
                 continue
+            translated_files += 1
             translated, parse_errors = resource_entries(translation_path)
             errors.extend(parse_errors)
 
-            expected = {
-                key
-                for key, element in source_entries.items()
-                if element.attrib.get("translatable", "true") != "false"
-            }
-            actual = set(translated)
-            for key in sorted(expected - actual):
-                errors.append(f"{translation_path}: missing {key[0]} {key[1]!r}")
-            for key in sorted(actual - expected):
-                errors.append(f"{translation_path}: unexpected {key[0]} {key[1]!r}")
-
-            for key in sorted(expected & actual):
-                source_element = source_entries[key]
-                translated_element = translated[key]
-                if placeholders(source_element) != placeholders(translated_element):
-                    errors.append(
-                        f"{translation_path}: placeholder mismatch for {key[1]!r}: "
-                        f"source={placeholders(source_element)!r}, "
-                        f"translation={placeholders(translated_element)!r}"
-                    )
-                if key[0] == "plurals":
-                    source_quantities = plural_quantities(source_element)
-                    translated_quantities = plural_quantities(translated_element)
-                    if source_quantities != translated_quantities:
-                        errors.append(
-                            f"{translation_path}: plural quantity mismatch for {key[1]!r}: "
-                            f"source={source_quantities!r}, translation={translated_quantities!r}"
-                        )
+            errors.extend(validate_entries(source_entries, translated, translation_path))
 
     if errors:
         print("Android localization validation failed:", file=sys.stderr)
         print("\n".join(f"- {error}" for error in errors), file=sys.stderr)
         return 1
 
-    translated_files = len(locale_dirs) * len(source_files)
     print(
         f"Android localization validation passed: {len(source_files)} source files, "
         f"{len(locale_dirs)} locales, {translated_files} translated files."
