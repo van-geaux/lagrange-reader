@@ -1072,11 +1072,18 @@ private fun AudioReader(
 internal fun EpubReaderProgressFooter(
     status: EpubReaderProgressStatus,
     theme: EpubReaderTheme,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    customBackgroundColor: Int? = null
 ) {
+    val footerBackground = customBackgroundColor ?: theme.backgroundColor
+    val footerContent = if (customBackgroundColor != null) {
+        Color(customReaderBackgroundTextColor(customBackgroundColor)).copy(alpha = 0.78f)
+    } else {
+        Color(android.graphics.Color.parseColor(theme.foregroundCss)).copy(alpha = 0.78f)
+    }
     Surface(
         modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
-        color = Color(theme.backgroundColor),
+        color = Color(footerBackground),
         shadowElevation = 2.dp
     ) {
         Box(
@@ -1126,7 +1133,7 @@ internal fun EpubReaderProgressFooter(
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color(android.graphics.Color.parseColor(theme.foregroundCss)).copy(alpha = 0.78f),
+                color = footerContent,
                 style = MaterialTheme.typography.labelSmall
             )
         }

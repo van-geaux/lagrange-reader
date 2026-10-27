@@ -11,4 +11,22 @@
     <string name="sheet_book_language_title">书籍语言</string>
     <string name="sheet_book_language_auto">自动（优先书籍，其次设备语言）</string>
     <string name="sheet_comic_page_of">第 %1$d 页，共 %2$d 页</string>
+    <!-- EPUB 自定义页面背景 -->
+    <string name="sheet_custom_background">背景颜色</string>
+    <string name="sheet_custom_background_summary">自定义 EPUB 页面背景（RGB）</string>
+    <string name="sheet_custom_background_default">默认</string>
+    <string name="sheet_custom_background_dialog_title">自定义背景颜色</string>
+    <string name="sheet_custom_background_red">红色 (R)</string>
+    <string name="sheet_custom_background_green">绿色 (G)</string>
+    <string name="sheet_custom_background_blue">蓝色 (B)</string>
+    <string name="sheet_custom_background_preview">预览</string>
+    <string name="sheet_custom_background_apply">应用</string>
+    <string name="sheet_custom_background_reset">恢复默认</string>
+    <string name="sheet_custom_background_invalid">请输入 0 到 255 之间的数值。</string>
+    <string name="sheet_text_color">文字颜色</string>
+    <string name="sheet_text_color_default">自动</string>
+    <string name="sheet_text_color_summary">自定义 EPUB 页面文字颜色（RGB）</string>
+    <string name="sheet_text_color_dialog_title">自定义文字颜色</string>
+    <string name="sheet_text_color_preview">预览</string>
+    <string name="sheet_text_color_sample">Aa 文字示例</string>
 </resources>
