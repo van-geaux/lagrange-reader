@@ -141,6 +141,49 @@ class ReaderSpreadPolicyTest {
     }
 
     @Test
+    fun `gutter is centred when there is no separating hinge`() {
+        assertEquals(1214 until 1234, readerSpreadGutterPx(2448, hinge = null, minimumGapPx = 20))
+        val flatHinge = readerHingeFrom(true, false, false, 1224, 1224)
+        assertEquals(1214 until 1234, readerSpreadGutterPx(2448, flatHinge, minimumGapPx = 20))
+    }
+
+    @Test
+    fun `gutter covers a wide separating vertical hinge exactly`() {
+        val hinge = readerHingeFrom(true, true, true, 1300, 1380)
+        assertEquals(1300 until 1380, readerSpreadGutterPx(2700, hinge, minimumGapPx = 20))
+    }
+
+    @Test
+    fun `gutter is centred on a narrow separating hinge with the minimum gap`() {
+        val hinge = readerHingeFrom(true, true, true, 1220, 1228)
+        assertEquals(1214 until 1234, readerSpreadGutterPx(2448, hinge, minimumGapPx = 20))
+    }
+
+    @Test
+    fun `horizontal or out of bounds hinges are ignored for the gutter`() {
+        val horizontal = readerHingeFrom(false, true, true, 0, 2448)
+        assertEquals(1214 until 1234, readerSpreadGutterPx(2448, horizontal, minimumGapPx = 20))
+        val outside = readerHingeFrom(true, true, true, 2500, 2600)
+        assertEquals(1214 until 1234, readerSpreadGutterPx(2448, outside, minimumGapPx = 20))
+    }
+
+    @Test
+    fun `gutter follows the hinge when the reader is inset from the window edge`() {
+        // Hinge at 1300–1380 in the window; the reader starts 100px in, so the hinge is at 1200–1280.
+        val hinge = readerHingeFrom(true, true, true, 1300, 1380).inReaderCoordinates(100)
+        assertEquals(1200 until 1280, readerSpreadGutterPx(2600, hinge, minimumGapPx = 20))
+        val same = readerHingeFrom(true, true, true, 1300, 1380)
+        assertEquals(same, same.inReaderCoordinates(0))
+    }
+
+    @Test
+    fun `zero gap gutter is empty and gap never exceeds window`() {
+        assertTrue(readerSpreadGutterPx(2448, null, minimumGapPx = 0).isEmpty())
+        assertEquals(0 until 10, readerSpreadGutterPx(10, null, minimumGapPx = 50))
+        assertTrue(readerSpreadGutterPx(-5, null, minimumGapPx = 50).isEmpty())
+    }
+
+    @Test
     fun `spread mode storage round trips and defaults to automatic`() {
         ReaderSpreadMode.entries.forEach { mode ->
             assertEquals(mode, readerSpreadModeFromStorage(readerSpreadModeStorageValue(mode)))

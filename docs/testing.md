@@ -67,7 +67,7 @@ When the affected scope requires it, verify normal versus Preview launch isolati
 
 - For EPUB, verify chapter/page navigation, continuous active-resource seeking, text size, margins, reading direction, custom/accessibility fonts, image handling, and optional read-along narration. When Android TTS is available, long-press a word and a sentence, choose `Listen from here`, and confirm playback starts at the selected word/sentence rather than the chapter beginning; on EPUB 3 media-overlay books, confirm `Play narration` remains a separate action. Open TTS settings during playback, confirm the Voice selector lists only voices compatible with the EPUB language, selecting a voice changes subsequent speech, the choice persists after reopening the reader, and `Default Android voice` clears the override. Force a selected voice failure and confirm playback stops, the failed override is cleared, the player returns with `Default Android voice` selected and paused, the reading locator is preserved, and no automatic speech starts until Play is pressed. Confirm network-dependent voices are identified and the existing missing-voice-data action opens Android voice installation. Verify read-along speed changes apply immediately through the five adjustment controls and that `Apply` is disabled. Verify TTS speed and pitch apply immediately, custom punctuation pauses are hidden by default and appear only after enabling the switch, and punctuation/lock-screen changes require `Apply`. Verify `Prefer server progress when reopening` is off by default, persists per library, keeps the exact local locator when off, and when enabled follows clearly newer server progress without moving backward or treating this device's own progress write as another-device progress. Repeat once in Preview and confirm the listen actions are unavailable. For PDF and comics, verify page navigation, progress, links where applicable, layout modes, page gaps, and reader chrome. For audiobook playback, verify compact/full players, chapters, seeking, speed, sleep timer, session history, notification controls, backgrounding, screen lock, audio focus, and process/task recreation.
 
-### Foldable EPUB spreads
+### Foldable spreads (EPUB and comics)
 
 Automated coverage: `ReaderSpreadPolicyTest`, `EpubSpreadPreferencesTest` (JVM); `EpubSpreadWebViewInstrumentedTest`, `EpubSpreadActivityInstrumentedTest` (connected). Spread assertions need a large horizontal window, such as the Android Studio Pixel Fold AVD unfolded (2208×1840, 420 dpi). On phone-sized devices they are skipped through a JUnit assumption. Run connected tests on a non-English host with `JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US"`: several existing parser tests assert `.`-formatted percentages.
 
@@ -79,7 +79,14 @@ On an unfolded foldable or a large landscape tablet:
 - A fixed-layout EPUB shows two facing pages, and the left/right margin setting still applies around the spread.
 - Line spacing, word spacing, font size and font family change both pages identically and reflow text across both columns.
 - Confirm the following still work: resume position after fold/unfold or rotation, TTS sentence highlighting and auto page-turn across columns, highlights spanning the column boundary, and tap zones.
-- Comics and PDF stay single-page.
+- PDF stays single-page.
+
+Comics (automated: `ComicSpreadPairingTest`, `ComicSpreadLayoutTest` (JVM); `ComicSpreadReaderInstrumentedTest`, `ComicSpreadPostureInstrumentedTest`, `ComicSpreadActivityInstrumentedTest` (connected)):
+
+- Unfolded, paginated CBZ/CBR shows the cover alone, then facing pairs. A double-page image is shown alone, and the pairs after it re-align.
+- Right-to-left libraries put the earlier page on the right and advance leftwards. `Shift page pairs` moves the pairing by one page; `Show cover alone` off pairs the cover too.
+- Pinch-zoom works on the spread; long-pressing a half exports that page. Tap zones, volume buttons and the page list all move by spread. The footer reads `Pages N–M of T`.
+- Folding reopens on the first page of the spread; unfolding reopens on the spread containing the saved page. Turning off `Two-page spread when unfolded` restores the single-page navigator immediately.
 
 ### OLED EPUB theme
 
