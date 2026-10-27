@@ -431,11 +431,11 @@ class ReadiumAudioPlaybackTest {
         val preferences = audiobookMediaButtonPreferences()
 
         assertEquals(2, preferences.size)
-        assertEquals(CommandButton.ICON_SKIP_BACK_10, preferences[0].icon)
+        assertEquals(CommandButton.ICON_SKIP_BACK_30, preferences[0].icon)
         assertEquals(AUDIO_SEEK_BACK_SESSION_ACTION, preferences[0].sessionCommand?.customAction)
         assertEquals(CommandButton.ICON_SKIP_FORWARD_30, preferences[1].icon)
         assertEquals(AUDIO_SEEK_FORWARD_SESSION_ACTION, preferences[1].sessionCommand?.customAction)
-        assertEquals(10_000L, AUDIO_SEEK_BACK_INCREMENT_MS)
+        assertEquals(30_000L, AUDIO_SEEK_BACK_INCREMENT_MS)
         assertEquals(30_000L, AUDIO_SEEK_FORWARD_INCREMENT_MS)
     }
 
@@ -443,7 +443,7 @@ class ReadiumAudioPlaybackTest {
     fun readiumEngineUsesTheSameTimedSeekIncrements() {
         val configuration = audiobookReadiumEngineConfiguration()
 
-        assertEquals(10.seconds, configuration.seekBackwardIncrement)
+        assertEquals(30.seconds, configuration.seekBackwardIncrement)
         assertEquals(30.seconds, configuration.seekForwardIncrement)
     }
 

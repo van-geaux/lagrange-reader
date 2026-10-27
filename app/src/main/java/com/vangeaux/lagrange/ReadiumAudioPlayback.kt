@@ -83,9 +83,9 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 import kotlin.coroutines.resume
 
 internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancelled."
-internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 10_000L
+internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 30_000L
 internal const val AUDIO_SEEK_FORWARD_INCREMENT_MS = 30_000L
-internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_BACK_10"
+internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_BACK_30"
 internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_FORWARD_30"
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
@@ -143,15 +143,15 @@ internal fun applyAudiobookAudioFocusPolicy(
 
 internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuration =
     ExoPlayerEngine.Configuration(
-        seekBackwardIncrement = 10.seconds,
+        seekBackwardIncrement = 30.seconds,
         seekForwardIncrement = 30.seconds
     )
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
-    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
         .setSessionCommand(audiobookSeekBackSessionCommand)
-        .setDisplayName("Replay 10 seconds")
+        .setDisplayName("Replay 30 seconds")
         .build(),
     CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
         .setSessionCommand(audiobookSeekForwardSessionCommand)
@@ -439,7 +439,7 @@ internal class AudiobookMediaSessionCallback(
         browser: MediaSession.ControllerInfo,
         params: MediaLibraryService.LibraryParams?
     ): ListenableFuture<LibraryResult<MediaItem>> =
-        onGetAndroidAutoLibraryRoot(serviceProvider(), params)
+        onGetAndroidAutoLibraryRoot(serviceProvider(), browser, params)
 
     override fun onGetChildren(
         session: MediaLibraryService.MediaLibrarySession,
@@ -1199,7 +1199,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
                 librarySession.setCustomLayout(
                     audiobookAutoMediaButtonPreferences(
-                        hasChapters = book.audioChapters.isNotEmpty(),
+                        hasChapters = book.audioChapters.isNotEmpty() || audioFiles.size > 1,
                         currentSpeed = currentSpeed
                     )
                 )
