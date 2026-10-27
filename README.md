@@ -25,7 +25,7 @@ This is a community project, not an official BookOrbit application. Development 
 
 ## Contributing
 
-Contributions are welcome. Start with an issue or feature discussion, then follow the repository workflow in [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Security reports should follow [`SECURITY.md`](SECURITY.md).
+Contributions are welcome. Start with an issue or feature discussion, then follow the repository workflow in [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Translation contributions are managed through [Crowdin](https://crowdin.com/project/lagrange-reader); see [`TRANSLATIONS.md`](TRANSLATIONS.md) for the translator workflow. Security reports should follow [`SECURITY.md`](SECURITY.md).
 
 ## Screenshots
 
