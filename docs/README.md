@@ -17,6 +17,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [Provider Manual Validation Checklist](./provider-checklists/provider-checklist-template.md) — copyable maintainer/user checklist for validating each target server/provider.
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
+- [Translation Guide](../TRANSLATIONS.md) — Crowdin workflow and translator contribution rules.
 - BookOrbit OIDC / SSO authentication is documented in [Provider documentation](./providers/bookorbit/oidc-authentication.md).
 - [Security Policy](../SECURITY.md) — responsible-disclosure guidance for security reports.
 
