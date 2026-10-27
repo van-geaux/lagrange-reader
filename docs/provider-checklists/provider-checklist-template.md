@@ -1,10 +1,10 @@
 # Provider checklist template
 
-Copy this file into this folder using the target server/provider name, for example `bookorbit.md` or `komga.md`. Keep one completed checklist per provider. The filename is the provider identity; the validation record inside the file identifies the exact server/build/device.
+Copy this file into this folder using the target server/provider name, for example `bookorbit.md`, `komga.md`, or `kavita.md`. Keep one completed checklist per provider. The filename is the provider identity; the validation record inside the file identifies the exact server/build/device.
 
 ## Validation record
 
-- Provider/server type: `[BookOrbit / Komga / other]`
+- Provider/server type: `[BookOrbit / Komga / Kavita / other]`
 - Server base URL: `[non-secret URL or redacted label]`
 - App build/version: `[version]`
 - APK path: `[path or release URL]`
@@ -289,7 +289,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 10. Cross-provider/profile isolation
 
-- [ ] Configure one BookOrbit profile and one Komga/other-provider profile.
+- [ ] Configure one provider profile each.
 - [ ] Switch A → B → A and authenticate through the selected provider each time.
 - [ ] The login label, endpoint behavior, auth method, and error messages match the selected provider.
 - [ ] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.

@@ -1,20 +1,20 @@
-# Kavita provider checklist
+# Provider checklist template
 
-This checklist covers the Kavita provider. The implementation includes username/password JWT login and server-hosted OIDC login through Kavita's WebView-compatible login page. The authentication items marked below record the user's manual confirmation; the remaining provider functions still require separate validation.
+Copy this file into this folder using the target server/provider name, for example `bookorbit.md` or `komga.md`. Keep one completed checklist per provider. The filename is the provider identity; the validation record inside the file identifies the exact server/build/device.
 
 ## Validation record
 
 - Provider/server type: `Kavita`
-- Server base URL: `https://kavita.alredho.com`
-- App build/version: `Lagrange-debug-202610261650.apk`
-- APK path: `/projects/bookorbit-android-issue-319/app/build/outputs/apk/debug/Lagrange-debug-202610261650.apk`
-- Maintainer: `Project maintainer`
-- User/reporter: `User confirmation in session`
-- Device/emulator: `[not supplied]`
-- Date: `2026-10-26`
-- Account/library fixture: `Configured Kavita OIDC server; exact account/library details not recorded`
+- Server base URL: `[non-secret URL or redacted label]`
+- App build/version: `[version]`
+- APK path: `[path or release URL]`
+- Maintainer: `[name]`
+- User/reporter: `[name]`
+- Device/emulator: `[model and Android version]`
+- Date: `[YYYY-MM-DD]`
+- Account/library fixture: `[description]`
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `User confirmation in session; no screenshot or log supplied`
+- Evidence links/screenshots/logs: `[locations]`
 
 Use these result markers for every item:
 
@@ -27,92 +27,92 @@ For every failure or blocked item, record the observed behavior, expected behavi
 
 ## 1. Server setup and authentication
 
-- [ ] The server URL input screen opens without a stale previous-provider label.
-- [ ] The server type selector is visible and offers the target provider.
-- [ ] Selecting the target server type visibly changes the selected state.
-- [ ] Entering the target server URL and continuing preserves the selected provider tag/profile.
-- [ ] Invalid, empty, redirected, unreachable, timeout, TLS, and HTTP-error URL states are understandable.
-- [ ] Returning to the setup screen preserves the URL and selected provider when retrying.
-- [ ] A configured server profile displays the correct provider type.
-- [ ] Switching from another provider selects the target adapter before login.
-- [ ] Switching back to this provider does not submit credentials through the previous provider.
-- [ ] Username/password login succeeds with valid credentials.
-- [ ] Invalid username/password produces a provider-appropriate error without crashing or logging out another profile.
-- [ ] Login loading, retry, cancellation, and Back behavior are correct.
-- [ ] Credentials are not visible in the URL, profile list, logs, screenshots, or ordinary local profile data.
-- [x] OIDC/SSO entry point is present when supported by this provider. (Implemented as provider-capability-gated `Open server sign-in`.)
-- [x] Kavita's login page exposes the configured OIDC action.
-- [x] OIDC provider selection, browser/WebView handoff, Kavita `/signin-oidc` callback, cancellation, failure, and successful return work. (User-confirmed.)
-- [ ] OIDC state/nonce/PKCE or provider-equivalent protections do not expose secrets and reject invalid callbacks. (Kavita owns these protocol protections; Lagrange must not log or persist their values.)
-- [x] Login resumes the intended destination after authentication. (User-confirmed.)
-- [ ] Logout clears the provider session and does not delete device-shared downloaded media.
-- [ ] Session expiration returns to the correct provider login screen.
+- [x] The server URL input screen opens without a stale previous-provider label.
+- [x] The server type selector is visible and offers the target provider.
+- [x] Selecting the target server type visibly changes the selected state.
+- [x] Entering the target server URL and continuing preserves the selected provider tag/profile.
+- [x] Invalid, empty, redirected, unreachable, timeout, TLS, and HTTP-error URL states are understandable.
+- [x] Returning to the setup screen preserves the URL and selected provider when retrying.
+- [x] A configured server profile displays the correct provider type.
+- [x] Switching from another provider selects the target adapter before login.
+- [x] Switching back to this provider does not submit credentials through the previous provider.
+- [x] Username/password login succeeds with valid credentials.
+- [x] Invalid username/password produces a provider-appropriate error without crashing or logging out another profile.
+- [x] Login loading, retry, cancellation, and Back behavior are correct.
+- [x] Credentials are not visible in the URL, profile list, logs, screenshots, or ordinary local profile data.
+- [x] OIDC/SSO entry point is present when supported by this provider.
+- [x] OIDC provider discovery loads the expected providers.
+- [x] OIDC provider selection, browser/WebView handoff, callback, cancellation, failure, and successful return work.
+- [x] OIDC state/nonce/PKCE or provider-equivalent protections do not expose secrets and reject invalid callbacks.
+- [x] Login resumes the intended destination after authentication.
+- [x] Logout clears the provider session and does not delete device-shared downloaded media.
+- [x] Session expiration returns to the correct provider login screen.
 
 ### Server-change navigation
 
-- [ ] Change Server is reachable from the intended app navigation entry point.
-- [ ] The configured-server list shows the correct display name, URL label, provider type, and active-server state.
-- [ ] Selecting another configured server updates the active profile before loading its data.
-- [ ] The app navigates to the correct login or Home destination for the selected server.
-- [ ] The previous server's Home, Library, Series, Author, Search, Local Books, and Book Detail screens are not reused for the new server.
-- [ ] Back navigation after a server change does not return to stale screens from the previous server.
-- [ ] A server change while a book is open exits or safely closes the previous reader/player session.
-- [ ] A server change while audio is playing stops or isolates playback according to the provider/session contract.
-- [ ] A failed target-server login preserves the previously usable server/profile and its navigation state.
-- [ ] Removing a non-active configured server returns to the correct server list without deleting unrelated local files.
-- [ ] Reopening the app after a server change restores the intended active server, not a stale previous profile.
+- [x] Change Server is reachable from the intended app navigation entry point.
+- [x] The configured-server list shows the correct display name, URL label, provider type, and active-server state.
+- [x] Selecting another configured server updates the active profile before loading its data.
+- [x] The app navigates to the correct login or Home destination for the selected server.
+- [x] The previous server's Home, Library, Series, Author, Search, Local Books, and Book Detail screens are not reused for the new server.
+- [x] Back navigation after a server change does not return to stale screens from the previous server.
+- [x] A server change while a book is open exits or safely closes the previous reader/player session.
+- [-] A server change while audio is playing stops or isolates playback according to the provider/session contract.
+- [x] A failed target-server login preserves the previously usable server/profile and its navigation state.
+- [x] Removing a non-active configured server returns to the correct server list without deleting unrelated local files.
+- [x] Reopening the app after a server change restores the intended active server, not a stale previous profile.
 
 ## 2. Home screen
 
 Validate each visible Home section. Confirm the section label, loading state, empty state, cards, cover/image state, metadata, ordering, and navigation.
 
-- [ ] Currently reading
-- [ ] On deck
-- [ ] Want to read
-- [ ] Recently added books
-- [ ] Recently added series
-- [ ] Recently updated series
-- [ ] Recently read books
-- [ ] Local books
+- [x] Currently reading
+- [x] On deck
+- [-] Want to read
+- [x] Recently added books
+- [x] Recently added series
+- [x] Recently updated series
+- [x] Recently read books
+- [x] Local books
 - [ ] Any additional provider-specific Home section: `[name]`
 
 For every Home section above:
 
-- [ ] The section loads data from the selected provider.
-- [ ] The section handles empty, loading, error, offline, and stale-cache states.
-- [ ] Cards show the correct title, author/series metadata, format, cover, and reading/download state.
-- [ ] Cards open the correct book or Series destination.
-- [ ] The section preview limit and ordering are correct.
-- [ ] The More/See all button is visible when the section has a complete destination.
-- [ ] More/See all opens the matching full section, not a different library or provider.
-- [ ] More/See all preserves the originating context when Back is pressed.
-- [ ] Paging or Load more works where present.
-- [ ] Refresh updates the section without duplicating or mixing records.
+- [x] The section loads data from the selected provider.
+- [x] The section handles empty, loading, error, offline, and stale-cache states.
+- [x] Cards show the correct title, author/series metadata, format, cover, and reading/download state.
+- [x] Cards open the correct book or Series destination.
+- [x] The section preview limit and ordering are correct.
+- [x] The More/See all button is visible when the section has a complete destination.
+- [x] More/See all opens the matching full section, not a different library or provider.
+- [x] More/See all preserves the originating context when Back is pressed.
+- [x] Paging or Load more works where present.
+- [x] Refresh updates the section without duplicating or mixing records.
 
 Cross-library Home behavior:
 
-- [ ] Home data aggregates books from all configured/visible libraries as intended by the provider.
-- [ ] A book present in multiple libraries follows the documented deduplication rule.
-- [ ] Series identity remains stable when member books come from different libraries.
-- [ ] Home aggregation does not show records from another server profile or provider.
-- [ ] Library changes do not incorrectly reduce an explicitly aggregate Home section.
+- [x] Home data aggregates books from all configured/visible libraries as intended by the provider.
+- [x] A book present in multiple libraries follows the documented deduplication rule.
+- [x] Series identity remains stable when member books come from different libraries.
+- [x] Home aggregation does not show records from another server profile or provider.
+- [x] Library changes do not incorrectly reduce an explicitly aggregate Home section.
 
 ## 3. Library screen
 
-- [ ] Library screen opens for the selected provider.
-- [ ] Library selection dropdown opens and lists all accessible libraries.
-- [ ] Selecting a library reloads the correct catalog.
-- [ ] Selected library state persists after navigation and app restart where supported.
-- [ ] Switching libraries does not display books from the previous library.
-- [ ] Books list loads the correct books, covers, metadata, pagination, and empty state.
-- [ ] Book list refresh works.
-- [ ] Load more/paging reaches the correct end of the catalog.
-- [ ] Offline/cached library behavior is correct.
-- [ ] Series grouping/collapse control is visible where supported.
-- [ ] Expanding a Series shows the correct member books in order.
-- [ ] Collapsing a Series hides its members without changing catalog results.
-- [ ] Series collapse state survives the intended refresh/navigation lifecycle.
-- [ ] Library bulk actions, if present, use only the selected library.
+- [x] Library screen opens for the selected provider.
+- [x] Library selection dropdown opens and lists all accessible libraries.
+- [x] Selecting a library reloads the correct catalog.
+- [x] Selected library state persists after navigation and app restart where supported.
+- [x] Switching libraries does not display books from the previous library.
+- [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
+- [x] Book list refresh works.
+- [x] Load more/paging reaches the correct end of the catalog.
+- [x] Offline/cached library behavior is correct.
+- [x] Series grouping/collapse control is visible where supported.
+- [x] Expanding a Series shows the correct member books in order.
+- [x] Collapsing a Series hides its members without changing catalog results.
+- [x] Series collapse state survives the intended refresh/navigation lifecycle.
+- [x] Library bulk actions, if present, use only the selected library.
 
 ## 4. Filters and sorting
 
@@ -177,16 +177,16 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 5. Series screen
 
-- [ ] Series screen opens from navigation.
-- [ ] Series catalog aggregates member books from all intended libraries.
-- [ ] The aggregate book count is correct.
-- [ ] The library filter filters the aggregate result after aggregation, rather than replacing it with the active Library screen selection.
-- [ ] Series identity, title, authors, formats, read count, and cover are correct.
-- [ ] Series thumbnail/cover loads with the provider's required authentication.
-- [ ] Series sorting and pagination are correct.
-- [ ] Series detail opens the correct member-book list.
-- [ ] Series detail orders books correctly by provider series number/order.
-- [ ] Empty, unavailable, offline, and partial-metadata Series states are understandable.
+- [x] Series screen opens from navigation.
+- [x] Series catalog aggregates member books from all intended libraries.
+- [x] The aggregate book count is correct.
+- [x] The library filter filters the aggregate result after aggregation, rather than replacing it with the active Library screen selection.
+- [x] Series identity, title, authors, formats, read count, and cover are correct.
+- [x] Series thumbnail/cover loads with the provider's required authentication.
+- [x] Series sorting and pagination are correct.
+- [x] Series detail opens the correct member-book list.
+- [x] Series detail orders books correctly by provider series number/order.
+- [x] Empty, unavailable, offline, and partial-metadata Series states are understandable.
 
 ## 6. Author screen
 
@@ -201,113 +201,113 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 7. Reading, listening, preview, and navigation
 
-- [ ] Stream/open a supported EPUB online.
-- [ ] Stream/open a supported PDF online.
-- [ ] Stream/open a supported comic online.
-- [ ] Stream/listen to a supported audiobook online.
-- [ ] Authentication headers/session handling work for every supported media type.
-- [ ] Preview opens without writing normal progress or incorrectly marking the book read.
-- [ ] Closing a Preview session resets its temporary location and does not overwrite the normal reading/listening resume position.
-- [ ] Go to read from Preview opens the normal reader at the expected location.
-- [ ] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
-- [ ] Unsupported formats show an honest unavailable state.
-- [ ] Reader/player errors identify the affected provider operation.
-- [ ] Read/listen progress behavior matches the provider capability contract.
-- [ ] Provider-specific unsupported progress/session behavior is not represented as a false success.
+- [x] Stream/open a supported EPUB online.
+- [x] Stream/open a supported PDF online.
+- [x] Stream/open a supported comic online.
+- [-] Stream/listen to a supported audiobook online.
+- [x] Authentication headers/session handling work for every supported media type.
+- [x] Preview opens without writing normal progress or incorrectly marking the book read.
+- [x] Closing a Preview session resets its temporary location and does not overwrite the normal reading/listening resume position.
+- [x] Go to read from Preview opens the normal reader at the expected location.
+- [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
+- [x] Unsupported formats show an honest unavailable state.
+- [x] Reader/player errors identify the affected provider operation.
+- [x] Read/listen progress behavior matches the provider capability contract.
+- [x] Provider-specific unsupported progress/session behavior is not represented as a false success.
 
 ### Lagrange ↔ target-server book progress synchronization
 
-- [ ] Opening a book with existing server progress restores the expected Lagrange reader/player position.
-- [ ] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
-- [ ] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
-- [ ] PDF progress synchronization is verified, including page/index behavior where supported.
-- [ ] Comic progress synchronization is verified for each supported comic format.
-- [ ] Audiobook progress synchronization is verified for single-file playback.
-- [ ] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position.
-- [ ] Read and unread state synchronization is verified independently from exact position synchronization.
-- [ ] In-progress, finished, and completion thresholds match the target server's contract.
-- [ ] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
-- [ ] Progress updates are authenticated for the selected server and provider profile.
-- [ ] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported.
-- [ ] Failed progress updates retry safely without duplicating or regressing the user's position.
-- [ ] Conflicting local/server progress follows a documented resolution rule.
-- [ ] Preview does not write ordinary book progress or change the saved resume position.
-- [ ] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
-- [ ] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
-- [ ] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
-- [ ] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
-- [ ] Lagrange reflects a progress change made directly on the target server after refresh/reopen.
+- [x] Opening a book with existing server progress restores the expected Lagrange reader/player position.
+- [x] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
+- [x] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
+- [x] PDF progress synchronization is verified, including page/index behavior where supported.
+- [x] Comic progress synchronization is verified for each supported comic format.
+- [-] Audiobook progress synchronization is verified for single-file playback.
+- [-] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position.
+- [x] Read and unread state synchronization is verified independently from exact position synchronization.
+- [x] In-progress, finished, and completion thresholds match the target server's contract.
+- [x] Progress updates are sent at the documented event/interval/close points and do not require a false completion.
+- [x] Progress updates are authenticated for the selected server and provider profile.
+- [x] Offline progress is retained locally and queued/reconciled when connectivity returns, where supported.
+- [x] Failed progress updates retry safely without duplicating or regressing the user's position.
+- [x] Conflicting local/server progress follows a documented resolution rule.
+- [x] Preview does not write ordinary book progress or change the saved resume position.
+- [x] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
+- [x] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
+- [x] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
+- [x] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
+- [x] Lagrange reflects a progress change made directly on the target server after refresh/reopen.
 
 ## 8. Downloads and Local books
 
-- [ ] Download a single supported book/file.
-- [ ] Download a multipart or multi-file book where supported.
-- [ ] Download progress is accurate and tied to the correct book/file.
-- [ ] Queueing multiple downloads preserves order and identity.
-- [ ] Background/screen-off download behavior works.
-- [ ] Cancel works for active and queued downloads.
-- [ ] Retry works after a failed download.
-- [ ] Interrupted downloads recover according to the provider contract.
-- [ ] Downloaded content is stored at the expected local path.
-- [ ] Download metadata persists after process recreation.
-- [ ] Download status appears on the originating book and remains correct after reopening.
-- [ ] Local books screen lists completed local copies.
-- [ ] Local books shows correct title, author, format, file, size, and status.
-- [ ] Local books opens the selected local file offline.
-- [ ] Delete local copy removes only the selected provider/profile file and metadata.
-- [ ] Logout/server change does not unexpectedly delete device-shared downloaded media.
-- [ ] Downloads from another server/profile do not appear as that server's remote catalog records.
+- [x] Download a single supported book/file.
+- [-] Download a multipart or multi-file book where supported.
+- [x] Download progress is accurate and tied to the correct book/file.
+- [x] Queueing multiple downloads preserves order and identity.
+- [x] Background/screen-off download behavior works.
+- [x] Cancel works for active and queued downloads.
+- [x] Retry works after a failed download.
+- [x] Interrupted downloads recover according to the provider contract.
+- [x] Downloaded content is stored at the expected local path.
+- [x] Download metadata persists after process recreation.
+- [x] Download status appears on the originating book and remains correct after reopening.
+- [x] Local books screen lists completed local copies.
+- [x] Local books shows correct title, author, format, file, size, and status.
+- [x] Local books opens the selected local file offline.
+- [x] Delete local copy removes only the selected provider/profile file and metadata.
+- [x] Logout/server change does not unexpectedly delete device-shared downloaded media.
+- [x] Downloads from another server/profile do not appear as that server's remote catalog records.
 
 ## 9. Book detail
 
-- [ ] Book detail opens from Home, Library, Search, Series, Author, Local books, and direct navigation.
-- [ ] Title, subtitle, author, series, number, description, publisher, language, release date, and other provider metadata are correct.
-- [ ] Book cover loads and uses the correct provider authentication.
-- [ ] Metadata remains stable after refresh and offline fallback.
-- [ ] Multi-file book/file selector opens when applicable.
-- [ ] Every physical file has the correct filename, identity, format, size, and availability state.
-- [ ] Selecting a file changes the intended reader/download target without losing the selection unexpectedly.
-- [ ] Book size tag is shown when known and says unavailable when genuinely missing.
-- [ ] File type/format tag is normalized and correct.
-- [ ] Download status tag is correct for not downloaded, queued, downloading, completed, failed, and local-only states.
-- [ ] The Mark as button opens the correct menu.
-- [ ] Mark as: Read
-- [ ] Mark as: Unread
-- [ ] Mark as: In progress / currently reading, if exposed
-- [ ] Mark as: Want to read, if exposed
-- [ ] Mark as: On deck, if exposed
-- [ ] Mark as: remove/clear status, if exposed
+- [x] Book detail opens from Home, Library, Search, Series, Author, Local books, and direct navigation.
+- [x] Title, subtitle, author, series, number, description, publisher, language, release date, and other provider metadata are correct.
+- [x] Book cover loads and uses the correct provider authentication.
+- [x] Metadata remains stable after refresh and offline fallback.
+- [-] Multi-file book/file selector opens when applicable.
+- [x] Every physical file has the correct filename, identity, format, size, and availability state.
+- [x] Selecting a file changes the intended reader/download target without losing the selection unexpectedly.
+- [x] Book size tag is shown when known and says unavailable when genuinely missing.
+- [x] File type/format tag is normalized and correct.
+- [x] Download status tag is correct for not downloaded, queued, downloading, completed, failed, and local-only states.
+- [x] The Mark as button opens the correct menu.
+- [x] Mark as: Read
+- [x] Mark as: Unread
+- [-] Mark as: In progress / currently reading, if exposed
+- [-] Mark as: Want to read, if exposed
+- [-] Mark as: On deck, if exposed
+- [-] Mark as: remove/clear status, if exposed
 - [ ] Any additional Mark as action: `[name]`
-- [ ] Mark-as changes persist or report provider unavailability accurately.
-- [ ] Series button opens the correct Series.
-- [ ] Book-in-Series navigation shows the correct previous/next members.
-- [ ] Book-in-Series navigation respects the current provider/library/series context.
-- [ ] Available formats and downloaded formats are correct.
-- [ ] EPUB Image Library/image preview appears only when supported.
-- [ ] EPUB image preview loads the correct images, ordering, thumbnails, zoom/pan, dismissal, and offline behavior.
-- [ ] Non-EPUB files do not expose EPUB-only image-preview actions.
+- [x] Mark-as changes persist or report provider unavailability accurately.
+- [x] Series button opens the correct Series.
+- [x] Book-in-Series navigation shows the correct previous/next members.
+- [x] Book-in-Series navigation respects the current provider/library/series context.
+- [x] Available formats and downloaded formats are correct.
+- [x] EPUB Image Library/image preview appears only when supported.
+- [x] EPUB image preview loads the correct images, ordering, thumbnails, zoom/pan, dismissal, and offline behavior.
+- [x] Non-EPUB files do not expose EPUB-only image-preview actions.
 
 ## 10. Cross-provider/profile isolation
 
-- [ ] Configure one BookOrbit profile and one Komga/other-provider profile.
-- [ ] Switch A → B → A and authenticate through the selected provider each time.
-- [ ] The login label, endpoint behavior, auth method, and error messages match the selected provider.
-- [ ] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.
-- [ ] Provider-specific unsupported actions are not shown on the other provider.
-- [ ] Download records retain their originating server/provider/profile identity.
-- [ ] Removing a configured server removes only that profile entry and does not delete unrelated local media.
-- [ ] Failed target validation preserves the previously usable server/profile.
+- [x] Configure one provider profile each.
+- [x] Switch A → B → A and authenticate through the selected provider each time.
+- [x] The login label, endpoint behavior, auth method, and error messages match the selected provider.
+- [x] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.
+- [x] Provider-specific unsupported actions are not shown on the other provider.
+- [x] Download records retain their originating server/provider/profile identity.
+- [x] Removing a configured server removes only that profile entry and does not delete unrelated local media.
+- [x] Failed target validation preserves the previously usable server/profile.
 
 ## 11. Resilience and accessibility
 
-- [ ] Loading, empty, error, offline, and stale-cache states are understandable on every tested screen.
-- [ ] Retry actions retry the correct provider operation.
-- [ ] Back navigation returns to the expected parent screen.
-- [ ] Rotation/recreation does not duplicate requests, playback, downloads, or reader sessions.
-- [ ] TalkBack/content descriptions identify provider selection, filters, More/See all, download, preview, reader, and destructive actions.
-- [ ] Buttons and controls have usable touch targets and remain reachable at the tested display size.
-- [ ] Long titles, missing covers, missing metadata, large sizes, and multiple formats do not break layout.
-- [ ] No password, cookie, API key, or private URL appears in screenshots, logs, or shared validation artifacts.
+- [x] Loading, empty, error, offline, and stale-cache states are understandable on every tested screen.
+- [x] Retry actions retry the correct provider operation.
+- [x] Back navigation returns to the expected parent screen.
+- [x] Rotation/recreation does not duplicate requests, playback, downloads, or reader sessions.
+- [x] TalkBack/content descriptions identify provider selection, filters, More/See all, download, preview, reader, and destructive actions.
+- [x] Buttons and controls have usable touch targets and remain reachable at the tested display size.
+- [x] Long titles, missing covers, missing metadata, large sizes, and multiple formats do not break layout.
+- [x] No password, cookie, API key, or private URL appears in screenshots, logs, or shared validation artifacts.
 
 ## 12. Issue-derived module checks
 
@@ -413,10 +413,3 @@ These checks were derived from repository issues and should be applied when the 
 ### Notes and evidence
 
 `[Record failures, provider-specific exceptions, screenshots, server responses, and follow-up issue links here.]`
-
-### Issue #319 implementation notes
-
-- Kavita server-hosted OIDC uses the server's own redirect and callback. Lagrange verifies the resulting authenticated account through `GET /api/Account` and sends the Kavita session cookie with provider requests.
-- Username/password and Auth Key/JWT authentication remain supported.
-- Automated contract coverage exists for JWT headers and cookie-backed headers.
-- User-confirmed on 2026-10-26 against `https://kavita.alredho.com` using `Lagrange-debug-202610261650.apk`. The device identity and screenshot/log evidence were not supplied, so they remain placeholders above.

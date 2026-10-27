@@ -4,14 +4,14 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Current release
 
-- [ ] Lagrange 2.0.0 is prepared for publication as [`v2.0.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0), with combined and ABI-specific APK assets.
-- [x] `app/build.gradle.kts` records `versionName 2.0.0` and `versionCode 27`.
-- [ ] Release validation is recorded in [`docs/release-notes/v2.0.0.md`](docs/release-notes/v2.0.0.md); automated verification passes, while current-device validation and final release publication remain part of the release gate. Security advisories [`GHSA-rmjp-8gm4-6j6w`](https://github.com/van-geaux/lagrange-reader/security/advisories/GHSA-rmjp-8gm4-6j6w) and [`GHSA-vr98-2hj5-h9wp`](https://github.com/van-geaux/lagrange-reader/security/advisories/GHSA-vr98-2hj5-h9wp) are published.
+- [ ] Lagrange 2.1.0 is prepared for publication as [`v2.1.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0), with combined and ABI-specific APK assets.
+- [x] `app/build.gradle.kts` records `versionName 2.1.0` and `versionCode 28`.
+- [ ] Release validation is recorded in [`docs/release-notes/v2.1.0.md`](docs/release-notes/v2.1.0.md); automated verification and final release publication remain part of the release gate. Current-device validation remains separate and incomplete.
 
 ## Current implementation status
 
 - [x] BookOrbit browsing, cache-first offline fallback, downloads, progress/status synchronization, EPUB/PDF/comic reading, audiobook playback, server reading sessions, statistics, achievements, and EPUB image/TTS tools are implemented.
-- [x] Provider module separation is implemented for BookOrbit and Komga; provider-specific behavior remains behind provider-owned modules and focused contracts.
+- [x] Provider module separation is implemented for BookOrbit, Komga, and Kavita; provider-specific behavior remains behind provider-owned modules and focused contracts. Kavita manual validation remains incomplete.
 - [x] Komga catalog filtering, format sorting, scoped Recommended results, local-reader fallback, download lifecycle projection, and supported format coverage are documented in [`docs/provider-checklists/komga.md`](docs/provider-checklists/komga.md).
 - [x] EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, navigation-bar controls, audiobook speed/progress controls, and grouped physical-file handling are included in 1.5.4.
 - [x] CBR/CB7 offline opening uses client-side RAR4/RAR5/7z extraction into a cached CBZ; MOBI, AZW, AZW3, and FB2 remain unsupported.

@@ -31,9 +31,9 @@ For release work, also verify the approved release assembly/workflow and the rel
 
 ### Provider switching and capability routing
 
-On a connected device, switch between a configured Komga server and a configured BookOrbit server without restarting the app. Verify each provider rebinds its supported modules, audiobook playback opens only where supported, and unsupported providers show an explicit unavailable state instead of stale callbacks or empty success. Repeat after sign-out/server change and after process recreation.
+On a connected device, switch between configured BookOrbit, Komga, and Kavita servers without restarting the app. Verify each provider rebinds its supported modules, audiobook playback opens only where supported, and unsupported providers show an explicit unavailable state instead of stale callbacks or empty success. Repeat after sign-out/server change and after process recreation.
 
-Use [`docs/provider-checklists/komga.md`](provider-checklists/komga.md) for Komga catalog, format, progress, download, and offline-reader validation. Use [`docs/provider-checklists/module-function-matrix.md`](provider-checklists/module-function-matrix.md) to confirm provider-exclusive actions remain unavailable when the selected provider lacks the capability.
+Use [`docs/provider-checklists/komga.md`](provider-checklists/komga.md) and [`docs/provider-checklists/kavita.md`](provider-checklists/kavita.md) for provider-specific catalog, format, progress, download, and offline-reader validation. Use [`docs/provider-checklists/module-function-matrix.md`](provider-checklists/module-function-matrix.md) to confirm provider-exclusive actions remain unavailable when the selected provider lacks the capability.
 
 ### Settings and reader options
 
@@ -121,9 +121,9 @@ For cached catalogs, confirm complete cached content appears before network refr
 
 ### Authentication and account isolation
 
-Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. For BookOrbit OIDC, verify provider discovery, PKCE/state/nonce validation, callback exchange, session verification, and recovery in the server-hosted WebView. This is not native AppAuth; native redirect validation remains pending.
+Verify password login, `/api/v1/auth/me` bootstrap where applicable, sign-out/session reset, session-expiry recovery, and pending-destination recovery. For BookOrbit and Kavita OIDC, verify provider discovery, callback/state protections, callback exchange, session verification, and recovery in the server-hosted WebView. This is not native AppAuth; native redirect validation remains pending.
 
-With both a BookOrbit profile and a Komga profile configured, sign in to each provider, switch BookOrbit → Komga and back, then repeat Komga → BookOrbit and back. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting at least five minutes. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state. Issue #268 was user-confirmed on Samsung SM-S931B / Android 16 over ADB with `Lagrange-debug-202610092219.apk`; the five-minute Komga-to-BookOrbit return loaded BookOrbit Home without a login prompt.
+With profiles for the supported providers configured, sign in to each provider and switch between BookOrbit, Komga, and Kavita in both directions. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting at least five minutes. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state. Issue #268 was user-confirmed for the BookOrbit/Komga path on Samsung SM-S931B / Android 16 over ADB with `Lagrange-debug-202610092219.apk`; any Kavita device validation must be recorded separately.
 
 After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available to its owning profile's Local books. Repeat with compact/full audiobook playback and a preparing session.
 

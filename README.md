@@ -6,18 +6,18 @@
 
 # Lagrange Reader
 
-An offline-first Android reader for BookOrbit and Komga.
+An offline-first Android reader for BookOrbit, Komga, and Kavita.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0)
+[![Version 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 [![Downloads](https://img.shields.io/github/downloads/van-geaux/lagrange-reader/total?label=Downloads&logo=github)](https://github.com/van-geaux/lagrange-reader/releases)
 
 </div>
 
-Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit) and [Komga](https://komga.org/). It began with a personal need: I wanted an app that lets me take my library with me and read offline.
+Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit), [Komga](https://komga.org/), and [Kavita](https://www.kavitareader.com/). It began with a personal need: I wanted an app that lets me take my library with me and read offline.
 
-It is now for anyone who already uses a BookOrbit or Komga server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
+It is now for anyone who already uses a BookOrbit, Komga, or Kavita server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
 
 Your configured server remains the source of truth for its library. Lagrange is the Android client: it lets you browse, download, read, listen where supported, and keep working when your connection is unavailable. When you reconnect, queued progress and other supported changes synchronize back to the active provider.
 
@@ -64,31 +64,31 @@ The following screenshots show the main reading and library experience. More scr
 
 Use Lagrange if you have:
 
-- access to a BookOrbit or Komga server and an account on that server;
+- access to a BookOrbit, Komga, or Kavita server and an account on that server;
 - an Android phone or tablet running Android 8.0 (API 26) or newer;
 - books, comics, PDFs, or audiobooks that you want available away from the server.
 
-Lagrange is not a standalone ebook reader and does not provide a BookOrbit or Komga server. If you do not already have server access, start with the [BookOrbit project](https://github.com/BookOrbit) or [Komga](https://komga.org/).
+Lagrange is not a standalone ebook reader and does not provide a BookOrbit, Komga, or Kavita server. If you do not already have server access, start with the [BookOrbit project](https://github.com/BookOrbit), [Komga](https://komga.org/), or [Kavita](https://www.kavitareader.com/).
 
 ## Get started
 
 1. Install the latest [Lagrange release](https://github.com/van-geaux/lagrange-reader/releases).
-2. Open the app and choose BookOrbit or Komga, then enter your server URL. Prefer HTTPS, especially outside your home network.
+2. Open the app and choose BookOrbit, Komga, or Kavita, then enter your server URL. Prefer HTTPS, especially outside your home network.
 3. Sign in with the account provided by your server administrator.
 4. Browse your libraries, open a book, or download content from Book Detail for offline use.
 
-The current sign-in flow supports BookOrbit username/password and server-hosted OIDC sign-in in a WebView, plus Komga Basic Auth and server-hosted OAuth2/OIDC sign-in in a WebView. Native OIDC/AppAuth is not implemented. See [BookOrbit OIDC / SSO Authentication](docs/providers/bookorbit/oidc-authentication.md) and [Komga integration](docs/providers/komga/integration.md).
+The current sign-in flow supports BookOrbit username/password and server-hosted OIDC sign-in in a WebView, Komga Basic Auth and server-hosted OAuth2/OIDC sign-in in a WebView, and Kavita username/password plus server-hosted OIDC sign-in in a WebView. Native OIDC/AppAuth is not implemented. See [BookOrbit OIDC / SSO Authentication](docs/providers/bookorbit/oidc-authentication.md), [Komga integration](docs/providers/komga/integration.md), and [Kavita integration](docs/providers/kavita/integration.md).
 
 ## How the client works
 
-Lagrange is a standalone native Android client, not a wrapper around the BookOrbit web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, durable offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. BookOrbit supplies authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
+Lagrange is a standalone native Android client, not a wrapper around any provider's web interface. It has its own Compose browsing experience, Room-backed local catalog and caches, durable offline downloads, background synchronization, Readium-based publication readers, and persistent Media3 audiobook playback. The configured provider supplies authenticated server and library data; Lagrange owns the Android interface, local state, reading, listening, and offline behavior.
 
-The important boundary is simple: BookOrbit stays authoritative, while Lagrange maintains useful local state so reading and listening can continue through unreliable connectivity. This also means Lagrange does not attempt to replace BookOrbit's administration, integrations, or web interface.
+The important boundary is simple: the configured provider stays authoritative, while Lagrange maintains useful local state so reading and listening can continue through unreliable connectivity. This also means Lagrange does not attempt to replace any provider's administration, integrations, or web interface.
 
 ## Features
 
 - **Offline-first library:** browse cached books and reopen downloaded EPUB, PDF, CBZ, and supported audiobook files without a connection.
-- **Two-way sync:** send local reading/listening progress to BookOrbit, receive server-side progress and status changes, and replay queued offline progress after reconnecting.
+- **Two-way sync:** send supported local reading/listening progress to the configured provider, receive supported server-side progress and status changes, and replay queued offline progress after reconnecting.
 - **EPUB reading:** paginated chapters, themes, text size, independent margins, chapter/page navigation, exact resume, keep-awake mode, per-library font selection through grouped normal/accessibility menus, one imported custom `.ttf`/`.otf` font, read-along narration for local EPUB 3 media overlays, and service-owned Android text to speech with sentence highlighting, preset or custom 0.5×–2× speed and pitch, optional speed-scaled punctuation pauses, uninterrupted rotation/screen-lock playback, media controls, background progress persistence, and separate **Listen from here**/**Keep listening** actions.
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
 - **Audiobook playback:** compact and full players with seeking, chapter selection, previous/next chapter controls, playback speed, sleep timer, resume, responsive portrait/landscape layouts, session history, read-along support, and optional pausing/resuming when Android reports competing audio focus (enabled by default).
@@ -108,19 +108,15 @@ The important boundary is simple: BookOrbit stays authoritative, while Lagrange 
 
 The following ebook formats are intentionally not supported at this time: MOBI, AZW, AZW3, and FB2. Conversion may be considered later. Audiobook and unusual comic files still benefit from broader device testing.
 
-## BookOrbit compatibility
+## Supported providers
 
-Lagrange targets the BookOrbit API used by the current `v1.5.4` release. The implemented API behavior is documented in [`docs/providers/bookorbit/api.md`](docs/providers/bookorbit/api.md), including libraries, books and files, progress, downloads, reading sessions, achievements, and statistics where supported.
+Lagrange currently supports BookOrbit, Komga, and Kavita. Each provider has different capabilities, authentication methods, and offline behavior. See the provider documentation for details:
 
-The compatibility table below is based on the tagged BookOrbit server history and the API change introduced in [BookOrbit's dedicated audiobook playback commit](https://github.com/BookOrbit/bookorbit/commit/ceda7428b0d1b8c43db59d266ca8318d9714c8b0). It describes the supported API boundary, not a complete end-to-end test matrix for every server release.
+- [BookOrbit](docs/providers/bookorbit/)
+- [Komga](docs/providers/komga/)
+- [Kavita](docs/providers/kavita/)
 
-| BookOrbit server | Lagrange capabilities |
-| --- | --- |
-| `v2.10.0+` | Library and book browsing, non-audio online content, downloads and offline reading, progress and status synchronization, reading sessions, achievements, statistics where supported, and remote audiobook playback through the dedicated manifest, asset-content, and playback-state APIs. |
-| `v2.0.1`–`v2.9.x` | Library and book browsing, generic online content serving, downloads and offline reading, progress and status synchronization, reading sessions, achievements, statistics where supported, and audiobook playback through the pre-`v2.10.0` generic file-serving API. |
-| Earlier than `v2.0.1` | Not verified. |
-
-Native mobile OIDC redirects are a known upstream compatibility gap; the interim WebView sign-in remains the supported path for that scenario. Server administrators should review the [BookOrbit release history](https://github.com/BookOrbit/bookorbit/releases) and API documentation before upgrading a production instance, and report incompatibilities through [GitHub Issues](https://github.com/van-geaux/lagrange-reader/issues).
+Provider-specific validation is tracked in the [provider function matrix](docs/provider-checklists/module-function-matrix.md).
 
 ## Sync accuracy by format
 
@@ -152,11 +148,11 @@ Preview sessions are excluded. Sessions shorter than 10 seconds are discarded by
 
 Lagrange does not include behavioral telemetry, advertising tracking, an analytics SDK, or a remote crash-reporting service. It does not collect usage events or device identifiers for the Lagrange project.
 
-The app does send functional requests to the BookOrbit server that you configure. Depending on the features you use, this includes authentication, library and book metadata, cover and media requests, reading/listening progress, reading-status changes, personal ratings, Statistics requests, and server reading-history requests. These requests are required for the app to browse, synchronize, read, listen, and recover progress.
+The app does send functional requests to the provider server that you configure. Depending on the provider and features you use, this includes authentication, library and book metadata, cover and media requests, reading/listening progress, reading-status changes, personal ratings, Statistics requests, and server reading-history requests. These requests are required for the app to browse, synchronize, read, listen, and recover progress.
 
-Lagrange stores app data locally in its private Android sandbox, including session cookies, cached catalog data, downloaded files, reader state, queued progress, preferences, and exact local audiobook session history. Exact local audiobook session-history events are not uploaded by Lagrange; the server-history view only reads analytics records already stored by BookOrbit.
+Lagrange stores app data locally in its private Android sandbox, including session cookies, cached catalog data, downloaded files, reader state, queued progress, preferences, and exact local audiobook session history. Exact local audiobook session-history events are not uploaded by Lagrange; a server-history view only reads analytics records already stored by providers that expose that capability.
 
-BookOrbit may retain or log normal server-side request information such as account activity, request timestamps, and network metadata. That server-side retention is controlled by the BookOrbit server and its administrator, not by Lagrange. Use HTTPS for the configured server; cleartext HTTP can expose credentials, session tokens, metadata, progress, and content on the network. See [`docs/privacy.md`](docs/privacy.md) for more details.
+The configured provider may retain or log normal server-side request information such as account activity, request timestamps, and network metadata. That server-side retention is controlled by the provider and its administrator, not by Lagrange. Use HTTPS for the configured server; cleartext HTTP can expose credentials, session tokens, metadata, progress, and content on the network. See [`docs/privacy.md`](docs/privacy.md) for more details.
 
 ## Android permissions
 
@@ -164,31 +160,13 @@ Lagrange requests only the permissions needed for networking, media playback, an
 
 | Permission | Why it is requested |
 | --- | --- |
-| `INTERNET` | Connect to the configured BookOrbit server for authentication, catalog data, content, synchronization, and media playback. |
+| `INTERNET` | Connect to the configured provider server for authentication, catalog data, content, synchronization, and media playback. |
 | `ACCESS_NETWORK_STATE` | Detect whether a network is available and apply the app's online/offline and background-network behavior. |
 | `FOREGROUND_SERVICE` | Keep audiobook playback running in a foreground service when the app is backgrounded. |
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Declare that the foreground service is used for media playback under current Android rules. |
 | `POST_NOTIFICATIONS` | Show audiobook playback controls and other user-visible notifications on Android versions that require notification permission. |
 
 The app does not request location, contacts, camera, microphone, phone, SMS, storage-wide, or advertising-ID permissions.
-
-## Lagrange and BookOrbit feature comparison
-
-BookOrbit is the server and web platform; Lagrange is an independent Android client. The table describes the current integration boundary rather than implying that the two projects share the same UI or implementation.
-
-| Capability | BookOrbit server/web platform | Lagrange Android client |
-| --- | --- | --- |
-| Authentication | Provides authenticated accounts, server sessions, configured OIDC providers, public state/callback APIs, and the HTTPS callback used by the WebView OIDC flow. | Uses username/password, explicit BookOrbit OIDC WebView sign-in, and generic Open server sign-in fallback. Native AppAuth remains deferred. |
-| Library and catalog | Owns libraries, books, authors, series, metadata, scanning, and catalog APIs. | Browses BookOrbit libraries and caches catalog data for offline fallback. |
-| Reading and listening | Serves book files, reader data, progress APIs, and audiobook media. | Provides native EPUB, PDF, comic, and audiobook readers with resume, themes, navigation, and playback controls. |
-| Offline use | Remains the connected source of server content. | Downloads supported content and reopens it offline, including CBR/CB7 files via client-side RAR4/RAR5/7z extraction into a cached CBZ. |
-| Progress and status | Stores reading/listening progress and book statuses. | Queues progress offline, synchronizes it, and exposes the server status controls in the Android UI. |
-| Ratings and metadata sources | Owns book metadata, provider IDs, and per-user book data. | Displays and updates supported per-user ratings and opens centralized links for known metadata providers. |
-| Audiobook sessions | Stores server reading sessions and reading attempts as analytics/history records. | Shows server history after local history; local exact-position audiobook sessions remain device-only and seekable. |
-| Statistics | Provides summary, daily reading, heatmap, source, peak-hour, timeline, goal, completion, pace, and related statistics APIs. | Currently consumes the summary and daily-reading endpoints in the lazy-loaded Statistics screen. |
-| Achievements | Owns achievement definitions and user progress. | Provides an Achievements destination that loads the user's server-backed achievements. |
-| Annotations, bookmarks, and notes | Provides server modules and APIs for these reading records. | Not currently exposed as a dedicated Lagrange feature. |
-| Integrations and administration | Includes integrations such as OPDS, KOReader, Kobo, Readwise, StoryGraph, notifications, and administrative/audit tools. | Focuses on the Android reading/listening experience and does not expose the server administration surface. |
 
 ## Roadmap
 

@@ -4,9 +4,9 @@ This document contains current project direction only. Historical work orders an
 
 ## Current status
 
-- Release: Lagrange 2.0.0 is being prepared for publication at [`v2.0.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.0.0). See [`release-notes/v2.0.0.md`](release-notes/v2.0.0.md).
-- Version marker: `versionName 2.0.0`, `versionCode 27` in `app/build.gradle.kts`.
-- Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit and Komga provider modules are the current integration surfaces; additional providers require a focused contract and validation plan.
+- Release: Lagrange 2.1.0 is being prepared for publication at [`v2.1.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0). See [`release-notes/v2.1.0.md`](release-notes/v2.1.0.md).
+- Version marker: `versionName 2.1.0`, `versionCode 28` in `app/build.gradle.kts`.
+- Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit, Komga, and Kavita provider modules are the current integration surfaces; additional providers require a focused contract and validation plan.
 - Current release capabilities include EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, immersive reader controls, audiobook speed/progress controls, grouped physical-file downloads, and client-side offline CBR/CB7 extraction.
 - Multiple named accounts can now be saved for the same provider and normalized server URL, with profile-scoped local books, downloads, browser snapshots, and account state.
 - Audiobook playback now prefers the provider's `medium=audio` cover endpoint, falls back to the generic cover, and preserves the square audiobook-cover presentation in compact and full players ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).

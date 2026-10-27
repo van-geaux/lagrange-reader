@@ -20,16 +20,16 @@ val releaseKeystoreProperties = Properties().apply {
 
 android {
     namespace = "com.vangeaux.lagrange"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.vangeaux.lagrange"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 27
-        versionName = "2.0.0"
+        versionCode = 28
+        versionName = "2.1.0"
     }
 
     signingConfigs {

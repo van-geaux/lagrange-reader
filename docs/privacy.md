@@ -1,10 +1,10 @@
 # Privacy Notes
 
-`Lagrange Reader` stores a limited amount of user and configured server data locally so the app can reconnect, reopen content, and recover progress. Lagrange currently supports BookOrbit and Komga servers. The provider determines which server requests, authentication/session data, catalog fields, and synchronization operations are available; the Android app applies the same local storage and offline-reader policies to both providers.
+`Lagrange Reader` stores a limited amount of user and configured server data locally so the app can reconnect, reopen content, and recover progress. Lagrange currently supports BookOrbit, Komga, and Kavita servers. The provider determines which server requests, authentication/session data, catalog fields, and synchronization operations are available; the Android app applies the same local storage and offline-reader policies to all supported providers.
 
 ## Local data currently stored
 
-- configured BookOrbit or Komga server URL and provider selection
+- configured BookOrbit, Komga, or Kavita server URL and provider selection
 - selected library id
 - provider authentication state, including WebView cookies or HTTP session data where the selected server requires it
 - cached library and book browser snapshots for offline fallback
@@ -23,8 +23,8 @@
 ## Current behavior
 
 - local data is scoped to the current Android app sandbox and is not shared with other apps
-- explicit HTTP URLs for configured BookOrbit or Komga servers are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
-- the app sends functional requests to the configured server, including authentication, catalog metadata, cover and media requests, downloads, reading/listening progress, statuses, and other provider-supported synchronization; the exact endpoints and fields depend on whether the selected provider is BookOrbit or Komga
+- explicit HTTP URLs for configured BookOrbit, Komga, or Kavita servers are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
+- the app sends functional requests to the configured server, including authentication, catalog metadata, cover and media requests, downloads, reading/listening progress, statuses, and other provider-supported synchronization; the exact endpoints and fields depend on the selected provider
 - the app trusts both Android's system CA store and user-installed CAs for all HTTPS connections; this is app-wide because the configured server URL is chosen by the user at runtime, so it lets self-hosted servers using a private/internal CA work over HTTPS without extra configuration, but it also means the app will trust any CA the user (or someone with access to the device) has installed, which is a broader trust surface than the system-only default
 - changing or clearing the configured server resets session state, but server-scoped cached browser and progress data may remain on disk
 - sign-out clears account-owned progress, reading-session events, annotations, catalog/detail/browser/reader state, and queued account-owned progress; downloaded media is preserved on-device as device-shared Local books and remains available to any account on the same device
