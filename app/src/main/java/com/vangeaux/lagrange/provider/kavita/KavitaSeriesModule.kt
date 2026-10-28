@@ -17,7 +17,28 @@ internal class KavitaSeriesCatalogModuleImpl(
         if (filter.homeSection == HomeSection.RECENTLY_ADDED_SERIES ||
             filter.homeSection == HomeSection.RECENTLY_UPDATED_SERIES
         ) {
-            return catalog.loadHomeSeriesPage(filter.homeSection!!, filter.libraryId, page)
+            val page = catalog.loadHomeSeriesPage(filter.homeSection!!, filter.libraryId, page)
+            if (!filter.includeCounts) return page
+            val enriched = coroutineScope {
+                page.items.map { summary ->
+                    async {
+                        runCatching { catalog.loadSelectedSeriesBooks(summary.id) }
+                            .getOrElse { emptyList() }
+                            .let { books ->
+                                summary.copy(
+                                    authors = books.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
+                                    bookCount = books.size,
+                                    readCount = books.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
+                                    availableFormats = books.flatMap { book ->
+                                        book.availableFormats.ifEmpty { listOfNotNull(book.format) }
+                                    }.distinct().sorted(),
+                                    genres = books.flatMap { it.genres }.distinct().sorted()
+                                )
+                            }
+                    }
+                }.awaitAll()
+            }
+            return page.copy(items = enriched)
         }
         val libraryId = filter.libraryId
         val (result, jumpIndex) = coroutineScope {
