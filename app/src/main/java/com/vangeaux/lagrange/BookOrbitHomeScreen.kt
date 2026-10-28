@@ -7732,7 +7732,7 @@ private fun LibraryContentScreen(
                     onMarkAsStatus = onMarkAsStatus,
                     onHomeSectionSelected = onHomeSectionSelected,
                     onLocalBooksSelected = onLocalBooksSelected,
-                    localBooksLibraryId = null,
+                    localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
                 )
                 LibraryTab.BROWSE -> if (state.homeShelves.deferInitialCatalogLoad) {
