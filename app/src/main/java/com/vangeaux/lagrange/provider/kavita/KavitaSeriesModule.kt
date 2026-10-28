@@ -14,6 +14,11 @@ internal class KavitaSeriesCatalogModuleImpl(
         filter: SeriesCatalogFilter,
         page: Int
     ): SeriesCatalogPage {
+        if (filter.homeSection == HomeSection.RECENTLY_ADDED_SERIES ||
+            filter.homeSection == HomeSection.RECENTLY_UPDATED_SERIES
+        ) {
+            return catalog.loadHomeSeriesPage(filter.homeSection!!, filter.libraryId, page)
+        }
         val libraryId = filter.libraryId
         val (result, jumpIndex) = coroutineScope {
             val pageRequest = async { catalog.loadSeriesSummaryPage(libraryId, page) }

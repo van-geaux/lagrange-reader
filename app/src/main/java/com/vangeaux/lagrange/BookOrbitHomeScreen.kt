@@ -2265,7 +2265,33 @@ internal fun NativeLibraryBrowserScreen(
                 destination.toHomeSection() in setOf(
                     HomeSection.RECENTLY_ADDED_SERIES,
                     HomeSection.RECENTLY_UPDATED_SERIES
-                ) -> HomeSeriesSectionScreen(
+                ) -> if (state.homeShelves.isServerProvided) {
+                    SeriesCatalogScreen(
+                        query = "",
+                        initialFilter = SeriesCatalogFilter(
+                            libraryId = state.selectedLibraryId.takeUnless {
+                                homeSectionReturnDestination == BrowserDestination.HOME
+                            },
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING,
+                            homeSection = destination.toHomeSection()
+                        ),
+                        persistenceKey = "home-series:${destination.toHomeSection()}:${state.selectedLibraryId}",
+                        appPreferences = appPreferences,
+                        onAppPreferencesChange = onAppPreferencesChange,
+                        libraryOptions = state.libraries,
+                        books = emptyList(),
+                        loadAllPages = false,
+                        modifier = Modifier.padding(padding),
+                        loader = seriesCatalogLoader,
+                        imageLoader = catalogImageLoader,
+                        onSeriesSelected = { series ->
+                            selectedSeriesKey = series.id
+                            selectedSeriesName = series.name
+                            detailReturnDestination = destination
+                        }
+                    )
+                } else HomeSeriesSectionScreen(
                     section = destination.toHomeSection()!!,
                     books = homeSectionSourceBooks(
                         state = state,

@@ -219,6 +219,67 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         }
     }
 
+    internal suspend fun loadHomeSeriesPage(
+        section: HomeSection,
+        libraryId: String?,
+        page: Int,
+        pageSize: Int = 20
+    ): SeriesCatalogPage = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val path = when (section) {
+            HomeSection.RECENTLY_ADDED_SERIES ->
+                "/api/series/recently-added-v2?pageNumber=${page + 1}&pageSize=$pageSize"
+            HomeSection.RECENTLY_UPDATED_SERIES ->
+                "/api/series/recently-updated-series?pageNumber=${page + 1}&pageSize=$pageSize"
+            else -> return@withContext SeriesCatalogPage()
+        }
+        val filterBody = JSONObject().apply {
+            put("statements", JSONArray().apply {
+                libraryId?.toIntOrNull()?.let { id ->
+                    put(JSONObject().apply {
+                        put("field", 19)
+                        put("comparison", 0)
+                        put("value", id.toString())
+                    })
+                }
+            })
+            put("combination", 0)
+        }.toString()
+        val request = Request.Builder()
+            .url(base + path)
+            .header("Accept", "application/json")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .post(filterBody.toRequestBody(jsonMediaType))
+            .build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita Home series (HTTP ${response.code}).", response.code))
+            }
+            val items = kavitaDashboardItems(payload)
+                .mapNotNull { item -> kavitaSeriesCard(item, base) }
+                .filter { libraryId.isNullOrBlank() || it.libraryId == libraryId }
+            val total = response.headers["X-Total-Count"]?.toIntOrNull()
+                ?: response.headers["X-TotalItems"]?.toIntOrNull()
+                ?: response.headers["Total-Count"]?.toIntOrNull()
+            SeriesCatalogPage(
+                items = items.map { book ->
+                    SeriesSummary(
+                        id = book.seriesId.orEmpty(),
+                        name = book.seriesName ?: book.title,
+                        bookCount = 0,
+                        coverUrl = book.coverUrl,
+                        lastAddedAtMillis = book.addedAtMillis,
+                        availableFormats = book.availableFormats
+                    )
+                },
+                total = total,
+                page = page,
+                size = pageSize
+            )
+        }
+    }
+
     internal suspend fun loadSeriesSummaryPage(
         libraryId: String?,
         page: Int
