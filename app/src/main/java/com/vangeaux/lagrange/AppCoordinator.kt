@@ -1421,6 +1421,17 @@ class AppCoordinator internal constructor(
                                 if (repository.loadCachedLibraryCatalog(library.id) == null) {
                                     runCatching { repository.loadBooks(library.id) }
                                 }
+                                runCatching {
+                                    var page = 0
+                                    while (true) {
+                                        val result = repository.loadSeriesCatalog(
+                                            SeriesCatalogFilter(libraryId = library.id, includeCounts = false),
+                                            page
+                                        )
+                                        if (result.items.isEmpty() || result.items.size < (result.size ?: result.items.size)) break
+                                        page++
+                                    }
+                                }
                             }
                         }.awaitAll()
                     }
