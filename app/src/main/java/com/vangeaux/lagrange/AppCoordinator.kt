@@ -1525,6 +1525,20 @@ class AppCoordinator internal constructor(
                     )
                     showBrowser(
                         cached.copy(
+                            homeShelves = if (providerHomeModule?.deferInitialCatalogLoad == true) {
+                                HomeShelfData(
+                                    isServerProvided = true,
+                                    hiddenSections = setOf(
+                                        HomeSection.WANT_TO_READ,
+                                        HomeSection.RECENTLY_ADDED_BOOKS,
+                                        HomeSection.RECENTLY_RELEASED_BOOKS,
+                                        HomeSection.RECENTLY_READ
+                                    ),
+                                    deferInitialCatalogLoad = true
+                                )
+                            } else {
+                                cached.homeShelves
+                            },
                             isOfflineSnapshot = true,
                             message = uiText(
                                 R.string.error_cached_snapshot_refresh_failed,

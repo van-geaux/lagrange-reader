@@ -26,7 +26,7 @@ internal class KavitaSeriesCatalogModuleImpl(
                         runCatching { catalog.loadSelectedSeriesBooks(summary.id) }
                             .getOrElse { emptyList() }
                             .let { books ->
-                                summary.copy(
+                                if (books.isEmpty()) summary else summary.copy(
                                     authors = books.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
                                     bookCount = books.size,
                                     readCount = books.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
@@ -47,6 +47,9 @@ internal class KavitaSeriesCatalogModuleImpl(
                 runCatching { catalog.loadSeriesSummaryPage(libraryId, page) }
                     .onSuccess { snapshotStore.write(libraryId, page, it) }
                     .getOrElse { snapshotStore.read(libraryId, page) ?: throw it }
+                    .let { result ->
+                        if (result.items.isEmpty()) snapshotStore.read(libraryId, page) ?: result else result
+                    }
             }
             val jumpRequest = if (page == 0 && filter.includeCounts) {
                 async {
@@ -77,7 +80,7 @@ internal class KavitaSeriesCatalogModuleImpl(
                     runCatching { catalog.loadSelectedSeriesBooks(summary.id) }
                         .getOrElse { emptyList() }
                         .let { books ->
-                            summary.copy(
+                            if (books.isEmpty()) summary else summary.copy(
                                 authors = books.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
                                 bookCount = books.size,
                                 readCount = books.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
