@@ -223,8 +223,11 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
             }
             val root = runCatching { JSONObject(payload) }.getOrNull()
-            val headerPagination = response.headers["X-Pagination"]
-                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            val rawPaginationHeader = response.headers["X-Pagination"]
+                ?: response.headers["X-Pagination-JSON"]
+            val headerPagination = rawPaginationHeader?.let(::parseKavitaPaginationHeader)
+            val headerTotal = listOf("X-Total-Count", "X-TotalItems", "Total-Count")
+                .firstNotNullOfOrNull { name -> response.headers[name]?.toIntOrNull() }
             val items = kavitaSeriesPageItems(payload)
             val pageSize = root?.optInt("pageSize", -1)?.takeIf { it > 0 }
                 ?: root?.optInt("size", -1)?.takeIf { it > 0 }
@@ -247,7 +250,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                         )
                     }
                 },
-                total = kavitaPaginationTotal(root, headerPagination),
+                total = kavitaPaginationTotal(root, headerPagination) ?: headerTotal,
                 pageSize = pageSize
             )
         }
@@ -465,7 +468,17 @@ private fun kavitaPaginationTotal(root: JSONObject?, header: JSONObject?): Int? 
         listOf("totalCount", "totalItems", "total", "count")
             .firstNotNullOfOrNull { key -> it.optInt(key, -1).takeIf { value -> value >= 0 } }
     }
-    return read(root) ?: read(root?.optJSONObject("pagination")) ?: read(header)
+    return read(root) ?: read(root?.optJSONObject("pagination")) ?: read(root?.optJSONObject("meta")) ?: read(header)
+}
+
+private fun parseKavitaPaginationHeader(value: String): JSONObject? {
+    val candidates = listOf(
+        value,
+        value.trim().removeSurrounding("\"").replace("\\\"", "\"")
+    )
+    return candidates.firstNotNullOfOrNull { candidate ->
+        runCatching { JSONObject(candidate) }.getOrNull()
+    }
 }
 
 internal fun kavitaSeriesPageItems(payload: String): JSONArray =
