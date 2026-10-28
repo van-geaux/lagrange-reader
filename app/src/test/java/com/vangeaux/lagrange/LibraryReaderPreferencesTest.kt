@@ -32,6 +32,7 @@ class LibraryReaderPreferencesTest {
             customBackgroundColor = 0xFF123456.toInt(),
             useCustomBackground = true,
             customTextColor = 0xFFB8B8B8.toInt(),
+            useCustomTextColor = true,
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
             lineSpacing = 1.4f,

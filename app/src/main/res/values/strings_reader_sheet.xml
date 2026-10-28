@@ -24,8 +24,8 @@
     <string name="sheet_custom_background_reset">Reset to default</string>
     <string name="sheet_custom_background_invalid">Enter values from 0 to 255.</string>
     <string name="sheet_text_color">Text color</string>
-    <string name="sheet_text_color_default">Automatic</string>
-    <string name="sheet_text_color_summary">Custom EPUB page text color (RGB)</string>
+    <string name="sheet_text_color_default">Default</string>
+    <string name="sheet_text_color_summary">Follow the reading background or choose a custom color</string>
     <string name="sheet_text_color_dialog_title">Custom text color</string>
     <string name="sheet_text_color_preview">Preview</string>
     <string name="sheet_text_color_sample">Aa Text sample</string>
@@ -34,4 +34,6 @@
     <string name="sheet_reading_background">Reading background</string>
     <string name="sheet_reading_background_summary">Page background and reading surface</string>
     <string name="sheet_custom_background_custom">Custom</string>
+    <string name="sheet_text_color_custom">Custom</string>
+    <string name="sheet_text_color_custom_summary">Choose a custom EPUB text color (RGB)</string>
 </resources>

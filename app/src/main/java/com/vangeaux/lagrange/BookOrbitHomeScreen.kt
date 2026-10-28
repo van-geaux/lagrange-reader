@@ -22,6 +22,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -5402,6 +5403,31 @@ private fun LibraryReaderConfiguration(
             }
         }
         if (selectedLibrary != null) {
+            AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_volume_page_navigation),
+                summary = stringResource(R.string.settings_volume_page_navigation_summary),
+                checked = value.volumeButtonPageNavigation,
+                testTag = "options-reading-volume-button-navigation",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(volumeButtonPageNavigation = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_swap_volume_buttons),
+                summary = stringResource(R.string.settings_swap_volume_buttons_summary),
+                checked = value.reverseVolumeButtonNavigation,
+                enabled = value.volumeButtonPageNavigation,
+                testTag = "options-reading-reverse-volume-button-navigation",
+                onCheckedChange = { reversed ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(reverseVolumeButtonNavigation = reversed)
+                    )
+                }
+            )
             Text(
                 stringResource(R.string.settings_reading_direction),
                 style = MaterialTheme.typography.titleMedium
@@ -5436,6 +5462,18 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading-tap-zone"
             )
             AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_show_page_progress),
+                summary = stringResource(R.string.settings_show_page_progress_summary),
+                checked = value.showPageProgress,
+                testTag = "options-reading-show-page-progress",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(showPageProgress = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
                 title = stringResource(R.string.settings_prefer_server_progress),
                 summary = stringResource(R.string.settings_prefer_server_progress_summary),
                 checked = value.preferServerProgressOnReopen,
@@ -5455,6 +5493,13 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading",
                 showOptionsTheme = true,
                 showBackgroundTheme = true
+            )
+            ReaderTextColorSettings(
+                value = value,
+                onPreferencesChange = { next ->
+                    onPreferencesChange(selectedLibrary.id, next)
+                },
+                testTagPrefix = "options-reading"
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -5521,6 +5566,13 @@ private fun LibraryReaderConfiguration(
                     onPreferencesChange(
                         selectedLibrary.id,
                         value.copy(pdfPageGapDp = pageGapDp)
+                    )
+                },
+                joinFacingPages = value.joinPdfFacingPages,
+                onJoinFacingPagesChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(joinPdfFacingPages = enabled)
                     )
                 },
                 invertColors = value.invertPdfColors,
@@ -5804,6 +5856,96 @@ private fun ReaderThemeChips(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun ReaderTextColorSettings(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String
+) {
+    var customTextColorDialogVisible by remember { mutableStateOf(false) }
+    val systemDarkMode = isSystemInDarkTheme()
+    val defaultTextColor = defaultReaderTextColor(
+        customBackgroundActive = activeCustomReaderBackground(value) != null,
+        presetTextColor = cssHexColorInt(value.backgroundTheme.foregroundCss),
+        systemDarkMode = systemDarkMode
+    )
+    Text(
+        stringResource(R.string.sheet_text_color),
+        style = MaterialTheme.typography.titleMedium
+    )
+    Text(
+        stringResource(R.string.sheet_text_color_summary),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = !value.useCustomTextColor,
+            onClick = {
+                if (value.useCustomTextColor) {
+                    onPreferencesChange(value.copy(useCustomTextColor = false))
+                }
+            },
+            label = { Text(stringResource(R.string.sheet_text_color_default)) },
+            modifier = Modifier.testTag("$testTagPrefix-text-color-default")
+        )
+        FilterChip(
+            selected = value.useCustomTextColor,
+            onClick = {
+                when {
+                    value.customTextColor == null ->
+                        customTextColorDialogVisible = true
+                    !value.useCustomTextColor ->
+                        onPreferencesChange(value.copy(useCustomTextColor = true))
+                }
+            },
+            label = { Text(stringResource(R.string.sheet_text_color_custom)) },
+            modifier = Modifier.testTag("$testTagPrefix-text-color-custom")
+        )
+    }
+    if (value.useCustomTextColor) {
+        AppPreferenceSelectionRow(
+            title = stringResource(R.string.sheet_text_color_custom),
+            value = value.customTextColor?.let(::customReaderBackgroundCss)
+                ?: stringResource(R.string.sheet_text_color_default),
+            summary = stringResource(R.string.sheet_text_color_custom_summary),
+            testTag = "$testTagPrefix-text-color",
+            onClick = { customTextColorDialogVisible = true }
+        )
+    }
+    if (customTextColorDialogVisible) {
+        ReaderCustomTextColorDialog(
+            initialColor = value.customTextColor,
+            pageBackgroundColor = readerContentBackgroundColor(value),
+            defaultTextColor = defaultTextColor,
+            testTagPrefix = testTagPrefix,
+            onApply = { color ->
+                onPreferencesChange(
+                    value.copy(
+                        useCustomTextColor = true,
+                        customTextColor = color
+                    )
+                )
+                customTextColorDialogVisible = false
+            },
+            onReset = {
+                onPreferencesChange(
+                    value.copy(
+                        useCustomTextColor = false,
+                        customTextColor = null
+                    )
+                )
+                customTextColorDialogVisible = false
+            },
+            onDismiss = { customTextColorDialogVisible = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun ReaderAppearanceSettings(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
@@ -5986,31 +6128,11 @@ internal fun ReaderConfigurationControls(
         showBackgroundTheme = format == ReaderConfigurationFormat.EPUB
     )
     if (format == ReaderConfigurationFormat.EPUB) {
-        var customTextColorDialogVisible by remember { mutableStateOf(false) }
-        AppPreferenceSelectionRow(
-            title = stringResource(R.string.sheet_text_color),
-            value = value.customTextColor?.let(::customReaderBackgroundCss)
-                ?: stringResource(R.string.sheet_text_color_default),
-            summary = stringResource(R.string.sheet_text_color_summary),
-            testTag = "$testTagPrefix-text-color",
-            onClick = { customTextColorDialogVisible = true }
+        ReaderTextColorSettings(
+            value = value,
+            onPreferencesChange = onPreferencesChange,
+            testTagPrefix = testTagPrefix
         )
-        if (customTextColorDialogVisible) {
-            ReaderCustomTextColorDialog(
-                initialColor = value.customTextColor,
-                pageBackgroundColor = readerContentBackgroundColor(value),
-                testTagPrefix = testTagPrefix,
-                onApply = { color ->
-                    onPreferencesChange(value.copy(customTextColor = color))
-                    customTextColorDialogVisible = false
-                },
-                onReset = {
-                    onPreferencesChange(value.copy(customTextColor = null))
-                    customTextColorDialogVisible = false
-                },
-                onDismiss = { customTextColorDialogVisible = false }
-            )
-        }
         AppPreferenceSwitchRow(
             title = stringResource(R.string.settings_prefer_server_progress),
             summary = stringResource(R.string.settings_prefer_server_progress_summary),
@@ -6374,6 +6496,7 @@ private fun ReaderCustomBackgroundDialog(
 private fun ReaderCustomTextColorDialog(
     initialColor: Int?,
     pageBackgroundColor: Int,
+    defaultTextColor: Int,
     testTagPrefix: String,
     onApply: (Int) -> Unit,
     onReset: () -> Unit,
@@ -6394,7 +6517,7 @@ private fun ReaderCustomTextColorDialog(
         null
     }
     val hasAnyInput = red.isNotEmpty() || green.isNotEmpty() || blue.isNotEmpty()
-    val previewTextColor = color ?: customReaderBackgroundTextColor(pageBackgroundColor)
+    val previewTextColor = color ?: defaultTextColor
 
     AlertDialog(
         onDismissRequest = onDismiss,

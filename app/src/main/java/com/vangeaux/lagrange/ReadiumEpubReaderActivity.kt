@@ -302,14 +302,23 @@ internal fun readiumPreferences(
     customBackgroundColor: Int? = null,
     customTextColor: Int? = null,
     backgroundTheme: EpubReaderTheme = theme,
-    useCustomBackground: Boolean = customBackgroundColor != null
+    useCustomBackground: Boolean = customBackgroundColor != null,
+    useCustomTextColor: Boolean = customTextColor != null,
+    systemDarkMode: Boolean? = null
 ): EpubPreferences {
     val activeCustomBackground = customBackgroundColor.takeIf { useCustomBackground }
     val effectiveTheme = activeCustomBackground?.let(::customReaderBackgroundReadiumTheme) ?: backgroundTheme
     val effectiveBackground = activeCustomBackground ?: backgroundTheme.backgroundColor
-    val automaticTextColor = activeCustomBackground?.let(::customReaderBackgroundTextColor)
-        ?: cssHexColorInt(backgroundTheme.foregroundCss)
-    val effectiveTextColor = readerTextColor(customTextColor, automaticTextColor)
+    val defaultTextColor = defaultReaderTextColor(
+        customBackgroundActive = activeCustomBackground != null,
+        presetTextColor = cssHexColorInt(backgroundTheme.foregroundCss),
+        systemDarkMode = systemDarkMode
+    )
+    val effectiveTextColor = readerTextColor(
+        customTextColor = customTextColor,
+        useCustomTextColor = useCustomTextColor,
+        defaultTextColor = defaultTextColor
+    )
     return EpubPreferences(
         backgroundColor = ReadiumColor(effectiveBackground),
         textColor = ReadiumColor(effectiveTextColor),
@@ -1475,7 +1484,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readerPreferences.customBackgroundColor,
                 readerPreferences.customTextColor,
                 readerPreferences.backgroundTheme,
-                readerPreferences.useCustomBackground
+                readerPreferences.useCustomBackground,
+                readerPreferences.useCustomTextColor,
+                systemDarkMode()
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
@@ -3110,7 +3121,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.customBackgroundColor,
                 normalized.customTextColor,
                 normalized.backgroundTheme,
-                normalized.useCustomBackground
+                normalized.useCustomBackground,
+                normalized.useCustomTextColor,
+                systemDarkMode()
             )
         )
         val current = appPreferencesStore.read()
@@ -3386,6 +3399,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+    }
+
+    /** Returns the system night-mode state, or null when the platform does not expose it. */
+    private fun systemDarkMode(): Boolean? {
+        val mode = resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        return when (mode) {
+            android.content.res.Configuration.UI_MODE_NIGHT_YES -> true
+            android.content.res.Configuration.UI_MODE_NIGHT_NO -> false
+            else -> null
+        }
     }
 
     @Suppress("DEPRECATION")

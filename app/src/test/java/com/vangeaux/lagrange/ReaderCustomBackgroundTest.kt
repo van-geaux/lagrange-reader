@@ -72,16 +72,56 @@ class ReaderCustomBackgroundTest {
     }
 
     @Test
-    fun `automatic text color keeps the contrast-derived color`() {
-        val background = 0xFF101010.toInt()
-        val automatic = customReaderBackgroundTextColor(background)
-        assertEquals(automatic, readerTextColor(null, automatic))
+    fun `default text color uses the preset theme on a preset background`() {
+        assertEquals(
+            0xFF1F1C17.toInt(),
+            defaultReaderTextColor(
+                customBackgroundActive = false,
+                presetTextColor = 0xFF1F1C17.toInt(),
+                systemDarkMode = true
+            )
+        )
     }
 
     @Test
-    fun `an explicit custom text color wins over the automatic color`() {
+    fun `default text color follows the system theme on a custom background`() {
+        assertEquals(
+            DEFAULT_READER_TEXT_ON_DARK_ARGB.toInt(),
+            defaultReaderTextColor(
+                customBackgroundActive = true,
+                presetTextColor = 0xFF1F1C17.toInt(),
+                systemDarkMode = true
+            )
+        )
+        assertEquals(
+            DEFAULT_READER_TEXT_ON_LIGHT_ARGB.toInt(),
+            defaultReaderTextColor(
+                customBackgroundActive = true,
+                presetTextColor = 0xFF1F1C17.toInt(),
+                systemDarkMode = false
+            )
+        )
+        assertEquals(
+            DEFAULT_READER_TEXT_ON_DARK_ARGB.toInt(),
+            defaultReaderTextColor(
+                customBackgroundActive = true,
+                presetTextColor = 0xFF1F1C17.toInt(),
+                systemDarkMode = null
+            )
+        )
+    }
+
+    @Test
+    fun `default text color is used when custom text is inactive`() {
+        val default = 0xFFECE4D8.toInt()
+        assertEquals(default, readerTextColor(null, false, default))
+        assertEquals(default, readerTextColor(0xFFB8B8B8.toInt(), false, default))
+    }
+
+    @Test
+    fun `an active custom text color wins over the default color`() {
         val custom = 0xFFB8B8B8.toInt()
-        assertEquals(custom, readerTextColor(custom, 0xFFECE4D8.toInt()))
+        assertEquals(custom, readerTextColor(custom, true, 0xFFECE4D8.toInt()))
     }
 
     @Test
@@ -93,10 +133,14 @@ class ReaderCustomBackgroundTest {
 
     @Test
     fun `custom text color round trips through profile storage`() {
-        val preferences = LibraryReaderPreferences(customTextColor = 0xFFB8B8B8.toInt())
+        val preferences = LibraryReaderPreferences(
+            customTextColor = 0xFFB8B8B8.toInt(),
+            useCustomTextColor = true
+        )
         val storage = libraryReaderPreferencesStorageValue(mapOf("library" to preferences))
         val decoded = libraryReaderPreferencesFromStorage(storage).getValue("library")
         assertEquals(preferences.customTextColor, decoded.customTextColor)
+        assertEquals(true, decoded.useCustomTextColor)
     }
 
     @Test
@@ -105,6 +149,16 @@ class ReaderCustomBackgroundTest {
             """{"version":3,"profiles":{"library":{"theme":"dark"}}}"""
         ).getValue("library")
         assertNull(legacy.customTextColor)
+        assertEquals(false, legacy.useCustomTextColor)
+    }
+
+    @Test
+    fun `legacy custom text profile remains active after migration`() {
+        val legacy = libraryReaderPreferencesFromStorage(
+            """{"version":3,"profiles":{"library":{"theme":"dark","customTextColor":"B8B8B8"}}}"""
+        ).getValue("library")
+        assertEquals(0xFFB8B8B8.toInt(), legacy.customTextColor)
+        assertEquals(true, legacy.useCustomTextColor)
     }
 
     @Test

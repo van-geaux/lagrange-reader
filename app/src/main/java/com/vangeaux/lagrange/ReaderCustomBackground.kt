@@ -90,12 +90,39 @@ internal fun customReaderBackgroundReadiumTheme(color: Int): EpubReaderTheme =
 internal fun normalizedReaderTextColor(color: Int?): Int? =
     color?.let { 0xFF000000.toInt() or (it and 0xFFFFFF) }
 
+internal const val DEFAULT_READER_TEXT_ON_DARK_ARGB: Long = 0xFFFFFFFFL
+internal const val DEFAULT_READER_TEXT_ON_LIGHT_ARGB: Long = 0xFF000000L
+
 /**
- * Resolves the EPUB content text colour. An explicit custom colour wins; otherwise the automatic
- * contrast colour for the page background is used.
+ * Default text colour when the user has not selected a custom text colour.
+ *
+ * - preset background: the preset's own foreground colour;
+ * - custom background: white on a dark system theme, black on a light system theme, and white
+ *   when the system mode cannot be determined.
  */
-internal fun readerTextColor(customTextColor: Int?, automaticTextColor: Int): Int =
-    customTextColor ?: automaticTextColor
+internal fun defaultReaderTextColor(
+    customBackgroundActive: Boolean,
+    presetTextColor: Int,
+    systemDarkMode: Boolean?
+): Int = if (!customBackgroundActive) {
+    presetTextColor
+} else {
+    when (systemDarkMode) {
+        true -> DEFAULT_READER_TEXT_ON_DARK_ARGB.toInt()
+        false -> DEFAULT_READER_TEXT_ON_LIGHT_ARGB.toInt()
+        null -> DEFAULT_READER_TEXT_ON_DARK_ARGB.toInt()
+    }
+}
+
+/**
+ * Resolves the EPUB content text colour. An active custom colour wins; otherwise [defaultTextColor]
+ * is used.
+ */
+internal fun readerTextColor(
+    customTextColor: Int?,
+    useCustomTextColor: Boolean,
+    defaultTextColor: Int
+): Int = if (useCustomTextColor) customTextColor ?: defaultTextColor else defaultTextColor
 
 /** The retained custom background colour, but only while the custom background is active. */
 internal fun activeCustomReaderBackground(preferences: LibraryReaderPreferences): Int? =

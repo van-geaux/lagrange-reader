@@ -106,6 +106,7 @@ data class LibraryReaderPreferences(
     val customBackgroundColor: Int? = null,
     val useCustomBackground: Boolean = false,
     val customTextColor: Int? = null,
+    val useCustomTextColor: Boolean = false,
     val fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
     val customFont: CustomFontRecord? = null,
     val fontScale: Float = 1f,
@@ -129,6 +130,7 @@ data class LibraryReaderPreferences(
         customBackgroundColor = normalizedCustomReaderBackground(customBackgroundColor),
         useCustomBackground = useCustomBackground && customBackgroundColor != null,
         customTextColor = normalizedReaderTextColor(customTextColor),
+        useCustomTextColor = useCustomTextColor && customTextColor != null,
         fontScale = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE),
         lineSpacing = lineSpacing.coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING),
         wordSpacing = wordSpacing.coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING),
@@ -230,6 +232,7 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             normalized.customBackgroundColor?.let {
                 put("customBackgroundColor", customReaderBackgroundHex(it))
             }
+            put("useCustomTextColor", normalized.useCustomTextColor)
             normalized.customTextColor?.let {
                 put("customTextColor", customReaderBackgroundHex(it))
             }
@@ -272,6 +275,10 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         .takeIf { it.isNotBlank() }
                         ?.toIntOrNull(16)
                         ?.let(::normalizedCustomReaderBackground)
+                    val customTextColor = item.optString("customTextColor")
+                        .takeIf { it.isNotBlank() }
+                        ?.toIntOrNull(16)
+                        ?.let(::normalizedReaderTextColor)
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         volumeButtonPageNavigation = item.optBoolean("volumeButtonPageNavigation", false),
@@ -289,10 +296,11 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             "useCustomBackground",
                             customBackgroundColor != null
                         ),
-                        customTextColor = item.optString("customTextColor")
-                            .takeIf { it.isNotBlank() }
-                            ?.toIntOrNull(16)
-                            ?.let(::normalizedReaderTextColor),
+                        customTextColor = customTextColor,
+                        useCustomTextColor = item.optBoolean(
+                            "useCustomTextColor",
+                            customTextColor != null
+                        ),
                         fontFamily = epubReaderFontFamilyFromStorage(item.optString("fontFamily")),
                         customFont = customFontFromStorage(item.optString("customFont")),
                         fontScale = item.optDouble("fontScale", 1.0).toFloat(),

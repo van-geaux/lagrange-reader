@@ -24,8 +24,8 @@
     <string name="sheet_custom_background_reset">恢复默认</string>
     <string name="sheet_custom_background_invalid">请输入 0 到 255 之间的数值。</string>
     <string name="sheet_text_color">文字颜色</string>
-    <string name="sheet_text_color_default">自动</string>
-    <string name="sheet_text_color_summary">自定义 EPUB 页面文字颜色（RGB）</string>
+    <string name="sheet_text_color_default">默认</string>
+    <string name="sheet_text_color_summary">跟随阅读背景或使用自定义颜色</string>
     <string name="sheet_text_color_dialog_title">自定义文字颜色</string>
     <string name="sheet_text_color_preview">预览</string>
     <string name="sheet_text_color_sample">Aa 文字示例</string>
@@ -34,4 +34,6 @@
     <string name="sheet_reading_background">阅读背景</string>
     <string name="sheet_reading_background_summary">页面背景与阅读区域</string>
     <string name="sheet_custom_background_custom">自定义</string>
+    <string name="sheet_text_color_custom">自定义</string>
+    <string name="sheet_text_color_custom_summary">自定义 EPUB 文字颜色（RGB）</string>
 </resources>
