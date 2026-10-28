@@ -227,6 +227,21 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `provider hidden sections remain hidden in the feed projection`() {
+        val hidden = setOf(
+            HomeSection.WANT_TO_READ,
+            HomeSection.RECENTLY_ADDED_BOOKS,
+            HomeSection.RECENTLY_RELEASED_BOOKS,
+            HomeSection.RECENTLY_READ
+        )
+        val shelves = HomeShelfData(hiddenSections = hidden)
+
+        assertEquals(hidden, shelves.hiddenSections)
+        assertFalse(HomeSection.CURRENTLY_READING in shelves.hiddenSections)
+        assertFalse(HomeSection.ON_DECK in shelves.hiddenSections)
+    }
+
+    @Test
     fun `library recommended feed filters every shelf to the selected library`() {
         val books = listOf(
             BookSummary("library-one", "book-1", "file-1", "One"),

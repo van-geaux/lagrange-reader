@@ -6841,6 +6841,7 @@ private fun HomeFeed(
     // Provider Home shelves are server-wide; filter them before rendering a
     // library Recommended feed instead of reusing aggregate contents.
     val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
+    val hiddenSections = serverShelves.hiddenSections
     val onDeckEnabled = state.homeShelfPreferences.effectiveOnDeckEnabled(
         localFallbackEnabled = localOnDeckEnabled,
         hasProviderOwnedShelves = serverShelves.isServerProvided
@@ -7004,18 +7005,18 @@ private fun HomeFeed(
         } else if (onDeck.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_on_deck), onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
         }
-        if (wantToRead.isNotEmpty()) item {
+        if (HomeSection.WANT_TO_READ !in hiddenSections && wantToRead.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_want_to_read), wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) })
         }
-        if (recentlyAddedBooks.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_ADDED_BOOKS !in hiddenSections && recentlyAddedBooks.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_added_books), recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) })
         }
-        if (recentlyReleasedBooks.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_RELEASED_BOOKS !in hiddenSections && recentlyReleasedBooks.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_released_books), recentlyReleasedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_RELEASED_BOOKS) })
         }
         if (recentSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_added_series), recentSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) }) }
         if (updatedSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_updated_series), updatedSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) }) }
-        if (recentlyRead.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_READ !in hiddenSections && recentlyRead.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_read_books), recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_READ) })
         }
         if (localBooks.isNotEmpty()) item {

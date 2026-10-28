@@ -808,6 +808,7 @@ data class HomeShelfPreferences(
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
+    val hiddenSections: Set<HomeSection> = emptySet(),
     val isServerProvided: Boolean = false,
     val isAggregatedAcrossLibraries: Boolean = false,
     val deferInitialCatalogLoad: Boolean = false

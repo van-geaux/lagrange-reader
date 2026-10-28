@@ -89,6 +89,12 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
                 HomeSection.RECENTLY_UPDATED_SERIES to updatedSeries,
                 HomeSection.RECENTLY_ADDED_SERIES to recentlyAddedSeries
             ),
+            hiddenSections = setOf(
+                HomeSection.WANT_TO_READ,
+                HomeSection.RECENTLY_ADDED_BOOKS,
+                HomeSection.RECENTLY_RELEASED_BOOKS,
+                HomeSection.RECENTLY_READ
+            ),
             isServerProvided = true,
             isAggregatedAcrossLibraries = true,
             deferInitialCatalogLoad = true
