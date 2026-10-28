@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
+import com.vangeaux.lagrange.provider.kavita.kavitaSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
 import com.vangeaux.lagrange.provider.kavita.mergeKavitaCatalogPages
 import org.json.JSONObject
@@ -11,6 +12,19 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class KavitaCatalogContractTest {
+    @Test
+    fun seriesNameReadsKavitaSeriesNameVariantsBeforeFallingBackToId() {
+        assertEquals(
+            "Actual Series",
+            kavitaSeriesName(JSONObject("{\"seriesName\":\"Actual Series\"}"), "42")
+        )
+        assertEquals(
+            "Nested Series",
+            kavitaSeriesName(JSONObject("{\"series\":{\"title\":\"Nested Series\"}}"), "42")
+        )
+        assertEquals("42", kavitaSeriesName(JSONObject("{}"), "42"))
+    }
+
     @Test
     fun formatExtractsExtensionFromKavitaFilename() {
         assertEquals("epub", kavitaFormat("application/octet-stream", "novel.epub"))

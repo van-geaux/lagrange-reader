@@ -2024,6 +2024,7 @@ internal fun NativeLibraryBrowserScreen(
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
+                        selectedSeriesName = series.name
                         activeSeriesGenre = null
                         genreSourceSeriesKey = null
                         detailReturnDestination = BrowserDestination.SERIES
@@ -2064,6 +2065,7 @@ internal fun NativeLibraryBrowserScreen(
                     readingStatusOptions = readingStatusOptions,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
+                        selectedSeriesName = selectedBook?.seriesName
                         selectedBook = null
                     },
                     onAuthorSelected = { authorName ->

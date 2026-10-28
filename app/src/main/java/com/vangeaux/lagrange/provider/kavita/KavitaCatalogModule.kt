@@ -25,6 +25,20 @@ internal fun mergeKavitaCatalogPages(
     addAll(byId.values)
 }
 
+internal fun kavitaSeriesName(root: JSONObject, fallback: String): String {
+    val nested = root.optJSONObject("series")
+    return sequenceOf(
+        root.optString("name"),
+        root.optString("localizedName"),
+        root.optString("seriesName"),
+        root.optString("title"),
+        nested?.optString("name").orEmpty(),
+        nested?.optString("localizedName").orEmpty(),
+        nested?.optString("seriesName").orEmpty(),
+        nested?.optString("title").orEmpty()
+    ).firstOrNull { it.isNotBlank() } ?: fallback
+}
+
 internal data class KavitaChapterProjection(
     val id: String,
     val title: String,
@@ -280,7 +294,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 auth.localizedMessage(R.string.perror_kavita_series_details_http, "Unable to load Kavita series details (HTTP ${response.code}).", response.code)
             )
             val root = JSONObject(payload)
-            val name = root.optString("name").ifBlank { root.optString("localizedName").ifBlank { seriesId } }
+            val name = kavitaSeriesName(root, seriesId)
             val libraryId = root.optInt("libraryId", 0).toString()
             val lastAdded = root.optString("created").takeIf { it.isNotBlank() }
                 ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
