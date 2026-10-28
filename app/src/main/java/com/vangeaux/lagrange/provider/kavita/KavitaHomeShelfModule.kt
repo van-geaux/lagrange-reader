@@ -68,7 +68,11 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             onDeckSeries.map { series ->
                 async {
                     runCatching {
-                        loadSeriesBooks(base, series.seriesId ?: return@runCatching emptyList())
+                        loadSeriesBooks(
+                            base,
+                            series.seriesId ?: return@runCatching emptyList(),
+                            series.seriesName ?: series.title
+                        )
                     }.getOrDefault(emptyList())
                 }
             }.awaitAll().flatten()
@@ -114,7 +118,7 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
         }
     }
 
-    private fun loadSeriesBooks(base: String, seriesId: String): List<BookSummary> {
+    private fun loadSeriesBooks(base: String, seriesId: String, fallbackName: String): List<BookSummary> {
         val request = Request.Builder()
             .url("$base/api/Series/series-detail?seriesId=$seriesId")
             .header("Accept", "application/json")
@@ -124,7 +128,7 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return emptyList()
             val root = JSONObject(response.body?.string().orEmpty())
-            val name = kavitaSeriesName(root, seriesId)
+            val name = kavitaSeriesName(root, fallbackName).takeUnless { it == seriesId } ?: fallbackName
             val libraryId = root.optInt("libraryId", -1).takeIf { it >= 0 }?.toString().orEmpty()
             return kavitaSeriesChapters(root).mapNotNull { chapter ->
                 val projection = kavitaChapterProjection(chapter) ?: return@mapNotNull null
