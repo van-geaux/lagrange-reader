@@ -2875,6 +2875,16 @@ private fun SeriesCatalogScreen(
             }
             .collect { loadNextPage() }
     }
+    suspend fun jumpToSeriesLabel(target: Char) {
+        if (loadAllPages) return
+        while (hasMorePages && items.none { libraryJumpLabel(it.name) == target }) {
+            loadNextPage()
+        }
+        val index = items.indexOfFirst { libraryJumpLabel(it.name) == target }
+        if (index >= 0) {
+            if (reduceMotion) gridState.scrollToItem(index) else gridState.animateScrollToItem(index)
+        }
+    }
     val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
     val jumpTargets = remember(displayItems, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
@@ -2884,7 +2894,7 @@ private fun SeriesCatalogScreen(
         }
     }
 
-    val hasJumpRail = jumpTargets.isNotEmpty()
+    val hasJumpRail = !isLoading && (jumpTargets.isNotEmpty() || (!loadAllPages && displayItems.isNotEmpty()))
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -2999,6 +3009,7 @@ private fun SeriesCatalogScreen(
         LibraryJumpRail(
             targets = jumpTargets,
             direction = filter.direction,
+            enabledLabels = if (!loadAllPages) catalogJumpRailLabels(filter.direction).toSet() else null,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -3010,7 +3021,10 @@ private fun SeriesCatalogScreen(
                             gridState.animateScrollToItem(index)
                         }
                     }
-                }
+                },
+                onUnavailableJump = if (!loadAllPages) {
+                    { label -> scope.launch { jumpToSeriesLabel(label) } }
+                } else null
             )
         }
         }
@@ -8723,7 +8737,9 @@ private fun LibraryJumpRail(
     targets: List<Pair<Char, Int>>,
     direction: SortDirection,
     modifier: Modifier,
-    onJump: (Int) -> Unit
+    enabledLabels: Set<Char>? = null,
+    onJump: (Int) -> Unit,
+    onUnavailableJump: ((Char) -> Unit)? = null
 ) {
     val targetsByLabel = targets.toMap()
     Column(
@@ -8738,6 +8754,7 @@ private fun LibraryJumpRail(
     ) {
         catalogJumpRailLabels(direction).forEach { label ->
             val index = targetsByLabel[label]
+            val canLoad = index == null && enabledLabels?.contains(label) == true && onUnavailableJump != null
             val jumpDescription = stringResource(R.string.browse_jump_to, label.toString())
             val unavailableDescription = stringResource(
                 R.string.browse_jump_unavailable,
@@ -8748,6 +8765,10 @@ private fun LibraryJumpRail(
                     if (index != null) {
                         Modifier
                             .clickable { onJump(index) }
+                            .semantics { contentDescription = jumpDescription }
+                    } else if (canLoad) {
+                        Modifier
+                            .clickable { onUnavailableJump?.invoke(label) }
                             .semantics { contentDescription = jumpDescription }
                     } else {
                         Modifier.semantics {
@@ -8761,7 +8782,7 @@ private fun LibraryJumpRail(
                 Text(
                     text = label.toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (index != null) {
+                    color = if (index != null || canLoad) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
