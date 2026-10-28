@@ -2,6 +2,17 @@
 <resources>
     <!-- 品牌名不翻译 -->
     <string name="app_name">Lagrange</string>
+    <string name="settings_category_permissions">权限</string>
+    <string name="settings_category_permissions_summary">Lagrange 使用的 Android 权限</string>
+    <string name="settings_permissions_summary">Lagrange 使用的 Android 权限</string>
+    <string name="settings_permissions_enabled">已启用</string>
+    <string name="settings_permissions_not_enabled">未启用</string>
+    <string name="settings_permissions_open_system">打开 Android 设置</string>
+    <string name="settings_permissions_none">此 Android 版本没有适用的可由用户控制的权限。</string>
+    <string name="settings_permission_notifications">通知</string>
+    <string name="settings_permission_notifications_summary">显示有声书播放控件和其他通知。</string>
+    <string name="settings_permission_storage">存储</string>
+    <string name="settings_permission_storage_summary">将导出的封面和其他文件保存到设备共享存储空间。</string>
 
     <!-- 通用操作 -->
     <string name="common_retry">重试</string>

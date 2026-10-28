@@ -132,6 +132,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -191,6 +192,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlin.math.roundToInt
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
@@ -350,6 +354,10 @@ private enum class OptionsCategory(
     NETWORK_SYNC(
         R.string.settings_category_network,
         R.string.settings_category_network_summary
+    ),
+    PERMISSIONS(
+        R.string.settings_category_permissions,
+        R.string.settings_category_permissions_summary
     )
 }
 
@@ -3740,6 +3748,16 @@ internal fun OptionsScreen(
     var isClearingDownloadedBooks by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var permissionRefreshKey by rememberSaveable { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) permissionRefreshKey += 1
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionSpecs = remember(permissionRefreshKey) { appPermissionSpecs() }
     var languageTag by remember { mutableStateOf(AppLocale.readTag(context)) }
     val languageLabels = AppLocale.languages.associate { language ->
         language.tag to stringResource(language.labelRes)
@@ -4256,6 +4274,79 @@ internal fun OptionsScreen(
                     onPreferencesChange(preferences.copy(pauseAudiobookForAudioInterruptions = it))
                 }
             )
+        }
+        if (selectedCategory == OptionsCategory.PERMISSIONS) item(key = "permissions-heading") {
+            Column(
+                modifier = Modifier.padding(start = 4.dp, top = 18.dp, end = 4.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    stringResource(R.string.settings_category_permissions),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    stringResource(R.string.settings_permissions_summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        if (selectedCategory == OptionsCategory.PERMISSIONS) {
+            if (permissionSpecs.isEmpty()) {
+                item(key = "permissions-none") {
+                    Text(
+                        stringResource(R.string.settings_permissions_none),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                permissionSpecs.forEach { spec ->
+                    item(key = "permission-${spec.permission}") {
+                        val enabled = isAppPermissionGranted(context, spec.permission)
+                        ListItem(
+                            headlineContent = { Text(stringResource(spec.titleRes)) },
+                            supportingContent = {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(stringResource(spec.summaryRes))
+                                    Text(
+                                        stringResource(
+                                            if (enabled) {
+                                                R.string.settings_permissions_enabled
+                                            } else {
+                                                R.string.settings_permissions_not_enabled
+                                            }
+                                        ),
+                                        color = if (enabled) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        },
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            },
+                            trailingContent = {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = stringResource(
+                                        R.string.settings_permissions_open_system
+                                    )
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    runCatching {
+                                        context.startActivity(spec.settingsIntent(context))
+                                    }
+                                }
+                                .testTag("options-permission-${spec.permission}")
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
         }
     }
 

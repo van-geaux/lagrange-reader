@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lagrange</string>
+    <string name="settings_category_permissions">Permissions</string>
+    <string name="settings_category_permissions_summary">Android permissions used by Lagrange</string>
+    <string name="settings_permissions_summary">Android permissions used by Lagrange</string>
+    <string name="settings_permissions_enabled">Enabled</string>
+    <string name="settings_permissions_not_enabled">Not enabled</string>
+    <string name="settings_permissions_open_system">Open Android settings</string>
+    <string name="settings_permissions_none">No user-controllable permissions apply on this Android version.</string>
+    <string name="settings_permission_notifications">Notifications</string>
+    <string name="settings_permission_notifications_summary">Show audiobook playback controls and other notifications.</string>
+    <string name="settings_permission_storage">Storage</string>
+    <string name="settings_permission_storage_summary">Save exported covers and other files to shared device storage.</string>
 
     <!-- Common actions -->
     <string name="common_retry">Retry</string>
