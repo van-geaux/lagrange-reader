@@ -8,6 +8,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [Provider Module Separation](./modules.md) — provider-neutral feature contracts, composition rules, and migration boundaries.
 - [Provider documentation](./providers/README.md) — provider-specific API, module, authentication, integration, and capability notes.
 - [EPUB Text-to-Speech Module](./epub-tts-module.md) — TTS boundaries, lifecycle isolation, persistence, and implementation pieces.
+- [Reader Appearance](./reader-appearance.md) — independent reader chrome/background themes, custom RGB colors, text-color resolution, storage migration, and UI behavior.
 - [Local Setup](./setup.md) — machine prerequisites and local build setup.
 - [Privacy Notes](./privacy.md) — local storage, network behavior, and current privacy gaps.
 - [Release Policy](./release.md) — versioning, signing, naming, and publishing rules.
