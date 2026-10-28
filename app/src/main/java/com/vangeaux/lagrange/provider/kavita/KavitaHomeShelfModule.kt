@@ -71,7 +71,8 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
                         loadSeriesBooks(
                             base,
                             series.seriesId ?: return@runCatching emptyList(),
-                            series.seriesName ?: series.title
+                            series.seriesName ?: series.title,
+                            series.libraryId
                         )
                     }.getOrDefault(emptyList())
                 }
@@ -118,7 +119,12 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
         }
     }
 
-    private fun loadSeriesBooks(base: String, seriesId: String, fallbackName: String): List<BookSummary> {
+    private fun loadSeriesBooks(
+        base: String,
+        seriesId: String,
+        fallbackName: String,
+        fallbackLibraryId: String
+    ): List<BookSummary> {
         val request = Request.Builder()
             .url("$base/api/Series/series-detail?seriesId=$seriesId")
             .header("Accept", "application/json")
@@ -129,7 +135,8 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             if (!response.isSuccessful) return emptyList()
             val root = JSONObject(response.body?.string().orEmpty())
             val name = kavitaSeriesName(root, fallbackName).takeUnless { it == seriesId } ?: fallbackName
-            val libraryId = root.optInt("libraryId", -1).takeIf { it >= 0 }?.toString().orEmpty()
+            val libraryId = root.optInt("libraryId", -1).takeIf { it > 0 }?.toString()
+                ?: fallbackLibraryId
             return kavitaSeriesChapters(root).mapNotNull { chapter ->
                 val projection = kavitaChapterProjection(chapter) ?: return@mapNotNull null
                 val completed = projection.pages != null && projection.pagesRead >= projection.pages
@@ -225,7 +232,10 @@ internal fun kavitaSeriesCard(item: JSONObject, baseUrl: String): BookSummary? {
     val format = kavitaFormat(item.optString("format").takeIf { it.isNotBlank() }, null)
     val lastUpdated = parseKavitaInstant(item.optString("lastChapterAddedUtc"))
         ?: parseKavitaInstant(item.optString("created"))
-    val libraryId = item.optInt("libraryId", -1).takeIf { it >= 0 }?.toString().orEmpty()
+    val nestedLibrary = item.optJSONObject("library")
+    val libraryId = item.optInt("libraryId", -1).takeIf { it > 0 }?.toString()
+        ?: nestedLibrary?.optInt("id", -1)?.takeIf { it > 0 }?.toString()
+        ?: ""
     return BookSummary(
         libraryId = libraryId,
         id = "series:$seriesId",
