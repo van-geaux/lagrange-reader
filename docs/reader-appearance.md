@@ -4,7 +4,12 @@ Status: implemented for EPUB readers; targeting `main` after the 2.1.0 / localiz
 
 ## Overview
 
-Reader appearance is split into two independent axes:
+Before this change, the EPUB reader had one preset row: a single `theme` controlled both the reader
+chrome and the page background, and there was no custom background or text color. This change keeps
+that preset row for the chrome and adds an independent reading-background axis with optional custom
+colors.
+
+Reader appearance is therefore split into two independent axes:
 
 1. **Reader options** (`theme`) — the preset used by the reader chrome: top controls, option
    sheets, dialogs, and progress controls.
@@ -19,7 +24,8 @@ All values are stored in the existing versioned per-library reader profile
 
 ## Data model
 
-`LibraryReaderPreferences` adds/changes these fields:
+`LibraryReaderPreferences` adds/changes these fields. Only `theme` exists in released profiles; the
+other fields and the custom-color UI are new in this change:
 
 | Field | Meaning | Stored key | Default |
 | --- | --- | --- | --- |
@@ -35,12 +41,13 @@ All values are stored in the existing versioned per-library reader profile
 Profiles are still read through `libraryReaderPreferencesFromStorage` and remain tolerant of older
 JSON (storage version 3):
 
-- missing `backgroundTheme` → copy the existing `theme` (preserves the old unified appearance);
-- existing `customBackgroundColor` without `useCustomBackground` → treat as active, matching the
-  first version of the custom-background feature;
-- existing `customTextColor` without `useCustomTextColor` → treat as active, matching the first
-  version of the custom-text feature;
-- missing custom colors and flags → preset background + default text color.
+- released profiles only contain `theme` and the previously existing keys; missing
+  `backgroundTheme` falls back to `theme`, preserving the old unified appearance;
+- missing custom colors/flags → preset background + default text color;
+- if a custom RGB is present without its activation flag, the parser treats it as active for
+  tolerant handling of partially written/intermediate data. Released profiles never contain these
+  keys, so normal upgrades start with both custom modes inactive.
+
 
 `normalized()` strips alpha to opaque RGB and deactivates a custom mode when its retained color is
 missing. Switching to a preset only changes the active flag; it never deletes the retained RGB,
