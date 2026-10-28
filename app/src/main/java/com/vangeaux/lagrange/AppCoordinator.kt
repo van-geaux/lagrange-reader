@@ -1415,11 +1415,11 @@ class AppCoordinator internal constructor(
                     }
 
                 if (deferInitialCatalogLoad) {
-                    coroutineScope {
-                        libraries.filterNot { it.id == selectedLibrary }.map { library ->
+                    scope.launch {
+                        libraries.map { library ->
                             async {
-                                runCatching {
-                                    repository.loadBooksPage(library.id, 0)
+                                if (repository.loadCachedLibraryCatalog(library.id) == null) {
+                                    runCatching { repository.loadBooks(library.id) }
                                 }
                             }
                         }.awaitAll()

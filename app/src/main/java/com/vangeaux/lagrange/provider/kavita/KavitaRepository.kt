@@ -41,7 +41,11 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val homeModule = KavitaHomeShelfModuleImpl(authModule)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
-    private val seriesModule = KavitaSeriesCatalogModuleImpl(catalogModule, detailModule)
+    private val seriesModule = KavitaSeriesCatalogModuleImpl(
+        catalogModule,
+        detailModule,
+        KavitaSeriesCatalogSnapshotStore(appContext)
+    )
     private val coverModule = KavitaCoverModuleImpl(authModule)
     private val readerModule = KavitaReaderModuleImpl(authModule, appContext)
     private val readingProgressModule = KavitaReadingProgressModuleImpl(authModule)

@@ -8,7 +8,8 @@ import kotlinx.coroutines.coroutineScope
 
 internal class KavitaSeriesCatalogModuleImpl(
     private val catalog: KavitaBookCatalogModuleImpl,
-    private val details: KavitaBookDetailModuleImpl
+    private val details: KavitaBookDetailModuleImpl,
+    private val snapshotStore: KavitaSeriesCatalogSnapshotStore
 ) : SeriesCatalogModule {
     override suspend fun loadSeriesCatalog(
         filter: SeriesCatalogFilter,
@@ -42,9 +43,17 @@ internal class KavitaSeriesCatalogModuleImpl(
         }
         val libraryId = filter.libraryId
         val (result, jumpIndex) = coroutineScope {
-            val pageRequest = async { catalog.loadSeriesSummaryPage(libraryId, page) }
+            val pageRequest = async {
+                runCatching { catalog.loadSeriesSummaryPage(libraryId, page) }
+                    .onSuccess { snapshotStore.write(libraryId, page, it) }
+                    .getOrElse { snapshotStore.read(libraryId, page) ?: throw it }
+            }
             val jumpRequest = if (page == 0 && filter.includeCounts) {
-                async { catalog.loadSeriesSummaryPage(libraryId, -1) }
+                async {
+                    runCatching { catalog.loadSeriesSummaryPage(libraryId, -1) }
+                        .onSuccess { snapshotStore.write(libraryId, -1, it) }
+                        .getOrNull()
+                }
             } else {
                 null
             }
