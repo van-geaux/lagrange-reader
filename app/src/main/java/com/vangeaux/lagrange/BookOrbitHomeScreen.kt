@@ -144,6 +144,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -205,6 +206,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -2778,6 +2781,7 @@ private fun SeriesCatalogScreen(
     var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
     var nextPage by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(1) }
     var hasMorePages by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
+    var isLoadingMore by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var filter by remember(query, initialFilter, selectedScopeId) {
         mutableStateOf(
             (lockedFilter ?: initialFilter).copy(query = query.takeIf { it.isNotBlank() })
@@ -2841,20 +2845,35 @@ private fun SeriesCatalogScreen(
             reloadKey += 1
         }
     }
-    val loadNextPage: () -> Unit = {
-        if (!loadAllPages && hasMorePages && !isLoading) {
-            scope.launch {
-                val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-                val catalog = runCatching {
-                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, nextPage)
-                    else loader(activeFilter, nextPage)
-                }.getOrNull() ?: return@launch
-                items = (items + catalog.items).distinctBy { it.id }
-                total = catalog.total ?: items.size
-                nextPage += 1
-                hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
-            }
+    suspend fun loadNextPage() {
+        if (loadAllPages || !hasMorePages || isLoading || isLoadingMore) return
+        isLoadingMore = true
+        try {
+            val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
+            val catalog = runCatching {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, nextPage)
+                else loader(activeFilter, nextPage)
+            }.getOrNull() ?: return
+            items = (items + catalog.items).distinctBy { it.id }
+            total = catalog.total ?: items.size
+            nextPage += 1
+            hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+        } finally {
+            isLoadingMore = false
         }
+    }
+    LaunchedEffect(loadAllPages, filter, selectedScopeId, hasMorePages) {
+        if (loadAllPages) return@LaunchedEffect
+        snapshotFlow {
+            val layout = gridState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible to layout.totalItemsCount
+        }
+            .distinctUntilChanged()
+            .filter { (lastVisible, totalItems) ->
+                hasMorePages && totalItems > 0 && lastVisible >= totalItems - 6
+            }
+            .collect { loadNextPage() }
     }
     val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
     val jumpTargets = remember(displayItems, filter.sort, filter.direction, isLoading) {
@@ -2997,12 +3016,7 @@ private fun SeriesCatalogScreen(
         }
         }
     }
-    if (!loadAllPages && hasMorePages) {
-        OutlinedButton(
-            onClick = loadNextPage,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = CATALOG_GRID_PADDING)
-        ) { Text(stringResource(R.string.browse_load_more)) }
-    }
+
     if (showFilter) {
         SeriesFilterSheet(
             initial = filter,
@@ -7753,12 +7767,14 @@ internal fun PullToRefreshLayout(
     }
     Box(modifier = modifier.nestedScroll(pullState.nestedScrollConnection)) {
         content()
-        PullToRefreshContainer(
-            state = pullState,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .testTag("pull_to_refresh_indicator")
-        )
+        if (isRefreshing || pullState.isRefreshing) {
+            PullToRefreshContainer(
+                state = pullState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .testTag("pull_to_refresh_indicator")
+            )
+        }
     }
 }
 
