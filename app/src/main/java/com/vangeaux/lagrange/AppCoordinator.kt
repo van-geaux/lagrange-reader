@@ -1382,11 +1382,7 @@ class AppCoordinator internal constructor(
                     showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
                 }
                 val firstPage = if (deferInitialCatalogLoad) {
-                    cachedCatalog ?: runCatching {
-                        repository.loadBooksPage(selectedLibrary, 0)
-                    }.getOrElse {
-                        LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
-                    }
+                    cachedCatalog ?: LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
                 } else {
                     cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
                 }
@@ -1415,26 +1411,6 @@ class AppCoordinator internal constructor(
                     }
 
                 if (deferInitialCatalogLoad) {
-                    scope.launch {
-                        libraries.map { library ->
-                            async {
-                                if (repository.loadCachedLibraryCatalog(library.id) == null) {
-                                    runCatching { repository.loadBooks(library.id) }
-                                }
-                                runCatching {
-                                    var page = 0
-                                    while (true) {
-                                        val result = repository.loadSeriesCatalog(
-                                            SeriesCatalogFilter(libraryId = library.id, includeCounts = false),
-                                            page
-                                        )
-                                        if (result.items.isEmpty() || result.items.size < (result.size ?: result.items.size)) break
-                                        page++
-                                    }
-                                }
-                            }
-                        }.awaitAll()
-                    }
                     return@runCatching
                 }
                 val refreshedCatalog = repository.refreshLibraryCatalog(
