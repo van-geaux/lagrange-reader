@@ -1,14 +1,12 @@
-## Contribution pause
+## Pull request
 
-Thanks for contributing. General pull requests are temporarily paused for a few days while the multi-server architecture and provider-module refactor are prepared and stabilized.
+Thanks for contributing. Please start with an issue or feature discussion when appropriate, and follow the repository workflow in `CONTRIBUTING.md`.
 
-Before submitting a pull request, please confirm that a maintainer requested the change. Unrequested feature and general bug-fix pull requests may be closed during this pause. Security vulnerabilities should follow `SECURITY.md` instead of being reported publicly.
+Security vulnerabilities should follow `SECURITY.md` instead of being reported publicly.
 
-### Maintainer-requested exception
+### Contributor checklist
 
-- [ ] A maintainer requested this pull request or confirmed the exception.
-- [ ] The change is scoped to the requested work.
-- [ ] The change is compatible with the multi-server/provider-module refactor.
+- [ ] The change is scoped to the related issue or feature discussion.
 - [ ] Tests and manual-validation status are documented.
 - [ ] No credentials, cookies, API keys, private server URLs, or generated local data are included.
 
