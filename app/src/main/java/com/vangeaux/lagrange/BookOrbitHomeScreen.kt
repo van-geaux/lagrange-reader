@@ -1239,6 +1239,7 @@ internal fun NativeLibraryBrowserScreen(
         update = { browserRoute = browserRoute.copy(selectedSeriesKey = it) }
     )
     var selectedSeriesKey by selectedSeriesKeyProperty
+    var selectedSeriesName by remember { mutableStateOf<String?>(null) }
     val selectedAuthorProperty = browserRouteProperty(
         value = { browserRoute.selectedAuthor },
         update = { browserRoute = browserRoute.copy(selectedAuthor = it) }
@@ -2086,6 +2087,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 selectedSeriesKey != null && destination != BrowserDestination.SMART_SCOPES -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
+                    seriesNameHint = selectedSeriesName,
                     books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
                     groupingMode = appPreferences.seriesGroupingMode,
@@ -2151,6 +2153,7 @@ internal fun NativeLibraryBrowserScreen(
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
+                        selectedSeriesName = series.name
                         detailReturnDestination = BrowserDestination.SERIES
                     }
                 )
@@ -12242,6 +12245,7 @@ private fun SeriesGroupingControls(
 @OptIn(ExperimentalLayoutApi::class)
 private fun SeriesDetails(
     seriesKey: String,
+    seriesNameHint: String? = null,
     books: List<BookSummary>,
     libraries: List<LibrarySummary>,
     groupingMode: SeriesGroupingMode,
@@ -12266,6 +12270,8 @@ private fun SeriesDetails(
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
         .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
     val seriesDisplayName = localBooks.firstOrNull()?.seriesName
+        ?.takeUnless { it == seriesKey }
+        ?: seriesNameHint?.takeUnless { it == seriesKey }
         ?: stringResource(R.string.browse_series)
     val localDetail = SeriesDetailInfo(
         id = seriesKey,
@@ -12284,17 +12290,27 @@ private fun SeriesDetails(
             isRefreshing = false
         }
     }
+    val displayedDetail = detail.copy(
+        name = detail.name.takeUnless { it.isBlank() || it == seriesKey } ?: seriesDisplayName,
+        books = detail.books.map { book ->
+            if (book.seriesName.isNullOrBlank() || book.seriesName == seriesKey) {
+                book.copy(seriesName = seriesDisplayName)
+            } else {
+                book
+            }
+        }
+    )
     val onRefresh: () -> Unit = {
         if (!isRefreshing) {
             isRefreshing = true
             reloadKey += 1
         }
     }
-    val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
-    val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
+    val bookSections = seriesBookSections(displayedDetail.books, libraries, groupingMode)
+    val completion = if (displayedDetail.bookCount > 0) displayedDetail.readCount.toFloat() / displayedDetail.bookCount else 0f
     val seriesDownloadCandidates = seriesSelectableFiles(
         booksWithLocalFilePathOverrides(
-            books = detail.books,
+            books = displayedDetail.books,
             localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
         )
     )
@@ -12415,8 +12431,8 @@ private fun SeriesDetails(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OrbitEyebrow(stringResource(R.string.browse_series))
-                Text(detail.name, style = MaterialTheme.typography.headlineSmall)
-                detail.authors.takeIf { it.isNotEmpty() }?.let {
+                Text(displayedDetail.name, style = MaterialTheme.typography.headlineSmall)
+                displayedDetail.authors.takeIf { it.isNotEmpty() }?.let {
                     Text(
                         stringResource(R.string.browse_by_authors, it.joinToString()),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -12425,8 +12441,8 @@ private fun SeriesDetails(
                 Text(
                     stringResource(
                         R.string.browse_series_books_read,
-                        detail.bookCount,
-                        detail.readCount
+                        displayedDetail.bookCount,
+                        displayedDetail.readCount
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
