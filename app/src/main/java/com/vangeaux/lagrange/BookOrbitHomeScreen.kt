@@ -1489,6 +1489,7 @@ internal fun NativeLibraryBrowserScreen(
             windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             MoreMenu(
+                seriesAvailable = !state.homeShelves.deferInitialCatalogLoad,
                 smartScopesAvailable = smartScopesAvailable,
                 authorsAvailable = authorsAvailable,
                 onSeries = {
@@ -2551,6 +2552,7 @@ private fun BrowserBottomNavigation(
 
 @Composable
 private fun MoreMenu(
+    seriesAvailable: Boolean = true,
     smartScopesAvailable: Boolean = true,
     authorsAvailable: Boolean = true,
     onSeries: () -> Unit,
@@ -2569,11 +2571,13 @@ private fun MoreMenu(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             style = MaterialTheme.typography.headlineSmall
         )
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.browse_series)) },
-            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_series)) },
-            modifier = Modifier.clickable(onClick = onSeries)
-        )
+        if (seriesAvailable) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.browse_series)) },
+                leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_series)) },
+                modifier = Modifier.clickable(onClick = onSeries)
+            )
+        }
         if (smartScopesAvailable) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.browse_smart_scopes)) },

@@ -2,6 +2,9 @@ package com.vangeaux.lagrange.provider.kavita
 
 import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.SeriesCatalogModule
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 internal class KavitaSeriesCatalogModuleImpl(
     private val catalog: KavitaBookCatalogModuleImpl,
@@ -16,8 +19,25 @@ internal class KavitaSeriesCatalogModuleImpl(
         val filtered = result.items.filter { summary ->
             filter.query.isNullOrBlank() || summary.name.contains(filter.query, ignoreCase = true)
         }
+        val enriched = coroutineScope {
+            filtered.map { summary ->
+                async {
+                    runCatching { catalog.loadSelectedSeriesBooks(summary.id) }
+                        .getOrElse { emptyList() }
+                        .let { books ->
+                            summary.copy(
+                                authors = books.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
+                                bookCount = books.size,
+                                readCount = books.count { it.isRead || (it.progressPercent ?: 0f) >= 99.5f },
+                                availableFormats = books.flatMap { book -> book.availableFormats.ifEmpty { listOfNotNull(book.format) } }.distinct().sorted(),
+                                genres = books.flatMap { it.genres }.distinct().sorted()
+                            )
+                        }
+                }
+            }.awaitAll()
+        }
         return SeriesCatalogPage(
-            items = filtered,
+            items = enriched,
             total = result.total,
             page = page,
             size = result.pageSize
