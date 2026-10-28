@@ -2283,6 +2283,7 @@ internal fun NativeLibraryBrowserScreen(
                         books = emptyList(),
                         loadAllPages = false,
                         showJumpRail = false,
+                        enablePagination = false,
                         modifier = Modifier.padding(padding),
                         loader = seriesCatalogLoader,
                         imageLoader = catalogImageLoader,
@@ -2814,6 +2815,7 @@ private fun SeriesCatalogScreen(
     books: List<BookSummary> = emptyList(),
     loadAllPages: Boolean = true,
     showJumpRail: Boolean = true,
+    enablePagination: Boolean = true,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -2867,7 +2869,7 @@ private fun SeriesCatalogScreen(
             total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
             nextPage = 1
             seriesPageSize = catalog.size ?: seriesPageSize
-            hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+            hasMorePages = enablePagination && !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
         }.onFailure {
             loadError = true
         }
@@ -2890,7 +2892,7 @@ private fun SeriesCatalogScreen(
                 total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
                 nextPage = 1
                 seriesPageSize = catalog.size ?: seriesPageSize
-                hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+                hasMorePages = enablePagination && !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             }
         } finally {
             isRefreshing = false
@@ -2903,7 +2905,7 @@ private fun SeriesCatalogScreen(
         }
     }
     suspend fun loadNextPage(includeCounts: Boolean = true): Boolean {
-        if (loadAllPages || !hasMorePages || isLoading || isLoadingMore) return false
+        if (!enablePagination || loadAllPages || !hasMorePages || isLoading || isLoadingMore) return false
         isLoadingMore = true
         return try {
             val activeFilter = filter.copy(
@@ -2925,7 +2927,7 @@ private fun SeriesCatalogScreen(
         }
     }
     LaunchedEffect(loadAllPages, filter, selectedScopeId, hasMorePages) {
-        if (loadAllPages) return@LaunchedEffect
+        if (!enablePagination || loadAllPages) return@LaunchedEffect
         snapshotFlow {
             val layout = gridState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
