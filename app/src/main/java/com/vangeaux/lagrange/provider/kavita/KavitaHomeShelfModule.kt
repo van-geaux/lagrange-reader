@@ -8,6 +8,7 @@ import com.vangeaux.lagrange.MediaKind
 import com.vangeaux.lagrange.UserFacingException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -63,11 +64,23 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             resolveSeriesCards(base, updatedIds)
         }.getOrDefault(emptyList())
         val onDeckSeries = onDeck.mapNotNull { item -> kavitaSeriesCard(item, base) }
+        val onDeckBooks = coroutineScope {
+            onDeckSeries.map { series ->
+                async {
+                    runCatching {
+                        loadSeriesBooks(base, series.seriesId ?: return@runCatching emptyList())
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten()
+        }
+        val readingShelves = kavitaHomeReadingShelves(onDeckBooks)
         val recentlyAddedSeries = recentlyAdded.mapNotNull { item -> kavitaSeriesCard(item, base) }
         HomeShelfData(
-            booksBySection = emptyMap(),
+            booksBySection = mapOf(
+                HomeSection.CURRENTLY_READING to readingShelves.currentlyReading,
+                HomeSection.ON_DECK to readingShelves.onDeck
+            ),
             seriesBySection = mapOf(
-                HomeSection.ON_DECK to onDeckSeries,
                 HomeSection.RECENTLY_UPDATED_SERIES to updatedSeries,
                 HomeSection.RECENTLY_ADDED_SERIES to recentlyAddedSeries
             ),
@@ -100,6 +113,78 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             return kavitaDashboardItems(payload)
         }
     }
+
+    private fun loadSeriesBooks(base: String, seriesId: String): List<BookSummary> {
+        val request = Request.Builder()
+            .url("$base/api/Series/series-detail?seriesId=$seriesId")
+            .header("Accept", "application/json")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return emptyList()
+            val root = JSONObject(response.body?.string().orEmpty())
+            val name = kavitaSeriesName(root, seriesId)
+            val libraryId = root.optInt("libraryId", -1).takeIf { it >= 0 }?.toString().orEmpty()
+            return kavitaSeriesChapters(root).mapNotNull { chapter ->
+                val projection = kavitaChapterProjection(chapter) ?: return@mapNotNull null
+                val completed = projection.pages != null && projection.pagesRead >= projection.pages
+                BookSummary(
+                    libraryId = libraryId,
+                    id = "chapter:${projection.id}",
+                    fileId = projection.fileId,
+                    title = projection.title,
+                    filename = projection.filename,
+                    author = projection.author,
+                    format = projection.format,
+                    mediaKind = kavitaMediaKind(projection.format),
+                    coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
+                    progressLabel = projection.pagesRead.takeIf { it > 0 }?.let { "Page $it" },
+                    progressPercent = projection.pages?.let { pages ->
+                        (projection.pagesRead.toFloat() / pages.toFloat() * 100f).coerceIn(0f, 100f)
+                    },
+                    progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                    seriesId = seriesId,
+                    seriesName = name,
+                    seriesIndex = projection.seriesIndex,
+                    readStatus = when {
+                        completed -> BookReadStatus.READ
+                        projection.pagesRead > 0 -> BookReadStatus.READING
+                        else -> BookReadStatus.UNREAD
+                    },
+                    isRead = completed,
+                    readerPageCount = projection.pages,
+                    genres = projection.genres
+                )
+            }
+        }
+    }
+}
+
+internal data class KavitaHomeReadingShelves(
+    val currentlyReading: List<BookSummary>,
+    val onDeck: List<BookSummary>
+)
+
+internal fun kavitaHomeReadingShelves(books: List<BookSummary>): KavitaHomeReadingShelves {
+    val currentlyReading = mutableListOf<BookSummary>()
+    val onDeck = mutableListOf<BookSummary>()
+    books.groupBy { it.seriesId ?: it.seriesName.orEmpty() }
+        .filterKeys { it.isNotBlank() }
+        .forEach { (_, seriesBooks) ->
+            val ordered = seriesBooks.sortedWith(
+                compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }
+                    .thenBy { it.title.lowercase() }
+                    .thenBy { it.id }
+            )
+            val current = ordered.firstOrNull {
+                it.readStatus == BookReadStatus.READING || it.readStatus == BookReadStatus.REREADING
+            }
+            current?.let(currentlyReading::add)
+            val nextIndex = current?.let { ordered.indexOf(it) + 1 } ?: 0
+            ordered.drop(nextIndex).firstOrNull { !it.isRead }?.let(onDeck::add)
+        }
+    return KavitaHomeReadingShelves(currentlyReading, onDeck)
 }
 
 internal fun kavitaDashboardItems(payload: String): List<JSONObject> {
