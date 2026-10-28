@@ -2282,6 +2282,7 @@ internal fun NativeLibraryBrowserScreen(
                         libraryOptions = state.libraries,
                         books = emptyList(),
                         loadAllPages = false,
+                        showJumpRail = false,
                         modifier = Modifier.padding(padding),
                         loader = seriesCatalogLoader,
                         imageLoader = catalogImageLoader,
@@ -2812,6 +2813,7 @@ private fun SeriesCatalogScreen(
     selectedScope: SmartScope? = null,
     books: List<BookSummary> = emptyList(),
     loadAllPages: Boolean = true,
+    showJumpRail: Boolean = true,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -3008,7 +3010,7 @@ private fun SeriesCatalogScreen(
         }
     }
 
-    val hasJumpRail = !isLoading && (jumpTargets.isNotEmpty() || (!loadAllPages && displayItems.isNotEmpty()))
+    val hasJumpRail = showJumpRail && !isLoading && (jumpTargets.isNotEmpty() || (!loadAllPages && displayItems.isNotEmpty()))
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
