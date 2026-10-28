@@ -2845,19 +2845,23 @@ private fun SeriesCatalogScreen(
             reloadKey += 1
         }
     }
-    suspend fun loadNextPage() {
-        if (loadAllPages || !hasMorePages || isLoading || isLoadingMore) return
+    suspend fun loadNextPage(includeCounts: Boolean = true): Boolean {
+        if (loadAllPages || !hasMorePages || isLoading || isLoadingMore) return false
         isLoadingMore = true
-        try {
-            val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
+        return try {
+            val activeFilter = filter.copy(
+                query = query.takeIf { it.isNotBlank() },
+                includeCounts = includeCounts
+            )
             val catalog = runCatching {
                 if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, nextPage)
                 else loader(activeFilter, nextPage)
-            }.getOrNull() ?: return
+            }.getOrNull() ?: return false
             items = (items + catalog.items).distinctBy { it.id }
             total = catalog.total ?: items.size
             nextPage += 1
             hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+            catalog.items.isNotEmpty()
         } finally {
             isLoadingMore = false
         }
@@ -2877,8 +2881,20 @@ private fun SeriesCatalogScreen(
     }
     suspend fun jumpToSeriesLabel(target: Char) {
         if (loadAllPages) return
-        while (hasMorePages && items.none { libraryJumpLabel(it.name) == target }) {
-            loadNextPage()
+        var targetPage = if (items.any { libraryJumpLabel(it.name) == target }) 0 else -1
+        while (targetPage < 0 && hasMorePages) {
+            val pageToLoad = nextPage
+            if (!loadNextPage(includeCounts = false)) break
+            if (items.any { libraryJumpLabel(it.name) == target }) targetPage = pageToLoad
+        }
+        if (targetPage < 0) return
+        val pagesToEnrich = (targetPage - 1..targetPage + 1).filter { it >= 0 && it < nextPage }
+        pagesToEnrich.forEach { page ->
+            val enriched = runCatching {
+                loader(filter.copy(includeCounts = true), page)
+            }.getOrNull() ?: return@forEach
+            val enrichedById = enriched.items.associateBy { it.id }
+            items = items.map { enrichedById[it.id] ?: it }
         }
         val index = items.indexOfFirst { libraryJumpLabel(it.name) == target }
         if (index >= 0) {

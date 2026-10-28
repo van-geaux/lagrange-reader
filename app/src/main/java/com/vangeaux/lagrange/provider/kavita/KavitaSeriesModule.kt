@@ -19,6 +19,14 @@ internal class KavitaSeriesCatalogModuleImpl(
         val filtered = result.items.filter { summary ->
             filter.query.isNullOrBlank() || summary.name.contains(filter.query, ignoreCase = true)
         }
+        if (!filter.includeCounts) {
+            return SeriesCatalogPage(
+                items = filtered,
+                total = result.total,
+                page = page,
+                size = result.pageSize
+            )
+        }
         val enriched = coroutineScope {
             filtered.map { summary ->
                 async {
