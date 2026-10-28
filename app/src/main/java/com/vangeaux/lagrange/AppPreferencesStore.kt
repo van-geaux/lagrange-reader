@@ -83,6 +83,7 @@ data class AppPreferences(
     val offlineCacheDetailsEnabled: Boolean = true,
     val offlineCacheCoversEnabled: Boolean = false,
     val offlineCacheAutoRefreshEnabled: Boolean = false,
+    val showOnDeckWhenShelfSyncDisabled: Boolean = true,
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
     val pauseAudiobookForAudioInterruptions: Boolean = true,
