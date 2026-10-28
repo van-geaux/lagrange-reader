@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
+import com.vangeaux.lagrange.provider.kavita.kavitaChapterSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
@@ -20,9 +21,13 @@ class KavitaCatalogContractTest {
         )
         assertEquals(
             "Nested Series",
-            kavitaSeriesName(JSONObject("{\"series\":{\"title\":\"Nested Series\"}}"), "42")
+            kavitaSeriesName(JSONObject("{\"series\":{\"name\":\"Nested Series\"}}"), "42")
         )
         assertEquals("42", kavitaSeriesName(JSONObject("{}"), "42"))
+        assertEquals(
+            "Actual Series",
+            kavitaChapterSeriesName(JSONObject("{\"title\":\"Book title\",\"seriesName\":\"Actual Series\"}"), "42")
+        )
     }
 
     @Test

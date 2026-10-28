@@ -28,14 +28,25 @@ internal fun mergeKavitaCatalogPages(
 internal fun kavitaSeriesName(root: JSONObject, fallback: String): String {
     val nested = root.optJSONObject("series")
     return sequenceOf(
-        root.optString("name"),
-        root.optString("localizedName"),
         root.optString("seriesName"),
-        root.optString("title"),
+        root.optString("localizedSeriesName"),
         nested?.optString("name").orEmpty(),
         nested?.optString("localizedName").orEmpty(),
         nested?.optString("seriesName").orEmpty(),
-        nested?.optString("title").orEmpty()
+        root.optString("name"),
+        root.optString("localizedName"),
+        nested?.optString("localizedSeriesName").orEmpty()
+    ).firstOrNull { it.isNotBlank() } ?: fallback
+}
+
+internal fun kavitaChapterSeriesName(chapter: JSONObject, fallback: String): String {
+    val nested = chapter.optJSONObject("series")
+    return sequenceOf(
+        chapter.optString("seriesName"),
+        chapter.optString("localizedSeriesName"),
+        nested?.optString("name").orEmpty(),
+        nested?.optString("localizedName").orEmpty(),
+        nested?.optString("seriesName").orEmpty()
     ).firstOrNull { it.isNotBlank() } ?: fallback
 }
 
@@ -278,6 +289,20 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 total = total ?: items.length().takeIf { page < 0 },
                 pageSize = pageSize
             )
+        }
+    }
+
+    internal suspend fun loadSeriesDisplayName(seriesId: String): String? = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: return@withContext null
+        val request = Request.Builder()
+            .url("$base/api/Series/$seriesId")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val payload = response.body?.string().orEmpty()
+            kavitaSeriesName(JSONObject(payload), "").takeIf { it.isNotBlank() }
         }
     }
 

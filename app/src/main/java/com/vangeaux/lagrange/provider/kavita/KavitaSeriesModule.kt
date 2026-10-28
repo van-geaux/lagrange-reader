@@ -66,16 +66,25 @@ internal class KavitaSeriesCatalogModuleImpl(
         val books = catalog.loadSelectedSeriesBooks(seriesId)
             .sortedWith(compareBy<com.vangeaux.lagrange.BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
         if (books.isEmpty()) return null
-        val seriesName = books.firstNotNullOfOrNull { it.seriesName?.takeIf(String::isNotBlank) }
+        val seriesName = runCatching { catalog.loadSeriesDisplayName(seriesId) }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: books.firstNotNullOfOrNull { it.seriesName?.takeIf(String::isNotBlank) }
             ?: "Series"
+        val namedBooks = books.map { book ->
+            if (book.seriesName.isNullOrBlank() || book.seriesName == "Series" || book.seriesName == seriesId) {
+                book.copy(seriesName = seriesName)
+            } else {
+                book
+            }
+        }
         return SeriesDetailInfo(
             id = seriesId,
             name = seriesName,
-            bookCount = books.size,
-            readCount = books.count { it.isRead },
-            authors = books.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
-            books = books,
-            firstBook = books.firstOrNull()?.let { details.loadBookDetail(it) }
+            bookCount = namedBooks.size,
+            readCount = namedBooks.count { it.isRead },
+            authors = namedBooks.mapNotNull { it.author?.takeIf(String::isNotBlank) }.distinct().sorted(),
+            books = namedBooks,
+            firstBook = namedBooks.firstOrNull()?.let { details.loadBookDetail(it) }
         )
     }
 }

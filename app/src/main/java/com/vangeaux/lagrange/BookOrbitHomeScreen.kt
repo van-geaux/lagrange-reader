@@ -2356,6 +2356,9 @@ internal fun NativeLibraryBrowserScreen(
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedSeriesKey = seriesKey
                     },
+                    onSeriesNameSelected = { seriesName ->
+                        selectedSeriesName = seriesName
+                    },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onDownload = requestDownload,
                     onBulkDownload = requestBulkDownload,
@@ -7544,6 +7547,7 @@ private fun LibraryContentScreen(
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onSeriesNameSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onDownload: ((BookSummary) -> Unit)? = null,
     onBulkDownload: ((String, List<BookSummary>) -> Unit)? = null,
@@ -7744,7 +7748,10 @@ private fun LibraryContentScreen(
                         modifier = Modifier.weight(1f),
                         loader = seriesCatalogLoader,
                         imageLoader = catalogImageLoader,
-                        onSeriesSelected = { series -> onSeriesSelected(series.id) }
+                        onSeriesSelected = { series ->
+                            onSeriesNameSelected(series.name)
+                            onSeriesSelected(series.id)
+                        }
                     )
                 } else LibraryBrowseScreen(
                     state = state,
@@ -12293,9 +12300,9 @@ private fun SeriesDetails(
         }
     }
     val displayedDetail = detail.copy(
-        name = detail.name.takeUnless { it.isBlank() || it == seriesKey } ?: seriesDisplayName,
+        name = detail.name.takeUnless { it.isBlank() || it == seriesKey || it == "Series" } ?: seriesDisplayName,
         books = detail.books.map { book ->
-            if (book.seriesName.isNullOrBlank() || book.seriesName == seriesKey) {
+            if (book.seriesName.isNullOrBlank() || book.seriesName == seriesKey || book.seriesName == "Series") {
                 book.copy(seriesName = seriesDisplayName)
             } else {
                 book
