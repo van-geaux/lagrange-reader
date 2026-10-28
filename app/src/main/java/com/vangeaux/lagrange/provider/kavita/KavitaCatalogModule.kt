@@ -81,9 +81,9 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         chapter.optString("range"),
         chapter.optString("number"),
         filename?.substringBeforeLast('.')
-    ).filterNotNull().firstOrNull(::isUsableKavitaTitle)
-        ?.let(::normalizeKavitaTitle)
-        ?.takeIf(::isUsableKavitaTitle)
+    ).filterNotNull()
+        .map(::normalizeKavitaTitle)
+        .firstOrNull(::isUsableKavitaTitle)
         ?: "Chapter $id"
     val writers = chapter.optJSONArray("writers")
     val author = writers?.optJSONObject(0)?.optString("name")?.takeIf { it.isNotBlank() }
@@ -467,7 +467,7 @@ private fun normalizeKavitaTitle(value: String): String =
     value.replaceFirst(Regex("^Book\\s+-100000\\s+-\\s*", RegexOption.IGNORE_CASE), "").trim()
 
 private fun isUsableKavitaTitle(value: String): Boolean =
-    value.isNotBlank() && value.trim() != "-100000"
+    value.isNotBlank() && !value.contains("-100000")
 
 internal fun kavitaSeriesChapters(root: JSONObject): List<JSONObject> = buildList {
     val seen = mutableSetOf<Int>()
