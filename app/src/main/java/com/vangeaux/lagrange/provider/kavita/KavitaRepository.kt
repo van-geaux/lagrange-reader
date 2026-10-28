@@ -179,8 +179,25 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         browserSnapshotStore.saveBooks(getServerUrl().orEmpty(), getSelectedLibraryId(), libraryId, books)
         return books
     }
-    override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter) =
-        catalogModule.loadBooksPage(libraryId, page, filter)
+    override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter): LibraryBooksPage {
+        val result = catalogModule.loadBooksPage(libraryId, page, filter)
+        if (filter == BookBrowseFilter()) {
+            browserSnapshotStore.appendBooks(
+                getServerUrl().orEmpty(),
+                getSelectedLibraryId(),
+                libraryId,
+                result.items
+            )
+        }
+        return result
+    }
+    override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? {
+        val books = browserSnapshotStore.read(getServerUrl().orEmpty())
+            ?.booksByLibraryId?.get(libraryId).orEmpty()
+        return books.takeIf { it.isNotEmpty() }?.let {
+            LibraryBooksPage(items = it, page = 0, size = 100, total = null, isComplete = false)
+        }
+    }
     override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int) =
         catalogModule.loadRecentBooksPage(libraryId, section, page)
     override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =

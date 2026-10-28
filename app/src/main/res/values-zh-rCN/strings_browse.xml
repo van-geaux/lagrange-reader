@@ -112,6 +112,7 @@
     <string name="browse_updating_cached_catalog">正在更新缓存目录…</string>
     <string name="browse_caching_full_library">正在缓存完整书库…</string>
     <string name="browse_load_more">加载更多</string>
+    <string name="browse_incremental_catalog_available">还有更多书籍可用。加载更多以继续同步此书库。</string>
     <string name="browse_mark_read">标记已读</string>
     <string name="browse_mark_unread">标记未读</string>
     <string name="browse_clear_selection">清除选择</string>

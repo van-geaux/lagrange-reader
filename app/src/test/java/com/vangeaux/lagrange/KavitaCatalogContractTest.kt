@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
+import com.vangeaux.lagrange.provider.kavita.mergeKavitaCatalogPages
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -121,6 +122,24 @@ class KavitaCatalogContractTest {
 
         assertEquals(listOf(1, 2), chapters.map { it.optInt("id") })
         assertEquals(4.5, chapters[1].optDouble("_kavitaVolumeNumber"), 0.0)
+    }
+
+    @Test
+    fun incrementalPagesMergeWithoutDuplicatingChapterIdentity() {
+        val first = listOf(
+            BookSummary("1", "chapter:1", "file-1", "First"),
+            BookSummary("1", "chapter:2", "file-2", "Second")
+        )
+        val second = listOf(
+            BookSummary("1", "chapter:2", "file-2", "Second updated"),
+            BookSummary("1", "chapter:3", "file-3", "Third")
+        )
+
+        assertEquals(
+            listOf("chapter:1", "chapter:2", "chapter:3"),
+            mergeKavitaCatalogPages(first, second).map { it.id }
+        )
+        assertEquals("Second updated", mergeKavitaCatalogPages(first, second)[1].title)
     }
 
     @Test

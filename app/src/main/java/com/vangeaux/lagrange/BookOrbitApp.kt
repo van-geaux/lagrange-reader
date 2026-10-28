@@ -339,6 +339,7 @@ private fun BookOrbitDestination(
             NativeLibraryBrowserScreen(
             state = screen.browserState,
             onRefresh = coordinator::refreshBrowser,
+            onLoadMoreLibraryBooks = coordinator::loadMoreLibraryBooks,
             onSignIn = coordinator::beginSignIn,
             onSignOut = coordinator::signOut,
             onNewServer = coordinator::clearServer,

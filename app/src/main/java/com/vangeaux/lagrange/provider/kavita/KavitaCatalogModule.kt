@@ -15,6 +15,16 @@ import java.util.Locale
 
 private const val KAVITA_PAGE_SIZE = 100
 
+internal fun mergeKavitaCatalogPages(
+    existing: List<BookSummary>,
+    incoming: List<BookSummary>
+): List<BookSummary> = buildList {
+    val byId = LinkedHashMap<String, BookSummary>()
+    existing.forEach { byId[it.id] = it }
+    incoming.forEach { byId[it.id] = it }
+    addAll(byId.values)
+}
+
 internal data class KavitaChapterProjection(
     val id: String,
     val title: String,
@@ -115,16 +125,19 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         libraryId: String,
         page: Int,
         filter: BookBrowseFilter
-    ): LibraryBooksPage {
-        val filtered = filterBooks(loadAllBooks(libraryId), filter)
-        val from = (page * KAVITA_PAGE_SIZE).coerceAtMost(filtered.size)
-        val to = (from + KAVITA_PAGE_SIZE).coerceAtMost(filtered.size)
-        return LibraryBooksPage(
-            items = filtered.subList(from, to),
-            total = filtered.size,
+    ): LibraryBooksPage = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val series = loadSeriesPage(base, page)
+        val books = series.flatMap { (seriesId, seriesName, seriesLibraryId, lastAdded) ->
+            loadSeriesChapters(base, seriesId, seriesName, seriesLibraryId, lastAdded)
+        }.filter { it.libraryId == libraryId }
+        val filtered = filterBooks(books, filter)
+        LibraryBooksPage(
+            items = filtered,
+            total = null,
             page = page,
             size = KAVITA_PAGE_SIZE,
-            isComplete = to >= filtered.size
+            isComplete = series.size < KAVITA_PAGE_SIZE
         )
     }
 
@@ -139,7 +152,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
         firstPage: LibraryBooksPage?
-    ): LibraryBooksPage = loadBooksPage(libraryId, 0)
+    ): LibraryBooksPage = firstPage ?: loadBooksPage(libraryId, 0)
 
     override suspend fun searchBooks(query: String): List<BookSummary> {
         val normalized = query.trim().lowercase(Locale.US)

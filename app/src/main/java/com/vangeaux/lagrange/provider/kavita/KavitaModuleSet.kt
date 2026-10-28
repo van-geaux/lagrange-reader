@@ -33,7 +33,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 repository.loadBooksPage(libraryId, page, filter)
             override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int): LibraryBooksPage =
                 repository.loadRecentBooksPage(libraryId, section, page)
-            override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = null
+            override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? =
+                repository.loadCachedLibraryCatalog(libraryId)
             override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?): LibraryBooksPage =
                 repository.refreshLibraryCatalog(libraryId, firstPage)
             override suspend fun searchBooks(query: String): List<BookSummary> = repository.searchBooks(query)

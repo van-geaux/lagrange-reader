@@ -31,6 +31,12 @@ The OIDC action is provider-capability gated. It is shown for Kavita profiles wi
 
 The series/volume/chapter hierarchy is not treated as a Komga-style book identity. The shared catalog presents chapters as book-like entries while provider requests retain the Kavita chapter, volume, series, and library IDs required by the API.
 
+## Large-library catalog loading
+
+Kavita browse loading is incremental. The first request fetches one page of series and their chapter metadata, then exposes those results immediately instead of scanning the complete library before rendering. The Browse screen offers `Load more` for subsequent series pages and displays a status explaining that additional books remain.
+
+Each successful page is merged into the provider browser snapshot. If a later request fails or the app restarts, the saved partial catalog remains available and the user can retry loading more. Catalog refresh reuses the first page already loaded during startup, avoiding an immediate duplicate full scan. Book content is not downloaded by this metadata synchronization path.
+
 ## Capability state
 
 Implemented provider modules are wired through `KavitaModuleSet` and selected only for profiles with provider ID `kavita`. Unsupported actions remain explicit: EPUB reader routing, chapter unread, audiobook downloads, Home shelves, authors, annotations, statistics, achievements, Smart Scopes, cache warming, and server reading-session history.

@@ -1083,6 +1083,7 @@ private suspend fun loadCatalogImageWithRetry(
 internal fun NativeLibraryBrowserScreen(
     state: BrowserState,
     onRefresh: () -> Unit,
+    onLoadMoreLibraryBooks: () -> Unit = {},
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onNewServer: () -> Unit = {},
@@ -2324,6 +2325,7 @@ internal fun NativeLibraryBrowserScreen(
                     modifier = Modifier.padding(padding),
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
+                    onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
                     localBooksLoader = localBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
@@ -7185,6 +7187,7 @@ private fun LibraryContentScreen(
     modifier: Modifier,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    onLoadMoreLibraryBooks: () -> Unit,
     localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
@@ -7374,6 +7377,7 @@ private fun LibraryContentScreen(
                 LibraryTab.BROWSE -> LibraryBrowseScreen(
                     state = state,
                     modifier = Modifier.weight(1f),
+                    onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
@@ -7785,6 +7789,7 @@ internal suspend fun loadCompleteRecentBooks(
 private fun LibraryBrowseScreen(
     state: BrowserState,
     modifier: Modifier,
+    onLoadMoreLibraryBooks: () -> Unit = {},
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -7809,6 +7814,15 @@ private fun LibraryBrowseScreen(
     val total = if (filter.isActive) books.size else state.booksTotal ?: books.size
     val seriesTotal = state.booksSeriesTotal.takeUnless { filter.isActive }
 
+    if (!state.isCatalogComplete && !state.isCatalogSyncing) {
+        Text(
+            text = stringResource(R.string.browse_incremental_catalog_available),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+
     LibraryBooks(
         state = state.copy(
             books = books,
@@ -7832,6 +7846,7 @@ private fun LibraryBrowseScreen(
         browseOptionsExpanded = browseOptionsExpanded,
         onBrowseOptionsExpandedChange = onBrowseOptionsExpandedChange,
         jumpRailEnabled = state.isCatalogComplete,
+        onLoadMore = onLoadMoreLibraryBooks.takeIf { !state.isCatalogComplete },
         serverJumpBuckets = state.libraryJumpBuckets.takeIf { filter == BookBrowseFilter() }.orEmpty(),
         onFilterClick = { showFilter = true },
         headerContent = headerContent

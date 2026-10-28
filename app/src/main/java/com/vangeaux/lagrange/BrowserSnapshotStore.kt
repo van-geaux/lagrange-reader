@@ -57,6 +57,25 @@ class BrowserSnapshotStore(context: Context) {
         )
     }
 
+    suspend fun appendBooks(
+        serverUrl: String,
+        selectedLibraryId: String?,
+        libraryId: String,
+        books: List<BookSummary>
+    ) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl }
+        val nextBooks = current?.booksByLibraryId.orEmpty().toMutableMap()
+        nextBooks[libraryId] = (nextBooks[libraryId].orEmpty() + books).distinctBy { it.id }
+        writeUnlocked(
+            BrowserSnapshot(
+                serverUrl = serverUrl,
+                selectedLibraryId = selectedLibraryId,
+                libraries = current?.libraries.orEmpty(),
+                booksByLibraryId = nextBooks
+            )
+        )
+    }
+
     suspend fun read(serverUrl: String): BrowserSnapshot? = mutex.withLock {
         readUnlocked()?.takeIf { it.serverUrl == serverUrl }
     }

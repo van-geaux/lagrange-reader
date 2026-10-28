@@ -258,6 +258,47 @@ class AppCoordinator internal constructor(
         bookCatalogModule()?.loadBooksPage(libraryId, page, filter) ?: repository.loadBooksPage(libraryId, page, filter)
     }
 
+    fun loadMoreLibraryBooks() {
+        val current = (_screen.value as? AppScreen.Browser)?.browserState ?: return
+        val libraryId = current.selectedLibraryId ?: return
+        if (current.isCatalogComplete || current.isCatalogSyncing) return
+        catalogLoadJob?.cancel()
+        catalogLoadJob = scope.launch {
+            showBrowser(current.copy(isCatalogSyncing = true, message = null))
+            runCatching {
+                val nextPage = current.booksPage + 1
+                val page = loadLibraryBooksPage(libraryId, nextPage)
+                val merged = (current.books + page.items).distinctBy { it.id }
+                showBrowser(
+                    current.copy(
+                        books = merged,
+                        homeBooks = current.homeBooks.replaceLibrary(libraryId, merged),
+                        booksTotal = page.total ?: merged.size,
+                        booksPage = page.page ?: nextPage,
+                        booksPageSize = page.size,
+                        isCatalogComplete = page.isComplete,
+                        isCatalogSyncing = false,
+                        isRefreshing = false,
+                        isLoadingBooks = false,
+                        message = null
+                    )
+                )
+            }.onFailure { error ->
+                showBrowser(
+                    current.copy(
+                        isCatalogSyncing = false,
+                        isRefreshing = false,
+                        isLoadingBooks = false,
+                        message = userMessage(
+                            error,
+                            uiText(R.string.error_unable_finish_refresh_library, "Unable to load more books.")
+                        )
+                    )
+                )
+            }
+        }
+    }
+
     internal suspend fun loadRecentBooksPage(
         libraryId: String,
         section: HomeSection,

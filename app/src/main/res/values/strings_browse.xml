@@ -112,6 +112,7 @@
     <string name="browse_updating_cached_catalog">Updating cached catalog...</string>
     <string name="browse_caching_full_library">Caching full library...</string>
     <string name="browse_load_more">Load more</string>
+    <string name="browse_incremental_catalog_available">More books are available. Load more to continue syncing this library.</string>
     <string name="browse_mark_read">Mark read</string>
     <string name="browse_mark_unread">Mark unread</string>
     <string name="browse_clear_selection">Clear selection</string>
