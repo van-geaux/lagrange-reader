@@ -1382,7 +1382,12 @@ class AppCoordinator internal constructor(
                     showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
                 }
                 val firstPage = if (deferInitialCatalogLoad) {
-                    cachedCatalog ?: LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
+                    cachedCatalog ?: runCatching {
+                        bookCatalogModule()?.loadBooksPage(selectedLibrary, 0)
+                            ?: repository.loadBooksPage(selectedLibrary, 0)
+                    }.getOrElse {
+                        LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
+                    }
                 } else {
                     cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
                 }
