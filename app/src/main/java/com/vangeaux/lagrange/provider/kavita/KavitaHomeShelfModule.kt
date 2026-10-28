@@ -185,8 +185,9 @@ internal fun kavitaHomeReadingShelves(books: List<BookSummary>): KavitaHomeReadi
                 it.readStatus == BookReadStatus.READING || it.readStatus == BookReadStatus.REREADING
             }
             current?.let(currentlyReading::add)
-            val nextIndex = current?.let { ordered.indexOf(it) + 1 } ?: 0
-            ordered.drop(nextIndex).firstOrNull { !it.isRead }?.let(onDeck::add)
+            if (current == null) {
+                ordered.firstOrNull { !it.isRead }?.let(onDeck::add)
+            }
         }
     return KavitaHomeReadingShelves(currentlyReading, onDeck)
 }

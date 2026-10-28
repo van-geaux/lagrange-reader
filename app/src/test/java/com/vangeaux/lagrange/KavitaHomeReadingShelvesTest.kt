@@ -16,6 +16,19 @@ class KavitaHomeReadingShelvesTest {
         val shelves = com.vangeaux.lagrange.provider.kavita.kavitaHomeReadingShelves(books)
 
         assertEquals(listOf("current"), shelves.currentlyReading.map { it.id })
+        assertTrue(shelves.onDeck.isEmpty())
+    }
+
+    @Test
+    fun nextUnreadBookIsOnDeckWhenSeriesHasNoActiveBook() {
+        val books = listOf(
+            book("read", 1.0, BookReadStatus.READ, isRead = true),
+            book("next", 2.0, BookReadStatus.UNREAD)
+        )
+
+        val shelves = com.vangeaux.lagrange.provider.kavita.kavitaHomeReadingShelves(books)
+
+        assertTrue(shelves.currentlyReading.isEmpty())
         assertEquals(listOf("next"), shelves.onDeck.map { it.id })
     }
 
