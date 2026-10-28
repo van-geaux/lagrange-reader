@@ -197,10 +197,12 @@ internal fun audiobookExternalPlayerCommands(
 ): Player.Commands = commands.buildUpon()
     .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
     .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
-    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-    .add(Player.COMMAND_SEEK_TO_NEXT)
-    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_BACK)
+    .add(Player.COMMAND_SEEK_FORWARD)
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    .remove(Player.COMMAND_SEEK_TO_NEXT)
+    .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
     .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -447,15 +449,28 @@ internal class AudiobookMediaSessionCallback(
         } else {
             appContext?.let { audiobookMediaButtonPreferences(it) } ?: audiobookMediaButtonPreferences()
         }
+        val playerCommands = if (isAutoController) {
+            audiobookAutoPlayerCommands(session.player.availableCommands)
+        } else {
+            audiobookExternalPlayerCommands(session.player.availableCommands)
+        }
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
             .setAvailableSessionCommands(audiobookAvailableSessionCommands())
-            .setAvailablePlayerCommands(
-                audiobookExternalPlayerCommands(
-                    session.player.availableCommands
-                )
-            )
+            .setAvailablePlayerCommands(playerCommands)
+            .setSessionExtras(androidAutoSessionExtras())
             .setCustomLayout(customLayout)
             .build()
+    }
+
+    override fun onMediaButtonEvent(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        intent: Intent
+    ): Boolean {
+        if (handleAndroidAutoMediaButtonEvent(session, controllerInfo, intent)) {
+            return true
+        }
+        return super.onMediaButtonEvent(session, controllerInfo, intent)
     }
 
     override fun onCustomCommand(
@@ -1250,6 +1265,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
         return MediaLibrarySession.Builder(this, forwarding, mediaSessionCallback)
             .setId(LIBRARY_SESSION_ID)
             .setSessionActivity(createSessionActivityIntent())
+            .setSessionExtras(androidAutoSessionExtras())
             .setCustomLayout(
                 audiobookAutoMediaButtonPreferences(
                     hasChapters = false,
