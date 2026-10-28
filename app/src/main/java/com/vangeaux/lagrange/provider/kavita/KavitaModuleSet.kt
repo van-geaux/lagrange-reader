@@ -167,7 +167,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
     }
 
     val backgroundCache: BackgroundCacheModule = object : BackgroundCacheModule {
-        override val isAvailable: Boolean = false
+        override val isAvailable: Boolean = true
 
         override suspend fun warmCoverCacheBatch(
             expectedServerUrl: String,
