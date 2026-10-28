@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Secondary screens: shared actions -->
+    <string name="secondary_try_again">Try again</string>
+    <string name="secondary_cancel">Cancel</string>
+    <string name="secondary_save">Save</string>
+    <string name="secondary_previous">Previous</string>
+    <string name="secondary_next">Next</string>
+
+    <!-- Statistics -->
+    <string name="secondary_statistics_loading">Loading statistics…</string>
+    <string name="secondary_statistics_unavailable">Statistics aren\'t available on this server version.</string>
+    <string name="secondary_statistics_error">Statistics couldn\'t be loaded.</string>
+    <string name="secondary_statistics_title">Your statistics</string>
+    <string name="secondary_statistics_subtitle">Reading activity reported by BookOrbit.</string>
+    <string name="secondary_statistics_no_summary">No summary data is available yet.</string>
+    <string name="secondary_statistics_library_progress">Library progress</string>
+    <string name="secondary_statistics_tracked_books">Tracked books</string>
+    <string name="secondary_statistics_started">Started</string>
+    <string name="secondary_statistics_in_progress">In progress</string>
+    <string name="secondary_statistics_completed">Completed</string>
+    <string name="secondary_statistics_mean_progress">Mean progress · %1$s</string>
+    <string name="secondary_statistics_daily_reading">Daily reading</string>
+    <string name="secondary_statistics_no_daily_reading">No daily reading activity is available yet.</string>
+    <string name="secondary_statistics_reading_events">%1$d reading events</string>
+    <string name="secondary_statistics_duration_hours">%1$dh %2$dm</string>
+    <string name="secondary_statistics_duration_minutes">%1$dm</string>
+
+    <!-- Achievements -->
+    <string name="secondary_achievements_loading">Loading achievements…</string>
+    <string name="secondary_achievements_unavailable">Achievements aren\'t available on this server version.</string>
+    <string name="secondary_achievements_error">Achievements couldn\'t be loaded.</string>
+    <string name="secondary_achievements_title">Your achievements</string>
+    <string name="secondary_achievements_summary">%1$d of %2$d unlocked</string>
+    <string name="secondary_achievements_unlocked">Unlocked</string>
+    <string name="secondary_achievements_no_unlocked">No achievements unlocked yet.</string>
+    <string name="secondary_achievements_locked">Locked</string>
+    <string name="secondary_achievements_all_unlocked">Everything is unlocked.</string>
+    <string name="secondary_achievements_symbol">%1$s achievement symbol</string>
+    <string name="secondary_achievements_unlocked_on">Unlocked %1$s</string>
+
+    <!-- Annotations -->
+    <string name="secondary_annotations_search_placeholder">Search highlights and notes</string>
+    <string name="secondary_annotations_filter_active">Active</string>
+    <string name="secondary_annotations_filter_trashed">Trashed</string>
+    <string name="secondary_annotations_filter_with_notes">With notes</string>
+    <string name="secondary_annotations_filter_all_notes">All notes</string>
+    <string name="secondary_annotations_sort_newest">Newest</string>
+    <string name="secondary_annotations_sort_oldest">Oldest</string>
+    <string name="secondary_annotations_error">Annotations could not be loaded.</string>
+    <string name="secondary_annotations_retry">Retry</string>
+    <string name="secondary_annotations_empty">No annotations found.</string>
+    <string name="secondary_annotations_unknown_book">Unknown book</string>
+    <string name="secondary_annotations_more_options">More options for annotation in %1$s</string>
+    <string name="secondary_annotations_copied">Copied</string>
+    <string name="secondary_annotations_clip_label">Annotation text</string>
+    <string name="secondary_annotations_note_line">Note: %1$s</string>
+    <string name="secondary_annotations_page">Page %1$d</string>
+    <string name="secondary_annotations_restore_failed">Unable to restore this annotation.</string>
+    <string name="secondary_annotations_edit_note">Edit note</string>
+    <string name="secondary_annotations_add_note">Add a note</string>
+    <string name="secondary_annotations_update_note_failed">Unable to update the note.</string>
+    <string name="secondary_annotations_highlight_style">Highlight style</string>
+    <string name="secondary_annotations_update_style_failed">Unable to update the highlight style.</string>
+    <string name="secondary_annotations_trash_title">Move to trash?</string>
+    <string name="secondary_annotations_trash_message">This annotation will be moved to trash. You can restore it later.</string>
+    <string name="secondary_annotations_trash_failed">Unable to move this annotation to trash.</string>
+    <string name="secondary_annotations_trash_confirm">Trash</string>
+    <string name="secondary_annotations_purge_title">Permanently delete?</string>
+    <string name="secondary_annotations_purge_message">This annotation will be permanently deleted. This cannot be undone.</string>
+    <string name="secondary_annotations_purge_failed">Unable to permanently delete this annotation.</string>
+    <string name="secondary_annotations_open_book_details">Open book details</string>
+    <string name="secondary_annotations_go_to_annotation">Go to annotation</string>
+    <string name="secondary_annotations_change_style">Change color / style</string>
+    <string name="secondary_annotations_copy_text">Copy text</string>
+    <string name="secondary_annotations_move_to_trash">Move to trash</string>
+    <string name="secondary_annotations_restore">Restore</string>
+    <string name="secondary_annotations_delete_permanently">Delete permanently</string>
+</resources>

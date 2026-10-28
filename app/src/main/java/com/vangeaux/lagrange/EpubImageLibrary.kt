@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import android.content.Context
+
 import android.graphics.BitmapFactory
 import java.io.File
 import java.io.InputStream
@@ -21,13 +23,17 @@ internal fun epubImageLibrarySourceResult(
     localFile: File?,
     localFileError: String?,
     fileId: String?,
-    allowRemoteCache: Boolean
+    allowRemoteCache: Boolean,
+    context: Context? = null
 ): EpubImageLibrarySourceResult = when {
     localFile != null -> EpubImageLibrarySourceResult.Ready(localFile)
     localFileError != null -> EpubImageLibrarySourceResult.Error(localFileError)
     !allowRemoteCache && !fileId.isNullOrBlank() ->
         EpubImageLibrarySourceResult.RemoteConsentRequired
-    else -> EpubImageLibrarySourceResult.Unavailable("The selected EPUB is not available locally.")
+    else -> EpubImageLibrarySourceResult.Unavailable(
+        context?.getString(R.string.polish_epub_not_local)
+            ?: "The selected EPUB is not available locally."
+    )
 }
 
 internal fun shouldShowEpubImageLibrary(book: BookSummary): Boolean =

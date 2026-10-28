@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,9 +129,9 @@ internal fun AudiobookSeekConfirmationOverlay(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Did you tap that?", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.audio_seek_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Keep this new audiobook position?",
+                        stringResource(R.string.audio_seek_message),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -143,7 +145,7 @@ internal fun AudiobookSeekConfirmationOverlay(
                             modifier = Modifier.testTag("audiobook-seek-dont-show-again")
                         )
                         Text(
-                            "Don't show confirmations again",
+                            stringResource(R.string.audio_seek_dont_show),
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(top = 12.dp),
@@ -151,7 +153,7 @@ internal fun AudiobookSeekConfirmationOverlay(
                         )
                     }
                     Text(
-                        "You can re-enable confirmations in Options.",
+                        stringResource(R.string.audio_seek_hint),
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
@@ -161,13 +163,13 @@ internal fun AudiobookSeekConfirmationOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("audiobook-seek-keep-position")
-                    ) { Text("Yes, keep position") }
+                    ) { Text(stringResource(R.string.audio_seek_keep)) }
                     TextButton(
                         onClick = onReturnToPrevious,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("audiobook-seek-go-back")
-                    ) { Text("No, go back") }
+                    ) { Text(stringResource(R.string.audio_seek_go_back)) }
                 }
             }
         }

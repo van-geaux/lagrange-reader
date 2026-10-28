@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import android.content.Context
+import androidx.annotation.StringRes
 import java.io.File
 import java.util.Locale
 
@@ -97,6 +99,18 @@ internal val KOMGA_READ_STATUS_OPTIONS: List<BookReadStatus> = listOf(
     BookReadStatus.READ
 )
 
+@StringRes
+internal fun BookReadStatus.displayLabelRes(): Int = when (this) {
+    BookReadStatus.UNREAD -> R.string.browse_status_unread
+    BookReadStatus.WANT_TO_READ -> R.string.browse_want_to_read
+    BookReadStatus.READING -> R.string.browse_reading
+    BookReadStatus.REREADING -> R.string.browse_status_rereading
+    BookReadStatus.ON_HOLD -> R.string.browse_status_on_hold
+    BookReadStatus.ABANDONED -> R.string.browse_abandoned
+    BookReadStatus.READ -> R.string.browse_read
+    BookReadStatus.SKIMMED -> R.string.browse_skimmed
+}
+
 internal fun BookReadStatus.displayLabel(): String = when (this) {
     BookReadStatus.UNREAD -> "Unread"
     BookReadStatus.WANT_TO_READ -> "Want to read"
@@ -171,6 +185,7 @@ data class BookSummary(
     val audioManifestRevision: String? = null,
     val downloadUrl: String? = null,
     val coverUrl: String? = null,
+    val audiobookCoverUrl: String? = null,
     val localPath: String? = null,
     val downloadedSourceUpdatedAtMillis: Long? = null,
     val progressLabel: String? = null,
@@ -185,6 +200,8 @@ data class BookSummary(
     val addedAtMillis: Long? = null,
     val updatedAtMillis: Long? = null,
     val lastReadAtMillis: Long? = null,
+    /** Set only by a progress fetch that matched this file; cleared before each fetch so it is never stale. */
+    val serverProgressPercent: Float? = null,
     val readerPageIndex: Int? = null,
     val readerPageCount: Int? = null,
     val readerLocatorJson: String? = null,
@@ -436,6 +453,35 @@ data class AvailableFileLabel(
     val metadata: String
 )
 
+@StringRes
+internal fun availableFileUnknownFormatRes(): Int = R.string.browse_file_unknown_format
+
+@StringRes
+internal fun availableFileUnnamedRes(): Int = R.string.browse_file_unnamed
+
+@StringRes
+internal fun availableFileUnknownNameRes(): Int = R.string.browse_unknown_file
+
+@StringRes
+internal fun availableFileRoleLabelRes(role: String?): Int =
+    if (role.equals("primary", ignoreCase = true)) {
+        R.string.browse_file_role_primary
+    } else {
+        R.string.browse_file_role_alternate
+    }
+
+@StringRes
+internal fun availableFileSizeUnavailableRes(): Int = R.string.browse_file_size_unavailable
+
+@StringRes
+internal fun availableFileDuplicateSuffixRes(): Int = R.string.browse_file_duplicate_suffix
+
+@StringRes
+internal fun availableFileCountOneRes(): Int = R.string.browse_file_count_one
+
+@StringRes
+internal fun availableFileCountManyRes(): Int = R.string.browse_file_count_many
+
 internal fun availableFileDisplayLabels(options: List<BookFileOption>): Map<String, AvailableFileLabel> {
     val baseLabels = options.associateWith { option ->
         val format = option.format
@@ -614,13 +660,15 @@ data class BookAnnotationsPage(
     val pageSize: Int? = null
 )
 
-internal fun BookAnnotation.toBookSummary(): BookSummary {
+internal fun BookAnnotation.toBookSummary(context: Context? = null): BookSummary {
     val format = jumpFileFormat?.takeIf { it.isNotBlank() }
     return BookSummary(
         libraryId = "",
         id = bookId,
         fileId = jumpFileId,
-        title = bookTitle ?: "Unknown book",
+        title = bookTitle
+            ?: context?.getString(R.string.polish_unknown_book)
+            ?: "Unknown book",
         author = author,
         format = format,
         mediaKind = BookOrbitPayloadParser.inferMediaKind(format, bookTitle),
@@ -703,11 +751,13 @@ data class LibraryBooksPage(
 
 data class BrowserState(
     val serverUrl: String,
+    val profileId: String? = null,
     val libraries: List<LibrarySummary>,
     val selectedLibraryId: String?,
     val books: List<BookSummary>,
     val homeBooks: List<BookSummary> = books,
     val homeShelves: HomeShelfData = HomeShelfData(),
+    val homeShelfPreferences: HomeShelfPreferences = HomeShelfPreferences(),
     val booksTotal: Int? = null,
     val booksSeriesTotal: Int? = null,
     val booksPage: Int = 0,
@@ -733,11 +783,36 @@ data class BrowserState(
     val message: String? = null
 )
 
+/** Provider-owned Home shelf choices that can be safely reflected by the native client. */
+enum class HomeShelfPreferenceSource {
+    SERVER_SYNCHRONIZED,
+    LOCAL_FALLBACK,
+    UNAVAILABLE
+}
+
+data class HomeShelfPreferences(
+    val onDeckEnabled: Boolean = false,
+    val source: HomeShelfPreferenceSource = HomeShelfPreferenceSource.UNAVAILABLE
+) {
+    fun effectiveOnDeckEnabled(
+        localFallbackEnabled: Boolean,
+        hasProviderOwnedShelves: Boolean = false
+    ): Boolean = when (source) {
+        HomeShelfPreferenceSource.SERVER_SYNCHRONIZED -> onDeckEnabled
+        HomeShelfPreferenceSource.LOCAL_FALLBACK -> localFallbackEnabled
+        HomeShelfPreferenceSource.UNAVAILABLE -> hasProviderOwnedShelves || onDeckEnabled
+    }
+}
+
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
-    val isServerProvided: Boolean = false
-)
+    val isServerProvided: Boolean = false,
+    val isAggregatedAcrossLibraries: Boolean = false
+) {
+    fun providesBooks(section: HomeSection): Boolean =
+        isServerProvided || booksBySection.containsKey(section)
+}
 
 enum class ReaderLaunchMode {
     NORMAL,
@@ -749,10 +824,13 @@ data class ReaderState(
     val localFile: File? = null,
     val streamUrl: String? = null,
     val comicPagesUrl: String? = null,
+    val comicPageCount: Int? = null,
     val lastKnownPosition: Long = 0L,
     val pageIndex: Int = 0,
     val readerPageIndex: Int = 0,
     val progressPercent: Float? = null,
+    /** What this device itself last reported to the server (queued or synced), to recognize its own writes. */
+    val lastReportedProgressPercent: Float? = null,
     val serverProgressAuthoritative: Boolean = false,
     val initialLocatorJson: String? = null,
     val launchMode: ReaderLaunchMode = ReaderLaunchMode.NORMAL,
@@ -851,10 +929,18 @@ data class ReadingAttemptsResult(
     val status: ServerReadingHistoryStatus = ServerReadingHistoryStatus.AVAILABLE
 )
 
+enum class DownloadOrigin {
+    MANUAL,
+    AUTOMATIC
+}
+
 data class DownloadRecord(
     val serverUrl: String,
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
+    val libraryId: String = "",
     val title: String,
     val filename: String? = null,
     val localPath: String,
@@ -862,6 +948,10 @@ data class DownloadRecord(
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
     val downloadedAtMillis: Long = System.currentTimeMillis(),
+    val lastAccessedAtMillis: Long? = null,
+    val lastKnownCompleted: Boolean? = null,
+    val sizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
     val status: DownloadRecordStatus = DownloadRecordStatus.COMPLETE,
     val hasExistingLocalCopy: Boolean = false
 )
@@ -871,10 +961,21 @@ enum class DownloadRecordStatus {
     INTERRUPTED
 }
 
+enum class DownloadAttemptState {
+    QUEUED,
+    STAGING,
+    VERIFIED,
+    COMMITTING
+}
+
 data class DownloadAttempt(
     val serverUrl: String,
+    val requestId: String = "",
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
+    val libraryId: String = "",
     val title: String,
     val filename: String? = null,
     val targetPath: String,
@@ -882,11 +983,22 @@ data class DownloadAttempt(
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
-    val startedAtMillis: Long = System.currentTimeMillis()
+    val expectedSizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
+    val policyGeneration: Long? = null,
+    val requiresQueueOwnership: Boolean = true,
+    val startedAtMillis: Long = System.currentTimeMillis(),
+    val state: DownloadAttemptState = DownloadAttemptState.QUEUED,
+    val stagedPath: String? = null,
+    val verifiedSizeBytes: Long? = null,
+    val verifiedSha256: String? = null
 )
 
 data class DownloadQueueEntry(
     val serverUrl: String,
+    val requestId: String = "",
+    val profileId: String = "",
+    val storageScopeId: String = "",
     val fileId: String,
     val bookId: String,
     val libraryId: String,
@@ -895,6 +1007,11 @@ data class DownloadQueueEntry(
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
+    val expectedSizeBytes: Long? = null,
+    val origin: DownloadOrigin = DownloadOrigin.MANUAL,
+    val requiresUnmeteredNetwork: Boolean = false,
+    val requiresCharging: Boolean = false,
+    val policyGeneration: Long? = null,
     val cellularConsentGranted: Boolean,
     val sequence: Long
 )

@@ -92,8 +92,12 @@ internal data class EpubTtsSessionSpec(
     val initialLocator: Locator?,
     val selectionText: String? = null,
     val settings: EpubTtsSettings,
+    /** Per-book language override for voices; null keeps Readium's book/device language. */
+    val languageTag: String? = null,
     val playWhenReady: Boolean
 )
+
+private fun ttsReaderLeaseId(requestId: Long): String = "epub-tts:$requestId"
 
 internal enum class EpubTtsFailureKind {
     LANGUAGE_DATA,
@@ -153,22 +157,35 @@ internal fun epubTtsMediaPlaybackActions(state: EpubTtsServiceState): Long {
 internal fun epubTtsOwnerMatches(state: EpubTtsServiceState, ownerToken: String?): Boolean =
     ownerToken == null || state.ownerToken == ownerToken
 
-internal fun epubTtsExposedTitle(state: EpubTtsServiceState): String =
-    if (state.settings.showBookTitleOnLockScreen) {
-        state.title ?: "Text to speech"
+internal fun epubTtsExposedTitle(
+    state: EpubTtsServiceState,
+    context: Context? = null
+): String {
+    val fallback = context?.getString(R.string.tts_state_text_to_speech) ?: "Text to speech"
+    return if (state.settings.showBookTitleOnLockScreen) {
+        state.title ?: fallback
     } else {
-        "Text to speech"
+        fallback
     }
+}
 
 internal fun epubTtsNotificationDetail(
     state: EpubTtsServiceState,
-    isPlaying: Boolean
-): String = when {
-    state.failure != null -> "Text to speech needs attention"
-    state.isPreparing -> "Preparing text to speech"
-    !state.utterance.isNullOrBlank() -> state.utterance
-    isPlaying -> "Reading aloud"
-    else -> "Text to speech paused"
+    isPlaying: Boolean,
+    context: Context? = null
+): String {
+    fun text(resourceId: Int, fallback: String): String =
+        context?.getString(resourceId) ?: fallback
+    return when {
+        state.failure != null -> text(
+            R.string.tts_state_attention,
+            "Text to speech needs attention"
+        )
+        state.isPreparing -> text(R.string.tts_state_preparing, "Preparing text to speech")
+        !state.utterance.isNullOrBlank() -> state.utterance
+        isPlaying -> text(R.string.tts_state_reading_aloud, "Reading aloud")
+        else -> text(R.string.tts_state_paused, "Text to speech paused")
+    }
 }
 
 /** Owns EPUB speech independently of any Activity so rotation, lock and screen-off are harmless. */
@@ -212,6 +229,13 @@ class EpubTtsPlaybackService : Service() {
         ).apply { setReferenceCounted(false) }
     }
 
+    /**
+     * Services are not wrapped by [AppLocale], so their own resources follow the device locale.
+     * The application context carries the locale selected inside the app.
+     */
+    private val localizedContext: Context
+        get() = applicationContext
+
     internal inner class PlaybackBinder : Binder() {
         private val mutableState = MutableStateFlow(EpubTtsServiceState())
         val state: StateFlow<EpubTtsServiceState> = mutableState.asStateFlow()
@@ -242,6 +266,7 @@ class EpubTtsPlaybackService : Service() {
             publish { it.copy(isPlaying = false) }
             updatePlaybackWakeLock(isPlaying = false)
             updateNotification(isPlayingOverride = false)
+            flushServerProgress()
         }
 
         fun previous(ownerToken: String? = null) {
@@ -262,6 +287,17 @@ class EpubTtsPlaybackService : Service() {
             active.skipToNextUtterance()
             if (navigator !== active) return
             if (wasPlaying) active.play() else active.pause()
+            publishNavigatorCapabilities()
+            updateNotification()
+        }
+
+        /** Switches the voice language of the running session (per-book override; null = Auto). */
+        fun setLanguage(ownerToken: String?, languageTag: String?) {
+            if (!isOwner(ownerToken)) return
+            val spec = activeSpec ?: return
+            if (spec.languageTag == languageTag) return
+            activeSpec = spec.copy(languageTag = languageTag)
+            navigator?.let { submitTtsPreferences(it, mutableState.value.settings, languageTag) }
             publishNavigatorCapabilities()
             updateNotification()
         }
@@ -293,14 +329,7 @@ class EpubTtsPlaybackService : Service() {
             }
             mutableState.value = mutableState.value.copy(settings = normalized)
             activeSpec = activeSpec?.copy(settings = normalized)
-            navigator?.submitPreferences(
-                AndroidTtsPreferences(
-                    pitch = normalized.pitch.toDouble(),
-                    speed = normalized.speed.toDouble(),
-                    voices = normalized.voiceIds.mapKeys { (language, _) -> Language(language) }
-                        .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
-                )
-            )
+            navigator?.let { submitTtsPreferences(it, normalized, activeSpec?.languageTag) }
             if (previous.speed == normalized.speed &&
                 previous.pitch == normalized.pitch &&
                 previous.pauses != normalized.pauses
@@ -378,7 +407,10 @@ class EpubTtsPlaybackService : Service() {
             ACTION_NEXT -> binder.next()
             ACTION_STOP -> binder.stop()
             ACTION_STOP_OWNER -> binder.stop(intent.getStringExtra(EXTRA_OWNER_TOKEN))
-            else -> promoteToForeground("Preparing text to speech", isPlaying = false)
+            else -> promoteToForeground(
+                localizedContext.getString(R.string.tts_state_preparing),
+                isPlaying = false
+            )
         }
         if (action != null && action in TRANSPORT_ACTIONS && binder.state.value.readerKey == null) {
             stopSelf(startId)
@@ -417,7 +449,10 @@ class EpubTtsPlaybackService : Service() {
             if (binder.state.value.readerKey != null) {
                 updateNotification()
             } else {
-                promoteToForeground("Preparing text to speech", isPlaying = false)
+                promoteToForeground(
+                    localizedContext.getString(R.string.tts_state_preparing),
+                    isPlaying = false
+                )
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 stopSelf(startId)
             }
@@ -443,7 +478,10 @@ class EpubTtsPlaybackService : Service() {
             preparedOwnerToken = ownerToken
             preparedRequestId = requestId
         }
-        promoteToForeground(title ?: "Text to speech", isPlaying = false)
+        promoteToForeground(
+            title ?: localizedContext.getString(R.string.tts_state_text_to_speech),
+            isPlaying = false
+        )
     }
 
     private fun openSession(spec: EpubTtsSessionSpec) {
@@ -460,6 +498,12 @@ class EpubTtsPlaybackService : Service() {
         }
         closeSession(removeNotification = false, stopService = false)
         activeSpec = spec
+        LocalBookReaderLeaseStore(applicationContext).acquire(
+            ownerId = ttsReaderLeaseId(spec.requestId),
+            serverUrl = "",
+            fileId = spec.fileId,
+            localPath = spec.filePath
+        )
         val requestGeneration = ++generation
         binder.publish {
             EpubTtsServiceState(
@@ -498,7 +542,13 @@ class EpubTtsPlaybackService : Service() {
                 publication = opened,
                 ttsEngineProvider = PunctuationPausingTtsEngineProvider(
                     applicationContext
-                ) { binder.state.value.settings.pauses }
+                ) { binder.state.value.settings.pauses },
+                tokenizerFactory = { language ->
+                    EpubTtsSentenceTokenizer(
+                        language = language,
+                        fallbackLanguage = opened.metadata.language
+                    )
+                }
             )
             if (factory == null) {
                 opened.close()
@@ -513,6 +563,7 @@ class EpubTtsPlaybackService : Service() {
                 },
                 initialLocator = spec.initialLocator,
                 initialPreferences = AndroidTtsPreferences(
+                    language = spec.languageTag?.let(::Language),
                     pitch = spec.settings.normalized().pitch.toDouble(),
                     speed = spec.settings.normalized().speed.toDouble(),
                     voices = spec.settings.normalized().voiceIds
@@ -534,10 +585,16 @@ class EpubTtsPlaybackService : Service() {
             seekTtsToSelection(created, spec.initialLocator, spec.selectionText)
             publication = opened
             navigator = created
+            // Language or voice settings changed while preparing only reached activeSpec; the
+            // navigator was built from the spec captured at the start, so bring it up to date.
+            val current = activeSpec?.takeIf { it.ownerToken == spec.ownerToken } ?: spec
+            if (current.languageTag != spec.languageTag || current.settings != spec.settings) {
+                submitTtsPreferences(created, current.settings, current.languageTag)
+            }
             binder.publish {
                 it.copy(
                     isPreparing = false,
-                    settings = spec.settings.normalized(),
+                    settings = current.settings.normalized(),
                     failure = null
                 )
             }
@@ -546,6 +603,23 @@ class EpubTtsPlaybackService : Service() {
             if (spec.playWhenReady) binder.play(spec.ownerToken)
             updateNotification()
         }
+    }
+
+    private fun submitTtsPreferences(
+        active: AndroidTtsNavigator,
+        settings: EpubTtsSettings,
+        languageTag: String?
+    ) {
+        val normalized = settings.normalized()
+        active.submitPreferences(
+            AndroidTtsPreferences(
+                language = languageTag?.let(::Language),
+                pitch = normalized.pitch.toDouble(),
+                speed = normalized.speed.toDouble(),
+                voices = normalized.voiceIds.mapKeys { (language, _) -> Language(language) }
+                    .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
+            )
+        )
     }
 
     private suspend fun seekTtsToSelection(
@@ -641,10 +715,22 @@ class EpubTtsPlaybackService : Service() {
         }
     }
 
+    /**
+     * Sends the current read-aloud position past the progress throttle. Called on pause, so the
+     * last stretch of listening reaches the server even if the app is killed while paused.
+     */
+    private fun flushServerProgress() {
+        val spec = activeSpec ?: return
+        val openedPublication = publication ?: return
+        val locator = binder.state.value.locator ?: return
+        queueServerProgress(spec, openedPublication, locator, force = true)
+    }
+
     private fun queueServerProgress(
         spec: EpubTtsSessionSpec,
         openedPublication: Publication,
-        locator: Locator
+        locator: Locator,
+        force: Boolean = false
     ) {
         if (!isSpecCurrent(spec)) return
         val currentBookId = spec.bookId?.takeIf { it.isNotBlank() } ?: return
@@ -660,7 +746,7 @@ class EpubTtsPlaybackService : Service() {
             chapterCount = openedPublication.readingOrder.size
         )
         val now = System.currentTimeMillis()
-        if (!shouldQueueEpubTtsProgress(
+        if (!force && !shouldQueueEpubTtsProgress(
                 lastQueuedAtMillis = lastQueuedAtMillis,
                 lastQueuedPercent = lastQueuedPercent,
                 lastQueuedChapter = lastQueuedChapter,
@@ -771,6 +857,7 @@ class EpubTtsPlaybackService : Service() {
         stopService: Boolean = true,
         completedOwnerToken: String? = null
     ) {
+        val closingSpec = activeSpec
         generation += 1
         requestedPlaybackState = null
         openingJob?.cancel()
@@ -788,6 +875,11 @@ class EpubTtsPlaybackService : Service() {
         publication?.close()
         publication = null
         activeSpec = null
+        closingSpec?.let { spec ->
+            LocalBookReaderLeaseStore(applicationContext).release(
+                ttsReaderLeaseId(spec.requestId)
+            )
+        }
         preparedOwnerToken = null
         preparedRequestId = null
         lastQueuedAtMillis = 0L
@@ -818,7 +910,10 @@ class EpubTtsPlaybackService : Service() {
             ?: requestedPlaybackState
             ?: navigator?.playback?.value?.playWhenReady
             ?: state.isPlaying
-        promoteToForeground(state.title ?: "Text to speech", isPlaying)
+        promoteToForeground(
+            state.title ?: localizedContext.getString(R.string.tts_state_text_to_speech),
+            isPlaying
+        )
     }
 
     private fun updateMediaSession(state: EpubTtsServiceState) {
@@ -832,13 +927,13 @@ class EpubTtsPlaybackService : Service() {
             )
             .apply {
                 if (state.failure != null) {
-                    setErrorMessage("Text to speech needs attention")
+                    setErrorMessage(localizedContext.getString(R.string.tts_state_attention))
                 }
                 if (state.readerKey != null) {
                     addCustomAction(
                         PlaybackStateCompat.CustomAction.Builder(
                             ACTION_STOP,
-                            "Close text to speech",
+                            localizedContext.getString(R.string.tts_close_cd),
                             android.R.drawable.ic_menu_close_clear_cancel
                         ).build()
                     )
@@ -846,7 +941,7 @@ class EpubTtsPlaybackService : Service() {
             }
             .build()
         mediaSession.setPlaybackState(playbackState)
-        val exposedTitle = epubTtsExposedTitle(state)
+        val exposedTitle = epubTtsExposedTitle(state, localizedContext)
         mediaSession.setMetadata(
             state.readerKey?.let {
                 MediaMetadataCompat.Builder()
@@ -854,7 +949,10 @@ class EpubTtsPlaybackService : Service() {
                         MediaMetadataCompat.METADATA_KEY_TITLE,
                         exposedTitle
                     )
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "EPUB text to speech")
+                    .putString(
+                        MediaMetadataCompat.METADATA_KEY_ARTIST,
+                        localizedContext.getString(R.string.tts_media_artist)
+                    )
                     .build()
             }
         )
@@ -875,7 +973,11 @@ class EpubTtsPlaybackService : Service() {
     private fun promoteToForeground(title: String, isPlaying: Boolean) {
         val state = binder.state.value
         val exposeTitle = state.settings.showBookTitleOnLockScreen
-        val notificationTitle = if (exposeTitle) title else epubTtsExposedTitle(state)
+        val notificationTitle = if (exposeTitle) {
+            title
+        } else {
+            epubTtsExposedTitle(state, localizedContext)
+        }
         val stopIntent = serviceAction(ACTION_STOP, 4)
         val active = state.failure == null && !state.isPreparing && state.readerKey != null
         val actions = EpubNarrationNotificationActions(
@@ -885,9 +987,9 @@ class EpubTtsPlaybackService : Service() {
             close = stopIntent
         )
         val notification = buildEpubNarrationNotification(
-            context = this,
+            context = localizedContext,
             title = notificationTitle,
-            detail = epubTtsNotificationDetail(state, isPlaying),
+            detail = epubTtsNotificationDetail(state, isPlaying, localizedContext),
             isPlaying = isPlaying && active,
             contentIntent = appLaunchIntent(),
             actions = actions,
@@ -914,10 +1016,10 @@ class EpubTtsPlaybackService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 EPUB_NARRATION_NOTIFICATION_CHANNEL_ID,
-                "EPUB narration",
+                localizedContext.getString(R.string.tts_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps book narration playing while the screen is off"
+                description = localizedContext.getString(R.string.tts_channel_description)
                 setShowBadge(false)
             }
         )

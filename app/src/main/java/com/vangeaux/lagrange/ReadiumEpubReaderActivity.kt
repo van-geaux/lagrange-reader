@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -32,6 +33,7 @@ import android.widget.ArrayAdapter
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -39,10 +41,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -59,6 +64,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
 import java.net.URI
+import java.util.Locale
 import java.util.UUID
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
@@ -86,7 +92,12 @@ import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
+import org.readium.r2.navigator.epub.css.ColCount as ReadiumCssColCount
+import org.readium.r2.navigator.epub.css.Length as ReadiumCssLength
+import org.readium.r2.navigator.epub.css.RsProperties
 import org.readium.r2.navigator.preferences.ColumnCount
+import org.readium.r2.navigator.preferences.Spread
+import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 import org.readium.r2.navigator.preferences.FontFamily as ReadiumFontFamily
 import org.readium.r2.navigator.preferences.Theme as ReadiumTheme
 import org.readium.r2.navigator.preferences.ReadingProgression as ReadiumReadingProgression
@@ -95,8 +106,10 @@ import org.readium.r2.shared.publication.Href
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.epub.EpubLayout
 import org.readium.r2.shared.publication.services.content.ContentService
 import org.readium.r2.shared.publication.services.positions
+import org.readium.r2.shared.util.Language as ReadiumLanguage
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.shared.util.mediatype.MediaType
@@ -114,7 +127,9 @@ internal suspend fun openReadiumEpub(
     ttsImageSettings: EpubTtsImageSettings? = null
 ): ReadiumEpubOpenResult = withContext(Dispatchers.IO) {
     if (!file.isFile || file.length() <= 0L) {
-        return@withContext ReadiumEpubOpenResult.Error("The EPUB file is unavailable.")
+        return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_file_unavailable)
+        )
     }
 
     val appContext = context.applicationContext
@@ -122,7 +137,9 @@ internal suspend fun openReadiumEpub(
     val assetRetriever = AssetRetriever(appContext.contentResolver, httpClient)
     val assetResult = assetRetriever.retrieve(file, MediaType.EPUB)
     val asset = assetResult.getOrNull()
-        ?: return@withContext ReadiumEpubOpenResult.Error("Readium could not read this EPUB file.")
+        ?: return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_read_failed)
+        )
     val publicationParser = DefaultPublicationParser(
         context = appContext,
         httpClient = httpClient,
@@ -145,10 +162,14 @@ internal suspend fun openReadiumEpub(
         }
     )
     val publication = publicationResult.getOrNull()
-        ?: return@withContext ReadiumEpubOpenResult.Error("Readium could not open this EPUB publication.")
+        ?: return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_open_failed)
+        )
     if (!publication.conformsTo(Publication.Profile.EPUB)) {
         publication.close()
-        return@withContext ReadiumEpubOpenResult.Error("Readium did not recognize this file as an EPUB publication.")
+        return@withContext ReadiumEpubOpenResult.Error(
+            context.getString(R.string.epub_open_error_not_epub)
+        )
     }
     ReadiumEpubOpenResult.Opened(publication)
 }
@@ -175,9 +196,89 @@ internal fun readiumFontFamily(fontFamily: EpubReaderFontFamily): ReadiumFontFam
     EpubReaderFontFamily.CUSTOM -> null
 }
 
+/**
+ * Base unit of the Readium page gutter in a spread. Readium pads every column with
+ * `pageGutter * pageMargins`, so with a 1px base `pageMargins` is the page margin in CSS px and can
+ * follow the reader margin setting live, without recreating the navigator.
+ */
+internal const val EPUB_SPREAD_PAGE_GUTTER_UNIT_CSS_PX = 1.0
+
+/** Smallest margin on each side of a spread page so the two pages' text never touches. */
+internal const val EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX = 12.0
+
+/**
+ * Margin on each side of each spread page, in CSS px (= dp). It is the same size the left/right
+ * margin setting gives a single page on this window, so changing margins changes all four page
+ * edges equally and both pages stay symmetric around the fold. It is capped at an eighth of the
+ * window, so each page keeps at least half its width for text, as a single page does at 100%.
+ */
+internal fun epubSpreadPageMarginCssPx(windowWidthDp: Int, leftPercent: Float, rightPercent: Float): Double {
+    val mean = (leftPercent.coerceIn(0f, 100f) + rightPercent.coerceIn(0f, 100f)) / 2f
+    val width = windowWidthDp.coerceAtLeast(0)
+    return maxOf(minOf(width * mean / 400.0, width / 8.0), EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX)
+}
+
+internal fun epubSpreadActive(twoPageSpread: Boolean, layoutMode: ReaderLayoutMode): Boolean =
+    twoPageSpread && layoutMode == ReaderLayoutMode.PAGINATED
+
+/**
+ * ReadiumCSS only honours a two-column request above a 60em viewport. Inline Readium CSS
+ * properties take precedence over that media query, so spreads also work on unfolded phones whose
+ * inner display is narrower than 960 CSS px. Column gap stays zero to keep Readium's
+ * viewport-width pagination exact; the gap between pages comes from the per-column page gutter.
+ */
+@OptIn(ExperimentalReadiumApi::class)
+internal fun epubSpreadRsProperties(twoPageSpread: Boolean): RsProperties = if (twoPageSpread) {
+    RsProperties(
+        colCount = ReadiumCssColCount.TWO,
+        pageGutter = ReadiumCssLength.Px(EPUB_SPREAD_PAGE_GUTTER_UNIT_CSS_PX),
+        overrides = mapOf("--RS__colWidth" to "auto")
+    )
+} else {
+    RsProperties()
+}
+
+/**
+ * Left/right reader container padding percentages. A reflowable spread moves the horizontal margins
+ * into each Readium column (see [epubSpreadPageMarginCssPx]) so both pages get the same margin on
+ * both sides. Fixed-layout spreads are laid out by Readium itself and keep the container margins.
+ */
+internal fun epubHorizontalPaddingPercents(
+    left: Float,
+    right: Float,
+    twoPageSpread: Boolean,
+    fixedLayout: Boolean = false
+): Pair<Float, Float> {
+    if (twoPageSpread && !fixedLayout) return 0f to 0f
+    return left.coerceIn(0f, 100f) to right.coerceIn(0f, 100f)
+}
+
 internal fun readiumEpubLineHeight(lineSpacing: Float): Double = lineSpacing
     .coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING)
     .toDouble()
+
+internal fun readiumEpubTextAlign(alignment: EpubTextAlignment): ReadiumTextAlign = when (alignment) {
+    // START follows the text direction, so right-to-left books stay aligned to their own edge.
+    EpubTextAlignment.START -> ReadiumTextAlign.START
+    EpubTextAlignment.JUSTIFY -> ReadiumTextAlign.JUSTIFY
+}
+
+/** Base languages without system hyphenation patterns, or whose script changes Readium's layout (RTL, CJK). */
+private val EPUB_NON_HYPHENATING_LANGUAGES = setOf(
+    "ar", "he", "iw", "fa", "ur", "yi", "ji", "ps", "sd", "ckb", "dv", "ug", "zh", "ja", "ko"
+)
+
+/**
+ * The browser hyphenates only text whose language is known. Books that declare no language get the
+ * device language so hyphenation still works. It is applied only for languages that hyphenate,
+ * because Readium also derives vertical text and right-to-left layout from the content language.
+ */
+internal fun epubFallbackContentLanguage(publicationLanguages: List<String>, deviceLocale: Locale): String? {
+    if (publicationLanguages.any { it.isNotBlank() }) return null
+    val base = deviceLocale.language.lowercase(Locale.ROOT)
+    if (base.isBlank() || base == "und" || base in EPUB_NON_HYPHENATING_LANGUAGES) return null
+    return deviceLocale.toLanguageTag()
+}
 
 internal fun readiumEpubWordSpacing(wordSpacing: Float): Double = wordSpacing
     .coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING)
@@ -191,7 +292,12 @@ internal fun readiumPreferences(
     readingDirection: LibraryReadingDirection = LibraryReadingDirection.LEFT_TO_RIGHT,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
     fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
-    wordSpacing: Float = DEFAULT_EPUB_WORD_SPACING
+    wordSpacing: Float = DEFAULT_EPUB_WORD_SPACING,
+    twoPageSpread: Boolean = false,
+    spreadPageMarginCssPx: Double = EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX,
+    textAlignment: EpubTextAlignment = EpubTextAlignment.START,
+    hyphenation: EpubHyphenation = EpubHyphenation.AUTO,
+    fallbackLanguage: String? = null
 ): EpubPreferences = EpubPreferences(
     backgroundColor = ReadiumColor(theme.backgroundColor),
     textColor = ReadiumColor(cssHexColorInt(theme.foregroundCss)),
@@ -203,10 +309,18 @@ internal fun readiumPreferences(
     fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
     lineHeight = readiumEpubLineHeight(lineSpacing),
     wordSpacing = readiumEpubWordSpacing(wordSpacing),
+    textAlign = readiumEpubTextAlign(textAlignment),
+    hyphens = epubHyphenationActive(textAlignment, hyphenation),
+    language = fallbackLanguage?.let(::ReadiumLanguage),
     fontFamily = readiumFontFamily(fontFamily),
     readingProgression = readiumEpubReadingProgression(readingDirection),
-    pageMargins = 0.0,
-    columnCount = ColumnCount.ONE,
+    // Spreads give each column its own margin (in units of the 1px spread page gutter).
+    pageMargins = if (epubSpreadActive(twoPageSpread, layoutMode)) {
+        spreadPageMarginCssPx.coerceAtLeast(EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX) / EPUB_SPREAD_PAGE_GUTTER_UNIT_CSS_PX
+    } else 0.0,
+    columnCount = if (epubSpreadActive(twoPageSpread, layoutMode)) ColumnCount.TWO else ColumnCount.ONE,
+    // Fixed-layout only. Readium 3.x treats Spread.AUTO as single page, so it must be explicit.
+    spread = if (epubSpreadActive(twoPageSpread, layoutMode)) Spread.ALWAYS else Spread.NEVER,
     scroll = layoutMode == ReaderLayoutMode.CONTINUOUS,
     // Readium only applies lineHeight and the other user CSS overrides when
     // publisher styles are disabled.
@@ -232,6 +346,87 @@ internal fun readiumOverallPercent(
     val safeChapterIndex = chapterIndex.coerceIn(0, safeChapterCount - 1)
     val safeResourceProgression = resourceProgression?.coerceIn(0.0, 1.0) ?: 0.0
     return (((safeChapterIndex + safeResourceProgression) / safeChapterCount) * 100.0).toFloat()
+}
+
+/** Renderers lay a book out differently, so smaller percent differences are drift, not newer reading. */
+internal const val SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT = 2f
+
+/**
+ * A server value this close to what this device last reported is this device's own write. The
+ * server may round or truncate what it stores, so this is wider than a float comparison.
+ */
+internal const val OWN_REPORT_TOLERANCE_PERCENT = 1f
+
+/**
+ * Whether progress recorded on the server should replace the exact locator saved here.
+ *
+ * Only progress ahead of the locator is followed, as when a book is reopened elsewhere in the app:
+ * a position that merely moved back, or a reset written by another client, never pulls this device
+ * backwards. Server progress that matches what this device last reported is its own write and
+ * leaves the locator alone. A lead within [SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT] is renderer
+ * drift, not reading.
+ */
+internal fun shouldPreferServerProgress(
+    serverPercent: Float?,
+    lastReportedPercent: Float?,
+    locatorPercent: Float?,
+    preferServerProgress: Boolean = true
+): Boolean {
+    if (!preferServerProgress || serverPercent == null || locatorPercent == null) return false
+    if (lastReportedPercent != null &&
+        abs(serverPercent - lastReportedPercent) <= OWN_REPORT_TOLERANCE_PERCENT
+    ) {
+        return false
+    }
+    return serverPercent - locatorPercent > SERVER_PROGRESS_MIN_DIFFERENCE_PERCENT
+}
+
+/**
+ * Tracks when the narration position stored on this device, replaced by newer server progress, can
+ * be dropped. That waits until the reader has moved to the server position and the narration service
+ * is connected, so narration of this book that is already running keeps its position. The service
+ * binds asynchronously, so either can happen first. A pending cleanup is carried across activity
+ * recreation through [isPending], since the recreated reader no longer sees the server progress.
+ */
+internal class StaleNarrationPositionCleanup {
+    private var resumedFromServer = false
+    private var readerOnServerPosition = false
+
+    val isPending: Boolean get() = resumedFromServer
+
+    fun serverProgressWon() {
+        resumedFromServer = true
+        readerOnServerPosition = false
+    }
+
+    fun readerMoved() {
+        if (resumedFromServer) readerOnServerPosition = true
+    }
+
+    /** Whether to drop the stored narration position now; decided once per server resume. */
+    fun shouldDrop(serviceConnected: Boolean, narrationActive: () -> Boolean): Boolean {
+        if (!resumedFromServer || !readerOnServerPosition || !serviceConnected) return false
+        resumedFromServer = false
+        readerOnServerPosition = false
+        return !narrationActive()
+    }
+}
+
+/**
+ * Overall progression (0..1) for a position inside one resource, read from the book's own positions
+ * in that resource rather than assuming equal chapter lengths. Locators written by narration or
+ * annotations lack a total progression and need this. Each candidate is (resource progression,
+ * total progression).
+ */
+internal fun progressionFromPositions(
+    resourceProgression: Double?,
+    resourcePositions: List<Pair<Double?, Double?>>
+): Double? {
+    val index = selectReadiumPositionIndex(
+        targetProgression = resourceProgression ?: 0.0,
+        totalProgressions = resourcePositions.map { it.first }
+    ) ?: return null
+    return resourcePositions[index].second
 }
 
 internal fun selectReadiumPositionIndex(
@@ -293,17 +488,27 @@ private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
 
-internal fun epubCurrentDocumentInstallScript(gestureScript: String): String =
-    readiumEpubImageColorOverrideScript() + "\n" + gestureScript
+internal fun epubCurrentDocumentInstallScript(
+    gestureScript: String,
+    oledText: Boolean = false
+): String = buildString {
+    append(readiumEpubImageColorOverrideScript())
+    if (oledText) {
+        append("\n")
+        append(readiumEpubOledTextStyleScript())
+    }
+    append("\n")
+    append(gestureScript)
+}
 
 internal suspend fun runEpubCurrentDocumentBridgeLoop(
-    installScript: String,
+    installScript: () -> String,
     evaluateJavascript: suspend (String) -> String?,
     onGesture: (String) -> Unit,
     pollIntervalMillis: Long = 250L
 ) {
     while (currentCoroutineContext().isActive) {
-        runCatching { evaluateJavascript(installScript) }
+        runCatching { evaluateJavascript(installScript()) }
         val event = runCatching {
             evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
                 ?.let(::decodeJavascriptString)
@@ -317,17 +522,18 @@ internal fun shouldOpenEpubImageViewer(gesture: String): Boolean = gesture == "l
 
 internal data class HighlightChoice(
     val label: String,
+    @StringRes val labelRes: Int,
     val color: String,
     val style: String,
     val previewColor: Int
 )
 
 internal fun epubHighlightChoices() = listOf(
-    HighlightChoice("Yellow highlight", "yellow", "highlight", 0xFFFFEB3B.toInt()),
-    HighlightChoice("Green highlight", "green", "highlight", 0xFF4CAF50.toInt()),
-    HighlightChoice("Blue highlight", "blue", "highlight", 0xFF2196F3.toInt()),
-    HighlightChoice("Pink highlight", "pink", "highlight", 0xFFE91E63.toInt()),
-    HighlightChoice("Yellow underline", "yellow", "underline", 0xFFFFEB3B.toInt())
+    HighlightChoice("Yellow highlight", R.string.epub_highlight_yellow, "yellow", "highlight", 0xFFFFEB3B.toInt()),
+    HighlightChoice("Green highlight", R.string.epub_highlight_green, "green", "highlight", 0xFF4CAF50.toInt()),
+    HighlightChoice("Blue highlight", R.string.epub_highlight_blue, "blue", "highlight", 0xFF2196F3.toInt()),
+    HighlightChoice("Pink highlight", R.string.epub_highlight_pink, "pink", "highlight", 0xFFE91E63.toInt()),
+    HighlightChoice("Yellow underline", R.string.epub_highlight_yellow_underline, "yellow", "underline", 0xFFFFEB3B.toInt())
 )
 
 internal enum class EpubSelectionActionPresentation {
@@ -561,8 +767,23 @@ internal fun shouldLoadNextAnnotationPage(
 
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumEpubReaderActivity : FragmentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private var publication: Publication? = null
     private var navigator: EpubNavigatorFragment? = null
+    private var lastRecordedVisualLocator: Locator? = null
+    // Newer position written while the reader was stopped (by background read-aloud), until the
+    // visual navigator reaches it; with its deadline.
+    private var foregroundSyncTarget: Locator? = null
+    private var foregroundSyncDeadline = 0L
+    private var stoppedSinceLastStart = false
+    private var foregroundSyncTimeoutJob: Job? = null
+    private var fallbackContentLanguage: String? = null
+    private var publicationLanguages: List<String> = emptyList()
+    private var bookLanguageOverride by mutableStateOf<String?>(null)
+    private val bookLanguageStore by lazy { EpubBookLanguageStore(this) }
     private var progressView: ProgressBar? = null
     private val readerContainerId: Int = R.id.readium_reader_container
     private lateinit var rootView: FrameLayout
@@ -599,6 +820,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var epubLayoutMode by mutableStateOf(ReaderLayoutMode.PAGINATED)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
+    private val windowTracker by lazy { ReaderWindowTracker(this) }
+    // Fixed for the navigator's lifetime: Readium CSS properties are set at fragment creation.
+    private var twoPageSpreadActive = false
+    private var fixedLayoutPublication = false
     private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
     private var chapterTitles by mutableStateOf(emptyList<String>())
     private var currentChapter by mutableStateOf(0)
@@ -639,6 +864,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private var ttsVoiceLanguageTag by mutableStateOf<String?>(null)
     private var ttsVoices by mutableStateOf<List<EpubTtsVoice>>(emptyList())
     private var lastTtsLocator: Locator? = null
+    private val staleNarrationPositionCleanup = StaleNarrationPositionCleanup()
     private var restoredTtsLocator: Locator? = null
 
     private val themeStore by lazy { EpubReaderThemeStore(this) }
@@ -660,7 +886,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     appPreferencesStore.save(appPreferencesStore.read().withReaderPreferences(libraryId, next))
                     recreate()
                 }
-                is CustomFontImportResult.Rejected -> showError(result.reason)
+                is CustomFontImportResult.Rejected -> showError(getString(result.reasonRes))
             }
         }
     }
@@ -685,6 +911,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (!canNavigateWithVolumeButtons()) return super.dispatchKeyEvent(event)
         if (event.action != KeyEvent.ACTION_DOWN) return true
         if (event.repeatCount > 0) return true
+        endForegroundSync()
         when (action) {
             VolumeButtonNavigationAction.PREVIOUS -> navigator?.goBackward(true)
             VolumeButtonNavigationAction.NEXT -> navigator?.goForward(true)
@@ -701,6 +928,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             !isTapZoneTutorialVisible()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(epubReaderActivityThemeRes(initialReaderTheme()))
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         if (savedInstanceState != null) {
             supportFragmentManager.fragmentFactory = EpubNavigatorFragment.createDummyFactory()
@@ -708,7 +936,6 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         mediaOverlayPlayback = ViewModelProvider(this)[EpubMediaOverlayPlaybackViewModel::class.java]
         mediaOverlayPlaylist = mediaOverlayPlayback.playableClips.map { it.clip }
-        restoredLocator = savedInstanceState?.readReaderLocator()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         AppPreferencesStore(this).read().let { preferences ->
             requestedOrientation = requestedOrientationForLock(
@@ -724,9 +951,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 intent.putExtra(EXTRA_TTS_OWNER_TOKEN, it)
             }
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
-        restoredTtsLocator = savedInstanceState?.readEpubTtsLocator()
-        lastTtsLocator = restoredTtsLocator ?: ttsPositionStore.read(readerKey)
+        // The restored reader opens where the server progress put it; the narration position it
+        // replaced must still be dropped once the reader is shown again and the service connects.
+        if (savedInstanceState?.getBoolean(STATE_STALE_NARRATION_CLEANUP_PENDING) == true) {
+            staleNarrationPositionCleanup.serverProgressWon()
+        }
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
+        restoredLocator = epubRestoredLocator(
+            savedState = savedInstanceState?.readReaderLocator(),
+            stored = if (isPreview) null else locatorStore.read(readerKey)
+        )
+        restoredTtsLocator = epubRestoredLocator(
+            savedState = savedInstanceState?.readEpubTtsLocator(),
+            stored = ttsPositionStore.read(readerKey)
+        )
+        lastTtsLocator = restoredTtsLocator ?: ttsPositionStore.read(readerKey)
+        bookLanguageOverride = bookLanguageStore.read(readerKey)
         bookId = epubAnnotationBookId(intent)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
             context = this,
@@ -750,6 +990,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         appPreferencesStore.save(
             appPreferences.withReaderPreferences(libraryId, readerPreferences)
         )
+        twoPageSpreadActive = computeTwoPageSpread()
+        windowTracker.start()
+        windowTracker.observeSpreadChanges({ computeTwoPageSpread() }) { recreateIfSpreadChanged() }
         configureSystemBars()
         createReaderViews()
         bindTtsService()
@@ -759,7 +1002,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
         if (file == null) {
-            showError("The EPUB reader file is unavailable.")
+            showError(getString(R.string.epub_reader_file_unavailable))
             return
         }
         lifecycleScope.launch {
@@ -777,7 +1020,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val readerFile = when (preparation) {
                 is CustomFontEpubPreparationResult.Prepared -> preparation.file
                 is CustomFontEpubPreparationResult.Rejected -> {
-                    showError(preparation.message)
+                    showError(getString(preparation.messageRes))
                     return@launch
                 }
             }
@@ -848,7 +1091,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         viewOnlyBannerView = ComposeView(this).apply {
             visibility = if (isPreview) View.VISIBLE else View.GONE
-            setContent { BookOrbitTheme { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
+            setContent { EpubReaderMaterialTheme(selectedTheme) { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val statusBarTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
@@ -878,8 +1121,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         }
         footerView = ComposeView(this).apply {
+            visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     EpubReaderProgressFooter(
                         status = currentProgressStatus(),
                         theme = selectedTheme,
@@ -899,13 +1143,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         chromeView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
+                    val context = LocalContext.current
+                    val pagePositionCount = currentPageCount.coerceAtLeast(1)
                     ReaderLightweightChrome(
-                        title = if (isPreview) "Preview · $displayTitle" else displayTitle,
+                        title = if (isPreview) {
+                            stringResource(R.string.epub_preview_title, displayTitle)
+                        } else {
+                            displayTitle
+                        },
                         theme = selectedTheme,
-                        positionKind = "Page",
-                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index ->
-                            "Page ${index + 1}"
+                        positionKind = stringResource(R.string.epub_page_kind),
+                        positionTitles = List(pagePositionCount) { index ->
+                            context.getString(R.string.epub_page_position, index + 1)
                         },
                         currentPosition = currentPage,
                         currentProgression = currentResourceProgression.takeIf {
@@ -916,11 +1166,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         onOpenSettings = ::showOptions,
                         onPositionSelected = ::goToPage,
                         onProgressionSelected = ::goToProgression,
-                        listPositionKind = "Chapter",
+                        listPositionKind = stringResource(R.string.epub_chapter_kind),
                         listPositionTitles = chapterTitles,
                         currentListPosition = currentChapter,
                         onListPositionSelected = ::goToChapter,
-                        secondaryPositionKind = "Chapter",
+                        secondaryPositionKind = stringResource(R.string.epub_chapter_kind),
                         secondaryCurrentPosition = currentChapter,
                         secondaryPositionCount = chapterTitles.size,
                         onSecondaryPositionSelected = ::goToChapter,
@@ -947,21 +1197,37 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         optionsView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        EpubReaderDismissScrim(onDismiss = ::hideOptions)
+                        EpubReaderDismissScrim(
+                            contentDescription = stringResource(
+                                R.string.epub_dismiss_reader_options_cd
+                            ),
+                            onDismiss = ::hideOptions
+                        )
                         EpubReaderOptionsBottomSheet(
-                            title = if (isPreview) "Preview · $displayTitle" else displayTitle,
-                            status = "Chapter ${currentChapter + 1}/${chapterTitles.size.coerceAtLeast(1)} · " +
-                                "Page ${currentPage + 1}/${currentPageCount.coerceAtLeast(1)}",
+                            title = if (isPreview) {
+                                stringResource(R.string.epub_preview_title, displayTitle)
+                            } else {
+                                displayTitle
+                            },
+                            status = stringResource(
+                                R.string.epub_options_status,
+                                currentChapter + 1,
+                                chapterTitles.size.coerceAtLeast(1),
+                                currentPage + 1,
+                                currentPageCount.coerceAtLeast(1)
+                            ),
                             preferences = readerPreferences,
-                            onContinueReading = ::hideOptions,
+                            onContinueReading = ::continueReading,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
                             showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
                             onShowTapZoneTutorialAfterChangesChange = ::updateShowTapZoneTutorialAfterChanges,
                             onCustomFontRequest = ::chooseCustomFont,
                             onCustomFontRemove = ::removeCustomFont,
+                            bookLanguage = remember(bookLanguageOverride, publication) { bookLanguageChoice() },
+                            onBookLanguageChange = ::setBookLanguage,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -979,7 +1245,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
                         readingDirection = readingDirection,
@@ -999,7 +1265,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         val epubImageViewerView = ComposeView(this).apply {
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     epubImageViewer?.let { (_, bitmap) ->
                         ComicPageImageViewer(
                             title = displayTitle,
@@ -1027,7 +1293,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         mediaOverlayView = ComposeView(this).apply {
             visibility = if (mediaOverlayPlayback.player == null) View.GONE else View.VISIBLE
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     val clip = mediaOverlayPlayback.activeClip
                     if (clip != null) {
                         EpubMediaOverlayControls(
@@ -1058,7 +1324,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                EpubReaderMaterialTheme(selectedTheme) {
                     EpubTtsControls(
                         settings = ttsSettings,
                         isPlaying = ttsIsPlaying,
@@ -1088,6 +1354,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             listOf(audioPlayerOverlay, mediaOverlayView, ttsView)
         )
         setContentView(rootView)
+        syncProgressFooter()
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
         ViewCompat.requestApplyInsets(readerViewport)
     }
@@ -1101,6 +1368,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         optionsView.visibility = if (
             savedInstanceState.getBoolean(STATE_READER_OPTIONS_VISIBLE)
         ) View.VISIBLE else View.GONE
+        syncProgressFooter()
     }
 
     private fun discardRestoredNavigatorIfNeeded(savedInstanceState: Bundle?) {
@@ -1132,16 +1400,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         if (openedPublication.readingOrder.isEmpty()) {
             openedPublication.close()
-            showError("This EPUB has no readable content.")
+            showError(getString(R.string.epub_no_readable_content))
             return
         }
         publication = openedPublication
+        publicationLanguages = openedPublication.metadata.languages
+        fallbackContentLanguage = epubNavigatorLanguage(currentContentLanguage())
         ttsAvailable = !isPreview && AndroidTtsNavigatorFactory(application, openedPublication) != null
-        readingSessionReporter.start(
-            intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN)
-        )
         chapterTitles = openedPublication.readingOrder.mapIndexed { index, link ->
-            chapterTitle(openedPublication.tableOfContents, link) ?: link.title ?: "Chapter ${index + 1}"
+            chapterTitle(openedPublication.tableOfContents, link) ?: link.title
+                ?: getString(R.string.epub_chapter_fallback, index + 1)
         }
         val initialLocator = requestedLocator
             ?.takeIf { saved ->
@@ -1150,14 +1418,20 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
             ?: initialLocator(openedPublication)
+        // Start the session where the reader actually opens, so reaching it is not counted as reading.
+        readingSessionReporter.start(locatorOverallPercent(openedPublication, initialLocator))
         val paginationListener = object : EpubNavigatorFragment.PaginationListener {
             override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
                 currentPage = pageIndex.coerceAtLeast(0)
                 currentPageCount = totalPages.coerceAtLeast(1)
-                updateLocation(locator)
+                recordVisualLocator(locator)
             }
         }
         val navigatorFactory = EpubNavigatorFactory(openedPublication)
+        // Readium draws fixed-layout spreads itself, so those keep the container margins.
+        fixedLayoutPublication =
+            navigatorFactory.createPreferencesEditor(EpubPreferences()).layout == EpubLayout.FIXED
+        applyReaderPadding()
         val fragmentFactory = navigatorFactory.createFragmentFactory(
             initialLocator = initialLocator,
             initialPreferences = readiumPreferences(
@@ -1167,10 +1441,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readingDirection,
                 epubLayoutMode,
                 selectedFontFamily,
-                readerPreferences.wordSpacing
+                readerPreferences.wordSpacing,
+                twoPageSpreadActive,
+                spreadPageMarginCssPx(),
+                readerPreferences.textAlignment,
+                readerPreferences.hyphenation,
+                fallbackContentLanguage
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
+                readiumCssRsProperties = epubSpreadRsProperties(twoPageSpreadActive),
                 shouldApplyInsetsPadding = false,
                 selectionActionModeCallback = if (
                     epubAnnotationFeaturesEnabled(intent) ||
@@ -1194,7 +1474,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readingDirection = { readingDirection },
                 tapZoneLayout = { readerPreferences.tapZoneLayout },
                 tapZoneInvertMode = { readerPreferences.tapZoneInvertMode },
-                onMenu = ::toggleChrome
+                onMenu = ::toggleChrome,
+                onPageTurn = ::endForegroundSync
             )
         )
         navigator = fragment
@@ -1209,7 +1490,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect { locator ->
-                    updateLocation(locator)
+                    recordVisualLocator(locator)
                     pendingAnnotationReanchor?.let { target ->
                         pendingAnnotationReanchor = null
                         if (locator != target) fragment.go(target)
@@ -1236,7 +1517,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             canKeepListening = canKeepListening
         )
         if (choices.isEmpty()) {
-            Toast.makeText(this, "No readable text or narration is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.epub_listen_nothing_available), Toast.LENGTH_LONG)
+                .show()
             return
         }
         if (choices.size == 1) {
@@ -1244,18 +1526,18 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Listen")
+            .setTitle(getString(R.string.epub_listen_title))
             .setItems(choices.map(::listenChoiceLabel).toTypedArray()) { _, index ->
                 performListenChoice(choices[index])
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
     private fun listenChoiceLabel(choice: EpubListenChoice): String = when (choice) {
-        EpubListenChoice.PUBLISHER_NARRATION -> "Publisher narration"
-        EpubListenChoice.TTS_FROM_HERE -> "Listen from here"
-        EpubListenChoice.TTS_KEEP_LISTENING -> "Keep listening"
+        EpubListenChoice.PUBLISHER_NARRATION -> getString(R.string.epub_listen_publisher_narration)
+        EpubListenChoice.TTS_FROM_HERE -> getString(R.string.epub_listen_from_here)
+        EpubListenChoice.TTS_KEEP_LISTENING -> getString(R.string.epub_listen_keep_listening)
     }
 
     private fun performListenChoice(choice: EpubListenChoice) {
@@ -1284,12 +1566,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Text-to-speech privacy")
-            .setMessage(
-                "Lagrange uses the Android text-to-speech engine selected on this device. " +
-                    "Some voices use a network service and may send the book text they speak to that provider."
-            )
-            .setPositiveButton("Continue") { _, _ ->
+            .setTitle(getString(R.string.tts_privacy_title))
+            .setMessage(getString(R.string.tts_privacy_message))
+            .setPositiveButton(getString(R.string.common_continue)) { _, _ ->
                 preferences.edit().putBoolean(TTS_PRIVACY_ACKNOWLEDGED, true).apply()
                 startTtsPlayback(
                     choice,
@@ -1298,7 +1577,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     playWhenReady = playWhenReady
                 )
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -1321,7 +1600,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         val visualNavigator = navigator
         if (!ttsAvailable || visualNavigator == null) {
-            Toast.makeText(this, "Text to speech is unavailable for this EPUB.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.tts_unavailable_for_epub), Toast.LENGTH_LONG).show()
             return
         }
         val requestedLocator = restoredLocator ?: when (choice) {
@@ -1375,6 +1654,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     initialLocator = initialLocator,
                     selectionText = selectionText,
                     settings = ttsSettings,
+                    languageTag = epubTtsLanguage(currentContentLanguage()),
                     playWhenReady = playWhenReady
                 )
                 if (ttsStartRequestId != requestId ||
@@ -1391,7 +1671,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             } catch (_: Throwable) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to find a readable position in this EPUB.",
+                    getString(R.string.tts_no_readable_position),
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
@@ -1409,11 +1689,16 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         startJob.start()
     }
 
+    /**
+     * Follows a read-aloud session that is still running for this reader after recreation. The
+     * saved read-aloud position ([restoredTtsLocator]) is not followed: without a live session it
+     * is only where listening last stopped, and jumping there would pull the reader back from where
+     * it has read since. It stays available as the "Keep listening" start point.
+     */
     private fun restoreTtsPositionAfterRecreation(openedPublication: Publication) {
         val locator = ttsServiceBinder?.state?.value
-            ?.takeIf { it.ownerToken == ttsOwnerToken && it.readerKey == readerKey }
+            ?.takeIf { it.ownerToken == ttsOwnerToken && it.readerKey == readerKey && it.hasSession }
             ?.locator
-            ?: restoredTtsLocator
         restoredTtsLocator = null
         locator?.takeIf { candidate ->
             openedPublication.readingOrder.any { link ->
@@ -1439,6 +1724,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             onConnected = { service ->
                 ttsServiceBinder = service
                 observeTtsService(service)
+                dropStaleNarrationPosition()
                 openPendingTtsSession()
             },
             onDisconnected = {
@@ -1542,6 +1828,19 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
     }
 
+    /** Narration of this book is running in the service, possibly started by an earlier reader screen. */
+    private fun bookNarrationActive(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
+        state.readerKey == readerKey && state.hasSession
+    } == true
+
+    /** Called from both updateLocation and the service connection, whichever completes the conditions last. */
+    private fun dropStaleNarrationPosition() {
+        if (staleNarrationPositionCleanup.shouldDrop(ttsServiceBinder != null, ::bookNarrationActive)) {
+            lastTtsLocator = null
+            ttsPositionStore.remove(readerKey)
+        }
+    }
+
     private fun hasActiveTtsSession(): Boolean = ttsServiceBinder?.state?.value?.let { state ->
         state.ownerToken == ttsOwnerToken && state.readerKey == readerKey && state.hasSession
     } == true
@@ -1578,12 +1877,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (error == EpubTtsFailureKind.LANGUAGE_DATA) {
             closeTtsPlayback()
             AlertDialog.Builder(this)
-                .setTitle("Voice data is missing")
-                .setMessage("Android needs voice data for this book's language before it can read aloud.")
-                .setPositiveButton("Install voice") { _, _ ->
+                .setTitle(getString(R.string.tts_voice_data_missing_title))
+                .setMessage(getString(R.string.tts_voice_data_missing_message))
+                .setPositiveButton(getString(R.string.tts_install_voice)) { _, _ ->
                     AndroidTtsEngine.requestInstallVoice(applicationContext)
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.common_cancel), null)
                 .show()
         } else if (voiceLanguageTag != null && failedVoiceId != null) {
             val nextSettings = ttsSettings.copy(
@@ -1597,25 +1896,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 playWhenReady = false
             )
             AlertDialog.Builder(this)
-                .setTitle("Text-to-speech voice failed")
-                .setMessage(
-                    "The selected voice could not read this text. " +
-                        "Default Android voice is selected and paused."
-                )
-                .setPositiveButton("OK", null)
+                .setTitle(getString(R.string.tts_voice_failed_title))
+                .setMessage(getString(R.string.tts_voice_failed_default_message))
+                .setPositiveButton(getString(R.string.epub_ok), null)
                 .show()
         } else if (voiceLanguageTag != null && alternativeVoices.isNotEmpty()) {
             val choices = listOf<EpubTtsVoice?>(null) + alternativeVoices
             val message = if (error == EpubTtsFailureKind.NETWORK) {
-                "The selected voice could not reach its network service. Choose another voice."
+                getString(R.string.tts_voice_failed_network_alternative)
             } else {
-                "The selected voice could not read this text. Choose another voice."
+                getString(R.string.tts_voice_failed_alternative)
             }
             AlertDialog.Builder(this)
-                .setTitle("Text-to-speech voice failed")
+                .setTitle(getString(R.string.tts_voice_failed_title))
                 .setMessage(message)
                 .setItems(
-                    choices.map { voice -> voice?.displayName() ?: "Default Android voice" }.toTypedArray()
+                    choices.map { voice ->
+                        voice?.displayName(this) ?: getString(R.string.tts_default_android_voice)
+                    }.toTypedArray()
                 ) { _, index ->
                     val selectedVoice = choices[index]
                     val nextSettings = ttsSettings.copy(
@@ -1631,14 +1929,14 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                         restoredLocator = recoveryLocator
                     )
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.common_cancel), null)
                 .show()
         } else {
             closeTtsPlayback()
             val message = if (error == EpubTtsFailureKind.NETWORK) {
-                "The selected text-to-speech voice could not reach its network service."
+                getString(R.string.tts_voice_failed_network)
             } else {
-                "Text to speech stopped because the book text or Android speech engine could not be read."
+                getString(R.string.tts_voice_failed_generic)
             }
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
@@ -1681,7 +1979,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 mediaOverlayPlayback.playableClips.indexOfFirst { it.clip.index == requested }
             }
             if (targetIndex != null && targetIndex < 0) {
-                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    getString(R.string.epub_narration_sentence_unavailable),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             retainedPlayer.pause()
@@ -1691,7 +1993,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val clip = mediaOverlayPlayback.playableClips.getOrNull(activeIndex)?.clip
             if (clip == null) {
                 mediaOverlayStartupNavigationPending = false
-                Toast.makeText(this, "Narration is unavailable for this sentence.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    getString(R.string.epub_narration_sentence_unavailable),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             mediaOverlayPlayback.updateClip(clip)
@@ -1707,7 +2013,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     } else {
                         Toast.makeText(
                             this@ReadiumEpubReaderActivity,
-                            "Unable to open the narration location.",
+                            getString(R.string.epub_narration_location_failed),
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -1720,7 +2026,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
         val source = file?.takeIf(File::isFile)
         if (source == null || mediaOverlayPlaylist.isEmpty()) {
-            Toast.makeText(this, "No EPUB narration is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.epub_narration_none_available), Toast.LENGTH_LONG)
+                .show()
             return
         }
         lifecycleScope.launch {
@@ -1733,7 +2040,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 )
             }.getOrDefault(emptyList())
             if (playable.isEmpty() || isFinishing || isDestroyed) {
-                Toast.makeText(this@ReadiumEpubReaderActivity, "Unable to prepare EPUB narration.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this@ReadiumEpubReaderActivity,
+                    getString(R.string.epub_narration_prepare_failed),
+                    Toast.LENGTH_LONG
+                ).show()
                 return@launch
             }
             val resumeIndex = epubMediaOverlayStartIndex(
@@ -1746,7 +2057,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (targetClipIndex != null && requestedIndex == null) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Narration is unavailable for this sentence.",
+                    getString(R.string.epub_narration_sentence_unavailable),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -1772,7 +2083,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 player.release()
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "EPUB narration controls are unavailable.",
+                    getString(R.string.epub_narration_controls_unavailable),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -1781,7 +2092,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val savedSpeed = AppPreferencesStore(this@ReadiumEpubReaderActivity).readAudioPlaybackSpeed()
             playbackController.setPlaybackSpeed(player, savedSpeed)
             player.setMediaItems(
-                playable.map { epubMediaOverlayMediaItem(it, displayTitle) },
+                playable.map {
+                    epubMediaOverlayMediaItem(it, displayTitle, this@ReadiumEpubReaderActivity)
+                },
                 startIndex,
                 0L
             )
@@ -1819,7 +2132,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 closeMediaOverlayPlayback()
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to open the narration location.",
+                    getString(R.string.epub_narration_location_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1852,7 +2165,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 mediaOverlayPlayback.updatePlaying(false)
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "Unable to play this EPUB narration.",
+                    getString(R.string.epub_narration_play_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1960,11 +2273,17 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val gestureScript = runCatching {
             assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
-        val installScript = epubCurrentDocumentInstallScript(gestureScript)
+        // OLED in-page styling is fixed per navigator: switching into or out of OLED recreates.
+        val installScript = epubCurrentDocumentInstallScript(
+            gestureScript,
+            oledText = selectedTheme.isOled()
+        )
         epubImageGestureJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 runEpubCurrentDocumentBridgeLoop(
-                    installScript = installScript,
+                    installScript = {
+                        installScript + "\n" + epubDocumentLanguageScript(bookLanguageOverride)
+                    },
                     evaluateJavascript = fragment::evaluateJavascript,
                     onGesture = { event -> handleEpubImageGesture(fragment, event) }
                 )
@@ -1997,7 +2316,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             } else {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "This EPUB image could not be opened.",
+                    getString(R.string.epub_image_open_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2087,22 +2406,25 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         runCatching { fragment.applyDecorations(decorations, HIGHLIGHT_DECORATION_GROUP) }
     }
 
+    private fun selectionActionMenu(action: EpubSelectionAction): Pair<Int, Int> = when (action.label) {
+        "Copy" -> ACTION_COPY to R.string.epub_selection_copy
+        "Share" -> ACTION_SHARE to R.string.epub_selection_share
+        "Play narration" -> ACTION_PLAY_NARRATION to R.string.epub_selection_play_narration
+        "Listen from here" -> ACTION_TTS_FROM_SELECTION to R.string.epub_selection_listen_from_here
+        "Web search" -> ACTION_WEB_SEARCH to R.string.epub_selection_web_search
+        "Highlight" -> ACTION_HIGHLIGHT to R.string.epub_selection_highlight
+        else -> ACTION_HIGHLIGHT_WITH_NOTE to R.string.epub_selection_highlight_note
+    }
+
     private fun highlightActionModeCallback(): ActionMode.Callback = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
             epubSelectionActions(
                 mediaOverlayAvailable = !isPreview && mediaOverlayPlaylist.isNotEmpty(),
                 textToSpeechAvailable = !isPreview && ttsAvailable
             ).forEachIndexed { order, action ->
-                val actionId = when (action.label) {
-                    "Copy" -> ACTION_COPY
-                    "Share" -> ACTION_SHARE
-                    "Play narration" -> ACTION_PLAY_NARRATION
-                    "Listen from here" -> ACTION_TTS_FROM_SELECTION
-                    "Web search" -> ACTION_WEB_SEARCH
-                    "Highlight" -> ACTION_HIGHLIGHT
-                    else -> ACTION_HIGHLIGHT_WITH_NOTE
-                }
-                val menuItem = menu?.add(0, actionId, order, action.label) ?: return@forEachIndexed
+                val (actionId, labelRes) = selectionActionMenu(action)
+                val menuItem = menu?.add(0, actionId, order, getString(labelRes))
+                    ?: return@forEachIndexed
                 val showAsAction = when (action.presentation) {
                     EpubSelectionActionPresentation.ALWAYS -> MenuItem.SHOW_AS_ACTION_ALWAYS
                     EpubSelectionActionPresentation.IF_ROOM -> MenuItem.SHOW_AS_ACTION_IF_ROOM
@@ -2182,11 +2504,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (!captured) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    if (requireCfi) {
-                        "This text selection cannot be highlighted. Please try selecting it again."
-                    } else {
-                        "The selected text is no longer available. Please select it again."
-                    },
+                    getString(
+                        if (requireCfi) {
+                            R.string.epub_selection_highlight_failed
+                        } else {
+                            R.string.epub_selection_unavailable
+                        }
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2273,7 +2597,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showNarrationSelectionUnavailable() {
         Toast.makeText(
             this,
-            "No narration sentence matches this text selection.",
+            getString(R.string.epub_narration_selection_no_match),
             Toast.LENGTH_LONG
         ).show()
     }
@@ -2285,8 +2609,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val selection = captured.selection
         val text = selectedText(selection) ?: return
         getSystemService(ClipboardManager::class.java)
-            ?.setPrimaryClip(ClipData.newPlainText("Selected text", text))
-        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+            ?.setPrimaryClip(
+                ClipData.newPlainText(getString(R.string.epub_clipboard_selected_text), text)
+            )
+        Toast.makeText(this, getString(R.string.epub_selection_copied), Toast.LENGTH_SHORT).show()
     }
 
     private fun shareSelection(captured: CapturedEpubSelection) {
@@ -2298,7 +2624,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
                 },
-                "Share selected text"
+                getString(R.string.epub_share_selected_text)
             )
         )
     }
@@ -2309,7 +2635,11 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         runCatching {
             startActivity(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, text))
         }.onFailure {
-            Toast.makeText(this, "No web search app is available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                getString(R.string.epub_selection_web_search_unavailable),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -2324,7 +2654,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val view = super.getView(position, convertView, parent) as TextView
                 val choice = getItem(position) ?: return view
-                view.text = choice.label
+                view.text = getString(choice.labelRes)
                 view.setPadding(dpToPx(20), view.paddingTop, dpToPx(20), view.paddingBottom)
                 val swatch = if (choice.style == "underline") {
                     ColorDrawable(choice.previewColor).apply {
@@ -2344,7 +2674,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
         AlertDialog.Builder(this)
-            .setTitle("Highlight style")
+            .setTitle(getString(R.string.epub_highlight_style_title))
             .setAdapter(adapter) { _, which ->
                 choices.getOrNull(which)?.let { choice ->
                     createHighlightFromSelection(
@@ -2355,7 +2685,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     )
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -2373,7 +2703,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 Log.w(TAG, "The captured EPUB selection did not produce text and a range CFI.")
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "This text selection cannot be highlighted. Please try selecting it again.",
+                    getString(R.string.epub_selection_highlight_failed),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2395,7 +2725,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             if (annotation == null) {
                 Toast.makeText(
                     this@ReadiumEpubReaderActivity,
-                    "The highlight could not be saved.",
+                    getString(R.string.epub_highlight_save_failed),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -2420,8 +2750,22 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showHighlightActionsDialog(annotation: BookAnnotation) {
         if (isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
-            .setTitle(if (annotation.note.isNullOrBlank()) "Highlight" else "Highlight note")
-            .setItems(arrayOf("Edit note", "Delete highlight", "Cancel")) { _, which ->
+            .setTitle(
+                getString(
+                    if (annotation.note.isNullOrBlank()) {
+                        R.string.epub_highlight_actions_title
+                    } else {
+                        R.string.epub_highlight_note_actions_title
+                    }
+                )
+            )
+            .setItems(
+                arrayOf(
+                    getString(R.string.epub_highlight_edit_note),
+                    getString(R.string.epub_highlight_delete),
+                    getString(R.string.common_cancel)
+                )
+            ) { _, which ->
                 when (which) {
                     0 -> promptForNote(existingNote = annotation.note) { note -> updateHighlightNote(annotation, note) }
                     1 -> deleteHighlight(annotation)
@@ -2434,12 +2778,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         if (isFinishing || isDestroyed) return
         val input = EditText(this).apply { setText(existingNote.orEmpty()) }
         AlertDialog.Builder(this)
-            .setTitle("Note")
+            .setTitle(getString(R.string.epub_note_title))
             .setView(input)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(getString(R.string.epub_note_save)) { _, _ ->
                 onSave(input.text?.toString()?.trim()?.takeIf { it.isNotBlank() })
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.common_cancel), null)
             .show()
     }
 
@@ -2493,26 +2837,62 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             }
         }
         if (!isPreview) {
-            locatorStore.read(readerKey)?.let { stored ->
-                if (openedPublication.readingOrder.any { link ->
-                        link.url().isEquivalent(stored.href.removeFragment())
-                    }
-                ) {
-                    return stored
-                }
+            val stored = locatorStore.read(readerKey)?.takeIf { locator ->
+                openedPublication.readingOrder.any { it.url().isEquivalent(locator.href.removeFragment()) }
+            }
+            val serverPercent = intent.getFloatExtra(EXTRA_SERVER_PROGRESS_PERCENT, Float.NaN)
+                .takeUnless(Float::isNaN)
+            // The server value describes the moment the book was opened; later restarts of this
+            // activity must not compare it with positions the user has since moved to.
+            intent.removeExtra(EXTRA_SERVER_PROGRESS_PERCENT)
+            if (stored != null && (!readerPreferences.preferServerProgressOnReopen || serverPercent == null)) {
+                return stored
+            }
+            if (stored != null) {
+                val storedTotal = locatorTotalProgression(stored)
+                val serverProgressWins = shouldPreferServerProgress(
+                    serverPercent = serverPercent,
+                    lastReportedPercent = intent.getFloatExtra(EXTRA_LAST_REPORTED_PERCENT, Float.NaN)
+                        .takeUnless(Float::isNaN),
+                    locatorPercent = storedTotal?.let { (it.coerceIn(0.0, 1.0) * 100.0).toFloat() },
+                    preferServerProgress = readerPreferences.preferServerProgressOnReopen
+                )
+                if (!serverProgressWins) return stored
+                // Another device read on: its position replaces this device's, including where
+                // narration would resume. The stored narration position is dropped once the
+                // reader has actually moved and the narration service is connected.
+                staleNarrationPositionCleanup.serverProgressWon()
+                return locatorFromPercent(
+                    openedPublication,
+                    initialPercent = serverPercent,
+                    requestedChapter = 0,
+                    initialPage = 0,
+                    initialPageCount = 1
+                )
             }
         }
+        return locatorFromPercent(
+            openedPublication,
+            initialPercent = intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN).takeUnless(Float::isNaN),
+            requestedChapter = intent.getIntExtra(EXTRA_INITIAL_CHAPTER, 0),
+            initialPage = intent.getIntExtra(EXTRA_INITIAL_PAGE, 0).coerceAtLeast(0),
+            initialPageCount = intent.getIntExtra(EXTRA_INITIAL_PAGE_COUNT, 1).coerceAtLeast(1)
+        )
+    }
+
+    private fun locatorFromPercent(
+        openedPublication: Publication,
+        initialPercent: Float?,
+        requestedChapter: Int,
+        initialPage: Int,
+        initialPageCount: Int
+    ): Locator {
         val chapterCount = openedPublication.readingOrder.size.coerceAtLeast(1)
-        val initialPercent = intent.getFloatExtra(EXTRA_INITIAL_PERCENT, Float.NaN)
-            .takeUnless(Float::isNaN)
-        val requestedChapter = intent.getIntExtra(EXTRA_INITIAL_CHAPTER, 0)
         val chapterIndex = when {
             isPreview -> 0
             requestedChapter > 0 -> requestedChapter.coerceIn(0, chapterCount - 1)
             else -> percentToChapterIndex(initialPercent, chapterCount)
         }
-        val initialPage = intent.getIntExtra(EXTRA_INITIAL_PAGE, 0).coerceAtLeast(0)
-        val initialPageCount = intent.getIntExtra(EXTRA_INITIAL_PAGE_COUNT, 1).coerceAtLeast(1)
         val totalProgression = if (isPreview) 0.0 else initialPercent
             ?.div(100f)
             ?.coerceIn(0f, 1f)
@@ -2537,21 +2917,65 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             )
     }
 
+    /** Total progression of a locator, read from the book's own positions when it carries none. */
+    private fun locatorTotalProgression(locator: Locator): Double? =
+        locator.locations.totalProgression ?: progressionFromPositions(
+            resourceProgression = locator.locations.progression,
+            resourcePositions = bookPositions
+                .filter { it.href.removeFragment().isEquivalent(locator.href.removeFragment()) }
+                .map { it.locations.progression to it.locations.totalProgression }
+        )
+
+    /** Overall percent of a locator, using the book's own positions when it carries no total progression. */
+    private fun locatorOverallPercent(openedPublication: Publication, locator: Locator): Float {
+        val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
+            link.url().isEquivalent(locator.href.removeFragment())
+        }.coerceAtLeast(0)
+        return readiumOverallPercent(
+            totalProgression = locatorTotalProgression(locator),
+            resourceProgression = locator.locations.progression,
+            chapterIndex = chapterIndex,
+            chapterCount = openedPublication.readingOrder.size
+        )
+    }
+
+    /**
+     * Records a position reported by the visual navigator. Returning to the foreground replays the
+     * last visual position (the locator flow re-collects and the WebView re-paginates), while
+     * background read-aloud may have saved a newer one since. Real moves are always recorded; a
+     * re-report of the same place (possibly enriched with book positions) is recorded only while
+     * the stored position is still the one this reader wrote.
+     */
+    private fun recordVisualLocator(locator: Locator) {
+        val last = lastRecordedVisualLocator
+        foregroundSyncTarget?.let { target ->
+            val expired = SystemClock.elapsedRealtime() > foregroundSyncDeadline
+            if (!expired && isStaleForegroundReReport(last, target, locator)) return
+            endForegroundSync()
+        }
+        if (!shouldRecordVisualLocator(last, locator)) {
+            if (last == null || locator == last) return
+            val storedElsewhere = !isPreview && last.let { mine ->
+                locatorStore.readJson(readerKey) != mine.toJSON().toString()
+            }
+            if (storedElsewhere) return
+        }
+        lastRecordedVisualLocator = locator
+        updateLocation(locator)
+    }
+
     private fun updateLocation(locator: Locator) {
         val openedPublication = publication ?: return
         val chapterIndex = openedPublication.readingOrder.indexOfFirst { link ->
             link.url().isEquivalent(locator.href.removeFragment())
         }.takeIf { it >= 0 } ?: currentChapter
         currentChapter = chapterIndex.coerceIn(0, openedPublication.readingOrder.lastIndex)
-        currentPercent = readiumOverallPercent(
-            totalProgression = locator.locations.totalProgression,
-            resourceProgression = locator.locations.progression,
-            chapterIndex = currentChapter,
-            chapterCount = openedPublication.readingOrder.size
-        )
+        currentPercent = locatorOverallPercent(openedPublication, locator)
         currentResourceProgression = normalizedReaderProgression(locator.locations.progression?.toFloat())
         currentBookPage = locator.locations.position
         if (!isPreview) locatorStore.save(readerKey, locator)
+        staleNarrationPositionCleanup.readerMoved()
+        dropStaleNarrationPosition()
         readingSessionReporter.activity(currentPercent)
         updateResult()
     }
@@ -2568,11 +2992,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun goToChapter(index: Int) {
         val link = publication?.readingOrder?.getOrNull(index) ?: return
+        endForegroundSync()
         navigator?.go(link)
     }
 
     private fun goToPage(index: Int) {
         val activeNavigator = navigator ?: return
+        endForegroundSync()
         val safePageCount = currentPageCount.coerceAtLeast(1)
         val target = index.coerceIn(0, safePageCount - 1)
         val progression = if (safePageCount <= 1) 0.0 else {
@@ -2585,6 +3011,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun goToProgression(progression: Float) {
         val activeNavigator = navigator ?: return
+        endForegroundSync()
         activeNavigator.go(
             activeNavigator.currentLocator.value.copyWithLocations(
                 progression = normalizedReaderProgression(progression).toDouble()
@@ -2619,6 +3046,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
+        val previousTheme = readerPreferences.theme
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         selectedTheme = normalized.theme
@@ -2627,6 +3055,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         fontScale = normalized.fontScale
         readingDirection = normalized.readingDirection
         epubLayoutMode = normalized.epubLayoutMode
+        syncProgressFooter()
         themeStore.save(normalized.theme)
         rootView.setBackgroundColor(normalized.theme.backgroundColor)
         readerViewport.setBackgroundColor(normalized.theme.backgroundColor)
@@ -2640,7 +3069,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.readingDirection,
                 normalized.epubLayoutMode,
                 normalized.fontFamily,
-                normalized.wordSpacing
+                normalized.wordSpacing,
+                twoPageSpreadActive,
+                spreadPageMarginCssPx(),
+                normalized.textAlignment,
+                normalized.hyphenation,
+                fallbackContentLanguage
             )
         )
         val current = appPreferencesStore.read()
@@ -2648,8 +3082,68 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             current.withReaderPreferences(libraryId, normalized)
         )
         configureSystemBars()
+        if (epubReaderThemeChangeRequiresRecreate(previousTheme, normalized.theme)) {
+            recreate()
+            return
+        }
+        if (recreateIfSpreadChanged()) return
         if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
     }
+
+    private fun spreadPageMarginCssPx(): Double =
+        epubSpreadPageMarginCssPx(resources.configuration.screenWidthDp, padding.left, padding.right)
+
+    private fun computeTwoPageSpread(): Boolean = shouldUseTwoPageSpread(
+        mode = readerPreferences.twoPageSpread,
+        window = windowTracker.state.value,
+        layoutMode = epubLayoutMode
+    )
+
+    /**
+     * Window size changes already recreate this activity. Posture or preference changes that flip
+     * the spread decision recreate it too, reopening at the saved locator, because Readium CSS
+     * column properties cannot be changed on a live navigator.
+     */
+    private fun recreateIfSpreadChanged(): Boolean {
+        if (isFinishing || isDestroyed) return false
+        if (computeTwoPageSpread() == twoPageSpreadActive) return false
+        recreate()
+        return true
+    }
+
+    /** Mirrors the reader-preference resolution in [onCreate] so the window theme matches it. */
+    private fun initialReaderTheme(): EpubReaderTheme {
+        val library = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
+        return appPreferencesStore.read().libraryReaderPreferences[library]?.theme
+            ?: themeStore.read()
+    }
+
+    private fun currentContentLanguage(): EpubContentLanguage =
+        resolveEpubContentLanguage(bookLanguageOverride, publicationLanguages, Locale.getDefault())
+
+    private fun bookLanguageChoice(): EpubBookLanguageChoice? =
+        publication?.let {
+            epubBookLanguageChoice(
+                bookLanguageOverride,
+                publicationLanguages,
+                Locale.getDefault(),
+                context = this
+            )
+        }
+
+    /** Sets or clears (null = Auto) this book's language for hyphenation and read-aloud. */
+    private fun setBookLanguage(languageTag: String?) {
+        val normalized = languageTag?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalized == bookLanguageOverride) return
+        bookLanguageOverride = normalized
+        if (!isPreview) bookLanguageStore.save(readerKey, normalized)
+        val language = currentContentLanguage()
+        fallbackContentLanguage = epubNavigatorLanguage(language)
+        ttsServiceBinder?.setLanguage(ttsOwnerToken, epubTtsLanguage(language))
+        applyReaderPreferences(readerPreferences)
+    }
+
+    internal fun setBookLanguageForTest(languageTag: String?) = setBookLanguage(languageTag)
 
     private fun updateShowTapZoneTutorialAfterChanges(enabled: Boolean) {
         showTapZoneTutorialAfterChanges = enabled
@@ -2671,12 +3165,34 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             val topMargin = (viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
             occupiedPreviewBannerBottom(topMargin, viewOnlyBannerView.height)
         } else 0
-        readerContainer.setPadding(
-            horizontal(padding.left),
-            effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
-            horizontal(padding.right),
-            vertical(padding.bottom) + dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
+        val (leftPercent, rightPercent) = epubHorizontalPaddingPercents(
+            padding.left,
+            padding.right,
+            epubSpreadActive(twoPageSpreadActive, epubLayoutMode),
+            fixedLayout = fixedLayoutPublication
         )
+        readerContainer.setPadding(
+            horizontal(leftPercent),
+            effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
+            horizontal(rightPercent),
+            vertical(padding.bottom) + if (readerPreferences.showPageProgress) {
+                dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
+            } else {
+                0
+            }
+        )
+    }
+
+    private fun syncProgressFooter() {
+        if (!::footerView.isInitialized) return
+        val controlsVisible = ::chromeView.isInitialized && chromeView.visibility == View.VISIBLE
+        footerView.visibility = if (readerPreferences.showPageProgress || controlsVisible) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        if (controlsVisible) footerView.bringToFront()
+        applyReaderPadding()
     }
 
     private fun toggleChrome() {
@@ -2686,19 +3202,26 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun showChrome() {
         hideOptions()
         chromeView.visibility = View.VISIBLE
+        syncProgressFooter()
     }
 
     private fun hideChrome() {
         chromeView.visibility = View.GONE
+        syncProgressFooter()
     }
 
     private fun showOptions() {
-        hideChrome()
         optionsView.visibility = View.VISIBLE
+        optionsView.bringToFront()
     }
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun continueReading() {
+        hideOptions()
+        hideChrome()
     }
 
     private fun enableReadMode() {
@@ -2749,6 +3272,28 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     internal fun hasShownTapZoneTutorial(): Boolean = tapZoneTutorialHasShown
 
+    internal fun isProgressFooterVisible(): Boolean =
+        ::footerView.isInitialized && footerView.visibility == View.VISIBLE
+
+    internal fun setShowPageProgressForTest(enabled: Boolean) {
+        applyReaderPreferences(readerPreferences.copy(showPageProgress = enabled))
+    }
+
+    internal fun showReaderOptionsForTest() = showOptions()
+
+    internal fun hideReaderOptionsForTest() = hideOptions()
+
+    internal fun readerContentBottomPaddingForTest(): Int = readerContainer.paddingBottom
+
+    internal fun isTwoPageSpreadActive(): Boolean = twoPageSpreadActive
+
+    /** Applies reader options the same way the options sheet does; for instrumented tests. */
+    internal fun applyReaderPreferencesForTest(change: (LibraryReaderPreferences) -> LibraryReaderPreferences) =
+        applyReaderPreferences(change(readerPreferences))
+
+    internal suspend fun evaluateReaderJavascript(script: String): String? =
+        navigator?.evaluateJavascript(script)
+
     private fun updateResult(reason: ReaderCompletionReason? = null) {
         val data = Intent().apply {
             reason?.let { putExtra(EXTRA_READER_COMPLETION_REASON, it.name) }
@@ -2793,7 +3338,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val root = findViewById<FrameLayout>(android.R.id.content)
         root.addView(
             TextView(this).apply {
-                text = "$message\n\nPress Back to return."
+                text = "$message\n\n${this@ReadiumEpubReaderActivity.getString(R.string.epub_error_press_back)}"
                 setTextColor(Color.WHITE)
                 textSize = 16f
                 gravity = Gravity.CENTER
@@ -2825,6 +3370,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         window.statusBarColor = selectedTheme.backgroundColor
         window.navigationBarColor = Color.BLACK
+        // Android 15 draws the status-bar strip from the window background, not statusBarColor.
+        window.setBackgroundDrawable(ColorDrawable(selectedTheme.backgroundColor))
     }
 
     private fun chapterTitle(tableOfContents: List<Link>, resource: Link): String? {
@@ -2840,7 +3387,70 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    override fun onStart() {
+        super.onStart()
+        if (stoppedSinceLastStart) {
+            stoppedSinceLastStart = false
+            syncToPositionSavedWhileStopped()
+        }
+    }
+
+    /**
+     * Background read-aloud keeps saving its position while the reader is stopped. On return the
+     * visual navigator still shows the old page, and Readium may re-report it after re-paginating
+     * with slightly different details. Show the newer position instead, and ignore re-reports of
+     * the old page until the navigator gets there (bounded, so real moves are never lost for long).
+     */
+    private fun syncToPositionSavedWhileStopped() {
+        if (isPreview) return
+        val last = lastRecordedVisualLocator ?: return
+        val storedJson = locatorStore.readJson(readerKey) ?: return
+        if (storedJson == last.toJSON().toString()) return
+        val stored = locatorStore.read(readerKey) ?: return
+        foregroundSyncTarget = stored
+        foregroundSyncDeadline = SystemClock.elapsedRealtime() + FOREGROUND_SYNC_TIMEOUT_MILLIS
+        foregroundSyncTimeoutJob?.cancel()
+        foregroundSyncTimeoutJob = lifecycleScope.launch {
+            delay(FOREGROUND_SYNC_TIMEOUT_MILLIS)
+            expireForegroundSync()
+        }
+        if (!holdForegroundSyncNavigationForTest) navigator?.go(stored)
+    }
+
+    /** Test barrier: catch-up starts but does not navigate until [releaseForegroundSyncNavigationForTest]. */
+    internal var holdForegroundSyncNavigationForTest = false
+
+    internal fun releaseForegroundSyncNavigationForTest() {
+        holdForegroundSyncNavigationForTest = false
+        foregroundSyncTarget?.let { navigator?.go(it) }
+    }
+
+    /**
+     * The window has passed without a report reaching the newer position (for example read-aloud
+     * only moved within the page shown, or the user swiped elsewhere). Any re-pagination replay is
+     * over by now, so what the navigator shows is where the reader is: record it.
+     */
+    private fun expireForegroundSync() {
+        foregroundSyncTarget ?: return
+        endForegroundSync()
+        navigator?.currentLocator?.value?.let(::recordVisualLocator)
+    }
+
+    private fun endForegroundSync() {
+        foregroundSyncTarget = null
+        foregroundSyncTimeoutJob?.cancel()
+        foregroundSyncTimeoutJob = null
+    }
+
+    internal fun isForegroundSyncPendingForTest(): Boolean = foregroundSyncTarget != null
+
+    /** Feeds a visual-navigator position report through the recording rules; for instrumented tests. */
+    internal fun recordVisualLocatorForTest(locator: Locator) = recordVisualLocator(locator)
+
     override fun onStop() {
+        if (!isChangingConfigurations) stoppedSinceLastStart = true
+        // Background read-aloud owns the position again; the next start catches up afresh.
+        endForegroundSync()
         if (
             shouldPauseEpubReadingSessionOnStop(
                 isChangingConfigurations = isChangingConfigurations,
@@ -2871,6 +3481,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         outState.putBoolean(STATE_READER_CHROME_VISIBLE, areLightweightControlsVisible())
         outState.putBoolean(STATE_READER_OPTIONS_VISIBLE, areReaderOptionsVisible())
         outState.putBoolean(STATE_READER_TUTORIAL_SHOWN, tapZoneTutorialHasShown)
+        outState.putBoolean(STATE_STALE_NARRATION_CLEANUP_PENDING, staleNarrationPositionCleanup.isPending)
         super.onSaveInstanceState(outState)
     }
 
@@ -2907,6 +3518,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val EXTRA_INITIAL_PAGE = "readium_epub_initial_page"
         private const val EXTRA_INITIAL_PAGE_COUNT = "readium_epub_initial_page_count"
         private const val EXTRA_INITIAL_PERCENT = "readium_epub_initial_percent"
+        private const val EXTRA_SERVER_PROGRESS_PERCENT = "readium_epub_server_progress_percent"
+        private const val EXTRA_LAST_REPORTED_PERCENT = "readium_epub_last_reported_percent"
         private const val EXTRA_INITIAL_CFI = "readium_epub_initial_cfi"
         private const val EXTRA_INITIAL_LOCATOR_JSON = "readium_epub_initial_locator_json"
         private const val EXTRA_INITIAL_ANNOTATION_TEXT = "readium_epub_initial_annotation_text"
@@ -2956,6 +3569,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             initialPage: Int,
             initialPageCount: Int = 1,
             initialPercent: Float? = null,
+            serverProgressPercent: Float? = null,
+            lastReportedProgressPercent: Float? = null,
             initialLocatorJson: String? = null,
             initialCfi: String? = null,
             initialAnnotationText: String? = null,
@@ -2977,6 +3592,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_INITIAL_PAGE_COUNT, initialPageCount)
             .apply {
                 initialPercent?.let { putExtra(EXTRA_INITIAL_PERCENT, it) }
+                serverProgressPercent?.let { putExtra(EXTRA_SERVER_PROGRESS_PERCENT, it) }
+                lastReportedProgressPercent?.let { putExtra(EXTRA_LAST_REPORTED_PERCENT, it) }
                 initialLocatorJson?.let { putExtra(EXTRA_INITIAL_LOCATOR_JSON, it) }
                 initialCfi?.let { putExtra(EXTRA_INITIAL_CFI, it) }
                 initialAnnotationText?.let { putExtra(EXTRA_INITIAL_ANNOTATION_TEXT, it) }
@@ -3007,6 +3624,52 @@ internal fun closeEpubReaderPlayback(
     closeTtsPlayback()
 }
 
+/**
+ * A visual position is recorded only when the reader actually moved: a different resource or a
+ * different progression within it. Readium re-reports the same place on resume, sometimes enriched
+ * with `position`/`totalProgression` once positions are computed; that is not a move.
+ */
+internal const val FOREGROUND_SYNC_TIMEOUT_MILLIS = 5_000L
+
+/**
+ * While the reader catches up with a position saved in the background ([target]), whether a visual
+ * report is Readium re-reporting the stale page the reader showed before ([lastRecorded]) rather
+ * than a real position: it is in the stale page's resource and either read-aloud moved on to
+ * another resource, or it is nearer the stale page than the target. Reports anywhere else, such as
+ * the target or another chapter the user went to, are real.
+ */
+internal fun isStaleForegroundReReport(lastRecorded: Locator?, target: Locator, current: Locator): Boolean {
+    fun Locator.resource() = href.removeFragment().toString()
+    val last = lastRecorded ?: return false
+    if (current.resource() != last.resource()) return false
+    if (target.resource() != last.resource()) return true
+    val currentProgression = current.locations.progression ?: return false
+    val lastProgression = last.locations.progression ?: return false
+    val targetProgression = target.locations.progression ?: return false
+    // Re-pagination only nudges the stale page; a report nearer the target is the arrival.
+    return kotlin.math.abs(currentProgression - lastProgression) <
+        kotlin.math.abs(currentProgression - targetProgression)
+}
+
+internal fun shouldRecordVisualLocator(lastRecorded: Locator?, current: Locator): Boolean {
+    val last = lastRecorded ?: return true
+    if (last.href.removeFragment().toString() != current.href.removeFragment().toString()) return true
+    val lastProgression = last.locations.progression
+    val currentProgression = current.locations.progression
+    if (lastProgression == null || currentProgression == null) return lastProgression != currentProgression
+    return kotlin.math.abs(lastProgression - currentProgression) > 1e-6
+}
+
+/**
+ * Position to restore when Android rebuilds the reader from saved instance state. The stores are
+ * written on every position change, including by background read-aloud after the saved state was
+ * captured, so a stored position is never older than the saved state and wins. The saved state is
+ * only a fallback (for example in preview, which never writes the store). Without saved state this
+ * is a fresh launch, which resolves its position from the intent and the store itself.
+ */
+internal fun epubRestoredLocator(savedState: Locator?, stored: Locator?): Locator? =
+    savedState?.let { stored ?: it }
+
 internal class ReadiumEpubLocatorStore(context: Context) {
     private val preferences = context.getSharedPreferences(
         "readium_epub_locations",
@@ -3018,6 +3681,9 @@ internal class ReadiumEpubLocatorStore(context: Context) {
         val json = preferences.getString(readerKey, null) ?: return null
         return runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
     }
+
+    fun readJson(readerKey: String): String? =
+        readerKey.takeIf { it.isNotBlank() }?.let { preferences.getString(it, null) }
 
     fun save(readerKey: String, locator: Locator) {
         if (readerKey.isBlank()) return

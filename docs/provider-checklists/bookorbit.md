@@ -294,7 +294,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 10. Cross-provider/profile isolation
 
-- [x] Configure one BookOrbit profile and one Komga/other-provider profile.
+- [x] Configure one BookOrbit profile and one profile for another supported provider.
 - [x] Switch A → B → A and authenticate through the selected provider each time.
 - [x] The login label, endpoint behavior, auth method, and error messages match the selected provider.
 - [x] Catalog, details, covers, progress, reader state, filters, and selections do not leak across profiles.

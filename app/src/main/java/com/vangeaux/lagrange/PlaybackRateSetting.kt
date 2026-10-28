@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -90,15 +92,24 @@ internal fun PlaybackRateSetting(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Custom ${title.lowercase()}") },
+            label = { Text(stringResource(R.string.audio_rate_custom, title.lowercase())) },
             suffix = { Text("×") },
             singleLine = true,
             isError = isError,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             supportingText = {
-                val range = "${formatEditablePlaybackRate(minHundredths / 100f)} to " +
+                val range = stringResource(
+                    R.string.audio_rate_range,
+                    formatEditablePlaybackRate(minHundredths / 100f),
                     formatEditablePlaybackRate(maxHundredths / 100f)
-                Text(if (isError) "Enter a value from $range" else range)
+                )
+                Text(
+                    if (isError) {
+                        stringResource(R.string.audio_rate_enter_value, range)
+                    } else {
+                        range
+                    }
+                )
             }
         )
     }
@@ -145,7 +156,7 @@ internal fun PlaybackRateAdjustmentRow(
     ) {
         PlaybackRateAdjustmentButton(
             label = "−0.10",
-            description = "Decrease $rateDescription by 0.10",
+            description = stringResource(R.string.audio_rate_decrease, rateDescription, "0.10"),
             modifier = Modifier.weight(1f),
             enabled = enabled &&
                 valueHundredths - PLAYBACK_RATE_COARSE_STEP_HUNDREDTHS >= minHundredths,
@@ -153,7 +164,7 @@ internal fun PlaybackRateAdjustmentRow(
         )
         PlaybackRateAdjustmentButton(
             label = "−0.05",
-            description = "Decrease $rateDescription by 0.05",
+            description = stringResource(R.string.audio_rate_decrease, rateDescription, "0.05"),
             modifier = Modifier.weight(1f),
             enabled = enabled &&
                 valueHundredths - PLAYBACK_RATE_FINE_STEP_HUNDREDTHS >= minHundredths,
@@ -166,7 +177,7 @@ internal fun PlaybackRateAdjustmentRow(
         )
         PlaybackRateAdjustmentButton(
             label = "+0.05",
-            description = "Increase $rateDescription by 0.05",
+            description = stringResource(R.string.audio_rate_increase, rateDescription, "0.05"),
             modifier = Modifier.weight(1f),
             enabled = enabled &&
                 valueHundredths + PLAYBACK_RATE_FINE_STEP_HUNDREDTHS <= maxHundredths,
@@ -174,7 +185,7 @@ internal fun PlaybackRateAdjustmentRow(
         )
         PlaybackRateAdjustmentButton(
             label = "+0.10",
-            description = "Increase $rateDescription by 0.10",
+            description = stringResource(R.string.audio_rate_increase, rateDescription, "0.10"),
             modifier = Modifier.weight(1f),
             enabled = enabled &&
                 valueHundredths + PLAYBACK_RATE_COARSE_STEP_HUNDREDTHS <= maxHundredths,

@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
@@ -75,16 +76,19 @@ internal fun StatisticsScreen(
         when (val loaded = statistics) {
             null -> StatisticsCenteredState(Modifier.fillMaxSize()) {
                 CircularProgressIndicator()
-                Text("Loading statistics…")
+                Text(stringResource(R.string.secondary_statistics_loading))
             }
             else -> when (loaded.status) {
                 UserStatisticsStatus.UNSUPPORTED -> StatisticsCenteredState(Modifier.fillMaxSize()) {
                     Icon(Icons.Default.Insights, contentDescription = null)
-                    Text("Statistics aren't available on this server version.")
+                    Text(stringResource(R.string.secondary_statistics_unavailable))
                 }
                 UserStatisticsStatus.ERROR -> StatisticsCenteredState(Modifier.fillMaxSize()) {
-                    Text("Statistics couldn't be loaded.", style = MaterialTheme.typography.titleMedium)
-                    Button(onClick = onRefresh) { Text("Try again") }
+                    Text(
+                        stringResource(R.string.secondary_statistics_error),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Button(onClick = onRefresh) { Text(stringResource(R.string.secondary_try_again)) }
                 }
                 UserStatisticsStatus.AVAILABLE -> StatisticsContent(loaded, Modifier.fillMaxSize())
             }
@@ -101,14 +105,14 @@ private fun StatisticsContent(statistics: UserStatistics, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Your statistics", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.secondary_statistics_title), style = MaterialTheme.typography.headlineSmall)
             Text(
-                "Reading activity reported by BookOrbit.",
+                stringResource(R.string.secondary_statistics_subtitle),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (summary == null) {
-            item { Text("No summary data is available yet.") }
+            item { Text(stringResource(R.string.secondary_statistics_no_summary)) }
         } else {
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -116,13 +120,19 @@ private fun StatisticsContent(statistics: UserStatistics, modifier: Modifier) {
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Library progress", style = MaterialTheme.typography.titleMedium)
-                        StatisticRow("Tracked books", summary.trackedBooks.toString())
-                        StatisticRow("Started", summary.startedBooks.toString())
-                        StatisticRow("In progress", summary.inProgressBooks.toString())
-                        StatisticRow("Completed", summary.completedBooks.toString())
                         Text(
-                            "Mean progress · ${formatStatisticPercent(summary.meanProgressPercent)}",
+                            stringResource(R.string.secondary_statistics_library_progress),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        StatisticRow(stringResource(R.string.secondary_statistics_tracked_books), summary.trackedBooks.toString())
+                        StatisticRow(stringResource(R.string.secondary_statistics_started), summary.startedBooks.toString())
+                        StatisticRow(stringResource(R.string.secondary_statistics_in_progress), summary.inProgressBooks.toString())
+                        StatisticRow(stringResource(R.string.secondary_statistics_completed), summary.completedBooks.toString())
+                        Text(
+                            stringResource(
+                                R.string.secondary_statistics_mean_progress,
+                                formatStatisticPercent(summary.meanProgressPercent)
+                            ),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         LinearProgressIndicator(
@@ -134,10 +144,10 @@ private fun StatisticsContent(statistics: UserStatistics, modifier: Modifier) {
             }
         }
         item {
-            Text("Daily reading", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.secondary_statistics_daily_reading), style = MaterialTheme.typography.titleMedium)
         }
         if (statistics.dailyReading.isEmpty()) {
-            item { Text("No daily reading activity is available yet.") }
+            item { Text(stringResource(R.string.secondary_statistics_no_daily_reading)) }
         } else {
             items(statistics.dailyReading.takeLast(30), key = { it.day }) { day ->
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -149,12 +159,12 @@ private fun StatisticsContent(statistics: UserStatistics, modifier: Modifier) {
                         Column {
                             Text(day.day, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${day.eventsCount} reading events",
+                                stringResource(R.string.secondary_statistics_reading_events, day.eventsCount),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        Text(formatStatisticDuration(day.readingSeconds))
+                        Text(statisticDurationLabel(day.readingSeconds))
                     }
                 }
             }
@@ -186,11 +196,16 @@ private fun StatisticsCenteredState(
     )
 }
 
-private fun formatStatisticDuration(seconds: Long): String {
+@Composable
+private fun statisticDurationLabel(seconds: Long): String {
     val safe = seconds.coerceAtLeast(0L)
     val hours = safe / 3600
     val minutes = (safe % 3600) / 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    return if (hours > 0) {
+        stringResource(R.string.secondary_statistics_duration_hours, hours, minutes)
+    } else {
+        stringResource(R.string.secondary_statistics_duration_minutes, minutes)
+    }
 }
 
 private fun formatStatisticPercent(value: Double): String =

@@ -39,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -82,6 +83,26 @@ internal fun annotationMenuActionLabel(action: AnnotationMenuAction): String = w
     AnnotationMenuAction.RESTORE -> "Restore"
     AnnotationMenuAction.PURGE -> "Delete permanently"
 }
+
+/**
+ * Localized resource id for an annotation menu label. Kept separate from
+ * [annotationMenuActionLabel] so the English-only label helper remains usable
+ * from JVM tests without an Android resource context.
+ */
+internal fun annotationMenuActionLabelResId(action: AnnotationMenuAction): Int = when (action) {
+    AnnotationMenuAction.OPEN_BOOK_DETAILS -> R.string.secondary_annotations_open_book_details
+    AnnotationMenuAction.GO_TO_ANNOTATION -> R.string.secondary_annotations_go_to_annotation
+    AnnotationMenuAction.EDIT_NOTE -> R.string.secondary_annotations_edit_note
+    AnnotationMenuAction.CHANGE_STYLE -> R.string.secondary_annotations_change_style
+    AnnotationMenuAction.COPY_TEXT -> R.string.secondary_annotations_copy_text
+    AnnotationMenuAction.TRASH -> R.string.secondary_annotations_move_to_trash
+    AnnotationMenuAction.RESTORE -> R.string.secondary_annotations_restore
+    AnnotationMenuAction.PURGE -> R.string.secondary_annotations_delete_permanently
+}
+
+@Composable
+internal fun annotationMenuActionLabelRes(action: AnnotationMenuAction): String =
+    stringResource(annotationMenuActionLabelResId(action))
 
 /**
  * Tracks which single annotation card currently has its menu expanded. Both the three-dots
@@ -181,7 +202,7 @@ internal fun AnnotationsScreen(
             onValueChange = { query = it; page = 1 },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             singleLine = true,
-            placeholder = { Text("Search highlights and notes") },
+            placeholder = { Text(stringResource(R.string.secondary_annotations_search_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Row(
@@ -189,13 +210,31 @@ internal fun AnnotationsScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TextButton(onClick = { status = if (status == "active") "trashed" else "active"; page = 1 }) {
-                Text(if (status == "active") "Active" else "Trashed")
+                Text(
+                    if (status == "active") {
+                        stringResource(R.string.secondary_annotations_filter_active)
+                    } else {
+                        stringResource(R.string.secondary_annotations_filter_trashed)
+                    }
+                )
             }
             TextButton(onClick = { hasNote = if (hasNote == true) null else true; page = 1 }) {
-                Text(if (hasNote == true) "With notes" else "All notes")
+                Text(
+                    if (hasNote == true) {
+                        stringResource(R.string.secondary_annotations_filter_with_notes)
+                    } else {
+                        stringResource(R.string.secondary_annotations_filter_all_notes)
+                    }
+                )
             }
             TextButton(onClick = { sortDir = if (sortDir == "desc") "asc" else "desc"; page = 1 }) {
-                Text(if (sortDir == "desc") "Newest" else "Oldest")
+                Text(
+                    if (sortDir == "desc") {
+                        stringResource(R.string.secondary_annotations_sort_newest)
+                    } else {
+                        stringResource(R.string.secondary_annotations_sort_oldest)
+                    }
+                )
             }
         }
         actionMessage?.let { message ->
@@ -206,10 +245,13 @@ internal fun AnnotationsScreen(
         when {
             loading && result == null -> Column(Modifier.padding(16.dp)) { CircularProgressIndicator() }
             error && result == null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Annotations could not be loaded.")
-                Button(onClick = { page = 1 }) { Text("Retry") }
+                Text(stringResource(R.string.secondary_annotations_error))
+                Button(onClick = { page = 1 }) { Text(stringResource(R.string.secondary_annotations_retry)) }
             }
-            result?.items.isNullOrEmpty() -> Text("No annotations found.", modifier = Modifier.padding(16.dp))
+            result?.items.isNullOrEmpty() -> Text(
+                stringResource(R.string.secondary_annotations_empty),
+                modifier = Modifier.padding(16.dp)
+            )
             else -> {
                 val current = result ?: return@Column
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -226,19 +268,24 @@ internal fun AnnotationsScreen(
                                     )
                             ) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val bookTitle = annotation.bookTitle
+                                        ?: stringResource(R.string.secondary_annotations_unknown_book)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            annotation.bookTitle ?: "Unknown book",
+                                            bookTitle,
                                             style = MaterialTheme.typography.titleMedium
                                         )
                                         Box {
                                             IconButton(onClick = { menuOpener.openFromOverflow(annotation.id) }) {
                                                 Icon(
                                                     imageVector = Icons.Default.MoreVert,
-                                                    contentDescription = "More options for annotation in ${annotation.bookTitle ?: "Unknown book"}"
+                                                    contentDescription = stringResource(
+                                                        R.string.secondary_annotations_more_options,
+                                                        bookTitle
+                                                    )
                                                 )
                                             }
                                             DropdownMenu(
@@ -247,12 +294,12 @@ internal fun AnnotationsScreen(
                                             ) {
                                                 actions.forEach { action ->
                                                     DropdownMenuItem(
-                                                        text = { Text(annotationMenuActionLabel(action)) },
+                                                        text = { Text(annotationMenuActionLabelRes(action)) },
                                                         onClick = {
                                                             menuOpener.dismiss()
                                                             when (action) {
                                                                 AnnotationMenuAction.OPEN_BOOK_DETAILS -> {
-                                                                    onBookDetails(annotation.toBookSummary())
+                                                                    onBookDetails(annotation.toBookSummary(context))
                                                                 }
                                                                 AnnotationMenuAction.GO_TO_ANNOTATION -> {
                                                                     onAnnotationSelected(annotation)
@@ -269,9 +316,16 @@ internal fun AnnotationsScreen(
                                                                 AnnotationMenuAction.COPY_TEXT -> {
                                                                     val clipboard = context.getSystemService(ClipboardManager::class.java)
                                                                     clipboard?.setPrimaryClip(
-                                                                        ClipData.newPlainText("Annotation text", annotation.text.orEmpty())
+                                                                        ClipData.newPlainText(
+                                                                            context.getString(R.string.secondary_annotations_clip_label),
+                                                                            annotation.text.orEmpty()
+                                                                        )
                                                                     )
-                                                                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        context.getString(R.string.secondary_annotations_copied),
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
                                                                 }
                                                                 AnnotationMenuAction.TRASH -> {
                                                                     dialogAnnotation = annotation
@@ -283,7 +337,9 @@ internal fun AnnotationsScreen(
                                                                             removeAnnotationFromList(annotation.id)
                                                                             actionMessage = null
                                                                         } else {
-                                                                            actionMessage = "Unable to restore this annotation."
+                                                                            actionMessage = context.getString(
+                                                                                R.string.secondary_annotations_restore_failed
+                                                                            )
                                                                         }
                                                                     }
                                                                 }
@@ -300,10 +356,17 @@ internal fun AnnotationsScreen(
                                     }
                                     annotation.author?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                                     Text("“${annotation.text}”", style = MaterialTheme.typography.bodyLarge)
-                                    annotation.note?.takeIf { it.isNotBlank() }?.let { Text("Note: $it") }
+                                    annotation.note?.takeIf { it.isNotBlank() }?.let {
+                                        Text(stringResource(R.string.secondary_annotations_note_line, it))
+                                    }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         annotation.chapterTitle?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                        annotation.pageno?.let { Text("Page ${it + 1}", style = MaterialTheme.typography.bodySmall) }
+                                        annotation.pageno?.let {
+                                            Text(
+                                                stringResource(R.string.secondary_annotations_page, it + 1),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -311,8 +374,12 @@ internal fun AnnotationsScreen(
                     }
                     item {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { page-- }, enabled = page > 1) { Text("Previous") }
-                            Button(onClick = { page++ }, enabled = page * (current.pageSize ?: ANNOTATIONS_PAGE_SIZE) < (current.total ?: 0)) { Text("Next") }
+                            Button(onClick = { page-- }, enabled = page > 1) {
+                                Text(stringResource(R.string.secondary_previous))
+                            }
+                            Button(onClick = { page++ }, enabled = page * (current.pageSize ?: ANNOTATIONS_PAGE_SIZE) < (current.total ?: 0)) {
+                                Text(stringResource(R.string.secondary_next))
+                            }
                         }
                     }
                 }
@@ -325,13 +392,13 @@ internal fun AnnotationsScreen(
         when (activeDialog) {
             EDIT_NOTE_DIALOG -> AlertDialog(
                 onDismissRequest = { closeMenuAndDialog() },
-                title = { Text("Edit note") },
+                title = { Text(stringResource(R.string.secondary_annotations_edit_note)) },
                 text = {
                     OutlinedTextField(
                         value = noteDraft,
                         onValueChange = { noteDraft = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Add a note") }
+                        placeholder = { Text(stringResource(R.string.secondary_annotations_add_note)) }
                     )
                 },
                 confirmButton = {
@@ -341,19 +408,23 @@ internal fun AnnotationsScreen(
                                 replaceAnnotationInList(dialogTarget.copy(note = noteDraft))
                                 actionMessage = null
                             } else {
-                                actionMessage = "Unable to update the note."
+                                actionMessage = context.getString(
+                                    R.string.secondary_annotations_update_note_failed
+                                )
                             }
                             closeMenuAndDialog()
                         }
-                    }) { Text("Save") }
+                    }) { Text(stringResource(R.string.secondary_save)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { closeMenuAndDialog() }) { Text("Cancel") }
+                    TextButton(onClick = { closeMenuAndDialog() }) {
+                        Text(stringResource(R.string.secondary_cancel))
+                    }
                 }
             )
             CHANGE_STYLE_DIALOG -> AlertDialog(
                 onDismissRequest = { closeMenuAndDialog() },
-                title = { Text("Highlight style") },
+                title = { Text(stringResource(R.string.secondary_annotations_highlight_style)) },
                 text = {
                     Column {
                         epubHighlightChoices().forEach { choice ->
@@ -363,23 +434,27 @@ internal fun AnnotationsScreen(
                                         replaceAnnotationInList(dialogTarget.copy(color = choice.color, style = choice.style))
                                         actionMessage = null
                                     } else {
-                                        actionMessage = "Unable to update the highlight style."
+                                        actionMessage = context.getString(
+                                            R.string.secondary_annotations_update_style_failed
+                                        )
                                     }
                                     closeMenuAndDialog()
                                 }
-                            }) { Text(choice.label) }
+                            }) { Text(stringResource(choice.labelRes)) }
                         }
                     }
                 },
                 confirmButton = {},
                 dismissButton = {
-                    TextButton(onClick = { closeMenuAndDialog() }) { Text("Cancel") }
+                    TextButton(onClick = { closeMenuAndDialog() }) {
+                        Text(stringResource(R.string.secondary_cancel))
+                    }
                 }
             )
             CONFIRM_TRASH_DIALOG -> AlertDialog(
                 onDismissRequest = { closeMenuAndDialog() },
-                title = { Text("Move to trash?") },
-                text = { Text("This annotation will be moved to trash. You can restore it later.") },
+                title = { Text(stringResource(R.string.secondary_annotations_trash_title)) },
+                text = { Text(stringResource(R.string.secondary_annotations_trash_message)) },
                 confirmButton = {
                     TextButton(onClick = {
                         scope.launch {
@@ -387,20 +462,24 @@ internal fun AnnotationsScreen(
                                 removeAnnotationFromList(dialogTarget.id)
                                 actionMessage = null
                             } else {
-                                actionMessage = "Unable to move this annotation to trash."
+                                actionMessage = context.getString(
+                                    R.string.secondary_annotations_trash_failed
+                                )
                             }
                             closeMenuAndDialog()
                         }
-                    }) { Text("Trash") }
+                    }) { Text(stringResource(R.string.secondary_annotations_trash_confirm)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { closeMenuAndDialog() }) { Text("Cancel") }
+                    TextButton(onClick = { closeMenuAndDialog() }) {
+                        Text(stringResource(R.string.secondary_cancel))
+                    }
                 }
             )
             CONFIRM_PURGE_DIALOG -> AlertDialog(
                 onDismissRequest = { closeMenuAndDialog() },
-                title = { Text("Permanently delete?") },
-                text = { Text("This annotation will be permanently deleted. This cannot be undone.") },
+                title = { Text(stringResource(R.string.secondary_annotations_purge_title)) },
+                text = { Text(stringResource(R.string.secondary_annotations_purge_message)) },
                 confirmButton = {
                     TextButton(onClick = {
                         scope.launch {
@@ -408,14 +487,18 @@ internal fun AnnotationsScreen(
                                 removeAnnotationFromList(dialogTarget.id)
                                 actionMessage = null
                             } else {
-                                actionMessage = "Unable to permanently delete this annotation."
+                                actionMessage = context.getString(
+                                    R.string.secondary_annotations_purge_failed
+                                )
                             }
                             closeMenuAndDialog()
                         }
-                    }) { Text("Delete permanently") }
+                    }) { Text(stringResource(R.string.secondary_annotations_delete_permanently)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { closeMenuAndDialog() }) { Text("Cancel") }
+                    TextButton(onClick = { closeMenuAndDialog() }) {
+                        Text(stringResource(R.string.secondary_cancel))
+                    }
                 }
             )
         }

@@ -305,8 +305,29 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
-    fun `catalog image cache scopes separate accounts and cookies`() {
-        val first = catalogImageCacheScopeId(
+    fun `catalog image cache scope follows the account, not its token`() {
+        val account = catalogImageUserAccountScope("https://books.example.test", "Reader")
+        assertEquals(account, catalogImageUserAccountScope("https://books.example.test/", " reader "))
+        assertFalse(account == catalogImageUserAccountScope("https://books.example.test", "someone-else"))
+        assertFalse(account == catalogImageUserAccountScope("https://other.example.test", "reader"))
+
+        val scopeA = CatalogImageRequestScope("https://books.example.test", "profile-1", "token-1", null, 1L, account)
+        val refreshed = CatalogImageRequestScope("https://books.example.test", "profile-1", "token-2", "c=1", 1L, account)
+        assertEquals(scopeA.cacheScopeId, refreshed.cacheScopeId)
+        assertFalse(scopeA.sameCredentialScope(refreshed))
+
+        val otherAccount = CatalogImageRequestScope(
+            "https://books.example.test", "profile-1", "token-1", null, 1L,
+            catalogImageUserAccountScope("https://books.example.test", "someone-else")
+        )
+        assertFalse(scopeA.cacheScopeId == otherAccount.cacheScopeId)
+        val otherProfile = CatalogImageRequestScope("https://books.example.test", "profile-2", "token-1", null, 1L, account)
+        assertFalse(scopeA.cacheScopeId == otherProfile.cacheScopeId)
+    }
+
+    @Test
+    fun `catalog image credential scopes separate accounts and cookies`() {
+        val first = catalogImageCredentialScopeId(
             serverUrl = "https://books.example.test",
             profileId = "profile-1",
             authorization = "Bearer account-a",
@@ -314,7 +335,7 @@ class BookOrbitRepositoryHelpersTest {
         )
         assertEquals(
             first,
-            catalogImageCacheScopeId(
+            catalogImageCredentialScopeId(
                 serverUrl = "https://books.example.test",
                 profileId = "profile-1",
                 authorization = "Bearer account-a",
@@ -322,7 +343,7 @@ class BookOrbitRepositoryHelpersTest {
             )
         )
         assertFalse(
-            first == catalogImageCacheScopeId(
+            first == catalogImageCredentialScopeId(
                 serverUrl = "https://books.example.test",
                 profileId = "profile-1",
                 authorization = "Bearer account-b",
@@ -330,7 +351,7 @@ class BookOrbitRepositoryHelpersTest {
             )
         )
         assertFalse(
-            first == catalogImageCacheScopeId(
+            first == catalogImageCredentialScopeId(
                 serverUrl = "https://books.example.test",
                 profileId = "profile-1",
                 authorization = "Bearer account-a",

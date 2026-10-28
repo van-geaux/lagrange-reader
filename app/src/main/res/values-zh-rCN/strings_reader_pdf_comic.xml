@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 阅读器通用 -->
+    <string name="reader_preview_title">预览 \u00b7 %1$s</string>
+    <string name="reader_page_kind">页</string>
+    <string name="reader_page_number">第 %1$d 页</string>
+    <string name="reader_error_with_back">%1$s\n\n按返回键退出。</string>
+
+    <!-- PDF 阅读器 -->
+    <string name="pdf_error_file_unavailable">无法读取此 PDF 文件。</string>
+    <string name="pdf_error_not_readable">此文件不包含可读取的 PDF 文档。</string>
+    <string name="pdf_could_not_read">Readium 无法读取此 PDF 文件。</string>
+    <string name="pdf_could_not_open">Readium 无法打开此 PDF 出版物。</string>
+    <string name="pdf_not_pdf">Readium 未能将此文件识别为 PDF 出版物。</string>
+    <string name="pdf_reader_file_unavailable">PDF 阅读文件不可用。</string>
+    <string name="pdf_no_readable_pages">此 PDF 没有可读取的页面。</string>
+    <string name="pdf_no_app_for_link">没有可打开此链接的应用。</string>
+
+    <!-- 漫画阅读器 -->
+    <string name="comic_error_file_unavailable">无法读取此漫画文件。</string>
+    <string name="comic_error_requires_cbz">Readium 需要 CBZ 图片压缩包。</string>
+    <string name="comic_could_not_read">Readium 无法读取此漫画文件。</string>
+    <string name="comic_could_not_open">Readium 无法打开此漫画出版物。</string>
+    <string name="comic_not_image_publication">Readium 未能将此文件识别为图片出版物。</string>
+    <string name="comic_server_no_pages">服务器未返回任何漫画页面。</string>
+    <string name="comic_page_url_invalid">漫画页面地址无效。</string>
+    <string name="comic_some_page_url_invalid">存在无效的漫画页面地址。</string>
+    <string name="comic_remote_not_image_publication">Readium 未能将远程漫画识别为图片出版物。</string>
+    <string name="comic_reader_source_unavailable">漫画阅读源不可用。</string>
+    <string name="comic_no_readable_images">此漫画没有可显示的图片。</string>
+    <string name="comic_page_open_failed">无法打开此漫画页面。</string>
+</resources>

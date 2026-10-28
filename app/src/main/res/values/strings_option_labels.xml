@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Reader theme labels -->
+    <string name="label_theme_light">Light</string>
+    <string name="label_theme_sepia">Sepia</string>
+    <string name="label_theme_dark">Dark</string>
+    <string name="label_theme_oled_black">OLED black</string>
+
+    <!-- Reading direction -->
+    <string name="label_reading_direction_ltr">Left to right</string>
+    <string name="label_reading_direction_rtl">Right to left</string>
+
+    <!-- Layout mode -->
+    <string name="label_layout_paginated">Paginated</string>
+    <string name="label_layout_continuous">Continuous</string>
+
+    <!-- Font families -->
+    <string name="label_font_publisher_default">Publisher default</string>
+    <string name="label_font_system_serif">System serif</string>
+    <string name="label_font_system_sans_serif">System sans-serif</string>
+    <string name="label_font_system_monospace">System monospace</string>
+    <string name="label_font_accessible_dfa">AccessibleDFA</string>
+    <string name="label_font_open_dyslexic">OpenDyslexic</string>
+    <string name="label_font_custom">Custom font</string>
+
+    <!-- Text alignment -->
+    <string name="label_align_left">Left</string>
+    <string name="label_align_justified">Justified</string>
+
+    <!-- Hyphenation -->
+    <string name="label_hyphenation_auto">Auto</string>
+    <string name="label_hyphenation_on">On</string>
+    <string name="label_hyphenation_off">Off</string>
+
+    <!-- Spread -->
+    <string name="label_spread_auto">Automatic</string>
+    <string name="label_spread_off">Off</string>
+
+    <!-- Tap zone layout -->
+    <string name="label_tap_zone_equal_thirds">Equal thirds</string>
+    <string name="label_tap_zone_vertical_thirds">Vertical thirds</string>
+    <string name="label_tap_zone_kindle">Kindle</string>
+    <string name="label_tap_zone_l_shape">L-shape</string>
+    <string name="label_tap_zone_edge">Edge</string>
+    <string name="label_tap_zone_menu_only">Menu only</string>
+
+    <!-- Tap zone invert mode -->
+    <string name="label_tap_invert_none">None</string>
+    <string name="label_tap_invert_horizontal">Horizontal</string>
+    <string name="label_tap_invert_vertical">Vertical</string>
+    <string name="label_tap_invert_both">Both</string>
+
+    <!-- Tap zone action -->
+    <string name="label_tap_action_previous">Previous</string>
+    <string name="label_tap_action_next">Next</string>
+    <string name="label_tap_action_menu">Menu</string>
+</resources>

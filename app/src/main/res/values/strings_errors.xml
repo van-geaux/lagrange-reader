@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Coordinator: user-facing session and browser messages -->
+    <string name="error_unable_update_rating">Unable to update the rating for %1$s.</string>
+    <string name="error_session_saved_expired">Your saved session is no longer authenticated. Sign in to continue.</string>
+    <string name="error_cached_snapshot_server_unavailable">Showing the last cached library snapshot while the server is unavailable.</string>
+    <string name="error_server_unavailable_retry_login">The server is unavailable. Keep the login page open or retry when the connection recovers.</string>
+    <string name="error_connect_complete_sign_in">Connect to the server and complete sign in.</string>
+    <string name="error_switching_server">Switching server…</string>
+    <string name="error_server_changed_sign_in">Server changed. Sign in to access your libraries.</string>
+    <string name="error_cached_snapshot_waiting_session">Showing the last cached library snapshot while waiting for an authenticated session.</string>
+    <string name="error_waiting_authenticated_session">Waiting for an authenticated session.</string>
+    <string name="error_waiting_connection_recover">Waiting for the server connection to recover.</string>
+    <string name="error_unable_sign_in">Unable to sign in.</string>
+    <string name="error_unable_load_sso_providers">Unable to load SSO providers.</string>
+    <string name="error_unable_start_sso">Unable to start SSO sign-in.</string>
+    <string name="error_unable_complete_sso">Unable to complete SSO sign-in.</string>
+    <string name="error_sign_in_again_refresh">Sign in again to refresh libraries or open online content.</string>
+    <string name="error_sign_in_refresh_libraries">Sign in to refresh your libraries and online content.</string>
+    <string name="error_signed_out">Signed out. Sign in to access your libraries.</string>
+    <string name="error_loading_libraries">Loading libraries…</string>
+    <string name="error_syncing_reading_progress">Syncing reading progress…</string>
+    <string name="error_loading_your_library">Loading your library…</string>
+    <string name="error_home_cached_results">Home is showing cached results for %1$s.</string>
+    <string name="error_session_expired_browsing">Your session expired. Sign in again to continue browsing.</string>
+    <string name="error_unable_finish_refresh_catalog">Unable to finish refreshing the library catalog.</string>
+    <string name="error_cached_snapshot_refresh_failed">Showing the last cached library snapshot. %1$s</string>
+    <string name="error_refresh_failed">Refresh failed.</string>
+    <string name="error_unable_refresh_libraries">Unable to refresh libraries.</string>
+    <string name="error_unable_load_libraries">Unable to load libraries.</string>
+    <string name="error_session_expired_library">Your session expired. Sign in again to continue in this library.</string>
+    <string name="error_unable_finish_refresh_library">Unable to finish refreshing the selected library.</string>
+    <string name="error_cached_books_library">Showing cached books for this library. %1$s</string>
+    <string name="error_unable_load_selected_library">Unable to load the selected library.</string>
+
+    <!-- Coordinator: reader and download messages -->
+    <string name="error_session_expired_reopen_book">Your session expired. Sign in again to reopen %1$s.</string>
+    <string name="error_unable_open_book">Unable to open %1$s.</string>
+    <string name="error_download_no_file">This title cannot be downloaded because it does not expose a file.</string>
+    <string name="error_unable_inspect_audiobook_files">Unable to inspect the audiobook files.</string>
+    <string name="error_download_canceled">Download canceled.</string>
+    <string name="error_download_permission_denied">You don’t have permission to download %1$s.</string>
+    <string name="error_download_permission_denied_this_title">You don’t have permission to download this title.</string>
+    <string name="error_session_expired_downloading">Your session expired. Sign in again to continue downloading.</string>
+    <string name="error_session_expired_downloading_book">Your session expired. Sign in again to continue downloading %1$s.</string>
+    <string name="error_download_failed">Download failed for %1$s.</string>
+    <string name="error_download_failed_this_title">Download failed for this title.</string>
+    <string name="error_unable_remove_local_copies">Unable to remove the selected local copies.</string>
+    <string name="error_removed_some_local_copies">Removed %1$d of %2$d local copies. %3$d could not be removed.</string>
+    <string name="error_unable_remove_local_copy">Unable to remove the local copy.</string>
+    <string name="error_unable_remove_local_file">Unable to remove the local file.</string>
+    <string name="error_unable_open_with_readium">Unable to open %1$s with Readium. %2$s</string>
+    <string name="error_unable_prepare_epub">Unable to prepare the selected EPUB.</string>
+    <string name="error_audiobook_unavailable">Audiobook playback is unavailable.</string>
+
+    <!-- Coordinator: reading status messages -->
+    <string name="error_removed_from_currently_reading">Removed %1$s from Currently reading and reset its progress.</string>
+    <string name="error_unable_remove_from_currently_reading">Unable to remove %1$s from Currently reading.</string>
+    <string name="error_marked_as_status">Marked %1$s as %2$s.</string>
+    <string name="error_unable_update_reading_status">Unable to update %1$s\'s reading status.</string>
+    <string name="error_marked_as_read">Marked %1$s as read.</string>
+    <string name="error_unable_mark_as_read">Unable to mark %1$s as read.</string>
+    <string name="error_marked_as_unread">Marked %1$s as unread and reset its progress.</string>
+    <string name="error_unable_mark_as_unread">Unable to mark %1$s as unread.</string>
+    <string name="error_session_expired_continue">Your session expired. Sign in again to continue.</string>
+
+    <!-- Coordinator: error classification (userMessage) -->
+    <string name="error_session_expired">Your session expired. Sign in again.</string>
+    <string name="error_invalid_credentials">The username or password was not accepted.</string>
+    <string name="error_login_rate_limited">The server is rate limiting sign-in attempts. Try again shortly.</string>
+    <string name="error_login_not_confirmed">The server did not confirm the new sign-in. Check the server and try again.</string>
+    <string name="error_not_found">The server could not find the requested content.</string>
+    <string name="error_rate_limited">The server is rate limiting requests. Try again shortly.</string>
+    <string name="error_server_failed_action">The server failed while trying to %1$s.</string>
+    <string name="error_server_could_not_action">The server could not %1$s.</string>
+    <string name="error_host_unresolved">The server host could not be resolved.</string>
+    <string name="error_timeout">The server took too long to respond.</string>
+    <string name="error_tls_invalid">The server\'s TLS configuration could not be validated.</string>
+    <string name="error_network_interrupted">A network error interrupted the request.</string>
+    <string name="error_sso_unavailable">SSO is not available for this provider.</string>
+    <string name="error_sso_missing_authorization_endpoint">The SSO server did not provide an authorization endpoint.</string>
+
+    <!-- Automatic downloads: persisted status messages (English fallback kept in code) -->
+    <string name="error_auto_download_settings_changed">Automatic-download settings changed during this pass.</string>
+    <string name="error_auto_download_scan_completed">Automatic-download scan completed.</string>
+    <string name="error_auto_download_baseline_recorded">Recorded the current %1$s catalog as the new-books baseline.</string>
+    <plurals name="error_auto_download_queued">
+        <item quantity="one">Queued %1$d file from %2$s.</item>
+        <item quantity="other">Queued %1$d files from %2$s.</item>
+    </plurals>
+    <string name="error_auto_download_none_eligible">No eligible downloads found in this %1$s batch.</string>
+    <string name="error_auto_download_paused_sign_in">Automatic downloads are paused until you sign in again.</string>
+    <string name="error_auto_download_planning_failed">Automatic download planning failed.</string>
+    <string name="error_auto_download_no_storage">No additional storage is available for this download.</string>
+    <string name="error_auto_download_policy_changed_removal">The automatic-download policy changed before removal completed.</string>
+    <string name="error_auto_download_paused_profile_active">Automatic downloads are paused until this server profile is active.</string>
+    <string name="error_auto_download_scanning">Scanning selected libraries.</string>
+    <string name="error_auto_download_select_library">Select at least one library.</string>
+    <string name="error_auto_download_waiting_conditions">Waiting for the selected network and charging conditions.</string>
+    <string name="error_auto_download_cancelled">Automatic download planning cancelled. Completed files were kept.</string>
+    <string name="error_auto_download_paused_profile_inactive">Automatic downloads are paused while this server profile is inactive.</string>
+
+    <!-- Automatic downloads: storage admission messages -->
+    <string name="error_storage_reserve_and_limit">The free-space reserve and maximum local-book storage limit would be exceeded.</string>
+    <string name="error_storage_reserve">The configured free-space reserve would be exceeded.</string>
+    <string name="error_storage_limit">The maximum local-book storage limit would be exceeded.</string>
+    <string name="error_storage_limit_generic">The storage limit would be exceeded.</string>
+
+    <!-- Automatic downloads: settings review lines -->
+    <string name="error_auto_review_libraries_all">Libraries: All current and future libraries</string>
+    <string name="error_auto_review_libraries_selected">Libraries: %1$s</string>
+    <string name="error_auto_review_books">Books: %1$s</string>
+    <string name="error_auto_review_books_existing_future">Existing and future books</string>
+    <string name="error_auto_review_books_new_only">New books only</string>
+    <string name="error_auto_review_copies">Copies per book: %1$s</string>
+    <string name="error_auto_review_copies_every">Every readable copy</string>
+    <string name="error_auto_review_copies_preferred">Preferred readable copy</string>
+    <string name="error_auto_review_network">Network: %1$s</string>
+    <string name="error_auto_review_network_unmetered">Unmetered only</string>
+    <string name="error_auto_review_network_any">Any connected network (cellular policy still applies)</string>
+    <string name="error_auto_review_power">Power: %1$s</string>
+    <string name="error_auto_review_power_charging_only">Only while charging</string>
+    <string name="error_auto_review_power_not_required">Charging not required</string>
+    <string name="error_auto_review_max_storage">Maximum local-book storage: %1$s</string>
+    <string name="error_auto_review_reserved_space">Reserved minimum free space: %1$s</string>
+    <string name="error_auto_review_cleanup">Automatic cleanup: %1$s</string>
+    <string name="error_auto_review_cleanup_enabled">Enabled</string>
+    <string name="error_auto_review_cleanup_disabled">Disabled</string>
+    <string name="error_auto_review_limit_no_limit">No limit</string>
+    <string name="error_auto_review_limit_gb">%1$s GB</string>
+
+    <!-- Offline cache status messages -->
+    <string name="error_offline_cache_select_content">Select Book details, Cover thumbnails, or both.</string>
+    <string name="error_offline_cache_server_changed">The configured server changed while the cache was updating.</string>
+    <string name="error_offline_cache_sign_in">Sign in again to update the offline cache.</string>
+    <string name="error_offline_cache_cancelled">Offline cache update cancelled.</string>
+    <string name="error_offline_cache_partial">Updated with some failures.</string>
+    <string name="error_offline_cache_up_to_date">Offline cache is up to date.</string>
+
+    <!-- Download worker error messages -->
+    <string name="error_download_cellular_policy">Cellular download policy requires confirmation on the current network.</string>
+    <string name="error_download_file_too_large">This file is larger than the maximum local-book storage limit.</string>
+    <string name="error_download_completed_too_large">The completed file could not fit within the storage limits.</string>
+    <string name="error_download_failed_generic">Download failed.</string>
+</resources>

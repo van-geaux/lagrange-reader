@@ -16,6 +16,7 @@ import com.vangeaux.lagrange.core.ActiveReaderSession
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -89,6 +90,13 @@ private object CatalogImageCoordinator {
     val requestLocks = Array(CATALOG_IMAGE_REQUEST_LOCK_COUNT) { Mutex() }
     val memoryCache = LinkedHashMap<String, ByteArray>(32, 0.75f, true)
     var memoryCacheBytes = 0L
+    /**
+     * Profile whose interactive (server page) sign-in has started and not authenticated yet. The
+     * previous account's token or cookies may still be present, so no cover request for that profile
+     * may create or use a cache scope until the new account is known.
+     */
+    @Volatile
+    var interactiveSignInProfileKey: String? = null
 }
 
 internal class CatalogImageRequestScope(
@@ -96,16 +104,30 @@ internal class CatalogImageRequestScope(
     val profileId: String?,
     internal val accessToken: String?,
     internal val cookie: String?,
-    val generation: Long
+    val generation: Long,
+    /** Stable for one signed-in account on this profile; see [CatalogImageAccountScopeStore]. */
+    val accountScope: String = catalogImageAnonymousAccountScope
 ) {
     internal val authorization: String? = accessToken
         ?.takeIf(String::isNotBlank)
         ?.let { "Bearer $it" }
-    val cacheScopeId: String = catalogImageCacheScopeId(
+
+    /** The credentials in use. Changes on every token refresh; guards 401 retries. */
+    val credentialScopeId: String = catalogImageCredentialScopeId(
         serverUrl = serverUrl,
         profileId = profileId,
         authorization = authorization,
         cookie = cookie
+    )
+
+    /**
+     * Disk/memory cover-cache scope. Keyed by the signed-in account, not its token, so covers cached
+     * before a token refresh stay usable (notably offline); different accounts never share it.
+     */
+    val cacheScopeId: String = catalogImageAccountCacheScopeId(
+        serverUrl = serverUrl,
+        profileId = profileId,
+        accountScope = accountScope
     )
 
     fun sameLogicalSession(other: CatalogImageRequestScope): Boolean =
@@ -114,10 +136,66 @@ internal class CatalogImageRequestScope(
             profileId == other.profileId
 
     fun sameCredentialScope(other: CatalogImageRequestScope): Boolean =
-        sameLogicalSession(other) && cacheScopeId == other.cacheScopeId
+        sameLogicalSession(other) && credentialScopeId == other.credentialScopeId
 }
 
-internal fun catalogImageCacheScopeId(
+/** Browser state for offline use when only downloaded books are available. */
+internal fun offlineDownloadsBrowserState(serverUrl: String, books: List<BookSummary>): BrowserState? =
+    books.takeIf { it.isNotEmpty() }?.let { localBooks ->
+        BrowserState(
+            serverUrl = serverUrl,
+            libraries = emptyList(),
+            selectedLibraryId = null,
+            books = localBooks,
+            homeBooks = localBooks,
+            isCatalogComplete = true
+        )
+    }
+
+internal const val catalogImageAnonymousAccountScope = "anonymous"
+
+internal fun catalogImageAccountCacheScopeId(
+    serverUrl: String,
+    profileId: String?,
+    accountScope: String
+): String = sha256Hex(listOf("account-cache", serverUrl, profileId.orEmpty(), accountScope).joinToString("\u0000"))
+
+/** Account scope for a password sign-in: the same user keeps its covers across sign-ins. */
+internal fun catalogImageUserAccountScope(serverUrl: String, username: String): String =
+    "user:" + sha256Hex(serverUrl.trim().trimEnd('/') + "\u0000" + username.trim().lowercase())
+
+private fun sha256Hex(value: String): String =
+    MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte) }
+
+/**
+ * Per-profile identity of the signed-in account for cover caching. Set at sign-in, kept across token
+ * refreshes, profile switches and session restores, removed at sign-out. A missing value is created
+ * on first authenticated use (sessions from before this store existed, or WebView cookie sign-ins).
+ */
+internal class CatalogImageAccountScopeStore(context: Context) {
+    private val preferences = context.getSharedPreferences("catalog_image_account_scopes", Context.MODE_PRIVATE)
+
+    fun read(profileKey: String): String? = preferences.getString(profileKey, null)
+
+    fun write(profileKey: String, accountScope: String) {
+        preferences.edit().putString(profileKey, accountScope).apply()
+    }
+
+    fun resolve(profileKey: String, hasCredentials: Boolean): String =
+        read(profileKey) ?: if (hasCredentials) {
+            ("session:" + java.util.UUID.randomUUID()).also { write(profileKey, it) }
+        } else {
+            catalogImageAnonymousAccountScope
+        }
+
+    fun clear(profileKey: String) {
+        preferences.edit().remove(profileKey).apply()
+    }
+}
+
+internal fun catalogImageCredentialScopeId(
     serverUrl: String,
     profileId: String?,
     authorization: String?,
@@ -288,6 +366,12 @@ internal fun extractAccessToken(payload: String): String? {
 }
 
 interface BookOrbitDataSource {
+    /** An interactive sign-in (server sign-in page) is starting; its account is not known yet. */
+    suspend fun beginInteractiveSignIn() {}
+    /** The interactive sign-in started by [beginInteractiveSignIn] has authenticated. */
+    suspend fun completeInteractiveSignIn() {}
+    /** The interactive sign-in was closed without signing in. */
+    suspend fun cancelInteractiveSignIn() {}
     suspend fun getServerUrl(): String?
     suspend fun setServerUrl(serverUrl: String)
     suspend fun clearServer()
@@ -329,6 +413,8 @@ interface BookOrbitDataSource {
         firstPage: LibraryBooksPage? = null
     ): LibraryBooksPage = (firstPage ?: loadBooksPage(libraryId, 0)).copy(isComplete = true)
     suspend fun loadCachedHomeBooks(): List<BookSummary> = emptyList()
+    suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
+    suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData()
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -391,7 +477,11 @@ interface BookOrbitDataSource {
     suspend fun saveEpubReaderPosition(book: BookSummary) = Unit
     suspend fun markBookAsRead(book: BookSummary) = Unit
     suspend fun resetBookReadingState(book: BookSummary) = Unit
-    suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
+    suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String? = null,
+        onProgress: (Float?) -> Unit = {}
+    ): File
     suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = listOf(book)
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun deleteLocalCopies(book: BookSummary): Set<String> {
@@ -447,8 +537,11 @@ interface BookOrbitDataSource {
 
 internal fun interruptedDownloadRecord(attempt: DownloadAttempt): DownloadRecord = DownloadRecord(
     serverUrl = attempt.serverUrl,
+    profileId = attempt.profileId,
+    storageScopeId = attempt.storageScopeId,
     fileId = attempt.fileId,
     bookId = attempt.bookId,
+    libraryId = attempt.libraryId,
     title = attempt.title,
     filename = attempt.filename,
     localPath = attempt.targetPath,
@@ -456,9 +549,24 @@ internal fun interruptedDownloadRecord(attempt: DownloadAttempt): DownloadRecord
     mimeType = attempt.mimeType,
     sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
     downloadedAtMillis = attempt.startedAtMillis,
+    sizeBytes = attempt.expectedSizeBytes,
+    origin = attempt.origin,
     status = DownloadRecordStatus.INTERRUPTED,
     hasExistingLocalCopy = attempt.existingLocalPath?.let(::File)?.exists() == true
 )
+
+internal fun bookOrbitAuthenticatedPrincipal(payload: String): AuthenticatedAccountPrincipal? =
+    authenticatedAccountPrincipal(
+        payload = payload,
+        stableFields = listOf("id", "_id", "userId", "sub"),
+        candidatePaths = listOf(
+            emptyList(),
+            listOf("data"),
+            listOf("user"),
+            listOf("data", "user"),
+            listOf("result")
+        )
+    )
 
 class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, ProfileSessionAware {
     /**
@@ -473,6 +581,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val annotationMutationQueueStore = AnnotationMutationQueueStore(context)
     private val annotationLocalIdMappingStore = AnnotationLocalIdMappingStore(context)
     private val downloadStore = DownloadStore(context)
+    private val catalogImageAccountScopeStore = CatalogImageAccountScopeStore(context)
     private val browserSnapshotStore = BrowserSnapshotStore(context)
     private val libraryCatalogStore = LibraryCatalogStore(context)
     private val catalogSnapshotStore = CatalogSnapshotStore(context)
@@ -528,6 +637,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private var libraryCoverAspectRatios: Map<String, CoverAspectRatio> = emptyMap()
     @Volatile
     private var legacyFullMediaCachesPruned = false
+    @Volatile
+    private var lastHomeShelfPreferences: HomeShelfPreferences? = null
 
     private fun rememberLibraryCoverAspectRatios(libraries: List<LibrarySummary>) {
         libraryCoverAspectRatios = libraries.associate { it.id to it.coverAspectRatio }
@@ -574,14 +685,26 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             val serverUrl = preferences[Keys.SERVER_URL].orEmpty()
             val profileId = ServerProfileStore(context).active()?.id
                 ?: serverUrl.takeIf(String::isNotBlank)?.let(::serverProfileId)
+            if (CatalogImageCoordinator.interactiveSignInProfileKey == (profileId ?: serverUrl)) {
+                throw StaleCatalogImageRequestException()
+            }
+            val accessToken = preferences[Keys.ACCESS_TOKEN]
+            val cookie = requestUrl
+                ?.takeIf { sameHttpOrigin(it, serverUrl) }
+                ?.let { CookieManager.getInstance().getCookie(it) }
+            val hasCredentials = !accessToken.isNullOrBlank() ||
+                !(cookie ?: serverUrl.takeIf(String::isNotBlank)?.let { CookieManager.getInstance().getCookie(it) })
+                    .isNullOrBlank()
             val scope = CatalogImageRequestScope(
                 serverUrl = serverUrl,
                 profileId = profileId,
-                accessToken = preferences[Keys.ACCESS_TOKEN],
-                cookie = requestUrl
-                    ?.takeIf { sameHttpOrigin(it, serverUrl) }
-                    ?.let { CookieManager.getInstance().getCookie(it) },
-                generation = generation
+                accessToken = accessToken,
+                cookie = cookie,
+                generation = generation,
+                accountScope = catalogImageAccountScopeStore.resolve(
+                    profileKey = profileId ?: serverUrl,
+                    hasCredentials = hasCredentials
+                )
             )
             if (CatalogImageCoordinator.generation.get() != generation) {
                 throw StaleCatalogImageRequestException()
@@ -660,6 +783,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
 
     override suspend fun setServerUrl(serverUrl: String) {
+        if (!serverUrlsMatch(getServerUrl().orEmpty(), serverUrl)) {
+            lastHomeShelfPreferences = null
+        }
         mutateCatalogImageSession {
             context.dataStore.edit { prefs ->
                 prefs[Keys.SERVER_URL] = normalizeStoredServerUrl(serverUrl)
@@ -668,51 +794,168 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun clearServer() {
-        mutateCatalogImageSession(clearDiskCacheAfter = true) {
-            OfflineCacheScheduler.cancelAll(context)
-            CoverCacheWarmWorker.cancelAll(context)
-            libraryCoverAspectRatios = emptyMap()
+        lastHomeShelfPreferences = null
+        val automaticServerUrl = runCatching { getServerUrl() }.getOrNull()
+        val automaticProfileId = runCatching { currentProfileId() }.getOrNull()
+        val activeReaderScope = runCatching {
+            automaticServerUrl?.let { resolveEpubReaderScope(context, it) }
+        }.getOrNull()
+        val automaticPolicy = runCatching {
+            activeAutomaticDownloadPolicy(automaticProfileId, automaticServerUrl)
+        }.getOrNull()
+        try {
+            // Covers remain available across profile switches because their disk cache is already
+            // isolated by server, profile and account.
+            mutateCatalogImageSession {
+                CatalogImageCoordinator.interactiveSignInProfileKey = null
+                try {
+                    clearRuntimeSession(activeReaderScope)
+                } finally {
+                    automaticProfileId?.let {
+                        AuthenticatedAccountScopeStore(context).deactivate(it)
+                    }
+                }
+                bestEffortRuntimeCleanup("cancel offline cache scheduling") {
+                    OfflineCacheScheduler.cancelAll(context)
+                    CoverCacheWarmWorker.cancelAll(context)
+                }
+                libraryCoverAspectRatios = emptyMap()
+                context.dataStore.edit { prefs ->
+                    prefs.remove(Keys.SERVER_URL)
+                    prefs.remove(Keys.SELECTED_LIBRARY_ID)
+                }
+            }
+        } finally {
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
+    }
+
+    override suspend fun beginInteractiveSignIn() {
+        lastHomeShelfPreferences = null
+        val profileId = currentProfileId()
+        profileId?.let { AuthenticatedAccountScopeStore(context).deactivate(it) }
+        mutateCatalogImageSession {
+            catalogImageAccountScopeStore.clear(profileId ?: getServerUrl().orEmpty())
+            CatalogImageCoordinator.interactiveSignInProfileKey = profileId ?: getServerUrl().orEmpty()
+        }
+    }
+
+    override suspend fun completeInteractiveSignIn() {
+        mutateCatalogImageSession { CatalogImageCoordinator.interactiveSignInProfileKey = null }
+        rememberAuthenticatedAccount()
+    }
+
+    override suspend fun cancelInteractiveSignIn() {
+        mutateCatalogImageSession { CatalogImageCoordinator.interactiveSignInProfileKey = null }
+        rememberAuthenticatedAccount()
+    }
+    override suspend fun clearSession() {
+        lastHomeShelfPreferences = null
+        val automaticServerUrl = runCatching { getServerUrl() }.getOrNull()
+        val automaticProfileId = runCatching { currentProfileId() }.getOrNull()
+        val activeReaderScope = runCatching {
+            automaticServerUrl?.let { resolveEpubReaderScope(context, it) }
+        }.getOrNull()
+        val automaticPolicy = runCatching {
+            activeAutomaticDownloadPolicy(automaticProfileId, automaticServerUrl)
+        }.getOrNull()
+        try {
+            mutateCatalogImageSession(clearDiskCacheAfter = true) {
+                catalogImageAccountScopeStore.clear(
+                    automaticProfileId ?: automaticServerUrl.orEmpty()
+                )
+                CatalogImageCoordinator.interactiveSignInProfileKey = null
+                // Per-book languages are kept per profile across profile switches; sign-out forgets them.
+                EpubBookLanguageStore(context).clearProfile()
+                try {
+                    clearRuntimeSession(activeReaderScope)
+                } finally {
+                    try {
+                        automaticProfileId?.let(profileSessionStore::clear)
+                    } finally {
+                        automaticProfileId?.let {
+                            AuthenticatedAccountScopeStore(context).deactivate(it)
+                        }
+                    }
+                }
+            }
+        } finally {
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
+    }
+
+    private fun activeAutomaticDownloadPolicy(
+        profileId: String?,
+        serverUrl: String?
+    ): AutomaticDownloadPolicy? {
+        profileId ?: return null
+        serverUrl?.takeIf(String::isNotBlank) ?: return null
+        val storageScopeId = downloadStorageScopeId(context, serverUrl, profileId) ?: return null
+        return AutomaticDownloadPolicyStore(context).read(profileId, serverUrl, storageScopeId)
+    }
+
+    private fun pauseAutomaticDownloadsForInactiveProfile(policy: AutomaticDownloadPolicy?) {
+        if (policy == null) return
+        runCatching {
+            AutomaticDownloadScheduler.pauseForInactiveProfile(context, policy)
+        }.onFailure { error ->
+            Log.w("BookOrbitRepository", "Unable to pause automatic downloads for inactive profile", error)
+        }
+    }
+
+    private suspend fun clearRuntimeSession(activeReaderScope: EpubReaderScope?) =
+        withContext(NonCancellable) {
+        var credentialFailure: Exception? = null
+        try {
             context.dataStore.edit { prefs ->
-                prefs.remove(Keys.SERVER_URL)
+                prefs.remove(Keys.ACCESS_TOKEN)
                 prefs.remove(Keys.SELECTED_LIBRARY_ID)
             }
-            bookDetailCacheStore.clear()
-            clearRuntimeSession()
+        } catch (error: Exception) {
+            credentialFailure = error
         }
-    }
-
-    override suspend fun clearSession() {
-        mutateCatalogImageSession(clearDiskCacheAfter = true) {
-            clearRuntimeSession()
-            currentProfileId()?.let(profileSessionStore::clear)
+        try {
+            clearCookies()
+        } catch (error: Exception) {
+            if (credentialFailure == null) credentialFailure = error
+            else credentialFailure.addSuppressed(error)
         }
-    }
 
-    private suspend fun clearRuntimeSession() {
         val workManager = WorkManager.getInstance(context)
-        workManager.cancelUniqueWork("bookorbit-progress-sync")
-        workManager.cancelUniqueWork("bookorbit-reading-session-sync")
-        workManager.cancelUniqueWork("bookorbit-annotation-sync")
-        OfflineCacheSyncWorker.cancel(context)
-        // DownloadStore is device-shared local content; do not remove completed files on logout.
-        queueStore.clear()
-        readingSessionQueueStore.clear()
-        annotationMutationQueueStore.clear()
-        annotationLocalIdMappingStore.clear()
-        lastSyncedProgressStore.clear()
-        browserSnapshotStore.clear()
-        catalogSnapshotStore.clear()
-        libraryCatalogStore.clear()
-        bookDetailCacheStore.clear()
-        context.dataStore.edit { prefs ->
-            prefs.remove(Keys.ACCESS_TOKEN)
-            prefs.remove(Keys.SELECTED_LIBRARY_ID)
+        bestEffortRuntimeCleanup("cancel account work") {
+            workManager.cancelUniqueWork("bookorbit-progress-sync")
+            workManager.cancelUniqueWork("bookorbit-reading-session-sync")
+            workManager.cancelUniqueWork("bookorbit-annotation-sync")
+            OfflineCacheSyncWorker.cancel(context)
         }
-        activeReaderStore.clear()
-        epubReaderPositionStore.clear()
-        ReadiumEpubLocatorStore(context).clear()
-        ReadiumEpubTtsPositionStore(context).clear()
-        clearCookies()
+        // DownloadStore is device-shared local content; do not remove completed files on logout.
+        bestEffortRuntimeCleanup("clear progress queue") { queueStore.clear() }
+        bestEffortRuntimeCleanup("clear reading session queue") { readingSessionQueueStore.clear() }
+        bestEffortRuntimeCleanup("clear annotation queue") { annotationMutationQueueStore.clear() }
+        bestEffortRuntimeCleanup("clear annotation mappings") { annotationLocalIdMappingStore.clear() }
+        bestEffortRuntimeCleanup("clear last synced progress") { lastSyncedProgressStore.clear() }
+        bestEffortRuntimeCleanup("clear browser snapshot") { browserSnapshotStore.clear() }
+        bestEffortRuntimeCleanup("clear catalog snapshot") { catalogSnapshotStore.clear() }
+        bestEffortRuntimeCleanup("clear library catalog") { libraryCatalogStore.clear() }
+        bestEffortRuntimeCleanup("clear book detail cache") { bookDetailCacheStore.clear() }
+        activeReaderScope?.let { scope ->
+            bestEffortRuntimeCleanup("clear active reader") { activeReaderStore.clear(scope) }
+        }
+        bestEffortRuntimeCleanup("clear EPUB reader positions") { epubReaderPositionStore.clear() }
+        bestEffortRuntimeCleanup("clear EPUB locators") { ReadiumEpubLocatorStore(context).clear() }
+        bestEffortRuntimeCleanup("clear EPUB TTS positions") { ReadiumEpubTtsPositionStore(context).clear() }
+        credentialFailure?.let { throw it }
+    }
+
+    private suspend fun bestEffortRuntimeCleanup(
+        action: String,
+        cleanup: suspend () -> Unit
+    ) {
+        try {
+            cleanup()
+        } catch (error: Exception) {
+            Log.w("BookOrbitRepository", "Unable to $action during session cleanup", error)
+        }
     }
 
     override suspend fun saveCurrentProfileSession() {
@@ -775,7 +1018,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     CookieManager.getInstance().flush()
                 }
             }
-            !token.isNullOrBlank()
+            val authenticated = !token.isNullOrBlank()
+            if (
+                authenticated &&
+                AuthenticatedAccountScopeStore(context).read(profileId) != null
+            ) {
+                DownloadStore(context).quarantineLegacyUnscopedDownloads()
+            }
+            authenticated
         }
     }
 
@@ -793,7 +1043,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     override suspend fun getSessionState(): SessionState = withContext(Dispatchers.IO) {
         runCatching {
-            request("/api/v1/auth/me", "GET", null)
+            val payload = request("/api/v1/auth/me", "GET", null)
+            val profileId = currentProfileId() ?: return@runCatching SessionState.Unavailable
+            val principal = bookOrbitAuthenticatedPrincipal(payload)
+                ?: return@runCatching SessionState.Unavailable
+            persistAuthenticatedAccount(profileId, principal)
             SessionState.Authenticated
         }.getOrElse { error ->
             when (error) {
@@ -804,6 +1058,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun login(username: String, password: String) = withContext(Dispatchers.IO) {
+        lastHomeShelfPreferences = null
         if (username.isBlank() || password.isBlank()) {
             throw InvalidCredentialsException()
         }
@@ -814,6 +1069,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             .toRequestBody(JSON)
         mutateCatalogImageSession {
             requestLogin(body)
+            val serverUrl = getServerUrl().orEmpty()
+            catalogImageAccountScopeStore.write(
+                currentProfileId() ?: serverUrl,
+                catalogImageUserAccountScope(serverUrl, username)
+            )
+            CatalogImageCoordinator.interactiveSignInProfileKey = null
+        }
+        if (!rememberAuthenticatedAccount()) {
+            currentProfileId()?.let { AuthenticatedAccountScopeStore(context).deactivate(it) }
         }
     }
 
@@ -859,7 +1123,40 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     prefs[Keys.ACCESS_TOKEN] = accessToken
                 }
             }
+            // The SSO identity is not known here: a new sign-in starts a new cover-cache scope.
+            catalogImageAccountScopeStore.write(
+                currentProfileId() ?: getServerUrl().orEmpty(),
+                "oidc:" + java.util.UUID.randomUUID()
+            )
+            CatalogImageCoordinator.interactiveSignInProfileKey = null
         }
+        if (!rememberAuthenticatedAccount()) {
+            throw BookOrbitOidcException(
+                "Sign-in succeeded, but the server did not provide a stable account identity."
+            )
+        }
+    }
+
+    private suspend fun rememberAuthenticatedAccount(): Boolean {
+        val profileId = currentProfileId() ?: return false
+        val payload = runCatching { request("/api/v1/auth/me", "GET", null) }.getOrNull()
+            ?: return false
+        val principal = bookOrbitAuthenticatedPrincipal(payload) ?: return false
+        persistAuthenticatedAccount(profileId, principal)
+        return true
+    }
+
+    private suspend fun persistAuthenticatedAccount(
+        profileId: String,
+        principal: AuthenticatedAccountPrincipal
+    ) {
+        AuthenticatedAccountScopeStore(context).writeAuthoritative(
+            profileId = profileId,
+            providerId = PROVIDER_BOOKORBIT,
+            principal = principal.canonical,
+            equivalentPrincipals = principal.provenAliases
+        )
+        DownloadStore(context).quarantineLegacyUnscopedDownloads()
     }
 
     override suspend fun loadAchievements(): AchievementCatalogue = withContext(Dispatchers.IO) {
@@ -996,6 +1293,36 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         books.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads)
     }
 
+    override suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = withContext(Dispatchers.IO) {
+        runCatching {
+            BookOrbitPayloadParser.parseHomeShelfPreferences(
+                request("/api/v1/auth/me", "GET", null)
+            )
+        }.onSuccess { lastHomeShelfPreferences = it }
+            .getOrElse { lastHomeShelfPreferences ?: HomeShelfPreferences() }
+    }
+
+    override suspend fun loadHomeShelves(): HomeShelfData = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+        val onDeck = runCatching {
+            BookOrbitPayloadParser.parseBooks(
+                libraryId = "",
+                payload = request(
+                    "/api/v1/dashboard/scrollers/up-next-in-series?limit=50",
+                    "GET",
+                    null
+                ),
+                downloads = downloads,
+                serverBase = serverUrl,
+                isLocalOnlyOverride = false
+            )
+        }.getOrDefault(emptyList())
+        HomeShelfData(
+            booksBySection = mapOf(HomeSection.ON_DECK to onDeck)
+        )
+    }
+
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
         firstPage: LibraryBooksPage?
@@ -1021,7 +1348,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
         if (!libraryCatalogPagesAreStable(pages, books)) {
             throw UserFacingException(
-                "The library changed while it was refreshing. Pull to refresh again."
+                providerErrorMessage(context, R.string.perror_bookorbit_library_changed_refresh, "The library changed while it was refreshing. Pull to refresh again.")
             )
         }
         val reportedTotal = pages.mapNotNull { it.total }.lastOrNull()
@@ -1429,7 +1756,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
         if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
-            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_annotation_syncing, "This annotation has not finished syncing yet. Try again once it syncs."))
         }
         request(annotationRestorePath(resolvedAnnotationId), "POST", JSONObject().toString().toRequestBody(JSON))
         Unit
@@ -1440,7 +1767,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val resolvedAnnotationId = annotationLocalIdMappingStore.resolve(annotationId)
         if (resolvedAnnotationId.startsWith(LOCAL_ANNOTATION_ID_PREFIX)) {
-            throw UserFacingException("This annotation has not finished syncing yet. Try again once it syncs.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_annotation_syncing, "This annotation has not finished syncing yet. Try again once it syncs."))
         }
         request(annotationPurgePath(resolvedAnnotationId), "DELETE", null)
         Unit
@@ -1518,8 +1845,39 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             }
             if (result.bytes.isNotEmpty()) return@withContext result.bytes
         }
+        if (lastFailure is StaleCatalogImageRequestException) throw lastFailure as Throwable
+        // No server cover reachable (offline) or none published: use the downloaded file's own.
+        localFileCover(book, initialScope)?.let { return@withContext it }
         lastFailure?.let { throw it }
         null
+    }
+
+    private suspend fun localFileCover(book: BookSummary, scope: CatalogImageRequestScope): ByteArray? {
+        val file = book.localPath?.let(::File)?.takeIf(File::isFile)
+            ?: downloadStore.readAll(scope.serverUrl)
+                .filter { it.status == DownloadRecordStatus.COMPLETE }
+                .let { records ->
+                    records.firstOrNull { it.fileId == book.fileId } ?: records.firstOrNull { it.bookId == book.id }
+                }
+                ?.localPath?.let(::File)?.takeIf(File::isFile)
+            ?: return null
+        val identity = scopedCoverCacheIdentity(
+            scope.cacheScopeId,
+            book.id,
+            "local-file:${file.name}#modified=${file.lastModified()}"
+        )
+        CatalogImageCoordinator.cacheMutationMutex.withLock {
+            requireCurrentCatalogImageGeneration(scope)
+            coverCacheStore.read(scope.serverUrl, book.id, identity)?.takeIf { it.isNotEmpty() }
+                // A sign-out can invalidate the session while the read is in flight.
+                ?.also { requireCurrentCatalogImageGeneration(scope) }
+        }?.let { return it }
+        val bytes = extractLocalCover(file) ?: return null
+        CatalogImageCoordinator.cacheMutationMutex.withLock {
+            requireCurrentCatalogImageGeneration(scope)
+            coverCacheStore.save(scope.serverUrl, book.id, identity, bytes)
+        }
+        return bytes
     }
 
     private suspend fun loadScopedCover(
@@ -1725,6 +2083,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     override suspend fun loadReaderProgress(
         book: BookSummary,
         availableFiles: List<BookFileOption>
+    ): BookSummary = fetchReaderProgress(book.copy(serverProgressPercent = null), availableFiles)
+
+    private suspend fun fetchReaderProgress(
+        book: BookSummary,
+        availableFiles: List<BookFileOption>
     ): BookSummary = withContext(Dispatchers.IO) {
         if (book.fileId == null) return@withContext book
         if (book.mediaKind == MediaKind.AUDIO) {
@@ -1841,7 +2204,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val detail = fetchAuthoritativeBookDetail(book)
         if (detail.userRating != rating) {
             throw UserFacingException(
-                "BookOrbit did not accept the rating; rating metadata may be locked."
+                providerErrorMessage(context, R.string.perror_bookorbit_rating_rejected, "BookOrbit did not accept the rating; rating metadata may be locked.")
             )
         }
         detail
@@ -1917,7 +2280,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        val snapshot = browserSnapshotStore.read(serverUrl) ?: return@withContext null
+        val snapshot = browserSnapshotStore.read(serverUrl)
+            // No catalog snapshot (never synced, or cleared): downloaded books are still readable,
+            // so offer them instead of a login screen that cannot reach the server.
+            ?: return@withContext offlineDownloadsBrowserState(serverUrl, loadLocalBooks())
         rememberLibraryCoverAspectRatios(snapshot.libraries)
         val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
         val selectedLibraryId = resolveSelectedLibraryId(
@@ -1971,9 +2337,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             comicExtractionError = localResolution.comicExtractionError,
             localFileError = localResolution.localFileError
         )
+        val latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
         val restoredProgress = resolveRestoredReaderProgress(
             book = book,
-            latestProgress = latestKnownProgress(serverUrl, book.id, book.fileId, book.mediaKind)
+            latestProgress = latestProgress
         )
         ReaderState(
             book = if (localFile != null) book.copy(localPath = localFile.absolutePath) else book,
@@ -1983,7 +2350,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             lastKnownPosition = restoredProgress.positionMs,
             pageIndex = restoredProgress.pageIndex,
             readerPageIndex = 0,
-            progressPercent = restoredProgress.progressPercent
+            progressPercent = restoredProgress.progressPercent,
+            lastReportedProgressPercent = normalizeStoredProgressPercent(latestProgress?.progressPercent)
         )
     }
 
@@ -1993,7 +2361,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     ): EpubImageLibrarySourceResult = withContext(Dispatchers.IO) {
         if (book.mediaKind != MediaKind.EPUB) {
             return@withContext EpubImageLibrarySourceResult.Unavailable(
-                "The selected file is not an EPUB."
+                context.getString(R.string.polish_selected_file_not_epub)
             )
         }
         val resolution = resolveReadableFile(book, allowRemoteCache = allowRemoteCache)
@@ -2001,7 +2369,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             localFile = resolution.file,
             localFileError = resolution.localFileError,
             fileId = book.fileId,
-            allowRemoteCache = allowRemoteCache
+            allowRemoteCache = allowRemoteCache,
+            context = context
         )
     }
 
@@ -2009,15 +2378,23 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         book: BookSummary,
         launchMode: ReaderLaunchMode
     ) = withContext(Dispatchers.IO) {
+        val serverUrl = getServerUrl().orEmpty()
+        val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext
+        val storageScopeId = downloadStorageScopeId(context, serverUrl, scope.profileId)
+            ?: return@withContext
         activeReaderStore.save(
-            serverUrl = getServerUrl().orEmpty(),
+            scope = scope,
+            storageScopeId = storageScopeId,
             book = book,
             launchMode = launchMode
         )
+        book.fileId?.let { downloadStore.markAccessed(serverUrl, it) }
+        Unit
     }
 
-    override suspend fun clearActiveReader() = withContext(Dispatchers.IO) {
-        activeReaderStore.clear()
+    override suspend fun clearActiveReader(): Unit = withContext(Dispatchers.IO) {
+        resolveEpubReaderScope(context)?.let { activeReaderStore.clear(it) }
+        Unit
     }
 
     override suspend fun saveEpubReaderPosition(book: BookSummary) = withContext(Dispatchers.IO) {
@@ -2068,6 +2445,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             isRead = status.isCompletedStatus(),
             lastReadAtMillis = completedAtMillis
         )
+        downloadStore.updateBookReadingState(
+            serverUrl = serverUrl,
+            bookId = book.id,
+            completed = status.isCompletedStatus(),
+            accessedAtMillis = completedAtMillis
+        )
+        Unit
     }
     override suspend fun markBookAsRead(book: BookSummary) = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
@@ -2089,13 +2473,20 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         bookDetailCacheStore.remove(serverUrl, book.id, book.fileId)
         libraryCatalogStore.markBookAsRead(serverUrl, book.id, markedAtMillis)
         browserSnapshotStore.markBookAsRead(serverUrl, book.id, markedAtMillis)
+        downloadStore.updateBookReadingState(
+            serverUrl = serverUrl,
+            bookId = book.id,
+            completed = true,
+            accessedAtMillis = markedAtMillis
+        )
+        Unit
     }
 
     override suspend fun resetBookReadingState(book: BookSummary) = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
         if (serverUrl.isBlank()) throw AuthenticationRequiredException()
         val progressResetRequest = buildProgressResetRequest(book)
-            ?: throw UserFacingException("Unable to reset progress because this book has no valid file ID.")
+            ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_reset_progress_no_file, "Unable to reset progress because this book has no valid file ID."))
 
         // A worker may already be replaying an older progress event. Serialize the clear
         // behind that replay, then remove every queued/acknowledged marker before another
@@ -2117,10 +2508,18 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
 
         epubReaderPositionStore.removeForBook(serverUrl, book.id)
-        activeReaderStore.clearIfMatches(serverUrl, book.id)
+        resolveEpubReaderScope(context, serverUrl)?.let { scope ->
+            activeReaderStore.clearIfMatches(scope, book.id)
+        }
         bookDetailCacheStore.remove(serverUrl, book.id, book.fileId)
         libraryCatalogStore.resetBookReadingState(serverUrl, book.id)
         browserSnapshotStore.resetBookReadingState(serverUrl, book.id)
+        downloadStore.updateBookReadingState(
+            serverUrl = serverUrl,
+            bookId = book.id,
+            completed = false
+        )
+        Unit
     }
 
     override suspend fun restoreActiveReaderState(localOnly: Boolean): ReaderState? = withContext(Dispatchers.IO) {
@@ -2128,7 +2527,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (serverUrl.isBlank()) {
             return@withContext null
         }
-        val savedSession = activeReaderStore.readSession(serverUrl) ?: return@withContext null
+        val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext null
+        val savedSession = activeReaderStore.readSession(scope) ?: return@withContext null
         restoreActiveReaderState(savedSession, localOnly)
     }
 
@@ -2137,6 +2537,13 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         localOnly: Boolean
     ): ReaderState? = withContext(Dispatchers.IO) {
         val serverUrl = session.serverUrl
+        val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext null
+        if (
+            session.profileId != scope.profileId ||
+            session.providerId != scope.providerId ||
+            session.accountScope != scope.accountScope ||
+            session.storageScopeId != downloadStorageScopeId(context, serverUrl, scope.profileId)
+        ) return@withContext null
         val savedBook = session.book
         var bookForRestore = savedBook
         var audioFiles = emptyList<BookFileOption>()
@@ -2282,52 +2689,104 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             pageIndex = restoredProgress.pageIndex,
             readerPageIndex = savedBook.readerPageIndex ?: 0,
             progressPercent = restoredProgress.progressPercent,
+            initialLocatorJson = bookForRestore.readerLocatorJson,
             launchMode = session.launchMode,
             audioFiles = audioFiles,
             audioTotalDurationMs = audioTotalDurationMs
         )
     }
 
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
-        val fileId = book.fileId ?: throw UserFacingException("This title is missing a downloadable file.")
+    override suspend fun downloadBook(
+        book: BookSummary,
+        expectedStorageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File = withContext(Dispatchers.IO) {
+        val fileId = book.fileId ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_missing_download_file, "This title is missing a downloadable file."))
         val serverUrl = getServerUrl().orEmpty()
-        val existingRecord = downloadStore.find(serverUrl, fileId)
-        val target = existingRecord
-            ?.localPath
-            ?.let(::File)
-            ?: downloadStore.downloadTarget(fileId, book.title, book.mediaKind, book.format)
+        val profileId = currentProfileId().orEmpty()
+        val currentStorageScopeId = downloadStorageScopeId(context, serverUrl, profileId)
+            ?: throw AuthenticationRequiredException()
+        val storageScopeId = expectedStorageScopeId ?: currentStorageScopeId
+        if (storageScopeId != currentStorageScopeId) throw AuthenticationRequiredException()
+        fun requireCapturedAccountScope() {
+            if (downloadStorageScopeId(context, serverUrl, profileId) != storageScopeId) {
+                throw AuthenticationRequiredException()
+            }
+        }
+        val existingRecord = downloadStore.find(serverUrl, fileId, storageScopeId)
+        val scheduledAttempt = downloadStore.findAttempt(serverUrl, fileId, storageScopeId)
+        val attemptOrigin = scheduledAttempt?.origin ?: DownloadOrigin.MANUAL
+        val target = downloadStore.ownedTargetOrIsolated(
+            serverUrl = serverUrl,
+            fileId = fileId,
+            title = book.title,
+            mediaKind = book.mediaKind,
+            formatHint = book.format,
+            recordedPath = existingRecord?.localPath,
+            storageScopeId = storageScopeId
+        )
         val hadUsableExisting = existingRecord != null &&
             downloadedFilePassesIntegrity(book, target)
-        downloadStore.saveAttempt(
-            DownloadAttempt(
+        if (scheduledAttempt == null) {
+            downloadStore.saveAttemptIfAbsent(
+                DownloadAttempt(
                 serverUrl = serverUrl,
+                requestId = "",
+                profileId = profileId,
+                storageScopeId = storageScopeId,
                 fileId = fileId,
                 bookId = book.id,
+                libraryId = book.libraryId,
                 title = book.title,
                 targetPath = target.absolutePath,
                 existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
                 mediaKind = book.mediaKind,
                 mimeType = book.format,
-                sourceUpdatedAtMillis = book.updatedAtMillis
+                sourceUpdatedAtMillis = book.updatedAtMillis,
+                origin = DownloadOrigin.MANUAL,
+                requiresQueueOwnership = false
+                )
             )
-        )
+        }
         val canReuseExisting = existingRecord != null &&
             !downloadUpdateAvailable(book, existingRecord) &&
             hadUsableExisting
+        val storagePolicy = AutomaticDownloadPolicyStore(context).read(
+            profileId.ifBlank { serverProfileId(serverUrl) },
+            serverUrl,
+            storageScopeId
+        )
+        var stagedForCommit: File? = null
+        var retainStagedForRetry = false
         if (!canReuseExisting) {
             val parent = target.parentFile
             parent?.mkdirs()
             if (parent != null && !parent.exists()) {
-                throw UserFacingException("Unable to prepare local storage for this download.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_download_storage_prepare, "Unable to prepare local storage for this download."))
             }
-            val staged = File(parent, ".${target.name}.$fileId.part")
+            val stagingId = scheduledAttempt?.requestId?.takeIf(String::isNotBlank)
+                ?: UUID.randomUUID().toString()
+            val staged = File(parent, ".${target.name}.part.$stagingId")
+            val storageReservationId = "$serverUrl\u0000$fileId\u0000$stagingId"
+            if (!downloadStore.markAttemptStateIfOwned(
+                    serverUrl,
+                    fileId,
+                    scheduledAttempt?.requestId.orEmpty(),
+                    DownloadAttemptState.STAGING,
+                    staged,
+                    storageScopeId
+                )
+            ) {
+                throw CancellationException("This download was replaced by a newer request.")
+            }
             if (staged.exists() && !staged.delete()) {
-                throw UserFacingException("Unable to clear an interrupted download before retrying.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_download_stage_replace, "Unable to replace the interrupted download stage."))
             }
             val downloadContext = currentCoroutineContext()
             try {
                 executeAuthenticated(
                     requestFactory = {
+                        requireCapturedAccountScope()
                         Request.Builder()
                             .url(buildDownloadUrl(fileId))
                             .get()
@@ -2337,10 +2796,48 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     action = "download this title"
                 ) { response ->
                     val body = response.body
-                        ?: throw UserFacingException("The server returned an empty download.")
+                        ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_empty_download, "The server returned an empty download."))
                     val input = body.byteStream()
                     val totalBytes = body.contentLength().takeIf { it > 0L }
+                    if (totalBytes != null) {
+                        if (downloadIsIndividuallyOverCap(
+                                totalBytes,
+                                attemptOrigin,
+                                storagePolicy
+                            )
+                        ) {
+                            throw LocalBookStorageLimitException(
+                                "This file is larger than the maximum local-book storage limit."
+                            )
+                        }
+                    }
+                    val (capacity, initialAllowance) = runBlocking {
+                        AutomaticDownloadStorage.prepareTransfer(
+                            context = context,
+                            serverUrl = serverUrl,
+                            profileId = profileId,
+                            policy = storagePolicy,
+                            declaredBytes = totalBytes,
+                            existingFinalBytes = target.length().coerceAtLeast(0L),
+                            protectedFileIds = setOf(fileId),
+                            allowRemoval = true,
+                            reservationId = storageReservationId,
+                            stagedPath = staged.absolutePath,
+                            origin = attemptOrigin
+                        )
+                    }
+                    if (!capacity.allowed ||
+                        (totalBytes != null &&
+                            initialAllowance.maximumAdditionalBytes != Long.MAX_VALUE &&
+                            totalBytes > initialAllowance.maximumAdditionalBytes)
+                    ) {
+                        throw LocalBookStorageLimitException(
+                            capacity.message
+                                ?: "This download would exceed the configured storage limits."
+                        )
+                    }
                     onProgress(0f.takeIf { totalBytes != null })
+                    var allowance = initialAllowance
                     try {
                         FileOutputStream(staged).use { output ->
                             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -2348,8 +2845,44 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                             var lastReportedPercent = -1
                             while (true) {
                                 downloadContext.ensureActive()
+                                requireCapturedAccountScope()
                                 val count = input.read(buffer)
                                 if (count < 0) break
+                                var permitted = allowance.permitsCurrentPolicyAndReserve(
+                                    context,
+                                    staged,
+                                    copiedBytes,
+                                    count,
+                                    attemptOrigin
+                                    )
+                                if (!permitted && totalBytes == null) {
+                                    val (extendedCapacity, extendedAllowance) = runBlocking {
+                                        AutomaticDownloadStorage.extendUnknownTransfer(
+                                            context = context,
+                                            serverUrl = serverUrl,
+                                            profileId = profileId,
+                                            policy = storagePolicy,
+                                            bytesWritten = copiedBytes,
+                                            protectedFileIds = setOf(fileId),
+                                            reservationId = storageReservationId,
+                                            stagedPath = staged.absolutePath
+                                        )
+                                    }
+                                    if (extendedCapacity.allowed) allowance = extendedAllowance
+                                    permitted = extendedCapacity.allowed &&
+                                        allowance.permitsCurrentPolicyAndReserve(
+                                            context,
+                                            staged,
+                                            copiedBytes,
+                                            count,
+                                            attemptOrigin
+                                        )
+                                }
+                                if (!permitted) {
+                                    throw LocalBookStorageLimitException(
+                                        "The download stopped before crossing the configured local-book storage limits."
+                                    )
+                                }
                                 output.write(buffer, 0, count)
                                 copiedBytes += count
                                 val percent = totalBytes?.let { total ->
@@ -2363,31 +2896,38 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                         }
                     } catch (error: IOException) {
                         if (error.isLikelyLocalStorageFailure()) {
-                            throw UserFacingException("Local storage could not save this download. Check free space and file access, then try again.")
+                            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_local_storage_save, "Local storage could not save this download. Check free space and file access, then try again."))
                         }
                         throw error
                     }
                     ensureNonEmptyFile(
                         target = staged,
-                        message = "The server returned an empty download."
+                        message = providerErrorMessage(context, R.string.perror_bookorbit_empty_download, "The server returned an empty download.")
                     )
                     if (!downloadedFilePassesIntegrity(book, staged)) {
                         val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
-                        throw UserFacingException("The downloaded file did not pass integrity checks.$suffix")
+                        throw UserFacingException(providerErrorMessage(context, if (hadUsableExisting) R.string.perror_download_integrity_kept else R.string.perror_download_integrity, "The downloaded file did not pass integrity checks.$suffix"))
                     }
                     onProgress(1f)
                 }
-                atomicReplaceDownloadedFile(staged, target)
-            } finally {
+                stagedForCommit = staged
+            } catch (error: Throwable) {
                 if (staged.exists()) staged.delete()
+                throw error
+            } finally {
+                runBlocking {
+                    AutomaticDownloadStorage.releaseTransfer(context, storageReservationId)
+                }
             }
         }
-        downloadStore.removeAttempt(serverUrl, fileId)
-        downloadStore.save(
-            DownloadRecord(
-                serverUrl = getServerUrl().orEmpty(),
+        val completedAttempt = scheduledAttempt
+        val completedRecord = DownloadRecord(
+                serverUrl = serverUrl,
+                profileId = profileId,
+                storageScopeId = storageScopeId,
                 fileId = fileId,
                 bookId = book.id,
+                libraryId = book.libraryId,
                 title = book.title,
                 filename = book.filename,
                 localPath = target.absolutePath,
@@ -2397,9 +2937,60 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     existingRecord?.sourceUpdatedAtMillis,
                     book.updatedAtMillis
                 ).maxOrNull(),
+                downloadedAtMillis = existingRecord?.downloadedAtMillis
+                    ?: System.currentTimeMillis(),
+                lastAccessedAtMillis = listOfNotNull(
+                    existingRecord?.lastAccessedAtMillis,
+                    book.lastReadAtMillis
+                ).maxOrNull(),
+                lastKnownCompleted = when {
+                    book.isRead -> true
+                    book.readStatus != null -> book.readStatus.isCompletedStatus()
+                    else -> existingRecord?.lastKnownCompleted
+                },
+                sizeBytes = (stagedForCommit ?: target).length().takeIf { it >= 0L },
+                origin = existingRecord?.origin
+                    ?: completedAttempt?.origin
+                    ?: DownloadOrigin.MANUAL,
                 status = DownloadRecordStatus.COMPLETE
-            )
         )
+        try {
+            requireCapturedAccountScope()
+            val committed = stagedForCommit?.let { staged ->
+                try {
+                    verifyAndCommitDownloadWhenReaderInactive(
+                        context = context,
+                        downloadStore = downloadStore,
+                        serverUrl = serverUrl,
+                        storageScopeId = storageScopeId,
+                        fileId = fileId,
+                        requestId = scheduledAttempt?.requestId.orEmpty(),
+                        stagedFile = staged,
+                        targetFile = target,
+                        record = completedRecord
+                    )
+                } catch (deferred: DownloadReplacementDeferredException) {
+                    retainStagedForRetry = true
+                    throw deferred
+                }
+            } ?: downloadStore.commitDownloadIfOwned(
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = scheduledAttempt?.requestId.orEmpty(),
+                    stagedFile = null,
+                    targetFile = target,
+                    record = completedRecord,
+                    storageScopeId = storageScopeId
+                )
+            if (!committed) {
+                throw CancellationException("This download was replaced by a newer request.")
+            }
+        } finally {
+            if (!retainStagedForRetry) {
+                stagedForCommit?.let { if (it.exists()) it.delete() }
+            }
+        }
+        requireCapturedAccountScope()
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, target.absolutePath)
         val downloadedBook = book.copy(localPath = target.absolutePath)
@@ -2427,11 +3018,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun deleteLocalCopy(book: BookSummary) = withContext(Dispatchers.IO) {
-        val fileId = book.fileId ?: throw UserFacingException("This title does not have a removable local file.")
+        val fileId = book.fileId ?: throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_remove_missing_file, "This title does not have a removable local file."))
         val serverUrl = getServerUrl().orEmpty()
         val deleted = downloadStore.delete(serverUrl, fileId)
         if (!deleted) {
-            throw UserFacingException("Unable to remove the local copy for this title.")
+            throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_remove_failed, "Unable to remove the local copy for this title."))
         }
         libraryCatalogStore.updateLocalPath(serverUrl, book.id, null)
         browserSnapshotStore.updateLocalPath(serverUrl, book.id, null)
@@ -2891,7 +3482,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (direct != null && !direct.isReadableLocalReaderFile(book)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The local reader file failed integrity checks."
+                localFileError = providerErrorMessage(context, R.string.perror_bookorbit_local_reader_integrity, "The local reader file failed integrity checks.")
             )
         }
         if (direct != null) {
@@ -2905,7 +3496,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (downloaded != null && !downloaded.isReadableLocalReaderFile(book)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The local reader file failed integrity checks."
+                localFileError = providerErrorMessage(context, R.string.perror_bookorbit_local_reader_integrity, "The local reader file failed integrity checks.")
             )
         }
         if (downloaded != null) {
@@ -2953,7 +3544,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val cacheDir = File(context.cacheDir, "comic-extraction-cache")
         return when (val outcome = ComicArchiveCache.resolve(identity, rawLocal, cacheDir)) {
             is ComicArchiveCache.Outcome.Ready -> LocalReaderResolution(outcome.file)
-            is ComicArchiveCache.Outcome.Failed -> LocalReaderResolution(null, outcome.message)
+            is ComicArchiveCache.Outcome.Failed -> LocalReaderResolution(
+                null,
+                providerErrorMessage(context, outcome.messageRes, outcome.message)
+            )
         }
     }
 
@@ -2979,31 +3573,49 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         when (book.mediaKind) {
             MediaKind.AUDIO -> {
                 if (localFile == null && streamUrl.isNullOrBlank()) {
-                    throw UserFacingException("This audiobook is missing both a local file and a playable stream.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_audio_missing),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.PDF -> {
                 if (localFile == null) {
-                    throw UserFacingException("This PDF could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_pdf_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.EPUB -> {
                 if (localFile == null) {
-                    throw UserFacingException("This EPUB could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_epub_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.COMIC -> {
                 if (comicExtractionError != null) {
-                    throw UserFacingException(comicExtractionError)
+                    throw UserFacingException(
+                        comicExtractionError,
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
                 val localComicReady = localFile?.let(ReaderFileValidator::canRenderComicLocally) == true
                 if (!localComicReady && comicPagesUrl.isNullOrBlank()) {
-                    throw UserFacingException("This comic could not be prepared for reading. Download it first or reconnect to the server.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_comic_unprepared),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
             MediaKind.UNKNOWN -> {
                 if (localFile == null && streamUrl.isNullOrBlank()) {
-                    throw UserFacingException("This title does not expose a readable local file or stream.")
+                    throw UserFacingException(
+                        context.getString(R.string.perror_local_reader_unknown_format),
+                        UserFacingReason.LOCAL_READER_UNAVAILABLE
+                    )
                 }
             }
         }
@@ -3045,9 +3657,9 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 true
             }
             if (!fetched) return null
-            ensureNonEmptyFile(staged, "The server returned an empty reader file.")
+            ensureNonEmptyFile(staged, providerErrorMessage(context, R.string.perror_bookorbit_empty_reader_file, "The server returned an empty reader file."))
             if (!ReaderFileValidator.isReadable(book.mediaKind, staged)) {
-                throw UserFacingException("The reader file did not pass integrity checks.")
+                throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_reader_integrity, "The reader file did not pass integrity checks."))
             }
             atomicReplaceDownloadedFile(staged, target)
             target
@@ -3108,7 +3720,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private fun request(path: String, method: String, body: RequestBody?): String {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         return executeAuthenticated(
             requestFactory = {
                 Request.Builder()
@@ -3125,7 +3737,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private suspend fun requestLogin(body: RequestBody) {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         val request = Request.Builder()
             .url(base.trimEnd('/') + "/api/v1/auth/login")
             .post(body)
@@ -3160,7 +3772,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     private fun requestUnauthenticated(path: String, method: String, body: RequestBody?): String {
-        val base = serverBase().ifBlank { throw UserFacingException("No BookOrbit server is configured.") }
+        val base = serverBase().ifBlank { throw UserFacingException(providerErrorMessage(context, R.string.perror_bookorbit_no_server, "No BookOrbit server is configured.")) }
         val request = Request.Builder()
             .url(base.trimEnd('/') + path)
             .method(method, body)
@@ -3225,7 +3837,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                         url = it.request.url.toString(),
                         serverUrl = responseScope.serverUrl
                     ),
-                    checkActive = { requestContext.ensureActive() }
+                    checkActive = { requestContext.ensureActive() },
+                    context = context
                 )
             }
             requireCurrentCatalogImageScope(responseScope)
@@ -3452,7 +4065,16 @@ enum class ServerCheckResult {
 }
 
 class AuthenticationRequiredException : IllegalStateException("Authentication required.")
-class UserFacingException(message: String) : IllegalStateException(message)
+enum class UserFacingReason {
+    GENERIC,
+    LOCAL_READER_UNAVAILABLE,
+    CAPABILITY_UNAVAILABLE
+}
+
+class UserFacingException(
+    message: String,
+    val reason: UserFacingReason = UserFacingReason.GENERIC
+) : IllegalStateException(message)
 class InvalidCredentialsException : IOException("Invalid credentials.")
 class LoginRateLimitedException : IOException("Login rate limited.")
 class LoginVerificationException : IOException("The server did not confirm the new session.")
@@ -3480,6 +4102,30 @@ private class WebViewCookieJar : CookieJar {
 }
 
 internal object BookOrbitPayloadParser {
+    fun parseHomeShelfPreferences(payload: String): HomeShelfPreferences {
+        val root = runCatching { JSONObject(payload) }.getOrNull() ?: return HomeShelfPreferences()
+        val user = root.optJSONObject("user") ?: root
+        val dashboardConfig = user.optJSONObject("settings")
+            ?.optJSONObject("dashboardShelfConfig")
+            ?: return HomeShelfPreferences(source = HomeShelfPreferenceSource.LOCAL_FALLBACK)
+        val syncValue = dashboardConfig.opt("syncAcrossSessions")
+        if (syncValue !is Boolean) return HomeShelfPreferences()
+        if (!dashboardConfig.optBoolean("syncAcrossSessions")) {
+            return HomeShelfPreferences(source = HomeShelfPreferenceSource.LOCAL_FALLBACK)
+        }
+        val scrollers = dashboardConfig.optJSONArray("scrollers") ?: JSONArray()
+        val onDeckEnabled = (0 until scrollers.length()).any { index ->
+            val scroller = scrollers.optJSONObject(index) ?: return@any false
+            scroller.optString("type") == "up-next-in-series" &&
+                scroller.opt("enabled") is Boolean &&
+                scroller.optBoolean("enabled")
+        }
+        return HomeShelfPreferences(
+            onDeckEnabled = onDeckEnabled,
+            source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+        )
+    }
+
     fun parseSmartScopes(payload: String): List<SmartScope> {
         val array = runCatching {
             when (val root = JSONTokener(payload).nextValue()) {
@@ -3705,6 +4351,10 @@ internal object BookOrbitPayloadParser {
                         streamUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/serve" },
                         downloadUrl = fileId?.let { "$serverBase/api/v1/books/files/$it/download" },
                         coverUrl = obj.resolveCoverUrl(serverBase = serverBase, bookId = bookId),
+                        audiobookCoverUrl = obj.resolveAudiobookCoverUrl(
+                            serverBase = serverBase,
+                            primaryFile = primaryFile
+                        ),
                         localPath = fileId?.let { downloads[it]?.localPath },
                         downloadedSourceUpdatedAtMillis = fileId?.let {
                             downloads[it]?.sourceUpdatedAtMillis
@@ -3927,7 +4577,11 @@ internal object BookOrbitPayloadParser {
                         add(
                             BookFileOption(
                                 book = fileBook.copy(
-                                    coverAspectRatio = book.coverAspectRatio,
+                                    coverAspectRatio = if (fileBook.mediaKind == MediaKind.AUDIO && fileBook.audiobookCoverUrl != null) {
+                                        CoverAspectRatio.SQUARE
+                                    } else {
+                                        book.coverAspectRatio
+                                    },
                                     audioChapters = if (fileBook.mediaKind == MediaKind.AUDIO) {
                                         audioChapters
                                     } else {
@@ -4397,7 +5051,8 @@ internal object BookOrbitPayloadParser {
             progressLabel = label,
             progressPercent = percentage ?: progressPercent,
             progressPositionMs = positionMs ?: progressPositionMs,
-            progressPageIndex = pageIndex ?: progressPageIndex
+            progressPageIndex = pageIndex ?: progressPageIndex,
+            serverProgressPercent = percentage
         )
     }
 
@@ -4625,6 +5280,48 @@ internal object BookOrbitPayloadParser {
         } else {
             null
         }
+    }
+
+    private fun JSONObject.resolveAudiobookCoverUrl(
+        serverBase: String,
+        primaryFile: JSONObject?
+    ): String? {
+        fun JSONObject.coverValue(): String? = sequenceOf(
+            stringValue("audiobookCoverUrl", "audioCoverUrl"),
+            optJSONObject("audiobookCover")?.stringValue("url", "href", "path"),
+            optJSONObject("audioCover")?.stringValue("url", "href", "path")
+        ).filterNotNull().firstOrNull { it.isNotBlank() }
+
+        fun JSONObject.fileCoverValue(): String? = sequenceOf(
+            stringValue("audiobookCoverUrl", "audioCoverUrl", "coverUrl", "cover", "coverImage"),
+            optJSONObject("audiobookCover")?.stringValue("url", "href", "path"),
+            optJSONObject("audioCover")?.stringValue("url", "href", "path"),
+            optJSONObject("cover")?.stringValue("url", "href", "path"),
+            optJSONObject("coverImage")?.stringValue("url", "href", "path")
+        ).filterNotNull().firstOrNull { it.isNotBlank() }
+
+        fun resolve(value: String): String = when {
+            value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true) -> value
+            else -> "$serverBase/${value.trimStart('/')}"
+        }
+
+        val direct = primaryFile?.fileCoverValue()
+            ?: coverValue()
+        if (direct != null) return resolve(direct)
+
+        val covers = sequenceOf(this, primaryFile)
+            .filterNotNull()
+            .mapNotNull { it.optJSONArray("covers") ?: it.optJSONArray("coverImages") }
+            .firstOrNull()
+            ?: return null
+        for (index in 0 until covers.length()) {
+            val cover = covers.optJSONObject(index) ?: continue
+            val label = cover.stringValue("mediaKind", "media_kind", "kind", "type", "format").orEmpty()
+            if (!label.contains("audio", ignoreCase = true)) continue
+            val value = cover.stringValue("url", "href", "path", "coverUrl", "imageUrl") ?: continue
+            return resolve(value)
+        }
+        return null
     }
 
     private fun JSONObject.resolveCatalogImageUrl(
@@ -5004,6 +5701,13 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
 
 internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List<String> {
     return buildList {
+        if (book.mediaKind == MediaKind.AUDIO) {
+            serverBase
+                .trim()
+                .trimEnd('/')
+                .takeIf { it.isNotBlank() }
+                ?.let { add("$it/api/v1/books/${book.id}/cover?medium=audio") }
+        }
         book.coverUrl
             ?.takeIf { it.isNotBlank() }
             ?.let(::coverThumbnailUrl)
@@ -5215,11 +5919,15 @@ internal fun readBoundedCatalogImageBytes(
     input: InputStream,
     declaredLength: Long,
     maxBytes: Long = MAX_COVER_IMAGE_RESPONSE_BYTES,
-    checkActive: () -> Unit = {}
+    checkActive: () -> Unit = {},
+    context: Context? = null
 ): ByteArray {
     require(maxBytes in 1..Int.MAX_VALUE.toLong())
     if (declaredLength > maxBytes) {
-        throw UserFacingException("The image response is too large.")
+        throw UserFacingException(
+            context?.getString(R.string.perror_catalog_image_too_large)
+                ?: "The image response is too large."
+        )
     }
     val maximum = maxBytes.toInt()
     var output = ByteArray(minOf(DEFAULT_CATALOG_IMAGE_BUFFER_BYTES, maximum))
@@ -5229,7 +5937,10 @@ internal fun readBoundedCatalogImageBytes(
         if (total == output.size) {
             if (total == maximum) {
                 if (input.read() >= 0) {
-                    throw UserFacingException("The image response is too large.")
+                    throw UserFacingException(
+                        context?.getString(R.string.perror_catalog_image_too_large)
+                            ?: "The image response is too large."
+                    )
                 }
                 break
             }

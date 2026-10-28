@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fallbacks shown when a model has no title -->
+    <string name="polish_unknown_book">Unknown book</string>
+    <string name="polish_epub_not_local">The selected EPUB is not available locally.</string>
+    <string name="polish_selected_file_not_epub">The selected file is not an EPUB.</string>
+</resources>

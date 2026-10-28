@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App shell: update dialog -->
+    <string name="shell_update_available">%1$s is available</string>
+    <string name="shell_update_ready">Version %1$s is ready to download.</string>
+    <string name="shell_update_ignore">Ignore</string>
+
+    <!-- App shell: startup and loading -->
+    <string name="shell_tagline">a Lagrange reader</string>
+    <string name="shell_loading_library">Loading your library…</string>
+    <string name="shell_back">Back</string>
+
+    <!-- App shell: library browser -->
+    <string name="shell_libraries_title">Libraries</string>
+    <string name="shell_refresh">Refresh</string>
+    <string name="shell_sign_out">Sign out</string>
+    <string name="shell_connected_server">Connected server</string>
+    <string name="shell_pending_sync_queue">Pending sync queue: %1$d</string>
+    <string name="shell_loading_libraries">Loading libraries...</string>
+    <string name="shell_no_libraries">No libraries found.</string>
+    <string name="shell_select_library">Select a library</string>
+    <string name="shell_books">Books</string>
+    <string name="shell_loading_books">Loading books...</string>
+    <string name="shell_no_books_in_library">No books found in this library.</string>
+    <string name="shell_open_local">Open local</string>
+    <string name="shell_unavailable_offline">Unavailable offline</string>
+    <string name="shell_read_or_listen">Read / Listen</string>
+    <string name="shell_delete_local">Delete local</string>
+    <string name="shell_downloading">Downloading</string>
+    <string name="shell_download">Download</string>
+    <string name="shell_status_downloaded">downloaded</string>
+    <string name="shell_status_not_available_offline">not available offline</string>
+
+    <!-- App shell: reader preparation errors -->
+    <string name="shell_reader_epub_unpreparable">Unable to prepare this EPUB.</string>
+    <string name="shell_reader_comic_needs_cbz">This comic container must be converted to CBZ before Readium can open it. Reconnect to the configured server to prepare it.</string>
+    <string name="shell_reader_pdf_unpreparable">Unable to prepare this PDF for Readium.</string>
+    <string name="shell_reader_format_unsupported">This file format is not supported.</string>
+
+    <!-- App shell: audiobook preparation -->
+    <string name="shell_audiobook_unavailable">Unable to prepare this audiobook for playback.</string>
+    <string name="shell_audiobook_timeout">Audiobook preparation timed out. Try opening it again.</string>
+    <string name="shell_audiobook_failed">Audiobook preparation failed safely.</string>
+    <string name="shell_audiobook_preparing">Preparing audiobook…</string>
+</resources>

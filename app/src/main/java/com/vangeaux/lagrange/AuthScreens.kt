@@ -19,6 +19,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
@@ -58,10 +61,35 @@ internal fun ServerSetupScreen(
     var server by remember(initialServerUrl) { mutableStateOf(initialServerUrl) }
     var serverName by remember(initialServerUrl, initialServerName) { mutableStateOf(initialServerName) }
     var providerId by remember(initialServerUrl, initialProviderId) { mutableStateOf(initialProviderId) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var errorRes by remember { mutableStateOf<Int?>(null) }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
+    val serverDescription = if (providerId.isNotBlank()) {
+        stringResource(R.string.setup_your_provider_server, serverProviderDisplayName(providerId))
+    } else {
+        stringResource(R.string.setup_your_server)
+    }
+    val providerButtonLabel = providerId.takeIf { it.isNotBlank() }
+        ?.let(::serverProviderDisplayName)
+        ?: stringResource(R.string.setup_select_server_type)
+    val serverUrlDescription = stringResource(
+        R.string.setup_server_url_description,
+        serverProviderDisplayName(providerId)
+    )
+    val submit = {
+        if (providerId.isBlank()) {
+            errorRes = R.string.setup_select_server_type_error
+        } else {
+            val normalized = normalizeServerUrl(server)
+            if (normalized == null) {
+                errorRes = R.string.setup_invalid_server_url
+            } else {
+                onContinue(normalized, serverName.trim(), providerId)
+            }
+        }
+    }
 
     Scaffold(
-        topBar = { BookOrbitTopBar(title = "Connect") },
+        topBar = { BookOrbitTopBar(title = stringResource(R.string.setup_title_connect)) },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
@@ -78,10 +106,13 @@ internal fun ServerSetupScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                OrbitEyebrow("Private reader")
-                Text("Your library, in orbit.", style = MaterialTheme.typography.displaySmall)
+                OrbitEyebrow(stringResource(R.string.setup_eyebrow_private_reader))
                 Text(
-                    "Connect securely to your BookOrbit server. Your library stays on your server; this app is your reading window.",
+                    stringResource(R.string.setup_tagline_your_library),
+                    style = MaterialTheme.typography.displaySmall
+                )
+                Text(
+                    stringResource(R.string.setup_intro, serverDescription),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -92,84 +123,85 @@ internal fun ServerSetupScreen(
                     value = serverName,
                     onValueChange = {
                         serverName = it
-                        error = null
+                        errorRes = null
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Server name (optional)") },
-                    placeholder = { Text("My library") },
+                    label = { Text(stringResource(R.string.setup_server_name_label)) },
+                    placeholder = { Text(stringResource(R.string.setup_server_name_placeholder)) },
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = server,
                     onValueChange = {
                         server = it
-                        error = null
+                        errorRes = null
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = "BookOrbit server URL" },
-                    label = { Text("Server URL") },
-                    placeholder = { Text("https://books.example.com") },
+                        .semantics { contentDescription = serverUrlDescription },
+                    label = { Text(stringResource(R.string.setup_server_url_label)) },
+                    placeholder = { Text(stringResource(R.string.setup_server_url_placeholder)) },
                     singleLine = true
                 )
-                Text("Server type", style = MaterialTheme.typography.titleMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (providerId == PROVIDER_BOOKORBIT) {
-                        Button(
-                            onClick = { providerId = PROVIDER_BOOKORBIT },
+                Text(stringResource(R.string.setup_server_type_title), style = MaterialTheme.typography.titleMedium)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { providerMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            providerButtonLabel,
                             modifier = Modifier.weight(1f)
-                        ) { Text("BookOrbit") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { providerId = PROVIDER_BOOKORBIT },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("BookOrbit") }
+                        )
                     }
-                    if (providerId == PROVIDER_KOMGA) {
-                        Button(
-                            onClick = { providerId = PROVIDER_KOMGA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Komga") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { providerId = PROVIDER_KOMGA },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Komga") }
+                    DropdownMenu(
+                        expanded = providerMenuExpanded,
+                        onDismissRequest = { providerMenuExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA).forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(serverProviderDisplayName(option)) },
+                                onClick = {
+                                    providerId = option
+                                    providerMenuExpanded = false
+                                    errorRes = null
+                                }
+                            )
+                        }
                     }
                 }
-                error?.let {
-                    OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                errorRes?.let { res ->
+                    if (providerId.isBlank() && res == R.string.setup_select_server_type_error) {
+                        Text(
+                            text = stringResource(res),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else if (res != R.string.setup_select_server_type_error) {
+                        OrbitMessage(stringResource(res), tone = OrbitMessageTone.ERROR)
+                    }
                 }
                 Button(
-                    onClick = {
-                        val normalized = normalizeServerUrl(server)
-                        if (normalized == null) {
-                            error = invalidServerUrlMessage()
-                        } else {
-                            onContinue(normalized, serverName.trim(), providerId)
-                        }
-                    },
+                    onClick = submit,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
                 ) {
-                    Text("Continue")
+                    Text(stringResource(R.string.common_continue))
                 }
                 if (server.isNotBlank() && !message.isNullOrBlank()) {
                     OutlinedButton(
-                        onClick = { onContinue(server, serverName.trim(), providerId) },
+                        onClick = submit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
                     ) {
-                        Text("Retry")
+                        Text(stringResource(R.string.common_retry))
                     }
                 }
                 if (configuredServerProfiles.isNotEmpty()) {
-                    Text("Configured servers", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.setup_configured_servers), style = MaterialTheme.typography.titleMedium)
                     configuredServerProfiles.forEach { profile ->
                         ConfiguredServerCard(
                             profile = profile,
@@ -247,7 +279,7 @@ internal fun ConfiguredServerCard(
         }
         onRemove?.let { remove ->
             TextButton(onClick = remove) {
-                Text(if (isCurrent) "Current" else "Remove")
+                Text(if (isCurrent) stringResource(R.string.setup_current) else stringResource(R.string.setup_remove))
             }
         }
     }
@@ -258,6 +290,7 @@ internal fun ConfiguredServerCard(
 internal fun LoginScreen(
     serverUrl: String,
     providerId: String,
+    serverHostedSignInAvailable: Boolean,
     configuredServerProfiles: List<ServerProfile>,
     message: String?,
     isSubmitting: Boolean,
@@ -269,24 +302,36 @@ internal fun LoginScreen(
 ) {
     var username by remember(serverUrl) { mutableStateOf("") }
     var password by remember(serverUrl) { mutableStateOf("") }
-    var passwordVisible by remember(serverUrl) { mutableStateOf(false) }
-    var validationMessage by remember(serverUrl) { mutableStateOf<String?>(null) }
+    var passwordVisible by remember(serverUrl, providerId) { mutableStateOf(false) }
+    var validationMessageRes by remember(serverUrl) { mutableStateOf<Int?>(null) }
     var showServerPicker by rememberSaveable(serverUrl) { mutableStateOf(false) }
     val submit = {
         when {
-            username.isBlank() -> validationMessage = "Enter your username."
-            password.isBlank() -> validationMessage = "Enter your password."
+            username.isBlank() -> validationMessageRes = R.string.login_enter_username
+            password.isBlank() -> validationMessageRes = R.string.login_enter_password
             else -> {
-                validationMessage = null
+                validationMessageRes = null
                 onSubmit(username.trim(), password)
             }
         }
     }
+    val usernameDescription = stringResource(
+        R.string.login_username_description,
+        serverProviderDisplayName(providerId)
+    )
+    val passwordDescription = stringResource(
+        R.string.login_password_description,
+        serverProviderDisplayName(providerId)
+    )
     Scaffold(
         topBar = {
             BookOrbitTopBar(
-                title = "Sign in",
-                actions = { TextButton(onClick = { showServerPicker = true }) { Text("Change server") } }
+                title = stringResource(R.string.login_title),
+                actions = {
+                    TextButton(onClick = { showServerPicker = true }) {
+                        Text(stringResource(R.string.common_change_server))
+                    }
+                }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -323,28 +368,30 @@ internal fun LoginScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Lagrange",
+                            text = stringResource(R.string.app_name),
                             style = MaterialTheme.typography.headlineSmall,
                             modifier = Modifier.semantics { heading() }
                         )
                         Text(
-                            text = "a BookOrbit reader",
+                            text = stringResource(R.string.login_tagline),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    OrbitEyebrow("BookOrbit server")
+                    OrbitEyebrow(
+                        stringResource(R.string.provider_server_label, serverProviderDisplayName(providerId))
+                    )
                     Text(serverUrl, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
                         value = username,
                         onValueChange = {
                             username = it
-                            validationMessage = null
+                            validationMessageRes = null
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .semantics { contentDescription = "BookOrbit username" },
-                        label = { Text("Username") },
+                            .semantics { contentDescription = usernameDescription },
+                        label = { Text(stringResource(R.string.login_username_label)) },
                         singleLine = true,
                         enabled = !isSubmitting,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -356,12 +403,12 @@ internal fun LoginScreen(
                         value = password,
                         onValueChange = {
                             password = it
-                            validationMessage = null
+                            validationMessageRes = null
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .semantics { contentDescription = "BookOrbit password" },
-                        label = { Text("Password") },
+                            .semantics { contentDescription = passwordDescription },
+                        label = { Text(stringResource(R.string.login_password_label)) },
                         singleLine = true,
                         enabled = !isSubmitting,
                         visualTransformation = if (passwordVisible) {
@@ -374,7 +421,11 @@ internal fun LoginScreen(
                                 onClick = { passwordVisible = !passwordVisible },
                                 enabled = !isSubmitting
                             ) {
-                                Text(if (passwordVisible) "Hide" else "Show")
+                                Text(
+                                    stringResource(
+                                        if (passwordVisible) R.string.login_hide_password else R.string.login_show_password
+                                    )
+                                )
                             }
                         },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -383,8 +434,8 @@ internal fun LoginScreen(
                         ),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
                     )
-                    validationMessage?.let {
-                        OrbitMessage(it, tone = OrbitMessageTone.ERROR)
+                    validationMessageRes?.let { res ->
+                        OrbitMessage(stringResource(res), tone = OrbitMessageTone.ERROR)
                     }
                     Button(
                         onClick = submit,
@@ -399,10 +450,10 @@ internal fun LoginScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Sign in")
+                            Text(stringResource(R.string.common_sign_in))
                         }
                     }
-                    if (providerId == PROVIDER_KOMGA) {
+                    if (serverHostedSignInAvailable) {
                         OutlinedButton(
                             onClick = onOpenServerSignIn,
                             enabled = !isSubmitting,
@@ -410,9 +461,9 @@ internal fun LoginScreen(
                                 .fillMaxWidth()
                                 .heightIn(min = 52.dp)
                         ) {
-                            Text("Open server sign-in")
+                            Text(stringResource(R.string.login_open_server_sign_in))
                         }
-                    } else {
+                    } else if (providerId == PROVIDER_BOOKORBIT) {
                         OutlinedButton(
                             onClick = onOpenOidcSignIn,
                             enabled = !isSubmitting,
@@ -420,7 +471,7 @@ internal fun LoginScreen(
                                 .fillMaxWidth()
                                 .heightIn(min = 52.dp)
                         ) {
-                            Text("Sign in with SSO")
+                            Text(stringResource(R.string.login_sign_in_with_sso))
                         }
                     }
                 }
@@ -430,10 +481,10 @@ internal fun LoginScreen(
     if (showServerPicker) {
         AlertDialog(
             onDismissRequest = { showServerPicker = false },
-            title = { Text("Change server") },
+            title = { Text(stringResource(R.string.common_change_server)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Choose a configured server or add a new one.")
+                    Text(stringResource(R.string.login_choose_server))
                     configuredServerProfiles.forEach { profile ->
                         val isCurrent = serverUrlsMatch(profile.serverUrl, serverUrl)
                         ConfiguredServerCard(
@@ -452,11 +503,11 @@ internal fun LoginScreen(
                             onNewServer()
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("New server") }
+                    ) { Text(stringResource(R.string.login_new_server)) }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showServerPicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showServerPicker = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }

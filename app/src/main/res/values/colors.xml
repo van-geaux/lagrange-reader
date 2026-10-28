@@ -3,4 +3,9 @@
     <color name="launcher_background">#102A43</color>
     <color name="launcher_orbit_accent">#F0B429</color>
     <color name="launcher_foreground">#F8FBFF</color>
+    <color name="oled_black">#FF000000</color>
+    <color name="oled_white">#FFFFFFFF</color>
+    <color name="oled_muted">#FFBDBDBD</color>
+    <color name="oled_outline">#FF8A8A8A</color>
+    <color name="oled_selection">#66FFFFFF</color>
 </resources>

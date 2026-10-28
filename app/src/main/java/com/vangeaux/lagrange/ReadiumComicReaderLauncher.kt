@@ -50,6 +50,7 @@ internal suspend fun prepareReadiumComic(
     book: BookSummary,
     localFile: File?,
     pagesUrl: String?,
+    providedPageCount: Int? = null,
     pageLoader: suspend (String) -> ByteArray?
 ): ReadiumComicPreparationResult = withContext(Dispatchers.IO) {
     localFile
@@ -63,23 +64,22 @@ internal suspend fun prepareReadiumComic(
             "This comic could not be prepared as a Readium image publication."
         )
     }
-    val pageCount = runCatching { pageLoader(pagesUrl) }
-        .getOrNull()
-        ?.let(::parseComicPageCount)
-        ?.takeIf { it > 0 }
+    val pageCount = providedPageCount?.takeIf { it > 0 }
+        ?: runCatching { pageLoader(pagesUrl) }
+            .getOrNull()
+            ?.let(::parseComicPageCount)
+            ?.takeIf { it > 0 }
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit could not provide this " +
-                archiveExtension.orEmpty().uppercase(Locale.US) +
-                " file's page list."
+            "The comic could not provide its ${archiveExtension.orEmpty().uppercase(Locale.US)} page list."
         )
     val firstPage = runCatching { pageLoader(comicPageUrl(pagesUrl, 0)) }
         .getOrNull()
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit could not provide the first comic page."
+            "The configured server could not provide the first comic page."
         )
     val mediaType = comicImageMediaType(firstPage)
         ?: return@withContext ReadiumComicPreparationResult.Error(
-            "BookOrbit returned an unsupported comic-page image."
+            "The configured server returned an unsupported comic-page image."
         )
     ReadiumComicPreparationResult.Remote(
         pagesUrl = pagesUrl.trimEnd('/'),
@@ -123,6 +123,7 @@ internal fun ReadiumComicReaderLauncher(
     book: BookSummary,
     file: File?,
     pagesUrl: String?,
+    providedPageCount: Int? = null,
     pageLoader: suspend (String) -> ByteArray?,
     title: String,
     readerKey: String,
@@ -156,6 +157,7 @@ internal fun ReadiumComicReaderLauncher(
             book = book,
             localFile = file,
             pagesUrl = pagesUrl,
+            providedPageCount = providedPageCount,
             pageLoader = pageLoader
         )
     }

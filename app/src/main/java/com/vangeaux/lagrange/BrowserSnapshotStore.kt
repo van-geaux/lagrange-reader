@@ -9,7 +9,18 @@ import java.io.File
 
 class BrowserSnapshotStore(context: Context) {
     private val mutex = Mutex()
-    private val file = File(context.filesDir, "browser_snapshot.json")
+    private val appContext = context.applicationContext
+
+    private fun snapshotFile(): File {
+        val profileId = ServerProfileStore(appContext).activeId()
+        return if (profileId == null || !profileId.startsWith("profile-")) {
+            File(appContext.filesDir, "browser_snapshot.json")
+        } else {
+            val safeId = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(profileId.toByteArray(Charsets.UTF_8))
+            File(appContext.filesDir, "browser_snapshot_$safeId.json")
+        }
+    }
 
     suspend fun saveLibraries(
         serverUrl: String,
@@ -124,12 +135,14 @@ class BrowserSnapshotStore(context: Context) {
     }
 
     suspend fun clear() = mutex.withLock {
+        val file = snapshotFile()
         if (file.exists()) {
             file.delete()
         }
     }
 
     private fun readUnlocked(): BrowserSnapshot? {
+        val file = snapshotFile()
         if (!file.exists()) {
             return null
         }
@@ -150,6 +163,7 @@ class BrowserSnapshotStore(context: Context) {
     }
 
     private fun writeUnlocked(snapshot: BrowserSnapshot) {
+        val file = snapshotFile()
         val root = JSONObject().apply {
             put("serverUrl", snapshot.serverUrl)
             put("selectedLibraryId", snapshot.selectedLibraryId)

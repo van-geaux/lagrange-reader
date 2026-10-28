@@ -76,17 +76,17 @@ internal suspend fun openReadiumPdf(
     file: File
 ): ReadiumPdfOpenResult = withContext(Dispatchers.IO) {
     if (!file.isFile || file.length() <= 0L) {
-        return@withContext ReadiumPdfOpenResult.Error("The PDF file is unavailable.")
+        return@withContext ReadiumPdfOpenResult.Error(context.getString(R.string.pdf_error_file_unavailable))
     }
     if (!ReaderFileValidator.isReadable(MediaKind.PDF, file)) {
-        return@withContext ReadiumPdfOpenResult.Error("This file does not contain a readable PDF document.")
+        return@withContext ReadiumPdfOpenResult.Error(context.getString(R.string.pdf_error_not_readable))
     }
 
     val appContext = context.applicationContext
     val httpClient = DefaultHttpClient()
     val assetRetriever = AssetRetriever(appContext.contentResolver, httpClient)
     val asset = assetRetriever.retrieve(file, MediaType.PDF).getOrNull()
-        ?: return@withContext ReadiumPdfOpenResult.Error("Readium could not read this PDF file.")
+        ?: return@withContext ReadiumPdfOpenResult.Error(context.getString(R.string.pdf_could_not_read))
     val publicationParser = DefaultPublicationParser(
         context = appContext,
         httpClient = httpClient,
@@ -97,10 +97,10 @@ internal suspend fun openReadiumPdf(
         asset = asset,
         allowUserInteraction = false
     ).getOrNull()
-        ?: return@withContext ReadiumPdfOpenResult.Error("Readium could not open this PDF publication.")
+        ?: return@withContext ReadiumPdfOpenResult.Error(context.getString(R.string.pdf_could_not_open))
     if (!publication.conformsTo(Publication.Profile.PDF)) {
         publication.close()
-        return@withContext ReadiumPdfOpenResult.Error("Readium did not recognize this file as a PDF publication.")
+        return@withContext ReadiumPdfOpenResult.Error(context.getString(R.string.pdf_not_pdf))
     }
     ReadiumPdfOpenResult.Opened(publication)
 }
@@ -153,6 +153,10 @@ internal fun pdfColorMatrix(inverted: Boolean): FloatArray = if (inverted) {
 
 @OptIn(ExperimentalReadiumApi::class)
 class ReadiumPdfReaderActivity : FragmentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private var publication: Publication? = null
     private var navigator: PdfiumNavigatorFragment? = null
     private var progressView: ProgressBar? = null
@@ -255,7 +259,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
         val file = intent.getStringExtra(EXTRA_FILE_PATH)?.let(::File)
         if (file == null) {
-            showError("The PDF reader file is unavailable.")
+            showError(getString(R.string.pdf_reader_file_unavailable))
             return
         }
         lifecycleScope.launch {
@@ -355,10 +359,10 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             setContent {
                 BookOrbitTheme {
                     ReaderLightweightChrome(
-                        title = if (isPreview) "Preview \u00b7 $displayTitle" else displayTitle,
+                        title = if (isPreview) getString(R.string.reader_preview_title, displayTitle) else displayTitle,
                         theme = EpubReaderTheme.Dark,
-                        positionKind = "Page",
-                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index -> "Page ${index + 1}" },
+                        positionKind = getString(R.string.reader_page_kind),
+                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index -> getString(R.string.reader_page_number, index + 1) },
                         currentPosition = currentPage,
                         onBackToReading = ::hideChrome,
                         onCloseBook = ::finishReader,
@@ -383,7 +387,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         EpubReaderDismissScrim(onDismiss = ::hideOptions)
                         ComicReaderOptionsBottomSheet(
-                            title = if (isPreview) "Preview \u00b7 $displayTitle" else displayTitle,
+                            title = if (isPreview) getString(R.string.reader_preview_title, displayTitle) else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
                             preferences = readerPreferences,
@@ -473,7 +477,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         }
         if (openedPublication.readingOrder.isEmpty()) {
             openedPublication.close()
-            showError("This PDF has no readable pages.")
+            showError(getString(R.string.pdf_no_readable_pages))
             return
         }
         prepareAndAttachPublicationWhenResumed(
@@ -545,7 +549,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             true
         }.getOrDefault(false)
         if (!opened) {
-            Toast.makeText(this, "No app is available to open this link.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.pdf_no_app_for_link), Toast.LENGTH_SHORT).show()
         }
         return opened
     }
@@ -730,7 +734,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val root = findViewById<FrameLayout>(android.R.id.content)
         root.addView(
             TextView(this).apply {
-                text = "$message\n\nPress Back to return."
+                text = getString(R.string.reader_error_with_back, message)
                 setTextColor(Color.WHITE)
                 textSize = 16f
                 gravity = Gravity.CENTER

@@ -3,13 +3,13 @@ package com.vangeaux.lagrange
 sealed interface AppScreen {
     data object Loading : AppScreen
     data class Startup(
-        val message: String = "Connecting to BookOrbit…"
+        val message: String = "Connecting…"
     ) : AppScreen
     data class ServerSetup(
         val serverUrl: String = "",
         val serverName: String = "",
         val message: String? = null,
-        val providerId: String = PROVIDER_BOOKORBIT
+        val providerId: String = ""
     ) : AppScreen
     data class Login(
         val serverUrl: String,

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 预览模式 -->
+    <string name="preview_banner_label">预览模式 · 点按以开启阅读进度</string>
+    <string name="preview_banner_content_description">预览模式。点按以开启阅读进度。</string>
+    <string name="preview_dialog_text">将切换到阅读模式，停留在当前页并开始保存阅读进度。</string>
+    <string name="preview_switch_to_reading">切换到阅读模式</string>
+    <string name="preview_leave_title">退出预览模式？</string>
+
+    <!-- 点击区域说明 -->
+    <string name="tutorial_content_description">阅读器点击区域说明</string>
+    <string name="tutorial_swipe_hint">上下滑动以滚动</string>
+    <string name="tutorial_tap_region_description">%1$s 点击区域</string>
+
+    <!-- 阅读器控制栏 -->
+    <string name="chrome_dismiss_scrim">关闭阅读控制并继续阅读</string>
+    <string name="chrome_close_book">关闭书籍</string>
+    <string name="chrome_exit">退出</string>
+    <string name="chrome_previous_position">上一%1$s</string>
+    <string name="chrome_next_position">下一%1$s</string>
+    <string name="chrome_progression_jump_bar">%1$s 进度跳转条</string>
+    <string name="chrome_jump_bar">%1$s 跳转条</string>
+    <string name="chrome_position_state">%1$d / %2$d</string>
+    <string name="chrome_chapter_position">第 %1$d / %2$d 章</string>
+    <string name="chrome_chapters">章节</string>
+    <string name="chrome_pages">页码</string>
+    <string name="chrome_chapter_kind">章节</string>
+    <string name="chrome_select_position">选择%1$s %2$d：%3$s</string>
+    <string name="chrome_position_with_number">%2$d %1$s</string>
+    <string name="chrome_current">当前</string>
+    <string name="chrome_listen_narration">收听朗读</string>
+    <string name="chrome_listen">朗读</string>
+    <string name="chrome_reader_settings">阅读器设置</string>
+    <string name="chrome_footer_page_of">第 %1$d / %2$d 页</string>
+    <string name="chrome_footer_comic_page_of">漫画第 %1$d / %2$d 页</string>
+    <string name="chrome_page_load_failed">第 %1$d 页加载失败</string>
+    <string name="chrome_dismiss_options">关闭阅读选项并继续阅读</string>
+
+    <!-- EPUB 进度条 -->
+    <string name="chrome_progress_summary">%1$d%% · 第 %2$d/%3$d 章 · 第 %4$d/%5$d 页 · %6$s</string>
+    <string name="chrome_progress_book_pages">全书 %1$d/%2$d</string>
+    <string name="chrome_progress_book_pages_calculating">正在计算全书页码…</string>
+    <string name="chrome_progress_a11y_summary">全书进度 %1$d%%；第 %2$d 章，共 %3$d 章；本章第 %4$d 页，共 %5$d 页；%6$s</string>
+    <string name="chrome_progress_a11y_book_pages">全书第 %1$d 页，共 %2$d 页</string>
+    <string name="chrome_progress_a11y_book_pages_calculating">正在计算全书页码</string>
+</resources>

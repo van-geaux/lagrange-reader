@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.StringRes
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -21,7 +22,7 @@ data class CustomFontRecord(
 
 internal sealed interface CustomFontImportResult {
     data class Imported(val record: CustomFontRecord) : CustomFontImportResult
-    data class Rejected(val reason: String) : CustomFontImportResult
+    data class Rejected(@StringRes val reasonRes: Int) : CustomFontImportResult
 }
 
 internal fun customFontStorageValue(record: CustomFontRecord): String = JSONObject().apply {
@@ -52,21 +53,21 @@ internal class CustomFontStore(context: Context) {
     suspend fun import(uri: Uri, displayName: String?): CustomFontImportResult = withContext(Dispatchers.IO) {
         val name = displayName.orEmpty()
         val extension = fontExtension(name) ?: fontExtensionFromUri(uri)
-            ?: return@withContext CustomFontImportResult.Rejected("Choose a .ttf or .otf font file.")
+            ?: return@withContext CustomFontImportResult.Rejected(R.string.extras_custom_font_choose_type)
         val directory = customFontDirectory().apply { mkdirs() }
         val stagingFile = File(directory, "staging-${UUID.randomUUID()}.tmp")
         try {
             val copiedBytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
                 stagingFile.outputStream().use { output -> copyWithLimit(input, output, MAX_CUSTOM_FONT_BYTES) }
-            } ?: return@withContext CustomFontImportResult.Rejected("The selected font file could not be opened.")
+            } ?: return@withContext CustomFontImportResult.Rejected(R.string.extras_custom_font_open_failed)
             if (copiedBytes <= 0L) {
-                return@withContext CustomFontImportResult.Rejected("The selected font file is empty.")
+                return@withContext CustomFontImportResult.Rejected(R.string.extras_custom_font_empty)
             }
             if (copiedBytes > MAX_CUSTOM_FONT_BYTES) {
-                return@withContext CustomFontImportResult.Rejected("The selected font file is too large (max 20 MB).")
+                return@withContext CustomFontImportResult.Rejected(R.string.extras_custom_font_too_large)
             }
             if (!isValidFontFile(stagingFile)) {
-                return@withContext CustomFontImportResult.Rejected("The selected file is not a valid TrueType or OpenType font.")
+                return@withContext CustomFontImportResult.Rejected(R.string.extras_custom_font_invalid)
             }
             val id = UUID.randomUUID().toString().replace("-", "")
             val fileName = "custom-font-$id.$extension"

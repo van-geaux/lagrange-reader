@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- EPUB reader: opening and empty states -->
+    <string name="epub_open_error_file_unavailable">The EPUB file is unavailable.</string>
+    <string name="epub_open_error_read_failed">Readium could not read this EPUB file.</string>
+    <string name="epub_open_error_open_failed">Readium could not open this EPUB publication.</string>
+    <string name="epub_open_error_not_epub">Readium did not recognize this file as an EPUB publication.</string>
+    <string name="epub_reader_file_unavailable">The EPUB reader file is unavailable.</string>
+    <string name="epub_no_readable_content">This EPUB has no readable content.</string>
+    <string name="epub_preview_title">Preview · %1$s</string>
+    <string name="epub_chapter_fallback">Chapter %1$d</string>
+    <string name="epub_page_kind">Page</string>
+    <string name="epub_chapter_kind">Chapter</string>
+    <string name="epub_page_position">Page %1$d</string>
+    <string name="epub_options_status">Chapter %1$d/%2$d · Page %3$d/%4$d</string>
+    <string name="epub_error_press_back">Press Back to return.</string>
+    <string name="epub_dismiss_reader_options_cd">Dismiss reader options and continue reading</string>
+
+    <!-- EPUB reader: listen / narration choices -->
+    <string name="epub_listen_title">Listen</string>
+    <string name="epub_listen_nothing_available">No readable text or narration is available.</string>
+    <string name="epub_listen_publisher_narration">Publisher narration</string>
+    <string name="epub_listen_from_here">Listen from here</string>
+    <string name="epub_listen_keep_listening">Keep listening</string>
+
+    <!-- EPUB reader: text-to-speech -->
+    <string name="tts_privacy_title">Text-to-speech privacy</string>
+    <string name="tts_privacy_message">Lagrange uses the Android text-to-speech engine selected on this device. Some voices use a network service and may send the book text they speak to that provider.</string>
+    <string name="tts_unavailable_for_epub">Text to speech is unavailable for this EPUB.</string>
+    <string name="tts_no_readable_position">Unable to find a readable position in this EPUB.</string>
+    <string name="tts_voice_data_missing_title">Voice data is missing</string>
+    <string name="tts_voice_data_missing_message">Android needs voice data for this book\'s language before it can read aloud.</string>
+    <string name="tts_install_voice">Install voice</string>
+    <string name="tts_voice_failed_title">Text-to-speech voice failed</string>
+    <string name="tts_voice_failed_default_message">The selected voice could not read this text. Default Android voice is selected and paused.</string>
+    <string name="tts_voice_failed_network_alternative">The selected voice could not reach its network service. Choose another voice.</string>
+    <string name="tts_voice_failed_alternative">The selected voice could not read this text. Choose another voice.</string>
+    <string name="tts_voice_failed_network">The selected text-to-speech voice could not reach its network service.</string>
+    <string name="tts_voice_failed_generic">Text to speech stopped because the book text or Android speech engine could not be read.</string>
+    <string name="tts_default_android_voice">Default Android voice</string>
+    <string name="epub_ok">OK</string>
+
+    <!-- EPUB reader: narration (media overlay) -->
+    <string name="epub_narration_sentence_unavailable">Narration is unavailable for this sentence.</string>
+    <string name="epub_narration_location_failed">Unable to open the narration location.</string>
+    <string name="epub_narration_none_available">No EPUB narration is available.</string>
+    <string name="epub_narration_prepare_failed">Unable to prepare EPUB narration.</string>
+    <string name="epub_narration_controls_unavailable">EPUB narration controls are unavailable.</string>
+    <string name="epub_narration_play_failed">Unable to play this EPUB narration.</string>
+
+    <!-- EPUB reader: image gallery -->
+    <string name="epub_image_open_failed">This EPUB image could not be opened.</string>
+    <string name="epub_image_loading">Finding EPUB images…</string>
+    <string name="epub_image_gallery_item_cd">Image %1$d of EPUB gallery</string>
+    <string name="epub_image_export_title">%1$s - Image %2$d</string>
+
+    <!-- EPUB reader: text selection actions -->
+    <string name="epub_selection_copy">Copy</string>
+    <string name="epub_selection_share">Share</string>
+    <string name="epub_selection_play_narration">Play narration</string>
+    <string name="epub_selection_listen_from_here">Listen from here</string>
+    <string name="epub_selection_web_search">Web search</string>
+    <string name="epub_selection_highlight">Highlight</string>
+    <string name="epub_selection_highlight_note">Highlight + Note</string>
+    <string name="epub_selection_highlight_failed">This text selection cannot be highlighted. Please try selecting it again.</string>
+    <string name="epub_selection_unavailable">The selected text is no longer available. Please select it again.</string>
+    <string name="epub_selection_web_search_unavailable">No web search app is available.</string>
+    <string name="epub_selection_copied">Copied</string>
+    <string name="epub_clipboard_selected_text">Selected text</string>
+    <string name="epub_share_selected_text">Share selected text</string>
+    <string name="epub_narration_selection_no_match">No narration sentence matches this text selection.</string>
+
+    <!-- EPUB reader: highlights and notes -->
+    <string name="epub_highlight_style_title">Highlight style</string>
+    <string name="epub_highlight_yellow">Yellow highlight</string>
+    <string name="epub_highlight_green">Green highlight</string>
+    <string name="epub_highlight_blue">Blue highlight</string>
+    <string name="epub_highlight_pink">Pink highlight</string>
+    <string name="epub_highlight_yellow_underline">Yellow underline</string>
+    <string name="epub_highlight_actions_title">Highlight</string>
+    <string name="epub_highlight_note_actions_title">Highlight note</string>
+    <string name="epub_highlight_edit_note">Edit note</string>
+    <string name="epub_highlight_delete">Delete highlight</string>
+    <string name="epub_highlight_save_failed">The highlight could not be saved.</string>
+    <string name="epub_note_title">Note</string>
+    <string name="epub_note_save">Save</string>
+
+    <!-- EPUB text-to-speech controls -->
+    <string name="tts_controls_title">Text to speech</string>
+    <string name="tts_settings_cd">Text-to-speech settings</string>
+    <string name="tts_previous_sentence_cd">Previous spoken sentence</string>
+    <string name="tts_next_sentence_cd">Next spoken sentence</string>
+    <string name="tts_pause_cd">Pause text to speech</string>
+    <string name="tts_play_cd">Play text to speech</string>
+    <string name="tts_close_cd">Close text to speech</string>
+    <string name="tts_settings_title">Text-to-speech settings</string>
+    <string name="tts_speed">Speed</string>
+    <string name="tts_pitch">Pitch</string>
+    <string name="tts_speed_description">text-to-speech speed</string>
+    <string name="tts_pitch_description">text-to-speech pitch</string>
+    <string name="tts_voice_section">Voice</string>
+    <string name="tts_no_compatible_voices">No compatible voices available</string>
+    <string name="tts_voices_filtered_hint">Voices are filtered to this EPUB\'s language. Network voices may send spoken text to their provider.</string>
+    <string name="tts_apply_immediately_hint">Speed and pitch changes apply immediately. Settings below require Apply.</string>
+    <string name="tts_punctuation_pauses">Extra punctuation pauses</string>
+    <string name="tts_use_custom_pauses">Use custom punctuation pauses</string>
+    <string name="tts_pauses_hint">Values are measured at 1× and scale with reading speed. Android voices may add their own latency between chunks.</string>
+    <string name="tts_pause_comma">Comma</string>
+    <string name="tts_pause_semicolon">Semicolon</string>
+    <string name="tts_pause_colon">Colon</string>
+    <string name="tts_pause_em_dash">Em dash</string>
+    <string name="tts_pause_ellipsis">Ellipsis (… or ...)</string>
+    <string name="tts_pause_grouping_hint">Grouping marks applies to opening and closing parentheses, square brackets, and braces.</string>
+    <string name="tts_pause_grouping">Grouping marks: ( ) [ ] { }</string>
+    <string name="tts_images_section">Images</string>
+    <string name="tts_read_image_descriptions">Read image descriptions</string>
+    <string name="tts_read_image_descriptions_hint">Speak EPUB alternative text and accessibility descriptions. Off by default.</string>
+    <string name="tts_read_image_resource_names">Read full image resource names</string>
+    <string name="tts_read_image_resource_names_hint">Speak the full EPUB-relative folder, filename, and extension. Off by default and independent of descriptions.</string>
+    <string name="tts_lockscreen_privacy">Lock-screen privacy</string>
+    <string name="tts_show_book_title_lockscreen">Show book title on lock screen</string>
+    <string name="tts_show_book_title_hint">When enabled, the book title is shown in the lock-screen media controls.</string>
+    <string name="tts_apply">Apply</string>
+    <string name="tts_voice_dialog_title">Text-to-speech voice</string>
+    <string name="tts_pause_zero_hint">Use 0 if the pause sounds too long.</string>
+    <string name="tts_pause_range_error">Enter a whole number from 0 to 2000</string>
+    <string name="tts_pause_range">0 to 2000 ms</string>
+    <string name="tts_pause_unit">ms</string>
+    <string name="tts_voice_network">Network</string>
+    <string name="tts_voice_local">Local</string>
+    <string name="tts_voice_variant">Variant %1$s</string>
+    <string name="tts_voice_name">Voice %1$s</string>
+
+    <!-- EPUB text-to-speech notification and media session -->
+    <string name="tts_state_text_to_speech">Text to speech</string>
+    <string name="tts_state_attention">Text to speech needs attention</string>
+    <string name="tts_state_preparing">Preparing text to speech</string>
+    <string name="tts_state_reading_aloud">Reading aloud</string>
+    <string name="tts_state_paused">Text to speech paused</string>
+    <string name="tts_notification_previous">Previous narration sentence</string>
+    <string name="tts_notification_next">Next narration sentence</string>
+    <string name="tts_notification_pause_narration">Pause narration</string>
+    <string name="tts_notification_play_narration">Play narration</string>
+    <string name="tts_notification_previous_short">Previous</string>
+    <string name="tts_notification_next_short">Next</string>
+    <string name="tts_notification_pause_short">Pause</string>
+    <string name="tts_notification_play_short">Play</string>
+    <string name="tts_notification_epub_narration">EPUB narration</string>
+    <string name="tts_media_artist">EPUB text to speech</string>
+    <string name="tts_channel_name">EPUB narration</string>
+    <string name="tts_channel_description">Keeps book narration playing while the screen is off</string>
+</resources>

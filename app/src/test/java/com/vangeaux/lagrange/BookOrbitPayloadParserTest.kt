@@ -7,6 +7,98 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `synced BookOrbit up next setting is authoritative`() {
+        val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(
+            """
+            {"user":{"settings":{"dashboardShelfConfig":{
+              "syncAcrossSessions":true,
+              "scrollers":[
+                {"type":"currently-reading","enabled":true},
+                {"type":"up-next-in-series","enabled":true}
+              ]
+            }}}}
+            """.trimIndent()
+        )
+
+        assertTrue(preferences.onDeckEnabled)
+        assertEquals(HomeShelfPreferenceSource.SERVER_SYNCHRONIZED, preferences.source)
+        assertTrue(preferences.effectiveOnDeckEnabled(localFallbackEnabled = false))
+    }
+
+    @Test
+    fun `unsynchronized BookOrbit settings select the local default-on fallback`() {
+        val payloads = listOf(
+            "{}",
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":false,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}"""
+        )
+
+        payloads.forEach { payload ->
+            val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(payload)
+            assertEquals(HomeShelfPreferenceSource.LOCAL_FALLBACK, preferences.source)
+            assertTrue(preferences.effectiveOnDeckEnabled(localFallbackEnabled = true))
+            assertTrue(!preferences.effectiveOnDeckEnabled(localFallbackEnabled = false))
+        }
+    }
+
+    @Test
+    fun `synchronized disabled and unavailable settings do not become local fallback`() {
+        val disabled = BookOrbitPayloadParser.parseHomeShelfPreferences(
+            """{"settings":{"dashboardShelfConfig":{"syncAcrossSessions":true,"scrollers":[{"type":"up-next-in-series","enabled":false}]}}}"""
+        )
+        val malformed = BookOrbitPayloadParser.parseHomeShelfPreferences("not json")
+
+        assertEquals(HomeShelfPreferenceSource.SERVER_SYNCHRONIZED, disabled.source)
+        assertTrue(!disabled.effectiveOnDeckEnabled(localFallbackEnabled = true))
+        assertEquals(HomeShelfPreferenceSource.UNAVAILABLE, malformed.source)
+        assertTrue(!malformed.effectiveOnDeckEnabled(localFallbackEnabled = true))
+    }
+
+    @Test
+    fun `an empty server On deck shelf remains server provided`() {
+        val shelves = HomeShelfData(booksBySection = mapOf(HomeSection.ON_DECK to emptyList()))
+
+        assertTrue(shelves.providesBooks(HomeSection.ON_DECK))
+        assertTrue(!shelves.providesBooks(HomeSection.CURRENTLY_READING))
+    }
+
+    @Test
+    fun `provider-owned shelves remain visible when BookOrbit preferences are unavailable`() {
+        val unavailable = HomeShelfPreferences()
+        val synchronizedDisabled = HomeShelfPreferences(
+            onDeckEnabled = false,
+            source = HomeShelfPreferenceSource.SERVER_SYNCHRONIZED
+        )
+        val localDisabled = HomeShelfPreferences(
+            source = HomeShelfPreferenceSource.LOCAL_FALLBACK
+        )
+
+        assertTrue(
+            unavailable.effectiveOnDeckEnabled(
+                localFallbackEnabled = false,
+                hasProviderOwnedShelves = true
+            )
+        )
+        assertTrue(
+            !unavailable.effectiveOnDeckEnabled(
+                localFallbackEnabled = true,
+                hasProviderOwnedShelves = false
+            )
+        )
+        assertTrue(
+            !synchronizedDisabled.effectiveOnDeckEnabled(
+                localFallbackEnabled = true,
+                hasProviderOwnedShelves = true
+            )
+        )
+        assertTrue(
+            !localDisabled.effectiveOnDeckEnabled(
+                localFallbackEnabled = false,
+                hasProviderOwnedShelves = true
+            )
+        )
+    }
+
+    @Test
     fun annotationBookSummaryPreservesBookAndFileIdentity() {
         val annotation = BookAnnotation(
             id = "a1",
@@ -313,6 +405,84 @@ class BookOrbitPayloadParserTest {
         assertEquals(42.5f, book.progressPercent)
         assertEquals(12_750L, book.progressPositionMs)
         assertEquals(6, book.progressPageIndex)
+    }
+
+    @Test
+    fun `parseBooks preserves an audiobook-specific cover from the audio file`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "Multi-format book",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "files": [{
+                      "id": "audio-file",
+                      "format": "m4b",
+                      "role": "primary",
+                      "audiobookCoverUrl": "/covers/audio-square.jpg"
+                    }]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/covers/portrait.jpg", books.single().coverUrl)
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
+    }
+
+    @Test
+    fun `parseBooks selects audio-labeled cover from cover list`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "Multi-format book",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "covers": [
+                      {"type": "portrait", "url": "/covers/portrait.jpg"},
+                      {"type": "audiobook", "url": "/covers/audio-square.jpg"}
+                    ],
+                    "files": [{"id": "audio-file", "format": "m4b", "role": "primary"}]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
+    }
+
+    @Test
+    fun `parseBooks uses the audio file cover when ebook is primary`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "lib-1",
+            payload = """
+                {
+                  "items": [{
+                    "id": "book-1",
+                    "title": "EPUB and audiobook",
+                    "coverUrl": "/covers/portrait.jpg",
+                    "files": [
+                      {"id": "epub-file", "format": "epub", "role": "primary"},
+                      {"id": "audio-file", "format": "m4b", "filename": "book.m4b", "coverUrl": "/covers/audio-square.jpg"}
+                    ]
+                  }]
+                }
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test",
+            preferredFileId = "audio-file"
+        )
+
+        assertEquals(MediaKind.AUDIO, books.single().mediaKind)
+        assertEquals("https://example.test/covers/audio-square.jpg", books.single().audiobookCoverUrl)
     }
 
     @Test
@@ -748,6 +918,36 @@ class BookOrbitPayloadParserTest {
         assertEquals(63.5f, hydrated.progressPercent)
         assertEquals(16, hydrated.progressPageIndex)
         assertEquals("63.5%", hydrated.progressLabel)
+    }
+
+    @Test
+    fun `parseReaderProgress records the server percent only from the matching entry`() {
+        val book = BookSummary(
+            libraryId = "lib-progress",
+            id = "book-progress",
+            fileId = "file-primary",
+            title = "Progress EPUB",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 10f
+        )
+
+        val hydrated = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","percentage":63.5}]"""
+        )
+        val noPercentage = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-primary","pageNumber":4}]"""
+        )
+        val otherFile = BookOrbitPayloadParser.parseReaderProgress(
+            book = book,
+            payload = """[{"fileId":"file-secondary","percentage":63.5}]"""
+        )
+
+        assertEquals(63.5f, hydrated.serverProgressPercent)
+        assertNull(noPercentage.serverProgressPercent)
+        assertNull(otherFile.serverProgressPercent)
+        assertEquals(10f, otherFile.progressPercent)
     }
 
     @Test

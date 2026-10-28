@@ -121,9 +121,30 @@ For every provider-exclusive row, manually verify all of the following:
 | Isolation | Download identity scope | Local Books/server change | S | P | Local files may be shared, identity must remain retained. |
 | Isolation | Reader/player session scope | Server change/logout | S | P | Verify active reader/player cleanup. |
 
+## Kavita implementation checkpoint
+
+This provider is implemented but has not received complete authenticated device/manual validation. Use `V` for implemented behavior pending manual validation, `N` for not yet implemented, and `U` for a provider contract that does not expose the shared operation. Kavita OIDC login was separately user-confirmed through the server-hosted WebView flow, but that confirmation does not validate the full provider checklist.
+
+| Function group | Kavita status | Endpoint/source evidence | UI/capability note |
+|---|---:|---|---|
+| Server selection and username/password login | V | `POST /api/Account/login`, JSON username/password body | Kavita returns a JWT; credentials are not persisted. |
+| OIDC/SSO login | V | Kavita `/Oidc/login` and `/signin-oidc` server flow | Server-hosted OIDC is capability-gated and uses the shared sign-in WebView; native AppAuth remains unavailable. |
+| Library discovery | V | `GET /api/Library/libraries` | Provider-specific library module is wired. |
+| Book catalog and chapter projection | V | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters are projected into shared book entries. |
+| Series catalog and detail | V | Series projection from Kavita chapter hierarchy | Series filters and detail are provider-routed. |
+| Book detail and covers | V | `GET /api/Series/chapter`, `/api/Image/series-cover` | Authenticated requests are wired. |
+| EPUB/PDF/comic reader routing | V | `/api/Reader/chapter-info`, `/api/Reader/image`, `/api/Reader/pdf`, authenticated `/api/Download/chapter` | EPUB is downloaded into app-private storage before opening with the shared local EPUB reader; comic and PDF chapters use Kavita reader endpoints. |
+| Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |
+| Chapter read mutation | V | `/api/Reader/mark-chapter-read` | Read action is exposed after manual validation. |
+| Chapter unread mutation | U | Kavita documents unread at series scope | Hidden/unavailable to avoid broad series mutation. |
+| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. |
+| Offline cache and Local Books | V | Kavita browser snapshot, app-private chapter files, and provider-scoped DownloadStore records | Completed downloads reopen through Local Books; cache warming and disposable-cache controls are provider-routed. |
+| Provider/profile isolation | V | `KavitaModuleSet`, provider-scoped profile/session/download identity | Kavita state must not fall back to BookOrbit after a failed request or leak across profiles. |
+| Home shelves, authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
+
 ## Blank target-server column template
 
-When adding a target server, copy this column and replace `[TARGET]` with its provider name. Do not reuse the BookOrbit or Komga status without verifying the new provider's contract.
+When adding a target server, copy this column and replace `[TARGET]` with its provider name. Do not reuse another provider's status without verifying the new provider's contract.
 
 | Module/function | Provider-exclusive? (`Y/N`) | [TARGET] status (`S/P/U/N/V/X`) | Endpoint/source evidence | Manual validation result | UI gating/notes/follow-up issue |
 |---|---:|---:|---|---|---|

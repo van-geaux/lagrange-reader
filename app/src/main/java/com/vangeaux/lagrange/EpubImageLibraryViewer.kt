@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -132,7 +133,11 @@ internal fun EpubImageLibraryViewer(
                     onSelected = { selectedIndexState = it }
                 )
             },
-            exportTitle = "$title - Image ${selectedIndex + 1}",
+            exportTitle = stringResource(
+                R.string.epub_image_export_title,
+                title,
+                selectedIndex + 1
+            ),
             exportBytes = {
                 EpubImageLibraryScanner.readEpubImageBytes(catalog.sourceFile, selectedEntry.archivePath)
             }
@@ -169,7 +174,7 @@ private fun EpubImageLibraryLoadingDialog(onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                    Text("Finding EPUB images…")
+                    Text(stringResource(R.string.epub_image_loading))
                 }
             }
         }
@@ -228,6 +233,7 @@ private fun EpubImageThumbnail(
             EpubImageLibraryScanner.decodeEpubImageBitmap(sourceFile, entry.archivePath, 160)
         }
     }
+    val itemDescription = stringResource(R.string.epub_image_gallery_item_cd, index + 1)
     Box(
         modifier = Modifier
             .size(68.dp)
@@ -240,7 +246,7 @@ private fun EpubImageThumbnail(
             .semantics {
                 this.selected = selected
                 role = Role.Tab
-                contentDescription = "Image ${index + 1} of EPUB gallery"
+                contentDescription = itemDescription
             },
         contentAlignment = Alignment.Center
     ) {

@@ -52,6 +52,7 @@ interface SeriesCatalogModule {
 
 interface HomeShelfModule {
     suspend fun loadCachedHomeBooks(): List<BookSummary>
+    suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData(
         booksBySection = mapOf(HomeSection.RECENTLY_ADDED_BOOKS to loadCachedHomeBooks())
     )
@@ -88,7 +89,11 @@ interface ReaderModule {
 
 interface DownloadModule {
     val handlesDownloadsDirectly: Boolean get() = false
-    suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit = {}): File
+    suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String? = null,
+        onProgress: (Float?) -> Unit = {}
+    ): File
     suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary>
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun deleteLocalCopies(book: BookSummary): Set<String>
@@ -161,6 +166,7 @@ interface BackgroundCacheModule {
 }
 
 data class ProviderFeatureAvailability(
+    val serverHostedSignIn: Boolean = false,
     val achievements: Boolean = true,
     val statistics: Boolean = true,
     val smartScopes: Boolean = true,

@@ -96,17 +96,17 @@ internal suspend fun openReadiumComic(
     file: File
 ): ReadiumComicOpenResult = withContext(Dispatchers.IO) {
     if (!file.isFile || file.length() <= 0L) {
-        return@withContext ReadiumComicOpenResult.Error("The comic file is unavailable.")
+        return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_error_file_unavailable))
     }
     if (!ReaderFileValidator.canRenderComicLocally(file)) {
-        return@withContext ReadiumComicOpenResult.Error("Readium requires a CBZ image archive.")
+        return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_error_requires_cbz))
     }
 
     val appContext = context.applicationContext
     val httpClient = DefaultHttpClient()
     val assetRetriever = AssetRetriever(appContext.contentResolver, httpClient)
     val asset = assetRetriever.retrieve(file, MediaType.CBZ).getOrNull()
-        ?: return@withContext ReadiumComicOpenResult.Error("Readium could not read this comic file.")
+        ?: return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_could_not_read))
     val publicationParser = DefaultPublicationParser(
         context = appContext,
         httpClient = httpClient,
@@ -117,10 +117,10 @@ internal suspend fun openReadiumComic(
         asset = asset,
         allowUserInteraction = false
     ).getOrNull()
-        ?: return@withContext ReadiumComicOpenResult.Error("Readium could not open this comic publication.")
+        ?: return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_could_not_open))
     if (!publication.conformsTo(Publication.Profile.DIVINA)) {
         publication.close()
-        return@withContext ReadiumComicOpenResult.Error("Readium did not recognize this file as an image publication.")
+        return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_not_image_publication))
     }
     ReadiumComicOpenResult.Opened(publication)
 }
@@ -135,16 +135,16 @@ internal suspend fun openReadiumRemoteComic(
     httpClient: HttpClient? = null
 ): ReadiumComicOpenResult = withContext(Dispatchers.IO) {
     if (pageCount <= 0) {
-        return@withContext ReadiumComicOpenResult.Error("BookOrbit reported no comic pages.")
+        return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_server_no_pages))
     }
     val normalizedPagesUrl = pagesUrl.trimEnd('/')
     val baseUrl = AbsoluteUrl(normalizedPagesUrl.substringBefore('?') + "/")
-        ?: return@withContext ReadiumComicOpenResult.Error("The comic page URL is invalid.")
+        ?: return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_page_url_invalid))
     val pageUrls = (0 until pageCount).mapNotNull { pageIndex ->
         AbsoluteUrl(comicPageUrl(normalizedPagesUrl, pageIndex))
     }
     if (pageUrls.size != pageCount) {
-        return@withContext ReadiumComicOpenResult.Error("A comic page URL is invalid.")
+        return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_some_page_url_invalid))
     }
     val client = httpClient ?: resolveActiveProviderAuthenticatedMediaModule(context.applicationContext).let { media ->
         AuthenticatedReadiumHttpClient(
@@ -170,13 +170,14 @@ internal suspend fun openReadiumRemoteComic(
     if (!publication.conformsTo(Publication.Profile.DIVINA)) {
         publication.close()
         return@withContext ReadiumComicOpenResult.Error(
-            "Readium did not recognize the remote comic as an image publication."
+            context.getString(R.string.comic_remote_not_image_publication)
         )
     }
     ReadiumComicOpenResult.Opened(publication)
 }
 
 internal fun comicPageUrl(pagesUrl: String, pageIndex: Int): String {
+    if (pagesUrl.contains("{page}")) return pagesUrl.replace("{page}", pageIndex.toString())
     val normalized = pagesUrl.trimEnd('/')
     val queryIndex = normalized.indexOf('?')
     return if (queryIndex < 0) {
@@ -203,6 +204,10 @@ internal suspend fun readContinuousComicPageBytes(resource: Resource): ByteArray
 }
 
 class ReadiumComicReaderActivity : FragmentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private var publication: Publication? = null
     private var navigator: ImageNavigatorFragment? = null
     private var progressView: ProgressBar? = null
@@ -330,7 +335,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                         pageMediaType = pageMediaType
                     )
                 else -> ReadiumComicOpenResult.Error(
-                    "The comic reader source is unavailable."
+                    getString(R.string.comic_reader_source_unavailable)
                 )
             }
             when (result) {
@@ -363,7 +368,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
             setBackgroundColor(Color.BLACK)
-            setPadding(0, 0, 0, dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP))
+            setPadding(0, 0, 0, 0)
         }
         readerViewport.addView(
             readerContainer,
@@ -415,6 +420,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             )
         }
         footerView = ComposeView(this).apply {
+            visibility = View.GONE
             setContent {
                 BookOrbitTheme {
                     ComicReaderProgressFooter(
@@ -438,10 +444,10 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             setContent {
                 BookOrbitTheme {
                     ReaderLightweightChrome(
-                        title = if (isPreview) "Preview · $displayTitle" else displayTitle,
+                        title = if (isPreview) getString(R.string.reader_preview_title, displayTitle) else displayTitle,
                         theme = EpubReaderTheme.Dark,
-                        positionKind = "Page",
-                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index -> "Page ${index + 1}" },
+                        positionKind = getString(R.string.reader_page_kind),
+                        positionTitles = List(currentPageCount.coerceAtLeast(1)) { index -> getString(R.string.reader_page_number, index + 1) },
                         currentPosition = currentPage,
                         onBackToReading = ::hideChrome,
                         onCloseBook = ::finishReader,
@@ -466,11 +472,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         EpubReaderDismissScrim(onDismiss = ::hideOptions)
                         ComicReaderOptionsBottomSheet(
-                            title = if (isPreview) "Preview · $displayTitle" else displayTitle,
+                            title = if (isPreview) getString(R.string.reader_preview_title, displayTitle) else displayTitle,
                             currentPage = currentPage,
                             pageCount = currentPageCount,
                             preferences = readerPreferences,
-                            onContinueReading = ::hideOptions,
+                            onContinueReading = ::continueReading,
                             onCloseBook = ::finishReader,
                             onPreferencesChange = ::applyReaderPreferences,
                             showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
@@ -528,6 +534,28 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
+        syncProgressFooter()
+    }
+
+    private fun syncProgressFooter() {
+        if (!::footerView.isInitialized) return
+        val controlsVisible = ::chromeView.isInitialized && chromeView.visibility == View.VISIBLE
+        footerView.visibility = if (readerPreferences.showPageProgress || controlsVisible) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        if (controlsVisible) footerView.bringToFront()
+        readerContainer.setPadding(
+            readerContainer.paddingLeft,
+            readerContainer.paddingTop,
+            readerContainer.paddingRight,
+            if (readerPreferences.showPageProgress) {
+                dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
+            } else {
+                0
+            }
+        )
     }
 
     private fun restoreReaderUi(savedInstanceState: Bundle?) {
@@ -539,6 +567,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         optionsView.visibility = if (
             savedInstanceState.getBoolean(STATE_READER_OPTIONS_VISIBLE)
         ) View.VISIBLE else View.GONE
+        syncProgressFooter()
     }
 
     private fun discardRestoredNavigatorIfNeeded(savedInstanceState: Bundle?) {
@@ -574,7 +603,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         }
         if (openedPublication.readingOrder.isEmpty()) {
             openedPublication.close()
-            showError("This comic has no readable images.")
+            showError(getString(R.string.comic_no_readable_images))
             return
         }
         publication = openedPublication
@@ -711,7 +740,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             } else {
                 Toast.makeText(
                     this@ReadiumComicReaderActivity,
-                    "This comic page could not be opened.",
+                    getString(R.string.comic_page_open_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -915,6 +944,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         readingDirection = normalized.readingDirection
+        syncProgressFooter()
         val store = AppPreferencesStore(this)
         store.save(store.read().withReaderPreferences(libraryId, normalized))
         configureSystemBars()
@@ -961,19 +991,26 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private fun showChrome() {
         hideOptions()
         chromeView.visibility = View.VISIBLE
+        syncProgressFooter()
     }
 
     private fun hideChrome() {
         chromeView.visibility = View.GONE
+        syncProgressFooter()
     }
 
     private fun showOptions() {
-        hideChrome()
         optionsView.visibility = View.VISIBLE
+        optionsView.bringToFront()
     }
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+    }
+
+    private fun continueReading() {
+        hideOptions()
+        hideChrome()
     }
 
     private fun enableReadMode() {
@@ -1031,6 +1068,19 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     internal fun hasShownTapZoneTutorial(): Boolean = tapZoneTutorialHasShown
 
+    internal fun isProgressFooterVisible(): Boolean =
+        ::footerView.isInitialized && footerView.visibility == View.VISIBLE
+
+    internal fun setShowPageProgressForTest(enabled: Boolean) {
+        applyReaderPreferences(readerPreferences.copy(showPageProgress = enabled))
+    }
+
+    internal fun showReaderOptionsForTest() = showOptions()
+
+    internal fun hideReaderOptionsForTest() = hideOptions()
+
+    internal fun readerContentBottomPaddingForTest(): Int = readerContainer.paddingBottom
+
     internal fun isContinuousComicReaderVisible(): Boolean =
         continuousComicView?.isAttachedToWindow == true
 
@@ -1069,7 +1119,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         val root = findViewById<FrameLayout>(android.R.id.content)
         root.addView(
             TextView(this).apply {
-                text = "$message\n\nPress Back to return."
+                text = getString(R.string.reader_error_with_back, message)
                 setTextColor(Color.WHITE)
                 textSize = 16f
                 gravity = Gravity.CENTER

@@ -13,4 +13,49 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
+    <!-- EPUB reader OLED theme: pure black surfaces, pure white primary content. -->
+    <style name="Theme.BookOrbit.Reader.Oled" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@color/oled_black</item>
+        <item name="android:colorBackground">@color/oled_black</item>
+        <item name="android:statusBarColor">@color/oled_black</item>
+        <item name="android:navigationBarColor">@color/oled_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/oled_white</item>
+        <item name="android:textColorSecondary">@color/oled_muted</item>
+        <item name="android:textColorHighlight">@color/oled_selection</item>
+        <item name="android:colorAccent">@color/oled_white</item>
+        <item name="android:colorControlActivated">@color/oled_white</item>
+        <item name="android:colorControlNormal">@color/oled_outline</item>
+        <item name="colorPrimary">@color/oled_white</item>
+        <item name="colorOnPrimary">@color/oled_black</item>
+        <item name="colorPrimaryContainer">@color/oled_black</item>
+        <item name="colorOnPrimaryContainer">@color/oled_white</item>
+        <item name="colorSecondary">@color/oled_white</item>
+        <item name="colorOnSecondary">@color/oled_black</item>
+        <item name="colorSurface">@color/oled_black</item>
+        <item name="colorOnSurface">@color/oled_white</item>
+        <item name="colorOnSurfaceVariant">@color/oled_muted</item>
+        <item name="colorSurfaceContainerLowest">@color/oled_black</item>
+        <item name="colorSurfaceContainerLow">@color/oled_black</item>
+        <item name="colorSurfaceContainer">@color/oled_black</item>
+        <item name="colorSurfaceContainerHigh">@color/oled_black</item>
+        <item name="colorSurfaceContainerHighest">@color/oled_black</item>
+        <item name="colorOutline">@color/oled_outline</item>
+        <item name="android:alertDialogTheme">@style/ThemeOverlay.BookOrbit.Reader.Oled.Dialog</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.BookOrbit.Reader.Oled.Dialog</item>
+    </style>
+    <style name="ThemeOverlay.BookOrbit.Reader.Oled.Dialog" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/oled_dialog_background</item>
+        <item name="android:colorBackground">@color/oled_black</item>
+        <item name="android:textColorPrimary">@color/oled_white</item>
+        <item name="android:textColorSecondary">@color/oled_muted</item>
+        <item name="android:textColor">@color/oled_white</item>
+        <item name="android:textColorHint">@color/oled_outline</item>
+        <item name="android:textColorHighlight">@color/oled_selection</item>
+        <item name="android:colorAccent">@color/oled_white</item>
+        <item name="android:colorControlActivated">@color/oled_white</item>
+        <item name="android:colorControlNormal">@color/oled_outline</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+    </style>
 </resources>

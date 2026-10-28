@@ -1,42 +1,56 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class BookReadFilter(val label: String, internal val serverOperator: String?) {
-    ALL("All", null),
-    UNREAD("Unread", "isUnread"),
-    IN_PROGRESS("In progress", "isInProgress"),
-    FINISHED("Finished", "isFinished")
+enum class BookReadFilter(
+    val label: String,
+    @StringRes val labelRes: Int,
+    internal val serverOperator: String?
+) {
+    ALL("All", R.string.browse_filter_all, null),
+    UNREAD("Unread", R.string.browse_filter_unread, "isUnread"),
+    IN_PROGRESS("In progress", R.string.browse_filter_in_progress, "isInProgress"),
+    FINISHED("Finished", R.string.browse_filter_finished, "isFinished")
 }
 
 enum class BookFormatFilter(
     val label: String,
+    @StringRes val labelRes: Int,
     internal val serverValues: List<String>,
     internal val mediaKinds: Set<MediaKind>
 ) {
-    ALL("All formats", emptyList(), emptySet()),
-    EPUB("EPUB", listOf("epub"), setOf(MediaKind.EPUB)),
-    PDF("PDF", listOf("pdf"), setOf(MediaKind.PDF)),
-    AUDIO("Audio", listOf("mp3", "m4b", "audio"), setOf(MediaKind.AUDIO)),
-    COMIC("Comic", listOf("cbz", "cbr", "cb7", "comic"), setOf(MediaKind.COMIC))
+    ALL("All formats", R.string.browse_filter_all_formats, emptyList(), emptySet()),
+    EPUB("EPUB", R.string.browse_filter_epub, listOf("epub"), setOf(MediaKind.EPUB)),
+    PDF("PDF", R.string.browse_filter_pdf, listOf("pdf"), setOf(MediaKind.PDF)),
+    AUDIO("Audio", R.string.browse_filter_audio, listOf("mp3", "m4b", "audio"), setOf(MediaKind.AUDIO)),
+    COMIC("Comic", R.string.browse_filter_comic, listOf("cbz", "cbr", "cb7", "comic"), setOf(MediaKind.COMIC))
 }
 
-enum class BookSortOption(val label: String, internal val serverField: String?) {
-    SERVER_DEFAULT("Server default", null),
-    TITLE("Title", "title"),
-    AUTHOR("Author", "author"),
-    SERIES("Series", "series"),
-    ADDED("Date added", "addedAt"),
-    UPDATED("Date updated", "updatedAt"),
-    READ_PROGRESS("Read progress", "readProgress"),
-    LAST_READ("Last read", "lastReadAt"),
-    FORMAT("Format", "format")
+enum class BookSortOption(
+    val label: String,
+    @StringRes val labelRes: Int,
+    internal val serverField: String?
+) {
+    SERVER_DEFAULT("Server default", R.string.browse_filter_server_default, null),
+    TITLE("Title", R.string.browse_filter_title, "title"),
+    AUTHOR("Author", R.string.browse_filter_author, "author"),
+    SERIES("Series", R.string.browse_filter_sort_series, "series"),
+    ADDED("Date added", R.string.browse_filter_date_added, "addedAt"),
+    UPDATED("Date updated", R.string.browse_filter_date_updated, "updatedAt"),
+    READ_PROGRESS("Read progress", R.string.browse_filter_read_progress, "readProgress"),
+    LAST_READ("Last read", R.string.browse_filter_last_read, "lastReadAt"),
+    FORMAT("Format", R.string.browse_filter_format, "format")
 }
 
-enum class SortDirection(val label: String, internal val serverValue: String) {
-    ASCENDING("Ascending", "asc"),
-    DESCENDING("Descending", "desc")
+enum class SortDirection(
+    val label: String,
+    @StringRes val labelRes: Int,
+    internal val serverValue: String
+) {
+    ASCENDING("Ascending", R.string.browse_filter_ascending, "asc"),
+    DESCENDING("Descending", R.string.browse_filter_descending, "desc")
 }
 
 data class BookBrowseFilter(
@@ -56,18 +70,26 @@ data class BookBrowseFilter(
             sort != BookSortOption.SERVER_DEFAULT
 }
 
-enum class SeriesCompletionFilter(val label: String, internal val serverValue: String?) {
-    ALL("All", null),
-    NOT_STARTED("Not started", "not_started"),
-    IN_PROGRESS("In progress", "in_progress"),
-    COMPLETE("Complete", "complete")
+enum class SeriesCompletionFilter(
+    val label: String,
+    @StringRes val labelRes: Int,
+    internal val serverValue: String?
+) {
+    ALL("All", R.string.browse_filter_all, null),
+    NOT_STARTED("Not started", R.string.browse_series_filter_not_started, "not_started"),
+    IN_PROGRESS("In progress", R.string.browse_filter_in_progress, "in_progress"),
+    COMPLETE("Complete", R.string.browse_series_filter_complete, "complete")
 }
 
-enum class SeriesSortOption(val label: String, internal val serverField: String) {
-    NAME("Name", "name"),
-    BOOK_COUNT("Book count", "bookCount"),
-    LAST_ADDED("Last added", "lastAddedAt"),
-    READ_PROGRESS("Read progress", "readProgress")
+enum class SeriesSortOption(
+    val label: String,
+    @StringRes val labelRes: Int,
+    internal val serverField: String
+) {
+    NAME("Name", R.string.browse_series_sort_name, "name"),
+    BOOK_COUNT("Book count", R.string.browse_series_sort_book_count, "bookCount"),
+    LAST_ADDED("Last added", R.string.browse_series_sort_last_added, "lastAddedAt"),
+    READ_PROGRESS("Read progress", R.string.browse_filter_read_progress, "readProgress")
 }
 
 data class SeriesCatalogFilter(

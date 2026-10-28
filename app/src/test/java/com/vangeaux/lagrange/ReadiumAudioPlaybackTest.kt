@@ -7,11 +7,45 @@ import java.nio.file.Files
 import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.readium.r2.shared.util.mediatype.MediaType
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackTest {
+
+    @Test
+    fun readerLeaseWakeRunsOnlyAfterPlayerResourcesCloseEvenOnFailure() {
+        val events = mutableListOf<String>()
+
+        val failure = runCatching {
+            closeReaderResourceBeforeLeaseWake(
+                closeResource = {
+                    events += "player-closed"
+                    throw IllegalStateException("close failed")
+                },
+                releaseLease = { events += "lease-released" }
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(listOf("player-closed", "lease-released"), events)
+    }
+
+    @Test
+    fun audiobookPreparationProtectsEveryLocalPlaylistFileBeforeOpen() {
+        val files = listOf(
+            file("part-1", null).copy(book = file("part-1", null).book.copy(localPath = "/books/1.mp3")),
+            file("part-2", null).copy(book = file("part-2", null).book.copy(localPath = "/books/2.mp3"))
+        )
+        val book = files.first().book.copy(fileId = "group")
+
+        val leases = audioReaderLeaseSpecs("preparing", book, files)
+
+        assertEquals(listOf("part-1", "part-2"), leases.map { it.fileId })
+        assertEquals(listOf("/books/1.mp3", "/books/2.mp3"), leases.map { it.localPath })
+        assertEquals(listOf("preparing:0", "preparing:1"), leases.map { it.ownerId })
+    }
 
     @Test
     fun audiobookPreviewBannerVisibilityFollowsCurrentEmittedSessionMode() {
@@ -272,7 +306,7 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
-    fun activeBookSummaryForActiveFileSwitchesFileIdAndStreamButKeepsBookLevelMetadata() {
+    fun activeBookSummaryForActiveFileSwitchesFileIdAndStreamAndFallsBackToBookMetadata() {
         val bookLevel = BookSummary(
             libraryId = "lib",
             id = "book-1",
@@ -324,6 +358,33 @@ class ReadiumAudioPlaybackTest {
         assertEquals("f2", active.fileId)
         assertEquals("aud_track_2", active.audioAssetId)
         assertEquals("manifest-rev-1", active.audioManifestRevision)
+    }
+
+    @Test
+    fun activeBookSummaryForActiveFileUsesTheActiveAudioCoverAndAspectRatio() {
+        val bookLevel = BookSummary(
+            libraryId = "lib",
+            id = "book-1",
+            fileId = "f1",
+            title = "Mixed format book",
+            author = "Author",
+            format = "epub",
+            mediaKind = MediaKind.AUDIO,
+            coverUrl = "https://server/portrait.jpg",
+            coverAspectRatio = CoverAspectRatio.PORTRAIT
+        )
+        val audioFile = file("f2", "https://server/stream/f2").copy(
+            book = file("f2", "https://server/stream/f2").book.copy(
+                coverUrl = "https://server/portrait.jpg",
+                audiobookCoverUrl = "https://server/square-audio.jpg",
+                coverAspectRatio = CoverAspectRatio.PORTRAIT
+            )
+        )
+
+        val active = activeBookSummaryForActiveFile(bookLevel, listOf(audioFile), "f2")
+
+        assertEquals("https://server/square-audio.jpg", active.audiobookCoverUrl)
+        assertEquals(CoverAspectRatio.SQUARE, active.coverAspectRatio)
     }
 
     private fun fileWithAsset(id: String, assetId: String): BookFileOption {

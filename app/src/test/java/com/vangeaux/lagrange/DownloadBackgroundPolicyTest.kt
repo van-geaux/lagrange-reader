@@ -56,18 +56,152 @@ class DownloadBackgroundPolicyTest {
     }
 
     @Test
-    fun `unique work name separates servers and files`() {
+    fun `unique work name separates servers accounts and files`() {
         assertNotEquals(
-            downloadUniqueWorkName("https://one.example", "file-1"),
-            downloadUniqueWorkName("https://two.example", "file-1")
+            downloadUniqueWorkName("https://one.example", "scope-a", "file-1"),
+            downloadUniqueWorkName("https://two.example", "scope-a", "file-1")
         )
         assertNotEquals(
-            downloadUniqueWorkName("https://one.example", "file-1"),
-            downloadUniqueWorkName("https://one.example", "file-2")
+            downloadUniqueWorkName("https://one.example", "scope-a", "file-1"),
+            downloadUniqueWorkName("https://one.example", "scope-a", "file-2")
+        )
+        assertNotEquals(
+            downloadUniqueWorkName("https://one.example", "scope-a", "file-1"),
+            downloadUniqueWorkName("https://one.example", "scope-b", "file-1")
         )
         assertTrue(
-            downloadUniqueWorkName("https://one.example", "file-1")
+            downloadUniqueWorkName("https://one.example", "scope-a", "file-1")
                 .contains("bookorbit-download")
+        )
+    }
+
+    @Test
+    fun `request tags distinguish replacement ownership`() {
+        val first = downloadRequestTag("request-1")
+        val second = downloadRequestTag("request-2")
+
+        assertNotEquals(first, second)
+        assertTrue(downloadWorkTagsMatchRequest(setOf(first), "request-1"))
+        assertFalse(downloadWorkTagsMatchRequest(setOf(second), "request-1"))
+        assertTrue(downloadWorkTagsMatchRequest(emptySet(), ""))
+    }
+
+    @Test
+    fun `active work owns only its exact durable queue request`() {
+        val queued = mapOf("file-1" to "request-new")
+
+        assertTrue(
+            downloadWorkTagsOwnQueuedRequest(
+                setOf(downloadFileTag("file-1"), downloadRequestTag("request-new")),
+                queued
+            )
+        )
+        assertFalse(
+            downloadWorkTagsOwnQueuedRequest(
+                setOf(downloadFileTag("file-1"), downloadRequestTag("request-old")),
+                queued
+            )
+        )
+        assertFalse(
+            downloadWorkTagsOwnQueuedRequest(
+                setOf(downloadFileTag("file-2"), downloadRequestTag("request-new")),
+                queued
+            )
+        )
+    }
+
+    @Test
+    fun `legacy blank queue owner matches only untagged work`() {
+        val queued = mapOf("legacy-file" to "")
+
+        assertTrue(
+            downloadWorkTagsOwnQueuedRequest(
+                setOf(downloadFileTag("legacy-file")),
+                queued
+            )
+        )
+        assertFalse(
+            downloadWorkTagsOwnQueuedRequest(
+                setOf(downloadFileTag("legacy-file"), downloadRequestTag("new-request")),
+                queued
+            )
+        )
+    }
+
+    @Test
+    fun `callbacks for replaced same-file work have distinct ownership keys`() {
+        val old = WorkManagerDownloadScheduler.DownloadCallbackKey(
+            "https://example.test",
+            "account-scope",
+            "same-file",
+            "old-request"
+        )
+        val replacement = WorkManagerDownloadScheduler.DownloadCallbackKey(
+            "https://example.test",
+            "account-scope",
+            "same-file",
+            "new-request"
+        )
+
+        assertNotEquals(old, replacement)
+    }
+
+    @Test
+    fun `policy generation tags preserve newer work during delayed cleanup`() {
+        val old = setOf(downloadPolicyGenerationTag(4))
+        val replacement = setOf(downloadPolicyGenerationTag(5))
+
+        assertEquals(4L, downloadPolicyGenerationFromTags(old))
+        assertEquals(5L, downloadPolicyGenerationFromTags(replacement))
+        assertEquals(null, downloadPolicyGenerationFromTags(emptySet()))
+        assertTrue(downloadWorkMayBeCancelledThroughGeneration(old, 4))
+        assertFalse(downloadWorkMayBeCancelledThroughGeneration(replacement, 4))
+        assertTrue(downloadWorkMayBeCancelledThroughGeneration(emptySet(), 4))
+    }
+
+    @Test
+    fun `automatic completion always rechecks active generation capacity`() {
+        val current = AutomaticDownloadPolicy(
+            profileId = "profile-1",
+            serverUrl = "https://example.test",
+            enabled = true,
+            automaticRemovalEnabled = false,
+            generation = 7
+        )
+
+        assertTrue(
+            shouldEnforcePostDownloadCapacity(DownloadOrigin.AUTOMATIC, 7, current)
+        )
+        assertFalse(
+            shouldEnforcePostDownloadCapacity(DownloadOrigin.AUTOMATIC, 6, current)
+        )
+        assertFalse(
+            shouldEnforcePostDownloadCapacity(DownloadOrigin.MANUAL, null, current)
+        )
+        assertTrue(
+            shouldEnforcePostDownloadCapacity(
+                DownloadOrigin.MANUAL,
+                null,
+                current.copy(automaticRemovalEnabled = true)
+            )
+        )
+    }
+
+    @Test
+    fun `same-file successor replaces its retiring stale work`() {
+        assertEquals(
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            downloadExistingWorkPolicy(
+                DownloadOrigin.AUTOMATIC,
+                replacingRetiringOwner = true
+            )
+        )
+        assertEquals(
+            androidx.work.ExistingWorkPolicy.KEEP,
+            downloadExistingWorkPolicy(
+                DownloadOrigin.AUTOMATIC,
+                replacingRetiringOwner = false
+            )
         )
     }
 
@@ -134,10 +268,11 @@ class DownloadBackgroundPolicyTest {
     @Test
     fun `cancel action uses the existing per-file unique work identity`() {
         val serverUrl = "https://example.test"
+        val storageScopeId = "account-scope"
         val fileId = "file-1"
         assertEquals(
-            "bookorbit-download:$serverUrl:$fileId",
-            downloadUniqueWorkName(serverUrl, fileId)
+            "bookorbit-download:$serverUrl:$storageScopeId:$fileId",
+            downloadUniqueWorkName(serverUrl, storageScopeId, fileId)
         )
         assertEquals("com.vangeaux.lagrange.CANCEL_DOWNLOAD", DOWNLOAD_NOTIFICATION_CANCEL_ACTION)
     }

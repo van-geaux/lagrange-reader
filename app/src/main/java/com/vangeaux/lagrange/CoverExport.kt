@@ -22,7 +22,9 @@ internal fun exportCoverImage(
     title: String,
     bytes: ByteArray
 ): CoverExportResult {
-    if (bytes.isEmpty()) return CoverExportResult(false, "Cover image is not available")
+    if (bytes.isEmpty()) {
+        return CoverExportResult(false, context.getString(R.string.notif_cover_unavailable))
+    }
 
     val (mimeType, extension) = imageType(bytes)
     val baseName = sanitizeCoverFileName(title)
@@ -32,9 +34,9 @@ internal fun exportCoverImage(
         } else {
             exportWithLegacyStorage(baseName, extension, bytes)
         }
-        CoverExportResult(true, "Cover saved to Downloads/Lagrange Reader")
+        CoverExportResult(true, context.getString(R.string.notif_cover_saved))
     } catch (_: Throwable) {
-        CoverExportResult(false, "Could not save cover image")
+        CoverExportResult(false, context.getString(R.string.notif_cover_save_failed))
     }
 }
 

@@ -11,6 +11,10 @@
 7. Push the feature or fix branch and open a pull request against `main`. Include the issue link, summary, verification commands and results, and any remaining manual-validation status.
 8. Wait for required checks and maintainer review before merging. Maintainers handle the final merge and remote branch cleanup.
 
+## Translation contributions
+
+Translation work is managed through Crowdin. Read [`TRANSLATIONS.md`](TRANSLATIONS.md) before suggesting or reviewing translated text. Do not create manual pull requests containing copied Android translation resources.
+
 ## Security reports
 
 Do not disclose security vulnerabilities in a public issue or pull request. Follow [`SECURITY.md`](SECURITY.md) and use GitHub's private vulnerability reporting or security-advisory channel when available.

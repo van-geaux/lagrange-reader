@@ -31,9 +31,9 @@ For release work, also verify the approved release assembly/workflow and the rel
 
 ### Provider switching and capability routing
 
-On a connected device, switch between a configured Komga server and a configured BookOrbit server without restarting the app. Verify each provider rebinds its supported modules, audiobook playback opens only where supported, and unsupported providers show an explicit unavailable state instead of stale callbacks or empty success. Repeat after sign-out/server change and after process recreation.
+On a connected device, switch between configured BookOrbit, Komga, and Kavita servers without restarting the app. Verify each provider rebinds its supported modules, audiobook playback opens only where supported, and unsupported providers show an explicit unavailable state instead of stale callbacks or empty success. Repeat after sign-out/server change and after process recreation.
 
-Use [`docs/provider-checklists/komga.md`](provider-checklists/komga.md) for Komga catalog, format, progress, download, and offline-reader validation. Use [`docs/provider-checklists/module-function-matrix.md`](provider-checklists/module-function-matrix.md) to confirm provider-exclusive actions remain unavailable when the selected provider lacks the capability.
+Use [`docs/provider-checklists/komga.md`](provider-checklists/komga.md) and [`docs/provider-checklists/kavita.md`](provider-checklists/kavita.md) for provider-specific catalog, format, progress, download, and offline-reader validation. Use [`docs/provider-checklists/module-function-matrix.md`](provider-checklists/module-function-matrix.md) to confirm provider-exclusive actions remain unavailable when the selected provider lacks the capability.
 
 ### Settings and reader options
 
@@ -65,7 +65,42 @@ Download EPUB, PDF, CBZ, CBR, and CB7 samples. Reopen valid local files with the
 
 When the affected scope requires it, verify normal versus Preview launch isolation, exact normal resume, Preview starting without persisted progress, progress on close, offline local fallback, orientation lock, keep-awake, themes, accessibility, and large-text behavior.
 
-For EPUB, verify chapter/page navigation, continuous active-resource seeking, text size, margins, reading direction, custom/accessibility fonts, image handling, and optional read-along narration. When Android TTS is available, long-press a word and a sentence, choose `Listen from here`, and confirm playback starts at the selected word/sentence rather than the chapter beginning; on EPUB 3 media-overlay books, confirm `Play narration` remains a separate action. Open TTS settings during playback, confirm the Voice selector lists only voices compatible with the EPUB language, selecting a voice changes subsequent speech, the choice persists after reopening the reader, and `Default Android voice` clears the override. Force a selected voice failure and confirm playback stops, the failed override is cleared, the player returns with `Default Android voice` selected and paused, the reading locator is preserved, and no automatic speech starts until Play is pressed. Confirm network-dependent voices are identified and the existing missing-voice-data action opens Android voice installation. Verify read-along speed changes apply immediately through the five adjustment controls and that `Apply` is disabled. Verify TTS speed and pitch apply immediately, custom punctuation pauses are hidden by default and appear only after enabling the switch, and punctuation/lock-screen changes require `Apply`. Repeat once in Preview and confirm the listen actions are unavailable. For PDF and comics, verify page navigation, progress, links where applicable, layout modes, page gaps, and reader chrome. For audiobook playback, verify compact/full players, chapters, seeking, speed, sleep timer, session history, notification controls, backgrounding, screen lock, audio focus, and process/task recreation.
+- For EPUB, verify chapter/page navigation, continuous active-resource seeking, text size, margins, reading direction, custom/accessibility fonts, image handling, and optional read-along narration. When Android TTS is available, long-press a word and a sentence, choose `Listen from here`, and confirm playback starts at the selected word/sentence rather than the chapter beginning; on EPUB 3 media-overlay books, confirm `Play narration` remains a separate action. Open TTS settings during playback, confirm the Voice selector lists only voices compatible with the EPUB language, selecting a voice changes subsequent speech, the choice persists after reopening the reader, and `Default Android voice` clears the override. Force a selected voice failure and confirm playback stops, the failed override is cleared, the player returns with `Default Android voice` selected and paused, the reading locator is preserved, and no automatic speech starts until Play is pressed. Confirm network-dependent voices are identified and the existing missing-voice-data action opens Android voice installation. Verify read-along speed changes apply immediately through the five adjustment controls and that `Apply` is disabled. Verify TTS speed and pitch apply immediately, custom punctuation pauses are hidden by default and appear only after enabling the switch, and punctuation/lock-screen changes require `Apply`. Verify `Prefer server progress when reopening` is off by default, persists per library, keeps the exact local locator when off, and when enabled follows clearly newer server progress without moving backward or treating this device's own progress write as another-device progress. Repeat once in Preview and confirm the listen actions are unavailable. For PDF and comics, verify page navigation, progress, links where applicable, layout modes, page gaps, and reader chrome. For audiobook playback, verify compact/full players, chapters, seeking, speed, sleep timer, session history, notification controls, backgrounding, screen lock, audio focus, and process/task recreation.
+
+### Foldable EPUB spreads
+
+Automated coverage: `ReaderSpreadPolicyTest`, `EpubSpreadPreferencesTest` (JVM); `EpubSpreadWebViewInstrumentedTest`, `EpubSpreadActivityInstrumentedTest` (connected). Spread assertions need a large horizontal window, such as the Android Studio Pixel Fold AVD unfolded (2208×1840, 420 dpi). On phone-sized devices they are skipped through a JUnit assumption. Run connected tests on a non-English host with `JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US"`: several existing parser tests assert `.`-formatted percentages.
+
+On an unfolded foldable or a large landscape tablet:
+
+- In landscape, paginated EPUB shows two columns. A page turn advances both columns.
+- Rotate to portrait, fold to the cover screen, open split-screen, switch to continuous layout, or turn off `Two-page spread when unfolded`: each shows one column.
+- Margins: each page has the same margin on its outer and inner side, and the gap between the pages is twice that. Raising or lowering the left/right margin widens or narrows all four page edges at once, without reopening the book. Uneven left/right settings use their mean. At the largest settings each page still keeps half its width for text.
+- A fixed-layout EPUB shows two facing pages, and the left/right margin setting still applies around the spread.
+- Line spacing, word spacing, font size and font family change both pages identically and reflow text across both columns.
+- Confirm the following still work: resume position after fold/unfold or rotation, TTS sentence highlighting and auto page-turn across columns, highlights spanning the column boundary, and tap zones.
+- Comics and PDF stay single-page.
+
+### OLED EPUB theme
+
+Automated coverage: `EpubOledThemeTest` (JVM); `EpubOledWebViewInstrumentedTest` (connected).
+
+- Choosing `OLED black` shows pure white text and links on pure black.
+- The following are all black, with white primary content and hairline edges: the status-bar strip, reader chrome, options sheet, chapter list, TTS/read-along panels, and system dialogs.
+- Text selection is white with black text, and illustrations keep their original colours.
+- Switching into or out of OLED reopens the reader at the same position.
+- PDF and comics are unaffected.
+
+### EPUB text alignment and hyphenation
+
+Automated coverage: `EpubTypesettingPreferencesTest` (JVM); `EpubTypesettingActivityInstrumentedTest`, `ReadiumEpubOpenInstrumentedTest`, `EpubReaderOptionsOverlayInstrumentedTest` (connected).
+
+- Left with Auto hyphenation (the default) is ragged and unhyphenated, as before.
+- Justified hyphenates long words and gives flush lines.
+- Hyphenation Off removes hyphens; Left with On hyphenates ragged text.
+- Changes apply without reopening the book, from the reader options and from the library reader settings.
+- A book whose metadata declares no language is hyphenated in the device language.
+- Book language (in-book options → This book): Auto shows the source (book or device). Choosing another language switches read-aloud voices immediately, even while playing, and changes hyphenation; it is remembered for that book on that server profile only: the same book on another server or account keeps its own choice. Auto restores the book's language. Automated: `EpubBookLanguageInstrumentedTest` (voice list per language with the system speech engine, page language, persistence), `EpubBookLanguageTest` (JVM).
 
 ### EPUB Image Library
 
@@ -86,11 +121,13 @@ For cached catalogs, confirm complete cached content appears before network refr
 
 ### Authentication and account isolation
 
-Verify password login, `/api/v1/auth/me` bootstrap, sign-out/session reset, session-expiry recovery, and pending-destination recovery. For BookOrbit OIDC, verify provider discovery, PKCE/state/nonce validation, callback exchange, session verification, and recovery in the server-hosted WebView. This is not native AppAuth; native redirect validation remains pending.
+Verify password login, `/api/v1/auth/me` bootstrap where applicable, sign-out/session reset, session-expiry recovery, and pending-destination recovery. For BookOrbit and Kavita OIDC, verify provider discovery, callback/state protections, callback exchange, session verification, and recovery in the server-hosted WebView. This is not native AppAuth; native redirect validation remains pending.
 
-With both a BookOrbit profile and a Komga profile configured, sign in to each provider, switch BookOrbit → Komga and back, then repeat Komga → BookOrbit and back. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting at least five minutes. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state. Issue #268 was user-confirmed on Samsung SM-S931B / Android 16 over ADB with `Lagrange-debug-202610092219.apk`; the five-minute Komga-to-BookOrbit return loaded BookOrbit Home without a login prompt.
+With profiles for the supported providers configured, sign in to each provider and switch between BookOrbit, Komga, and Kavita in both directions. Confirm each switch opens the saved provider without showing login when its saved session is still valid, including after waiting at least five minutes. Confirm an actually expired or rejected session still requires login, and that the target provider's libraries and selected library are not replaced by the previous provider's state. Issue #268 was user-confirmed for the BookOrbit/Komga path on Samsung SM-S931B / Android 16 over ADB with `Lagrange-debug-202610092219.apk`; any Kavita device validation must be recorded separately.
 
-After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available as device-shared Local books. Repeat with compact/full audiobook playback and a preparing session.
+After logout or account switch, confirm account-owned progress, sessions, annotations, catalogs, detail state, and queued progress are not reused by the next account. Confirm completed downloaded media remains available to its owning profile's Local books. Repeat with compact/full audiobook playback and a preparing session.
+
+For two named profiles using the same provider and normalized server URL, confirm saving the second profile does not replace the first. Switch between the profiles and verify each account's credentials/session, browser state, downloads, and Local books remain isolated. Confirm a local book downloaded under one profile is absent from the other profile's Local books until it is downloaded there independently.
 
 ## Verification reporting
 

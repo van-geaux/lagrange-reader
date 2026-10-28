@@ -1,6 +1,6 @@
 # EPUB text-to-speech module
 
-EPUB text-to-speech is an independent reader capability. It is not a BookOrbit or Komga server module because narration operates on the opened EPUB publication and local reader state rather than a provider endpoint.
+EPUB text-to-speech is an independent reader capability. It is not a server-provider module because narration operates on the opened EPUB publication and local reader state rather than a provider endpoint.
 
 ## Contract
 

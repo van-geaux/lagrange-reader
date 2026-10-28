@@ -45,8 +45,9 @@ class ReadiumEpubReaderRoutingTest {
     }
 
     @Test
-    fun previewLabelsUsePreviewModeTerminologyForReadingAndListening() {
-        assertEquals("Preview mode · Tap to enable reading progress", BOOK_PREVIEW_MODE_LABEL)
+    fun previewLabelsUsePreviewModeTerminologyForListening() {
+        // The reading preview banner text now lives in string resources; the listening player
+        // label is still a constant until the audiobook player is localized.
         assertEquals("Preview mode · Tap to enable listening progress", AUDIOBOOK_PREVIEW_MODE_LABEL)
     }
 

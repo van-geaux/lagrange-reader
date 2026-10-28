@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 下载通知 -->
+    <string name="notif_download_title">正在下载 %1$s</string>
+    <string name="notif_downloading">下载中</string>
+    <string name="notif_summary_title">正在下载 %1$d 本书</string>
+    <string name="notif_summary_text">图书正在下载中</string>
+    <string name="notif_download_attempts_exhausted">下载在尝试五次后停止。</string>
+
+    <!-- 下载通知渠道（渠道 ID 不翻译） -->
+    <string name="notif_channel_downloads_name">图书下载</string>
+    <string name="notif_channel_downloads_description">显示图书下载进度。</string>
+
+    <!-- 有声书媒体会话按钮 -->
+    <string name="notif_audiobook_seek_back">回退 10 秒</string>
+    <string name="notif_audiobook_seek_forward">快进 30 秒</string>
+
+    <!-- 有声书准备错误 -->
+    <string name="notif_audiobook_no_local_file">本地没有可播放的已下载有声书文件。</string>
+    <string name="notif_audiobook_format_unsupported">暂不支持此有声书格式。</string>
+    <string name="notif_audiobook_media3_open_failed">Media3 无法从已配置的服务器打开有声书流（%1$s）。</string>
+    <string name="notif_audiobook_file_unavailable">已下载的有声书文件不可用。</string>
+    <string name="notif_audiobook_read_failed">Readium 无法读取此有声书文件。</string>
+    <string name="notif_audiobook_open_failed">Readium 无法打开此有声书。</string>
+    <string name="notif_audiobook_unrecognized">Readium 未将此文件识别为有声书。</string>
+    <string name="notif_audiobook_prepare_failed">Readium 无法准备此有声书。</string>
+    <string name="notif_audiobook_initialize_failed">Readium 无法初始化有声书播放。</string>
+    <string name="notif_audiobook_bind_failed">无法绑定有声书播放服务。</string>
+    <string name="notif_audiobook_bind_start_failed">无法启动有声书播放服务绑定。</string>
+    <string name="notif_audiobook_connect_timeout">连接有声书播放超时。</string>
+    <string name="notif_audiobook_resume_failed">无法恢复有声书播放。</string>
+    <string name="notif_audiobook_prepare_timeout">准备有声书超时。</string>
+    <string name="notif_audiobook_start_failed">无法开始有声书播放。</string>
+
+    <!-- 封面导出提示 -->
+    <string name="notif_cover_unavailable">封面图片不可用</string>
+    <string name="notif_cover_saved">封面已保存到 Downloads/Lagrange Reader</string>
+    <string name="notif_cover_save_failed">无法保存封面图片</string>
+
+    <!-- 应用启动默认提示（等接入批次使用） -->
+    <string name="notif_connecting">正在连接…</string>
+    <string name="notif_audio_open_cancelled">已取消打开有声书。</string>
+</resources>

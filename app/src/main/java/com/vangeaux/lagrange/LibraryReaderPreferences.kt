@@ -1,26 +1,75 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
 import org.json.JSONObject
 
-enum class LibraryReadingDirection(val displayName: String) {
-    LEFT_TO_RIGHT("Left to right"),
-    RIGHT_TO_LEFT("Right to left")
+enum class LibraryReadingDirection(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    LEFT_TO_RIGHT("Left to right", R.string.label_reading_direction_ltr),
+    RIGHT_TO_LEFT("Right to left", R.string.label_reading_direction_rtl)
 }
 
-enum class ReaderLayoutMode(val displayName: String) {
-    PAGINATED("Paginated"),
-    CONTINUOUS("Continuous")
+enum class ReaderLayoutMode(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    PAGINATED("Paginated", R.string.label_layout_paginated),
+    CONTINUOUS("Continuous", R.string.label_layout_continuous)
 }
 
-enum class EpubReaderFontFamily(val displayName: String) {
-    PUBLISHER_DEFAULT("Publisher default"),
-    SYSTEM_SERIF("System serif"),
-    SYSTEM_SANS_SERIF("System sans-serif"),
-    SYSTEM_MONOSPACE("System monospace"),
-    ACCESSIBLE_DFA("AccessibleDFA"),
-    OPEN_DYSLEXIC("OpenDyslexic"),
-    CUSTOM("Custom font")
+enum class EpubReaderFontFamily(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    PUBLISHER_DEFAULT("Publisher default", R.string.label_font_publisher_default),
+    SYSTEM_SERIF("System serif", R.string.label_font_system_serif),
+    SYSTEM_SANS_SERIF("System sans-serif", R.string.label_font_system_sans_serif),
+    SYSTEM_MONOSPACE("System monospace", R.string.label_font_system_monospace),
+    ACCESSIBLE_DFA("AccessibleDFA", R.string.label_font_accessible_dfa),
+    OPEN_DYSLEXIC("OpenDyslexic", R.string.label_font_open_dyslexic),
+    CUSTOM("Custom font", R.string.label_font_custom)
 }
+
+enum class EpubTextAlignment(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    START("Left", R.string.label_align_left),
+    JUSTIFY("Justified", R.string.label_align_justified)
+}
+
+/** AUTO hyphenates justified text only, which is when ragged gaps would otherwise appear. */
+enum class EpubHyphenation(
+    val displayName: String,
+    @StringRes val displayNameRes: Int
+) {
+    AUTO("Auto", R.string.label_hyphenation_auto),
+    ON("On", R.string.label_hyphenation_on),
+    OFF("Off", R.string.label_hyphenation_off)
+}
+
+internal fun epubHyphenationActive(alignment: EpubTextAlignment, hyphenation: EpubHyphenation): Boolean =
+    when (hyphenation) {
+        EpubHyphenation.ON -> true
+        EpubHyphenation.OFF -> false
+        EpubHyphenation.AUTO -> alignment == EpubTextAlignment.JUSTIFY
+    }
+
+internal fun epubTextAlignmentStorageValue(value: EpubTextAlignment): String = value.name.lowercase()
+
+internal fun epubTextAlignmentFromStorage(value: String?): EpubTextAlignment =
+    if (value?.trim()?.lowercase() == "justify") EpubTextAlignment.JUSTIFY else EpubTextAlignment.START
+
+internal fun epubHyphenationStorageValue(value: EpubHyphenation): String = value.name.lowercase()
+
+internal fun epubHyphenationFromStorage(value: String?): EpubHyphenation =
+    when (value?.trim()?.lowercase()) {
+        "on" -> EpubHyphenation.ON
+        "off" -> EpubHyphenation.OFF
+        else -> EpubHyphenation.AUTO
+    }
 
 internal val EPUB_NORMAL_FONT_FAMILY_OPTIONS = listOf(
     EpubReaderFontFamily.PUBLISHER_DEFAULT,
@@ -43,7 +92,7 @@ internal const val MAX_EPUB_LINE_SPACING = 2f
 internal const val DEFAULT_EPUB_WORD_SPACING = 0f
 internal const val MAX_EPUB_WORD_SPACING = 1f
 
-private const val READER_PREFERENCES_STORAGE_VERSION = 2
+private const val READER_PREFERENCES_STORAGE_VERSION = 3
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
 data class LibraryReaderPreferences(
@@ -58,14 +107,19 @@ data class LibraryReaderPreferences(
     val fontScale: Float = 1f,
     val lineSpacing: Float = DEFAULT_EPUB_LINE_SPACING,
     val wordSpacing: Float = DEFAULT_EPUB_WORD_SPACING,
+    val textAlignment: EpubTextAlignment = EpubTextAlignment.START,
+    val hyphenation: EpubHyphenation = EpubHyphenation.AUTO,
+    val preferServerProgressOnReopen: Boolean = false,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
+    val showPageProgress: Boolean = true,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
     val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
     val joinPdfFacingPages: Boolean = false,
     val invertPdfColors: Boolean = false,
     val comicLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
-    val comicPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP
+    val comicPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
+    val twoPageSpread: ReaderSpreadMode = ReaderSpreadMode.AUTO
 ) {
     fun normalized(): LibraryReaderPreferences = copy(
         fontScale = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE),
@@ -169,17 +223,22 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("fontScale", normalized.fontScale.toDouble())
             put("lineSpacing", normalized.lineSpacing.toDouble())
             put("wordSpacing", normalized.wordSpacing.toDouble())
+            put("textAlignment", epubTextAlignmentStorageValue(normalized.textAlignment))
+            put("hyphenation", epubHyphenationStorageValue(normalized.hyphenation))
+            put("preferServerProgressOnReopen", normalized.preferServerProgressOnReopen)
             put("top", normalized.padding.top.toDouble())
             put("bottom", normalized.padding.bottom.toDouble())
             put("left", normalized.padding.left.toDouble())
             put("right", normalized.padding.right.toDouble())
             put("epubLayout", readerLayoutModeStorageValue(normalized.epubLayoutMode))
+            put("showPageProgress", normalized.showPageProgress)
             put("pdfLayout", readerLayoutModeStorageValue(normalized.pdfLayoutMode))
             put("pdfPageGapDp", normalized.pdfPageGapDp.toDouble())
             put("joinPdfFacingPages", normalized.joinPdfFacingPages)
             put("invertPdfColors", normalized.invertPdfColors)
             put("comicLayout", readerLayoutModeStorageValue(normalized.comicLayoutMode))
             put("comicPageGapDp", normalized.comicPageGapDp.toDouble())
+            put("twoPageSpread", readerSpreadModeStorageValue(normalized.twoPageSpread))
         }
     }
 
@@ -211,6 +270,9 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             "wordSpacing",
                             DEFAULT_EPUB_WORD_SPACING.toDouble()
                         ).toFloat(),
+                        textAlignment = epubTextAlignmentFromStorage(item.optString("textAlignment")),
+                        hyphenation = epubHyphenationFromStorage(item.optString("hyphenation")),
+                        preferServerProgressOnReopen = item.optBoolean("preferServerProgressOnReopen", false),
                         padding = EpubPaddingPercentages(
                             top = item.optDouble("top", EPUB_DEFAULT_TOP_PADDING_PERCENT.toDouble()).toFloat(),
                             bottom = item.optDouble("bottom", EPUB_DEFAULT_PADDING_PERCENT.toDouble()).toFloat(),
@@ -221,6 +283,7 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             item.optString("epubLayout"),
                             ReaderLayoutMode.PAGINATED
                         ),
+                        showPageProgress = item.optBoolean("showPageProgress", true),
                         pdfLayoutMode = readerLayoutModeFromStorage(
                             item.optString("pdfLayout"),
                             ReaderLayoutMode.CONTINUOUS
@@ -238,7 +301,8 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         comicPageGapDp = item.optDouble(
                             "comicPageGapDp",
                             DEFAULT_READER_PAGE_GAP_DP.toDouble()
-                        ).toFloat()
+                        ).toFloat(),
+                        twoPageSpread = readerSpreadModeFromStorage(item.optString("twoPageSpread"))
                     ).normalized()
                 }.getOrNull()?.let { decoded -> put(libraryId, decoded) }
             }

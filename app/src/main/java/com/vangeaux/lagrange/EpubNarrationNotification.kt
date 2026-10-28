@@ -63,19 +63,30 @@ internal fun buildEpubNarrationNotification(
     actions.previous?.let {
         builder.addAction(
             android.R.drawable.ic_media_previous,
-            "Previous narration sentence",
+            context.getString(R.string.tts_notification_previous),
             it
         )
     }
     builder.addAction(
         if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-        if (isPlaying) "Pause narration" else "Play narration",
+        context.getString(
+            if (isPlaying) R.string.tts_notification_pause_narration
+            else R.string.tts_notification_play_narration
+        ),
         actions.playPause
     )
     actions.next?.let {
-        builder.addAction(android.R.drawable.ic_media_next, "Next narration sentence", it)
+        builder.addAction(
+            android.R.drawable.ic_media_next,
+            context.getString(R.string.tts_notification_next),
+            it
+        )
     }
-    builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", actions.close)
+    builder.addAction(
+        android.R.drawable.ic_menu_close_clear_cancel,
+        context.getString(R.string.common_close),
+        actions.close
+    )
     return builder.build()
 }
 
@@ -91,19 +102,34 @@ internal fun buildEpubNarrationMediaAnchorNotification(
     val builder = NotificationCompat.Builder(context, EPUB_NARRATION_NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_media_play)
         .setContentTitle(title)
-        .setContentText("EPUB narration")
+        .setContentText(context.getString(R.string.tts_notification_epub_narration))
         .setContentIntent(contentIntent)
         .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
         .setOnlyAlertOnce(true)
         .setOngoing(isPlaying)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-    actions.previous?.let { builder.addAction(android.R.drawable.ic_media_previous, "Previous", it) }
+    actions.previous?.let {
+        builder.addAction(
+            android.R.drawable.ic_media_previous,
+            context.getString(R.string.tts_notification_previous_short),
+            it
+        )
+    }
     builder.addAction(
         if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-        if (isPlaying) "Pause" else "Play",
+        context.getString(
+            if (isPlaying) R.string.tts_notification_pause_short
+            else R.string.tts_notification_play_short
+        ),
         actions.playPause
     )
-    actions.next?.let { builder.addAction(android.R.drawable.ic_media_next, "Next", it) }
+    actions.next?.let {
+        builder.addAction(
+            android.R.drawable.ic_media_next,
+            context.getString(R.string.tts_notification_next_short),
+            it
+        )
+    }
     val compactIndices = buildList {
         if (actions.previous != null) add(0)
         add(if (actions.previous != null) 1 else 0)
@@ -127,19 +153,34 @@ internal fun buildEpubNarrationCompatMediaAnchorNotification(
     val builder = NotificationCompat.Builder(context, EPUB_NARRATION_NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_media_play)
         .setContentTitle(title)
-        .setContentText("EPUB narration")
+        .setContentText(context.getString(R.string.tts_notification_epub_narration))
         .setContentIntent(contentIntent)
         .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
         .setOnlyAlertOnce(true)
         .setOngoing(isPlaying)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-    actions.previous?.let { builder.addAction(android.R.drawable.ic_media_previous, "Previous", it) }
+    actions.previous?.let {
+        builder.addAction(
+            android.R.drawable.ic_media_previous,
+            context.getString(R.string.tts_notification_previous_short),
+            it
+        )
+    }
     builder.addAction(
         if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-        if (isPlaying) "Pause" else "Play",
+        context.getString(
+            if (isPlaying) R.string.tts_notification_pause_short
+            else R.string.tts_notification_play_short
+        ),
         actions.playPause
     )
-    actions.next?.let { builder.addAction(android.R.drawable.ic_media_next, "Next", it) }
+    actions.next?.let {
+        builder.addAction(
+            android.R.drawable.ic_media_next,
+            context.getString(R.string.tts_notification_next_short),
+            it
+        )
+    }
     val compactIndices = buildList {
         if (actions.previous != null) add(0)
         add(if (actions.previous != null) 1 else 0)

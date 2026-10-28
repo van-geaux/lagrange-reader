@@ -1,29 +1,32 @@
 package com.vangeaux.lagrange
 
-enum class ReaderTapZoneLayout(val displayName: String) {
-    CURRENT_EDGES("Equal thirds"),
-    VERTICAL_THIRDS("Vertical thirds"),
-    KINDLE("Kindle"),
-    L_SHAPE("L-shape"),
-    EDGE("Edge"),
-    MENU_ONLY("Menu only")
+import androidx.annotation.StringRes
+
+enum class ReaderTapZoneLayout(val displayName: String, @StringRes val displayNameRes: Int) {
+    CURRENT_EDGES("Equal thirds", R.string.label_tap_zone_equal_thirds),
+    VERTICAL_THIRDS("Vertical thirds", R.string.label_tap_zone_vertical_thirds),
+    KINDLE("Kindle", R.string.label_tap_zone_kindle),
+    L_SHAPE("L-shape", R.string.label_tap_zone_l_shape),
+    EDGE("Edge", R.string.label_tap_zone_edge),
+    MENU_ONLY("Menu only", R.string.label_tap_zone_menu_only)
 }
 
 enum class ReaderTapZoneInvertMode(
     val displayName: String,
+    @StringRes val displayNameRes: Int,
     val horizontal: Boolean,
     val vertical: Boolean
 ) {
-    NONE("None", horizontal = false, vertical = false),
-    HORIZONTAL("Horizontal", horizontal = true, vertical = false),
-    VERTICAL("Vertical", horizontal = false, vertical = true),
-    BOTH("Both", horizontal = true, vertical = true)
+    NONE("None", R.string.label_tap_invert_none, horizontal = false, vertical = false),
+    HORIZONTAL("Horizontal", R.string.label_tap_invert_horizontal, horizontal = true, vertical = false),
+    VERTICAL("Vertical", R.string.label_tap_invert_vertical, horizontal = false, vertical = true),
+    BOTH("Both", R.string.label_tap_invert_both, horizontal = true, vertical = true)
 }
 
-enum class ReaderTapZoneAction(val displayName: String) {
-    PREVIOUS("Previous"),
-    NEXT("Next"),
-    MENU("Menu")
+enum class ReaderTapZoneAction(val displayName: String, @StringRes val displayNameRes: Int) {
+    PREVIOUS("Previous", R.string.label_tap_action_previous),
+    NEXT("Next", R.string.label_tap_action_next),
+    MENU("Menu", R.string.label_tap_action_menu)
 }
 
 data class ReaderTapZoneRect(

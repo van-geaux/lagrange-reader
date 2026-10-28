@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -174,10 +175,33 @@ internal fun ComicPageImageViewer(
     bottomContentHeight: Dp = 0.dp,
     bottomContentBottomGap: Dp = 12.dp,
     showTransientTopBar: Boolean = false,
-    exportTitle: String = comicPageExportTitle(title, pageIndex),
+    exportTitle: String? = null,
     exportBytes: (() -> ByteArray?)? = null
 ) {
     val context = LocalContext.current
+    val comicFallbackTitle = stringResource(R.string.extras_comic_default_title)
+    val resolvedExportTitle = exportTitle ?: stringResource(
+        R.string.extras_comic_export_title,
+        title.trim().ifBlank { comicFallbackTitle },
+        pageIndex + 1
+    )
+    val imageReadFailureMessage = stringResource(R.string.extras_could_not_read_image)
+    val storagePermissionMessage = stringResource(R.string.extras_storage_permission_required)
+    val exportSavedMessage = stringResource(R.string.extras_export_saved)
+    val exportFailedMessage = stringResource(R.string.extras_export_failed)
+    val pageImageDescription = stringResource(R.string.extras_image_page_cd, pageIndex + 1)
+    val imageTapHint = stringResource(R.string.extras_image_tap_controls_hint)
+    val imageGestureHint = stringResource(R.string.extras_image_gesture_hint)
+    val pageNumberDescription = stringResource(R.string.extras_page_number, pageIndex + 1)
+    val viewerDescription = buildString {
+        append(pageImageDescription)
+        if (showTransientTopBar) {
+            append(' ')
+            append(imageTapHint)
+        }
+        append(' ')
+        append(imageGestureHint)
+    }
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
     var pan by remember(pageIndex) { mutableStateOf(Offset.Zero) }
     var menuAnchor by remember(pageIndex) { mutableStateOf<Offset?>(null) }
@@ -211,9 +235,13 @@ internal fun ComicPageImageViewer(
 
     fun export() {
         val bytes = exportBytes?.invoke() ?: if (exportBytes == null) bitmapToPng(bitmap) else null
-        val result = bytes?.let { exportCoverImage(context, exportTitle, it) }
-            ?: return Toast.makeText(context, "Could not read the image", Toast.LENGTH_SHORT).show()
-        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+        val result = bytes?.let { exportCoverImage(context, resolvedExportTitle, it) }
+            ?: return Toast.makeText(context, imageReadFailureMessage, Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context,
+            if (result.succeeded) exportSavedMessage else exportFailedMessage,
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -221,7 +249,7 @@ internal fun ComicPageImageViewer(
     ) { granted ->
         if (granted && pendingExport) export()
         else if (!granted) {
-            Toast.makeText(context, "Storage permission is required to save the page", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, storagePermissionMessage, Toast.LENGTH_SHORT).show()
         }
         pendingExport = false
     }
@@ -323,13 +351,7 @@ internal fun ComicPageImageViewer(
                     }
                 }
                 .semantics {
-                    contentDescription = buildString {
-                        append("Page image ${pageIndex + 1}. ")
-                        if (showTransientTopBar) {
-                            append("Single tap toggles viewer controls. ")
-                        }
-                        append("Pinch or double-tap to zoom. Tap outside the image or use back to close. Long-press the image for download options.")
-                    }
+                    contentDescription = viewerDescription
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -348,7 +370,7 @@ internal fun ComicPageImageViewer(
                 )
                 Image(
                     bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Page ${pageIndex + 1}",
+                    contentDescription = pageNumberDescription,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .width(with(density) { fittedSize.width.toDp() })
@@ -403,7 +425,7 @@ internal fun ComicPageImageViewer(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close image viewer",
+                            contentDescription = stringResource(R.string.extras_close_image_viewer),
                             tint = Color.White
                         )
                     }
@@ -421,7 +443,7 @@ internal fun ComicPageImageViewer(
                         onDismissRequest = { menuAnchor = null }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Download page") },
+                            text = { Text(stringResource(R.string.extras_download_page)) },
                             onClick = { menuAnchor = null; requestExport() }
                         )
                     }

@@ -8,7 +8,8 @@ import kotlinx.coroutines.withContext
 
 data class StorageUsage(
     val downloadedBytes: Long = 0L,
-    val cacheBytes: Long = 0L
+    val cacheBytes: Long = 0L,
+    val availableBytes: Long = 0L
 )
 
 internal class AppStorageManager private constructor(
@@ -25,11 +26,14 @@ internal class AppStorageManager private constructor(
 
     suspend fun usage(): StorageUsage = withContext(Dispatchers.IO) {
         StorageUsage(
-            downloadedBytes = fileTreeSize(File(filesDir, "downloads")),
+            downloadedBytes = managedDownloadStorageRoots(filesDir).sumOf { storageRoot ->
+                fileTreeSize(File(storageRoot, "downloads"))
+            },
             cacheBytes = fileTreeSize(File(filesDir, "cover_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache.json")) +
-                fileTreeSize(cacheDir)
+                fileTreeSize(cacheDir),
+            availableBytes = filesDir.usableSpace.coerceAtLeast(0L)
         )
     }
 
@@ -49,6 +53,29 @@ internal class AppStorageManager private constructor(
         }
         deleteChildren(File(cacheDir, "readium-comics"))
     }
+}
+
+/**
+ * Returns every physical root that can own download records and book files. The legacy root is
+ * always included, and profile roots are discovered from disk so data belonging to a removed
+ * profile still counts toward device-wide limits.
+ */
+internal fun managedDownloadStorageRoots(filesDir: File): List<File> {
+    val legacyRoot = runCatching { filesDir.canonicalFile }.getOrElse { filesDir.absoluteFile }
+    val profilesRoot = runCatching { File(legacyRoot, "profiles").canonicalFile }
+        .getOrElse { File(legacyRoot, "profiles").absoluteFile }
+    val profileRoots = profilesRoot.listFiles()
+        .orEmpty()
+        .asSequence()
+        .filter(File::isDirectory)
+        .mapNotNull { directory ->
+            runCatching { directory.canonicalFile }.getOrNull()
+        }
+        .filter { directory -> directory.parentFile == profilesRoot }
+        .distinctBy(File::getPath)
+        .sortedBy(File::getPath)
+        .toList()
+    return listOf(legacyRoot) + profileRoots
 }
 
 internal fun fileTreeSize(root: File): Long {

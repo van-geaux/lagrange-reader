@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preview mode -->
+    <string name="preview_banner_label">Preview mode · Tap to enable reading progress</string>
+    <string name="preview_banner_content_description">Preview mode. Tap to enable reading progress.</string>
+    <string name="preview_dialog_text">You’ll switch to reading mode, remain on this page, and start saving reading progress.</string>
+    <string name="preview_switch_to_reading">Switch to reading mode</string>
+    <string name="preview_leave_title">Leave preview mode?</string>
+
+    <!-- Tap zone tutorial -->
+    <string name="tutorial_content_description">Reader tap regions tutorial</string>
+    <string name="tutorial_swipe_hint">Swipe vertically to scroll</string>
+    <string name="tutorial_tap_region_description">%1$s tap region</string>
+
+    <!-- Reader chrome -->
+    <string name="chrome_dismiss_scrim">Dismiss reader controls and continue reading</string>
+    <string name="chrome_close_book">Close book</string>
+    <string name="chrome_exit">Exit</string>
+    <string name="chrome_previous_position">Previous %1$s</string>
+    <string name="chrome_next_position">Next %1$s</string>
+    <string name="chrome_progression_jump_bar">%1$s progression jump bar</string>
+    <string name="chrome_jump_bar">%1$s jump bar</string>
+    <string name="chrome_position_state">%1$d of %2$d</string>
+    <string name="chrome_chapter_position">Chapter %1$d/%2$d</string>
+    <string name="chrome_chapters">Chapters</string>
+    <string name="chrome_pages">Pages</string>
+    <string name="chrome_chapter_kind">Chapter</string>
+    <string name="chrome_select_position">Select %1$s %2$d: %3$s</string>
+    <string name="chrome_position_with_number">%1$s %2$d</string>
+    <string name="chrome_current">Current</string>
+    <string name="chrome_listen_narration">Listen to narration</string>
+    <string name="chrome_listen">Listen</string>
+    <string name="chrome_reader_settings">Reader settings</string>
+    <string name="chrome_footer_page_of">Page %1$d of %2$d</string>
+    <string name="chrome_footer_comic_page_of">Comic page %1$d of %2$d</string>
+    <string name="chrome_page_load_failed">Page %1$d could not be loaded</string>
+    <string name="chrome_dismiss_options">Dismiss reader options and continue reading</string>
+
+    <!-- EPUB progress footer -->
+    <string name="chrome_progress_summary">%1$d%% · Chapter %2$d/%3$d · Page %4$d/%5$d · %6$s</string>
+    <string name="chrome_progress_book_pages">Book %1$d/%2$d</string>
+    <string name="chrome_progress_book_pages_calculating">Book pages calculating…</string>
+    <string name="chrome_progress_a11y_summary">Book completion %1$d percent; chapter %2$d of %3$d; chapter page %4$d of %5$d; %6$s</string>
+    <string name="chrome_progress_a11y_book_pages">book page %1$d of %2$d</string>
+    <string name="chrome_progress_a11y_book_pages_calculating">whole-book pages are calculating</string>
+</resources>

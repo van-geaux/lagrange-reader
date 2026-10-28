@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 次要界面：通用操作 -->
+    <string name="secondary_try_again">重试</string>
+    <string name="secondary_cancel">取消</string>
+    <string name="secondary_save">保存</string>
+    <string name="secondary_previous">上一页</string>
+    <string name="secondary_next">下一页</string>
+
+    <!-- 统计 -->
+    <string name="secondary_statistics_loading">正在加载统计信息…</string>
+    <string name="secondary_statistics_unavailable">此服务器版本不支持统计功能。</string>
+    <string name="secondary_statistics_error">无法加载统计信息。</string>
+    <string name="secondary_statistics_title">你的统计</string>
+    <string name="secondary_statistics_subtitle">由 BookOrbit 上报的阅读活动。</string>
+    <string name="secondary_statistics_no_summary">暂无汇总数据。</string>
+    <string name="secondary_statistics_library_progress">书库进度</string>
+    <string name="secondary_statistics_tracked_books">已跟踪书籍</string>
+    <string name="secondary_statistics_started">已开始</string>
+    <string name="secondary_statistics_in_progress">阅读中</string>
+    <string name="secondary_statistics_completed">已完成</string>
+    <string name="secondary_statistics_mean_progress">平均进度 · %1$s</string>
+    <string name="secondary_statistics_daily_reading">每日阅读</string>
+    <string name="secondary_statistics_no_daily_reading">暂无每日阅读活动。</string>
+    <string name="secondary_statistics_reading_events">%1$d 次阅读</string>
+    <string name="secondary_statistics_duration_hours">%1$d 小时 %2$d 分钟</string>
+    <string name="secondary_statistics_duration_minutes">%1$d 分钟</string>
+
+    <!-- 成就 -->
+    <string name="secondary_achievements_loading">正在加载成就…</string>
+    <string name="secondary_achievements_unavailable">此服务器版本不支持成就功能。</string>
+    <string name="secondary_achievements_error">无法加载成就。</string>
+    <string name="secondary_achievements_title">你的成就</string>
+    <string name="secondary_achievements_summary">已解锁 %1$d / %2$d</string>
+    <string name="secondary_achievements_unlocked">已解锁</string>
+    <string name="secondary_achievements_no_unlocked">还没有解锁任何成就。</string>
+    <string name="secondary_achievements_locked">未解锁</string>
+    <string name="secondary_achievements_all_unlocked">所有成就均已解锁。</string>
+    <string name="secondary_achievements_symbol">%1$s 成就图标</string>
+    <string name="secondary_achievements_unlocked_on">解锁于 %1$s</string>
+
+    <!-- 标注 -->
+    <string name="secondary_annotations_search_placeholder">搜索高亮和笔记</string>
+    <string name="secondary_annotations_filter_active">活跃</string>
+    <string name="secondary_annotations_filter_trashed">回收站</string>
+    <string name="secondary_annotations_filter_with_notes">含笔记</string>
+    <string name="secondary_annotations_filter_all_notes">全部笔记</string>
+    <string name="secondary_annotations_sort_newest">最新</string>
+    <string name="secondary_annotations_sort_oldest">最早</string>
+    <string name="secondary_annotations_error">无法加载标注。</string>
+    <string name="secondary_annotations_retry">重试</string>
+    <string name="secondary_annotations_empty">未找到标注。</string>
+    <string name="secondary_annotations_unknown_book">未知书籍</string>
+    <string name="secondary_annotations_more_options">%1$s 中标注的更多选项</string>
+    <string name="secondary_annotations_copied">已复制</string>
+    <string name="secondary_annotations_clip_label">标注文本</string>
+    <string name="secondary_annotations_note_line">笔记：%1$s</string>
+    <string name="secondary_annotations_page">第 %1$d 页</string>
+    <string name="secondary_annotations_restore_failed">无法恢复此标注。</string>
+    <string name="secondary_annotations_edit_note">编辑笔记</string>
+    <string name="secondary_annotations_add_note">添加笔记</string>
+    <string name="secondary_annotations_update_note_failed">无法更新笔记。</string>
+    <string name="secondary_annotations_highlight_style">高亮样式</string>
+    <string name="secondary_annotations_update_style_failed">无法更新高亮样式。</string>
+    <string name="secondary_annotations_trash_title">移到回收站？</string>
+    <string name="secondary_annotations_trash_message">此标注将移到回收站，之后可以恢复。</string>
+    <string name="secondary_annotations_trash_failed">无法将此标注移到回收站。</string>
+    <string name="secondary_annotations_trash_confirm">移到回收站</string>
+    <string name="secondary_annotations_purge_title">永久删除？</string>
+    <string name="secondary_annotations_purge_message">此标注将被永久删除，且无法撤销。</string>
+    <string name="secondary_annotations_purge_failed">无法永久删除此标注。</string>
+    <string name="secondary_annotations_open_book_details">打开书籍详情</string>
+    <string name="secondary_annotations_go_to_annotation">跳转到标注</string>
+    <string name="secondary_annotations_change_style">更改颜色 / 样式</string>
+    <string name="secondary_annotations_copy_text">复制文本</string>
+    <string name="secondary_annotations_move_to_trash">移到回收站</string>
+    <string name="secondary_annotations_restore">恢复</string>
+    <string name="secondary_annotations_delete_permanently">永久删除</string>
+</resources>

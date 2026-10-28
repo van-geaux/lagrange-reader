@@ -4,6 +4,7 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.*
 
 import android.content.Context
+import android.util.Log
 import com.vangeaux.lagrange.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,6 +80,9 @@ internal fun komgaDownloadedEpubFile(record: DownloadRecord?, fallbackPath: Stri
     komgaDownloadedLocalFile(record, fallbackPath)
 
 class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
+    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
+
     private val appContext = context.applicationContext
     private val preferences = context.getSharedPreferences("komga_connection", Context.MODE_PRIVATE)
     private val authModule = KomgaAuthModuleImpl(appContext)
@@ -98,16 +102,72 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun setServerUrl(serverUrl: String) {
         val normalized = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Komga server URL.")
+            ?: throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         preferences.edit().putString(SERVER_URL_KEY, normalized).apply()
     }
 
     override suspend fun clearServer() {
-        preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
-        authModule.clearRuntimeSession()
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        try {
+            preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
+            authModule.clearRuntimeSession()
+            browserSnapshotStore.clear()
+        } finally {
+            clearUnscopedEpubResumeState()
+            profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
     }
 
-    override suspend fun clearSession() = authModule.clearSession()
+    override suspend fun clearSession() {
+        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        try {
+            // Per-book languages are kept per profile across profile switches; sign-out forgets them.
+            EpubBookLanguageStore(appContext).clearProfile()
+            authModule.clearSession()
+            browserSnapshotStore.clear()
+        } finally {
+            clearUnscopedEpubResumeState()
+            profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
+            pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
+        }
+    }
+
+    private suspend fun clearUnscopedEpubResumeState() {
+        bestEffortResumeCleanup("reader positions") { EpubReaderPositionStore(appContext).clear() }
+        bestEffortResumeCleanup("locators") { ReadiumEpubLocatorStore(appContext).clear() }
+        bestEffortResumeCleanup("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
+    }
+
+    private suspend fun bestEffortResumeCleanup(
+        name: String,
+        cleanup: suspend () -> Unit
+    ) {
+        try {
+            cleanup()
+        } catch (error: Exception) {
+            Log.w("KomgaRepository", "Unable to clear unscoped EPUB $name", error)
+        }
+    }
+
+    private fun activeAutomaticDownloadPolicy(profileId: String?): AutomaticDownloadPolicy? {
+        val serverUrl = preferences.getString(SERVER_URL_KEY, null).orEmpty()
+        if (serverUrl.isBlank()) return null
+        val resolvedProfileId = profileId ?: serverProfileId(serverUrl)
+        val storageScopeId = downloadStorageScopeId(appContext, serverUrl, resolvedProfileId)
+            ?: return null
+        return AutomaticDownloadPolicyStore(appContext)
+            .read(resolvedProfileId, serverUrl, storageScopeId)
+    }
+
+    private fun pauseAutomaticDownloadsForInactiveProfile(policy: AutomaticDownloadPolicy?) {
+        if (policy == null) return
+        runCatching {
+            AutomaticDownloadScheduler.pauseForInactiveProfile(appContext, policy)
+        }
+    }
 
     internal suspend fun streamingRequestHeaders(url: String): Map<String, String> {
         val serverUrl = getServerUrl().orEmpty()
@@ -131,7 +191,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun getSessionState(): SessionState = authModule.sessionState(getServerUrl().orEmpty())
 
     override suspend fun login(username: String, password: String) {
-        val url = getServerUrl() ?: throw UserFacingException("Enter a Komga server URL first.")
+        val url = getServerUrl() ?: throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_server_url_first, "Enter a Komga server URL first."))
         authModule.login(url, username, password)
     }
 
@@ -146,7 +206,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             }
     }
 
-    suspend fun loadHomeShelves(): HomeShelfData {
+    override suspend fun loadHomeShelves(): HomeShelfData {
         val shelves = homeModule.loadHomeShelves(getServerUrl().orEmpty())
         val downloads = downloadStore.readAll(getServerUrl().orEmpty()).associateBy { it.fileId }
         return shelves.copy(
@@ -288,7 +348,8 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             localFile = komgaDownloadedEpubFile(record, book.localPath),
             localFileError = null,
             fileId = book.fileId,
-            allowRemoteCache = allowRemoteCache
+            allowRemoteCache = allowRemoteCache,
+            context = appContext
         )
     }
 
@@ -354,7 +415,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             )
         }
         if (localOnly) {
-            throw UserFacingException("This Komga book is not downloaded for offline reading.")
+            throw UserFacingException(providerErrorMessage(appContext, R.string.perror_komga_not_downloaded, "This Komga book is not downloaded for offline reading."))
         }
         val detail = loadBookDetail(book)
         val resolvedBook = detail.book
@@ -465,24 +526,18 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         return komgaCachedSeriesDetailFromBooks(books, seriesId)
     }
 
-    override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit): File {
+    override suspend fun downloadBook(
+        book: BookSummary,
+        storageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File {
         val serverUrl = getServerUrl().orEmpty()
-        val target = downloadModule.downloadBook(serverUrl, book, onProgress)
-        downloadStore.save(
-            DownloadRecord(
-                serverUrl = serverUrl,
-                fileId = book.fileId ?: book.id,
-                bookId = book.id,
-                title = book.title,
-                filename = book.filename ?: target.name,
-                localPath = target.absolutePath,
-                mediaKind = book.mediaKind,
-                mimeType = book.format,
-                sourceUpdatedAtMillis = book.updatedAtMillis,
-                status = DownloadRecordStatus.COMPLETE
-            )
-        )
-        return target
+        return downloadModule.downloadBook(serverUrl, book, storageScopeId, onProgress)
+    }
+
+    override suspend fun clearInterruptedDownload(fileId: String) {
+        val serverUrl = getServerUrl().orEmpty()
+        downloadStore.removeAttempt(serverUrl, fileId)
     }
 
     override suspend fun deleteLocalCopy(book: BookSummary) {

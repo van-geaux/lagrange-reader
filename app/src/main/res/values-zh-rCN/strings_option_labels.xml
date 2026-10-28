@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 阅读主题 -->
+    <string name="label_theme_light">浅色</string>
+    <string name="label_theme_sepia">护眼</string>
+    <string name="label_theme_dark">深色</string>
+    <string name="label_theme_oled_black">OLED 纯黑</string>
+
+    <!-- 阅读方向 -->
+    <string name="label_reading_direction_ltr">从左到右</string>
+    <string name="label_reading_direction_rtl">从右到左</string>
+
+    <!-- 翻页模式 -->
+    <string name="label_layout_paginated">分页</string>
+    <string name="label_layout_continuous">连续滚动</string>
+
+    <!-- 字体 -->
+    <string name="label_font_publisher_default">出版方默认</string>
+    <string name="label_font_system_serif">系统衬线</string>
+    <string name="label_font_system_sans_serif">系统无衬线</string>
+    <string name="label_font_system_monospace">系统等宽</string>
+    <string name="label_font_accessible_dfa">AccessibleDFA</string>
+    <string name="label_font_open_dyslexic">OpenDyslexic</string>
+    <string name="label_font_custom">自定义字体</string>
+
+    <!-- 对齐 -->
+    <string name="label_align_left">靠左</string>
+    <string name="label_align_justified">两端对齐</string>
+
+    <!-- 断词 -->
+    <string name="label_hyphenation_auto">自动</string>
+    <string name="label_hyphenation_on">开启</string>
+    <string name="label_hyphenation_off">关闭</string>
+
+    <!-- 双页跨页 -->
+    <string name="label_spread_auto">自动</string>
+    <string name="label_spread_off">关闭</string>
+
+    <!-- 点击区域布局 -->
+    <string name="label_tap_zone_equal_thirds">三等分</string>
+    <string name="label_tap_zone_vertical_thirds">纵向三等分</string>
+    <string name="label_tap_zone_kindle">Kindle</string>
+    <string name="label_tap_zone_l_shape">L 形</string>
+    <string name="label_tap_zone_edge">边缘</string>
+    <string name="label_tap_zone_menu_only">仅菜单</string>
+
+    <!-- 点击区域反转 -->
+    <string name="label_tap_invert_none">无</string>
+    <string name="label_tap_invert_horizontal">水平</string>
+    <string name="label_tap_invert_vertical">垂直</string>
+    <string name="label_tap_invert_both">双向</string>
+
+    <!-- 点击区域动作 -->
+    <string name="label_tap_action_previous">上一页</string>
+    <string name="label_tap_action_next">下一页</string>
+    <string name="label_tap_action_menu">菜单</string>
+</resources>

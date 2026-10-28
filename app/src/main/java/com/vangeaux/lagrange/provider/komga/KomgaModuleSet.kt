@@ -6,7 +6,11 @@ import com.vangeaux.lagrange.core.*
 internal class KomgaModuleSet(private val repository: KomgaRepository) {
     val downloads: DownloadModule = object : DownloadModule {
         override val handlesDownloadsDirectly: Boolean = false
-        override suspend fun downloadBook(book: BookSummary, onProgress: (Float?) -> Unit) = repository.downloadBook(book, onProgress)
+        override suspend fun downloadBook(
+            book: BookSummary,
+            storageScopeId: String?,
+            onProgress: (Float?) -> Unit
+        ) = repository.downloadBook(book, storageScopeId, onProgress)
         override suspend fun loadAudiobookDownloadFiles(book: BookSummary) = repository.loadAudiobookDownloadFiles(book)
         override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
         override suspend fun deleteLocalCopies(book: BookSummary) = repository.deleteLocalCopies(book)
@@ -71,7 +75,13 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
         override suspend fun loadBookDetail(book: BookSummary) = repository.loadBookDetail(book)
         override suspend fun loadCachedBookDetail(book: BookSummary) = repository.loadCachedBookDetail(book)
         override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
-            throw UserFacingException("Book ratings are not available for Komga.")
+            throw UserFacingException(
+                repository.localizedMessage(
+                    R.string.perror_komga_ratings_unavailable,
+                    "Book ratings are not available for Komga."
+                ),
+                UserFacingReason.CAPABILITY_UNAVAILABLE
+            )
     }
 
     val readingSessions: ReadingSessionModule = object : ReadingSessionModule {
@@ -143,6 +153,7 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
     }
 
     val featureAvailability = ProviderFeatureAvailability(
+        serverHostedSignIn = true,
         achievements = false,
         statistics = false,
         smartScopes = false,
@@ -171,8 +182,35 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
         override suspend fun warmOfflineCacheBatch(expectedServerUrl: String, libraryId: String, startIndex: Int, maxItems: Int, includeDetails: Boolean, includeCovers: Boolean): OfflineCacheBatchResult? = null
     }
 
-    private fun unavailableReadingSessions(): Nothing = throw UserFacingException("Komga reading-session synchronization is not available.")
-    private fun unavailableAnnotations(): Nothing = throw UserFacingException("Komga annotations are not available.")
-    private fun unavailableSmartScopes(): Nothing = throw UserFacingException("Smart scopes are not available for Komga.")
-    private fun unavailableAuthors(): Nothing = throw UserFacingException("Authors are not available for Komga.")
+    private fun unavailableReadingSessions(): Nothing = throw UserFacingException(
+        repository.localizedMessage(
+            R.string.perror_komga_reading_sessions_unavailable,
+            "Komga reading-session synchronization is not available."
+        ),
+        UserFacingReason.CAPABILITY_UNAVAILABLE
+    )
+
+    private fun unavailableAnnotations(): Nothing = throw UserFacingException(
+        repository.localizedMessage(
+            R.string.perror_komga_annotations_unavailable,
+            "Komga annotations are not available."
+        ),
+        UserFacingReason.CAPABILITY_UNAVAILABLE
+    )
+
+    private fun unavailableSmartScopes(): Nothing = throw UserFacingException(
+        repository.localizedMessage(
+            R.string.perror_komga_smart_scopes_unavailable,
+            "Smart scopes are not available for Komga."
+        ),
+        UserFacingReason.CAPABILITY_UNAVAILABLE
+    )
+
+    private fun unavailableAuthors(): Nothing = throw UserFacingException(
+        repository.localizedMessage(
+            R.string.perror_komga_authors_unavailable,
+            "Authors are not available for Komga."
+        ),
+        UserFacingReason.CAPABILITY_UNAVAILABLE
+    )
 }

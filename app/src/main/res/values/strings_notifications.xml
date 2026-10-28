@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Download notifications -->
+    <string name="notif_download_title">Downloading %1$s</string>
+    <string name="notif_downloading">Downloading</string>
+    <string name="notif_summary_title">Downloading %1$d books</string>
+    <string name="notif_summary_text">Book downloads are in progress</string>
+    <string name="notif_download_attempts_exhausted">Download stopped after five attempts.</string>
+
+    <!-- Download notification channel (id is not localized) -->
+    <string name="notif_channel_downloads_name">Book downloads</string>
+    <string name="notif_channel_downloads_description">Shows progress while a book is downloading.</string>
+
+    <!-- Audiobook media session buttons -->
+    <string name="notif_audiobook_seek_back">Replay 10 seconds</string>
+    <string name="notif_audiobook_seek_forward">Forward 30 seconds</string>
+
+    <!-- Audiobook preparation errors -->
+    <string name="notif_audiobook_no_local_file">No playable downloaded audiobook file is available locally.</string>
+    <string name="notif_audiobook_format_unsupported">This audiobook format is not supported yet.</string>
+    <string name="notif_audiobook_media3_open_failed">Media3 could not open the audiobook stream from the configured server (%1$s).</string>
+    <string name="notif_audiobook_file_unavailable">The downloaded audiobook file is unavailable.</string>
+    <string name="notif_audiobook_read_failed">Readium could not read this audiobook file.</string>
+    <string name="notif_audiobook_open_failed">Readium could not open this audiobook publication.</string>
+    <string name="notif_audiobook_unrecognized">Readium did not recognize this file as an audiobook.</string>
+    <string name="notif_audiobook_prepare_failed">Readium could not prepare this audiobook.</string>
+    <string name="notif_audiobook_initialize_failed">Readium could not initialize audiobook playback.</string>
+    <string name="notif_audiobook_bind_failed">Could not bind the audiobook playback service.</string>
+    <string name="notif_audiobook_bind_start_failed">Could not start the audiobook playback service binding.</string>
+    <string name="notif_audiobook_connect_timeout">Timed out while connecting to audiobook playback.</string>
+    <string name="notif_audiobook_resume_failed">Could not resume audiobook playback.</string>
+    <string name="notif_audiobook_prepare_timeout">Timed out while preparing the audiobook.</string>
+    <string name="notif_audiobook_start_failed">Could not start audiobook playback.</string>
+
+    <!-- Cover export messages -->
+    <string name="notif_cover_unavailable">Cover image is not available</string>
+    <string name="notif_cover_saved">Cover saved to Downloads/Lagrange Reader</string>
+    <string name="notif_cover_save_failed">Could not save cover image</string>
+
+    <!-- App shell startup default (wired by the owning batch) -->
+    <string name="notif_connecting">Connecting…</string>
+    <string name="notif_audio_open_cancelled">Audiobook opening was cancelled.</string>
+</resources>

@@ -1,4 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lagrange</string>
+
+    <!-- Common actions -->
+    <string name="common_retry">Retry</string>
+    <string name="common_close">Close</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_continue">Continue</string>
+    <string name="common_sign_in">Sign in</string>
+    <string name="common_change_server">Change server</string>
+    <string name="common_dismiss_message">Dismiss message</string>
+
+    <!-- Provider labels -->
+    <string name="provider_server_label">%1$s server</string>
+
+    <!-- Server setup -->
+    <string name="setup_title_connect">Connect</string>
+    <string name="setup_eyebrow_private_reader">Private reader</string>
+    <string name="setup_tagline_your_library">Your library, in orbit.</string>
+    <string name="setup_intro">Connect securely to %1$s. Your library stays on your server; this app is your reading window.</string>
+    <string name="setup_your_provider_server">your %1$s server</string>
+    <string name="setup_your_server">your server</string>
+    <string name="setup_server_name_label">Server name (optional)</string>
+    <string name="setup_server_name_placeholder">My library</string>
+    <string name="setup_server_url_label">Server URL</string>
+    <string name="setup_server_url_placeholder" translatable="false">https://books.example.com</string>
+    <string name="setup_server_url_description">%1$s server URL</string>
+    <string name="setup_server_type_title">Server type</string>
+    <string name="setup_select_server_type">Select server type</string>
+    <string name="setup_select_server_type_error">Select a server type.</string>
+    <string name="setup_configured_servers">Configured servers</string>
+    <string name="setup_current">Current</string>
+    <string name="setup_remove">Remove</string>
+    <string name="setup_invalid_server_url">Enter a valid HTTP or HTTPS server URL.</string>
+    <string name="setup_connecting">Connecting to %1$s…</string>
+    <string name="setup_error_host_unresolved">The server host could not be resolved.</string>
+    <string name="setup_error_timeout">The server took too long to respond. Retry or check the network.</string>
+    <string name="setup_error_tls">The server TLS certificate could not be validated.</string>
+    <string name="setup_error_redirected">The server redirected this URL. Enter the final base URL directly.</string>
+    <string name="setup_error_http">The server responded, but the base URL did not open correctly.</string>
+    <string name="setup_error_network">Unable to reach that server. Check the URL and try again.</string>
+
+    <!-- Login -->
+    <string name="login_title">Sign in</string>
+    <string name="login_tagline">a BookOrbit reader</string>
+    <string name="login_username_label">Username</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_username_description">%1$s username</string>
+    <string name="login_password_description">%1$s password</string>
+    <string name="login_show_password">Show</string>
+    <string name="login_hide_password">Hide</string>
+    <string name="login_enter_username">Enter your username.</string>
+    <string name="login_enter_password">Enter your password.</string>
+    <string name="login_open_server_sign_in">Open server sign-in</string>
+    <string name="login_sign_in_with_sso">Sign in with SSO</string>
+    <string name="login_choose_server">Choose a configured server or add a new one.</string>
+    <string name="login_new_server">New server</string>
+
+    <!-- Server-hosted sign-in dialog -->
+    <string name="signin_server_title">Server sign-in</string>
+    <string name="signin_wait_notice">After successful sign-in, wait for Lagrange to verify your session. This sign-in window will close automatically when verification is complete.</string>
+    <string name="signin_server_address_invalid">The server address is not configured correctly.</string>
+    <string name="signin_page_load_failed">The sign-in page could not be loaded. Check your connection and try again.</string>
+    <string name="signin_http_error">The sign-in page returned HTTP %1$d.</string>
+    <string name="signin_tls_error">The server\'s TLS certificate could not be validated.</string>
+    <string name="signin_checking">Checking your sign-in with the server…</string>
+
+    <!-- OIDC/SSO sign-in dialog -->
+    <string name="signin_sso_title">SSO sign-in</string>
+    <string name="signin_completing">Completing sign-in…</string>
+    <string name="signin_loading_providers">Loading available sign-in providers…</string>
+    <string name="signin_choose_provider">Choose a sign-in provider.</string>
+    <string name="signin_sign_in_with_provider">Sign in with %1$s</string>
+    <string name="signin_no_sso_provider">No SSO provider is enabled on this server.</string>
+    <string name="signin_sso_page_load_failed">The SSO sign-in page could not be loaded. Check your connection and try again.</string>
+
+    <!-- Settings: app language -->
+    <string name="settings_language">Language</string>
+    <string name="settings_language_summary">App display language</string>
+    <string name="language_system">System default</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">简体中文</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_lagrange_logo">Lagrange logo</string>
+    <string name="cd_open_library_selector">Open library selector</string>
 </resources>

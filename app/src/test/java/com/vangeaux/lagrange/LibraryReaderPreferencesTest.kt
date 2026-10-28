@@ -11,6 +11,17 @@ import java.io.File
 
 class LibraryReaderPreferencesTest {
     @Test
+    fun `page progress is enabled by default and legacy profiles keep it enabled`() {
+        assertTrue(LibraryReaderPreferences().showPageProgress)
+
+        val legacy = libraryReaderPreferencesFromStorage(
+            """{"version":2,"profiles":{"library":{"theme":"dark"}}}"""
+        ).getValue("library")
+
+        assertTrue(legacy.showPageProgress)
+    }
+
+    @Test
     fun `reader profile storage uses a versioned envelope`() {
         val profile = LibraryReaderPreferences(
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
@@ -21,6 +32,7 @@ class LibraryReaderPreferencesTest {
             fontScale = 1.3f,
             lineSpacing = 1.4f,
             wordSpacing = 0.4f,
+            preferServerProgressOnReopen = true,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
@@ -70,6 +82,7 @@ class LibraryReaderPreferencesTest {
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 4f,
+            showPageProgress = false,
             comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
             comicPageGapDp = 24f
         )
@@ -131,7 +144,40 @@ class LibraryReaderPreferencesTest {
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
         assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
+        assertFalse(decoded.preferServerProgressOnReopen)
         assertFalse(decoded.volumeButtonPageNavigation)
+    }
+
+    @Test
+    fun `spread preferences round trip through storage`() {
+        val profile = LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.OFF)
+
+        val decoded = libraryReaderPreferencesFromStorage(
+            libraryReaderPreferencesStorageValue(mapOf("manga" to profile))
+        ).getValue("manga")
+
+        assertEquals(profile, decoded)
+        assertEquals(ReaderSpreadMode.OFF, decoded.twoPageSpread)
+    }
+
+    @Test
+    fun `legacy profiles without spread keys default to automatic spreads`() {
+        val decoded = libraryReaderPreferencesFromStorage(
+            """{"version":2,"profiles":{"library":{"theme":"oled_black"}}}"""
+        ).getValue("library")
+
+        assertEquals(ReaderSpreadMode.AUTO, decoded.twoPageSpread)
+        assertEquals(EpubReaderTheme.OledBlack, decoded.theme)
+    }
+
+    @Test
+    fun `unknown spread mode value falls back to automatic without dropping the profile`() {
+        val decoded = libraryReaderPreferencesFromStorage(
+            """{"version":2,"profiles":{"library":{"twoPageSpread":"sideways","fontScale":1.4}}}"""
+        ).getValue("library")
+
+        assertEquals(ReaderSpreadMode.AUTO, decoded.twoPageSpread)
+        assertEquals(1.4f, decoded.fontScale)
     }
 
     @Test

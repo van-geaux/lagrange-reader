@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -39,8 +40,39 @@ data class OfflineCacheStatus(
     val unavailable: Int = 0,
     val failed: Int = 0,
     val lastSuccessAtMillis: Long? = null,
-    val message: String? = null
+    val message: String? = null,
+    @StringRes val messageRes: Int? = null
 )
+
+/**
+ * UI-side localized variant of [message].
+ *
+ * [messageRes] is a transient writer hint and is not persisted, so a status restored from
+ * preferences is mapped from [state] (plus the known failure texts) instead. Unknown failure
+ * messages fall back to the stored English text.
+ */
+fun OfflineCacheStatus.localizedMessage(context: Context?): String? {
+    if (context == null) return message
+    val resId = messageRes ?: offlineCacheMessageResFromStoredState()
+    if (resId == null) return message
+    return runCatching { context.getString(resId) }.getOrNull() ?: message
+}
+
+private fun OfflineCacheStatus.offlineCacheMessageResFromStoredState(): Int? = when (state) {
+    OfflineCacheRunState.CANCELLED -> R.string.error_offline_cache_cancelled
+    OfflineCacheRunState.PARTIAL -> R.string.error_offline_cache_partial
+    OfflineCacheRunState.SUCCEEDED -> R.string.error_offline_cache_up_to_date
+    OfflineCacheRunState.FAILED -> when (message) {
+        "Select Book details, Cover thumbnails, or both." ->
+            R.string.error_offline_cache_select_content
+        "The configured server changed while the cache was updating." ->
+            R.string.error_offline_cache_server_changed
+        "Sign in again to update the offline cache." ->
+            R.string.error_offline_cache_sign_in
+        else -> null
+    }
+    else -> null
+}
 
 class OfflineCacheStatusStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -111,7 +143,11 @@ class OfflineCacheSyncWorker(
             return Result.success()
         }
         if (!details && !covers) {
-            fail(applicationContext, "Select Book details, Cover thumbnails, or both.")
+            fail(
+                applicationContext,
+                R.string.error_offline_cache_select_content,
+                "Select Book details, Cover thumbnails, or both."
+            )
             return Result.success()
         }
         val repository = resolveProviderRepository(applicationContext, serverUrl)
@@ -138,7 +174,11 @@ class OfflineCacheSyncWorker(
                 includeDetails = details,
                 includeCovers = covers
             ) ?: return Result.success().also {
-                fail(applicationContext, "The configured server changed while the cache was updating.")
+                fail(
+                    applicationContext,
+                    R.string.error_offline_cache_server_changed,
+                    "The configured server changed while the cache was updating."
+                )
             }
             statusStore.update { current ->
                 current.copy(
@@ -168,7 +208,11 @@ class OfflineCacheSyncWorker(
                 else -> Result.success().also { finish(applicationContext) }
             }
         } catch (_: AuthenticationRequiredException) {
-            fail(applicationContext, "Sign in again to update the offline cache.")
+            fail(
+                applicationContext,
+                R.string.error_offline_cache_sign_in,
+                "Sign in again to update the offline cache."
+            )
             Result.success()
         } catch (error: HttpRequestException) {
             if (isRetryableOfflineCacheError(error)) return Result.retry()
@@ -235,7 +279,15 @@ class OfflineCacheSyncWorker(
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelAllWorkByTag(TAG)
             OfflineCacheStatusStore(context).update {
-                it.copy(state = OfflineCacheRunState.CANCELLED, message = "Offline cache update cancelled.")
+                it.copy(
+                    state = OfflineCacheRunState.CANCELLED,
+                    message = localizedUiMessage(
+                        context,
+                        R.string.error_offline_cache_cancelled,
+                        "Offline cache update cancelled."
+                    ),
+                    messageRes = R.string.error_offline_cache_cancelled
+                )
             }
         }
 
@@ -287,17 +339,39 @@ class OfflineCacheSyncWorker(
         private fun finish(context: Context) {
             val store = OfflineCacheStatusStore(context)
             store.update { current ->
+                val partial = current.failed > 0
                 current.copy(
-                    state = if (current.failed > 0) OfflineCacheRunState.PARTIAL else OfflineCacheRunState.SUCCEEDED,
+                    state = if (partial) OfflineCacheRunState.PARTIAL else OfflineCacheRunState.SUCCEEDED,
                     lastSuccessAtMillis = System.currentTimeMillis(),
-                    message = if (current.failed > 0) "Updated with some failures." else "Offline cache is up to date."
+                    message = if (partial) {
+                        localizedUiMessage(
+                            context,
+                            R.string.error_offline_cache_partial,
+                            "Updated with some failures."
+                        )
+                    } else {
+                        localizedUiMessage(
+                            context,
+                            R.string.error_offline_cache_up_to_date,
+                            "Offline cache is up to date."
+                        )
+                    },
+                    messageRes = if (partial) {
+                        R.string.error_offline_cache_partial
+                    } else {
+                        R.string.error_offline_cache_up_to_date
+                    }
                 )
             }
         }
 
-        private fun fail(context: Context, message: String) {
+        private fun fail(context: Context, @StringRes messageRes: Int, message: String) {
             OfflineCacheStatusStore(context).update {
-                it.copy(state = OfflineCacheRunState.FAILED, message = message)
+                it.copy(
+                    state = OfflineCacheRunState.FAILED,
+                    message = localizedUiMessage(context, messageRes, message),
+                    messageRes = messageRes
+                )
             }
         }
     }

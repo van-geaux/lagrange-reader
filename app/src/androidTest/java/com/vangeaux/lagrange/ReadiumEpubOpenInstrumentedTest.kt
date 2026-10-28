@@ -40,6 +40,7 @@ import org.readium.navigator.media.tts.AndroidTtsNavigatorFactory
 import org.readium.navigator.media.tts.TtsNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.preferences.ColumnCount
+import org.readium.r2.navigator.preferences.Spread
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
@@ -441,7 +442,7 @@ class ReadiumEpubOpenInstrumentedTest {
         var installAttempts = 0
         val bridgeJob = launch {
             runEpubCurrentDocumentBridgeLoop(
-                installScript = "install-current-document",
+                installScript = { "install-current-document" },
                 evaluateJavascript = { script ->
                     if (script == "install-current-document") {
                         installAttempts += 1
@@ -518,6 +519,108 @@ class ReadiumEpubOpenInstrumentedTest {
                 fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC
             ).fontFamily
         )
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun singlePagePreferencesKeepOneColumnWithoutPageMargins() {
+        val preferences = readiumPreferences(EpubReaderTheme.Sepia, fontScale = 1f)
+
+        assertEquals(ColumnCount.ONE, preferences.columnCount)
+        assertEquals(0.0, requireNotNull(preferences.pageMargins), 0.0)
+        assertEquals(Spread.NEVER, preferences.spread)
+        assertEquals(false, preferences.scroll)
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun paginatedSpreadRequestsTwoColumnsFixedLayoutSpreadsAndGutters() {
+        val preferences = readiumPreferences(
+            EpubReaderTheme.OledBlack,
+            fontScale = 1.2f,
+            layoutMode = ReaderLayoutMode.PAGINATED,
+            twoPageSpread = true
+        )
+
+        assertEquals(ColumnCount.TWO, preferences.columnCount)
+        assertEquals(EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX, requireNotNull(preferences.pageMargins), 0.0)
+        assertEquals(Spread.ALWAYS, preferences.spread)
+        assertEquals(false, preferences.scroll)
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun spreadPreferencesCarryThePageMarginAndSinglePageKeepsNone() {
+        val spread = readiumPreferences(
+            EpubReaderTheme.Light, fontScale = 1f, twoPageSpread = true, spreadPageMarginCssPx = 40.0
+        )
+        assertEquals(40.0, requireNotNull(spread.pageMargins), 0.0)
+        val tooSmall = readiumPreferences(
+            EpubReaderTheme.Light, fontScale = 1f, twoPageSpread = true, spreadPageMarginCssPx = 2.0
+        )
+        assertEquals(EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX, requireNotNull(tooSmall.pageMargins), 0.0)
+        val single = readiumPreferences(
+            EpubReaderTheme.Light, fontScale = 1f, twoPageSpread = false, spreadPageMarginCssPx = 40.0
+        )
+        assertEquals(0.0, requireNotNull(single.pageMargins), 0.0)
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun continuousLayoutIgnoresSpreadRequest() {
+        val preferences = readiumPreferences(
+            EpubReaderTheme.Dark,
+            fontScale = 1f,
+            layoutMode = ReaderLayoutMode.CONTINUOUS,
+            twoPageSpread = true
+        )
+
+        assertEquals(ColumnCount.ONE, preferences.columnCount)
+        assertEquals(0.0, requireNotNull(preferences.pageMargins), 0.0)
+        assertEquals(Spread.NEVER, preferences.spread)
+        assertEquals(true, preferences.scroll)
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun spreadLeavesTypographyPreferencesUnchanged() {
+        fun preferences(spread: Boolean) = readiumPreferences(
+            EpubReaderTheme.Light,
+            fontScale = 1.4f,
+            lineSpacing = 1.5f,
+            fontFamily = EpubReaderFontFamily.SYSTEM_SERIF,
+            wordSpacing = 0.3f,
+            twoPageSpread = spread
+        ).copy(columnCount = null, pageMargins = null, spread = null)
+
+        assertEquals(preferences(false), preferences(true))
+    }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    @Test
+    fun typesettingPreferencesMapToReadiumAlignmentHyphensAndLanguage() {
+        val defaults = readiumPreferences(EpubReaderTheme.Light, fontScale = 1f)
+        assertEquals(org.readium.r2.navigator.preferences.TextAlign.START, defaults.textAlign)
+        assertEquals(false, defaults.hyphens)
+        assertEquals(null, defaults.language)
+
+        val justified = readiumPreferences(
+            EpubReaderTheme.Light,
+            fontScale = 1f,
+            textAlignment = EpubTextAlignment.JUSTIFY,
+            fallbackLanguage = "de-DE"
+        )
+        assertEquals(org.readium.r2.navigator.preferences.TextAlign.JUSTIFY, justified.textAlign)
+        assertEquals(true, justified.hyphens)
+        assertEquals("de-DE", justified.language?.code)
+
+        val forcedOff = readiumPreferences(
+            EpubReaderTheme.Light,
+            fontScale = 1f,
+            textAlignment = EpubTextAlignment.JUSTIFY,
+            hyphenation = EpubHyphenation.OFF
+        )
+        assertEquals(false, forcedOff.hyphens)
     }
 
     @Test
@@ -654,13 +757,20 @@ class ReadiumEpubOpenInstrumentedTest {
             assertTrue("Readium navigator did not become ready", navigatorReady)
             var tutorialWasShown = false
             var tutorialVisible = false
+            var normalReadingPadding = 0
             scenario.onActivity { activity ->
                 tutorialWasShown = activity.hasShownTapZoneTutorial()
                 tutorialVisible = activity.isTapZoneTutorialVisible()
             }
             assertTrue("EPUB tap-zone tutorial was not shown on reader entry", tutorialWasShown)
             SystemClock.sleep(READER_TAP_ZONE_TUTORIAL_DURATION_MILLIS + 250L)
-            scenario.onActivity { activity -> tutorialVisible = activity.isTapZoneTutorialVisible() }
+            scenario.onActivity {
+                tutorialVisible = it.isTapZoneTutorialVisible()
+                it.setShowPageProgressForTest(false)
+                assertEquals(false, it.isProgressFooterVisible())
+                it.setShowPageProgressForTest(true)
+                normalReadingPadding = it.readerContentBottomPaddingForTest()
+            }
             assertEquals(false, tutorialVisible)
             var tapX = 0f
             var tapY = 0f
@@ -689,6 +799,16 @@ class ReadiumEpubOpenInstrumentedTest {
             scenario.onActivity { activity ->
                 controlsVisible = activity.areLightweightControlsVisible()
                 optionsVisible = activity.areReaderOptionsVisible()
+                assertTrue("EPUB progress footer did not overlay reader controls", activity.isProgressFooterVisible())
+                assertEquals(normalReadingPadding, activity.readerContentBottomPaddingForTest())
+                val paddingBeforeOptions = activity.readerContentBottomPaddingForTest()
+                activity.showReaderOptionsForTest()
+                assertEquals(true, activity.areReaderOptionsVisible())
+                assertEquals(paddingBeforeOptions, activity.readerContentBottomPaddingForTest())
+                activity.hideReaderOptionsForTest()
+                assertEquals(false, activity.areReaderOptionsVisible())
+                assertEquals(true, activity.areLightweightControlsVisible())
+                assertEquals(paddingBeforeOptions, activity.readerContentBottomPaddingForTest())
             }
             assertTrue("Center tap did not open the lightweight reader chrome", controlsVisible)
             assertEquals(false, optionsVisible)

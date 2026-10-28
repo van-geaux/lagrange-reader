@@ -173,6 +173,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .assertIsDisplayed()
         composeRule.onAllNodesWithText("Fonts").assertCountEquals(0)
         composeRule.onAllNodesWithText("Accessibility fonts").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Text alignment").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Hyphenation").assertCountEquals(0)
     }
 
     @Test
@@ -227,6 +229,93 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
             assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
         }
+    }
+
+    @Test
+    fun epubAlignmentAndHyphenationChoicesUpdateOnlyTheirSettings() {
+        val profile = mutableStateOf(
+            LibraryReaderPreferences(
+                theme = EpubReaderTheme.OledBlack,
+                fontScale = 1.3f,
+                lineSpacing = 1.4f,
+                padding = EpubPaddingPercentages(11f, 22f, 33f, 44f)
+            )
+        )
+        composeRule.setContent {
+            EpubReaderOptionsBottomSheet(
+                title = "Typesetting test",
+                status = "Chapter 1/1 · Page 1/1",
+                preferences = profile.value,
+                onContinueReading = {},
+                onCloseBook = {},
+                onPreferencesChange = { profile.value = it }
+            )
+        }
+
+        composeRule.onNodeWithText("Text alignment").performScrollTo().assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertFalse(profile.value.preferServerProgressOnReopen)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-prefer-server-progress-on-reopen")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertTrue(profile.value.preferServerProgressOnReopen)
+        }
+        composeRule.onNodeWithText("Auto hyphenates justified text only", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-reading-text-align-justify").performScrollTo().performClick()
+        composeRule.runOnIdle {
+            assertEquals(EpubTextAlignment.JUSTIFY, profile.value.textAlignment)
+            assertEquals(EpubHyphenation.AUTO, profile.value.hyphenation)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-hyphenation-off").performScrollTo().performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(EpubTextAlignment.JUSTIFY, profile.value.textAlignment)
+            assertEquals(EpubHyphenation.OFF, profile.value.hyphenation)
+            assertEquals(EpubReaderTheme.OledBlack, profile.value.theme)
+            assertEquals(1.3f, profile.value.fontScale)
+            assertEquals(1.4f, profile.value.lineSpacing)
+            assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
+        }
+    }
+
+    @Test
+    fun bookLanguagePickerShowsTheResolvedLanguageAndReportsChoices() {
+        val override = mutableStateOf<String?>(null)
+        val changes = mutableListOf<String?>()
+        composeRule.setContent {
+            EpubReaderOptionsBottomSheet(
+                title = "Language test",
+                status = "Chapter 1/1 · Page 1/1",
+                preferences = LibraryReaderPreferences(),
+                onContinueReading = {},
+                onCloseBook = {},
+                onPreferencesChange = {},
+                bookLanguage = epubBookLanguageChoice(
+                    override = override.value,
+                    publicationLanguages = listOf("nl"),
+                    deviceLocale = java.util.Locale.US,
+                    availableLanguages = listOf("nl", "en", "de", "fr")
+                ),
+                onBookLanguageChange = {
+                    changes += it
+                    override.value = it
+                }
+            )
+        }
+
+        composeRule.onNodeWithText("Book language: Auto · Dutch (from book)").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-book-language-dropdown").performClick()
+        composeRule.onNodeWithTag("reader-options-book-language-en").performClick()
+        composeRule.onNodeWithText("Book language: English").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-book-language-dropdown").performClick()
+        composeRule.onNodeWithTag("reader-options-book-language-auto").performClick()
+
+        composeRule.runOnIdle { assertEquals(listOf("en", null), changes) }
+        composeRule.onNodeWithText("Book language: Auto · Dutch (from book)").assertIsDisplayed()
     }
 
     @Test

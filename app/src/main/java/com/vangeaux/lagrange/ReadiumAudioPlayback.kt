@@ -1,5 +1,7 @@
 package com.vangeaux.lagrange
 
+import androidx.annotation.StringRes
+
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -159,6 +161,19 @@ internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
         .build()
 )
 
+/** Localized variant for the media notification and session surfaces; the plain form above is test-stable. */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun audiobookMediaButtonPreferences(context: Context): List<CommandButton> = listOf(
+    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
+        .setSessionCommand(audiobookSeekBackSessionCommand)
+        .setDisplayName(context.getString(R.string.notif_audiobook_seek_back))
+        .build(),
+    CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+        .setSessionCommand(audiobookSeekForwardSessionCommand)
+        .setDisplayName(context.getString(R.string.notif_audiobook_seek_forward))
+        .build()
+)
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAvailableSessionCommands(): SessionCommands =
     MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
@@ -191,10 +206,12 @@ internal fun audiobookExternalPlayerCommands(
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookNotificationMediaButtons(
     playerCommands: Player.Commands,
-    defaultButtons: List<CommandButton>
+    defaultButtons: List<CommandButton>,
+    context: Context? = null
 ): ImmutableList<CommandButton> {
     val buttons = mutableListOf<CommandButton>()
-    val seekButtons = audiobookMediaButtonPreferences()
+    val seekButtons = context?.let { audiobookMediaButtonPreferences(it) }
+        ?: audiobookMediaButtonPreferences()
     if (playerCommands.contains(Player.COMMAND_SEEK_BACK)) {
         buttons += seekButtons[0].withCompactViewIndex(0)
     }
@@ -221,8 +238,12 @@ private fun CommandButton.withCompactViewIndex(index: Int): CommandButton =
     }.build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
-private class AudiobookMediaNotificationProvider(context: Context) :
-    DefaultMediaNotificationProvider(context) {
+private class AudiobookMediaNotificationProvider(
+    context: Context
+) : DefaultMediaNotificationProvider(context) {
+    /** The service context is not wrapped by [AppLocale]; the application context carries its locale. */
+    private val appContext: Context = context.applicationContext
+
     override fun getMediaButtons(
         mediaSession: MediaSession,
         playerCommands: Player.Commands,
@@ -235,7 +256,8 @@ private class AudiobookMediaNotificationProvider(context: Context) :
             playerCommands,
             customLayout,
             showPauseButton
-        )
+        ),
+        context = appContext
     )
 }
 
@@ -246,15 +268,24 @@ private class ReadAlongMediaNotificationProvider(
     private val audiobookProvider = AudiobookMediaNotificationProvider(context)
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
+    /**
+     * Runs inside the playback service, which is not wrapped by [AppLocale]; the application
+     * context carries the locale selected inside the app.
+     */
+    private val localizedContext: Context
+        get() = context.applicationContext
+
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager?.createNotificationChannel(
                 NotificationChannel(
                     EPUB_NARRATION_NOTIFICATION_CHANNEL_ID,
-                    "Read-along playback",
+                    localizedContext.getString(R.string.extras_readalong_playback_channel),
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "Shows the sentence currently narrated in an EPUB."
+                    description = localizedContext.getString(
+                        R.string.extras_readalong_playback_channel_description
+                    )
                 }
             )
         }
@@ -279,14 +310,14 @@ private class ReadAlongMediaNotificationProvider(
         val previous = actionFactory.createCustomAction(
             mediaSession,
             IconCompat.createWithResource(context, android.R.drawable.ic_media_previous),
-            "Previous narration sentence",
+            localizedContext.getString(R.string.extras_readalong_previous_sentence_cd),
             readAlongPreviousSessionCommand.customAction,
             readAlongPreviousSessionCommand.customExtras
         ).actionIntent?.takeIf { player.currentMediaItemIndex > 0 }
         val next = actionFactory.createCustomAction(
             mediaSession,
             IconCompat.createWithResource(context, android.R.drawable.ic_media_next),
-            "Next narration sentence",
+            localizedContext.getString(R.string.extras_readalong_next_sentence_cd),
             readAlongNextSessionCommand.customAction,
             readAlongNextSessionCommand.customExtras
         ).actionIntent?.takeIf { player.currentMediaItemIndex + 1 < player.mediaItemCount }
@@ -296,13 +327,16 @@ private class ReadAlongMediaNotificationProvider(
                 context,
                 if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
             ),
-            if (player.isPlaying) "Pause narration" else "Play narration",
+            localizedContext.getString(
+                if (player.isPlaying) R.string.extras_readalong_pause_cd
+                else R.string.extras_readalong_play_cd
+            ),
             Player.COMMAND_PLAY_PAUSE
         ).actionIntent ?: error("Read-along play/pause action was unavailable")
         val close = actionFactory.createMediaAction(
             mediaSession,
             IconCompat.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
-            "Close narration",
+            localizedContext.getString(R.string.extras_close_narration),
             Player.COMMAND_STOP
         ).actionIntent ?: playPause
         val sessionActivity = mediaSession.sessionActivity
@@ -311,9 +345,11 @@ private class ReadAlongMediaNotificationProvider(
         return MediaNotification(
             EPUB_NARRATION_NOTIFICATION_ID,
             buildEpubNarrationNotification(
-                context,
-                player.mediaMetadata.title?.toString() ?: "Read-along",
-                player.mediaMetadata.artist?.toString() ?: "Read-along",
+                localizedContext,
+                player.mediaMetadata.title?.toString()
+                    ?: localizedContext.getString(R.string.extras_readalong_title),
+                player.mediaMetadata.artist?.toString()
+                    ?: localizedContext.getString(R.string.extras_readalong_title),
                 player.isPlaying,
                 sessionActivity,
                 actions
@@ -330,7 +366,6 @@ private class ReadAlongMediaNotificationProvider(
                 }
         }
     }
-
 
     override fun handleCustomCommand(
         mediaSession: MediaSession,
@@ -393,6 +428,7 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class AudiobookMediaSessionCallback(
+    private val appContext: Context? = null,
     private val serviceProvider: () -> ReadiumAudioPlaybackService? = { null }
 ) : MediaLibraryService.MediaLibrarySession.Callback {
     override fun onConnect(
@@ -409,7 +445,7 @@ internal class AudiobookMediaSessionCallback(
         val customLayout = if (isAutoController) {
             audiobookAutoMediaButtonPreferences(hasChapters = hasChapters, currentSpeed = currentSpeed)
         } else {
-            audiobookMediaButtonPreferences()
+            appContext?.let { audiobookMediaButtonPreferences(it) } ?: audiobookMediaButtonPreferences()
         }
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
             .setAvailableSessionCommands(audiobookAvailableSessionCommands())
@@ -645,7 +681,14 @@ internal fun activeBookSummaryForActiveFile(
         format = activeFile.book.format,
         localPath = activeFile.book.localPath,
         audioAssetId = activeFile.book.audioAssetId,
-        audioManifestRevision = activeFile.book.audioManifestRevision
+        audioManifestRevision = activeFile.book.audioManifestRevision,
+        coverUrl = activeFile.book.coverUrl ?: book.coverUrl,
+        audiobookCoverUrl = activeFile.book.audiobookCoverUrl ?: book.audiobookCoverUrl,
+        coverAspectRatio = if (book.mediaKind == MediaKind.AUDIO || activeFile.mediaKind == MediaKind.AUDIO) {
+            CoverAspectRatio.SQUARE
+        } else {
+            activeFile.book.coverAspectRatio
+        }
     )
 }
 
@@ -684,10 +727,12 @@ internal suspend fun openDirectMedia3Audio(
     }
     val url = streamUrl?.takeIf { it.isNotBlank() }
         ?: return ReadiumAudioOpenResult.Error(
-            "No playable downloaded audiobook file is available locally."
+            application.getString(R.string.notif_audiobook_no_local_file)
         )
     val mimeType = book.format?.let(::media3AudioMimeType)
-        ?: return ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
+        ?: return ReadiumAudioOpenResult.Error(
+            application.getString(R.string.notif_audiobook_format_unsupported)
+        )
     return prepareDirectMedia3Audio(
         application = application,
         book = book,
@@ -741,8 +786,10 @@ private suspend fun preparePlaylistMedia3Audio(
         } else {
             player.release()
             ReadiumAudioOpenResult.Error(
-                "Media3 could not open the audiobook stream from the configured server " +
-                    "(${playbackError.errorCodeName})."
+                application.getString(
+                    R.string.notif_audiobook_media3_open_failed,
+                    playbackError.errorCodeName
+                )
             )
         }
     } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -805,8 +852,10 @@ private suspend fun prepareDirectMedia3Audio(
         } else {
             player.release()
             ReadiumAudioOpenResult.Error(
-                "Media3 could not open the audiobook stream from the configured server " +
-                    "(${playbackError.errorCodeName})."
+                application.getString(
+                    R.string.notif_audiobook_media3_open_failed,
+                    playbackError.errorCodeName
+                )
             )
         }
     } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -865,13 +914,17 @@ internal data class AudioFullPlayerRequest(
     val book: BookSummary
 )
 
-internal enum class AudioSleepTimerOption(val label: String, val durationMs: Long?) {
-    OFF("Off", null),
-    END_OF_CHAPTER("End of chapter", null),
-    FIFTEEN_MINUTES("15 minutes", 15 * 60_000L),
-    THIRTY_MINUTES("30 minutes", 30 * 60_000L),
-    FORTY_FIVE_MINUTES("45 minutes", 45 * 60_000L),
-    SIXTY_MINUTES("60 minutes", 60 * 60_000L)
+internal enum class AudioSleepTimerOption(
+    val label: String,
+    @StringRes val labelRes: Int,
+    val durationMs: Long?
+) {
+    OFF("Off", R.string.audio_sleep_off, null),
+    END_OF_CHAPTER("End of chapter", R.string.audio_sleep_end_of_chapter, null),
+    FIFTEEN_MINUTES("15 minutes", R.string.audio_sleep_15m, 15 * 60_000L),
+    THIRTY_MINUTES("30 minutes", R.string.audio_sleep_30m, 30 * 60_000L),
+    FORTY_FIVE_MINUTES("45 minutes", R.string.audio_sleep_45m, 45 * 60_000L),
+    SIXTY_MINUTES("60 minutes", R.string.audio_sleep_60m, 60 * 60_000L)
 }
 
 internal data class AudioSleepTimerState(
@@ -970,16 +1023,18 @@ internal suspend fun openReadiumAudio(
     val localFile = file?.takeIf { it.isFile && it.length() > 0L }
     if (localFile == null) {
         return@withContext ReadiumAudioOpenResult.Error(
-            "The downloaded audiobook file is unavailable."
+            application.getString(R.string.notif_audiobook_file_unavailable)
         )
     }
     val mediaType = book.format?.let(::readiumAudioMediaType)
         ?: localFile.name.let(::readiumAudioMediaType)
-        ?: return@withContext ReadiumAudioOpenResult.Error("This audiobook format is not supported yet.")
+        ?: return@withContext ReadiumAudioOpenResult.Error(
+            application.getString(R.string.notif_audiobook_format_unsupported)
+        )
     val assetRetriever = AssetRetriever(application.contentResolver, httpClient)
     val asset = assetRetriever.retrieve(localFile, mediaType).getOrNull()
         ?: return@withContext ReadiumAudioOpenResult.Error(
-            "Readium could not read this audiobook file."
+            application.getString(R.string.notif_audiobook_read_failed)
         )
     val parser = DefaultPublicationParser(
         context = application,
@@ -991,10 +1046,14 @@ internal suspend fun openReadiumAudio(
         asset = asset,
         allowUserInteraction = false
     ).getOrNull()
-        ?: return@withContext ReadiumAudioOpenResult.Error("Readium could not open this audiobook publication.")
+        ?: return@withContext ReadiumAudioOpenResult.Error(
+            application.getString(R.string.notif_audiobook_open_failed)
+        )
     if (!publication.conformsTo(Publication.Profile.AUDIOBOOK)) {
         publication.close()
-        return@withContext ReadiumAudioOpenResult.Error("Readium did not recognize this file as an audiobook.")
+        return@withContext ReadiumAudioOpenResult.Error(
+            application.getString(R.string.notif_audiobook_unrecognized)
+        )
     }
 
     // Readium's ExoPlayer adapter creates a main-looper Player. Media3 requires every
@@ -1012,7 +1071,9 @@ internal suspend fun openReadiumAudio(
             val factory = AudioNavigatorFactory(publication, engineProvider)
                 ?: run {
                     publication.close()
-                    return@main ReadiumAudioOpenResult.Error("Readium could not prepare this audiobook.")
+                    return@main ReadiumAudioOpenResult.Error(
+                        application.getString(R.string.notif_audiobook_prepare_failed)
+                    )
                 }
             val initialLocator = publication.readingOrder.firstOrNull()
                 ?.let(publication::locatorFromLink)
@@ -1023,7 +1084,9 @@ internal suspend fun openReadiumAudio(
             ).getOrNull()
                 ?: run {
                     publication.close()
-                    return@main ReadiumAudioOpenResult.Error("Readium could not initialize audiobook playback.")
+                    return@main ReadiumAudioOpenResult.Error(
+                        application.getString(R.string.notif_audiobook_initialize_failed)
+                    )
                 }
             val player = navigator.asMedia3Player()
             (player as? ExoPlayer)?.apply {
@@ -1048,6 +1111,47 @@ internal suspend fun openReadiumAudio(
     }
 }
 
+private const val AUDIO_READER_LEASE = "audiobook-playback"
+private const val AUDIO_PREPARATION_READER_LEASE = "audiobook-preparation"
+private const val READ_ALONG_READER_LEASE = "epub-read-along"
+
+internal data class AudioReaderLeaseSpec(
+    val ownerId: String,
+    val fileId: String?,
+    val localPath: String?
+)
+
+internal fun audioReaderLeaseSpecs(
+    ownerPrefix: String,
+    book: BookSummary,
+    audioFiles: List<BookFileOption>,
+    singleFileOverride: File? = null
+): List<AudioReaderLeaseSpec> {
+    val books = audioFiles.map { it.book }.ifEmpty { listOf(book) }
+    return books.mapIndexed { index, activeBook ->
+        AudioReaderLeaseSpec(
+            ownerId = "$ownerPrefix:$index",
+            fileId = activeBook.fileId ?: book.fileId,
+            localPath = if (books.size == 1) {
+                singleFileOverride?.absolutePath ?: activeBook.localPath ?: book.localPath
+            } else {
+                activeBook.localPath
+            }
+        )
+    }
+}
+
+internal inline fun closeReaderResourceBeforeLeaseWake(
+    closeResource: () -> Unit,
+    releaseLease: () -> Unit
+) {
+    try {
+        closeResource()
+    } finally {
+        releaseLease()
+    }
+}
+
 @OptIn(ExperimentalReadiumApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadiumAudioPlaybackService : MediaLibraryService() {
@@ -1068,6 +1172,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
 
         fun activeBookSummary(): BookSummary =
             activeBookSummaryForActiveFile(book, audioFiles, currentFileId())
+                .copy(coverAspectRatio = CoverAspectRatio.SQUARE)
 
         fun currentPlaybackSpeed(): Float =
             player.playbackParameters.speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
@@ -1109,7 +1214,9 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
     }
 
     internal val libraryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val mediaSessionCallback = AudiobookMediaSessionCallback { this }
+    private val mediaSessionCallback by lazy {
+        AudiobookMediaSessionCallback(applicationContext) { this }
+    }
     private var idlePlayer: ExoPlayer? = null
     internal var librarySessionPlayer: LagrangeLibrarySessionPlayer? = null
     internal var mediaLibrarySession: MediaLibrarySession? = null
@@ -1175,6 +1282,11 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             aggregateDurationMs: Long? = null
         ): Session {
             closeSession()
+            val readerLeases = audioReaderLeaseSpecs(
+                AUDIO_READER_LEASE,
+                book,
+                audioFiles
+            )
             try {
                 val librarySession = ensureLibrarySession()
                 val wrappedPlayer = LagrangeLibrarySessionPlayer(
@@ -1216,9 +1328,20 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     preloadSessionCoverBytes(this@ReadiumAudioPlaybackService, session) {
                         mutableSession.value === session
                     }
+                    readerLeases.forEach { lease ->
+                        LocalBookReaderLeaseStore(applicationContext).acquire(
+                            ownerId = lease.ownerId,
+                            serverUrl = "",
+                            fileId = lease.fileId,
+                            localPath = lease.localPath
+                        )
+                    }
                 }
             } catch (error: Throwable) {
                 mutableSession.value = null
+                readerLeases.forEach { lease ->
+                    LocalBookReaderLeaseStore(applicationContext).release(lease.ownerId)
+                }
                 throw error
             }
         }
@@ -1239,8 +1362,21 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     mediaLibrarySession?.setPlayer(wrappedFallback)
                     refreshAndroidAutoCustomLayout()
                 }
-                current.engine.close()
                 mutableSession.value = null
+                closeReaderResourceBeforeLeaseWake(
+                    closeResource = {
+                        current.engine.close()
+                    },
+                    releaseLease = {
+                        audioReaderLeaseSpecs(
+                            AUDIO_READER_LEASE,
+                            current.book,
+                            current.audioFiles
+                        ).forEach { lease ->
+                            LocalBookReaderLeaseStore(applicationContext).release(lease.ownerId)
+                        }
+                    }
+                )
             }
         }
 
@@ -1253,12 +1389,33 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 .build()
             addSession(createdSession)
             mediaOverlaySession = createdSession
+            LocalBookReaderLeaseStore(applicationContext).acquire(
+                ownerId = READ_ALONG_READER_LEASE,
+                serverUrl = "",
+                fileId = book.fileId,
+                localPath = book.localPath
+            )
         }
 
         fun closeMediaOverlaySession(stopServiceIfIdle: Boolean = true) {
             ReadAlongMediaNotificationProvider.cancelSentenceNotification(applicationContext)
-            mediaOverlaySession?.release()
+            val closingSession = mediaOverlaySession
             mediaOverlaySession = null
+            closeReaderResourceBeforeLeaseWake(
+                closeResource = {
+                    val closingPlayer = closingSession?.player
+                    try {
+                        closingSession?.release()
+                    } finally {
+                        closingPlayer?.release()
+                    }
+                },
+                releaseLease = {
+                    LocalBookReaderLeaseStore(applicationContext).release(
+                        READ_ALONG_READER_LEASE
+                    )
+                }
+            )
             if (stopServiceIfIdle && mutableSession.value == null) {
                 ServiceCompat.stopForeground(
                     this@ReadiumAudioPlaybackService,
@@ -1352,7 +1509,9 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 override fun onNullBinding(name: ComponentName?) {
                     if (!result.isCompleted) {
                         result.completeExceptionally(
-                            IllegalStateException("Could not bind the audiobook playback service.")
+                            IllegalStateException(
+                                application.getString(R.string.notif_audiobook_bind_failed)
+                            )
                         )
                     }
                 }
@@ -1364,7 +1523,9 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             )
             if (!bound && !result.isCompleted) {
                 result.completeExceptionally(
-                    IllegalStateException("Could not start the audiobook playback service binding.")
+                    IllegalStateException(
+                        application.getString(R.string.notif_audiobook_bind_start_failed)
+                    )
                 )
             }
             return result.await()
@@ -1593,7 +1754,7 @@ class ReadiumAudioPlaybackController internal constructor(
                 ?: run {
                     resetPreparationIfCurrent(generation)
                     return ReadiumAudioOpenResult.Error(
-                        "Timed out while connecting to audiobook playback."
+                        application.getString(R.string.notif_audiobook_connect_timeout)
                     )
                 }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -1638,7 +1799,28 @@ class ReadiumAudioPlaybackController internal constructor(
             } catch (error: Throwable) {
                 Log.e(TAG, "Could not resume audiobook playback.", error)
                 resetPreparationIfCurrent(generation)
-                ReadiumAudioOpenResult.Error("Could not resume audiobook playback.")
+                ReadiumAudioOpenResult.Error(
+                    application.getString(R.string.notif_audiobook_resume_failed)
+                )
+            }
+        }
+        val preparationLeases = audioReaderLeaseSpecs(
+            "$AUDIO_PREPARATION_READER_LEASE:$generation",
+            book,
+            preparedAudioFiles,
+            file
+        )
+        preparationLeases.forEach { lease ->
+            LocalBookReaderLeaseStore(application).acquire(
+                ownerId = lease.ownerId,
+                serverUrl = "",
+                fileId = lease.fileId,
+                localPath = lease.localPath
+            )
+        }
+        fun releasePreparationLeases() {
+            preparationLeases.forEach { lease ->
+                LocalBookReaderLeaseStore(application).release(lease.ownerId)
             }
         }
         val opened = try {
@@ -1665,15 +1847,18 @@ class ReadiumAudioPlaybackController internal constructor(
                     )
                 }
             } ?: run {
+                releasePreparationLeases()
                 resetPreparationIfCurrent(generation)
                 return ReadiumAudioOpenResult.Error(
-                    "Timed out while preparing the audiobook."
+                    application.getString(R.string.notif_audiobook_prepare_timeout)
                 )
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            releasePreparationLeases()
             resetPreparationIfCurrent(generation)
             throw cancelled
         } catch (error: Throwable) {
+            releasePreparationLeases()
             resetPreparationIfCurrent(generation)
             throw error
         }
@@ -1685,6 +1870,7 @@ class ReadiumAudioPlaybackController internal constructor(
                         mutablePreparingSession.value = null
                     }
                 }
+                releasePreparationLeases()
                 opened
             }
             is ReadiumAudioOpenResult.Opened -> {
@@ -1698,8 +1884,13 @@ class ReadiumAudioPlaybackController internal constructor(
                         } else {
                             applyPersistedAudioPlaybackSpeed(opened.engine.player)
                             endReadingSession(serviceBinder.session.value)
+                            val sessionBook = if (book.localPath == null && file?.isFile == true) {
+                                book.copy(localPath = file.absolutePath)
+                            } else {
+                                book
+                            }
                             val session = serviceBinder.openSession(
-                                book,
+                                sessionBook,
                                 launchMode,
                                 opened.engine,
                                 preparedAudioFiles,
@@ -1720,7 +1911,11 @@ class ReadiumAudioPlaybackController internal constructor(
                     Log.e(TAG, "Could not finalize audiobook playback.", error)
                     closeOpenedEngineAfterFailure(serviceBinder, opened.engine)
                     resetPreparationIfCurrent(generation)
-                    ReadiumAudioOpenResult.Error("Could not start audiobook playback.")
+                    ReadiumAudioOpenResult.Error(
+                        application.getString(R.string.notif_audiobook_start_failed)
+                    )
+                } finally {
+                    releasePreparationLeases()
                 }
             }
         }

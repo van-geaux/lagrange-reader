@@ -14,6 +14,7 @@ internal const val DOWNLOAD_NOTIFICATION_GROUP = "bookorbit-active-downloads"
 internal const val DOWNLOAD_NOTIFICATION_CANCEL_ACTION = "com.vangeaux.lagrange.CANCEL_DOWNLOAD"
 internal const val DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA = "file-id"
 internal const val DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA = "server-url"
+internal const val DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA = "storage-scope-id"
 private const val DOWNLOAD_NOTIFICATION_ID_BASE = 40_000
 private const val DOWNLOAD_SUMMARY_NOTIFICATION_ID = DOWNLOAD_NOTIFICATION_ID_BASE - 1
 
@@ -22,6 +23,10 @@ internal fun downloadNotificationId(fileId: String): Int =
     DOWNLOAD_NOTIFICATION_ID_BASE + fileId.hashCode()
 
 internal fun downloadNotificationTitle(title: String): String = "Downloading $title"
+
+/** Localized variant for the notification UI; [downloadNotificationTitle] stays the plain-text form. */
+internal fun downloadNotificationTitle(context: Context, title: String): String =
+    context.getString(R.string.notif_download_title, title)
 
 internal fun downloadNotificationProgress(progress: Float?): DownloadNotificationProgress =
     progress?.let { DownloadNotificationProgress.Determinate((it * 100f).toInt().coerceIn(0, 100)) }
@@ -37,6 +42,7 @@ internal fun buildDownloadNotification(
     title: String,
     fileId: String,
     serverUrl: String,
+    storageScopeId: String,
     progress: Float?
 ): Notification {
     val openAppIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -54,21 +60,26 @@ internal fun buildDownloadNotification(
             action = DOWNLOAD_NOTIFICATION_CANCEL_ACTION
             putExtra(DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA, fileId)
             putExtra(DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA, serverUrl)
+            putExtra(DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA, storageScopeId)
         },
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
     return NotificationCompat.Builder(context, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
-        .setContentTitle(downloadNotificationTitle(title))
+        .setContentTitle(downloadNotificationTitle(context, title))
         .setSmallIcon(android.R.drawable.stat_sys_download)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
         .setContentIntent(contentIntent)
-        .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelIntent)
+        .addAction(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            context.getString(R.string.common_cancel),
+            cancelIntent
+        )
         .apply {
             when (val presentation = downloadNotificationProgress(progress)) {
                 DownloadNotificationProgress.Indeterminate -> {
-                    setContentText("Downloading")
+                    setContentText(context.getString(R.string.notif_downloading))
                     setProgress(0, 0, true)
                 }
                 is DownloadNotificationProgress.Determinate -> {
@@ -86,12 +97,20 @@ internal fun updateDownloadNotification(
     title: String,
     fileId: String,
     serverUrl: String,
+    storageScopeId: String,
     progress: Float?
 ) {
     try {
         context.getSystemService(NotificationManager::class.java)?.notify(
             downloadNotificationId(fileId),
-            buildDownloadNotification(context, title, fileId, serverUrl, progress)
+            buildDownloadNotification(
+                context,
+                title,
+                fileId,
+                serverUrl,
+                storageScopeId,
+                progress
+            )
         )
     } catch (_: SecurityException) {
         // POST_NOTIFICATIONS can be denied. Notifications are optional UI.
@@ -119,8 +138,8 @@ internal fun refreshDownloadNotificationSummary(context: Context, currentWorkId:
                 DOWNLOAD_SUMMARY_NOTIFICATION_ID,
                 NotificationCompat.Builder(context, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_download)
-                    .setContentTitle("Downloading $activeCount books")
-                    .setContentText("Book downloads are in progress")
+                    .setContentTitle(context.getString(R.string.notif_summary_title, activeCount))
+                    .setContentText(context.getString(R.string.notif_summary_text))
                     .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
                     .setGroupSummary(true)
                     .setOnlyAlertOnce(true)
@@ -144,9 +163,14 @@ internal class DownloadNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != DOWNLOAD_NOTIFICATION_CANCEL_ACTION) return
         val serverUrl = intent.getStringExtra(DOWNLOAD_NOTIFICATION_SERVER_URL_EXTRA)
+        val storageScopeId = intent.getStringExtra(DOWNLOAD_NOTIFICATION_STORAGE_SCOPE_EXTRA)
         val fileId = intent.getStringExtra(DOWNLOAD_NOTIFICATION_FILE_ID_EXTRA)
-        if (serverUrl.isNullOrBlank() || fileId.isNullOrBlank()) return
-        WorkManager.getInstance(context).cancelUniqueWork(downloadUniqueWorkName(serverUrl, fileId))
+        if (serverUrl.isNullOrBlank() || storageScopeId.isNullOrBlank() || fileId.isNullOrBlank()) {
+            return
+        }
+        WorkManager.getInstance(context).cancelUniqueWork(
+            downloadUniqueWorkName(serverUrl, storageScopeId, fileId)
+        )
         context.getSystemService(NotificationManager::class.java)?.cancel(downloadNotificationId(fileId))
         refreshDownloadNotificationSummary(context)
     }

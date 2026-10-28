@@ -11,10 +11,12 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 
 import com.vangeaux.lagrange.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -44,9 +46,19 @@ internal fun komgaSessionHeaders(authorization: String?, cookie: String?): Map<S
     cookie?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
 }
 
+internal fun komgaAuthenticatedPrincipal(payload: String): AuthenticatedAccountPrincipal? =
+    authenticatedAccountPrincipal(
+        payload = payload,
+        stableFields = listOf("id", "userId")
+    )
+
 internal fun komgaParseInstantMillis(value: String?): Long? = value
     ?.takeIf { it.isNotBlank() }
     ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+
+internal fun komgaReadActivityMillis(progress: JSONObject?): Long? =
+    komgaParseInstantMillis(progress?.optString("lastModified"))
+        ?: komgaParseInstantMillis(progress?.optString("readDate"))
 
 internal data class KomgaReadState(
     val status: BookReadStatus,
@@ -85,10 +97,7 @@ internal fun komgaReaderProgressBook(book: BookSummary, payload: String): BookSu
         progressPageIndex = page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
         readStatus = if (completed) BookReadStatus.READ else BookReadStatus.READING,
         isRead = completed,
-        lastReadAtMillis = progress.optString("readDate")
-            .takeIf { it.isNotBlank() }
-            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-            ?: book.lastReadAtMillis
+        lastReadAtMillis = komgaReadActivityMillis(progress) ?: book.lastReadAtMillis
     )
 }
 
@@ -236,6 +245,10 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
     private var serverUrl: String? = null
     private var authorization: String? = ServerProfileStore(appContext).active()?.id?.let(credentialStore::read)
 
+    /** Localizes a provider error message, falling back to the original English text. */
+    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+        providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
+
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: return@withContext ServerCheckResult.MalformedUrl
         runCatching {
@@ -260,23 +273,35 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     override suspend fun login(serverUrl: String, username: String, password: String) = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl)
-            ?: throw UserFacingException("Enter a valid Komga server URL.")
+            ?: throw UserFacingException(
+                localizedMessage(
+                    R.string.perror_komga_server_url,
+                    "Enter a valid Komga server URL."
+                )
+            )
         val request = Request.Builder()
             .url("$base/api/v2/users/me")
             .header("Authorization", Credentials.basic(username, password))
             .get()
             .build()
+        var authenticatedPrincipal: AuthenticatedAccountPrincipal? = null
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || response.code == 403) {
-                throw UserFacingException("Komga did not accept this username or password.")
+                throw UserFacingException(localizedMessage(R.string.perror_komga_credentials, "Komga did not accept this username or password."))
             }
             if (!response.isSuccessful) {
-                throw UserFacingException("Komga sign-in failed with HTTP ${response.code}.")
+                throw UserFacingException(localizedMessage(R.string.perror_komga_signin_http, "Komga sign-in failed with HTTP ${response.code}.", response.code))
             }
+            authenticatedPrincipal = komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
         }
         this@KomgaAuthModuleImpl.serverUrl = base
         authorization = Credentials.basic(username, password)
-        activeProfileId()?.let { credentialStore.write(it, authorization!!) }
+        activeProfileId()?.let { profileId ->
+            credentialStore.write(profileId, authorization!!)
+            authenticatedPrincipal?.let { principal ->
+                persistAuthenticatedAccount(profileId, principal)
+            }
+        }
         Unit
     }
 
@@ -292,7 +317,16 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
                 .build()
             client.newCall(request).execute().use { response ->
                 when {
-                    response.isSuccessful -> SessionState.Authenticated
+                    response.isSuccessful -> {
+                        val principal = komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
+                        val profileId = activeProfileId()
+                        if (principal != null && profileId != null) {
+                            persistAuthenticatedAccount(profileId, principal)
+                            SessionState.Authenticated
+                        } else {
+                            SessionState.Unavailable
+                        }
+                    }
                     response.code == 401 || response.code == 403 -> SessionState.Unauthenticated
                     else -> SessionState.Unavailable
                 }
@@ -314,7 +348,52 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     internal suspend fun restoreCurrentProfileSession(): Boolean {
         authorization = activeProfileId()?.let(credentialStore::read)
-        return !authorization.isNullOrBlank() || hasWebSession()
+        val profileId = activeProfileId()
+        if (profileId != null && AuthenticatedAccountScopeStore(appContext).read(profileId) == null) {
+            val profile = ServerProfileStore(appContext).active()
+            val remotePrincipal = profile?.serverUrl?.let { configured ->
+                val base = normalizeServerUrl(configured) ?: return@let null
+                runCatching {
+                    val request = Request.Builder()
+                        .url("$base/api/v2/users/me")
+                        .apply {
+                            requestHeaders(base).forEach { (name, value) -> header(name, value) }
+                        }
+                        .get()
+                        .build()
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) null else {
+                            komgaAuthenticatedPrincipal(response.body?.string().orEmpty())
+                        }
+                    }
+                }.getOrNull()
+            }
+            remotePrincipal?.let { principal ->
+                persistAuthenticatedAccount(profileId, principal)
+            }
+        }
+        val hasSession = !authorization.isNullOrBlank() || hasWebSession()
+        if (
+            hasSession &&
+            profileId != null &&
+            AuthenticatedAccountScopeStore(appContext).read(profileId) != null
+        ) {
+            DownloadStore(appContext).quarantineLegacyUnscopedDownloads()
+        }
+        return hasSession
+    }
+
+    private suspend fun persistAuthenticatedAccount(
+        profileId: String,
+        principal: AuthenticatedAccountPrincipal
+    ) {
+        AuthenticatedAccountScopeStore(appContext).writeAuthoritative(
+            profileId = profileId,
+            providerId = PROVIDER_KOMGA,
+            principal = principal.canonical,
+            equivalentPrincipals = principal.provenAliases
+        )
+        DownloadStore(appContext).quarantineLegacyUnscopedDownloads()
     }
 
     internal suspend fun clearRuntimeSession() = withContext(Dispatchers.Main.immediate) {
@@ -348,13 +427,13 @@ class KomgaLibraryModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaLibra
     private val client = KomgaHttpClient().client
 
     override suspend fun loadLibraries(serverUrl: String): List<LibrarySummary> = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val request = Request.Builder().url("$base/api/v1/libraries").get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga libraries (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_libraries_http, "Unable to load Komga libraries (HTTP ${response.code}).", response.code))
             val array = runCatching { JSONArray(payload) }.getOrElse {
                 val root = JSONObject(payload)
                 root.optJSONArray("libraries")
@@ -378,14 +457,14 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
     private val client = KomgaHttpClient().client
 
     override suspend fun loadBooks(serverUrl: String, libraryId: String, page: Int): LibraryBooksPage = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val url = "$base/api/v1/books?library_id=$libraryId&page=$page&size=$PAGE_SIZE&sort=metadata.title,asc"
         val request = Request.Builder().url(url).get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga books (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_books_http, "Unable to load Komga books (HTTP ${response.code}).", response.code))
             val root = JSONObject(payload)
             val content = root.optJSONArray("content") ?: JSONArray()
             val items = buildList {
@@ -419,9 +498,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                             isRead = readState.isRead,
                             addedAtMillis = komgaParseInstantMillis(item.optString("created")),
                             updatedAtMillis = komgaParseInstantMillis(item.optString("lastModified")),
-                            lastReadAtMillis = komgaParseInstantMillis(
-                                item.optJSONObject("readProgress")?.optString("readDate")
-                            ),
+                            lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress")),
                             genres = metadata.optJSONArray("genres").toStringList()
                     )
                     add(summary)
@@ -442,7 +519,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
     private val client = KomgaHttpClient().client
 
     suspend fun loadHomeShelves(serverUrl: String): HomeShelfData = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         HomeShelfData(
             booksBySection = buildMap {
                 listOf(
@@ -472,7 +549,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "response code=${response.code} items=${content.length()}")
             buildList {
@@ -511,7 +588,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 Log.w("KomgaHome", "recently released error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             }
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "recently released code=${response.code} items=${content.length()}")
@@ -528,7 +605,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga Home shelf (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_home_http, "Unable to load Komga Home shelf (HTTP ${response.code}).", response.code))
             val content = JSONObject(response.body?.string().orEmpty()).optJSONArray("content") ?: JSONArray()
             Log.d("KomgaHome", "response code=${response.code} items=${content.length()}")
             buildList {
@@ -570,7 +647,7 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
             isRead = readState.isRead,
             addedAtMillis = parseInstantMillis(item.optString("created")),
             updatedAtMillis = parseInstantMillis(item.optString("lastModified")),
-            lastReadAtMillis = parseInstantMillis(item.optJSONObject("readProgress")?.optString("readDate").orEmpty())
+            lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress"))
         )
     }
 
@@ -592,7 +669,7 @@ class KomgaReadingProgressModuleImpl(
         progressPercent: Float?
     ) = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrlProvider())
-            ?: throw UserFacingException("Komga server URL is unavailable for progress synchronization.")
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_progress_url_unavailable, "Komga server URL is unavailable for progress synchronization."))
         val page = (pageIndex + 1).coerceAtLeast(1)
         val completed = progressPercent != null && progressPercent >= 99.5f
         val locator = book.readerLocatorJson
@@ -620,7 +697,7 @@ class KomgaReadingProgressModuleImpl(
             Log.d("KomgaProgress", "book=${book.id} endpoint=${endpoint.substringAfter("/api/v1/")} code=${response.code} page=$page completed=$completed")
             if (!response.isSuccessful) {
                 Log.w("KomgaProgress", "error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to synchronize Komga reading progress (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_progress_http, "Unable to synchronize Komga reading progress (HTTP ${response.code}).", response.code))
             }
         }
     }
@@ -641,7 +718,7 @@ class KomgaReadingStatusModuleImpl(
         when (status) {
             BookReadStatus.READ -> markBookAsRead(book)
             BookReadStatus.UNREAD -> resetBookReadingState(book)
-            else -> throw UserFacingException("Komga supports only read and unread book status.")
+            else -> throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_unsupported, "Komga supports only read and unread book status."))
         }
     }
 
@@ -670,14 +747,14 @@ class KomgaReadingStatusModuleImpl(
 
     private suspend fun requireServerUrl(): String =
         normalizeServerUrl(serverUrlProvider())
-            ?: throw UserFacingException("Komga server URL is unavailable for reading-status synchronization.")
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_url_unavailable, "Komga server URL is unavailable for reading-status synchronization."))
 
     private fun execute(endpoint: String, request: Request) {
         client.newCall(request).execute().use { response ->
             Log.d("KomgaReadingStatus", "endpoint=${endpoint.substringAfter("/api/v1/")} code=${response.code}")
             if (!response.isSuccessful) {
                 Log.w("KomgaReadingStatus", "error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException("Unable to synchronize Komga reading status (HTTP ${response.code}).")
+                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_status_http, "Unable to synchronize Komga reading status (HTTP ${response.code}).", response.code))
             }
         }
     }
@@ -747,12 +824,12 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
     private val client = KomgaHttpClient().client
 
     override suspend fun loadBookDetail(serverUrl: String, book: BookSummary): BookDetailInfo = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         val request = Request.Builder().url("$base/api/v1/books/${book.id}").get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw UserFacingException("Unable to load Komga book details (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw UserFacingException(auth.localizedMessage(R.string.perror_komga_details_http, "Unable to load Komga book details (HTTP ${response.code}).", response.code))
             val root = JSONObject(response.body?.string().orEmpty())
             val metadata = root.optJSONObject("metadata") ?: JSONObject()
             val media = root.optJSONObject("media") ?: JSONObject()
@@ -783,8 +860,8 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
             } else {
                 null
             }
-            val readProgress = komgaReadState(root.optJSONObject("readProgress"))
-            val readProgressDate = root.optJSONObject("readProgress")?.optString("readDate")
+            val readProgressObject = root.optJSONObject("readProgress")
+            val readProgress = komgaReadState(readProgressObject)
             val resolvedBook = book.copy(
                 title = metadata.optString("title", book.title),
                 filename = filename ?: book.filename,
@@ -807,9 +884,7 @@ class KomgaBookDetailModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaBo
                 progressPageIndex = readProgress.page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
                 readStatus = readProgress.status,
                 isRead = readProgress.isRead,
-                lastReadAtMillis = readProgressDate
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                lastReadAtMillis = komgaReadActivityMillis(readProgressObject)
                     ?: book.lastReadAtMillis,
                 readerLocatorJson = progressionLocatorJson ?: book.readerLocatorJson
             )
@@ -913,8 +988,13 @@ class KomgaDownloadModuleImpl(
     private val client = KomgaHttpClient().client
     private val downloadStore = DownloadStore(context)
 
-    override suspend fun downloadBook(serverUrl: String, book: BookSummary, onProgress: (Float?) -> Unit): File = withContext(Dispatchers.IO) {
-        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException("Enter a valid Komga server URL.")
+    override suspend fun downloadBook(
+        serverUrl: String,
+        book: BookSummary,
+        expectedStorageScopeId: String?,
+        onProgress: (Float?) -> Unit
+    ): File = withContext(Dispatchers.IO) {
+        val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         if (!auth.hasSession(base)) {
             auth.restoreCurrentProfileSession()
         }
@@ -922,58 +1002,177 @@ class KomgaDownloadModuleImpl(
             throw AuthenticationRequiredException()
         }
         val fileId = book.fileId ?: book.id
-        val existingRecord = downloadStore.find(serverUrl, fileId)
-        val target = DownloadStore(context).downloadTarget(
+        val profileId = ServerProfileStore(context).activeId().orEmpty()
+        val currentStorageScopeId = downloadStorageScopeId(context, serverUrl, profileId)
+            ?: throw AuthenticationRequiredException()
+        val storageScopeId = expectedStorageScopeId ?: currentStorageScopeId
+        if (storageScopeId != currentStorageScopeId) throw AuthenticationRequiredException()
+        fun requireCapturedAccountScope() {
+            if (downloadStorageScopeId(context, serverUrl, profileId) != storageScopeId) {
+                throw AuthenticationRequiredException()
+            }
+        }
+        val existingRecord = downloadStore.find(serverUrl, fileId, storageScopeId)
+        val scheduledAttempt = downloadStore.findAttempt(serverUrl, fileId, storageScopeId)
+        val attemptOrigin = scheduledAttempt?.origin ?: DownloadOrigin.MANUAL
+        val storagePolicy = AutomaticDownloadPolicyStore(context)
+            .read(profileId, serverUrl, storageScopeId)
+        val target = DownloadStore(context).ownedTargetOrIsolated(
+            serverUrl = serverUrl,
             fileId = fileId,
             title = book.title,
             mediaKind = book.mediaKind,
-            formatHint = book.format
-        ).let { fallback -> existingRecord?.localPath?.let(::File) ?: fallback }
+            formatHint = book.format,
+            recordedPath = existingRecord?.localPath,
+            storageScopeId = storageScopeId
+        )
         val hadUsableExisting = existingRecord != null && downloadedFilePassesIntegrity(book, target)
         val canReuseExisting = existingRecord != null &&
             !downloadUpdateAvailable(book, existingRecord) &&
             hadUsableExisting
-        downloadStore.saveAttempt(
-            DownloadAttempt(
+        if (scheduledAttempt == null) {
+            downloadStore.saveAttemptIfAbsent(
+                DownloadAttempt(
                 serverUrl = serverUrl,
+                requestId = "",
+                profileId = profileId,
+                storageScopeId = storageScopeId,
                 fileId = fileId,
                 bookId = book.id,
+                libraryId = book.libraryId,
                 title = book.title,
                 filename = book.filename,
                 targetPath = target.absolutePath,
                 existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
                 mediaKind = book.mediaKind,
                 mimeType = book.format,
-                sourceUpdatedAtMillis = book.updatedAtMillis
+                sourceUpdatedAtMillis = book.updatedAtMillis,
+                origin = DownloadOrigin.MANUAL,
+                requiresQueueOwnership = false
+                )
             )
-        )
+        }
         if (canReuseExisting) {
-            downloadStore.removeAttempt(serverUrl, fileId)
+            downloadStore.removeAttemptIfOwned(
+                serverUrl,
+                fileId,
+                scheduledAttempt?.requestId.orEmpty(),
+                storageScopeId = storageScopeId
+            )
+            requireCapturedAccountScope()
             onProgress(1f)
             return@withContext target
         }
         target.parentFile?.mkdirs()
-        val temporary = File(target.parentFile, ".${target.name}.${fileId}.part")
-        if (temporary.exists() && !temporary.delete()) {
-            throw UserFacingException("Unable to clear an interrupted Komga download before retrying.")
+        val stagingId = scheduledAttempt?.requestId?.takeIf(String::isNotBlank)
+            ?: java.util.UUID.randomUUID().toString()
+        val temporary = File(target.parentFile, ".${target.name}.part.$stagingId")
+        val storageReservationId = "$serverUrl\u0000$fileId\u0000$stagingId"
+        var retainStagedForRetry = false
+        if (!downloadStore.markAttemptStateIfOwned(
+                serverUrl,
+                fileId,
+                scheduledAttempt?.requestId.orEmpty(),
+                DownloadAttemptState.STAGING,
+                temporary,
+                storageScopeId
+            )
+        ) {
+            throw CancellationException("This download was replaced by a newer request.")
         }
+        if (temporary.exists() && !temporary.delete()) {
+            throw UserFacingException(auth.localizedMessage(R.string.perror_download_stage_replace, "Unable to replace the interrupted download stage."))
+        }
+        requireCapturedAccountScope()
         val request = Request.Builder().url("$base/api/v1/books/${book.id}/file").get()
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
             .build()
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw HttpRequestException(response.code, "download the Komga book")
-                val body = response.body ?: throw UserFacingException("Komga returned an empty book file.")
+                val body = response.body ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_empty_file, "Komga returned an empty book file."))
                 val total = body.contentLength().takeIf { it > 0L }
+                if (total != null) {
+                    if (downloadIsIndividuallyOverCap(
+                            total,
+                            attemptOrigin,
+                            storagePolicy
+                        )
+                    ) {
+                        throw LocalBookStorageLimitException(
+                            "This file is larger than the maximum local-book storage limit."
+                        )
+                    }
+                }
+                val (capacity, initialAllowance) = runBlocking {
+                    AutomaticDownloadStorage.prepareTransfer(
+                        context = context,
+                        serverUrl = serverUrl,
+                        profileId = profileId,
+                        policy = storagePolicy,
+                        declaredBytes = total,
+                        existingFinalBytes = target.length().coerceAtLeast(0L),
+                        protectedFileIds = setOf(fileId),
+                        allowRemoval = true,
+                        reservationId = storageReservationId,
+                        stagedPath = temporary.absolutePath,
+                        origin = attemptOrigin
+                    )
+                }
+                if (!capacity.allowed ||
+                    (total != null && initialAllowance.maximumAdditionalBytes != Long.MAX_VALUE &&
+                        total > initialAllowance.maximumAdditionalBytes)
+                ) {
+                    throw LocalBookStorageLimitException(
+                        capacity.message ?: "This download would exceed the configured storage limits."
+                    )
+                }
                 var copied = 0L
+                var allowance = initialAllowance
                 onProgress(0f.takeIf { total != null })
                 body.byteStream().use { input ->
                     FileOutputStream(temporary).use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         while (true) {
                             currentCoroutineContext().ensureActive()
+                            requireCapturedAccountScope()
                             val count = input.read(buffer)
                             if (count < 0) break
+                            var permitted = allowance.permitsCurrentPolicyAndReserve(
+                                    context,
+                                    temporary,
+                                    copied,
+                                    count,
+                                    attemptOrigin
+                                )
+                            if (!permitted && total == null) {
+                                val (extendedCapacity, extendedAllowance) = runBlocking {
+                                    AutomaticDownloadStorage.extendUnknownTransfer(
+                                        context = context,
+                                        serverUrl = serverUrl,
+                                        profileId = profileId,
+                                        policy = storagePolicy,
+                                        bytesWritten = copied,
+                                        protectedFileIds = setOf(fileId),
+                                        reservationId = storageReservationId,
+                                        stagedPath = temporary.absolutePath
+                                    )
+                                }
+                                if (extendedCapacity.allowed) allowance = extendedAllowance
+                                permitted = extendedCapacity.allowed &&
+                                    allowance.permitsCurrentPolicyAndReserve(
+                                        context,
+                                        temporary,
+                                        copied,
+                                        count,
+                                        attemptOrigin
+                                    )
+                            }
+                            if (!permitted) {
+                                throw LocalBookStorageLimitException(
+                                    "The download stopped before crossing the configured local-book storage limits."
+                                )
+                            }
                             output.write(buffer, 0, count)
                             copied += count
                             onProgress(komgaDownloadProgress(copied, total))
@@ -981,18 +1180,69 @@ class KomgaDownloadModuleImpl(
                     }
                 }
                 if (!temporary.isFile || temporary.length() <= 0L) {
-                    throw UserFacingException("Komga returned an empty book file.")
+                    throw UserFacingException(auth.localizedMessage(R.string.perror_komga_empty_file, "Komga returned an empty book file."))
                 }
                 if (!downloadedFilePassesIntegrity(book, temporary)) {
                     val suffix = if (hadUsableExisting) " The previous local copy was kept." else ""
-                    throw UserFacingException("The downloaded Komga file did not pass integrity checks.$suffix")
+                    throw UserFacingException(auth.localizedMessage(if (hadUsableExisting) R.string.perror_komga_download_integrity_kept else R.string.perror_komga_download_integrity, "The downloaded Komga file did not pass integrity checks.$suffix"))
                 }
                 onProgress(1f)
             }
-            atomicReplaceDownloadedFile(temporary, target)
-            downloadStore.removeAttempt(serverUrl, fileId)
+            val completedRecord = DownloadRecord(
+                serverUrl = serverUrl,
+                profileId = profileId,
+                storageScopeId = storageScopeId,
+                fileId = fileId,
+                bookId = book.id,
+                libraryId = book.libraryId,
+                title = book.title,
+                filename = book.filename ?: target.name,
+                localPath = target.absolutePath,
+                mediaKind = book.mediaKind,
+                mimeType = book.format,
+                sourceUpdatedAtMillis = book.updatedAtMillis,
+                downloadedAtMillis = existingRecord?.downloadedAtMillis
+                    ?: System.currentTimeMillis(),
+                lastAccessedAtMillis = listOfNotNull(
+                    existingRecord?.lastAccessedAtMillis,
+                    book.lastReadAtMillis
+                ).maxOrNull(),
+                lastKnownCompleted = when {
+                    book.isRead -> true
+                    book.readStatus != null -> book.readStatus.isCompletedStatus()
+                    else -> existingRecord?.lastKnownCompleted
+                },
+                sizeBytes = temporary.length().coerceAtLeast(0L),
+                origin = existingRecord?.origin
+                    ?: scheduledAttempt?.origin
+                    ?: DownloadOrigin.MANUAL,
+                status = DownloadRecordStatus.COMPLETE
+            )
+            requireCapturedAccountScope()
+            val committed = try {
+                verifyAndCommitDownloadWhenReaderInactive(
+                    context = context,
+                    downloadStore = downloadStore,
+                    serverUrl = serverUrl,
+                    storageScopeId = storageScopeId,
+                    fileId = fileId,
+                    requestId = scheduledAttempt?.requestId.orEmpty(),
+                    stagedFile = temporary,
+                    targetFile = target,
+                    record = completedRecord
+                )
+            } catch (deferred: DownloadReplacementDeferredException) {
+                retainStagedForRetry = true
+                throw deferred
+            }
+            if (!committed) {
+                throw CancellationException("This download was replaced by a newer request.")
+            }
         } finally {
-            if (temporary.exists()) temporary.delete()
+            runBlocking {
+                AutomaticDownloadStorage.releaseTransfer(context, storageReservationId)
+            }
+            if (!retainStagedForRetry && temporary.exists()) temporary.delete()
         }
         target
     }

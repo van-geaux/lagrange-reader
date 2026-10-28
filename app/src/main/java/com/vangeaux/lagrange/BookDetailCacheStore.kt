@@ -196,6 +196,7 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     putNullable("streamUrl", streamUrl)
     putNullable("downloadUrl", downloadUrl)
     putNullable("coverUrl", coverUrl)
+    putNullable("audiobookCoverUrl", audiobookCoverUrl)
     put("coverAspectRatio", coverAspectRatio.wireValue)
     putNullable("localPath", localPath)
     putNullable("progressLabel", progressLabel)
@@ -253,6 +254,7 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     streamUrl = optionalString("streamUrl"),
     downloadUrl = optionalString("downloadUrl"),
     coverUrl = optionalString("coverUrl"),
+    audiobookCoverUrl = optionalString("audiobookCoverUrl"),
     coverAspectRatio = CoverAspectRatio.fromWireValue(optionalString("coverAspectRatio")),
     localPath = optionalString("localPath"),
     progressLabel = optionalString("progressLabel"),
