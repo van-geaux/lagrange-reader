@@ -808,7 +808,8 @@ data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val isServerProvided: Boolean = false,
-    val isAggregatedAcrossLibraries: Boolean = false
+    val isAggregatedAcrossLibraries: Boolean = false,
+    val deferInitialCatalogLoad: Boolean = false
 ) {
     fun providesBooks(section: HomeSection): Boolean =
         isServerProvided || booksBySection.containsKey(section)

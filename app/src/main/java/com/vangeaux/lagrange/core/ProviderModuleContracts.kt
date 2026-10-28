@@ -51,6 +51,8 @@ interface SeriesCatalogModule {
 }
 
 interface HomeShelfModule {
+    val deferInitialCatalogLoad: Boolean
+        get() = false
     suspend fun loadCachedHomeBooks(): List<BookSummary>
     suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData(

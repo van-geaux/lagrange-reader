@@ -266,7 +266,11 @@ class AppCoordinator internal constructor(
         catalogLoadJob = scope.launch {
             showBrowser(current.copy(isCatalogSyncing = true, message = null))
             runCatching {
-                val nextPage = current.booksPage + 1
+                val nextPage = if (current.books.isEmpty() && current.booksPage == 0) {
+                    0
+                } else {
+                    current.booksPage + 1
+                }
                 val page = loadLibraryBooksPage(libraryId, nextPage)
                 val merged = (current.books + page.items).distinctBy { it.id }
                 showBrowser(
@@ -1342,21 +1346,31 @@ class AppCoordinator internal constructor(
                 }
 
                 serverSelectionModule()?.setSelectedLibraryId(selectedLibrary) ?: repository.setSelectedLibraryId(selectedLibrary)
+                val providerHomeModule = homeShelfModule()
                 val homeShelves = runCatching {
-                    homeShelfModule()?.loadHomeShelves()
-                }.getOrNull() ?: HomeShelfData()
+                    providerHomeModule?.loadHomeShelves()
+                }.getOrElse {
+                    HomeShelfData(deferInitialCatalogLoad = providerHomeModule?.deferInitialCatalogLoad == true)
+                } ?: HomeShelfData()
                 // Dashboard settings are optional. Load them concurrently so a failed
                 // preference request cannot hold up the first library render.
                 val homeShelfPreferencesRequest = async {
                     runCatching {
-                        homeShelfModule()?.loadHomeShelfPreferences()
+                        providerHomeModule?.loadHomeShelfPreferences()
                     }.getOrNull() ?: HomeShelfPreferences()
                 }
-                var homeBooks = homeShelfModule()?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
+                var homeBooks = providerHomeModule?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
-                showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
-                val firstPage = cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
+                val deferInitialCatalogLoad = homeShelves.deferInitialCatalogLoad
+                if (!deferInitialCatalogLoad) {
+                    showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
+                }
+                val firstPage = if (deferInitialCatalogLoad) {
+                    LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
+                } else {
+                    cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
+                }
 
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
                 showBrowser(
@@ -1369,7 +1383,7 @@ class AppCoordinator internal constructor(
                         homeShelves = homeShelves,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated,
-                        isCatalogSyncing = true
+                        isCatalogSyncing = !deferInitialCatalogLoad
                     )
                 )
 
@@ -1381,6 +1395,9 @@ class AppCoordinator internal constructor(
                         showBrowser(current.copy(homeShelfPreferences = homeShelfPreferences))
                     }
 
+                if (deferInitialCatalogLoad) {
+                    return@runCatching
+                }
                 val refreshedCatalog = repository.refreshLibraryCatalog(
                     libraryId = selectedLibrary,
                     firstPage = firstPage.takeUnless { it.isComplete }

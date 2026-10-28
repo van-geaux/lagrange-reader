@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.time.Instant
 import java.util.Locale
 
-private const val KAVITA_PAGE_SIZE = 100
+private const val KAVITA_PAGE_SIZE = 20
 
 internal fun mergeKavitaCatalogPages(
     existing: List<BookSummary>,
@@ -206,7 +206,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
             if (!response.isSuccessful) {
                 throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
             }
-            val array = runCatching { JSONArray(payload) }.getOrElse { JSONArray() }
+            val array = kavitaSeriesPageItems(payload)
             return buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
@@ -345,6 +345,17 @@ private data class KavitaSeriesProjection(
     val libraryId: String,
     val lastAddedAtMillis: Long?
 )
+
+internal fun kavitaSeriesPageItems(payload: String): JSONArray =
+    runCatching { JSONArray(payload) }.getOrElse {
+        runCatching {
+            val root = JSONObject(payload)
+            root.optJSONArray("items")
+                ?: root.optJSONArray("results")
+                ?: root.optJSONArray("data")
+                ?: JSONArray()
+        }.getOrDefault(JSONArray())
+    }
 
 internal fun JSONArray?.jsonTitles(): List<String> = buildList {
     val array = this@jsonTitles ?: return@buildList

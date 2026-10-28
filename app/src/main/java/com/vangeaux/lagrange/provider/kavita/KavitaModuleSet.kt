@@ -46,55 +46,9 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 repository.loadSeriesDetail(seriesId)
         },
         home = object : HomeShelfModule {
+            override val deferInitialCatalogLoad: Boolean = true
             override suspend fun loadCachedHomeBooks(): List<BookSummary> = repository.loadCachedHomeBooks()
-            override suspend fun loadHomeShelves(): HomeShelfData {
-                val books = repository.loadCachedHomeBooks()
-                val libraryId = repository.getSelectedLibraryId()
-                val currentlyReading = books.filter {
-                    !it.isRead && (it.progressPercent ?: 0f) > 0f ||
-                        (!it.isRead && it.progressPageIndex != null)
-                }
-                val recentlyRead = books
-                    .filter { it.isRead || it.readStatus == BookReadStatus.READ }
-                    .sortedByDescending { it.lastReadAtMillis ?: it.updatedAtMillis ?: 0L }
-                val onDeck = onDeckBooks(books, limit = null)
-                val recentlyAdded = books.sortedByDescending { it.addedAtMillis ?: 0L }
-                val bookShelves = buildMap {
-                    if (currentlyReading.isNotEmpty()) put(HomeSection.CURRENTLY_READING, currentlyReading)
-                    if (onDeck.isNotEmpty()) put(HomeSection.ON_DECK, onDeck)
-                    if (recentlyRead.isNotEmpty()) put(HomeSection.RECENTLY_READ, recentlyRead)
-                    if (recentlyAdded.isNotEmpty()) put(HomeSection.RECENTLY_ADDED_BOOKS, recentlyAdded)
-                }
-                val series = aggregateBooksToSeriesCatalog(books).items
-                    .sortedByDescending { it.lastAddedAtMillis ?: 0L }
-                    .map { series ->
-                        BookSummary(
-                            libraryId = libraryId.orEmpty(),
-                            id = "series:${series.id}",
-                            fileId = null,
-                            title = series.name,
-                            coverUrl = series.coverUrl,
-                            seriesId = series.id,
-                            seriesName = series.name,
-                            genres = series.genres,
-                            availableFormats = series.availableFormats,
-                            downloadedFormats = series.downloadedFormats,
-                            addedAtMillis = series.lastAddedAtMillis ?: 0L,
-                            isRead = series.bookCount > 0 && series.readCount >= series.bookCount,
-                            readStatus = if (series.bookCount > 0 && series.readCount >= series.bookCount) {
-                                BookReadStatus.READ
-                            } else {
-                                BookReadStatus.UNREAD
-                            }
-                        )
-                    }
-                return HomeShelfData(
-                    booksBySection = bookShelves,
-                    seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to series),
-                    isServerProvided = true,
-                    isAggregatedAcrossLibraries = true
-                )
-            }
+            override suspend fun loadHomeShelves(): HomeShelfData = repository.loadHomeShelves()
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes(): List<SmartScope> = unavailable()
@@ -213,7 +167,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
     }
 
     val backgroundCache: BackgroundCacheModule = object : BackgroundCacheModule {
-        override val isAvailable: Boolean = true
+        override val isAvailable: Boolean = false
 
         override suspend fun warmCoverCacheBatch(
             expectedServerUrl: String,

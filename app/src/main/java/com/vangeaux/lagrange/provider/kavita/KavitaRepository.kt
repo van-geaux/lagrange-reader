@@ -38,6 +38,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val preferences = appContext.getSharedPreferences("kavita_connection", Context.MODE_PRIVATE)
     private val authModule = KavitaAuthModuleImpl(appContext)
     private val libraryModule = KavitaLibraryModuleImpl(authModule)
+    private val homeModule = KavitaHomeShelfModuleImpl(authModule)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val seriesModule = KavitaSeriesCatalogModuleImpl(catalogModule, detailModule)
@@ -203,17 +204,12 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
         catalogModule.refreshLibraryCatalog(libraryId, firstPage)
     override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
-    override suspend fun loadCachedHomeBooks(): List<BookSummary> = runCatching {
-        loadLibraries()
-            .flatMap { library -> loadBooks(library.id) }
-            .plus(loadLocalBooks())
-            .distinctBy { it.libraryId to (it.fileId ?: it.id) }
-    }.getOrElse {
+    override suspend fun loadCachedHomeBooks(): List<BookSummary> =
         browserSnapshotStore.read(getServerUrl().orEmpty())?.booksByLibraryId?.values.orEmpty()
             .flatten()
             .plus(loadLocalBooks())
             .distinctBy { it.libraryId to (it.fileId ?: it.id) }
-    }
+    override suspend fun loadHomeShelves(): HomeShelfData = homeModule.loadHomeShelves()
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         seriesModule.loadSeriesCatalog(filter, page)
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =

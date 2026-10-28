@@ -6727,6 +6727,10 @@ private fun HomeFeed(
     }
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
+    val onDeckSeriesAll = if (serverShelves.isServerProvided) {
+        val seriesBooks = serverShelves.seriesBySection[HomeSection.ON_DECK].orEmpty()
+        seriesBooks.map { book -> (book.seriesName ?: book.title) to book }
+    } else emptyList()
     val wantToRead = wantToReadAll.take(HOME_PREVIEW_LIMIT)
     val recentlyAddedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_ADDED_BOOKS].orEmpty()
@@ -6767,22 +6771,12 @@ private fun HomeFeed(
     val recentlyReleasedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_RELEASED_BOOKS].orEmpty()
     } else emptyList()
+    fun providerSeriesShelf(section: HomeSection): List<Pair<String, BookSummary>> {
+        val seriesBooks = serverShelves.seriesBySection[section].orEmpty()
+        return seriesBooks.map { book -> (book.seriesName ?: book.title) to book }
+    }
     val recentSeriesAll = if (serverShelves.isServerProvided) {
-        val seriesBooks = serverShelves.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES].orEmpty()
-        homeSeriesShelfItems(
-            series = seriesBooks.mapNotNull { book ->
-                book.seriesId?.let {
-                    SeriesSummary(
-                        id = it,
-                        name = book.seriesName ?: book.title,
-                        coverUrl = book.coverUrl
-                    )
-                }
-            }.distinctBy { it.id },
-            books = seriesBooks,
-            limit = Int.MAX_VALUE,
-            preferBookOrbitImportSequence = false
-        )
+        providerSeriesShelf(HomeSection.RECENTLY_ADDED_SERIES)
     } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
@@ -6791,7 +6785,9 @@ private fun HomeFeed(
             preferBookOrbitImportSequence = true
         )
     }
-    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
+    val updatedSeriesAll = if (serverShelves.isServerProvided) {
+        providerSeriesShelf(HomeSection.RECENTLY_UPDATED_SERIES)
+    } else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
     val recentlyReadAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_READ].orEmpty()
     } else recentlyReadBooks(libraryScopedBooks, limit = null)
@@ -6856,7 +6852,9 @@ private fun HomeFeed(
                 )
             }
         }
-        if (onDeck.isNotEmpty()) item {
+        if (onDeckSeriesAll.isNotEmpty()) item {
+            SeriesShelf(stringResource(R.string.browse_on_deck), onDeckSeriesAll.take(HOME_PREVIEW_LIMIT), coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
+        } else if (onDeck.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_on_deck), onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
         }
         if (wantToRead.isNotEmpty()) item {
@@ -6890,7 +6888,9 @@ private fun HomeFeed(
             )
         }
         if (state.isLoadingBooks) item { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
-        if (!state.isLoadingBooks && state.books.isEmpty()) {
+        val hasServerHomeContent = serverShelves.booksBySection.values.any { it.isNotEmpty() } ||
+            serverShelves.seriesBySection.values.any { it.isNotEmpty() }
+        if (!state.isLoadingBooks && state.books.isEmpty() && !hasServerHomeContent) {
             item {
                 Text(
                     stringResource(R.string.browse_no_books_in_library),
@@ -7419,6 +7419,11 @@ private fun LibraryContentScreen(
         state.selectedLibraryId
     ) {
         value = runCatching { localBooksLoader() }.getOrNull()
+    }
+    LaunchedEffect(tab, state.selectedLibraryId) {
+        if (tab == LibraryTab.BROWSE && state.books.isEmpty() && !state.isCatalogComplete && !state.isCatalogSyncing) {
+            onLoadMoreLibraryBooks()
+        }
     }
     val libraryDownloadCandidates = remember(state.books, state.selectedLibraryId) {
         booksDownloadableForLibrary(state.books, state.selectedLibraryId)
@@ -8311,7 +8316,7 @@ private fun LibraryBooks(
                     if (state.isCatalogComplete) {
                         stringResource(R.string.browse_updating_cached_catalog)
                     } else {
-                        stringResource(R.string.browse_caching_full_library)
+                        stringResource(R.string.browse_loading_books)
                     }
                 )
             }
