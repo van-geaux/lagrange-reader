@@ -2858,7 +2858,7 @@ private fun SeriesCatalogScreen(
                 else loader(activeFilter, nextPage)
             }.getOrNull() ?: return false
             items = (items + catalog.items).distinctBy { it.id }
-            total = catalog.total ?: items.size
+            total = catalog.total ?: total.takeIf { it > 0 } ?: items.size
             nextPage += 1
             hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             catalog.items.isNotEmpty()

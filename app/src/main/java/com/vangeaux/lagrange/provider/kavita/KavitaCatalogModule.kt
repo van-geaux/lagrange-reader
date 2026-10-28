@@ -223,7 +223,10 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
             }
             val root = runCatching { JSONObject(payload) }.getOrNull()
-            val rawPaginationHeader = response.headers["X-Pagination"]
+            // Kavita Web UI reads the exact `Pagination` response header.
+            // Keep legacy header variants for older/proxy deployments.
+            val rawPaginationHeader = response.headers["Pagination"]
+                ?: response.headers["X-Pagination"]
                 ?: response.headers["X-Pagination-JSON"]
             val headerPagination = rawPaginationHeader?.let(::parseKavitaPaginationHeader)
             val headerTotal = listOf("X-Total-Count", "X-TotalItems", "Total-Count")
@@ -233,6 +236,9 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                 ?: root?.optInt("size", -1)?.takeIf { it > 0 }
                 ?: headerPagination?.optInt("itemsPerPage", -1)?.takeIf { it > 0 }
                 ?: KAVITA_PAGE_SIZE
+            val total = kavitaPaginationTotal(root, headerPagination)
+                ?: headerTotal
+                ?: kavitaDerivedPaginationTotal(root, headerPagination, pageSize)
             KavitaSeriesSummaryPage(
                 items = buildList {
                     for (index in 0 until items.length()) {
@@ -250,7 +256,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                         )
                     }
                 },
-                total = kavitaPaginationTotal(root, headerPagination) ?: headerTotal,
+                total = total,
                 pageSize = pageSize
             )
         }
@@ -464,11 +470,39 @@ internal data class KavitaSeriesSummaryPage(
 )
 
 private fun kavitaPaginationTotal(root: JSONObject?, header: JSONObject?): Int? {
+    val keys = setOf("totalcount", "totalitems", "total", "count")
     fun read(source: JSONObject?): Int? = source?.let {
-        listOf("totalCount", "totalItems", "total", "count")
-            .firstNotNullOfOrNull { key -> it.optInt(key, -1).takeIf { value -> value >= 0 } }
+        it.keys().asSequence().firstNotNullOfOrNull { key ->
+            if (key.lowercase(Locale.US) !in keys) return@firstNotNullOfOrNull null
+            val value = it.opt(key)
+            when (value) {
+                is Number -> value.toInt().takeIf { number -> number >= 0 }
+                is String -> value.toIntOrNull()?.takeIf { number -> number >= 0 }
+                else -> null
+            }
+        }
     }
     return read(root) ?: read(root?.optJSONObject("pagination")) ?: read(root?.optJSONObject("meta")) ?: read(header)
+}
+
+private fun kavitaDerivedPaginationTotal(
+    root: JSONObject?,
+    header: JSONObject?,
+    pageSize: Int
+): Int? {
+    if (pageSize <= 0) return null
+    fun readPageCount(source: JSONObject?): Int? = source?.let {
+        it.keys().asSequence().firstNotNullOfOrNull { key ->
+            if (key.lowercase(Locale.US) != "totalpages") return@firstNotNullOfOrNull null
+            when (val value = it.opt(key)) {
+                is Number -> value.toInt().takeIf { number -> number > 0 }
+                is String -> value.toIntOrNull()?.takeIf { number -> number > 0 }
+                else -> null
+            }
+        }
+    }
+    return (readPageCount(root) ?: readPageCount(root?.optJSONObject("pagination")) ?: readPageCount(header))
+        ?.times(pageSize)
 }
 
 private fun parseKavitaPaginationHeader(value: String): JSONObject? {
