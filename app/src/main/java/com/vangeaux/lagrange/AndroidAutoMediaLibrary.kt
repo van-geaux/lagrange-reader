@@ -57,6 +57,7 @@ internal const val AUDIO_PREVIOUS_CHAPTER_SESSION_ACTION =
 internal const val AUDIO_NEXT_CHAPTER_SESSION_ACTION =
     "com.vangeaux.lagrange.AUDIO_NEXT_CHAPTER"
 internal const val CHAPTER_RESTART_THRESHOLD_MS = 3_000L
+internal const val ANDROID_AUTO_SEEK_BACK_INCREMENT_MS = 30_000L
 
 internal enum class AndroidAutoCompletionStatus {
     NOT_PLAYED,
@@ -1832,7 +1833,7 @@ internal class LagrangeLibrarySessionPlayer(
 
 
     override fun seekBack() {
-        seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
+        seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
     }
 
     override fun seekForward() {
@@ -1968,9 +1969,9 @@ internal class LagrangeLibrarySessionPlayer(
             if (mediaItemIndex > currentMediaItemIndex) {
                 seekRelativeRawMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
             } else if (mediaItemIndex < currentMediaItemIndex) {
-                seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
+                seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
             } else {
-                seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
+                seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
             }
             return
         }
