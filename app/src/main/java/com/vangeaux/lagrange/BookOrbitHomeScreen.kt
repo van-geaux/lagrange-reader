@@ -2810,7 +2810,7 @@ private fun SeriesCatalogScreen(
             }
         }.onSuccess { catalog ->
             items = catalog.items
-            total = catalog.total ?: catalog.items.size
+            total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
             nextPage = 1
             hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
         }.onFailure {
@@ -2831,7 +2831,7 @@ private fun SeriesCatalogScreen(
             }
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
-                total = catalog.total ?: catalog.items.size
+                total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
                 nextPage = 1
                 hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             }
