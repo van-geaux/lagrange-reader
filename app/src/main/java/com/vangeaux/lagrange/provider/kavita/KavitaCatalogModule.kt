@@ -211,8 +211,13 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
             })
             put("combination", 0)
         }
+        val url = if (page < 0) {
+            "$base/api/Series/v2"
+        } else {
+            "$base/api/Series/v2?PageNumber=$page&PageSize=$KAVITA_PAGE_SIZE"
+        }
         val request = Request.Builder()
-            .url("$base/api/Series/v2?PageNumber=$page&PageSize=$KAVITA_PAGE_SIZE")
+            .url(url)
             .header("Content-Type", "application/json")
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
             .post(filter.toString().toRequestBody(jsonMediaType))
@@ -256,7 +261,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                         )
                     }
                 },
-                total = total,
+                total = total ?: items.length().takeIf { page < 0 },
                 pageSize = pageSize
             )
         }

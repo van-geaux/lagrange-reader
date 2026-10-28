@@ -594,7 +594,8 @@ data class SeriesCatalogPage(
     val items: List<SeriesSummary> = emptyList(),
     val total: Int? = null,
     val page: Int? = null,
-    val size: Int? = null
+    val size: Int? = null,
+    val jumpIndex: List<SeriesSummary>? = null
 )
 
 data class SmartScope(

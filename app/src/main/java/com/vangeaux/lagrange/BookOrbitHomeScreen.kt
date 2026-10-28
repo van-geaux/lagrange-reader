@@ -2774,12 +2774,14 @@ private fun SeriesCatalogScreen(
     val lockedFilter = appPreferences.lockedSeriesFilters[persistenceKey]
         ?.let(::seriesCatalogFilterFromStorage)
     var items by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var jumpIndexItems by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
     var total by remember(query, initialFilter, selectedScopeId) { mutableStateOf(0) }
     var isLoading by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var isRefreshing by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var loadError by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
     var nextPage by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(1) }
+    var seriesPageSize by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(20) }
     var hasMorePages by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var isLoadingMore by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var filter by remember(query, initialFilter, selectedScopeId) {
@@ -2796,6 +2798,7 @@ private fun SeriesCatalogScreen(
         isLoading = true
         loadError = false
         items = emptyList()
+        jumpIndexItems = emptyList()
         total = 0
         gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
@@ -2810,8 +2813,10 @@ private fun SeriesCatalogScreen(
             }
         }.onSuccess { catalog ->
             items = catalog.items
+            jumpIndexItems = catalog.jumpIndex ?: catalog.items
             total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
             nextPage = 1
+            seriesPageSize = catalog.size ?: seriesPageSize
             hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
         }.onFailure {
             loadError = true
@@ -2831,8 +2836,10 @@ private fun SeriesCatalogScreen(
             }
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
+                jumpIndexItems = catalog.jumpIndex ?: jumpIndexItems
                 total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
                 nextPage = 1
+                seriesPageSize = catalog.size ?: seriesPageSize
                 hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             }
         } finally {
@@ -2859,6 +2866,7 @@ private fun SeriesCatalogScreen(
             }.getOrNull() ?: return false
             items = (items + catalog.items).distinctBy { it.id }
             total = catalog.total ?: total.takeIf { it > 0 } ?: items.size
+            seriesPageSize = catalog.size ?: seriesPageSize
             nextPage += 1
             hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             catalog.items.isNotEmpty()
@@ -2879,6 +2887,35 @@ private fun SeriesCatalogScreen(
             }
             .collect { loadNextPage() }
     }
+    suspend fun jumpToSeriesIndex(index: Int) {
+        if (index < items.size) {
+            if (reduceMotion) gridState.scrollToItem(index) else gridState.animateScrollToItem(index)
+            return
+        }
+        val targetPage = (index / seriesPageSize.coerceAtLeast(1)).coerceAtLeast(0)
+        val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() }, includeCounts = false)
+        val catalog = runCatching {
+            if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, targetPage)
+            else loader(activeFilter, targetPage)
+        }.getOrNull() ?: return
+        if (catalog.items.isEmpty()) return
+        items = catalog.items
+        seriesPageSize = catalog.size ?: seriesPageSize
+        nextPage = targetPage + 1
+        hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+        val localIndex = (index % seriesPageSize.coerceAtLeast(1)).coerceIn(0, catalog.items.lastIndex)
+        if (reduceMotion) gridState.scrollToItem(localIndex) else gridState.animateScrollToItem(localIndex)
+        scope.launch {
+            val enriched = runCatching {
+                val countFilter = filter.copy(query = query.takeIf { it.isNotBlank() }, includeCounts = true)
+                if (selectedScope != null) scopeLoader(selectedScope.id, countFilter, targetPage)
+                else loader(countFilter, targetPage)
+            }.getOrNull() ?: return@launch
+            val enrichedById = enriched.items.associateBy { it.id }
+            items = items.map { enrichedById[it.id] ?: it }
+        }
+    }
+
     suspend fun jumpToSeriesLabel(target: Char) {
         if (loadAllPages) return
         var targetPage = if (items.any { libraryJumpLabel(it.name) == target }) 0 else -1
@@ -2902,9 +2939,9 @@ private fun SeriesCatalogScreen(
         }
     }
     val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
-    val jumpTargets = remember(displayItems, filter.sort, filter.direction, isLoading) {
+    val jumpTargets = remember(jumpIndexItems, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
-            buildSeriesJumpTargets(displayItems, filter.direction)
+            buildSeriesJumpTargets(jumpIndexItems, filter.direction)
         } else {
             emptyList()
         }
@@ -3031,11 +3068,7 @@ private fun SeriesCatalogScreen(
                     .padding(end = 4.dp, bottom = 12.dp),
                 onJump = { index ->
                     scope.launch {
-                        if (reduceMotion) {
-                            gridState.scrollToItem(index)
-                        } else {
-                            gridState.animateScrollToItem(index)
-                        }
+                        jumpToSeriesIndex(index)
                     }
                 },
                 onUnavailableJump = if (!loadAllPages) {

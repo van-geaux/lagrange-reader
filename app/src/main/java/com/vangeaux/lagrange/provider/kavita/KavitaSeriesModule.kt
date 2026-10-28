@@ -15,7 +15,15 @@ internal class KavitaSeriesCatalogModuleImpl(
         page: Int
     ): SeriesCatalogPage {
         val libraryId = filter.libraryId
-        val result = catalog.loadSeriesSummaryPage(libraryId, page)
+        val (result, jumpIndex) = coroutineScope {
+            val pageRequest = async { catalog.loadSeriesSummaryPage(libraryId, page) }
+            val jumpRequest = if (page == 0 && filter.includeCounts) {
+                async { catalog.loadSeriesSummaryPage(libraryId, -1) }
+            } else {
+                null
+            }
+            pageRequest.await() to jumpRequest?.await()?.items
+        }
         val filtered = result.items.filter { summary ->
             filter.query.isNullOrBlank() || summary.name.contains(filter.query, ignoreCase = true)
         }
@@ -24,7 +32,8 @@ internal class KavitaSeriesCatalogModuleImpl(
                 items = filtered,
                 total = result.total,
                 page = page,
-                size = result.pageSize
+                size = result.pageSize,
+                jumpIndex = jumpIndex
             )
         }
         val enriched = coroutineScope {
@@ -48,7 +57,8 @@ internal class KavitaSeriesCatalogModuleImpl(
             items = enriched,
             total = result.total,
             page = page,
-            size = result.pageSize
+            size = result.pageSize,
+            jumpIndex = jumpIndex
         )
     }
 
