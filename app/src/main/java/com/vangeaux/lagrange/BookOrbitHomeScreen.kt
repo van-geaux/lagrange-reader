@@ -2888,22 +2888,35 @@ private fun SeriesCatalogScreen(
             .collect { loadNextPage() }
     }
     suspend fun jumpToSeriesIndex(index: Int) {
+        val targetLabel = jumpIndexItems.getOrNull(index)?.let { libraryJumpLabel(it.name) }
         if (index < items.size) {
-            if (reduceMotion) gridState.scrollToItem(index) else gridState.animateScrollToItem(index)
+            val localIndex = targetLabel?.let { label -> items.indexOfFirst { libraryJumpLabel(it.name) == label } }
+                ?.takeIf { it >= 0 } ?: index
+            if (reduceMotion) gridState.scrollToItem(localIndex) else gridState.animateScrollToItem(localIndex)
             return
         }
-        val targetPage = (index / seriesPageSize.coerceAtLeast(1)).coerceAtLeast(0)
+        var targetPage = (index / seriesPageSize.coerceAtLeast(1)).coerceAtLeast(0)
         val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() }, includeCounts = false)
-        val catalog = runCatching {
-            if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, targetPage)
-            else loader(activeFilter, targetPage)
-        }.getOrNull() ?: return
+        suspend fun loadSummaryPage(page: Int): SeriesCatalogPage? = runCatching {
+            if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page)
+            else loader(activeFilter, page)
+        }.getOrNull()
+        var catalog = loadSummaryPage(targetPage) ?: return
+        if (targetLabel != null && catalog.items.none { libraryJumpLabel(it.name) == targetLabel }) {
+            val next = loadSummaryPage(targetPage + 1)
+            if (next?.items?.any { libraryJumpLabel(it.name) == targetLabel } == true) {
+                targetPage += 1
+                catalog = next
+            }
+        }
         if (catalog.items.isEmpty()) return
         items = catalog.items
         seriesPageSize = catalog.size ?: seriesPageSize
         nextPage = targetPage + 1
         hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
-        val localIndex = (index % seriesPageSize.coerceAtLeast(1)).coerceIn(0, catalog.items.lastIndex)
+        val localIndex = targetLabel?.let { label -> catalog.items.indexOfFirst { libraryJumpLabel(it.name) == label } }
+            ?.takeIf { it >= 0 }
+            ?: (index % seriesPageSize.coerceAtLeast(1)).coerceIn(0, catalog.items.lastIndex)
         if (reduceMotion) gridState.scrollToItem(localIndex) else gridState.animateScrollToItem(localIndex)
         scope.launch {
             val enriched = runCatching {
