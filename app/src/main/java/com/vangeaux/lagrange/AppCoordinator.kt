@@ -1383,8 +1383,7 @@ class AppCoordinator internal constructor(
                 }
                 val firstPage = if (deferInitialCatalogLoad) {
                     cachedCatalog ?: runCatching {
-                        bookCatalogModule()?.loadBooksPage(selectedLibrary, 0)
-                            ?: repository.loadBooksPage(selectedLibrary, 0)
+                        repository.loadBooksPage(selectedLibrary, 0)
                     }.getOrElse {
                         LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
                     }
@@ -1416,6 +1415,15 @@ class AppCoordinator internal constructor(
                     }
 
                 if (deferInitialCatalogLoad) {
+                    coroutineScope {
+                        libraries.filterNot { it.id == selectedLibrary }.map { library ->
+                            async {
+                                runCatching {
+                                    repository.loadBooksPage(library.id, 0)
+                                }
+                            }
+                        }.awaitAll()
+                    }
                     return@runCatching
                 }
                 val refreshedCatalog = repository.refreshLibraryCatalog(
