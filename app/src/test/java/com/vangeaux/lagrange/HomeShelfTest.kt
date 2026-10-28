@@ -245,7 +245,8 @@ class HomeShelfTest {
         val shelves = HomeShelfData(
             booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(libraryBook, otherBook)),
             seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(libraryBook, otherBook)),
-            isServerProvided = true
+            isServerProvided = true,
+            isAggregatedAcrossLibraries = true
         )
         val localBook = BookSummary("", "book-1", "file-1", "One", localPath = "/books/one.epub")
 
