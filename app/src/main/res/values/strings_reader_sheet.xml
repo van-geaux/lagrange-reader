@@ -29,4 +29,9 @@
     <string name="sheet_text_color_dialog_title">Custom text color</string>
     <string name="sheet_text_color_preview">Preview</string>
     <string name="sheet_text_color_sample">Aa Text sample</string>
+    <string name="sheet_reader_theme_options">Menu &amp; options</string>
+    <string name="sheet_reader_theme_options_summary">Menu and option sheet colors</string>
+    <string name="sheet_reading_background">Reading background</string>
+    <string name="sheet_reading_background_summary">Page background and reading surface</string>
+    <string name="sheet_custom_background_custom">Custom</string>
 </resources>

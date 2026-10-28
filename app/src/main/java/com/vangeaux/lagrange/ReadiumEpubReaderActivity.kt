@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.OpenableColumns
@@ -299,12 +300,15 @@ internal fun readiumPreferences(
     hyphenation: EpubHyphenation = EpubHyphenation.AUTO,
     fallbackLanguage: String? = null,
     customBackgroundColor: Int? = null,
-    customTextColor: Int? = null
+    customTextColor: Int? = null,
+    backgroundTheme: EpubReaderTheme = theme,
+    useCustomBackground: Boolean = customBackgroundColor != null
 ): EpubPreferences {
-    val effectiveTheme = customBackgroundColor?.let(::customReaderBackgroundReadiumTheme) ?: theme
-    val effectiveBackground = customBackgroundColor ?: theme.backgroundColor
-    val automaticTextColor = customBackgroundColor?.let(::customReaderBackgroundTextColor)
-        ?: cssHexColorInt(theme.foregroundCss)
+    val activeCustomBackground = customBackgroundColor.takeIf { useCustomBackground }
+    val effectiveTheme = activeCustomBackground?.let(::customReaderBackgroundReadiumTheme) ?: backgroundTheme
+    val effectiveBackground = activeCustomBackground ?: backgroundTheme.backgroundColor
+    val automaticTextColor = activeCustomBackground?.let(::customReaderBackgroundTextColor)
+        ?: cssHexColorInt(backgroundTheme.foregroundCss)
     val effectiveTextColor = readerTextColor(customTextColor, automaticTextColor)
     return EpubPreferences(
         backgroundColor = ReadiumColor(effectiveBackground),
@@ -823,6 +827,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private val highlightAnnotations = mutableMapOf<String, BookAnnotation>()
     private val highlightLocators = mutableMapOf<String, Locator>()
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
+    private var selectedBackgroundTheme by mutableStateOf(EpubReaderTheme.Sepia)
+    private var selectedUseCustomBackground by mutableStateOf(false)
     private var selectedCustomBackgroundColor by mutableStateOf<Int?>(null)
     private var selectedFontFamily by mutableStateOf(EpubReaderFontFamily.PUBLISHER_DEFAULT)
     private var padding by mutableStateOf(EpubPaddingPercentages())
@@ -988,9 +994,12 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         readerPreferences = appPreferences.libraryReaderPreferences[libraryId]
             ?: LibraryReaderPreferences(
                 theme = themeStore.read(),
+                backgroundTheme = themeStore.read(),
                 padding = paddingStore.read(readerKey)
             )
         selectedTheme = readerPreferences.theme
+        selectedBackgroundTheme = readerPreferences.backgroundTheme
+        selectedUseCustomBackground = readerPreferences.useCustomBackground
         selectedCustomBackgroundColor = readerPreferences.customBackgroundColor
         selectedFontFamily = readerPreferences.fontFamily
         padding = readerPreferences.padding
@@ -1137,9 +1146,13 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 EpubReaderMaterialTheme(selectedTheme) {
                     EpubReaderProgressFooter(
                         status = currentProgressStatus(),
-                        theme = selectedTheme,
+                        theme = selectedBackgroundTheme,
                         modifier = Modifier.fillMaxSize(),
-                        customBackgroundColor = selectedCustomBackgroundColor
+                        customBackgroundColor = if (selectedUseCustomBackground) {
+                            selectedCustomBackgroundColor
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -1460,7 +1473,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 readerPreferences.hyphenation,
                 fallbackContentLanguage,
                 readerPreferences.customBackgroundColor,
-                readerPreferences.customTextColor
+                readerPreferences.customTextColor,
+                readerPreferences.backgroundTheme,
+                readerPreferences.useCustomBackground
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
@@ -3064,6 +3079,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         selectedTheme = normalized.theme
+        selectedBackgroundTheme = normalized.backgroundTheme
+        selectedUseCustomBackground = normalized.useCustomBackground
         selectedCustomBackgroundColor = normalized.customBackgroundColor
         selectedFontFamily = normalized.fontFamily
         padding = normalized.padding
@@ -3091,7 +3108,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.hyphenation,
                 fallbackContentLanguage,
                 normalized.customBackgroundColor,
-                normalized.customTextColor
+                normalized.customTextColor,
+                normalized.backgroundTheme,
+                normalized.useCustomBackground
             )
         )
         val current = appPreferencesStore.read()
@@ -3378,25 +3397,24 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             hideStatusBar = preferences.hideStatusBarWhileReading
         )
         val contentBackground = readerContentBackgroundColor(readerPreferences)
-        val customBackground = readerPreferences.customBackgroundColor
-        val lightStatusBarIcons = if (customBackground != null) {
-            isLightCustomReaderBackground(customBackground)
-        } else {
-            selectedTheme.usesDarkStatusBarIcons()
-        }
-        val lightNavigationBarIcons = customBackground != null &&
-            isLightCustomReaderBackground(customBackground)
+        val lightSystemBarIcons = isLightCustomReaderBackground(contentBackground)
         WindowCompat.getInsetsController(window, window.decorView).apply {
             if (policy.showStatusBar) show(WindowInsetsCompat.Type.statusBars())
             else hide(WindowInsetsCompat.Type.statusBars())
             if (policy.showNavigationBar) show(WindowInsetsCompat.Type.navigationBars())
             else hide(WindowInsetsCompat.Type.navigationBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            isAppearanceLightStatusBars = lightStatusBarIcons
-            isAppearanceLightNavigationBars = lightNavigationBarIcons
+            isAppearanceLightStatusBars = lightSystemBarIcons
+            isAppearanceLightNavigationBars = lightSystemBarIcons
         }
         window.statusBarColor = contentBackground
-        window.navigationBarColor = if (customBackground != null) contentBackground else Color.BLACK
+        window.navigationBarColor = contentBackground
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Keep the system from drawing a translucent contrast scrim over the custom surface
+            // when the system bars are transparent (Android 10+ / edge-to-edge on Android 15+).
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
         // Android 15 draws the status-bar strip from the window background, not statusBarColor.
         window.setBackgroundDrawable(ColorDrawable(contentBackground))
     }

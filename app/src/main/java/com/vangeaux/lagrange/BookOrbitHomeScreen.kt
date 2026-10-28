@@ -5447,24 +5447,15 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            Text(
-                stringResource(R.string.settings_typography),
-                style = MaterialTheme.typography.titleMedium
+            ReaderAppearanceSettings(
+                value = value,
+                onPreferencesChange = { next ->
+                    onPreferencesChange(selectedLibrary.id, next)
+                },
+                testTagPrefix = "options-reading",
+                showOptionsTheme = true,
+                showBackgroundTheme = true
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EPUB_THEME_OPTIONS.forEach { theme ->
-                    FilterChip(
-                        selected = value.theme == theme,
-                        onClick = {
-                            onPreferencesChange(selectedLibrary.id, value.copy(theme = theme))
-                        },
-                        label = { Text(stringResource(theme.labelRes)) }
-                    )
-                }
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -5777,6 +5768,145 @@ private fun ReaderTapZoneSettings(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun ReaderThemeChips(
+    selected: EpubReaderTheme,
+    presetSelected: Boolean,
+    testTagPrefix: String,
+    onSelected: (EpubReaderTheme) -> Unit,
+    showCustom: Boolean = false,
+    customSelected: Boolean = false,
+    onCustomSelected: () -> Unit = {}
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        EPUB_THEME_OPTIONS.forEach { theme ->
+            FilterChip(
+                selected = presetSelected && selected == theme,
+                onClick = { onSelected(theme) },
+                label = { Text(stringResource(theme.labelRes)) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-${theme.name.lowercase()}"
+                )
+            )
+        }
+        if (showCustom) {
+            FilterChip(
+                selected = customSelected,
+                onClick = onCustomSelected,
+                label = { Text(stringResource(R.string.sheet_custom_background_custom)) },
+                modifier = Modifier.testTag("$testTagPrefix-custom")
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReaderAppearanceSettings(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String,
+    showOptionsTheme: Boolean,
+    showBackgroundTheme: Boolean
+) {
+    var customBackgroundDialogVisible by remember { mutableStateOf(false) }
+
+    if (showOptionsTheme) {
+        Text(
+            stringResource(R.string.sheet_reader_theme_options),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_reader_theme_options_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        ReaderThemeChips(
+            selected = value.theme,
+            presetSelected = true,
+            testTagPrefix = "$testTagPrefix-theme",
+            onSelected = { theme -> onPreferencesChange(value.copy(theme = theme)) }
+        )
+    }
+
+    if (showBackgroundTheme) {
+        if (showOptionsTheme) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+        }
+        Text(
+            stringResource(R.string.sheet_reading_background),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_reading_background_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        ReaderThemeChips(
+            selected = value.backgroundTheme,
+            presetSelected = !value.useCustomBackground,
+            testTagPrefix = "$testTagPrefix-background-theme",
+            onSelected = { theme ->
+                onPreferencesChange(
+                    value.copy(
+                        backgroundTheme = theme,
+                        useCustomBackground = false
+                    )
+                )
+            },
+            showCustom = true,
+            customSelected = value.useCustomBackground,
+            onCustomSelected = {
+                when {
+                    value.customBackgroundColor == null ->
+                        customBackgroundDialogVisible = true
+                    !value.useCustomBackground ->
+                        onPreferencesChange(value.copy(useCustomBackground = true))
+                }
+            }
+        )
+        if (value.useCustomBackground) {
+            AppPreferenceSelectionRow(
+                title = stringResource(R.string.sheet_custom_background),
+                value = value.customBackgroundColor?.let(::customReaderBackgroundCss)
+                    ?: stringResource(R.string.sheet_custom_background_default),
+                summary = stringResource(R.string.sheet_custom_background_summary),
+                testTag = "$testTagPrefix-custom-background",
+                onClick = { customBackgroundDialogVisible = true }
+            )
+        }
+        if (customBackgroundDialogVisible) {
+            ReaderCustomBackgroundDialog(
+                initialColor = value.customBackgroundColor,
+                testTagPrefix = testTagPrefix,
+                onApply = { color ->
+                    onPreferencesChange(
+                        value.copy(
+                            useCustomBackground = true,
+                            customBackgroundColor = color
+                        )
+                    )
+                    customBackgroundDialogVisible = false
+                },
+                onReset = {
+                    onPreferencesChange(
+                        value.copy(
+                            useCustomBackground = false,
+                            customBackgroundColor = null
+                        )
+                    )
+                    customBackgroundDialogVisible = false
+                },
+                onDismiss = { customBackgroundDialogVisible = false }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
@@ -5848,60 +5978,14 @@ internal fun ReaderConfigurationControls(
         testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
         onCheckedChange = onShowTapZoneTutorialAfterChangesChange
     )
-    if (format != ReaderConfigurationFormat.COMIC) {
-        Text(
-            stringResource(R.string.settings_typography),
-            style = MaterialTheme.typography.titleMedium
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            EPUB_THEME_OPTIONS.forEach { theme ->
-                FilterChip(
-                    selected = value.theme == theme,
-                    onClick = {
-                        onPreferencesChange(
-                            value.copy(
-                                theme = theme,
-                                customBackgroundColor = null,
-                                customTextColor = null
-                            )
-                        )
-                    },
-                    label = { Text(stringResource(theme.labelRes)) },
-                    modifier = Modifier.testTag(
-                        "$testTagPrefix-theme-${theme.name.lowercase()}"
-                    )
-                )
-            }
-        }
-    }
+    ReaderAppearanceSettings(
+        value = value,
+        onPreferencesChange = onPreferencesChange,
+        testTagPrefix = testTagPrefix,
+        showOptionsTheme = format != ReaderConfigurationFormat.COMIC,
+        showBackgroundTheme = format == ReaderConfigurationFormat.EPUB
+    )
     if (format == ReaderConfigurationFormat.EPUB) {
-        var customBackgroundDialogVisible by remember { mutableStateOf(false) }
-        AppPreferenceSelectionRow(
-            title = stringResource(R.string.sheet_custom_background),
-            value = value.customBackgroundColor?.let(::customReaderBackgroundCss)
-                ?: stringResource(R.string.sheet_custom_background_default),
-            summary = stringResource(R.string.sheet_custom_background_summary),
-            testTag = "$testTagPrefix-custom-background",
-            onClick = { customBackgroundDialogVisible = true }
-        )
-        if (customBackgroundDialogVisible) {
-            ReaderCustomBackgroundDialog(
-                initialColor = value.customBackgroundColor,
-                testTagPrefix = testTagPrefix,
-                onApply = { color ->
-                    onPreferencesChange(value.copy(customBackgroundColor = color))
-                    customBackgroundDialogVisible = false
-                },
-                onReset = {
-                    onPreferencesChange(value.copy(customBackgroundColor = null))
-                    customBackgroundDialogVisible = false
-                },
-                onDismiss = { customBackgroundDialogVisible = false }
-            )
-        }
         var customTextColorDialogVisible by remember { mutableStateOf(false) }
         AppPreferenceSelectionRow(
             title = stringResource(R.string.sheet_text_color),

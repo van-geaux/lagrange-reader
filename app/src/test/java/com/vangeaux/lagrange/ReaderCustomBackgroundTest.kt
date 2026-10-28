@@ -108,23 +108,76 @@ class ReaderCustomBackgroundTest {
     }
 
     @Test
-    fun `reader content background uses the custom color when set`() {
+    fun `reader content background uses the active custom color`() {
         val defaultPreferences = LibraryReaderPreferences()
-        assertEquals(defaultPreferences.theme.backgroundColor, readerContentBackgroundColor(defaultPreferences))
+        assertEquals(
+            defaultPreferences.backgroundTheme.backgroundColor,
+            readerContentBackgroundColor(defaultPreferences)
+        )
 
         val custom = 0xFF123456.toInt()
         assertEquals(
             custom,
-            readerContentBackgroundColor(LibraryReaderPreferences(customBackgroundColor = custom))
+            readerContentBackgroundColor(
+                LibraryReaderPreferences(
+                    customBackgroundColor = custom,
+                    useCustomBackground = true
+                )
+            )
         )
     }
 
     @Test
+    fun `inactive custom background falls back to the background theme`() {
+        val preferences = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            backgroundTheme = EpubReaderTheme.Light,
+            customBackgroundColor = 0xFF123456.toInt(),
+            useCustomBackground = false
+        )
+
+        assertEquals(
+            EpubReaderTheme.Light.backgroundColor,
+            readerContentBackgroundColor(preferences)
+        )
+        assertEquals(0xFF123456.toInt(), preferences.customBackgroundColor)
+    }
+
+    @Test
+    fun `background theme is independent from reader chrome theme`() {
+        val preferences = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            backgroundTheme = EpubReaderTheme.Light
+        )
+
+        assertEquals(EpubReaderTheme.Dark, preferences.theme)
+        assertEquals(EpubReaderTheme.Light.backgroundColor, readerContentBackgroundColor(preferences))
+    }
+
+    @Test
     fun `custom background round trips through profile storage`() {
-        val preferences = LibraryReaderPreferences(customBackgroundColor = 0xFF123456.toInt())
+        val preferences = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            backgroundTheme = EpubReaderTheme.Light,
+            customBackgroundColor = 0xFF123456.toInt(),
+            useCustomBackground = true
+        )
         val storage = libraryReaderPreferencesStorageValue(mapOf("library" to preferences))
         val decoded = libraryReaderPreferencesFromStorage(storage).getValue("library")
         assertEquals(preferences.customBackgroundColor, decoded.customBackgroundColor)
+        assertEquals(EpubReaderTheme.Dark, decoded.theme)
+        assertEquals(EpubReaderTheme.Light, decoded.backgroundTheme)
+        assertEquals(true, decoded.useCustomBackground)
+    }
+
+    @Test
+    fun `legacy custom background profile remains active after migration`() {
+        val legacy = libraryReaderPreferencesFromStorage(
+            """{"version":3,"profiles":{"library":{"theme":"dark","customBackgroundColor":"123456"}}}"""
+        ).getValue("library")
+        assertEquals(0xFF123456.toInt(), legacy.customBackgroundColor)
+        assertEquals(true, legacy.useCustomBackground)
+        assertEquals(EpubReaderTheme.Dark, legacy.backgroundTheme)
     }
 
     @Test

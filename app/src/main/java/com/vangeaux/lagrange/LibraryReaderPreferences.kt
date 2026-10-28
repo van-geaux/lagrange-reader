@@ -102,7 +102,9 @@ data class LibraryReaderPreferences(
     val tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
     val tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
+    val backgroundTheme: EpubReaderTheme = EpubReaderTheme.Sepia,
     val customBackgroundColor: Int? = null,
+    val useCustomBackground: Boolean = false,
     val customTextColor: Int? = null,
     val fontFamily: EpubReaderFontFamily = EpubReaderFontFamily.PUBLISHER_DEFAULT,
     val customFont: CustomFontRecord? = null,
@@ -125,6 +127,7 @@ data class LibraryReaderPreferences(
 ) {
     fun normalized(): LibraryReaderPreferences = copy(
         customBackgroundColor = normalizedCustomReaderBackground(customBackgroundColor),
+        useCustomBackground = useCustomBackground && customBackgroundColor != null,
         customTextColor = normalizedReaderTextColor(customTextColor),
         fontScale = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE),
         lineSpacing = lineSpacing.coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING),
@@ -222,6 +225,8 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("tapZoneLayout", readerTapZoneLayoutStorageValue(normalized.tapZoneLayout))
             put("tapZoneInvertMode", readerTapZoneInvertModeStorageValue(normalized.tapZoneInvertMode))
             put("theme", epubReaderThemeStorageValue(normalized.theme))
+            put("backgroundTheme", epubReaderThemeStorageValue(normalized.backgroundTheme))
+            put("useCustomBackground", normalized.useCustomBackground)
             normalized.customBackgroundColor?.let {
                 put("customBackgroundColor", customReaderBackgroundHex(it))
             }
@@ -262,17 +267,28 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                 if (libraryId.isBlank()) return@forEach
                 val item = profiles.optJSONObject(libraryId) ?: return@forEach
                 runCatching {
+                    val theme = epubReaderThemeFromStorage(item.optString("theme"))
+                    val customBackgroundColor = item.optString("customBackgroundColor")
+                        .takeIf { it.isNotBlank() }
+                        ?.toIntOrNull(16)
+                        ?.let(::normalizedCustomReaderBackground)
                     LibraryReaderPreferences(
                         readingDirection = libraryReadingDirectionFromStorage(item.optString("readingDirection")),
                         volumeButtonPageNavigation = item.optBoolean("volumeButtonPageNavigation", false),
                         reverseVolumeButtonNavigation = item.optBoolean("reverseVolumeButtonNavigation", false),
                         tapZoneLayout = readerTapZoneLayoutFromStorage(item.optString("tapZoneLayout")),
                         tapZoneInvertMode = readerTapZoneInvertModeFromStorage(item.optString("tapZoneInvertMode")),
-                        theme = epubReaderThemeFromStorage(item.optString("theme")),
-                        customBackgroundColor = item.optString("customBackgroundColor")
-                            .takeIf { it.isNotBlank() }
-                            ?.toIntOrNull(16)
-                            ?.let(::normalizedCustomReaderBackground),
+                        theme = theme,
+                        backgroundTheme = if (item.has("backgroundTheme")) {
+                            epubReaderThemeFromStorage(item.optString("backgroundTheme"))
+                        } else {
+                            theme
+                        },
+                        customBackgroundColor = customBackgroundColor,
+                        useCustomBackground = item.optBoolean(
+                            "useCustomBackground",
+                            customBackgroundColor != null
+                        ),
                         customTextColor = item.optString("customTextColor")
                             .takeIf { it.isNotBlank() }
                             ?.toIntOrNull(16)

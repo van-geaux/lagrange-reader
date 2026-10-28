@@ -97,9 +97,13 @@ internal fun normalizedReaderTextColor(color: Int?): Int? =
 internal fun readerTextColor(customTextColor: Int?, automaticTextColor: Int): Int =
     customTextColor ?: automaticTextColor
 
-/** Window/content background: the custom colour when set, otherwise the selected theme background. */
+/** The retained custom background colour, but only while the custom background is active. */
+internal fun activeCustomReaderBackground(preferences: LibraryReaderPreferences): Int? =
+    preferences.customBackgroundColor?.takeIf { preferences.useCustomBackground }
+
+/** Window/content background: active custom colour, otherwise the selected reading background theme. */
 internal fun readerContentBackgroundColor(preferences: LibraryReaderPreferences): Int =
-    preferences.customBackgroundColor ?: preferences.theme.backgroundColor
+    activeCustomReaderBackground(preferences) ?: preferences.backgroundTheme.backgroundColor
 
 /** Contrast ratio (1..21) between two opaque colours; used by tests. */
 internal fun contrastRatio(first: Int, second: Int): Double {
