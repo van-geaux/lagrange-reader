@@ -11,4 +11,22 @@
     <string name="sheet_book_language_title">Book language</string>
     <string name="sheet_book_language_auto">Auto (book, else device language)</string>
     <string name="sheet_comic_page_of">Page %1$d of %2$d</string>
+    <!-- EPUB custom page background -->
+    <string name="sheet_custom_background">Background color</string>
+    <string name="sheet_custom_background_summary">Custom EPUB page background (RGB)</string>
+    <string name="sheet_custom_background_default">Default</string>
+    <string name="sheet_custom_background_dialog_title">Custom background color</string>
+    <string name="sheet_custom_background_red">Red (R)</string>
+    <string name="sheet_custom_background_green">Green (G)</string>
+    <string name="sheet_custom_background_blue">Blue (B)</string>
+    <string name="sheet_custom_background_preview">Preview</string>
+    <string name="sheet_custom_background_apply">Apply</string>
+    <string name="sheet_custom_background_reset">Reset to default</string>
+    <string name="sheet_custom_background_invalid">Enter values from 0 to 255.</string>
+    <string name="sheet_text_color">Text color</string>
+    <string name="sheet_text_color_default">Automatic</string>
+    <string name="sheet_text_color_summary">Custom EPUB page text color (RGB)</string>
+    <string name="sheet_text_color_dialog_title">Custom text color</string>
+    <string name="sheet_text_color_preview">Preview</string>
+    <string name="sheet_text_color_sample">Aa Text sample</string>
 </resources>

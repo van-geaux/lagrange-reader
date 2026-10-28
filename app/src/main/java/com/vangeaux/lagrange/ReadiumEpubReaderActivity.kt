@@ -297,35 +297,44 @@ internal fun readiumPreferences(
     spreadPageMarginCssPx: Double = EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX,
     textAlignment: EpubTextAlignment = EpubTextAlignment.START,
     hyphenation: EpubHyphenation = EpubHyphenation.AUTO,
-    fallbackLanguage: String? = null
-): EpubPreferences = EpubPreferences(
-    backgroundColor = ReadiumColor(theme.backgroundColor),
-    textColor = ReadiumColor(cssHexColorInt(theme.foregroundCss)),
-    theme = when (theme) {
-        EpubReaderTheme.Light -> ReadiumTheme.LIGHT
-        EpubReaderTheme.Sepia -> ReadiumTheme.SEPIA
-        EpubReaderTheme.Dark, EpubReaderTheme.OledBlack -> ReadiumTheme.DARK
-    },
-    fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
-    lineHeight = readiumEpubLineHeight(lineSpacing),
-    wordSpacing = readiumEpubWordSpacing(wordSpacing),
-    textAlign = readiumEpubTextAlign(textAlignment),
-    hyphens = epubHyphenationActive(textAlignment, hyphenation),
-    language = fallbackLanguage?.let(::ReadiumLanguage),
-    fontFamily = readiumFontFamily(fontFamily),
-    readingProgression = readiumEpubReadingProgression(readingDirection),
-    // Spreads give each column its own margin (in units of the 1px spread page gutter).
-    pageMargins = if (epubSpreadActive(twoPageSpread, layoutMode)) {
-        spreadPageMarginCssPx.coerceAtLeast(EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX) / EPUB_SPREAD_PAGE_GUTTER_UNIT_CSS_PX
-    } else 0.0,
-    columnCount = if (epubSpreadActive(twoPageSpread, layoutMode)) ColumnCount.TWO else ColumnCount.ONE,
-    // Fixed-layout only. Readium 3.x treats Spread.AUTO as single page, so it must be explicit.
-    spread = if (epubSpreadActive(twoPageSpread, layoutMode)) Spread.ALWAYS else Spread.NEVER,
-    scroll = layoutMode == ReaderLayoutMode.CONTINUOUS,
-    // Readium only applies lineHeight and the other user CSS overrides when
-    // publisher styles are disabled.
-    publisherStyles = false
-)
+    fallbackLanguage: String? = null,
+    customBackgroundColor: Int? = null,
+    customTextColor: Int? = null
+): EpubPreferences {
+    val effectiveTheme = customBackgroundColor?.let(::customReaderBackgroundReadiumTheme) ?: theme
+    val effectiveBackground = customBackgroundColor ?: theme.backgroundColor
+    val automaticTextColor = customBackgroundColor?.let(::customReaderBackgroundTextColor)
+        ?: cssHexColorInt(theme.foregroundCss)
+    val effectiveTextColor = readerTextColor(customTextColor, automaticTextColor)
+    return EpubPreferences(
+        backgroundColor = ReadiumColor(effectiveBackground),
+        textColor = ReadiumColor(effectiveTextColor),
+        theme = when (effectiveTheme) {
+            EpubReaderTheme.Light -> ReadiumTheme.LIGHT
+            EpubReaderTheme.Sepia -> ReadiumTheme.SEPIA
+            EpubReaderTheme.Dark, EpubReaderTheme.OledBlack -> ReadiumTheme.DARK
+        },
+        fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
+        lineHeight = readiumEpubLineHeight(lineSpacing),
+        wordSpacing = readiumEpubWordSpacing(wordSpacing),
+        textAlign = readiumEpubTextAlign(textAlignment),
+        hyphens = epubHyphenationActive(textAlignment, hyphenation),
+        language = fallbackLanguage?.let(::ReadiumLanguage),
+        fontFamily = readiumFontFamily(fontFamily),
+        readingProgression = readiumEpubReadingProgression(readingDirection),
+        // Spreads give each column its own margin (in units of the 1px spread page gutter).
+        pageMargins = if (epubSpreadActive(twoPageSpread, layoutMode)) {
+            spreadPageMarginCssPx.coerceAtLeast(EPUB_SPREAD_MIN_PAGE_MARGIN_CSS_PX) / EPUB_SPREAD_PAGE_GUTTER_UNIT_CSS_PX
+        } else 0.0,
+        columnCount = if (epubSpreadActive(twoPageSpread, layoutMode)) ColumnCount.TWO else ColumnCount.ONE,
+        // Fixed-layout only. Readium 3.x treats Spread.AUTO as single page, so it must be explicit.
+        spread = if (epubSpreadActive(twoPageSpread, layoutMode)) Spread.ALWAYS else Spread.NEVER,
+        scroll = layoutMode == ReaderLayoutMode.CONTINUOUS,
+        // Readium only applies lineHeight and the other user CSS overrides when
+        // publisher styles are disabled.
+        publisherStyles = false
+    )
+}
 
 internal fun cssHexColorInt(value: String): Int {
     val hex = value.removePrefix("#")
@@ -814,6 +823,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
     private val highlightAnnotations = mutableMapOf<String, BookAnnotation>()
     private val highlightLocators = mutableMapOf<String, Locator>()
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
+    private var selectedCustomBackgroundColor by mutableStateOf<Int?>(null)
     private var selectedFontFamily by mutableStateOf(EpubReaderFontFamily.PUBLISHER_DEFAULT)
     private var padding by mutableStateOf(EpubPaddingPercentages())
     private var fontScale by mutableStateOf(1f)
@@ -981,6 +991,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 padding = paddingStore.read(readerKey)
             )
         selectedTheme = readerPreferences.theme
+        selectedCustomBackgroundColor = readerPreferences.customBackgroundColor
         selectedFontFamily = readerPreferences.fontFamily
         padding = readerPreferences.padding
         fontScale = readerPreferences.fontScale
@@ -1051,10 +1062,10 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun createReaderViews() {
         rootView = FrameLayout(this).apply {
-            setBackgroundColor(selectedTheme.backgroundColor)
+            setBackgroundColor(readerContentBackgroundColor(readerPreferences))
         }
         readerViewport = FrameLayout(this).apply {
-            setBackgroundColor(selectedTheme.backgroundColor)
+            setBackgroundColor(readerContentBackgroundColor(readerPreferences))
         }
         ViewCompat.setOnApplyWindowInsetsListener(readerViewport) { view, insets ->
             val navigationBarBottom = insets.getInsetsIgnoringVisibility(
@@ -1080,7 +1091,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         readerContainer = FrameLayout(this).apply {
             id = readerContainerId
-            setBackgroundColor(selectedTheme.backgroundColor)
+            setBackgroundColor(readerContentBackgroundColor(readerPreferences))
         }
         readerViewport.addView(
             readerContainer,
@@ -1127,7 +1138,8 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                     EpubReaderProgressFooter(
                         status = currentProgressStatus(),
                         theme = selectedTheme,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        customBackgroundColor = selectedCustomBackgroundColor
                     )
                 }
             }
@@ -1446,7 +1458,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 spreadPageMarginCssPx(),
                 readerPreferences.textAlignment,
                 readerPreferences.hyphenation,
-                fallbackContentLanguage
+                fallbackContentLanguage,
+                readerPreferences.customBackgroundColor,
+                readerPreferences.customTextColor
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
@@ -3050,6 +3064,7 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
         selectedTheme = normalized.theme
+        selectedCustomBackgroundColor = normalized.customBackgroundColor
         selectedFontFamily = normalized.fontFamily
         padding = normalized.padding
         fontScale = normalized.fontScale
@@ -3057,9 +3072,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
         epubLayoutMode = normalized.epubLayoutMode
         syncProgressFooter()
         themeStore.save(normalized.theme)
-        rootView.setBackgroundColor(normalized.theme.backgroundColor)
-        readerViewport.setBackgroundColor(normalized.theme.backgroundColor)
-        readerContainer.setBackgroundColor(normalized.theme.backgroundColor)
+        rootView.setBackgroundColor(readerContentBackgroundColor(normalized))
+        readerViewport.setBackgroundColor(readerContentBackgroundColor(normalized))
+        readerContainer.setBackgroundColor(readerContentBackgroundColor(normalized))
         applyReaderPadding()
         navigator?.submitPreferences(
             readiumPreferences(
@@ -3074,7 +3089,9 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
                 spreadPageMarginCssPx(),
                 normalized.textAlignment,
                 normalized.hyphenation,
-                fallbackContentLanguage
+                fallbackContentLanguage,
+                normalized.customBackgroundColor,
+                normalized.customTextColor
             )
         )
         val current = appPreferencesStore.read()
@@ -3360,18 +3377,28 @@ class ReadiumEpubReaderActivity : FragmentActivity() {
             hideNavigationBar = preferences.hideNavigationBarWhileReading,
             hideStatusBar = preferences.hideStatusBarWhileReading
         )
+        val contentBackground = readerContentBackgroundColor(readerPreferences)
+        val customBackground = readerPreferences.customBackgroundColor
+        val lightStatusBarIcons = if (customBackground != null) {
+            isLightCustomReaderBackground(customBackground)
+        } else {
+            selectedTheme.usesDarkStatusBarIcons()
+        }
+        val lightNavigationBarIcons = customBackground != null &&
+            isLightCustomReaderBackground(customBackground)
         WindowCompat.getInsetsController(window, window.decorView).apply {
             if (policy.showStatusBar) show(WindowInsetsCompat.Type.statusBars())
             else hide(WindowInsetsCompat.Type.statusBars())
             if (policy.showNavigationBar) show(WindowInsetsCompat.Type.navigationBars())
             else hide(WindowInsetsCompat.Type.navigationBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            isAppearanceLightStatusBars = selectedTheme.usesDarkStatusBarIcons()
+            isAppearanceLightStatusBars = lightStatusBarIcons
+            isAppearanceLightNavigationBars = lightNavigationBarIcons
         }
-        window.statusBarColor = selectedTheme.backgroundColor
-        window.navigationBarColor = Color.BLACK
+        window.statusBarColor = contentBackground
+        window.navigationBarColor = if (customBackground != null) contentBackground else Color.BLACK
         // Android 15 draws the status-bar strip from the window background, not statusBarColor.
-        window.setBackgroundDrawable(ColorDrawable(selectedTheme.backgroundColor))
+        window.setBackgroundDrawable(ColorDrawable(contentBackground))
     }
 
     private fun chapterTitle(tableOfContents: List<Link>, resource: Link): String? {

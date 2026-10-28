@@ -28,6 +28,8 @@ class LibraryReaderPreferencesTest {
             volumeButtonPageNavigation = true,
             reverseVolumeButtonNavigation = true,
             theme = EpubReaderTheme.Dark,
+            customBackgroundColor = 0xFF123456.toInt(),
+            customTextColor = 0xFFB8B8B8.toInt(),
             fontFamily = EpubReaderFontFamily.OPEN_DYSLEXIC,
             fontScale = 1.3f,
             lineSpacing = 1.4f,
