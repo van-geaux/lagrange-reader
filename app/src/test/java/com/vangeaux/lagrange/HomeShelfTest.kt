@@ -242,6 +242,28 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `see all uses provider shelf data when catalog is deferred`() {
+        val current = BookSummary("library-a", "book-1", "file-1", "Current")
+        val state = BrowserState(
+            serverUrl = "https://example.test",
+            libraries = listOf(LibrarySummary("library-a", "Library A")),
+            selectedLibraryId = "library-a",
+            books = emptyList(),
+            homeBooks = emptyList(),
+            homeShelves = HomeShelfData(
+                booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(current)),
+                isServerProvided = true,
+                deferInitialCatalogLoad = true
+            )
+        )
+
+        assertEquals(
+            listOf("book-1"),
+            homeSectionSourceBooks(state, HomeSection.CURRENTLY_READING, serverWide = false).map { it.id }
+        )
+    }
+
+    @Test
     fun `library recommended feed filters every shelf to the selected library`() {
         val books = listOf(
             BookSummary("library-one", "book-1", "file-1", "One"),

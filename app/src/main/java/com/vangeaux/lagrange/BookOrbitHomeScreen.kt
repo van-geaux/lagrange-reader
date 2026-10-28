@@ -922,6 +922,19 @@ internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeSh
 internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
     libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
 
+internal fun homeSectionSourceBooks(
+    state: BrowserState,
+    section: HomeSection,
+    serverWide: Boolean
+): List<BookSummary> {
+    val shelves = homeFeedShelves(state.homeShelves, state.selectedLibraryId.takeUnless { serverWide })
+    shelves.seriesBySection[section]?.let { return it }
+    if (shelves.isServerProvided && section in shelves.booksBySection.keys) {
+        return shelves.booksBySection[section].orEmpty()
+    }
+    return if (serverWide) state.homeBooks else state.books
+}
+
 internal fun bookAvailableFormatsForDisplay(
     book: BookSummary
 ): List<String> = book.availableFormats.ifEmpty {
@@ -2254,13 +2267,14 @@ internal fun NativeLibraryBrowserScreen(
                     HomeSection.RECENTLY_UPDATED_SERIES
                 ) -> HomeSeriesSectionScreen(
                     section = destination.toHomeSection()!!,
-                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
-                        state.books
-                    } else {
-                        state.homeBooks
-                    },
+                    books = homeSectionSourceBooks(
+                        state = state,
+                        section = destination.toHomeSection()!!,
+                        serverWide = homeSectionReturnDestination == BrowserDestination.HOME
+                    ),
                     state = state,
-                    serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
+                    serverWide = homeSectionReturnDestination == BrowserDestination.HOME &&
+                        !state.homeShelves.isServerProvided,
                     recentBooksPageLoader = recentBooksPageLoader,
                     seriesCatalogLoader = seriesCatalogLoader,
                     modifier = Modifier.padding(padding),
@@ -2272,11 +2286,11 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination.toHomeSection() != null -> HomeSectionScreen(
                     section = destination.toHomeSection()!!,
-                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
-                        state.books
-                    } else {
-                        state.homeBooks
-                    },
+                    books = homeSectionSourceBooks(
+                        state = state,
+                        section = destination.toHomeSection()!!,
+                        serverWide = homeSectionReturnDestination == BrowserDestination.HOME
+                    ),
                     state = state,
                     localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
