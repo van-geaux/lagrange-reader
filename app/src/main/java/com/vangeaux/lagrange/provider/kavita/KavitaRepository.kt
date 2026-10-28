@@ -276,6 +276,16 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
             books = books,
             homeBooks = snapshot.booksByLibraryId.values.flatten().plus(loadLocalBooks())
                 .distinctBy { it.libraryId to (it.fileId ?: it.id) },
+            homeShelves = HomeShelfData(
+                isServerProvided = true,
+                hiddenSections = setOf(
+                    HomeSection.WANT_TO_READ,
+                    HomeSection.RECENTLY_ADDED_BOOKS,
+                    HomeSection.RECENTLY_RELEASED_BOOKS,
+                    HomeSection.RECENTLY_READ
+                ),
+                deferInitialCatalogLoad = true
+            ),
             booksTotal = books.size,
             booksPageSize = books.size,
             isCatalogComplete = true,
