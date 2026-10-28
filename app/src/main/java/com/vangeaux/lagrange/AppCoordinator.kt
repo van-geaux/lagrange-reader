@@ -1286,6 +1286,8 @@ class AppCoordinator internal constructor(
                 }
             }
             var previous = lastBrowserState
+            val providerHomeModule = homeShelfModule()
+            val suppressCachedHomeFallback = providerHomeModule?.deferInitialCatalogLoad == true
             if (previous == null) {
                 (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState())?.let { cached ->
                     previous = cached
@@ -1297,6 +1299,20 @@ class AppCoordinator internal constructor(
                         isRefreshing = userInitiated,
                         isLoadingLibraries = true,
                         isLoadingBooks = true,
+                        homeShelves = if (suppressCachedHomeFallback) {
+                            HomeShelfData(
+                                isServerProvided = true,
+                                hiddenSections = setOf(
+                                    HomeSection.WANT_TO_READ,
+                                    HomeSection.RECENTLY_ADDED_BOOKS,
+                                    HomeSection.RECENTLY_RELEASED_BOOKS,
+                                    HomeSection.RECENTLY_READ
+                                ),
+                                deferInitialCatalogLoad = true
+                            )
+                        } else {
+                            previousState.homeShelves
+                        },
                         isOfflineSnapshot = false,
                         message = null
                     )
@@ -1346,7 +1362,6 @@ class AppCoordinator internal constructor(
                 }
 
                 serverSelectionModule()?.setSelectedLibraryId(selectedLibrary) ?: repository.setSelectedLibraryId(selectedLibrary)
-                val providerHomeModule = homeShelfModule()
                 val homeShelves = runCatching {
                     providerHomeModule?.loadHomeShelves()
                 }.getOrElse {
