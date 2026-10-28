@@ -1177,6 +1177,11 @@ internal fun NativeLibraryBrowserScreen(
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
     }
+    LaunchedEffect(state.homeShelves.deferInitialCatalogLoad, destination) {
+        if (state.homeShelves.deferInitialCatalogLoad && destination == BrowserDestination.SERIES) {
+            destination = BrowserDestination.LIBRARY
+        }
+    }
     LaunchedEffect(achievementsAvailable) {
         if (!achievementsAvailable && destination == BrowserDestination.ACHIEVEMENTS) {
             destination = BrowserDestination.HOME
@@ -2330,6 +2335,8 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
+                    seriesCatalogLoader = seriesCatalogLoader,
+                    catalogImageLoader = catalogImageLoader,
                     localBooksLoader = localBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
@@ -2749,6 +2756,7 @@ private fun SeriesCatalogScreen(
     libraryOptions: List<LibrarySummary>,
     selectedScope: SmartScope? = null,
     books: List<BookSummary> = emptyList(),
+    loadAllPages: Boolean = true,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -2764,6 +2772,8 @@ private fun SeriesCatalogScreen(
     var isRefreshing by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var loadError by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
+    var nextPage by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(1) }
+    var hasMorePages by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var filter by remember(query, initialFilter, selectedScopeId) {
         mutableStateOf(
             (lockedFilter ?: initialFilter).copy(query = query.takeIf { it.isNotBlank() })
@@ -2782,11 +2792,19 @@ private fun SeriesCatalogScreen(
         gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
         val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-        runCatching { loadCompleteSeriesCatalog { page ->
-                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
-            } }.onSuccess { catalog ->
+        runCatching {
+            if (loadAllPages) {
+                loadCompleteSeriesCatalog { page ->
+                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+                }
+            } else {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, 0) else loader(activeFilter, 0)
+            }
+        }.onSuccess { catalog ->
             items = catalog.items
             total = catalog.total ?: catalog.items.size
+            nextPage = 1
+            hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
         }.onFailure {
             loadError = true
         }
@@ -2796,12 +2814,18 @@ private fun SeriesCatalogScreen(
         if (reloadKey == 0) return@LaunchedEffect
         try {
             val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-            val catalog = loadCompleteSeriesCatalog { page ->
-                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+            val catalog = if (loadAllPages) {
+                loadCompleteSeriesCatalog { page ->
+                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+                }
+            } else {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, 0) else loader(activeFilter, 0)
             }
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
                 total = catalog.total ?: catalog.items.size
+                nextPage = 1
+                hasMorePages = !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             }
         } finally {
             isRefreshing = false
@@ -2811,6 +2835,21 @@ private fun SeriesCatalogScreen(
         if (!isRefreshing && !isLoading) {
             isRefreshing = true
             reloadKey += 1
+        }
+    }
+    val loadNextPage: () -> Unit = {
+        if (!loadAllPages && hasMorePages && !isLoading) {
+            scope.launch {
+                val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
+                val catalog = runCatching {
+                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, nextPage)
+                    else loader(activeFilter, nextPage)
+                }.getOrNull() ?: return@launch
+                items = (items + catalog.items).distinctBy { it.id }
+                total = catalog.total ?: items.size
+                nextPage += 1
+                hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+            }
         }
     }
     val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
@@ -2953,6 +2992,12 @@ private fun SeriesCatalogScreen(
         }
         }
         }
+    }
+    if (!loadAllPages && hasMorePages) {
+        OutlinedButton(
+            onClick = loadNextPage,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = CATALOG_GRID_PADDING)
+        ) { Text(stringResource(R.string.browse_load_more)) }
     }
     if (showFilter) {
         SeriesFilterSheet(
@@ -7394,6 +7439,8 @@ private fun LibraryContentScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    catalogImageLoader: suspend (String) -> ByteArray?,
     localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
@@ -7585,7 +7632,22 @@ private fun LibraryContentScreen(
                     localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
                 )
-                LibraryTab.BROWSE -> LibraryBrowseScreen(
+                LibraryTab.BROWSE -> if (state.homeShelves.deferInitialCatalogLoad) {
+                    SeriesCatalogScreen(
+                        query = "",
+                        initialFilter = SeriesCatalogFilter(libraryId = state.selectedLibraryId),
+                        persistenceKey = "kavita-library-series-${state.selectedLibraryId}",
+                        appPreferences = appPreferences,
+                        onAppPreferencesChange = onAppPreferencesChange,
+                        libraryOptions = state.libraries,
+                        books = state.books,
+                        loadAllPages = false,
+                        modifier = Modifier.weight(1f),
+                        loader = seriesCatalogLoader,
+                        imageLoader = catalogImageLoader,
+                        onSeriesSelected = { series -> onSeriesSelected(series.id) }
+                    )
+                } else LibraryBrowseScreen(
                     state = state,
                     modifier = Modifier.weight(1f),
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
