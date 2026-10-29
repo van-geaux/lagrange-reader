@@ -27,6 +27,8 @@
     <string name="comic_some_page_url_invalid">A comic page URL is invalid.</string>
     <string name="comic_remote_not_image_publication">Readium did not recognize the remote comic as an image publication.</string>
     <string name="comic_reader_source_unavailable">The comic reader source is unavailable.</string>
+    <string name="comic_spread_pages">Pages %1$d and %2$d</string>
+    <string name="comic_spread_page">Page %1$d</string>
     <string name="comic_no_readable_images">This comic has no readable images.</string>
     <string name="comic_page_open_failed">This comic page could not be opened.</string>
 </resources>

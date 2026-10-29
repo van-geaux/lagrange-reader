@@ -290,9 +290,9 @@ private fun ComicSpreadPage(
     val currentWidths by rememberUpdatedState(widths)
     val density = LocalDensity.current
     val pageDescription = if (spread.isPair) {
-        "Pages ${spread.firstPage + 1} and ${spread.lastPage + 1}"
+        stringResource(R.string.comic_spread_pages, spread.firstPage + 1, spread.lastPage + 1)
     } else {
-        "Page ${spread.firstPage + 1}"
+        stringResource(R.string.comic_spread_page, spread.firstPage + 1)
     }
     LaunchedEffect(isCurrent) { if (!isCurrent) offset = Offset.Zero }
 
