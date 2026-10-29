@@ -33,6 +33,8 @@
     <string name="chrome_reader_settings">阅读器设置</string>
     <string name="chrome_footer_page_of">第 %1$d / %2$d 页</string>
     <string name="chrome_footer_comic_page_of">漫画第 %1$d / %2$d 页</string>
+    <string name="chrome_footer_pages_of">第 %1$d–%2$d / %3$d 页</string>
+    <string name="chrome_footer_comic_pages_of">漫画第 %1$d 和 %2$d / %3$d 页</string>
     <string name="chrome_page_load_failed">第 %1$d 页加载失败</string>
     <string name="chrome_dismiss_options">关闭阅读选项并继续阅读</string>
 

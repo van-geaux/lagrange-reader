@@ -6897,8 +6897,8 @@ private fun ReaderSpreadSettings(
     )
     if (showComicOptions) {
         AppPreferenceSwitchRow(
-            title = "Show cover alone",
-            summary = "Keep the first page by itself so later pages pair like a printed book",
+            title = stringResource(R.string.settings_comic_spread_cover_alone),
+            summary = stringResource(R.string.settings_comic_spread_cover_alone_summary),
             checked = value.comicSpreadCoverAlone,
             enabled = spreadEnabled,
             testTag = "$testTagPrefix-spread-cover-alone",
@@ -6907,8 +6907,8 @@ private fun ReaderSpreadSettings(
             }
         )
         AppPreferenceSwitchRow(
-            title = "Shift page pairs",
-            summary = "Move pairs by one page when two-page artwork is split across spreads",
+            title = stringResource(R.string.settings_comic_spread_shift),
+            summary = stringResource(R.string.settings_comic_spread_shift_summary),
             checked = value.comicSpreadShift,
             enabled = spreadEnabled,
             testTag = "$testTagPrefix-spread-shift",
