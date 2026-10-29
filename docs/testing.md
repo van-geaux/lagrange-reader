@@ -97,6 +97,7 @@ Comics (automated: `ComicSpreadPairingTest`, `ComicSpreadLayoutTest` (JVM); `Com
 - Right-to-left libraries put the earlier page on the right and advance leftwards. `Shift page pairs` moves the pairing by one page; `Show cover alone` off pairs the cover too.
 - Pinch-zoom works on the spread; long-pressing a half exports that page. Tap zones, volume buttons and the page list all move by spread. The footer reads `Pages N–M of T`.
 - Folding reopens on the first page of the spread; unfolding reopens on the spread containing the saved page. Turning off `Two-page spread when unfolded` restores the single-page navigator immediately.
+- Reopening a book keeps the pairs found for a double-page image. The same book on another server profile pairs from scratch.
 
 ### OLED EPUB theme
 
