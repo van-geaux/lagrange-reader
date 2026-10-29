@@ -56,6 +56,7 @@ On Home, Library, Search, Series, Authors, Genre, and Local books, verify:
 - force-closing during a transfer restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;
 - a failed update preserves the previous local copy and exposes `Update local` plus `Delete local`.
+- after a completed Kavita download, refresh while online and confirm the book remains downloaded; disable network access and open it from Home, Browse, and Local books using the retained local copy.
 
 For book thumbnails on Home, Library, Search, Series, Authors, Genre, and Local books, verify that an untouched unread book shows a small yellow folded-corner marker at the top-right of its cover. Books with any reading progress, books marked read, and missing-server books must not show the marker. Confirm the marker does not change thumbnail dimensions, obscure the missing-book overlay, or become a separate click target, and that accessibility semantics identify the book as unread.
 
