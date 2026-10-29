@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
@@ -437,8 +438,8 @@ private fun SpreadPageImage(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
             ) {
-                Text("Page ${page + 1} could not be loaded", color = Color.White)
-                TextButton(onClick = { retryKey++ }) { Text("Retry") }
+                Text(stringResource(R.string.chrome_page_load_failed, page + 1), color = Color.White)
+                TextButton(onClick = { retryKey++ }) { Text(stringResource(R.string.common_retry)) }
             }
         }
     }
