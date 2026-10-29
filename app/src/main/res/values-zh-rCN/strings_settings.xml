@@ -140,6 +140,7 @@
     <string name="settings_offline_cache_update_now">立即下载/更新</string>
     <string name="settings_offline_cache_clear">清除离线缓存</string>
     <string name="settings_offline_cache_scope_required">请选择书库和至少一种缓存类型</string>
+    <string name="settings_offline_cache_unavailable">此提供商不支持离线元数据缓存。</string>
 
     <!-- 书库阅读器配置 -->
     <string name="settings_reading_config_eyebrow">阅读配置</string>

@@ -28,9 +28,11 @@
     <string name="perror_komga_server_url_first">Enter a Komga server URL first.</string>
     <string name="perror_komga_not_downloaded">This Komga book is not downloaded for offline reading.</string>
     <string name="perror_komga_credentials">Komga did not accept this username or password.</string>
+    <string name="perror_komga_credential_persistence">Komga signed in, but the credentials could not be saved on this device.</string>
     <string name="perror_komga_signin_http">Komga sign-in failed with HTTP %1$d.</string>
     <string name="perror_komga_libraries_http">Unable to load Komga libraries (HTTP %1$d).</string>
     <string name="perror_komga_books_http">Unable to load Komga books (HTTP %1$d).</string>
+    <string name="perror_komga_series_http">Unable to load Komga series (HTTP %1$d).</string>
     <string name="perror_komga_home_http">Unable to load Komga Home shelf (HTTP %1$d).</string>
     <string name="perror_komga_progress_url_unavailable">Komga server URL is unavailable for progress synchronization.</string>
     <string name="perror_komga_progress_http">Unable to synchronize Komga reading progress (HTTP %1$d).</string>

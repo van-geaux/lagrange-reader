@@ -5,9 +5,18 @@ import com.vangeaux.lagrange.core.*
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+
+private inline fun <T> komgaRunCatching(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (error: CancellationException) {
+    throw error
+} catch (error: Throwable) {
+    Result.failure(error)
+}
 
 internal fun komgaDownloadedLocalFile(record: DownloadRecord?, fallbackPath: String?): File? =
     listOfNotNull(record?.localPath, fallbackPath)
@@ -87,7 +96,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     private val authModule = KomgaAuthModuleImpl(appContext)
     private val libraryModule = KomgaLibraryModuleImpl(authModule)
     private val catalogModule = KomgaBookCatalogModuleImpl(authModule)
-    private val seriesModule = KomgaSeriesModuleImpl(authModule, libraryModule, catalogModule)
+    private val seriesModule = KomgaSeriesModuleImpl(authModule, catalogModule)
     private val homeModule = KomgaHomeShelfModuleImpl(authModule)
     private val readingStatusModule = KomgaReadingStatusModuleImpl(authModule) { getServerUrl().orEmpty() }
     private val readingProgressModule = KomgaReadingProgressModuleImpl(authModule) { getServerUrl().orEmpty() }
@@ -107,8 +116,8 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     }
 
     override suspend fun clearServer() {
-        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
-        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        val profileId = komgaRunCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = komgaRunCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
         try {
             preferences.edit().remove(SERVER_URL_KEY).remove(SELECTED_LIBRARY_KEY).apply()
             authModule.clearRuntimeSession()
@@ -121,8 +130,8 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     }
 
     override suspend fun clearSession() {
-        val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
-        val automaticPolicy = runCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
+        val profileId = komgaRunCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val automaticPolicy = komgaRunCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
         try {
             // Per-book languages are kept per profile across profile switches; sign-out forgets them.
             EpubBookLanguageStore(appContext).clearProfile()
@@ -147,6 +156,8 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     ) {
         try {
             cleanup()
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             Log.w("KomgaRepository", "Unable to clear unscoped EPUB $name", error)
         }
@@ -164,7 +175,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     private fun pauseAutomaticDownloadsForInactiveProfile(policy: AutomaticDownloadPolicy?) {
         if (policy == null) return
-        runCatching {
+        komgaRunCatching {
             AutomaticDownloadScheduler.pauseForInactiveProfile(appContext, policy)
         }
     }
@@ -197,7 +208,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun loadLibraries(): List<LibrarySummary> {
         val serverUrl = getServerUrl().orEmpty()
-        return runCatching { libraryModule.loadLibraries(serverUrl) }
+        return komgaRunCatching { libraryModule.loadLibraries(serverUrl) }
             .onSuccess { libraries ->
                 browserSnapshotStore.saveLibraries(serverUrl, getSelectedLibraryId(), libraries)
             }
@@ -218,9 +229,12 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun loadBooks(libraryId: String): List<BookSummary> =
         loadBooksPage(libraryId, 0).items
 
+    override suspend fun searchBooks(query: String): List<BookSummary> =
+        withDownloadPaths(getServerUrl().orEmpty(), catalogModule.searchBooks(getServerUrl().orEmpty(), query))
+
     override suspend fun loadBooksPage(libraryId: String, page: Int): LibraryBooksPage {
         val serverUrl = getServerUrl().orEmpty()
-        return runCatching {
+        return komgaRunCatching {
             val result = catalogModule.loadBooks(serverUrl, libraryId, page)
             val books = withDownloadPaths(serverUrl, result.items)
             val cachedBooks = browserSnapshotStore.read(serverUrl)?.booksByLibraryId?.get(libraryId).orEmpty()
@@ -242,7 +256,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun refreshLibraryCatalog(
         libraryId: String,
         firstPage: LibraryBooksPage?
-    ): LibraryBooksPage = runCatching {
+    ): LibraryBooksPage = komgaRunCatching {
         val first = firstPage ?: loadBooksPage(libraryId, 0)
         var page = first.page ?: 0
         val books = first.items.toMutableList()
@@ -297,7 +311,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     ): LibraryBooksPage {
         if (!filter.isActive) return loadBooksPage(libraryId, page)
         val serverUrl = getServerUrl().orEmpty()
-        return runCatching {
+        return komgaRunCatching {
             val allBooks = buildList {
                 var currentPage = 0
                 while (currentPage < 1000) {
@@ -362,13 +376,13 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage {
         val serverUrl = getServerUrl().orEmpty()
-        return runCatching { seriesModule.loadSeriesCatalog(serverUrl, null, filter, page) }
+        return komgaRunCatching { seriesModule.loadSeriesCatalog(serverUrl, null, filter, page) }
             .getOrElse { error -> cachedSeriesCatalog(serverUrl, filter, page) ?: throw error }
     }
 
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? {
         val serverUrl = getServerUrl().orEmpty()
-        return runCatching { seriesModule.loadSeriesDetail(serverUrl, seriesId) }
+        return komgaRunCatching { seriesModule.loadSeriesDetail(serverUrl, seriesId) }
             .getOrElse { cachedSeriesDetail(serverUrl, seriesId) }
     }
 

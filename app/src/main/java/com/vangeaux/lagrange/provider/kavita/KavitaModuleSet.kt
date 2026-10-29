@@ -130,6 +130,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadUserStatistics() = UserStatistics(status = UserStatisticsStatus.UNSUPPORTED)
         },
         cache = object : CacheModule {
+            override val offlineCacheAvailable: Boolean = true
             override suspend fun loadCachedBrowserState(): BrowserState? = repository.loadCachedBrowserState()
             override suspend fun loadStorageUsage(): StorageUsage = repository.loadStorageUsage()
             override suspend fun clearAppCache() = repository.clearAppCache()

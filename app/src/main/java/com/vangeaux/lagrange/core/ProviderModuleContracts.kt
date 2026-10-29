@@ -139,6 +139,7 @@ interface AnnotationModule {
 interface AchievementModule { suspend fun loadAchievements(): AchievementCatalogue }
 interface StatisticsModule { suspend fun loadUserStatistics(): UserStatistics }
 interface CacheModule {
+    val offlineCacheAvailable: Boolean get() = true
     suspend fun loadCachedBrowserState(): BrowserState? = null
     suspend fun loadStorageUsage(): StorageUsage
     suspend fun clearAppCache()

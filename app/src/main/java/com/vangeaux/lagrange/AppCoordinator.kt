@@ -424,6 +424,8 @@ class AppCoordinator internal constructor(
 
     suspend fun loadStorageUsage(): StorageUsage = cacheModule()?.loadStorageUsage() ?: repository.loadStorageUsage()
 
+    fun offlineCacheAvailable(): Boolean = cacheModule()?.offlineCacheAvailable ?: true
+
     suspend fun clearAppCache() {
         cacheModule()?.clearAppCache() ?: repository.clearAppCache()
     }

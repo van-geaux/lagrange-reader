@@ -63,19 +63,19 @@ For every provider-exclusive row, manually verify all of the following:
 | Libraries | Library discovery | Library dropdown | S | S | Komga `/api/v1/libraries`. |
 | Libraries | Selected-library persistence | Library screen/profile | S | V | Verify per-provider persistence manually. |
 | Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`. |
-| Book catalog | Search | Search screen | S | N | Komga search is not implemented in the current adapter. |
+| Book catalog | Search | Search screen | S | V | Komga native `POST /api/v1/books/list` search is implemented; live-server/device validation remains pending. |
 | Book catalog | Book filters and sorting | Library/Search/More screens | S | S | User-confirmed on the issue-202 APK; genre, read state, progress, last-read, date, and existing format projections are applied locally after complete Komga paging. |
-| Home shelves | Currently reading | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | On deck | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Want to read | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Recently added books | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Recently added Series | Home | S | P | Komga Series exists, but Home-specific recency is not implemented. |
-| Home shelves | Recently updated Series | Home | S | P | Verify whether a provider derivation is added. |
-| Home shelves | Recently read | Home | S | U | Komga progress/status is unsupported in the current adapter. |
+| Home shelves | Currently reading | Home | S | S | Komga provider shelf request is implemented and previously checklist-validated. |
+| Home shelves | On deck | Home | S | S | Komga `/api/v1/books/ondeck` shelf request is implemented and previously checklist-validated. |
+| Home shelves | Want to read | Home | S | U | Komga does not expose the BookOrbit Want to read capability. |
+| Home shelves | Recently added books | Home | S | S | Komga `/api/v1/books/latest` shelf request is implemented and previously checklist-validated. |
+| Home shelves | Recently added Series | Home | S | S | Komga `/api/v1/series/new` is requested with a bounded page. |
+| Home shelves | Recently updated Series | Home | S | V | Komga `/api/v1/series/updated` is implemented with a bounded page; live-server/device validation remains pending. |
+| Home shelves | Recently read | Home | S | S | Komga read-status shelf request is implemented and previously checklist-validated. |
 | Home shelves | Local Books shelf | Home | S | P | Local books are shared device state, but provider attribution must remain isolated. |
 | Home shelves | More/See all destination | Home section action | S | P | Validate only for sections exposed by the provider. |
-| Aggregation | Aggregate books across libraries | Home/Series/catalog | S | S | Komga Series aggregates all libraries. |
-| Aggregation | Post-aggregation library filter | Series screen | S | S | Komga applies library filtering after aggregate loading. |
+| Aggregation | Aggregate series across libraries | Home/Series/catalog | S | V | Komga native series list returns server-aggregated series summaries; live multi-library validation remains pending. |
+| Aggregation | Post-query library filter | Series screen | S | S | Komga series-list conditions include the selected library before shared local filtering. |
 | Series | Series catalog | Series screen | S | S | Komga groups by series identity. |
 | Series | Series detail/member ordering | Series detail | S | S | Komga uses series number/order where available. |
 | Series | Completion/read-progress filters | Series filter | S | S | User-confirmed on the issue-202 APK; genre/query/completion and read-progress/date sorting are applied to the aggregated series projection. |
@@ -101,11 +101,11 @@ For every provider-exclusive row, manually verify all of the following:
 | Reader lifecycle | Active-reader save/clear persistence | Reader open/close/server change | X | X | Shared `ReaderLifecycleModule`; validate once plus cross-provider isolation. |
 | Reader feature | EPUB 3 read-along narration | EPUB reader/player | S | V | Reader feature is independent; provider file/overlay support needs validation. |
 | Reader feature | EPUB text-to-speech | EPUB reader/player | X | X | Local feature module, not a server-provider capability. |
-| Progress | Read position hydration | Reader open | S | U | Komga progress synchronization is unsupported. |
-| Progress | Read position upload | Reader lifecycle | S | U | Komga adapter intentionally bypasses progress sync. |
+| Progress | Read position hydration | Reader open | S | S | Komga read-progress and Readium progression endpoints are implemented and previously checklist-validated. |
+| Progress | Read position upload | Reader lifecycle | S | S | Komga `PATCH /read-progress` and `PUT /progression` paths are implemented and previously checklist-validated. |
 | Progress | Audiobook position sync | Player lifecycle | S | U | Requires provider progress contract. |
-| Status | Read/unread mutations | Mark as/context menu | S | U | Komga status module is not implemented. |
-| Status | In-progress/completed state | Cards/filters | S | U | Komga status module is not implemented. |
+| Status | Read/unread mutations | Mark as/context menu | S | S | Komga read-progress status module is implemented and previously checklist-validated. |
+| Status | In-progress/completed state | Cards/filters | S | S | Komga read-progress mapping exposes read/in-progress state and completion thresholds. |
 | Sessions | Reading sessions/attempts | History/detail | S | U | Komga server-session synchronization unsupported. |
 | Downloads | Authenticated file download | Download action | S | S | Komga provider-specific download module. |
 | Downloads | Multipart audiobook download | Download/file selector | S | P | Verify all asset/file ordering and identity. |
@@ -117,7 +117,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Annotations | Annotation load/write/delete | Reader annotations | S | U | Explicitly unsupported by Komga adapter. |
 | Achievements | Achievement loading | Achievements | S | U | Explicitly unsupported by Komga adapter. |
 | Statistics | Statistics loading | Statistics | S | U | Explicitly unsupported by Komga adapter. |
-| Cache | Catalog/detail cache | Offline/cache screens | S | P | Verify provider/profile cache keys and invalidation. |
+| Cache | Catalog/detail cache | Offline/cache screens | S | P | Local catalog snapshots remain available as fallback; Komga offline metadata-cache lifecycle controls are explicitly unavailable. |
 | Cache | Background refresh | Cache settings/worker | S | U | Provider-specific cache refresh is not implemented for Komga. |
 | Isolation | Provider/profile cache scope | Server change | S | P | Must be manually validated for every target server. |
 | Isolation | Download identity scope | Local Books/server change | S | P | Local files may be shared, identity must remain retained. |

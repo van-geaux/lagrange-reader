@@ -140,6 +140,7 @@
     <string name="settings_offline_cache_update_now">Download/update now</string>
     <string name="settings_offline_cache_clear">Clear offline cache</string>
     <string name="settings_offline_cache_scope_required">Select a library and at least one cache type</string>
+    <string name="settings_offline_cache_unavailable">Offline metadata cache is not available for this provider.</string>
 
     <!-- Library reader profile -->
     <string name="settings_reading_config_eyebrow">Reading configuration</string>

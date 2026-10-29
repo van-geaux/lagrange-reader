@@ -88,7 +88,7 @@ Validate each visible Home section. Confirm the section label, loading state, em
 - [x] Recently added books
 - [x] Recently released books
 - [x] Recently added series
-- [!] Recently updated series (Even if not available in Komga, it should be able to calculate)
+- [ ] Recently updated series (Komga now requests `/api/v1/series/updated?page=0&size=8`; device/server validation remains pending)
 - [x] Recently read books
 - [x] Local books
 - [ ] Any additional provider-specific Home section: `[name]`
@@ -252,7 +252,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Preview does not write ordinary book progress or change the saved resume position.
 - [x] Changing server/profile does not upload progress to the wrong server or expose it in another profile.
 - [ ] Sign-out, server removal, and app restart preserve or clear local progress according to the documented retention contract.
-- [ ] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update.
+- [-] Unsupported progress synchronization is clearly marked unavailable and does not appear as a successful update. (Komga exposes read-progress and Readium progression endpoints; this blocked/unsupported checklist item is not applicable to the implemented book-progress path.)
 - [x] The target server's web UI/API reflects the validated Lagrange progress after synchronization.
 - [x] Lagrange reflects a progress change made directly on the target server after refresh/reopen. (After the server position was reset to approximately 55%, reopening the book reflected approximately 54% in Lagrange.)
 

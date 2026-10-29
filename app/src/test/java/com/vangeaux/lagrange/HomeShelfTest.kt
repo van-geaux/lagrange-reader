@@ -13,6 +13,12 @@ import com.vangeaux.lagrange.provider.komga.komgaMergeDownloadedBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesCatalogFromBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesDetailFromBooks
 import com.vangeaux.lagrange.provider.komga.komgaBookProjection
+import com.vangeaux.lagrange.provider.komga.komgaBookSearchPayload
+import com.vangeaux.lagrange.provider.komga.komgaBookSearchPath
+import com.vangeaux.lagrange.provider.komga.komgaSeriesSearchPayload
+import com.vangeaux.lagrange.provider.komga.komgaSeriesSearchPath
+import com.vangeaux.lagrange.provider.komga.komgaHttpClientFollowsRedirects
+import com.vangeaux.lagrange.provider.komga.komgaHomeSeriesPath
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -22,6 +28,46 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HomeShelfTest {
+    @Test
+    fun `komga book search uses the native list endpoint and payload`() {
+        assertEquals(
+            "/api/v1/books/list?page=0&size=100&sort=metadata.title,asc",
+            komgaBookSearchPath()
+        )
+        assertEquals(
+            "The Expanse",
+            JSONObject(komgaBookSearchPayload("  The Expanse  ")).getString("fullTextSearch")
+        )
+    }
+
+    @Test
+    fun `komga series catalog uses the native series list endpoint`() {
+        val payload = JSONObject(
+            komgaSeriesSearchPayload(
+                SeriesCatalogFilter(query = "Batman", genre = "Action"),
+                libraryId = "library-1"
+            )
+        )
+        assertEquals("/api/v1/series/list?unpaged=true&sort=metadata.title,asc", komgaSeriesSearchPath())
+        assertEquals("Batman", payload.getString("fullTextSearch"))
+        assertEquals(
+            "library-1",
+            payload.getJSONObject("condition").getJSONArray("allOf")
+                .getJSONObject(0).getJSONObject("libraryId").getString("value")
+        )
+    }
+
+    @Test
+    fun `komga server probing does not follow redirects`() {
+        assertFalse(komgaHttpClientFollowsRedirects())
+    }
+
+    @Test
+    fun `komga Home uses bounded added and updated series endpoints`() {
+        assertEquals("/api/v1/series/new?page=0&size=8", komgaHomeSeriesPath(updated = false))
+        assertEquals("/api/v1/series/updated?page=0&size=8", komgaHomeSeriesPath(updated = true))
+    }
+
     @Test
     fun `generated On deck requires the synced provider setting`() {
         val books = listOf(

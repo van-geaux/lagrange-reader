@@ -404,6 +404,7 @@ private fun BookOrbitDestination(
             onCheckForUpdates = onCheckForUpdates,
             storageUsageLoader = coordinator::loadStorageUsage,
             onClearCache = coordinator::clearAppCache,
+            offlineCacheAvailable = coordinator.offlineCacheAvailable(),
             offlineCacheStatusLoader = coordinator::loadOfflineCacheStatus,
             onStartOfflineCacheUpdate = coordinator::startOfflineCacheUpdate,
             onCancelOfflineCacheUpdate = coordinator::cancelOfflineCacheUpdate,

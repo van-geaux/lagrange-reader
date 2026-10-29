@@ -108,6 +108,7 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
         achievements = object : AchievementModule { override suspend fun loadAchievements() = source.loadAchievements() },
         statistics = object : StatisticsModule { override suspend fun loadUserStatistics() = source.loadUserStatistics() },
         cache = object : CacheModule {
+            override val offlineCacheAvailable: Boolean = true
             override suspend fun loadStorageUsage() = source.loadStorageUsage()
             override suspend fun clearAppCache() = source.clearAppCache()
             override suspend fun loadOfflineCacheStatus() = source.loadOfflineCacheStatus()
