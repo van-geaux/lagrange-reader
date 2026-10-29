@@ -18,10 +18,10 @@ internal class KavitaSeriesCatalogModuleImpl(
         if (filter.homeSection == HomeSection.RECENTLY_ADDED_SERIES ||
             filter.homeSection == HomeSection.RECENTLY_UPDATED_SERIES
         ) {
-            val page = catalog.loadHomeSeriesPage(filter.homeSection!!, filter.libraryId, page)
-            if (!filter.includeCounts) return page
+            val homePage = catalog.loadHomeSeriesPage(filter.homeSection, filter.libraryId, page)
+            if (!filter.includeCounts) return homePage
             val enriched = coroutineScope {
-                page.items.map { summary ->
+                homePage.items.map { summary ->
                     async {
                         runCatching { catalog.loadSelectedSeriesBooks(summary.id) }
                             .getOrElse { emptyList() }
@@ -39,22 +39,24 @@ internal class KavitaSeriesCatalogModuleImpl(
                     }
                 }.awaitAll()
             }
-            return page.copy(items = enriched)
+            return homePage.copy(items = enriched)
         }
         val libraryId = filter.libraryId
+        val serverUrl = catalog.serverUrl()
+            ?: throw UserFacingException("Enter a valid Kavita server URL.")
         val (result, jumpIndex) = coroutineScope {
             val pageRequest = async {
                 runCatching { catalog.loadSeriesSummaryPage(libraryId, page) }
-                    .onSuccess { snapshotStore.write(libraryId, page, it) }
-                    .getOrElse { snapshotStore.read(libraryId, page) ?: throw it }
+                    .onSuccess { snapshotStore.write(serverUrl, libraryId, page, it) }
+                    .getOrElse { snapshotStore.read(serverUrl, libraryId, page) ?: throw it }
                     .let { result ->
-                        if (result.items.isEmpty()) snapshotStore.read(libraryId, page) ?: result else result
+                        if (result.items.isEmpty()) snapshotStore.read(serverUrl, libraryId, page) ?: result else result
                     }
             }
             val jumpRequest = if (page == 0 && filter.includeCounts) {
                 async {
                     runCatching { catalog.loadSeriesSummaryPage(libraryId, -1) }
-                        .onSuccess { snapshotStore.write(libraryId, -1, it) }
+                        .onSuccess { snapshotStore.write(serverUrl, libraryId, -1, it) }
                         .getOrNull()
                 }
             } else {

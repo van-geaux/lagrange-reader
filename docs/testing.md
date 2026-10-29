@@ -117,7 +117,7 @@ On Book Detail, Series, Authors, Local books, Statistics, and Achievements:
 - Local books refresh does not interrupt active downloads or destructive actions;
 - automatic/background synchronization remains silent.
 
-For cached catalogs, confirm complete cached content appears before network refresh finishes, additions/deletions/progress changes reconcile after refresh, and an interrupted refresh retains the last complete usable snapshot. For orientation/process recreation, confirm one reader navigator remains active, the exact locator/page is restored, Preview remains isolated, and explicit Close is distinguished from recreation.
+For cached catalogs, confirm complete cached content appears before network refresh finishes, additions/deletions/progress changes reconcile after refresh, and an interrupted refresh retains the last complete usable snapshot. For Kavita cache restart coverage, while online open Home, enter Browse and Series, open several books, force-close the app, disable network access, and reopen it. Confirm the cached Home shelves, visited book cards, and visited series/catalog pages remain available, while uncached pages use an explicit unavailable or incomplete state rather than an empty successful result. Repeat after switching profiles or servers and confirm their snapshots do not mix. For orientation/process recreation, confirm one reader navigator remains active, the exact locator/page is restored, Preview remains isolated, and explicit Close is distinguished from recreation.
 
 ### Authentication and account isolation
 

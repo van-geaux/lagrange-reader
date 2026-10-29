@@ -2,18 +2,28 @@ package com.vangeaux.lagrange.provider.kavita
 
 import android.content.Context
 import com.vangeaux.lagrange.SeriesSummary
+import com.vangeaux.lagrange.HomeSection
+import com.vangeaux.lagrange.ServerProfileStore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Base64
 
 internal class KavitaSeriesCatalogSnapshotStore(context: Context) {
-    private val file = File(context.applicationContext.filesDir, "kavita_series_catalog_snapshot.json")
+    private val appContext = context.applicationContext
 
     @Synchronized
-    fun read(libraryId: String?, page: Int): KavitaSeriesSummaryPage? {
+    fun read(
+        serverUrl: String,
+        libraryId: String?,
+        page: Int,
+        section: HomeSection? = null
+    ): KavitaSeriesSummaryPage? {
+        val file = snapshotFile()
         if (!file.isFile) return null
         val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return null
-        val key = key(libraryId, page)
+        if (root.optString("serverUrl") != serverUrl) return null
+        val key = key(section, libraryId, page)
         val value = root.optJSONObject("pages")?.optJSONObject(key) ?: return null
         val items = value.optJSONArray("items").toSeriesSummaries()
         return KavitaSeriesSummaryPage(
@@ -24,19 +34,45 @@ internal class KavitaSeriesCatalogSnapshotStore(context: Context) {
     }
 
     @Synchronized
-    fun write(libraryId: String?, page: Int, value: KavitaSeriesSummaryPage) {
+    fun write(
+        serverUrl: String,
+        libraryId: String?,
+        page: Int,
+        value: KavitaSeriesSummaryPage,
+        section: HomeSection? = null
+    ) {
+        val file = snapshotFile()
         val root = runCatching { if (file.isFile) JSONObject(file.readText()) else JSONObject() }
             .getOrDefault(JSONObject())
+        root.put("serverUrl", serverUrl)
         val pages = root.optJSONObject("pages") ?: JSONObject().also { root.put("pages", it) }
-        pages.put(key(libraryId, page), JSONObject().apply {
+        pages.put(key(section, libraryId, page), JSONObject().apply {
             put("total", value.total ?: JSONObject.NULL)
             put("size", value.pageSize)
             put("items", JSONArray().apply { value.items.forEach { put(it.toJson()) } })
         })
+        file.parentFile?.mkdirs()
         file.writeText(root.toString())
     }
 
-    private fun key(libraryId: String?, page: Int) = "${libraryId ?: "all"}:$page"
+    @Synchronized
+    fun clear() {
+        snapshotFile().takeIf(File::exists)?.delete()
+    }
+
+    private fun snapshotFile(): File {
+        val profileId = ServerProfileStore(appContext).activeId()
+        return if (profileId == null || !profileId.startsWith("profile-")) {
+            File(appContext.filesDir, "kavita_series_catalog_snapshot.json")
+        } else {
+            val safeId = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(profileId.toByteArray(Charsets.UTF_8))
+            File(appContext.filesDir, "kavita_series_catalog_snapshot_$safeId.json")
+        }
+    }
+
+    private fun key(section: HomeSection?, libraryId: String?, page: Int) =
+        "${section?.name ?: "catalog"}:${libraryId ?: "all"}:$page"
 
     private fun SeriesSummary.toJson() = JSONObject().apply {
         put("id", id); put("name", name); put("bookCount", bookCount); put("readCount", readCount)

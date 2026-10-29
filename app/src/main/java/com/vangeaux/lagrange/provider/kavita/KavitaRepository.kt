@@ -33,18 +33,34 @@ internal suspend fun runBestEffortKavitaCleanup(
     }
 }
 
+private fun HomeShelfData.homeBooks(): List<BookSummary> =
+    booksBySection.values.flatten()
+        .plus(seriesBySection.values.flatten())
+        .distinctBy { it.libraryId to (it.fileId ?: it.id) }
+
+internal fun mergeKavitaCachedBooks(
+    snapshotBooksByLibraryId: Map<String, List<BookSummary>>,
+    homeShelves: HomeShelfData?,
+    localBooks: List<BookSummary>
+): List<BookSummary> = snapshotBooksByLibraryId.values.flatten()
+    .plus(homeShelves?.homeBooks().orEmpty())
+    .plus(localBooks)
+    .distinctBy { it.libraryId to (it.fileId ?: it.id) }
+
 internal class KavitaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("kavita_connection", Context.MODE_PRIVATE)
     private val authModule = KavitaAuthModuleImpl(appContext)
     private val libraryModule = KavitaLibraryModuleImpl(authModule)
     private val homeModule = KavitaHomeShelfModuleImpl(authModule)
+    private val homeSnapshotStore = KavitaHomeSnapshotStore(appContext)
+    private val seriesSnapshotStore = KavitaSeriesCatalogSnapshotStore(appContext)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val seriesModule = KavitaSeriesCatalogModuleImpl(
         catalogModule,
         detailModule,
-        KavitaSeriesCatalogSnapshotStore(appContext)
+        seriesSnapshotStore
     )
     private val coverModule = KavitaCoverModuleImpl(authModule)
     private val readerModule = KavitaReaderModuleImpl(authModule, appContext)
@@ -127,6 +143,8 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
                 check(editor.commit()) { "Unable to clear Kavita connection selection." }
             },
             KavitaCleanupAction("browser snapshot") { browserSnapshotStore.clear() },
+            KavitaCleanupAction("home snapshot") { homeSnapshotStore.clear() },
+            KavitaCleanupAction("series catalog snapshot") { seriesSnapshotStore.clear() },
             KavitaCleanupAction("reader positions") { EpubReaderPositionStore(appContext).clear() },
             KavitaCleanupAction("locators") { ReadiumEpubLocatorStore(appContext).clear() },
             KavitaCleanupAction("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
@@ -209,21 +227,27 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         catalogModule.refreshLibraryCatalog(libraryId, firstPage)
     override suspend fun searchBooks(query: String) = catalogModule.searchBooks(query)
     override suspend fun loadCachedHomeBooks(): List<BookSummary> =
-        browserSnapshotStore.read(getServerUrl().orEmpty())?.booksByLibraryId?.values.orEmpty()
-            .flatten()
-            .plus(loadLocalBooks())
-            .distinctBy { it.libraryId to (it.fileId ?: it.id) }
-    override suspend fun loadHomeShelves(): HomeShelfData = homeModule.loadHomeShelves()
+        mergeKavitaCachedBooks(
+            browserSnapshotStore.read(getServerUrl().orEmpty())?.booksByLibraryId.orEmpty(),
+            homeSnapshotStore.read(getServerUrl().orEmpty()),
+            loadLocalBooks()
+        )
+    override suspend fun loadHomeShelves(): HomeShelfData {
+        val shelves = homeModule.loadHomeShelves()
+        homeSnapshotStore.write(getServerUrl().orEmpty(), shelves)
+        cacheBooks(shelves.homeBooks())
+        return shelves
+    }
     override suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
         seriesModule.loadSeriesCatalog(filter, page)
     override suspend fun loadSeriesDetail(seriesId: String): SeriesDetailInfo? =
-        seriesModule.loadSeriesDetail(seriesId)
+        seriesModule.loadSeriesDetail(seriesId)?.also { cacheBooks(it.books) }
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo {
         val detail = detailModule.loadBookDetail(book)
         val localAccess = LocalDownloadAccess(appContext)
         val localRecord = downloadStore.find(getServerUrl().orEmpty(), book.fileId ?: book.id)
             ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && localAccess.exists(it.localPath) }
-        return localRecord?.let { record ->
+        val resolved = localRecord?.let { record ->
             detail.copy(
                 book = detail.book.copy(
                     localPath = record.localPath,
@@ -231,6 +255,8 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
                 )
             )
         } ?: detail
+        cacheBooks(listOf(resolved.book))
+        return resolved
     }
     override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = detailModule.loadCachedBookDetail(book)
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
@@ -266,31 +292,54 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = downloadModule.deleteLocalCopies(book)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? {
         val serverUrl = getServerUrl().orEmpty()
-        val snapshot = browserSnapshotStore.read(serverUrl) ?: return null
-        val selected = libraryId ?: snapshot.selectedLibraryId
-        val books = snapshot.booksByLibraryId[selected].orEmpty()
+        val snapshot = browserSnapshotStore.read(serverUrl)
+        val cachedShelves = homeSnapshotStore.read(serverUrl)
+        val localBooks = loadLocalBooks()
+        if (snapshot == null && cachedShelves == null && localBooks.isEmpty()) return null
+        val selected = libraryId ?: getSelectedLibraryId() ?: snapshot?.selectedLibraryId
+        val allBooks = mergeKavitaCachedBooks(
+            snapshot?.booksByLibraryId.orEmpty(),
+            cachedShelves,
+            localBooks
+        )
+        val books = snapshot?.booksByLibraryId?.get(selected).orEmpty()
+            .ifEmpty { allBooks.filter { selected == null || it.libraryId == selected } }
+        val homeShelves = cachedShelves ?: HomeShelfData(
+            isServerProvided = true,
+            hiddenSections = setOf(
+                HomeSection.WANT_TO_READ,
+                HomeSection.RECENTLY_ADDED_BOOKS,
+                HomeSection.RECENTLY_RELEASED_BOOKS,
+                HomeSection.RECENTLY_READ
+            ),
+            deferInitialCatalogLoad = true
+        )
         return BrowserState(
             serverUrl = serverUrl,
-            libraries = snapshot.libraries,
+            libraries = snapshot?.libraries.orEmpty(),
             selectedLibraryId = selected,
             books = books,
-            homeBooks = snapshot.booksByLibraryId.values.flatten().plus(loadLocalBooks())
-                .distinctBy { it.libraryId to (it.fileId ?: it.id) },
-            homeShelves = HomeShelfData(
-                isServerProvided = true,
-                hiddenSections = setOf(
-                    HomeSection.WANT_TO_READ,
-                    HomeSection.RECENTLY_ADDED_BOOKS,
-                    HomeSection.RECENTLY_RELEASED_BOOKS,
-                    HomeSection.RECENTLY_READ
-                ),
-                deferInitialCatalogLoad = true
-            ),
+            homeBooks = allBooks,
+            homeShelves = homeShelves,
             booksTotal = books.size,
             booksPageSize = books.size,
-            isCatalogComplete = true,
+            isCatalogComplete = snapshot?.booksByLibraryId?.containsKey(selected) == true,
             catalogRefreshedAtMillis = System.currentTimeMillis()
         )
+    }
+
+    private suspend fun cacheBooks(books: List<BookSummary>) {
+        val serverUrl = getServerUrl().orEmpty()
+        books.filter { it.libraryId.isNotBlank() }
+            .groupBy(BookSummary::libraryId)
+            .forEach { (libraryId, libraryBooks) ->
+                browserSnapshotStore.appendBooks(
+                    serverUrl,
+                    getSelectedLibraryId(),
+                    libraryId,
+                    libraryBooks
+                )
+            }
     }
 
     override suspend fun loadLocalBooks(): List<BookSummary> {

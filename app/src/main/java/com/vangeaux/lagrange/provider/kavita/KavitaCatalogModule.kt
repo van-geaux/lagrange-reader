@@ -143,6 +143,8 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
     private val client = OkHttpClient()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    internal suspend fun serverUrl(): String? = auth.serverUrl()
+
     override suspend fun loadBooks(libraryId: String): List<BookSummary> =
         loadAllBooks(libraryId)
 
