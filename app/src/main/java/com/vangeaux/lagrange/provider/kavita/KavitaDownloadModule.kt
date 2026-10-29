@@ -32,7 +32,7 @@ internal class KavitaDownloadModuleImpl(
         book: BookSummary,
         storageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File =
+    ): DownloadedBookFile =
         withContext(Dispatchers.IO) {
             val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
             val fileId = book.fileId ?: chapterId(book)
@@ -51,6 +51,50 @@ internal class KavitaDownloadModuleImpl(
             val attemptOrigin = scheduledAttempt?.origin ?: DownloadOrigin.MANUAL
             val storagePolicy = AutomaticDownloadPolicyStore(appContext)
                 .read(profileId, base, capturedStorageScopeId)
+            if (DownloadStorageSelectionStore(appContext).read().usesPortableFolder) {
+                return@withContext downloadBookToPortableStorage(
+                    context = appContext,
+                    downloadStore = downloadStore,
+                    serverUrl = base,
+                    profileId = profileId,
+                    storageScopeId = capturedStorageScopeId,
+                    book = book,
+                    scheduledAttempt = scheduledAttempt,
+                    existingRecord = existing,
+                    storagePolicy = storagePolicy,
+                    requireCapturedAccountScope = ::requireCapturedAccountScope,
+                    onProgress = onProgress
+                ) { consume ->
+                    requireCapturedAccountScope()
+                    val request = Request.Builder()
+                        .url(kavitaDownloadEndpoint(base, chapterId(book)))
+                        .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+                        .get()
+                        .build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.code == 401) throw AuthenticationRequiredException()
+                        if (!response.isSuccessful) {
+                            throw HttpRequestException(response.code, "download the Kavita chapter")
+                        }
+                        val body = response.body
+                            ?: throw UserFacingException("Kavita returned an empty chapter file.")
+                        body.byteStream().use { input ->
+                            consume(input, body.contentLength().takeIf { it > 0L })
+                        }
+                    }
+                }
+            }
+            reusableDownloadedBook(appContext, book, existing)?.let { reusable ->
+                downloadStore.removeAttemptIfOwned(
+                    base,
+                    fileId,
+                    scheduledAttempt?.requestId.orEmpty(),
+                    storageScopeId = capturedStorageScopeId
+                )
+                requireCapturedAccountScope()
+                onProgress(1f)
+                return@withContext reusable
+            }
             val target = downloadStore.ownedTargetOrIsolated(
                 serverUrl = base,
                 fileId = fileId,
@@ -60,10 +104,8 @@ internal class KavitaDownloadModuleImpl(
                 recordedPath = existing?.localPath,
                 storageScopeId = capturedStorageScopeId
             )
-            val hadUsableExisting = existing != null && downloadedFilePassesIntegrity(book, target)
-            val canReuseExisting = existing != null &&
-                !downloadUpdateAvailable(book, existing) &&
-                hadUsableExisting
+            val hadUsableExisting = existing != null &&
+                downloadedLocatorPassesIntegrity(appContext, book, existing.localPath)
             if (scheduledAttempt == null) {
                 downloadStore.saveAttemptIfAbsent(
                     DownloadAttempt(
@@ -77,7 +119,7 @@ internal class KavitaDownloadModuleImpl(
                         title = book.title,
                         filename = book.filename,
                         targetPath = target.absolutePath,
-                        existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
+                        existingLocalPath = existing?.localPath.takeIf { hadUsableExisting },
                         mediaKind = book.mediaKind,
                         mimeType = book.format,
                         sourceUpdatedAtMillis = book.updatedAtMillis,
@@ -86,18 +128,6 @@ internal class KavitaDownloadModuleImpl(
                     )
                 )
             }
-            if (canReuseExisting) {
-                downloadStore.removeAttemptIfOwned(
-                    base,
-                    fileId,
-                    scheduledAttempt?.requestId.orEmpty(),
-                    storageScopeId = capturedStorageScopeId
-                )
-                requireCapturedAccountScope()
-                onProgress(1f)
-                return@withContext target
-            }
-
             target.parentFile?.mkdirs()
             val stagingId = scheduledAttempt?.requestId?.takeIf(String::isNotBlank)
                 ?: UUID.randomUUID().toString()
@@ -152,7 +182,10 @@ internal class KavitaDownloadModuleImpl(
                             profileId = profileId,
                             policy = storagePolicy,
                             declaredBytes = total,
-                            existingFinalBytes = target.length().coerceAtLeast(0L),
+                            existingFinalBytes = existing
+                                ?.let { LocalDownloadAccess(appContext).length(it.localPath) }
+                                ?.coerceAtLeast(0L)
+                                ?: 0L,
                             protectedFileIds = setOf(fileId),
                             allowRemoval = true,
                             reservationId = storageReservationId,
@@ -261,6 +294,9 @@ internal class KavitaDownloadModuleImpl(
                         ?: DownloadOrigin.MANUAL,
                     status = DownloadRecordStatus.COMPLETE
                 )
+                existing
+                    ?.takeUnless { localDownloadLocatorsMatch(it.localPath, target.absolutePath) }
+                    ?.let { PortableDownloadCleanup.defer(appContext, it) }
                 requireCapturedAccountScope()
                 val committed = try {
                     verifyAndCommitDownloadWhenReaderInactive(
@@ -287,7 +323,8 @@ internal class KavitaDownloadModuleImpl(
                 }
                 if (!retainStagedForRetry && temporary.exists()) temporary.delete()
             }
-            target
+            PortableDownloadCleanup.schedule(appContext)
+            DownloadedBookFile(target.absolutePath, target)
         }
 
     override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = emptyList()

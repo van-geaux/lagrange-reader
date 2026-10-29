@@ -24,16 +24,19 @@ private val activeReaderStoreProcessMutex = Mutex()
  */
 class ActiveReaderStore private constructor(
     private val file: File,
-    @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean
+    @Suppress("UNUSED_PARAMETER") private val directFileConstructor: Boolean,
+    private val appContext: Context?
 ) {
     constructor(context: Context) : this(
         file = File(context.filesDir, "active_reader.json"),
-        directFileConstructor = true
+        directFileConstructor = true,
+        appContext = context.applicationContext
     )
 
     internal constructor(filesDir: File) : this(
         file = File(filesDir, "active_reader.json"),
-        directFileConstructor = true
+        directFileConstructor = true,
+        appContext = null
     )
 
     suspend fun save(
@@ -132,9 +135,9 @@ class ActiveReaderStore private constructor(
 
     /** Legacy quarantine mutation only. */
     suspend fun clearIfMatches(serverUrl: String, bookId: String) = localCopyDeletionGuard.withLock {
-        activeReaderStoreProcessMutex.withLock {
-            val root = readRootUnlocked() ?: return@withLock
-            if (root.has("sessions")) return@withLock
+        activeReaderStoreProcessMutex.withLock processLock@{
+            val root = readRootUnlocked() ?: return@processLock
+            if (root.has("sessions")) return@processLock
             if (
                 serverUrlsMatch(root.optString("serverUrl"), serverUrl) &&
                 root.optJSONObject("book")?.optString("id") == bookId
@@ -234,7 +237,7 @@ class ActiveReaderStore private constructor(
         if (book.mediaKind == MediaKind.EPUB) {
             withContext(Dispatchers.IO) {
                 book.localPath
-                    ?.let(::File)
+                    ?.let { readableActiveEpubFile(it, book) }
                     ?.takeIf(File::isFile)
                     ?.let(::verifiedEpubPublicationFingerprint)
                     .orEmpty()
@@ -249,7 +252,7 @@ class ActiveReaderStore private constructor(
         if (session.book.mediaKind != MediaKind.EPUB) return session
         val currentFingerprint = withContext(Dispatchers.IO) {
             session.book.localPath
-                ?.let(::File)
+                ?.let { readableActiveEpubFile(it, session.book) }
                 ?.takeIf(File::isFile)
                 ?.let(::verifiedEpubPublicationFingerprint)
         }
@@ -269,6 +272,21 @@ class ActiveReaderStore private constructor(
             )
         )
     }
+
+    private fun readableActiveEpubFile(locator: String, book: BookSummary): File? =
+        if (locator.isContentLocator()) {
+            appContext?.let { context ->
+                runCatching {
+                    LocalDownloadAccess(context).materialize(
+                        locator = locator,
+                        fileId = book.fileId ?: book.id,
+                        formatHint = book.filename ?: book.format
+                    )
+                }.getOrNull()
+            }
+        } else {
+            File(locator)
+        }
 
     private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
         libraryId = optString("libraryId"),

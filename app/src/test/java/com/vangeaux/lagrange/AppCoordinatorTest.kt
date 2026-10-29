@@ -3549,7 +3549,7 @@ private class FakeBookOrbitDataSource(
         book: BookSummary,
         storageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File {
+    ): DownloadedBookFile {
         downloadedBooks += book
         concurrentDownloads += 1
         maxConcurrentDownloads = maxOf(maxConcurrentDownloads, concurrentDownloads)
@@ -3558,7 +3558,7 @@ private class FakeBookOrbitDataSource(
             downloadGate?.await()
             downloadErrorsByFileId[book.fileId]?.let { throw it }
             downloadError?.let { throw it }
-            File("downloaded.bin")
+            File("downloaded.bin").let { DownloadedBookFile(it.absolutePath, it) }
         } finally {
             concurrentDownloads -= 1
         }

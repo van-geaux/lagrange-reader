@@ -93,7 +93,7 @@ interface DownloadModule {
         book: BookSummary,
         storageScopeId: String? = null,
         onProgress: (Float?) -> Unit = {}
-    ): File
+    ): DownloadedBookFile
     suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary>
     suspend fun deleteLocalCopy(book: BookSummary)
     suspend fun deleteLocalCopies(book: BookSummary): Set<String>

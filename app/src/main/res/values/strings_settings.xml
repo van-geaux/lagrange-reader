@@ -8,16 +8,6 @@
     <string name="settings_choose_category_summary">Choose a category to change application settings.</string>
 
     <!-- Settings categories -->
-    <string name="settings_category_appearance">Appearance</string>
-    <string name="settings_category_appearance_summary">Theme, motion, and browsing presentation</string>
-    <string name="settings_category_general">General</string>
-    <string name="settings_category_general_summary">Opening behavior, orientation, and general preferences</string>
-    <string name="settings_category_library">Library</string>
-    <string name="settings_category_library_summary">Browsing and library presentation</string>
-    <string name="settings_category_downloads">Downloads &amp; Offline</string>
-    <string name="settings_category_downloads_summary">Downloads, storage, and offline library data</string>
-    <string name="settings_category_network">Network &amp; Sync</string>
-    <string name="settings_category_network_summary">Background network and playback behavior</string>
 
     <!-- General preferences -->
     <string name="settings_lock_orientation">Lock orientation</string>

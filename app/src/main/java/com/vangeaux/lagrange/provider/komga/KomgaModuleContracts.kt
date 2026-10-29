@@ -40,5 +40,5 @@ interface KomgaDownloadModule {
         book: BookSummary,
         storageScopeId: String? = null,
         onProgress: (Float?) -> Unit
-    ): File
+    ): DownloadedBookFile
 }

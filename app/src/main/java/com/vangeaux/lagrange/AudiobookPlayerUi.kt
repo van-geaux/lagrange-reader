@@ -50,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -219,11 +220,21 @@ internal fun ReadiumCompactAudioPlayer(
     LaunchedEffect(positionMs, isSeeking) {
         if (!isSeeking) seekPositionMs = positionMs.toFloat()
     }
+    val context = LocalContext.current
+    val scaleBySpeed = remember(context, playback.speed, positionMs) {
+        AppPreferencesStore(context).read().scaleProgressByPlaybackSpeed
+    }
     val chapters = current.book.audioChapters
     val activeChapterIndex = chapters.indexOfLast { it.startMs <= positionMs }.coerceAtLeast(0)
+    val displayedPositionMs = scaleAudioTimeMs(
+        if (isSeeking) seekPositionMs.toLong() else positionMs,
+        playback.speed,
+        scaleBySpeed
+    )
     val remainingMs = durationMs
         ?.minus(if (isSeeking) seekPositionMs.toLong() else positionMs)
         ?.coerceAtLeast(0L)
+        ?.let { scaleAudioTimeMs(it, playback.speed, scaleBySpeed) }
 
     Box(modifier = modifier) {
         Surface(
@@ -315,7 +326,7 @@ internal fun ReadiumCompactAudioPlayer(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        formatPlaybackTime(if (isSeeking) seekPositionMs.toLong() else positionMs),
+                        formatPlaybackTime(displayedPositionMs),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

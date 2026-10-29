@@ -804,7 +804,11 @@ class BookOrbitRepositoryIntegrationTest {
             updatedAtMillis = 100L
         )
 
-        val localFile = repository.downloadBook(original)
+        val localFile = repository.downloadBook(original).readableFile(
+            context,
+            original.fileId!!,
+            original.format
+        )
         assertEquals("%PDF-old", localFile.readText())
 
         val updated = original.copy(updatedAtMillis = 200L, localPath = localFile.absolutePath)

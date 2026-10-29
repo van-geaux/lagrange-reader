@@ -934,6 +934,11 @@ enum class DownloadOrigin {
     AUTOMATIC
 }
 
+data class DownloadedBookFile(
+    val locator: String,
+    val directlyReadableFile: File? = null
+)
+
 data class DownloadRecord(
     val serverUrl: String,
     val profileId: String = "",
@@ -944,6 +949,8 @@ data class DownloadRecord(
     val title: String,
     val filename: String? = null,
     val localPath: String,
+    val storageTreeUri: String? = null,
+    val storageRootUri: String? = null,
     val mediaKind: MediaKind,
     val mimeType: String? = null,
     val sourceUpdatedAtMillis: Long? = null,
@@ -979,6 +986,8 @@ data class DownloadAttempt(
     val title: String,
     val filename: String? = null,
     val targetPath: String,
+    val storageTreeUri: String? = null,
+    val storageRootUri: String? = null,
     val existingLocalPath: String? = null,
     val mediaKind: MediaKind,
     val mimeType: String? = null,

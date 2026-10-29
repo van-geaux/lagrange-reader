@@ -148,6 +148,7 @@ class AutomaticDownloadsTest {
         assertTrue("Copies per book: Preferred readable copy" in lines)
         assertTrue("Network: Any connected network (cellular policy still applies)" in lines)
         assertTrue("Power: Only while charging" in lines)
+        assertTrue("Download location: Internal app storage" in lines)
         assertTrue("Maximum local-book storage: No limit" in lines)
         assertTrue("Reserved minimum free space: 0.5 GB" in lines)
         assertTrue("Automatic cleanup: Enabled" in lines)
@@ -347,6 +348,57 @@ class AutomaticDownloadsTest {
             listOf("complete-old", "complete-new", "incomplete"),
             selected.map { it.bookId }
         )
+    }
+
+    @Test
+    fun `reserve-space eviction only counts bytes on the selected destination`() {
+        val internalOld = candidate("internal-old", true, 1, 500, 1).copy(
+            selectedDestinationBytes = 0
+        )
+        val cardRecent = candidate("card-recent", true, 100, 200, 100).copy(
+            selectedDestinationBytes = 200
+        )
+
+        val selected = selectAutomaticEvictions(
+            candidates = listOf(internalOld, cardRecent),
+            requiredBytes = 0,
+            requiredSelectedDestinationBytes = 150
+        )
+
+        assertEquals(listOf("card-recent"), selected.map { it.bookId })
+        assertTrue(
+            evictionPlanCanSatisfy(
+                selected,
+                requiredBytes = 0,
+                requiredSelectedDestinationBytes = 150
+            )
+        )
+        assertFalse(
+            evictionPlanCanSatisfy(
+                listOf(internalOld),
+                requiredBytes = 0,
+                requiredSelectedDestinationBytes = 1
+            )
+        )
+    }
+
+    @Test
+    fun `combined maximum and reserve eviction satisfies both byte pools`() {
+        val internal = candidate("internal", true, 1, 300, 1).copy(
+            selectedDestinationBytes = 0
+        )
+        val card = candidate("card", false, 2, 100, 2).copy(
+            selectedDestinationBytes = 100
+        )
+
+        val selected = selectAutomaticEvictions(
+            candidates = listOf(internal, card),
+            requiredBytes = 250,
+            requiredSelectedDestinationBytes = 80
+        )
+
+        assertEquals(listOf("internal", "card"), selected.map { it.bookId })
+        assertTrue(evictionPlanCanSatisfy(selected, 250, 80))
     }
 
     @Test

@@ -16,6 +16,73 @@ import org.junit.Test
 
 class DownloadStoreTest {
     @Test
+    fun `portable retry does not delete a recreated document with the same uri`() {
+        val stageUri = "content://downloads/tree/card%3ABooks/document/card%3ABooks%2Fbook.epub"
+        val current = DownloadAttempt(
+            serverUrl = "https://example.test",
+            requestId = "same-request",
+            profileId = "profile-1",
+            storageScopeId = "account-1",
+            fileId = "file-1",
+            bookId = "book-1",
+            title = "Book",
+            targetPath = stageUri,
+            storageTreeUri = "content://downloads/tree/card%3ABooks",
+            storageRootUri = "content://downloads/tree/card%3ABooks/document/card%3ABooks",
+            mediaKind = MediaKind.EPUB,
+            state = DownloadAttemptState.STAGING,
+            stagedPath = stageUri
+        )
+        val retry = current.copy(
+            state = DownloadAttemptState.QUEUED,
+            stagedPath = null
+        )
+
+        assertTrue(replacementRetainsStagedLocator(current, retry))
+        assertFalse(
+            replacementRetainsStagedLocator(
+                current,
+                retry.copy(requestId = "replacement-request")
+            )
+        )
+        assertFalse(
+            replacementRetainsStagedLocator(
+                current,
+                retry.copy(
+                    targetPath = "content://downloads/tree/card%3ABooks/document/card%3ABooks%2Fnew.epub"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `portable download metadata survives store round trip without filesystem pruning`() = runBlocking {
+        val filesDir = Files.createTempDirectory("download-store-portable-record").toFile()
+        val store = DownloadStore(filesDir)
+        val record = DownloadRecord(
+            serverUrl = "https://example.test",
+            profileId = "profile",
+            storageScopeId = "test-default-scope",
+            fileId = "file",
+            bookId = "book",
+            title = "Portable book",
+            localPath = "content://downloads/document/card%3Abook.epub",
+            storageTreeUri = "content://downloads/tree/card%3ABooks",
+            storageRootUri = "content://downloads/document/card%3ABooks%2FLagrange",
+            mediaKind = MediaKind.EPUB,
+            sizeBytes = 1234L
+        )
+
+        store.save(record)
+        val restored = DownloadStore(filesDir).readAll("https://example.test").single()
+
+        assertEquals(record.localPath, restored.localPath)
+        assertEquals(record.storageTreeUri, restored.storageTreeUri)
+        assertEquals(record.storageRootUri, restored.storageRootUri)
+        assertEquals(1234L, restored.sizeBytes)
+    }
+
+    @Test
     fun `explicit storage root deletes only records owned by that root`() = runBlocking {
         val filesDir = Files.createTempDirectory("download-store-root-delete").toFile()
         val firstRoot = File(filesDir, "profiles/first").apply { mkdirs() }

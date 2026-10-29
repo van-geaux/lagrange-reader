@@ -14,26 +14,52 @@ data class StorageUsage(
 
 internal class AppStorageManager private constructor(
     private val filesDir: File,
-    private val cacheDir: File
+    private val cacheDir: File,
+    private val appContext: Context?
 ) {
-    constructor(context: Context) : this(context.filesDir, context.cacheDir)
+    constructor(context: Context) : this(
+        context.filesDir,
+        context.cacheDir,
+        context.applicationContext
+    )
 
     @Suppress("UNUSED_PARAMETER")
     internal constructor(filesDir: File, cacheDir: File, marker: Unit = Unit) : this(
         filesDir,
-        cacheDir
+        cacheDir,
+        null
     )
 
     suspend fun usage(): StorageUsage = withContext(Dispatchers.IO) {
+        val downloadedBytes = appContext?.let { context ->
+            managedDownloadStorageRoots(filesDir)
+                .flatMap { storageRoot ->
+                    DownloadStore.forStorageRoot(storageRoot, context).readAll()
+                }
+                .distinctBy(DownloadRecord::localPath)
+                .sumOf { record ->
+                    LocalDownloadAccess(context).length(record.localPath)
+                        .takeIf { it > 0L }
+                        ?: record.sizeBytes?.coerceAtLeast(0L)
+                        ?: 0L
+                }
+        } ?: managedDownloadStorageRoots(filesDir).sumOf { storageRoot ->
+            fileTreeSize(File(storageRoot, "downloads"))
+        }
+        val availableBytes = if (appContext != null) {
+            val context = appContext
+            val selectionStore = DownloadStorageSelectionStore(context)
+            selectionStore.availableBytes(selectionStore.read()) ?: 0L
+        } else {
+            filesDir.usableSpace.coerceAtLeast(0L)
+        }
         StorageUsage(
-            downloadedBytes = managedDownloadStorageRoots(filesDir).sumOf { storageRoot ->
-                fileTreeSize(File(storageRoot, "downloads"))
-            },
+            downloadedBytes = downloadedBytes,
             cacheBytes = fileTreeSize(File(filesDir, "cover_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache")) +
                 fileTreeSize(File(filesDir, "book_detail_cache.json")) +
                 fileTreeSize(cacheDir),
-            availableBytes = filesDir.usableSpace.coerceAtLeast(0L)
+            availableBytes = availableBytes
         )
     }
 

@@ -235,6 +235,7 @@ internal fun ReadiumFullAudioPlayer(
     val sleepTimer by controller.sleepTimer.collectAsState()
     val context = LocalContext.current
     val preferences = remember { AppPreferencesStore(context) }
+    val scaleBySpeed = remember(playback.speed, playback.positionMs) { preferences.read().scaleProgressByPlaybackSpeed }
     var skipBackSeconds by remember { mutableIntStateOf(preferences.readAudioSkipBackSeconds()) }
     var skipForwardSeconds by remember { mutableIntStateOf(preferences.readAudioSkipForwardSeconds()) }
     var intervalDirection by remember { mutableStateOf<SkipDirection?>(null) }
@@ -444,8 +445,8 @@ internal fun ReadiumFullAudioPlayer(
                 durationMs = playback.durationMs,
                 onSeeking = { isSeekingOverall = true; overallSeekPosition = it },
                 onSeekFinished = { requestSeek(overallSeekPosition.toLong()); isSeekingOverall = false },
-                leading = formatPlaybackTime(overallSeekPosition.toLong()),
-                trailing = "−${formatPlaybackTime((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L))}",
+                leading = formatPlaybackTime(scaleAudioTimeMs(overallSeekPosition.toLong(), playback.speed, scaleBySpeed)),
+                trailing = "−${formatPlaybackTime(scaleAudioTimeMs((playback.durationMs - overallSeekPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                 label = formatFullPlayerProgressLabel(
                     stringResource(R.string.audio_book_progress),
                     absoluteProgressPercent(overallSeekPosition.toLong(), playback.durationMs)
@@ -461,8 +462,8 @@ internal fun ReadiumFullAudioPlayer(
                     requestSeek(chapterStartMs + chapterSeekPosition.toLong())
                     isSeekingChapter = false
                 },
-                leading = formatPlaybackTime(chapterSeekPosition.toLong()),
-                trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterSeekPosition).toLong().coerceAtLeast(0L))}",
+                leading = formatPlaybackTime(scaleAudioTimeMs(chapterSeekPosition.toLong(), playback.speed, scaleBySpeed)),
+                trailing = "−${formatPlaybackTime(scaleAudioTimeMs((chapterEndMs - chapterStartMs - chapterSeekPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                 label = formatFullPlayerProgressLabel(
                     stringResource(R.string.audio_chapter_progress),
                     chapterProgressPercent(
@@ -854,6 +855,7 @@ private fun FullPlayerLandscape(
     BackHandler(onBack = { if (!playerLocked) onCollapse() })
     val context = LocalContext.current
     val preferences = remember { AppPreferencesStore(context) }
+    val scaleBySpeed = remember(playback.speed, playback.positionMs) { preferences.read().scaleProgressByPlaybackSpeed }
     val sleepTimer by controller.sleepTimer.collectAsState()
     var showCoverViewer by remember(current.book.id, current.book.fileId) { mutableStateOf(false) }
     var chapterMenuExpanded by remember { mutableStateOf(false) }
@@ -1060,8 +1062,8 @@ private fun FullPlayerLandscape(
                     durationMs = playback.durationMs,
                     onSeeking = { isSeekingOverall = true; overallPosition = it },
                     onSeekFinished = { requestSeek(overallPosition.toLong()); isSeekingOverall = false },
-                    leading = formatPlaybackTime(overallPosition.toLong()),
-                    trailing = "−${formatPlaybackTime((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L))}",
+                    leading = formatPlaybackTime(scaleAudioTimeMs(overallPosition.toLong(), playback.speed, scaleBySpeed)),
+                    trailing = "−${formatPlaybackTime(scaleAudioTimeMs((playback.durationMs - overallPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                     label = formatFullPlayerProgressLabel(
                         stringResource(R.string.audio_book_progress),
                         absoluteProgressPercent(overallPosition.toLong(), playback.durationMs)
@@ -1077,8 +1079,8 @@ private fun FullPlayerLandscape(
                         requestSeek(chapterStartMs + chapterPosition.toLong())
                         isSeekingChapter = false
                     },
-                    leading = formatPlaybackTime(chapterPosition.toLong()),
-                    trailing = "−${formatPlaybackTime((chapterEndMs - chapterStartMs - chapterPosition).toLong().coerceAtLeast(0L))}",
+                    leading = formatPlaybackTime(scaleAudioTimeMs(chapterPosition.toLong(), playback.speed, scaleBySpeed)),
+                    trailing = "−${formatPlaybackTime(scaleAudioTimeMs((chapterEndMs - chapterStartMs - chapterPosition).toLong().coerceAtLeast(0L), playback.speed, scaleBySpeed))}",
                     label = formatFullPlayerProgressLabel(
                         stringResource(R.string.audio_chapter_progress),
                         chapterProgressPercent(

@@ -96,4 +96,17 @@
     <!-- 无障碍描述 -->
     <string name="cd_lagrange_logo">Lagrange 标志</string>
     <string name="cd_open_library_selector">打开书库选择器</string>
+
+    <string name="settings_category_appearance">外观</string>
+    <string name="settings_category_appearance_summary">主题、动效与浏览展示</string>
+    <string name="settings_category_general">通用</string>
+    <string name="settings_category_general_summary">启动行为、屏幕方向与通用偏好</string>
+    <string name="settings_category_library">书库</string>
+    <string name="settings_category_library_summary">浏览与书库展示</string>
+    <string name="settings_category_downloads">下载与离线</string>
+    <string name="settings_category_downloads_summary">下载、存储与离线书库数据</string>
+    <string name="settings_category_network">网络与同步</string>
+    <string name="settings_category_network_summary">后台网络与播放行为</string>
+    <string name="settings_category_playback">播放</string>
+    <string name="settings_category_playback_summary">速度跟踪、进度缩放和 Android Auto 选项</string>
 </resources>

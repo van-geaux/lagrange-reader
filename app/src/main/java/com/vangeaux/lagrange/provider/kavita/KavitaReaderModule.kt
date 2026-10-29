@@ -14,9 +14,10 @@ internal class KavitaReaderModuleImpl(
     private val auth: KavitaAuthModule,
     context: android.content.Context
 ) : ReaderModule {
+    private val appContext = context.applicationContext
     private val client = OkHttpClient()
-    private val downloadStore = DownloadStore(context.applicationContext)
-    private val downloadModule = KavitaDownloadModuleImpl(context.applicationContext, auth)
+    private val downloadStore = DownloadStore(appContext)
+    private val downloadModule = KavitaDownloadModuleImpl(appContext, auth)
 
     override suspend fun loadReaderProgress(
         book: BookSummary,
@@ -57,8 +58,13 @@ internal class KavitaReaderModuleImpl(
                 readerPageCount = info.optInt("pages", 0).takeIf { it > 0 } ?: book.readerPageCount
             )
             if (resolvedBook.mediaKind == MediaKind.EPUB) {
-                val localFile = downloadModule.downloadBook(resolvedBook) { }
-                val localBook = resolvedBook.copy(localPath = localFile.absolutePath)
+                val download = downloadModule.downloadBook(resolvedBook) { }
+                val localFile = download.readableFile(
+                    appContext,
+                    resolvedBook.fileId ?: resolvedBook.id,
+                    resolvedBook.format
+                )
+                val localBook = resolvedBook.copy(localPath = download.locator)
                 return@withContext ReaderState(
                     book = localBook,
                     localFile = localFile,
@@ -71,7 +77,11 @@ internal class KavitaReaderModuleImpl(
             when (resolvedBook.mediaKind) {
                 MediaKind.COMIC -> {
                     val localFile = kavitaLocalFile(resolvedBook)
-                        ?: downloadModule.downloadBook(resolvedBook) { }
+                        ?: downloadModule.downloadBook(resolvedBook) { }.readableFile(
+                            appContext,
+                            resolvedBook.fileId ?: resolvedBook.id,
+                            resolvedBook.format
+                        )
                     ReaderState(
                         book = resolvedBook.copy(localPath = localFile.absolutePath),
                         localFile = localFile,
@@ -105,8 +115,20 @@ internal class KavitaReaderModuleImpl(
             ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
         return listOfNotNull(record?.localPath, book.localPath)
             .asSequence()
-            .map(::File)
-            .firstOrNull(File::isFile)
+            .mapNotNull { locator ->
+                if (locator.isContentLocator()) {
+                    runCatching {
+                        LocalDownloadAccess(appContext).materialize(
+                            locator,
+                            book.fileId ?: book.id,
+                            book.filename ?: book.format
+                        )
+                    }.getOrNull()
+                } else {
+                    File(locator).takeIf(File::isFile)
+                }
+            }
+            .firstOrNull()
     }
 
     override suspend fun prepareEpubImageLibrarySource(
@@ -117,7 +139,13 @@ internal class KavitaReaderModuleImpl(
         if (localFile != null) return@withContext EpubImageLibrarySourceResult.Ready(localFile)
         if (!allowRemoteCache) return@withContext EpubImageLibrarySourceResult.RemoteConsentRequired
         runCatching {
-            EpubImageLibrarySourceResult.Ready(downloadModule.downloadBook(book) { })
+            EpubImageLibrarySourceResult.Ready(
+                downloadModule.downloadBook(book) { }.readableFile(
+                    appContext,
+                    book.fileId ?: book.id,
+                    book.format
+                )
+            )
         }.getOrElse { error ->
             EpubImageLibrarySourceResult.Error(
                 error.message ?: "Unable to prepare the Kavita EPUB image library."

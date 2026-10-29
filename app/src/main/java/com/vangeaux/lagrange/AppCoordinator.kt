@@ -2083,11 +2083,11 @@ class AppCoordinator internal constructor(
                     completedDownloadBookIdsAwaitingRefresh += book.id
                     updateLocalFileState(
                         fileId = fileId,
-                        localPath = outcome.localFile.absolutePath,
+                        localPath = outcome.download.locator,
                         downloadedSourceUpdatedAtMillis = book.updatedAtMillis
                     )
                     epubImageLibraryDownloadCallbacks.remove(fileId)?.invoke(
-                        book.copy(localPath = outcome.localFile.absolutePath)
+                        book.copy(localPath = outcome.download.locator)
                     )
                 }
             }

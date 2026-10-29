@@ -993,7 +993,7 @@ class KomgaDownloadModuleImpl(
         book: BookSummary,
         expectedStorageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File = withContext(Dispatchers.IO) {
+    ): DownloadedBookFile = withContext(Dispatchers.IO) {
         val base = normalizeServerUrl(serverUrl) ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
         if (!auth.hasSession(base)) {
             auth.restoreCurrentProfileSession()
@@ -1017,6 +1017,52 @@ class KomgaDownloadModuleImpl(
         val attemptOrigin = scheduledAttempt?.origin ?: DownloadOrigin.MANUAL
         val storagePolicy = AutomaticDownloadPolicyStore(context)
             .read(profileId, serverUrl, storageScopeId)
+        if (DownloadStorageSelectionStore(context).read().usesPortableFolder) {
+            return@withContext downloadBookToPortableStorage(
+                context = context,
+                downloadStore = downloadStore,
+                serverUrl = serverUrl,
+                profileId = profileId,
+                storageScopeId = storageScopeId,
+                book = book,
+                scheduledAttempt = scheduledAttempt,
+                existingRecord = existingRecord,
+                storagePolicy = storagePolicy,
+                requireCapturedAccountScope = ::requireCapturedAccountScope,
+                onProgress = onProgress
+            ) { consume ->
+                requireCapturedAccountScope()
+                val request = Request.Builder().url("$base/api/v1/books/${book.id}/file").get()
+                    .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw HttpRequestException(response.code, "download the Komga book")
+                    }
+                    val body = response.body
+                        ?: throw UserFacingException(
+                            auth.localizedMessage(
+                                R.string.perror_komga_empty_file,
+                                "Komga returned an empty book file."
+                            )
+                        )
+                    body.byteStream().use { input ->
+                        consume(input, body.contentLength().takeIf { it > 0L })
+                    }
+                }
+            }
+        }
+        reusableDownloadedBook(context, book, existingRecord)?.let { reusable ->
+            downloadStore.removeAttemptIfOwned(
+                serverUrl,
+                fileId,
+                scheduledAttempt?.requestId.orEmpty(),
+                storageScopeId = storageScopeId
+            )
+            requireCapturedAccountScope()
+            onProgress(1f)
+            return@withContext reusable
+        }
         val target = DownloadStore(context).ownedTargetOrIsolated(
             serverUrl = serverUrl,
             fileId = fileId,
@@ -1026,10 +1072,8 @@ class KomgaDownloadModuleImpl(
             recordedPath = existingRecord?.localPath,
             storageScopeId = storageScopeId
         )
-        val hadUsableExisting = existingRecord != null && downloadedFilePassesIntegrity(book, target)
-        val canReuseExisting = existingRecord != null &&
-            !downloadUpdateAvailable(book, existingRecord) &&
-            hadUsableExisting
+        val hadUsableExisting = existingRecord != null &&
+            downloadedLocatorPassesIntegrity(context, book, existingRecord.localPath)
         if (scheduledAttempt == null) {
             downloadStore.saveAttemptIfAbsent(
                 DownloadAttempt(
@@ -1043,7 +1087,7 @@ class KomgaDownloadModuleImpl(
                 title = book.title,
                 filename = book.filename,
                 targetPath = target.absolutePath,
-                existingLocalPath = target.absolutePath.takeIf { hadUsableExisting },
+                existingLocalPath = existingRecord?.localPath.takeIf { hadUsableExisting },
                 mediaKind = book.mediaKind,
                 mimeType = book.format,
                 sourceUpdatedAtMillis = book.updatedAtMillis,
@@ -1051,17 +1095,6 @@ class KomgaDownloadModuleImpl(
                 requiresQueueOwnership = false
                 )
             )
-        }
-        if (canReuseExisting) {
-            downloadStore.removeAttemptIfOwned(
-                serverUrl,
-                fileId,
-                scheduledAttempt?.requestId.orEmpty(),
-                storageScopeId = storageScopeId
-            )
-            requireCapturedAccountScope()
-            onProgress(1f)
-            return@withContext target
         }
         target.parentFile?.mkdirs()
         val stagingId = scheduledAttempt?.requestId?.takeIf(String::isNotBlank)
@@ -1111,7 +1144,10 @@ class KomgaDownloadModuleImpl(
                         profileId = profileId,
                         policy = storagePolicy,
                         declaredBytes = total,
-                        existingFinalBytes = target.length().coerceAtLeast(0L),
+                        existingFinalBytes = existingRecord
+                            ?.let { LocalDownloadAccess(context).length(it.localPath) }
+                            ?.coerceAtLeast(0L)
+                            ?: 0L,
                         protectedFileIds = setOf(fileId),
                         allowRemoval = true,
                         reservationId = storageReservationId,
@@ -1218,6 +1254,9 @@ class KomgaDownloadModuleImpl(
                     ?: DownloadOrigin.MANUAL,
                 status = DownloadRecordStatus.COMPLETE
             )
+            existingRecord
+                ?.takeUnless { localDownloadLocatorsMatch(it.localPath, target.absolutePath) }
+                ?.let { PortableDownloadCleanup.defer(context, it) }
             requireCapturedAccountScope()
             val committed = try {
                 verifyAndCommitDownloadWhenReaderInactive(
@@ -1244,7 +1283,8 @@ class KomgaDownloadModuleImpl(
             }
             if (!retainStagedForRetry && temporary.exists()) temporary.delete()
         }
-        target
+        PortableDownloadCleanup.schedule(context)
+        DownloadedBookFile(target.absolutePath, target)
     }
 }
 

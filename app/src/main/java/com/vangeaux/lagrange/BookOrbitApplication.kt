@@ -16,5 +16,6 @@ class BookOrbitApplication : Application() {
         super.onCreate()
         CookieManager.getInstance().setAcceptCookie(true)
         audioPlaybackController = ReadiumAudioPlaybackController(this)
+        PortableDownloadCleanup.schedule(this)
     }
 }

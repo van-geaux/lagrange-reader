@@ -15,7 +15,7 @@ import java.io.File
  * the transfer was executed (in-process coroutine or a WorkManager worker).
  */
 internal sealed interface DownloadOutcome {
-    data class Success(val localFile: File) : DownloadOutcome
+    data class Success(val download: DownloadedBookFile) : DownloadOutcome
     data object Canceled : DownloadOutcome
     data object AuthRequired : DownloadOutcome
     data object PermissionDenied : DownloadOutcome

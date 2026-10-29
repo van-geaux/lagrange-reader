@@ -220,8 +220,9 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         seriesModule.loadSeriesDetail(seriesId)
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo {
         val detail = detailModule.loadBookDetail(book)
+        val localAccess = LocalDownloadAccess(appContext)
         val localRecord = downloadStore.find(getServerUrl().orEmpty(), book.fileId ?: book.id)
-            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).isFile }
+            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && localAccess.exists(it.localPath) }
         return localRecord?.let { record ->
             detail.copy(
                 book = detail.book.copy(
@@ -260,7 +261,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         book: BookSummary,
         storageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File = downloadModule.downloadBook(book, storageScopeId, onProgress)
+    ): DownloadedBookFile = downloadModule.downloadBook(book, storageScopeId, onProgress)
     override suspend fun deleteLocalCopy(book: BookSummary) = downloadModule.deleteLocalCopy(book)
     override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = downloadModule.deleteLocalCopies(book)
     override suspend fun loadCachedBrowserState(libraryId: String?): BrowserState? {
@@ -289,22 +290,24 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         val metadataByKey = snapshotBooks
             .flatMap { book -> listOfNotNull(book.fileId, book.id).map { it to book } }
             .toMap()
+        val localAccess = LocalDownloadAccess(appContext)
         return downloadStore.readAll(serverUrl)
-            .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).isFile }
+            .filter { it.status == DownloadRecordStatus.COMPLETE && localAccess.exists(it.localPath) }
             .map { record ->
                 val fallback = BookSummary(
                     libraryId = "",
                     id = record.bookId,
                     fileId = record.fileId,
                     title = record.title,
-                    filename = record.filename ?: File(record.localPath).name,
+                    filename = record.filename ?: localAccess.displayName(record.localPath),
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
                     updatedAtMillis = record.sourceUpdatedAtMillis
                 )
                 (metadataByKey[record.fileId] ?: metadataByKey[record.bookId] ?: fallback).copy(
                     fileId = record.fileId,
-                    filename = record.filename ?: metadataByKey[record.fileId]?.filename ?: File(record.localPath).name,
+                    filename = record.filename ?: metadataByKey[record.fileId]?.filename
+                        ?: localAccess.displayName(record.localPath),
                     localPath = record.localPath,
                     mediaKind = record.mediaKind,
                     format = record.mimeType ?: metadataByKey[record.fileId]?.format,
@@ -328,6 +331,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
                 .distinctBy { it.libraryId to (it.fileId ?: it.id) }
         }.getOrElse { return false }
         offlineCacheStatusStore.write(OfflineCacheStatus(state = OfflineCacheRunState.RUNNING, total = books.size))
+        val localAccess = LocalDownloadAccess(appContext)
         offlineCacheJob = offlineScope.launch {
             var processed = 0
             var downloaded = 0
@@ -337,7 +341,9 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
                 currentCoroutineContext().ensureActive()
                 try {
                     val existing = downloadStore.find(serverUrl, book.fileId ?: book.id)
-                    if (existing?.status == DownloadRecordStatus.COMPLETE && File(existing.localPath).isFile) {
+                    if (existing?.status == DownloadRecordStatus.COMPLETE &&
+                        localAccess.exists(existing.localPath)
+                    ) {
                         skipped++
                     } else {
                         downloadModule.downloadBook(book) { }

@@ -345,6 +345,10 @@ private enum class OptionsCategory(
         R.string.settings_category_general,
         R.string.settings_category_general_summary
     ),
+    PLAYBACK(
+        R.string.settings_category_playback,
+        R.string.settings_category_playback_summary
+    ),
     LIBRARY(
         R.string.settings_category_library,
         R.string.settings_category_library_summary
@@ -3735,6 +3739,8 @@ internal fun OptionsScreen(
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
     var selectedCategory by rememberSaveable { mutableStateOf<OptionsCategory?>(null) }
     BackHandler(enabled = selectedCategory != null) { selectedCategory = null }
+    var subDestination by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = subDestination != null) { subDestination = null }
     var readingLibraryId by rememberSaveable {
         mutableStateOf(libraries.firstOrNull()?.id)
     }
@@ -3786,6 +3792,36 @@ internal fun OptionsScreen(
         BackgroundRefreshNetworkPolicy.values().toList(),
         BackgroundRefreshNetworkPolicy::displayNameRes
     )
+    val downloadStorageSelectionStore = remember(context) {
+        DownloadStorageSelectionStore(context)
+    }
+    var downloadStorageSelection by remember {
+        mutableStateOf(downloadStorageSelectionStore.read())
+    }
+    var downloadStorageMessage by remember { mutableStateOf<String?>(null) }
+    val downloadFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { downloadStorageSelectionStore.select(uri) }
+                }
+                result.onSuccess { selection ->
+                    downloadStorageSelection = selection
+                    downloadStorageMessage = context.getString(
+                        R.string.settings_download_location_new_downloads,
+                        selection.displayName
+                            ?: context.getString(R.string.settings_download_location_selected_folder)
+                    )
+                    storageRefreshKey += 1
+                }.onFailure { error ->
+                    downloadStorageMessage = error.message
+                        ?: context.getString(R.string.settings_download_location_select_failed)
+                }
+            }
+        }
+    }
     val automaticProfileId = profileId ?: serverProfileId(serverUrl)
     val automaticStorageScopeId =
         downloadStorageScopeId(context, serverUrl, automaticProfileId) ?: "unresolved-account"
@@ -3844,6 +3880,16 @@ internal fun OptionsScreen(
     val storageUsage by produceState<StorageUsage?>(initialValue = null, storageRefreshKey) {
         value = runCatching { storageUsageLoader() }.getOrNull()
     }
+    val portableStorageStatus by produceState<Pair<PortableStorageAvailability, Long?>?>(
+        initialValue = null,
+        downloadStorageSelection,
+        storageRefreshKey
+    ) {
+        value = withContext(Dispatchers.IO) {
+            downloadStorageSelectionStore.availability(downloadStorageSelection) to
+                downloadStorageSelectionStore.availableBytes(downloadStorageSelection)
+        }
+    }
     val offlineCacheStatus by produceState(
         initialValue = OfflineCacheStatus(),
         offlineCacheRefreshKey
@@ -3863,9 +3909,15 @@ internal fun OptionsScreen(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (selectedCategory != null) {
+                if (selectedCategory != null || subDestination != null) {
                     IconButton(
-                        onClick = { selectedCategory = null },
+                        onClick = { 
+                            if (subDestination != null) {
+                                subDestination = null 
+                            } else {
+                                selectedCategory = null 
+                            }
+                        },
                         modifier = Modifier.testTag("options-back")
                     ) {
                         Icon(
@@ -3876,16 +3928,18 @@ internal fun OptionsScreen(
                 }
                 OrbitEyebrow(stringResource(R.string.settings_options_eyebrow))
                 val categoryForHeader = selectedCategory
-                val headerTitle = when (categoryForHeader) {
-                    OptionsCategory.APPEARANCE ->
+                val headerTitle = when {
+                    subDestination == "android_auto" -> "Android Auto"
+                    categoryForHeader == OptionsCategory.APPEARANCE ->
                         stringResource(R.string.settings_interface_title)
-                    null -> stringResource(R.string.settings_title)
+                    categoryForHeader == null -> stringResource(R.string.settings_title)
                     else -> stringResource(categoryForHeader.titleRes)
                 }
-                val headerSummary = if (categoryForHeader != null) {
-                    stringResource(categoryForHeader.summaryRes)
-                } else {
-                    stringResource(R.string.settings_choose_category_summary)
+                val headerSummary = when {
+                    subDestination == "android_auto" ->
+                        "Configure playback speed buttons, skip increments, and vehicle controls"
+                    categoryForHeader != null -> stringResource(categoryForHeader.summaryRes)
+                    else -> stringResource(R.string.settings_choose_category_summary)
                 }
                 Text(
                     headerTitle,
@@ -4005,6 +4059,60 @@ internal fun OptionsScreen(
                 }
             )
         }
+if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
+            AppPreferenceSwitchRow(
+                title = "Scale Progress by Playback Speed",
+                summary = "Adjusts remaining time and progress bar tracking when listening above 1.0x speed.",
+                checked = preferences.scaleProgressByPlaybackSpeed,
+                testTag = "options-scale-progress-speed",
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(scaleProgressByPlaybackSpeed = it))
+                }
+            )
+        }
+        if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "android-auto-menu-item") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { subDestination = "android_auto" }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("options-playback-android-auto"),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                OrbitEyebrow("Android Auto")
+                Text("Dashboard controls", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Customize playback speed buttons, skip intervals, and steering wheel actions.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        if (subDestination == "android_auto") item(key = "aa-skip-behavior-header") {
+            Column(
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OrbitEyebrow("Android Auto Controls")
+                Text("Steering wheel & skip behavior", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Define whether vehicle skip buttons jump chapters or perform timed skips.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        if (subDestination == "android_auto") item(key = "aa-vehicle-skip-mode") {
+            // Placeholder or preference toggle for steering wheel skip mode (Chapters vs Time-skip)
+            AppPreferenceSwitchRow(
+                title = "Vehicle Skip Buttons Jump Chapters",
+                summary = "When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.",
+                checked = false, // Map to your app preference key when ready
+                testTag = "options-aa-vehicle-skip-chapters",
+                onCheckedChange = { /* Save preference */ }
+            )
+        }
         if (selectedCategory == OptionsCategory.LIBRARY) item(key = "library-card-size") {
             AppPreferenceSelectionRow(
                 title = stringResource(R.string.settings_library_card_size),
@@ -4099,6 +4207,90 @@ internal fun OptionsScreen(
                 onClick = { openDialog = OptionsDialog.CELLULAR_DOWNLOADS }
             )
         }
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "download-location") {
+            val availability = portableStorageStatus?.first
+                ?: PortableStorageAvailability.TEMPORARILY_UNAVAILABLE
+            val availableBytes = portableStorageStatus?.second
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_download_location_title)) },
+                supportingContent = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            if (downloadStorageSelection.usesPortableFolder) {
+                                downloadStorageSelection.displayName
+                                    ?: stringResource(R.string.settings_download_location_selected_folder)
+                            } else {
+                                stringResource(R.string.settings_download_location_internal)
+                            }
+                        )
+                        if (downloadStorageSelection.usesPortableFolder) {
+                            Text(
+                                when (availability) {
+                                    PortableStorageAvailability.AVAILABLE -> availableBytes?.let {
+                                        stringResource(
+                                            R.string.settings_download_location_available,
+                                            formatByteSize(it)
+                                        )
+                                    } ?: stringResource(R.string.settings_download_location_available_unknown)
+                                    PortableStorageAvailability.PERMISSION_REVOKED ->
+                                        stringResource(R.string.settings_download_location_permission_revoked)
+                                    PortableStorageAvailability.TEMPORARILY_UNAVAILABLE ->
+                                        stringResource(R.string.settings_download_location_unavailable)
+                                    PortableStorageAvailability.NOT_CONFIGURED ->
+                                        stringResource(R.string.settings_download_location_internal)
+                                },
+                                color = if (availability == PortableStorageAvailability.AVAILABLE) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.settings_download_location_existing_stay),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        downloadStorageMessage?.let { message ->
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                },
+                trailingContent = {
+                    Column(horizontalAlignment = Alignment.End) {
+                        TextButton(
+                            onClick = {
+                                downloadStorageMessage = null
+                                downloadFolderLauncher.launch(
+                                    downloadStorageSelection.treeUri?.let(Uri::parse)
+                                )
+                            },
+                            modifier = Modifier.testTag("options-choose-download-folder")
+                        ) { Text(stringResource(R.string.settings_download_location_choose_folder)) }
+                        if (downloadStorageSelection.usesPortableFolder) {
+                            TextButton(
+                                onClick = {
+                                    downloadStorageSelection =
+                                        downloadStorageSelectionStore.useInternalStorage()
+                                    downloadStorageMessage = context.getString(
+                                        R.string.settings_download_location_new_downloads_internal
+                                    )
+                                    storageRefreshKey += 1
+                                },
+                                modifier = Modifier.testTag("options-use-internal-download-storage")
+                            ) { Text(stringResource(R.string.settings_download_location_use_internal)) }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().testTag("options-download-location")
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "storage") {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_storage)) },
@@ -4183,6 +4375,11 @@ internal fun OptionsScreen(
             AutomaticBookDownloadConfiguration(
                 policy = automaticPolicy,
                 libraries = libraries,
+                downloadLocationName = if (downloadStorageSelection.usesPortableFolder) {
+                    downloadStorageSelection.displayName ?: "Selected SD-card folder"
+                } else {
+                    "Internal app storage"
+                },
                 status = automaticStatus,
                 onPolicyChange = saveAutomaticPolicy,
                 ownerIsCurrent = { candidateOwner ->
@@ -4519,6 +4716,7 @@ internal fun OptionsScreen(
 internal fun AutomaticBookDownloadConfiguration(
     policy: AutomaticDownloadPolicy,
     libraries: List<LibrarySummary>,
+    downloadLocationName: String = "Internal app storage",
     status: AutomaticDownloadStatus,
     onPolicyChange: (AutomaticDownloadPolicy) -> Unit,
     ownerIsCurrent: (AutomaticDownloadOwnerKey) -> Boolean = { true },
@@ -4886,7 +5084,8 @@ internal fun AutomaticBookDownloadConfiguration(
                     ) {
                         automaticDownloadLocalizedReviewLines(
                             confirmation.policy,
-                            libraries
+                            libraries,
+                            downloadLocationName
                         ).forEach { line ->
                             Text(line)
                         }
@@ -5012,7 +5211,8 @@ internal fun AutomaticDownloadPolicy.hasAutomaticDownloadScope(): Boolean =
 @Composable
 private fun automaticDownloadLocalizedReviewLines(
     policy: AutomaticDownloadPolicy,
-    libraries: List<LibrarySummary>
+    libraries: List<LibrarySummary>,
+    downloadLocationName: String
 ): List<String> {
     val libraryNames = libraries.associate { it.id to it.name }
     val scopeLine = if (policy.scope == AutomaticDownloadScope.ALL_LIBRARIES) {
@@ -5057,6 +5257,10 @@ private fun automaticDownloadLocalizedReviewLines(
             }
         ),
         stringResource(
+            R.string.settings_auto_download_review_location,
+            downloadLocationName
+        ),
+        stringResource(
             R.string.settings_auto_download_review_max_storage,
             maximumLimit
         ),
@@ -5086,7 +5290,8 @@ private fun localizedAutomaticDownloadLimit(bytes: Long): String = if (bytes <= 
 
 internal fun automaticDownloadReviewLines(
     policy: AutomaticDownloadPolicy,
-    libraries: List<LibrarySummary>
+    libraries: List<LibrarySummary>,
+    downloadLocationName: String = "Internal app storage"
 ): List<String> {
     val libraryNames = libraries.associate { it.id to it.name }
     val scopeSummary = if (policy.scope == AutomaticDownloadScope.ALL_LIBRARIES) {
@@ -5113,6 +5318,7 @@ internal fun automaticDownloadReviewLines(
             "Any connected network (cellular policy still applies)"
         },
         "Power: " + if (policy.chargingRequired) "Only while charging" else "Charging not required",
+        "Download location: $downloadLocationName",
         "Maximum local-book storage: ${formatAutomaticDownloadLimit(policy.maximumBytes)}",
         "Reserved minimum free space: ${formatAutomaticDownloadLimit(policy.reserveBytes)}",
         "Automatic cleanup: " + if (policy.automaticRemovalEnabled) "Enabled" else "Disabled"
@@ -10971,8 +11177,16 @@ private fun availableFileMetadata(option: BookFileOption?, label: AvailableFileL
             }
         )
     }
-    if (!option?.localPath.isNullOrBlank()) {
-        parts.add(stringResource(R.string.browse_available_offline))
+    option?.localPath?.takeIf(String::isNotBlank)?.let { localPath ->
+        parts.add(
+            stringResource(
+                if (localPath.isContentLocator()) {
+                    R.string.browse_downloaded_to_sd_card
+                } else {
+                    R.string.browse_available_offline
+                }
+            )
+        )
     }
     return parts.joinToString(" · ")
 }

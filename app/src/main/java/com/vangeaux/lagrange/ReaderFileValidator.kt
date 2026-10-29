@@ -2,8 +2,10 @@ package com.vangeaux.lagrange
 
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 import java.util.Locale
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 internal object ReaderFileValidator {
     internal val comicImageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif")
@@ -21,6 +23,24 @@ internal object ReaderFileValidator {
             MediaKind.PDF -> hasPdfHeader(file)
             MediaKind.EPUB -> hasEpubContainer(file)
             MediaKind.COMIC -> canRenderComicLocally(file) || hasHeader(file, rar4Signature, rar5Signature, sevenZipSignature)
+        }
+    }
+
+    fun isReadable(
+        mediaKind: MediaKind,
+        length: Long,
+        openInput: () -> InputStream
+    ): Boolean {
+        if (length <= 0L) return false
+        return when (mediaKind) {
+            MediaKind.AUDIO,
+            MediaKind.UNKNOWN -> true
+            MediaKind.PDF -> hasHeader(openInput, "%PDF-".toByteArray(Charsets.US_ASCII))
+            MediaKind.EPUB -> zipContains(openInput) { name -> name == "META-INF/container.xml" }
+            MediaKind.COMIC -> hasHeader(openInput, rar4Signature, rar5Signature, sevenZipSignature) ||
+                zipContains(openInput) { name ->
+                    name.substringAfterLast('.', "").lowercase(Locale.US) in comicImageExtensions
+                }
         }
     }
 
@@ -75,4 +95,41 @@ internal object ReaderFileValidator {
             }
         }.getOrDefault(false)
     }
+
+    private fun hasHeader(openInput: () -> InputStream, vararg signatures: ByteArray): Boolean =
+        runCatching {
+            val maxSize = signatures.maxOf(ByteArray::size)
+            val header = ByteArray(maxSize)
+            val count = openInput().use { input -> input.read(header) }
+            signatures.any { signature ->
+                count >= signature.size && signature.indices.all { index -> header[index] == signature[index] }
+            }
+        }.getOrDefault(false)
+
+    private fun zipContains(openInput: () -> InputStream, predicate: (String) -> Boolean): Boolean =
+        runCatching {
+            ZipInputStream(openInput().buffered()).use { zip ->
+                var entries = 0
+                var scannedUncompressedBytes = 0L
+                while (entries < MAX_VALIDATION_ZIP_ENTRIES) {
+                    val entry = zip.nextEntry ?: return false
+                    entries += 1
+                    if (!entry.isDirectory && predicate(entry.name)) return true
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = zip.read(buffer)
+                        if (count < 0) break
+                        scannedUncompressedBytes += count
+                        if (scannedUncompressedBytes > MAX_VALIDATION_ZIP_SCAN_BYTES) {
+                            return false
+                        }
+                    }
+                    zip.closeEntry()
+                }
+                false
+            }
+        }.getOrDefault(false)
+
+    private const val MAX_VALIDATION_ZIP_ENTRIES = 20_000
+    private const val MAX_VALIDATION_ZIP_SCAN_BYTES = 32L * 1024L * 1024L
 }

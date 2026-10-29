@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -12,6 +14,17 @@ import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private fun requestIdsMatch(current: String, expected: String): Boolean = current == expected
+
+internal fun replacementRetainsStagedLocator(
+    current: DownloadAttempt,
+    replacement: DownloadAttempt
+): Boolean {
+    if (!requestIdsMatch(current.requestId, replacement.requestId)) return false
+    val staged = current.stagedPath ?: return false
+    return sequenceOf(replacement.targetPath, replacement.stagedPath)
+        .filterNotNull()
+        .any { locator -> localDownloadLocatorsMatch(staged, locator) }
+}
 
 internal fun downloadStorageScopeId(
     context: Context,
@@ -52,7 +65,8 @@ internal data class VerifiedCommitPrevalidation(
 class DownloadStore private constructor(
     private val filesDir: File,
     private val activeProfileId: () -> String?,
-    private val scopeResolver: (String) -> String?
+    private val scopeResolver: (String) -> String?,
+    private val appContext: Context?
 ) {
     companion object {
         private val mutex = Mutex()
@@ -61,32 +75,44 @@ class DownloadStore private constructor(
         internal fun forStorageRoot(storageRoot: File): DownloadStore = DownloadStore(
             filesDir = storageRoot,
             activeProfileId = { null },
-            scopeResolver = { null }
+            scopeResolver = { null },
+            appContext = null
+        )
+
+        internal fun forStorageRoot(storageRoot: File, context: Context): DownloadStore = DownloadStore(
+            filesDir = storageRoot,
+            activeProfileId = { null },
+            scopeResolver = { null },
+            appContext = context.applicationContext
         )
     }
 
     constructor(context: Context) : this(
         filesDir = context.filesDir,
         activeProfileId = { ServerProfileStore(context).activeId() },
-        scopeResolver = { serverUrl -> downloadStorageScopeId(context, serverUrl) }
+        scopeResolver = { serverUrl -> downloadStorageScopeId(context, serverUrl) },
+        appContext = context.applicationContext
     )
 
     internal constructor(filesDir: File) : this(
         filesDir = filesDir,
         activeProfileId = { null },
-        scopeResolver = { "test-default-scope" }
+        scopeResolver = { "test-default-scope" },
+        appContext = null
     )
 
     internal constructor(filesDir: File, profileId: String) : this(
         filesDir = filesDir,
         activeProfileId = { profileId },
-        scopeResolver = { "test-default-scope" }
+        scopeResolver = { "test-default-scope" },
+        appContext = null
     )
 
     internal constructor(filesDir: File, scopeResolver: (String) -> String?) : this(
         filesDir = filesDir,
         activeProfileId = { null },
-        scopeResolver = scopeResolver
+        scopeResolver = scopeResolver,
+        appContext = null
     )
 
     private fun scopedDirectory(): File {
@@ -161,17 +187,10 @@ class DownloadStore private constructor(
         val record = records.firstOrNull {
             it.inScope(serverUrl, scope) && it.fileId == fileId
         } ?: return@withLock false
-        val target = File(record.localPath)
-        val targetPath = runCatching { target.canonicalFile }.getOrNull() ?: return@withLock false
-        val downloadRoot = runCatching { downloadDir.canonicalFile }.getOrNull()
-            ?: return@withLock false
-        val isManagedPath = targetPath.path.startsWith(downloadRoot.path + File.separator)
-        if (!isManagedPath) return@withLock false
         val sharedPath = records.any { other ->
-            other !== record && runCatching { File(other.localPath).canonicalFile == targetPath }
-                .getOrDefault(false)
+            other !== record && locatorsMatch(other.localPath, record.localPath)
         }
-        val deletedFile = sharedPath || !targetPath.exists() || targetPath.delete()
+        val deletedFile = sharedPath || deleteManagedRecordFile(record)
         if (!deletedFile) return@withLock false
         val remaining = records.filterNot { it === record }
         writeUnlocked(remaining)
@@ -213,7 +232,11 @@ class DownloadStore private constructor(
                 it.serverUrl == scopedAttempt.serverUrl &&
                     it.storageScopeId == scopedAttempt.storageScopeId &&
                     it.fileId == scopedAttempt.fileId
-            }.forEach(::deleteStagedFileIfOwned)
+            }
+            .filterNot { current ->
+                replacementRetainsStagedLocator(current, scopedAttempt)
+            }
+            .forEach(::deleteStagedFileIfOwned)
         val remaining = attempts.filterNot {
             it.serverUrl == scopedAttempt.serverUrl &&
                 it.storageScopeId == scopedAttempt.storageScopeId &&
@@ -322,22 +345,13 @@ class DownloadStore private constructor(
                 failed += fileId
                 return@forEach
             }
-            val targetPath = runCatching { File(record.localPath).canonicalFile }.getOrNull()
-            val downloadRoot = runCatching { downloadDir.canonicalFile }.getOrNull()
-            if (targetPath == null || downloadRoot == null ||
-                !targetPath.path.startsWith(downloadRoot.path + File.separator)
-            ) {
-                failed += fileId
-                return@forEach
-            }
             val sharedPath = records.any { other ->
                     other !== record &&
                     !(other.serverUrl == serverUrl &&
                         other.storageScopeId == storageScopeId && other.fileId in fileIds) &&
-                    runCatching { File(other.localPath).canonicalFile == targetPath }
-                        .getOrDefault(false)
+                    locatorsMatch(other.localPath, record.localPath)
             }
-            if (sharedPath || !targetPath.exists() || targetPath.delete()) {
+            if (sharedPath || deleteManagedRecordFile(record)) {
                 deleted += fileId
             } else {
                 failed += fileId
@@ -382,16 +396,10 @@ class DownloadStore private constructor(
             it.serverUrl == serverUrl &&
                 it.storageScopeId == storageScopeId && it.fileId == fileId
         } ?: return@withLock false
-        val targetPath = runCatching { File(record.localPath).canonicalFile }.getOrNull()
-            ?: return@withLock false
-        val downloadRoot = runCatching { downloadDir.canonicalFile }.getOrNull()
-            ?: return@withLock false
-        if (!targetPath.path.startsWith(downloadRoot.path + File.separator)) return@withLock false
         val sharedPath = records.any { other ->
-            other !== record && runCatching { File(other.localPath).canonicalFile == targetPath }
-                .getOrDefault(false)
+            other !== record && locatorsMatch(other.localPath, record.localPath)
         }
-        if (!sharedPath && targetPath.exists() && !targetPath.delete()) return@withLock false
+        if (!sharedPath && !deleteManagedRecordFile(record)) return@withLock false
         writeUnlocked(records.filterNot { it === record })
         true
     }
@@ -447,6 +455,38 @@ class DownloadStore private constructor(
         true
     }
 
+    internal suspend fun markPortableAttemptStateIfOwned(
+        serverUrl: String,
+        fileId: String,
+        requestId: String,
+        state: DownloadAttemptState,
+        target: PortableDownloadTarget,
+        verifiedSizeBytes: Long? = null,
+        verifiedSha256: String? = null,
+        storageScopeId: String? = null
+    ): Boolean = mutex.withLock {
+        val scope = usableScope(storageScopeId ?: currentScope(serverUrl))
+        val attempts = readAttemptsUnlocked()
+        val current = attempts.firstOrNull {
+            it.inScope(serverUrl, scope) && it.fileId == fileId && it.requestId == requestId
+        } ?: return@withLock false
+        val stageUri = Uri.parse(target.stageUri)
+        require(documentBelongsToRoot(Uri.parse(target.storageRootUri), stageUri)) {
+            "Portable download stage escaped managed storage."
+        }
+        val updated = current.copy(
+            targetPath = target.stageUri,
+            storageTreeUri = target.treeUri,
+            storageRootUri = target.storageRootUri,
+            state = state,
+            stagedPath = target.stageUri,
+            verifiedSizeBytes = verifiedSizeBytes ?: current.verifiedSizeBytes,
+            verifiedSha256 = verifiedSha256 ?: current.verifiedSha256
+        )
+        writeAttemptsUnlocked(attempts.map { if (it === current) updated else it })
+        true
+    }
+
     /**
      * Finishes a verified commit interrupted by process death. Every filesystem action is
      * justified by the still-current request owner and the digest persisted before publication.
@@ -465,6 +505,23 @@ class DownloadStore private constructor(
             ) return@mapNotNull null
             val expectedSize = attempt.verifiedSizeBytes ?: return@mapNotNull null
             val expectedHash = attempt.verifiedSha256 ?: return@mapNotNull null
+            if (attempt.stagedPath?.isContentLocator() == true) {
+                val context = appContext ?: return@mapNotNull null
+                val locator = attempt.stagedPath
+                val root = attempt.storageRootUri?.let(Uri::parse) ?: return@mapNotNull null
+                if (!documentBelongsToRoot(root, Uri.parse(locator))) return@mapNotNull null
+                val access = LocalDownloadAccess(context)
+                val verified = access.length(locator) == expectedSize &&
+                    runCatching { sha256Hex(access.openInput(locator)) == expectedHash }
+                        .getOrDefault(false)
+                if (!verified) return@mapNotNull null
+                return@mapNotNull VerifiedCommitPrevalidation(
+                    fileId = attempt.fileId,
+                    requestId = attempt.requestId,
+                    verifiedStagePath = locator,
+                    targetAlreadyVerified = false
+                )
+            }
             val stage = attempt.stagedPath?.let(::File)
             val verifiedStage = stage?.takeIf {
                 it.isFile && it.length() == expectedSize && sha256Hex(it) == expectedHash
@@ -509,6 +566,63 @@ class DownloadStore private constructor(
             ) return@forEach
             val expectedSize = attempt.verifiedSizeBytes ?: return@forEach
             val expectedHash = attempt.verifiedSha256 ?: return@forEach
+            if (attempt.stagedPath?.isContentLocator() == true) {
+                val context = appContext ?: return@forEach
+                val locator = attempt.stagedPath
+                val root = attempt.storageRootUri?.let(Uri::parse) ?: return@forEach
+                if (!documentBelongsToRoot(root, Uri.parse(locator))) return@forEach
+                val validation = prevalidated?.firstOrNull {
+                    it.fileId == attempt.fileId && it.requestId == attempt.requestId
+                }
+                if (prevalidated != null && validation?.verifiedStagePath != locator) return@forEach
+                if (validation == null) {
+                    val access = LocalDownloadAccess(context)
+                    if (access.length(locator) != expectedSize ||
+                        runCatching { sha256Hex(access.openInput(locator)) != expectedHash }
+                            .getOrDefault(true)
+                    ) return@forEach
+                }
+                val replacedRecord = records.firstOrNull {
+                    it.storageScopeId == attempt.storageScopeId &&
+                        it.serverUrl == attempt.serverUrl && it.fileId == attempt.fileId
+                }
+                records.removeAll {
+                    it.storageScopeId == attempt.storageScopeId &&
+                        it.serverUrl == attempt.serverUrl && it.fileId == attempt.fileId
+                }
+                records += DownloadRecord(
+                    serverUrl = attempt.serverUrl,
+                    profileId = attempt.profileId,
+                    storageScopeId = attempt.storageScopeId,
+                    fileId = attempt.fileId,
+                    bookId = attempt.bookId,
+                    libraryId = attempt.libraryId,
+                    title = attempt.title,
+                    filename = attempt.filename,
+                    localPath = locator,
+                    storageTreeUri = attempt.storageTreeUri,
+                    storageRootUri = attempt.storageRootUri,
+                    mediaKind = attempt.mediaKind,
+                    mimeType = attempt.mimeType,
+                    sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
+                    downloadedAtMillis = attempt.startedAtMillis,
+                    sizeBytes = expectedSize,
+                    origin = attempt.origin,
+                    status = DownloadRecordStatus.COMPLETE
+                )
+                replacedRecord
+                    ?.takeUnless { localDownloadLocatorsMatch(it.localPath, locator) }
+                    ?.let { PortableDownloadCleanup.defer(context, it) }
+                attempts.remove(attempt)
+                queue.removeAll {
+                    it.storageScopeId == attempt.storageScopeId &&
+                        it.serverUrl == attempt.serverUrl &&
+                        it.fileId == attempt.fileId &&
+                        it.requestId == attempt.requestId
+                }
+                recovered += attempt.fileId
+                return@forEach
+            }
             val stage = attempt.stagedPath?.let(::File)
             val target = File(attempt.targetPath)
             val validation = prevalidated?.firstOrNull {
@@ -538,6 +652,10 @@ class DownloadStore private constructor(
                 else -> validation.targetAlreadyVerified
             }
             if (!targetIsVerified) return@forEach
+            val replacedRecord = records.firstOrNull {
+                it.storageScopeId == attempt.storageScopeId &&
+                    it.serverUrl == attempt.serverUrl && it.fileId == attempt.fileId
+            }
             records.removeAll {
                 it.storageScopeId == attempt.storageScopeId &&
                     it.serverUrl == attempt.serverUrl && it.fileId == attempt.fileId
@@ -552,6 +670,8 @@ class DownloadStore private constructor(
                 title = attempt.title,
                 filename = attempt.filename,
                 localPath = target.canonicalPath,
+                storageTreeUri = attempt.storageTreeUri,
+                storageRootUri = attempt.storageRootUri,
                 mediaKind = attempt.mediaKind,
                 mimeType = attempt.mimeType,
                 sourceUpdatedAtMillis = attempt.sourceUpdatedAtMillis,
@@ -560,6 +680,11 @@ class DownloadStore private constructor(
                 origin = attempt.origin,
                 status = DownloadRecordStatus.COMPLETE
             )
+            appContext?.let { context ->
+                replacedRecord
+                    ?.takeUnless { localDownloadLocatorsMatch(it.localPath, target.canonicalPath) }
+                    ?.let { PortableDownloadCleanup.defer(context, it) }
+            }
             attempts.remove(attempt)
             queue.removeAll {
                 it.storageScopeId == attempt.storageScopeId &&
@@ -1074,6 +1199,47 @@ class DownloadStore private constructor(
         true
     }
 
+    /** Records a card-side document only while the captured request still owns the transfer. */
+    internal suspend fun commitPortableDownloadIfOwned(
+        serverUrl: String,
+        fileId: String,
+        requestId: String,
+        publishedLocator: String,
+        record: DownloadRecord,
+        storageScopeId: String? = null
+    ): Boolean = mutex.withLock {
+        require(record.serverUrl == serverUrl && record.fileId == fileId)
+        require(publishedLocator.isContentLocator())
+        val scope = usableScope(storageScopeId ?: currentScope(serverUrl))
+        val attempts = readAttemptsUnlocked()
+        val currentAttempt = attempts.firstOrNull {
+            it.inScope(serverUrl, scope) && it.fileId == fileId
+        } ?: return@withLock false
+        if (currentAttempt.requestId != requestId) return@withLock false
+        if (currentAttempt.requiresQueueOwnership) {
+            val ownsQueue = readQueueUnlocked().any {
+                it.inScope(serverUrl, scope) && it.fileId == fileId && it.requestId == requestId
+            }
+            if (!ownsQueue) return@withLock false
+        }
+        val root = currentAttempt.storageRootUri?.let(Uri::parse) ?: return@withLock false
+        if (!documentBelongsToRoot(root, Uri.parse(publishedLocator))) return@withLock false
+        val expectedSize = currentAttempt.verifiedSizeBytes ?: return@withLock false
+        val records = readSanitizedUnlocked(serverUrl, scope)
+            .filterNot { it.inScope(serverUrl, scope) && it.fileId == fileId }
+            .toMutableList()
+        records += record.copy(
+            storageScopeId = scope,
+            localPath = publishedLocator,
+            storageTreeUri = currentAttempt.storageTreeUri,
+            storageRootUri = currentAttempt.storageRootUri,
+            sizeBytes = expectedSize
+        )
+        writeUnlocked(records)
+        writeAttemptsUnlocked(attempts.filterNot { it === currentAttempt })
+        true
+    }
+
     suspend fun clearDownloadQueue(serverUrl: String? = null) = mutex.withLock {
         if (serverUrl == null) {
             if (queueFile.exists()) queueFile.delete()
@@ -1160,6 +1326,8 @@ class DownloadStore private constructor(
                         title = obj.optString("title"),
                         filename = obj.optString("filename").takeIf { it.isNotBlank() },
                         localPath = obj.optString("localPath"),
+                        storageTreeUri = obj.optString("storageTreeUri").takeIf { it.isNotBlank() },
+                        storageRootUri = obj.optString("storageRootUri").takeIf { it.isNotBlank() },
                         mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
                         mimeType = obj.optString("mimeType"),
                         sourceUpdatedAtMillis = if (
@@ -1202,7 +1370,12 @@ class DownloadStore private constructor(
             val selected = (serverUrl == null || record.serverUrl == serverUrl) &&
                 (storageScopeId == null || record.storageScopeId == storageScopeId)
             !selected || record.status == DownloadRecordStatus.INTERRUPTED ||
-                File(record.localPath).exists()
+                if (record.localPath.isContentLocator()) {
+                    val context = appContext
+                    context == null || !LocalDownloadAccess(context).isDefinitelyMissing(record)
+                } else {
+                    File(record.localPath).exists()
+                }
         }
         if (validRecords.size != records.size) {
             writeUnlocked(validRecords)
@@ -1224,6 +1397,8 @@ class DownloadStore private constructor(
                     put("title", record.title)
                     put("filename", record.filename)
                     put("localPath", record.localPath)
+                    put("storageTreeUri", record.storageTreeUri)
+                    put("storageRootUri", record.storageRootUri)
                     put("mediaKind", record.mediaKind.name)
                     put("mimeType", record.mimeType)
                     put("sourceUpdatedAtMillis", record.sourceUpdatedAtMillis)
@@ -1257,6 +1432,8 @@ class DownloadStore private constructor(
                         title = obj.optString("title"),
                         filename = obj.optString("filename").takeIf { it.isNotBlank() },
                         targetPath = obj.optString("targetPath"),
+                        storageTreeUri = obj.optString("storageTreeUri").takeIf { it.isNotBlank() },
+                        storageRootUri = obj.optString("storageRootUri").takeIf { it.isNotBlank() },
                         existingLocalPath = obj.optString("existingLocalPath").takeIf { it.isNotBlank() },
                         mediaKind = runCatching { MediaKind.valueOf(obj.optString("mediaKind")) }.getOrDefault(MediaKind.UNKNOWN),
                         mimeType = obj.optString("mimeType").takeIf { it.isNotBlank() },
@@ -1301,6 +1478,8 @@ class DownloadStore private constructor(
                 put("title", attempt.title)
                 put("filename", attempt.filename)
                 put("targetPath", attempt.targetPath)
+                put("storageTreeUri", attempt.storageTreeUri)
+                put("storageRootUri", attempt.storageRootUri)
                 put("existingLocalPath", attempt.existingLocalPath)
                 put("mediaKind", attempt.mediaKind.name)
                 put("mimeType", attempt.mimeType)
@@ -1455,7 +1634,30 @@ class DownloadStore private constructor(
         return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 
+    private fun sha256Hex(input: java.io.InputStream): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        input.buffered().use { source ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = source.read(buffer)
+                if (count < 0) break
+                if (count > 0) digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+    }
+
     private fun deleteStagedFileIfOwned(attempt: DownloadAttempt) {
+        if (attempt.stagedPath?.isContentLocator() == true) {
+            val context = appContext ?: return
+            val root = attempt.storageRootUri?.let(Uri::parse) ?: return
+            val staged = Uri.parse(attempt.stagedPath)
+            if (!documentBelongsToRoot(root, staged)) return
+            runCatching {
+                DocumentsContract.deleteDocument(context.contentResolver, staged)
+            }
+            return
+        }
         val staged = attempt.stagedPath?.let(::File)?.let {
             runCatching { it.canonicalFile }.getOrNull()
         } ?: return
@@ -1463,6 +1665,24 @@ class DownloadStore private constructor(
         val root = runCatching { downloadDir.canonicalFile }.getOrNull() ?: return
         if (!staged.path.startsWith(root.path + File.separator) || staged == target) return
         if (staged.isFile) staged.delete()
+    }
+
+    private fun locatorsMatch(first: String, second: String): Boolean {
+        if (first.isContentLocator() || second.isContentLocator()) return first == second
+        return runCatching { File(first).canonicalFile == File(second).canonicalFile }
+            .getOrDefault(false)
+    }
+
+    private fun deleteManagedRecordFile(record: DownloadRecord): Boolean {
+        if (record.localPath.isContentLocator()) {
+            val context = appContext ?: return false
+            return LocalDownloadAccess(context).deleteOwned(record)
+        }
+        val targetPath = runCatching { File(record.localPath).canonicalFile }.getOrNull()
+            ?: return false
+        val root = runCatching { downloadDir.canonicalFile }.getOrNull() ?: return false
+        if (!targetPath.path.startsWith(root.path + File.separator)) return false
+        return !targetPath.exists() || targetPath.delete()
     }
 
     private fun extensionFor(mediaKind: MediaKind, formatHint: String?, title: String): String {

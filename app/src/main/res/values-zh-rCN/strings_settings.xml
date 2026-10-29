@@ -8,16 +8,6 @@
     <string name="settings_choose_category_summary">选择类别以更改应用设置。</string>
 
     <!-- 设置类别 -->
-    <string name="settings_category_appearance">外观</string>
-    <string name="settings_category_appearance_summary">主题、动效与浏览展示</string>
-    <string name="settings_category_general">通用</string>
-    <string name="settings_category_general_summary">启动行为、屏幕方向与通用偏好</string>
-    <string name="settings_category_library">书库</string>
-    <string name="settings_category_library_summary">浏览与书库展示</string>
-    <string name="settings_category_downloads">下载与离线</string>
-    <string name="settings_category_downloads_summary">下载、存储与离线书库数据</string>
-    <string name="settings_category_network">网络与同步</string>
-    <string name="settings_category_network_summary">后台网络与播放行为</string>
 
     <!-- 通用偏好 -->
     <string name="settings_lock_orientation">锁定屏幕方向</string>

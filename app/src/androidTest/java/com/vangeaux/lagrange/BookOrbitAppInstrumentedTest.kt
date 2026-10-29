@@ -2763,9 +2763,9 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
         book: BookSummary,
         storageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File {
+    ): DownloadedBookFile {
         downloadedBooks += book
-        return File("unused")
+        return File("unused").let { DownloadedBookFile(it.absolutePath, it) }
     }
     override suspend fun deleteLocalCopy(book: BookSummary) {
         deleteLocalErrorsByBookId[book.id]?.let { throw it }

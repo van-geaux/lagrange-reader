@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -158,6 +159,30 @@ class BookDetailAvailableFilePickerInstrumentedTest {
         composeRule.onNodeWithTag("book-detail-available-file-metadata")
             .assertTextContains("Primary")
         composeRule.onNodeWithContentDescription("Choose available file").assertDoesNotExist()
+    }
+
+    @Test
+    fun portableFileIsDescribedAsStoredOnTheSdCardWithoutClaimingAvailability() {
+        val option = fileOption(
+            fileId = "file-1",
+            format = "application/epub+zip",
+            filename = "portable-book.epub",
+            sizeBytes = 8L * 1024L * 1024L,
+            role = "primary",
+            localPath = "content://documents/tree/card/document/portable-book.epub"
+        )
+
+        composeRule.setContent {
+            BookDetailAvailableFileSummary(
+                options = listOf(option),
+                selectedFileId = option.fileId,
+                onOpenSheet = {}
+            )
+        }
+
+        composeRule.onNodeWithTag("book-detail-available-file-metadata")
+            .assertTextEquals("8.0 MB · Primary · Downloaded to SD card")
+        composeRule.onNodeWithText("Available offline").assertDoesNotExist()
     }
 
     private fun fileOption(

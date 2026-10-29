@@ -87,6 +87,7 @@ data class AppPreferences(
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
     val pauseAudiobookForAudioInterruptions: Boolean = true,
+    val scaleProgressByPlaybackSpeed: Boolean = false, // Added preference field
     val epubImageMinimumDimensionPx: Int = DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
@@ -147,6 +148,7 @@ internal class AppPreferencesStore(context: Context) {
         pauseAudiobookForAudioInterruptions = audiobookAudioInterruptionPauseFromStorage(
             preferences.getBoolean(PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY, true)
         ),
+        scaleProgressByPlaybackSpeed = preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, false), // Read preference
         epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
             preferences.getInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
@@ -221,6 +223,7 @@ internal class AppPreferencesStore(context: Context) {
                 PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY,
                 value.pauseAudiobookForAudioInterruptions
             )
+            .putBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, value.scaleProgressByPlaybackSpeed) // Save preference
             .putInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
                 normalizeEpubImageMinimumDimensionPx(value.epubImageMinimumDimensionPx)
@@ -243,6 +246,15 @@ internal class AppPreferencesStore(context: Context) {
             )
             .putString(LOCKED_BOOK_FILTERS_KEY, stringMapStorageValue(value.lockedBookFilters))
             .putString(LOCKED_SERIES_FILTERS_KEY, stringMapStorageValue(value.lockedSeriesFilters))
+            .apply()
+    }
+
+    fun readScaleProgressByPlaybackSpeed(): Boolean =
+        preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, true)
+
+    fun saveScaleProgressByPlaybackSpeed(value: Boolean) {
+        preferences.edit()
+            .putBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, value)
             .apply()
     }
 
@@ -404,6 +416,7 @@ internal class AppPreferencesStore(context: Context) {
         const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
         const val PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY =
             "pause_audiobook_for_audio_interruptions"
+        const val SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY = "scale_progress_by_playback_speed" // Added key constant
         const val EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY = "epub_image_minimum_dimension_px"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"

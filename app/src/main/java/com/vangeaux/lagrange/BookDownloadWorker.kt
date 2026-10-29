@@ -375,6 +375,21 @@ class BookDownloadWorker(
                 finishQueueEntry(serverUrl, fileId, requestId)
                 return Result.success()
             }
+            val selectionStore = DownloadStorageSelectionStore(applicationContext)
+            val selection = selectionStore.read()
+            if (selection.usesPortableFolder &&
+                selectionStore.availability(selection) != PortableStorageAvailability.AVAILABLE
+            ) {
+                AutomaticDownloadStatusStore(applicationContext).write(
+                    profileId,
+                    storageScopeId,
+                    AutomaticDownloadStatus(
+                        state = AutomaticDownloadRunState.PAUSED,
+                        message = "Automatic downloads are paused until the selected SD-card folder is available."
+                    )
+                )
+                return Result.retry()
+            }
         }
 
         return try {
@@ -440,8 +455,7 @@ class BookDownloadWorker(
                 storageScopeId
             )
                 ?.localPath
-                ?.let(::File)
-                ?.length()
+                ?.let { LocalDownloadAccess(applicationContext).length(it) }
                 ?.coerceAtLeast(0L)
                 ?: 0L
             val capacity = AutomaticDownloadStorage.ensureCapacity(
@@ -547,7 +561,8 @@ class BookDownloadWorker(
                     successfulCompletion = true,
                     continueAutomatic = origin == DownloadOrigin.AUTOMATIC
                 )
-                Result.success(workDataOf(KEY_LOCAL_PATH to localFile.absolutePath))
+                PortableDownloadCleanup.schedule(applicationContext)
+                Result.success(workDataOf(KEY_LOCAL_PATH to localFile.locator))
             }
         } catch (cancellation: CancellationException) {
             // Cancellation retires this WorkSpec, not necessarily the durable logical request.
@@ -573,6 +588,31 @@ class BookDownloadWorker(
             // A verified stage is intentionally retained. This retry is not failure exhaustion:
             // the next run publishes it after the Activity/TTS lease has been released.
             Result.retry()
+        } catch (storage: PortableStorageUnavailableException) {
+            if (origin == DownloadOrigin.AUTOMATIC) {
+                AutomaticDownloadStatusStore(applicationContext).write(
+                    profileId,
+                    storageScopeId,
+                    AutomaticDownloadStatus(
+                        state = AutomaticDownloadRunState.PAUSED,
+                        message = storage.message
+                            ?: "Automatic downloads are paused until the selected SD-card folder is available."
+                    )
+                )
+                Result.retry()
+            } else {
+                withContext(NonCancellable) {
+                    finishQueueEntry(serverUrl, fileId, requestId)
+                }
+                Result.failure(
+                    workDataOf(
+                        KEY_OUTCOME to OUTCOME_FAILED,
+                        KEY_ERROR_MESSAGE to (
+                            storage.message ?: "The selected SD-card folder is unavailable."
+                        )
+                    )
+                )
+            }
         } catch (io: UnknownHostException) {
             retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
         } catch (io: SocketTimeoutException) {
@@ -1669,7 +1709,15 @@ internal class WorkManagerDownloadScheduler(
         when (info.state) {
             WorkInfo.State.SUCCEEDED -> {
                 val localPath = info.outputData.getString(KEY_LOCAL_PATH)
-                onOutcome(DownloadOutcome.Success(File(localPath.orEmpty())))
+                val locator = localPath.orEmpty()
+                onOutcome(
+                    DownloadOutcome.Success(
+                        DownloadedBookFile(
+                            locator = locator,
+                            directlyReadableFile = locator.takeUnless(String::isContentLocator)?.let(::File)
+                        )
+                    )
+                )
             }
             WorkInfo.State.CANCELLED -> onOutcome(DownloadOutcome.Canceled)
             WorkInfo.State.FAILED -> {

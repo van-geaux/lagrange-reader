@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -67,6 +69,52 @@ class ReaderFileValidatorTest {
         }
     }
 
+    @Test
+    fun `stream validators accept portable pdf epub and comic containers`() {
+        val pdf = "%PDF-1.7\nbody".toByteArray()
+        assertTrue(
+            ReaderFileValidator.isReadable(MediaKind.PDF, pdf.size.toLong()) {
+                ByteArrayInputStream(pdf)
+            }
+        )
+
+        val epub = zipBytes("META-INF/container.xml" to "<container/>")
+        assertTrue(
+            ReaderFileValidator.isReadable(MediaKind.EPUB, epub.size.toLong()) {
+                ByteArrayInputStream(epub)
+            }
+        )
+
+        val comic = zipBytes("pages/001.jpg" to "image")
+        assertTrue(
+            ReaderFileValidator.isReadable(MediaKind.COMIC, comic.size.toLong()) {
+                ByteArrayInputStream(comic)
+            }
+        )
+
+    }
+
+    @Test
+    fun `stream zip validation stops before expanding an oversized leading entry`() {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(ZipEntry("oversized.bin"))
+            val block = ByteArray(1024)
+            repeat(32 * 1024 + 1) { zip.write(block) }
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("META-INF/container.xml"))
+            zip.write("<container/>".toByteArray())
+            zip.closeEntry()
+        }
+        val archive = output.toByteArray()
+
+        assertFalse(
+            ReaderFileValidator.isReadable(MediaKind.EPUB, archive.size.toLong()) {
+                ByteArrayInputStream(archive)
+            }
+        )
+    }
+
     private fun zip(target: File, vararg entries: Pair<String, String>) {
         target.parentFile?.mkdirs()
         ZipOutputStream(target.outputStream()).use { output ->
@@ -77,4 +125,15 @@ class ReaderFileValidatorTest {
             }
         }
     }
+
+    private fun zipBytes(vararg entries: Pair<String, String>): ByteArray =
+        ByteArrayOutputStream().also { buffer ->
+            ZipOutputStream(buffer).use { output ->
+                entries.forEach { (name, content) ->
+                    output.putNextEntry(ZipEntry(name))
+                    output.write(content.toByteArray())
+                    output.closeEntry()
+                }
+            }
+        }.toByteArray()
 }

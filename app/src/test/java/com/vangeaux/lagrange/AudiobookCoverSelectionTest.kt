@@ -1,7 +1,9 @@
 package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AudiobookCoverSelectionTest {
@@ -40,5 +42,13 @@ class AudiobookCoverSelectionTest {
         )
 
         assertNull(bookCoverCandidateUrls(book, "https://server").firstOrNull { it.endsWith("audio-cover") })
+    }
+
+    @Test
+    fun downloadedAudiobookIsNotCopiedToInternalStorageForCoverFallback() {
+        assertFalse(shouldMaterializeDownloadedFileForCover(MediaKind.AUDIO))
+        assertTrue(shouldMaterializeDownloadedFileForCover(MediaKind.EPUB))
+        assertTrue(shouldMaterializeDownloadedFileForCover(MediaKind.PDF))
+        assertTrue(shouldMaterializeDownloadedFileForCover(MediaKind.COMIC))
     }
 }

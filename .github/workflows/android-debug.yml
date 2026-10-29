@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'feat/**'
   pull_request:
 
 permissions:
@@ -54,3 +55,9 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
+
+      - name: Upload Debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lagrange-debug-apk
+          path: app/build/outputs/apk/debug/Lagrange-debug-*.apk

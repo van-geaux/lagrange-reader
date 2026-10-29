@@ -5,7 +5,6 @@ import com.vangeaux.lagrange.core.*
 
 import android.content.Context
 import android.util.Log
-import com.vangeaux.lagrange.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -96,6 +95,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     private val coverModule = KomgaCoverModuleImpl(authModule)
     private val downloadModule = KomgaDownloadModuleImpl(appContext, authModule)
     private val downloadStore = DownloadStore(appContext)
+    private val localDownloadAccess = LocalDownloadAccess(appContext)
     private val browserSnapshotStore = BrowserSnapshotStore(appContext)
 
     override suspend fun getServerUrl(): String? = preferences.getString(SERVER_URL_KEY, null)
@@ -274,14 +274,14 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun loadLocalBooks(): List<BookSummary> = withContext(Dispatchers.IO) {
         downloadStore.readAll(getServerUrl().orEmpty())
-            .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
+            .filter { it.status == DownloadRecordStatus.COMPLETE && localDownloadAccess.exists(it.localPath) }
             .map { record ->
                 BookSummary(
                     libraryId = "",
                     id = record.bookId,
                     fileId = record.fileId,
                     title = record.title,
-                    filename = record.filename ?: File(record.localPath).name,
+                    filename = record.filename ?: localDownloadAccess.displayName(record.localPath),
                     format = record.mimeType,
                     mediaKind = record.mediaKind,
                     localPath = record.localPath,
@@ -334,7 +334,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun loadBookDetail(book: BookSummary): BookDetailInfo {
         val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
-            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
+            ?.takeIf { it.status == DownloadRecordStatus.COMPLETE && localDownloadAccess.exists(it.localPath) }
         return detailModule.loadBookDetail(getServerUrl().orEmpty(), book.copy(localPath = record?.localPath ?: book.localPath))
     }
 
@@ -344,8 +344,12 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     ): EpubImageLibrarySourceResult {
         val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
             ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
+        val locator = listOfNotNull(record?.localPath, book.localPath)
+            .firstOrNull(localDownloadAccess::exists)
         return epubImageLibrarySourceResult(
-            localFile = komgaDownloadedEpubFile(record, book.localPath),
+            localFile = locator?.let {
+                localDownloadAccess.materialize(it, book.fileId ?: book.id, book.format)
+            },
             localFileError = null,
             fileId = book.fileId,
             allowRemoteCache = allowRemoteCache,
@@ -403,11 +407,18 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     override suspend fun buildReaderState(book: BookSummary, localOnly: Boolean): ReaderState {
         val record = book.fileId?.let { downloadStore.find(getServerUrl().orEmpty(), it) }
             ?.takeIf { it.status == DownloadRecordStatus.COMPLETE }
-        val localBook = komgaLocalReaderBook(book, record)
-        if (localBook != null) {
+        val localLocator = listOfNotNull(record?.localPath, book.localPath)
+            .firstOrNull(localDownloadAccess::exists)
+        if (localLocator != null) {
+            val localBook = book.copy(localPath = localLocator)
+            val localFile = localDownloadAccess.materialize(
+                localLocator,
+                book.fileId ?: book.id,
+                book.format
+            )
             return ReaderState(
                 book = localBook,
-                localFile = File(localBook.localPath!!),
+                localFile = localFile,
                 pageIndex = komgaReaderPageIndex(localBook),
                 progressPercent = localBook.progressPercent,
                 serverProgressAuthoritative = !localOnly,
@@ -429,8 +440,13 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
                 initialLocatorJson = resolvedBook.readerLocatorJson
             )
         }
-        val localFile = downloadBook(resolvedBook) { }
-        val readerBook = resolvedBook.copy(localPath = localFile.absolutePath)
+        val download = downloadBook(resolvedBook) { }
+        val localFile = download.readableFile(
+            appContext,
+            resolvedBook.fileId ?: resolvedBook.id,
+            resolvedBook.format
+        )
+        val readerBook = resolvedBook.copy(localPath = download.locator)
         return ReaderState(
             book = readerBook,
             localFile = localFile,
@@ -493,7 +509,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     private suspend fun withDownloadPaths(serverUrl: String, books: List<BookSummary>): List<BookSummary> {
         val records = downloadStore.readAll(serverUrl)
-            .filter { it.status == DownloadRecordStatus.COMPLETE && File(it.localPath).exists() }
+            .filter { it.status == DownloadRecordStatus.COMPLETE && localDownloadAccess.exists(it.localPath) }
             .associateBy { it.fileId }
         return books.withCurrentDownloads(records)
     }
@@ -530,7 +546,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         book: BookSummary,
         storageScopeId: String?,
         onProgress: (Float?) -> Unit
-    ): File {
+    ): DownloadedBookFile {
         val serverUrl = getServerUrl().orEmpty()
         return downloadModule.downloadBook(serverUrl, book, storageScopeId, onProgress)
     }
@@ -542,8 +558,11 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun deleteLocalCopy(book: BookSummary) {
         val serverUrl = getServerUrl().orEmpty()
-        book.fileId?.let { downloadStore.delete(serverUrl, it) }
-            ?: book.localPath?.let(::File)?.takeIf(File::exists)?.delete()
+        val deleted = downloadStore.delete(serverUrl, book.fileId ?: book.id)
+        if (!deleted) {
+            book.localPath?.takeUnless(String::isContentLocator)
+                ?.let(::File)?.takeIf(File::exists)?.delete()
+        }
     }
 
     private companion object {

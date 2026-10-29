@@ -31,8 +31,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import androidx.media3.session.MediaSessionService
 
 import androidx.media3.session.SessionCommand
@@ -43,6 +46,7 @@ import com.google.common.collect.ImmutableList
 import java.io.File
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.vangeaux.lagrange.provider.resolveActiveProviderAuthenticatedMediaModule
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
@@ -51,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -96,6 +101,14 @@ internal val audiobookSeekBackSessionCommand = SessionCommand(
 )
 internal val audiobookSeekForwardSessionCommand = SessionCommand(
     AUDIO_SEEK_FORWARD_SESSION_ACTION,
+    Bundle()
+)
+internal val audiobookPreviousChapterSessionCommand = SessionCommand(
+    AUDIO_PREVIOUS_CHAPTER_SESSION_ACTION,
+    Bundle()
+)
+internal val audiobookNextChapterSessionCommand = SessionCommand(
+    AUDIO_NEXT_CHAPTER_SESSION_ACTION,
     Bundle()
 )
 
@@ -163,9 +176,14 @@ internal fun audiobookMediaButtonPreferences(context: Context): List<CommandButt
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun audiobookAvailableSessionCommands(): SessionCommands =
-    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+    MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
         .add(audiobookSeekBackSessionCommand)
         .add(audiobookSeekForwardSessionCommand)
+        .add(audiobookPreviousChapterSessionCommand)
+        .add(audiobookNextChapterSessionCommand)
+        .apply {
+            AndroidAutoSpeedController.getAllSpeedSessionCommands().forEach { add(it) }
+        }
         .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -177,12 +195,12 @@ private fun audiobookCompactViewExtras(index: Int): Bundle = Bundle().apply {
 internal fun audiobookExternalPlayerCommands(
     commands: Player.Commands
 ): Player.Commands = commands.buildUpon()
-    .removeAll(
-        Player.COMMAND_SEEK_TO_PREVIOUS,
-        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-        Player.COMMAND_SEEK_TO_NEXT,
-        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
-    )
+    .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_TO_NEXT)
+    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
     .build()
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -349,7 +367,6 @@ private class ReadAlongMediaNotificationProvider(
         }
     }
 
-
     override fun handleCustomCommand(
         mediaSession: MediaSession,
         action: String,
@@ -363,6 +380,9 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
         session: MediaSession,
         controller: MediaSession.ControllerInfo
     ): MediaSession.ConnectionResult {
+        if (!controller.isTrusted && controller.uid != android.os.Process.myUid()) {
+            return MediaSession.ConnectionResult.reject()
+        }
         val commands = session.player.availableCommands.buildUpon()
             .remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
@@ -408,40 +428,113 @@ private class ReadAlongMediaSessionCallback : MediaSession.Callback {
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class AudiobookMediaSessionCallback(
-    private val appContext: Context
-) : MediaSession.Callback {
+    private val appContext: Context? = null,
+    private val serviceProvider: () -> ReadiumAudioPlaybackService? = { null }
+) : MediaLibraryService.MediaLibrarySession.Callback {
     override fun onConnect(
         session: MediaSession,
         controller: MediaSession.ControllerInfo
-    ): MediaSession.ConnectionResult = MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-        .setAvailableSessionCommands(audiobookAvailableSessionCommands())
-        .setAvailablePlayerCommands(
-            audiobookExternalPlayerCommands(
-                session.player.availableCommands
+    ): MediaSession.ConnectionResult {
+        if (!isAcceptedAudiobookController(session, serviceProvider(), controller)) {
+            return MediaSession.ConnectionResult.reject()
+        }
+        val isAutoController = session.isAutoCompanionController(controller) ||
+            session.isAutomotiveController(controller)
+        val hasChapters = serviceProvider()?.activeSessionHasChapters() == true
+        val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
+        val customLayout = if (isAutoController) {
+            audiobookAutoMediaButtonPreferences(hasChapters = hasChapters, currentSpeed = currentSpeed)
+        } else {
+            appContext?.let { audiobookMediaButtonPreferences(it) } ?: audiobookMediaButtonPreferences()
+        }
+        return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            .setAvailableSessionCommands(audiobookAvailableSessionCommands())
+            .setAvailablePlayerCommands(
+                audiobookExternalPlayerCommands(
+                    session.player.availableCommands
+                )
             )
-        )
-        .setCustomLayout(audiobookMediaButtonPreferences(appContext))
-        .build()
+            .setCustomLayout(customLayout)
+            .build()
+    }
 
     override fun onCustomCommand(
         session: MediaSession,
         controller: MediaSession.ControllerInfo,
         customCommand: SessionCommand,
         args: Bundle
-    ): ListenableFuture<SessionResult> = when (customCommand) {
-        audiobookSeekBackSessionCommand -> {
-            session.player.seekBack()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+    ): ListenableFuture<SessionResult> =
+        handleAudiobookCustomCommand(
+            session = session,
+            service = serviceProvider(),
+            customCommand = customCommand
+        ) ?: super.onCustomCommand(session, controller, customCommand, args)
 
-        audiobookSeekForwardSessionCommand -> {
-            session.player.seekForward()
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
+    override fun onGetLibraryRoot(
+        session: MediaLibraryService.MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        params: MediaLibraryService.LibraryParams?
+    ): ListenableFuture<LibraryResult<MediaItem>> =
+        onGetAndroidAutoLibraryRoot(serviceProvider(), browser, params)
 
-        else -> super.onCustomCommand(session, controller, customCommand, args)
-    }
+    override fun onGetChildren(
+        session: MediaLibraryService.MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        parentId: String,
+        page: Int,
+        pageSize: Int,
+        params: MediaLibraryService.LibraryParams?
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+        onGetAndroidAutoChildren(serviceProvider(), browser, parentId, page, pageSize, params)
+
+    override fun onGetItem(
+        session: MediaLibraryService.MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        mediaId: String
+    ): ListenableFuture<LibraryResult<MediaItem>> =
+        onGetAndroidAutoItem(serviceProvider(), browser, mediaId)
+
+    override fun onSearch(
+        session: MediaLibraryService.MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        params: MediaLibraryService.LibraryParams?
+    ): ListenableFuture<LibraryResult<Void>> =
+        onSearchAndroidAuto(session, serviceProvider(), browser, query, params)
+
+    override fun onGetSearchResult(
+        session: MediaLibraryService.MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        page: Int,
+        pageSize: Int,
+        params: MediaLibraryService.LibraryParams?
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+        onGetAndroidAutoSearchResult(serviceProvider(), browser, query, page, pageSize, params)
+
+    override fun onAddMediaItems(
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        mediaItems: List<MediaItem>
+    ): ListenableFuture<List<MediaItem>> =
+        onAddAndroidAutoMediaItems(serviceProvider(), controller, mediaItems)
+
+    override fun onSetMediaItems(
+        mediaSession: MediaSession,
+        browser: MediaSession.ControllerInfo,
+        mediaItems: List<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long
+    ): ListenableFuture<MediaItemsWithStartPosition> =
+        onSetAndroidAutoMediaItems(serviceProvider(), browser, mediaItems, startIndex, startPositionMs)
+
+    override fun onPlaybackResumption(
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo
+    ): ListenableFuture<MediaItemsWithStartPosition> =
+        onAndroidAutoPlaybackResumption(serviceProvider(), controller)
 }
+
 @OptIn(ExperimentalReadiumApi::class)
 internal typealias BookOrbitAudioNavigator = AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>
 
@@ -451,7 +544,10 @@ internal data class AudiobookMediaItemSpec(
     val mimeType: String,
     val title: String,
     val artist: String?,
-    val localPath: String? = null
+    val localPath: String? = null,
+    val bookId: String = "",
+    val libraryId: String = "",
+    val albumTitle: String? = null
 )
 
 internal data class PreparedAudiobookPlaylist(
@@ -462,7 +558,9 @@ internal data class PreparedAudiobookPlaylist(
 internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudiobookPlaylist {
     val tracks = AudiobookTimeline.downloadableAudioFiles(files).mapNotNull { file ->
         val fileId = file.fileId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        val localPath = file.localPath?.takeIf { File(it).isFile }
+        val localPath = file.localPath?.takeIf {
+            it.isContentLocator() || File(it).isFile
+        }
         val streamUrl = file.book.streamUrl?.takeIf { it.isNotBlank() }
             ?: localPath
             ?: return@mapNotNull null
@@ -473,7 +571,10 @@ internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudi
             mimeType = mimeType,
             title = file.filename ?: file.book.title,
             artist = file.book.author,
-            localPath = localPath
+            localPath = localPath,
+            bookId = file.book.id,
+            libraryId = file.book.libraryId,
+            albumTitle = file.book.seriesName ?: file.book.title
         )
     }
     return PreparedAudiobookPlaylist(
@@ -485,18 +586,29 @@ internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudi
 internal fun buildAudiobookMediaItemSpecs(files: List<BookFileOption>): List<AudiobookMediaItemSpec> =
     prepareAudiobookPlaylist(files).specs
 
-internal fun buildAudiobookMediaItems(files: List<BookFileOption>): List<MediaItem> =
+internal fun buildAudiobookMediaItems(
+    files: List<BookFileOption>,
+    packageName: String = "com.vangeaux.lagrange"
+): List<MediaItem> =
     buildAudiobookMediaItemSpecs(files).map { spec ->
+        val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle(spec.title.sanitizeAudiobookTitle())
+            .setArtist(spec.artist)
+            .setAlbumTitle(spec.albumTitle)
+        if (spec.bookId.isNotBlank()) {
+            metadataBuilder.setArtworkUri(
+                androidAutoCoverUri(packageName, spec.bookId, spec.libraryId)
+            )
+        }
         MediaItem.Builder()
             .setMediaId(spec.fileId)
-            .setUri(spec.localPath?.let { Uri.parse(File(it).toURI().toString()) } ?: Uri.parse(spec.streamUrl))
-            .setMimeType(spec.mimeType)
-            .setMediaMetadata(
-                androidx.media3.common.MediaMetadata.Builder()
-                    .setTitle(spec.title)
-                    .setArtist(spec.artist)
-                    .build()
+            .setUri(
+                spec.localPath?.let { locator ->
+                    if (locator.isContentLocator()) Uri.parse(locator) else Uri.fromFile(File(locator))
+                } ?: Uri.parse(spec.streamUrl)
             )
+            .setMimeType(spec.mimeType)
+            .setMediaMetadata(metadataBuilder.build())
             .build()
     }
 
@@ -607,7 +719,7 @@ internal suspend fun openDirectMedia3Audio(
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
     recoverAuthentication: suspend () -> Boolean
 ): ReadiumAudioOpenResult {
-    val playlistItems = buildAudiobookMediaItems(audioFiles)
+    val playlistItems = buildAudiobookMediaItems(audioFiles, application.packageName)
     if (shouldUsePlaylistMedia3Audio(playlistItems.size)) {
         return preparePlaylistMedia3Audio(
             application = application,
@@ -720,15 +832,20 @@ private suspend fun prepareDirectMedia3Audio(
             )
         )
         .build()
+    val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
+        .setTitle(book.title.sanitizeAudiobookTitle())
+        .setArtist(book.author)
+        .setAlbumTitle(book.seriesName ?: book.title)
+    if (book.id.isNotBlank()) {
+        metadataBuilder.setArtworkUri(
+            androidAutoCoverUri(application.packageName, book.id, book.libraryId)
+        )
+    }
     val mediaItem = MediaItem.Builder()
+        .setMediaId(book.fileId ?: book.id)
         .setUri(streamUrl)
         .setMimeType(mimeType)
-        .setMediaMetadata(
-            androidx.media3.common.MediaMetadata.Builder()
-                .setTitle(book.title)
-                .setArtist(book.author)
-                .build()
-        )
+        .setMediaMetadata(metadataBuilder.build())
         .build()
     player.setMediaItem(mediaItem)
     player.seekTo(initialPositionMs.coerceAtLeast(0L))
@@ -952,7 +1069,7 @@ internal suspend fun openReadiumAudio(
             val engineProvider = ExoPlayerEngineProvider(
                 application = application,
                 metadataProvider = DefaultMediaMetadataProvider(
-                    title = book.title,
+                    title = book.title.sanitizeAudiobookTitle(),
                     author = book.author
                 ),
                 configuration = audiobookReadiumEngineConfiguration()
@@ -1043,14 +1160,15 @@ internal inline fun closeReaderResourceBeforeLeaseWake(
 
 @OptIn(ExperimentalReadiumApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-class ReadiumAudioPlaybackService : MediaSessionService() {
+class ReadiumAudioPlaybackService : MediaLibraryService() {
     internal data class Session(
         val book: BookSummary,
         val launchMode: ReaderLaunchMode,
         val engine: AudioPlaybackEngine,
         val mediaSession: MediaSession,
         val audioFiles: List<BookFileOption> = emptyList(),
-        val aggregateDurationMs: Long? = null
+        val aggregateDurationMs: Long? = null,
+        @Volatile var cachedCoverBytes: ByteArray? = null
     ) {
         val player: Player
             get() = engine.player
@@ -1062,6 +1180,9 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             activeBookSummaryForActiveFile(book, audioFiles, currentFileId())
                 .copy(coverAspectRatio = CoverAspectRatio.SQUARE)
 
+        fun currentPlaybackSpeed(): Float =
+            player.playbackParameters.speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+
         fun currentFilePositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
 
         fun totalDurationMs(): Long = resolveTotalDurationMs(
@@ -1072,6 +1193,17 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun absolutePositionMs(): Long =
             resolveAbsolutePositionMs(audioFiles, currentFileId(), currentFilePositionMs())
+
+        fun effectivePositionMs(scaleBySpeed: Boolean): Long =
+            scaleAudioTimeMs(absolutePositionMs(), currentPlaybackSpeed(), scaleBySpeed)
+
+        fun effectiveTotalDurationMs(scaleBySpeed: Boolean): Long =
+            scaleAudioTimeMs(totalDurationMs(), currentPlaybackSpeed(), scaleBySpeed)
+
+        fun effectiveRemainingMs(scaleBySpeed: Boolean): Long {
+            val rem = (totalDurationMs() - absolutePositionMs()).coerceAtLeast(0L)
+            return scaleAudioTimeMs(rem, currentPlaybackSpeed(), scaleBySpeed)
+        }
 
         fun seekToAbsolutePosition(ms: Long) {
             if (audioFiles.size < 2) {
@@ -1087,7 +1219,61 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
         }
     }
 
-    private val mediaSessionCallback by lazy { AudiobookMediaSessionCallback(applicationContext) }
+    internal val libraryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mediaSessionCallback by lazy {
+        AudiobookMediaSessionCallback(applicationContext) { this }
+    }
+    private var idlePlayer: ExoPlayer? = null
+    internal var librarySessionPlayer: LagrangeLibrarySessionPlayer? = null
+    internal var mediaLibrarySession: MediaLibrarySession? = null
+
+    private fun ensureLibrarySession(): MediaLibrarySession {
+        mediaLibrarySession?.let { return it }
+        val fallbackPlayer = idlePlayer ?: ExoPlayer.Builder(applicationContext)
+            .setAudioAttributes(audiobookMedia3AudioAttributes(), true)
+            .setHandleAudioBecomingNoisy(true)
+            .setSeekBackIncrementMs(AUDIO_SEEK_BACK_INCREMENT_MS)
+            .setSeekForwardIncrementMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
+            .build()
+            .also { idlePlayer = it }
+        val forwarding = LagrangeLibrarySessionPlayer(
+            fallbackPlayer,
+            ::activeFallbackMediaMetadata,
+            sessionProvider = ::activeSession,
+            scaleBySpeedProvider = {
+                AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+            }
+        ).also {
+            librarySessionPlayer = it
+        }
+        val initialSpeed = AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
+        return MediaLibrarySession.Builder(this, forwarding, mediaSessionCallback)
+            .setId(LIBRARY_SESSION_ID)
+            .setSessionActivity(createSessionActivityIntent())
+            .setCustomLayout(
+                audiobookAutoMediaButtonPreferences(
+                    hasChapters = false,
+                    currentSpeed = initialSpeed
+                )
+            )
+            .build()
+            .also { created ->
+                mediaLibrarySession = created
+            }
+    }
+
+    internal fun activeFallbackMediaMetadata(): androidx.media3.common.MediaMetadata? =
+        buildActiveSessionFallbackMediaMetadata(binder.session.value, packageName)
+
+    private fun createSessionActivityIntent(): PendingIntent {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+            ?: Intent(this@ReadiumAudioPlaybackService, MainActivity::class.java)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        return PendingIntent.getActivity(applicationContext, 0, intent, flags)
+    }
+
+    internal fun activeSession(): Session? = binder.session.value
 
     internal inner class Binder : android.os.Binder() {
         private val mutableSession = MutableStateFlow<Session?>(null)
@@ -1102,30 +1288,52 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             aggregateDurationMs: Long? = null
         ): Session {
             closeSession()
-            var mediaSession: MediaSession? = null
             val readerLeases = audioReaderLeaseSpecs(
                 AUDIO_READER_LEASE,
                 book,
                 audioFiles
             )
             try {
-                val createdSession = MediaSession.Builder(applicationContext, engine.player)
-                    .setId("${book.libraryId}:${book.id}:${book.fileId.orEmpty()}")
-                    .setSessionActivity(createSessionActivityIntent())
-                    .setCallback(mediaSessionCallback)
-                    .setCustomLayout(audiobookMediaButtonPreferences(applicationContext))
-                    .build()
-                mediaSession = createdSession
-                addSession(createdSession)
+                val librarySession = ensureLibrarySession()
+                val wrappedPlayer = LagrangeLibrarySessionPlayer(
+                    engine.player,
+                    ::activeFallbackMediaMetadata,
+                    sessionProvider = ::activeSession,
+                    scaleBySpeedProvider = {
+                        AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+                    }
+                )
+                wrappedPlayer.addListener(object : Player.Listener {
+                    override fun onPlaybackParametersChanged(
+                        playbackParameters: androidx.media3.common.PlaybackParameters
+                    ) {
+                        librarySessionPlayer?.notifyTimelineAndMetadataChanged()
+                        refreshAndroidAutoCustomLayout(engine.player.playbackParameters.speed)
+                    }
+                })
+                librarySessionPlayer = wrappedPlayer
+                librarySession.setPlayer(wrappedPlayer)
+                val currentSpeed = engine.player.playbackParameters.speed.takeIf { it > 0f }
+                    ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
+                librarySession.setCustomLayout(
+                    audiobookAutoMediaButtonPreferences(
+                        hasChapters = book.audioChapters.isNotEmpty() || audioFiles.size > 1,
+                        currentSpeed = currentSpeed
+                    )
+                )
+                grantBookCoverPermissions(this@ReadiumAudioPlaybackService, book)
                 return Session(
                     book,
                     launchMode,
                     engine,
-                    createdSession,
+                    librarySession,
                     audioFiles,
                     aggregateDurationMs
                 ).also { session ->
                     mutableSession.value = session
+                    preloadSessionCoverBytes(this@ReadiumAudioPlaybackService, session) {
+                        mutableSession.value === session
+                    }
                     readerLeases.forEach { lease ->
                         LocalBookReaderLeaseStore(applicationContext).acquire(
                             ownerId = lease.ownerId,
@@ -1136,7 +1344,6 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
                     }
                 }
             } catch (error: Throwable) {
-                mediaSession?.release()
                 mutableSession.value = null
                 readerLeases.forEach { lease ->
                     LocalBookReaderLeaseStore(applicationContext).release(lease.ownerId)
@@ -1147,14 +1354,24 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
 
         fun closeSession() {
             mutableSession.value?.let { current ->
+                idlePlayer?.let { fallback ->
+                    fallback.clearMediaItems()
+                    val wrappedFallback = LagrangeLibrarySessionPlayer(
+                        fallback,
+                        ::activeFallbackMediaMetadata,
+                        sessionProvider = ::activeSession,
+                        scaleBySpeedProvider = {
+                            AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
+                        }
+                    )
+                    librarySessionPlayer = wrappedFallback
+                    mediaLibrarySession?.setPlayer(wrappedFallback)
+                    refreshAndroidAutoCustomLayout()
+                }
                 mutableSession.value = null
                 closeReaderResourceBeforeLeaseWake(
                     closeResource = {
-                        try {
-                            current.mediaSession.release()
-                        } finally {
-                            current.engine.close()
-                        }
+                        current.engine.close()
                     },
                     releaseLease = {
                         audioReaderLeaseSpecs(
@@ -1235,14 +1452,6 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             )
             this@ReadiumAudioPlaybackService.stopSelf()
         }
-
-        private fun createSessionActivityIntent(): PendingIntent {
-            val intent = packageManager.getLaunchIntentForPackage(packageName)
-                ?: Intent(this@ReadiumAudioPlaybackService, MainActivity::class.java)
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-            return PendingIntent.getActivity(applicationContext, 0, intent, flags)
-        }
     }
 
     private val binder by lazy { Binder() }
@@ -1250,6 +1459,7 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         setMediaNotificationProvider(ReadAlongMediaNotificationProvider(this))
+        ensureLibrarySession()
     }
 
     override fun onBind(intent: Intent?): IBinder? =
@@ -1260,8 +1470,9 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
             super.onBind(intent)
         }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        binder.activeMediaSession()
+    override fun onGetSession(
+        controllerInfo: MediaSession.ControllerInfo
+    ): MediaLibrarySession? = ensureLibrarySession()
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
@@ -1271,11 +1482,18 @@ class ReadiumAudioPlaybackService : MediaSessionService() {
     override fun onDestroy() {
         binder.closeSession()
         binder.closeMediaOverlaySession()
+        mediaLibrarySession?.release()
+        mediaLibrarySession = null
+        librarySessionPlayer = null
+        idlePlayer?.release()
+        idlePlayer = null
+        libraryScope.cancel()
         super.onDestroy()
     }
 
     companion object {
         internal const val SERVICE_INTERFACE = "com.vangeaux.lagrange.READIUM_AUDIO_PLAYBACK"
+        internal const val LIBRARY_SESSION_ID = "lagrange-audiobook-library"
 
         internal fun start(application: Application) {
             application.startService(serviceIntent(application))
@@ -1344,6 +1562,7 @@ class ReadiumAudioPlaybackController internal constructor(
     private var openGeneration = 0L
     private var progressJob: Job? = null
     private var progressListener: ((BookSummary, Long, Float?, ReaderLaunchMode) -> Unit)? = null
+    private val fallbackSessionHistoryStore by lazy { AudiobookSessionHistoryStore(application) }
     private var sessionHistoryStore: AudiobookSessionHistoryStore? = null
     private var serverUrlProvider: (suspend () -> String?)? = null
     private var readingSessionReporter: ReadingSessionReporter? = null
@@ -1351,10 +1570,12 @@ class ReadiumAudioPlaybackController internal constructor(
     private var playbackStateListener: Player.Listener? = null
     private var lastRecordedIsPlaying: Boolean? = null
     private var coverLoader: (suspend (BookSummary) -> ByteArray?)? = null
-    private var streamingHeadersProvider: suspend (AbsoluteUrl) -> Map<String, String> = {
-        emptyMap()
+    private var streamingHeadersProvider: suspend (AbsoluteUrl) -> Map<String, String> = { url ->
+        resolveActiveProviderAuthenticatedMediaModule(application).requestHeaders(url.toString())
     }
-    private var streamingAuthenticationRecovery: suspend () -> Boolean = { false }
+    private var streamingAuthenticationRecovery: suspend () -> Boolean = {
+        resolveActiveProviderAuthenticatedMediaModule(application).recoverAuthentication()
+    }
     private val mutableBookDetailRequest = MutableStateFlow<AudioBookDetailRequest?>(null)
     internal val bookDetailRequest: StateFlow<AudioBookDetailRequest?> =
         mutableBookDetailRequest.asStateFlow()
@@ -1415,7 +1636,9 @@ class ReadiumAudioPlaybackController internal constructor(
         }
     }
 
-    internal suspend fun loadCover(book: BookSummary): ByteArray? = coverLoader?.invoke(book)
+    internal suspend fun loadCover(book: BookSummary): ByteArray? =
+        coverLoader?.invoke(book)
+            ?: AndroidAutoCatalogBridge.getInstance(application).loadCoverBytes(book.id, book.libraryId)
 
     internal fun requestBookDetail(book: BookSummary, openSessionHistory: Boolean = false) {
         bookDetailRequestSequence += 1L
@@ -1455,9 +1678,11 @@ class ReadiumAudioPlaybackController internal constructor(
                 val positionMs = current.absolutePositionMs()
                 val chapterEndMs = audiobookChapterEndMs(current.book.audioChapters, positionMs)
                     ?: current.totalDurationMs()
-                chapterEndMs
+                val rawRemainingMs = chapterEndMs
                     .minus(positionMs)
                     .coerceAtLeast(0L)
+                val scaleBySpeed = preferencesStore.read().scaleProgressByPlaybackSpeed
+                scaleAudioTimeMs(rawRemainingMs, current.currentPlaybackSpeed(), scaleBySpeed)
             }
             if (durationMs == null || durationMs <= 0L) {
                 mutableSleepTimer.value = AudioSleepTimerState()
@@ -1752,7 +1977,7 @@ class ReadiumAudioPlaybackController internal constructor(
             open(
                 book = book,
                 file = book.localPath?.let(::File)?.takeIf { it.isFile },
-                streamUrl = book.streamUrl,
+                streamUrl = book.localPath?.takeIf(String::isContentLocator) ?: book.streamUrl,
                 initialPositionMs = positionMs,
                 launchMode = ReaderLaunchMode.NORMAL,
                 playWhenReady = true
@@ -1821,12 +2046,14 @@ class ReadiumAudioPlaybackController internal constructor(
         isPlaying: Boolean
     ) {
         if (session.launchMode == ReaderLaunchMode.PREVIEW) return
-        val store = sessionHistoryStore ?: return
-        val serverUrlProvider = serverUrlProvider ?: return
+        val store = sessionHistoryStore ?: fallbackSessionHistoryStore
+        val resolvedServerUrlProvider: suspend () -> String? = serverUrlProvider ?: {
+            ServerProfileStore(application).active()?.serverUrl
+        }
         val activeBook = session.activeBookSummary()
         val positionMs = session.currentFilePositionMs()
         scope.launch(Dispatchers.IO) {
-            val serverUrl = serverUrlProvider()?.takeIf { it.isNotBlank() } ?: return@launch
+            val serverUrl = resolvedServerUrlProvider()?.takeIf { it.isNotBlank() } ?: return@launch
             runCatching {
                 store.record(
                     serverUrl = serverUrl,
@@ -1915,16 +2142,34 @@ class ReadiumAudioPlaybackController internal constructor(
         readingSessionFileId = null
     }
 
-    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? =
-        absoluteProgressPercent(session.absolutePositionMs(), session.totalDurationMs())
+    private fun progressPercent(session: ReadiumAudioPlaybackService.Session): Float? {
+        val baseDurationMs = session.totalDurationMs()
+        if (baseDurationMs <= 0L) return null
+
+        val speed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
+        val scaleBySpeed = preferencesStore.read().scaleProgressByPlaybackSpeed
+
+        val effectiveDurationMs = if (scaleBySpeed) (baseDurationMs.toDouble() / speed).toLong() else baseDurationMs
+        val effectivePositionMs = if (scaleBySpeed) (session.absolutePositionMs().toDouble() / speed).toLong() else session.absolutePositionMs()
+
+        return absoluteProgressPercent(effectivePositionMs, effectiveDurationMs)
+    }
 
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
-        progressListener?.invoke(
-            session.activeBookSummary(),
-            session.currentFilePositionMs(),
-            progressPercent(session),
-            session.launchMode
-        )
+        val activeBook = session.activeBookSummary()
+        val positionMs = session.currentFilePositionMs()
+        val percent = progressPercent(session)
+        val listener = progressListener
+        if (listener != null) {
+            listener.invoke(activeBook, positionMs, percent, session.launchMode)
+        } else {
+            AndroidAutoCatalogBridge.getInstance(application).recordHeadlessProgress(
+                book = activeBook,
+                positionMs = positionMs,
+                progressPercent = percent,
+                launchMode = session.launchMode
+            )
+        }
     }
 
     private suspend fun binder(): ReadiumAudioPlaybackService.Binder {

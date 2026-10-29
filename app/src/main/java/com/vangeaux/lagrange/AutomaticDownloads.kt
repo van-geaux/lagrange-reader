@@ -677,6 +677,7 @@ internal class LocalBookReaderLeaseStore(context: Context) {
         }
         if (released.isNotEmpty()) {
             DownloadQueuePump.wakeVerifiedReplacements(appContext, released)
+            PortableDownloadCleanup.schedule(appContext)
         }
     }
 
@@ -721,8 +722,7 @@ internal class DownloadReplacementDeferredException : IllegalStateException(
 
 private fun canonicalPathsMatch(first: String?, second: String?): Boolean {
     if (first.isNullOrBlank() || second.isNullOrBlank()) return false
-    return runCatching { File(first).canonicalFile == File(second).canonicalFile }
-        .getOrDefault(false)
+    return localDownloadLocatorsMatch(first, second)
 }
 
 internal fun localReaderLeaseBlocksReplacement(
@@ -1015,7 +1015,8 @@ internal data class AutomaticEvictionCandidate(
     val storageScopeId: String = "",
     val sourceRevisions: Map<String, Long?> = emptyMap(),
     val localPaths: Set<String> = emptySet(),
-    val storageRootPath: String = ""
+    val storageRootPath: String = "",
+    val selectedDestinationBytes: Long = sizeBytes
 )
 
 internal data class DownloadStorageInventory(
@@ -1033,9 +1034,9 @@ internal data class ProtectedDownloadIdentity(
     val fileId: String
 )
 
-internal suspend fun readDownloadStorageInventories(filesDir: File): List<DownloadStorageInventory> =
-    managedDownloadStorageRoots(filesDir).map { storageRoot ->
-        val store = DownloadStore.forStorageRoot(storageRoot)
+internal suspend fun readDownloadStorageInventories(context: Context): List<DownloadStorageInventory> =
+    managedDownloadStorageRoots(context.filesDir).map { storageRoot ->
+        val store = DownloadStore.forStorageRoot(storageRoot, context)
         DownloadStorageInventory(
             rootPath = storageRoot.path,
             store = store,
@@ -1049,14 +1050,19 @@ internal suspend fun activeDownloadStagedPaths(filesDir: File): Set<String> =
     managedDownloadStorageRoots(filesDir)
         .flatMap { storageRoot -> DownloadStore.forStorageRoot(storageRoot).readAttempts() }
         .mapNotNull { it.stagedPath }
-        .mapNotNull { runCatching { File(it).canonicalPath }.getOrNull() }
+        .mapNotNull { stagedPath ->
+            if (stagedPath.isContentLocator()) stagedPath
+            else runCatching { File(stagedPath).canonicalPath }.getOrNull()
+        }
         .toSet()
 
 internal fun buildAutomaticEvictionCandidates(
     inventories: List<DownloadStorageInventory>,
     activeFileIds: Set<ProtectedDownloadIdentity>,
     readerLeases: List<LocalBookReaderLease>,
-    incomingProtected: Set<ProtectedDownloadIdentity>
+    incomingProtected: Set<ProtectedDownloadIdentity>,
+    selectedStorageRootUri: String? = null,
+    selectedStorageIsPortable: Boolean = false
 ): List<AutomaticEvictionCandidate> = inventories.flatMap { inventory ->
     val queued = inventory.queue.mapTo(mutableSetOf()) {
         Triple(it.serverUrl, it.storageScopeId, it.fileId)
@@ -1081,7 +1087,7 @@ internal fun buildAutomaticEvictionCandidates(
                 protectedIdentity in activeFileIds
         }
         if (protected) return@mapNotNull null
-        val files = bookRecords.map { File(it.localPath) }.distinctBy { it.absolutePath }
+        val locators = bookRecords.distinctBy(DownloadRecord::localPath)
         val protectedByLease = readerLeases.any { lease ->
             bookRecords.any { record ->
                 localReaderLeaseBlocksReplacement(
@@ -1097,7 +1103,13 @@ internal fun buildAutomaticEvictionCandidates(
         AutomaticEvictionCandidate(
             bookId = identity[3],
             fileIds = fileIds,
-            sizeBytes = files.sumOf { file -> file.length().coerceAtLeast(0L) },
+            sizeBytes = locators.sumOf { record ->
+                if (record.localPath.isContentLocator()) {
+                    record.sizeBytes?.coerceAtLeast(0L) ?: 0L
+                } else {
+                    File(record.localPath).length().coerceAtLeast(0L)
+                }
+            },
             completed = bookRecords.all { it.lastKnownCompleted == true },
             lastAccessedAtMillis = bookRecords.mapNotNull { it.lastAccessedAtMillis }
                 .maxOrNull() ?: Long.MIN_VALUE,
@@ -1107,8 +1119,24 @@ internal fun buildAutomaticEvictionCandidates(
             profileId = identity[1],
             storageScopeId = identity[2],
             sourceRevisions = bookRecords.associate { it.fileId to it.sourceUpdatedAtMillis },
-            localPaths = files.mapTo(mutableSetOf()) { it.absolutePath },
-            storageRootPath = inventory.rootPath
+            localPaths = locators.mapTo(mutableSetOf(), DownloadRecord::localPath),
+            storageRootPath = inventory.rootPath,
+            selectedDestinationBytes = locators
+                .filter { record ->
+                    if (selectedStorageIsPortable) {
+                        record.localPath.isContentLocator() &&
+                            record.storageRootUri == selectedStorageRootUri
+                    } else {
+                        !record.localPath.isContentLocator()
+                    }
+                }
+                .sumOf { record ->
+                    if (record.localPath.isContentLocator()) {
+                        record.sizeBytes?.coerceAtLeast(0L) ?: 0L
+                    } else {
+                        File(record.localPath).length().coerceAtLeast(0L)
+                    }
+                }
         )
     }
 }
@@ -1126,10 +1154,12 @@ internal fun groupDownloadedRecordsByBook(
 
 internal fun selectAutomaticEvictions(
     candidates: List<AutomaticEvictionCandidate>,
-    requiredBytes: Long
+    requiredBytes: Long,
+    requiredSelectedDestinationBytes: Long = 0L
 ): List<AutomaticEvictionCandidate> {
-    if (requiredBytes <= 0L) return emptyList()
+    if (requiredBytes <= 0L && requiredSelectedDestinationBytes <= 0L) return emptyList()
     var reclaimed = 0L
+    var selectedDestinationReclaimed = 0L
     return buildList {
         candidates.sortedWith(
             compareByDescending<AutomaticEvictionCandidate> { it.completed }
@@ -1137,19 +1167,38 @@ internal fun selectAutomaticEvictions(
                 .thenBy { it.downloadedAtMillis }
                 .thenBy { it.bookId }
         ).forEach { candidate ->
-            if (reclaimed >= requiredBytes) return@forEach
+            if (reclaimed >= requiredBytes &&
+                selectedDestinationReclaimed >= requiredSelectedDestinationBytes
+            ) return@forEach
+            val helpsGlobalLimit = reclaimed < requiredBytes
+            val helpsSelectedReserve =
+                selectedDestinationReclaimed < requiredSelectedDestinationBytes &&
+                    candidate.selectedDestinationBytes > 0L
+            if (!helpsGlobalLimit && !helpsSelectedReserve) return@forEach
             add(candidate)
             reclaimed = saturatingAdd(reclaimed, candidate.sizeBytes.coerceAtLeast(0L))
+            selectedDestinationReclaimed = saturatingAdd(
+                selectedDestinationReclaimed,
+                candidate.selectedDestinationBytes.coerceAtLeast(0L)
+            )
         }
     }
 }
 
 internal fun evictionPlanCanSatisfy(
     plan: List<AutomaticEvictionCandidate>,
-    requiredBytes: Long
-): Boolean = plan.fold(0L) { total, candidate ->
-    saturatingAdd(total, candidate.sizeBytes.coerceAtLeast(0L))
-} >= requiredBytes.coerceAtLeast(0L)
+    requiredBytes: Long,
+    requiredSelectedDestinationBytes: Long = 0L
+): Boolean {
+    val reclaimed = plan.fold(0L) { total, candidate ->
+        saturatingAdd(total, candidate.sizeBytes.coerceAtLeast(0L))
+    }
+    val selectedReclaimed = plan.fold(0L) { total, candidate ->
+        saturatingAdd(total, candidate.selectedDestinationBytes.coerceAtLeast(0L))
+    }
+    return reclaimed >= requiredBytes.coerceAtLeast(0L) &&
+        selectedReclaimed >= requiredSelectedDestinationBytes.coerceAtLeast(0L)
+}
 
 internal fun downloadIsIndividuallyOverCap(
     totalBytes: Long,
@@ -1184,6 +1233,20 @@ internal fun DownloadStorageAllowance.permitsCurrentPolicyAndReserve(
     bytesWritten: Long,
     nextChunkBytes: Int,
     origin: DownloadOrigin = DownloadOrigin.AUTOMATIC
+): Boolean = permitsCurrentPolicyAndReserve(
+    context = context,
+    availableBytes = { stagedFile.usableSpace.coerceAtLeast(0L) },
+    bytesWritten = bytesWritten,
+    nextChunkBytes = nextChunkBytes,
+    origin = origin
+)
+
+internal fun DownloadStorageAllowance.permitsCurrentPolicyAndReserve(
+    context: Context,
+    availableBytes: () -> Long?,
+    bytesWritten: Long,
+    nextChunkBytes: Int,
+    origin: DownloadOrigin = DownloadOrigin.AUTOMATIC
 ): Boolean {
     if (!automaticStorageLimitsApply(origin)) return true
     if (!permits(bytesWritten, nextChunkBytes)) return false
@@ -1192,7 +1255,8 @@ internal fun DownloadStorageAllowance.permitsCurrentPolicyAndReserve(
         throw LocalBookStoragePolicyChangedException()
     }
     if (current.reserveBytes <= 0L) return true
-    return stagedFile.usableSpace.coerceAtLeast(0L) - nextChunkBytes >= current.reserveBytes
+    val available = availableBytes() ?: return false
+    return available.coerceAtLeast(0L) - nextChunkBytes >= current.reserveBytes
 }
 
 internal class LocalBookStorageLimitException(message: String) : IllegalStateException(message)
@@ -1339,6 +1403,9 @@ internal class DownloadStorageReservationStore(context: Context) {
     )
 }
 
+private fun normalizedStagedLocator(value: String): String =
+    if (value.isContentLocator()) value else File(value).canonicalPath
+
 internal fun evictionPolicyIsStillCurrent(
     expected: LocalBookStoragePolicy,
     current: LocalBookStoragePolicy
@@ -1388,7 +1455,7 @@ internal object AutomaticDownloadStorage {
         val activeStagedPaths = activeDownloadStagedPaths(context.filesDir)
         val allowance = DownloadStorageReservationStore(context).reserve(
             reservationId = reservationId,
-            stagedPath = File(stagedPath).canonicalPath,
+            stagedPath = normalizedStagedLocator(stagedPath),
             usage = AppStorageManager(context).usage(),
             policy = storagePolicy,
             requestedBytes = expected ?: UNKNOWN_DOWNLOAD_RESERVATION_WINDOW_BYTES,
@@ -1412,7 +1479,7 @@ internal object AutomaticDownloadStorage {
         val reservationStore = DownloadStorageReservationStore(context)
         var additional = reservationStore.reserve(
             reservationId = reservationId,
-            stagedPath = File(stagedPath).canonicalPath,
+            stagedPath = normalizedStagedLocator(stagedPath),
             usage = AppStorageManager(context).usage(),
             policy = storagePolicy,
             requestedBytes = UNKNOWN_DOWNLOAD_RESERVATION_WINDOW_BYTES,
@@ -1438,7 +1505,7 @@ internal object AutomaticDownloadStorage {
             }
             additional = reservationStore.reserve(
                 reservationId = reservationId,
-                stagedPath = File(stagedPath).canonicalPath,
+                stagedPath = normalizedStagedLocator(stagedPath),
                 usage = AppStorageManager(context).usage(),
                 policy = LocalBookStoragePolicyStore(context).read(),
                 requestedBytes = UNKNOWN_DOWNLOAD_RESERVATION_WINDOW_BYTES,
@@ -1495,7 +1562,7 @@ internal object AutomaticDownloadStorage {
             )
         }
 
-        val inventories = readDownloadStorageInventories(context.filesDir)
+        val inventories = readDownloadStorageInventories(context)
         val inventoriesByRoot = inventories.associateBy { it.rootPath }
         val activeFileIds = ActiveReaderStore(context).readAll().mapNotNullTo(mutableSetOf()) { session ->
             session.book.fileId?.let { fileId ->
@@ -1516,14 +1583,26 @@ internal object AutomaticDownloadStorage {
                 fileId = it
             )
         }
+        val destination = DownloadStorageSelectionStore(context).read()
         val candidates = buildAutomaticEvictionCandidates(
             inventories = inventories,
             activeFileIds = activeFileIds,
             readerLeases = readerLeases,
-            incomingProtected = incomingProtected
+            incomingProtected = incomingProtected,
+            selectedStorageRootUri = destination.managedDirectoryUri,
+            selectedStorageIsPortable = destination.usesPortableFolder
         )
-        val plan = selectAutomaticEvictions(candidates, admission.requiredReclaimBytes)
-        if (!evictionPlanCanSatisfy(plan, admission.requiredReclaimBytes)) {
+        val plan = selectAutomaticEvictions(
+            candidates = candidates,
+            requiredBytes = admission.maximumExceededByBytes,
+            requiredSelectedDestinationBytes = admission.reserveShortfallBytes
+        )
+        if (!evictionPlanCanSatisfy(
+                plan = plan,
+                requiredBytes = admission.maximumExceededByBytes,
+                requiredSelectedDestinationBytes = admission.reserveShortfallBytes
+            )
+        ) {
             return@withContext AutomaticCapacityResult(
                 allowed = false,
                 message = capacityMessage(context, admission)
@@ -1549,10 +1628,7 @@ internal object AutomaticDownloadStorage {
                             lease.fileId in candidate.fileIds) ||
                             candidate.localPaths.any { recordPath ->
                                 lease.localPath != null &&
-                                    runCatching {
-                                        File(recordPath).canonicalFile ==
-                                            File(lease.localPath).canonicalFile
-                                    }.getOrDefault(false)
+                                localDownloadLocatorsMatch(recordPath, lease.localPath)
                             }
                     }
                 ) return@withLock null
@@ -1742,11 +1818,12 @@ internal suspend fun clearLocalCopiesForServer(
     val records = store.readAll(serverUrl, storageScopeId)
     val removedBookIds = mutableSetOf<String>()
     val suppressionStore = AutomaticDownloadSuppressionStore(context)
+    val localAccess = LocalDownloadAccess(context)
     val storageGeneration = LocalBookStoragePolicyStore(context).read().generation
     groupDownloadedRecordsByBook(records).forEach { (bookId, bookRecords) ->
         val fileIds = bookRecords.mapTo(mutableSetOf()) { it.fileId }
         val sizesByFileId = bookRecords.associate { record ->
-            record.fileId to File(record.localPath).length().coerceAtLeast(0L)
+            record.fileId to localAccess.length(record.localPath).coerceAtLeast(0L)
         }
         val deletion = localCopyDeletionGuard.withLock {
             val currentActive = ActiveReaderStore(context).read(serverUrl, storageScopeId)?.fileId
@@ -1755,9 +1832,10 @@ internal suspend fun clearLocalCopiesForServer(
             val protectedByLease = liveLeases.any { lease ->
                 (lease.serverUrl == serverUrl && lease.fileId in fileIds) ||
                     bookRecords.any { record ->
-                        lease.localPath != null && runCatching {
-                            File(lease.localPath).canonicalFile == File(record.localPath).canonicalFile
-                        }.getOrDefault(false)
+                        lease.localPath != null && localDownloadLocatorsMatch(
+                            lease.localPath,
+                            record.localPath
+                        )
                     }
             }
             if (protectedByLease) return@withLock null
@@ -2008,7 +2086,11 @@ class AutomaticDownloadPlannerWorker(
                         )
                         if (existing != null &&
                             !downloadUpdateAvailable(candidateBook, existing) &&
-                            downloadedFilePassesIntegrity(candidateBook, File(existing.localPath))
+                            downloadedLocatorPassesIntegrity(
+                                applicationContext,
+                                candidateBook,
+                                existing.localPath
+                            )
                         ) {
                             handledFileIds += optionFileId
                             completedFileIds += optionFileId
