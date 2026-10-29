@@ -1,11 +1,14 @@
 package com.vangeaux.lagrange
 
+import android.app.UiAutomation
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.SystemClock
+import android.view.Surface
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
@@ -39,6 +42,7 @@ class ComicSpreadActivityInstrumentedTest {
     @After
     fun restoreOriginalPreferences() {
         store.save(original)
+        InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(UiAutomation.ROTATION_UNFREEZE)
     }
 
     private fun useProfile(profile: LibraryReaderPreferences) {
@@ -268,12 +272,18 @@ class ComicSpreadActivityInstrumentedTest {
         }
     }
 
-    /** Rotates like a user would; the lock is switched too so the recreated reader stays portrait. */
+    /**
+     * Rotates the device a quarter turn, as a user would. Apps targeting SDK 36 cannot set a fixed
+     * orientation on large screens, so asking the activity for portrait does nothing on an unfolded
+     * foldable; the lock is switched too so a phone-sized device keeps the recreated reader portrait.
+     */
     private fun <A : android.app.Activity> rotateToPortrait(scenario: ActivityScenario<A>) {
         store.save(store.read().copy(lockedOrientation = LockedOrientation.PORTRAIT))
-        scenario.onActivity { activity ->
-            activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        var rotation = Surface.ROTATION_0
+        @Suppress("DEPRECATION")
+        scenario.onActivity { activity -> rotation = activity.windowManager.defaultDisplay.rotation }
+        // UiAutomation's ROTATION_FREEZE_* values match Surface.ROTATION_*.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation((rotation + 1) % 4)
     }
 
     private fun pageBytes(color: Int): ByteArray = ByteArrayOutputStream().use { output ->
