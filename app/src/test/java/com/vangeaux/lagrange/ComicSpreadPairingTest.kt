@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -220,5 +221,16 @@ class ComicSpreadPairingTest {
         assertEquals(ComicFooterPages(null, 1, 40), comicReaderFooterPages(currentPage = 0, pageCount = 40, spreadFirstPage = 0))
         assertEquals(ComicFooterPages(null, 5, 40), comicReaderFooterPages(currentPage = 4, pageCount = 40))
         assertEquals(ComicFooterPages(null, 1, 1), comicReaderFooterPages(currentPage = 0, pageCount = 0))
+    }
+
+    @Test
+    fun `wide pages are keyed per profile`() {
+        val book = "book-1|file-1"
+        assertEquals(comicWidePageKey("profile-a", book), comicWidePageKey("profile-a", book))
+        assertNotEquals(comicWidePageKey("profile-a", book), comicWidePageKey("profile-b", book))
+        assertNotEquals(comicWidePageKey("profile-a", book), comicWidePageKey(null, book))
+        // A profile ID cannot run into the reader key and collide with another profile's key.
+        assertNotEquals(comicWidePageKey("a/b", "c"), comicWidePageKey("a", "b/c"))
+        assertNotEquals(comicWidePageKey("a|b", "c"), comicWidePageKey("a", "b|c"))
     }
 }

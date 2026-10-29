@@ -120,41 +120,83 @@ class ComicSpreadActivityInstrumentedTest {
         }
     }
 
+    /**
+     * Opens a 7-page comic of portrait pages at page 5 (index 4) in a spread and returns the resumed
+     * page file, or skips the test on windows too small for spreads. With page 2 (index 1) remembered
+     * as wide the pairs are cover, 2, 3–4, 5–6 and it resumes on 0004; without it, 4–5 and 0003.
+     */
+    private fun resumedPageAtPageFive(name: String, readerKey: String, cbz: File): String {
+        writeCbz(cbz, 7)
+        useProfile(LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.AUTO))
+        ActivityScenario.launch<ReadiumComicReaderActivity>(
+            ReadiumComicReaderActivity.createIntent(
+                context = context,
+                file = cbz,
+                title = name,
+                readerKey = readerKey,
+                libraryId = libraryId,
+                launchMode = ReaderLaunchMode.NORMAL,
+                initialPage = 4
+            )
+        ).use { scenario ->
+            var qualifies = false
+            awaitCondition(scenario, "comic reader did not settle") { activity ->
+                qualifies = windowQualifiesForSpread(activity)
+                activity.isComicSpreadReaderVisible() == qualifies &&
+                    ReadiumComicLocatorStore(context).read(readerKey) != null
+            }
+            assumeTrue("Requires a large horizontal window (unfolded foldable or tablet)", qualifies)
+            return requireNotNull(ReadiumComicLocatorStore(context).read(readerKey)).href.toString()
+        }
+    }
+
     @Test
     fun rememberedWidePagesKeepTheSamePairsAfterReopening() {
         val cbz = File(context.cacheDir, "fold-wide-${System.nanoTime()}.cbz")
         val readerKey = "fold-wide-comic-${System.nanoTime()}"
-        writeCbz(cbz, 7)
-        useProfile(LibraryReaderPreferences(twoPageSpread = ReaderSpreadMode.AUTO))
         // A previous session found page 2 (index 1) to be double-page artwork. The fixture's pages are
         // all portrait, so only the remembered classification can change the pairing.
         ComicWidePageStore(context).save(readerKey, setOf(1))
         try {
-            ActivityScenario.launch<ReadiumComicReaderActivity>(
-                ReadiumComicReaderActivity.createIntent(
-                    context = context,
-                    file = cbz,
-                    title = "Fold wide",
-                    readerKey = readerKey,
-                    libraryId = libraryId,
-                    launchMode = ReaderLaunchMode.NORMAL,
-                    initialPage = 4
-                )
-            ).use { scenario ->
-                var qualifies = false
-                awaitCondition(scenario, "comic reader did not settle") { activity ->
-                    qualifies = windowQualifiesForSpread(activity)
-                    activity.isComicSpreadReaderVisible() == qualifies &&
-                        ReadiumComicLocatorStore(context).read(readerKey) != null
-                }
-                assumeTrue("Requires a large horizontal window (unfolded foldable or tablet)", qualifies)
-                // Cover, wide page 2 alone, then pairs 3–4, 5–6: page 5 (index 4) opens on spread 5–6,
-                // which resumes on its first page. Without the remembered page it would be 4–5 (0003).
-                val stored = requireNotNull(ReadiumComicLocatorStore(context).read(readerKey))
-                assertTrue(stored.href.toString(), stored.href.toString().endsWith("0004.jpg"))
-            }
+            val href = resumedPageAtPageFive("Fold wide", readerKey, cbz)
+            assertTrue(href, href.endsWith("0004.jpg"))
         } finally {
+            ComicWidePageStore(context).save(readerKey, emptySet())
             cbz.delete()
+        }
+    }
+
+    @Test
+    fun widePagesRememberedForAnotherProfileDoNotChangeThePairs() {
+        val cbz = File(context.cacheDir, "fold-other-profile-${System.nanoTime()}.cbz")
+        val readerKey = "fold-other-profile-comic-${System.nanoTime()}"
+        // The same book ID on another server or account found page 2 to be wide. This profile has
+        // not, so the reader must pair the pages as if nothing were remembered.
+        val otherProfile = ComicWidePageStore(context, "profile-other-${System.nanoTime()}")
+        otherProfile.save(readerKey, setOf(1))
+        try {
+            val href = resumedPageAtPageFive("Fold other profile", readerKey, cbz)
+            assertTrue(href, href.endsWith("0003.jpg"))
+        } finally {
+            otherProfile.save(readerKey, emptySet())
+            cbz.delete()
+        }
+    }
+
+    @Test
+    fun widePageStoreKeepsProfilesApart() {
+        val readerKey = "wide-store-${System.nanoTime()}"
+        val first = ComicWidePageStore(context, "profile-first-${System.nanoTime()}")
+        val second = ComicWidePageStore(context, "profile-second-${System.nanoTime()}")
+        try {
+            first.save(readerKey, setOf(1, 4))
+            assertEquals(emptySet<Int>(), second.read(readerKey))
+            second.save(readerKey, setOf(2))
+            assertEquals(setOf(1, 4), first.read(readerKey))
+            assertEquals(setOf(2), second.read(readerKey))
+        } finally {
+            first.save(readerKey, emptySet())
+            second.save(readerKey, emptySet())
         }
     }
 

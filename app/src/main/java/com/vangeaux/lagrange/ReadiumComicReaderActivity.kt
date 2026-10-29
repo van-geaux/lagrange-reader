@@ -1547,13 +1547,20 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     }
 }
 
-/** Pages detected as double-page (wide) artwork, per book, so spread pairing survives reopening. */
-internal class ComicWidePageStore(context: Context) {
+/**
+ * Pages detected as double-page (wide) artwork, per book, so spread pairing survives reopening.
+ * Kept separately for each saved server profile (which also fixes the provider), because the same
+ * book ID can exist on another server or account with different pages.
+ */
+internal class ComicWidePageStore(context: Context, private val profileId: String?) {
+    /** Scoped to the active profile, read once: a reader keeps the profile it was opened with. */
+    constructor(context: Context) : this(context, ServerProfileStore(context).activeId())
+
     private val preferences = context.getSharedPreferences("readium_comic_wide_pages", Context.MODE_PRIVATE)
 
     fun read(readerKey: String): Set<Int> {
         if (readerKey.isBlank()) return emptySet()
-        return preferences.getString(readerKey, null).orEmpty()
+        return preferences.getString(comicWidePageKey(profileId, readerKey), null).orEmpty()
             .split(',')
             .mapNotNull { it.trim().toIntOrNull()?.takeIf { page -> page >= 0 } }
             .toSet()
@@ -1561,9 +1568,17 @@ internal class ComicWidePageStore(context: Context) {
 
     fun save(readerKey: String, pages: Set<Int>) {
         if (readerKey.isBlank()) return
-        preferences.edit().putString(readerKey, pages.sorted().joinToString(",")).apply()
+        val key = comicWidePageKey(profileId, readerKey)
+        preferences.edit().apply {
+            if (pages.isEmpty()) remove(key) else putString(key, pages.sorted().joinToString(","))
+        }.apply()
     }
 }
+
+/** URL-safe Base64 never contains '/', so a profile ID cannot spill into the reader key. */
+internal fun comicWidePageKey(profileId: String?, readerKey: String): String =
+    java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(profileId.orEmpty().toByteArray(Charsets.UTF_8)) + "/" + readerKey
 
 internal class ReadiumComicLocatorStore(context: Context) {
     private val preferences = context.getSharedPreferences(
