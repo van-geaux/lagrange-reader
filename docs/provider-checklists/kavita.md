@@ -16,6 +16,11 @@ Copy this file into this folder using the target server/provider name, for examp
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
 - Evidence links/screenshots/logs: `[locations]`
 
+User confirmation:
+
+- On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`.
+- Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied. This confirmation does not mark additional checklist items as manually validated.
+
 Use these result markers for every item:
 
 - `[x] Pass`

@@ -12,6 +12,8 @@ On 2026-10-06, the user confirmed Komga server web OIDC sign-in on Samsung SM-S9
 
 On 2026-10-09, the user confirmed the saved-session provider-switch path on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610092219.apk` against the configured BookOrbit and Komga profiles under issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268). Switching to Komga, waiting five minutes, and returning to BookOrbit restored BookOrbit Home without login. This confirms the implemented server-selection/session-restoration function for both provider directions; it does not independently validate general provider token-expiry behavior.
 
+On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`. Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied, so no additional Kavita matrix cells are changed to `S` or treated as manually validated by this confirmation.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
