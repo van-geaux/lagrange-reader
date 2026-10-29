@@ -15,7 +15,7 @@ The adapter follows Kavita's upstream OpenAPI contract:
 - comic pages: `GET /api/Reader/image?chapterId={chapterId}&page={page}`;
 - PDF reader stream: `GET /api/Reader/pdf?chapterId={chapterId}`;
 - progress read: `GET /api/Reader/get-progress?chapterId={chapterId}`;
-- progress write: `POST /api/Reader/progress` with library, series, volume, chapter, and page IDs;
+- progress write: `POST /api/Reader/progress` with library, series, volume, chapter, and page IDs; `pageNum = 0` resets one chapter to unread;
 - chapter read: `POST /api/Reader/mark-chapter-read`;
 - chapter download: `GET /api/Download/chapter?chapterId={chapterId}`;
 - series cover: `GET /api/Image/series-cover?seriesId={seriesId}`.
@@ -39,6 +39,6 @@ Each successful page is merged into the provider browser snapshot. If a later re
 
 ## Capability state
 
-Implemented provider modules are wired through `KavitaModuleSet` and selected only for profiles with provider ID `kavita`. Unsupported actions remain explicit: EPUB reader routing, chapter unread, audiobook downloads, Home shelves, authors, annotations, statistics, achievements, Smart Scopes, cache warming, and server reading-session history.
+- Implemented provider modules are wired through `KavitaModuleSet` and selected only for profiles with provider ID `kavita`. Unsupported actions remain explicit: audiobook downloads, Home shelves, authors, annotations, statistics, achievements, Smart Scopes, cache warming, and server reading-session history.
 
 Compilation and parser/contract tests do not constitute authenticated demo-server or device validation. Manual validation requires locally supplied credentials through the secure local mechanism; credentials are not stored in profiles, source files, logs, fixtures, or documentation. The Kavita OIDC browser/session path remains pending live device validation against a configured Kavita server.

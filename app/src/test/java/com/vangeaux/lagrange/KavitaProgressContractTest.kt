@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.KavitaChapterContext
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterContext
+import com.vangeaux.lagrange.provider.kavita.kavitaProgressPayload
 import com.vangeaux.lagrange.provider.kavita.kavitaProgressBook
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -63,5 +64,19 @@ class KavitaProgressContractTest {
 
         assertEquals(BookReadStatus.READ, projected.readStatus)
         assertTrue(projected.isRead)
+    }
+
+    @Test
+    fun chapterUnreadUsesZeroPageProgressWithFullHierarchy() {
+        val payload = kavitaProgressPayload(
+            KavitaChapterContext(chapterId = 42, volumeId = 7, seriesId = 3, libraryId = 1),
+            page = 0
+        )
+
+        assertEquals(0, payload.getInt("pageNum"))
+        assertEquals(42, payload.getInt("chapterId"))
+        assertEquals(7, payload.getInt("volumeId"))
+        assertEquals(3, payload.getInt("seriesId"))
+        assertEquals(1, payload.getInt("libraryId"))
     }
 }
