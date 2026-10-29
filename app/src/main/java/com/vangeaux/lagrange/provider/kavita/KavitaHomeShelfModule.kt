@@ -224,8 +224,8 @@ internal fun kavitaDashboardItems(payload: String): List<JSONObject> {
 }
 
 internal fun kavitaSeriesCard(item: JSONObject, baseUrl: String): BookSummary? {
-    val seriesId = item.optInt("id", -1).takeIf { it >= 0 }
-        ?: item.optInt("seriesId", -1).takeIf { it >= 0 }
+    val seriesId = item.optInt("seriesId", -1).takeIf { it >= 0 }
+        ?: item.optInt("id", -1).takeIf { it >= 0 }
         ?: return null
     val title = sequenceOf("name", "localizedName", "seriesName", "localizedSeriesName")
         .map { key -> item.optString(key) }
