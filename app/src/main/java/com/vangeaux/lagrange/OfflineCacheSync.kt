@@ -132,13 +132,25 @@ class OfflineCacheSyncWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val serverUrl = inputData.getString(KEY_SERVER_URL).orEmpty()
+        val profileId = inputData.getString(KEY_PROFILE_ID).orEmpty()
+        val activeProfileId = ServerProfileStore(applicationContext).activeId().orEmpty()
         val libraryIds = offlineCacheLibraryIdsFromStorage(inputData.getString(KEY_LIBRARY_IDS)).toList()
         val libraryIndex = inputData.getInt(KEY_LIBRARY_INDEX, 0)
         val startIndex = inputData.getInt(KEY_START_INDEX, 0)
         val details = inputData.getBoolean(KEY_DETAILS, true)
         val covers = inputData.getBoolean(KEY_COVERS, false)
         val automatic = inputData.getBoolean(KEY_AUTOMATIC, false)
-        if (serverUrl.isBlank() || libraryIds.isEmpty() || libraryIndex !in libraryIds.indices) {
+        if (serverUrl.isBlank() || profileId.isBlank() || profileId != activeProfileId ||
+            libraryIds.isEmpty() || libraryIndex !in libraryIds.indices
+        ) {
+            if (profileId.isNotBlank() && profileId != activeProfileId) {
+                fail(
+                    applicationContext,
+                    R.string.error_offline_cache_server_changed,
+                    "The configured server/profile changed while the cache was updating."
+                )
+                return Result.success()
+            }
             finish(applicationContext)
             return Result.success()
         }
@@ -194,14 +206,14 @@ class OfflineCacheSyncWorker(
                 batch.nextIndex != null -> {
                     enqueueContinuation(
                         applicationContext, serverUrl, libraryIds, libraryIndex,
-                        batch.nextIndex, details, covers, automatic
+                        batch.nextIndex, details, covers, automatic, profileId
                     )
                     Result.success()
                 }
                 libraryIndex + 1 < libraryIds.size -> {
                     enqueueContinuation(
                         applicationContext, serverUrl, libraryIds, libraryIndex + 1,
-                        0, details, covers, automatic
+                        0, details, covers, automatic, profileId
                     )
                     Result.success()
                 }
@@ -220,7 +232,7 @@ class OfflineCacheSyncWorker(
             if (libraryIndex + 1 < libraryIds.size) {
                 enqueueContinuation(
                     applicationContext, serverUrl, libraryIds, libraryIndex + 1,
-                    0, details, covers, automatic
+                    0, details, covers, automatic, profileId
                 )
             } else {
                 finish(applicationContext)
@@ -235,6 +247,7 @@ class OfflineCacheSyncWorker(
         private const val TAG = "bookorbit-offline-cache-sync"
         private const val WORK_NAME = "bookorbit-offline-cache-sync"
         private const val KEY_SERVER_URL = "server-url"
+        private const val KEY_PROFILE_ID = "profile-id"
         private const val KEY_LIBRARY_IDS = "library-ids"
         private const val KEY_LIBRARY_INDEX = "library-index"
         private const val KEY_START_INDEX = "start-index"
@@ -270,7 +283,8 @@ class OfflineCacheSyncWorker(
                     serverUrl, libraries.toList().sorted(), 0, 0,
                     preferences.offlineCacheDetailsEnabled,
                     preferences.offlineCacheCoversEnabled,
-                    automatic
+                    automatic,
+                    ServerProfileStore(context).activeId().orEmpty()
                 )
             )
             return true
@@ -299,12 +313,13 @@ class OfflineCacheSyncWorker(
             startIndex: Int,
             details: Boolean,
             covers: Boolean,
-            automatic: Boolean
+            automatic: Boolean,
+            profileId: String
         ) {
             WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME,
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
-                request(serverUrl, libraryIds, libraryIndex, startIndex, details, covers, automatic)
+                request(serverUrl, libraryIds, libraryIndex, startIndex, details, covers, automatic, profileId)
             )
         }
 
@@ -315,7 +330,8 @@ class OfflineCacheSyncWorker(
             startIndex: Int,
             details: Boolean,
             covers: Boolean,
-            automatic: Boolean
+            automatic: Boolean,
+            profileId: String
         ) = OneTimeWorkRequestBuilder<OfflineCacheSyncWorker>()
             .setConstraints(
                 Constraints.Builder()
@@ -325,6 +341,7 @@ class OfflineCacheSyncWorker(
             .setInputData(
                 workDataOf(
                     KEY_SERVER_URL to serverUrl,
+                    KEY_PROFILE_ID to profileId,
                     KEY_LIBRARY_IDS to offlineCacheLibraryIdsStorageValue(libraryIds.toSet()),
                     KEY_LIBRARY_INDEX to libraryIndex,
                     KEY_START_INDEX to startIndex,

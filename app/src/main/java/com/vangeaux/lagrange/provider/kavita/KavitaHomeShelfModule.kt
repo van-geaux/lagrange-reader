@@ -30,29 +30,23 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             ?: throw UserFacingException("Enter a valid Kavita server URL.")
         val (onDeck, recentlyUpdated, recentlyAdded) = coroutineScope {
             val onDeckRequest = async {
-                runCatching {
-                    requestDashboardItems(
-                        base,
-                        "/api/series/on-deck?libraryId=0&pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
-                    )
-                }.getOrDefault(emptyList())
+                requestDashboardItems(
+                    base,
+                    "/api/series/on-deck?libraryId=0&pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
+                )
             }
             val updatedRequest = async {
-                runCatching {
-                    requestDashboardItems(
-                        base,
-                        "/api/series/recently-updated-series?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
-                    )
-                }.getOrDefault(emptyList())
+                requestDashboardItems(
+                    base,
+                    "/api/series/recently-updated-series?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
+                )
             }
             val addedRequest = async {
-                runCatching {
-                    requestDashboardItems(
-                        base,
-                        "/api/series/recently-added-v2?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE",
-                        body = "{}"
-                    )
-                }.getOrDefault(emptyList())
+                requestDashboardItems(
+                    base,
+                    "/api/series/recently-added-v2?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE",
+                    body = "{}"
+                )
             }
             Triple(onDeckRequest.await(), updatedRequest.await(), addedRequest.await())
         }
@@ -60,21 +54,17 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
         val updatedIds = recentlyUpdated.mapNotNull { item ->
             item.optInt("seriesId", -1).takeIf { it >= 0 }
         }
-        val updatedSeries = runCatching {
-            resolveSeriesCards(base, updatedIds)
-        }.getOrDefault(emptyList())
+        val updatedSeries = resolveSeriesCards(base, updatedIds)
         val onDeckSeries = onDeck.mapNotNull { item -> kavitaSeriesCard(item, base) }
         val onDeckBooks = coroutineScope {
             onDeckSeries.map { series ->
                 async {
-                    runCatching {
-                        loadSeriesBooks(
-                            base,
-                            series.seriesId ?: return@runCatching emptyList(),
-                            series.seriesName ?: series.title,
-                            series.libraryId
-                        )
-                    }.getOrDefault(emptyList())
+                    loadSeriesBooks(
+                        base,
+                        series.seriesId ?: return@async emptyList(),
+                        series.seriesName ?: series.title,
+                        series.libraryId
+                    )
                 }
             }.awaitAll().flatten()
         }
@@ -138,7 +128,9 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             .get()
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return emptyList()
+            if (!response.isSuccessful) {
+                throw UserFacingException("Unable to load Kavita series details (HTTP ${response.code}).")
+            }
             val root = JSONObject(response.body?.string().orEmpty())
             val name = kavitaSeriesName(root, fallbackName).takeUnless { it == seriesId } ?: fallbackName
             val libraryId = root.optInt("libraryId", -1).takeIf { it > 0 }?.toString()
@@ -160,7 +152,7 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
                     progressPercent = projection.pages?.let { pages ->
                         (projection.pagesRead.toFloat() / pages.toFloat() * 100f).coerceIn(0f, 100f)
                     },
-                    progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                    progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
                     seriesId = seriesId,
                     seriesName = name,
                     seriesIndex = projection.seriesIndex,
@@ -252,7 +244,7 @@ internal fun kavitaSeriesCard(item: JSONObject, baseUrl: String): BookSummary? {
         coverUrl = "$baseUrl/api/Image/series-cover?seriesId=$seriesId",
         progressLabel = pagesRead.takeIf { it > 0 }?.let { "Page $it" },
         progressPercent = progress,
-        progressPageIndex = pagesRead.takeIf { it > 0 },
+        progressPageIndex = kavitaReaderPageIndex(pagesRead),
         seriesId = seriesId.toString(),
         seriesName = title,
         readStatus = when {

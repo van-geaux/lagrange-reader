@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterSeriesName
+import com.vangeaux.lagrange.provider.kavita.kavitaFileId
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
@@ -75,6 +76,18 @@ class KavitaCatalogContractTest {
     }
 
     @Test
+    fun fileIdentityUsesTheNestedKavitaFileId() {
+        assertEquals(
+            "99",
+            kavitaFileId(JSONObject("""{"id":99}"""), "42")
+        )
+        assertEquals(
+            "42",
+            kavitaFileId(JSONObject("{}"), "42")
+        )
+    }
+
+    @Test
     fun chapterProjectionRejectsEntriesWithoutAnIntegerId() {
         assertNull(kavitaChapterProjection(JSONObject("{\"title\":\"missing id\"}")))
     }
@@ -133,7 +146,7 @@ class KavitaCatalogContractTest {
     @Test
     fun formatNormalizationUsesMimeOrExtensionFallback() {
         assertEquals("epub", kavitaFormat("application/epub+zip", null))
-        assertEquals("cbz", kavitaFormat(null, ".zip"))
+        assertNull(kavitaFormat(null, ".zip"))
         assertEquals("pdf", kavitaFormat(null, "book.pdf"))
     }
 

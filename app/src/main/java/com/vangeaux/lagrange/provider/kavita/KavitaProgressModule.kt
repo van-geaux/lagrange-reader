@@ -46,6 +46,9 @@ internal fun kavitaProgressPayload(
     .put("seriesId", context.seriesId)
     .put("libraryId", context.libraryId)
 
+internal fun kavitaReaderPageIndex(pagesRead: Int): Int? =
+    pagesRead.takeIf { it > 0 }?.minus(1)?.coerceAtLeast(0)
+
 internal fun kavitaProgressBook(book: BookSummary, progress: JSONObject): BookSummary {
     val page = progress.optInt("pageNum", 0).takeIf { it > 0 }
     val pages = book.readerPageCount
@@ -53,14 +56,15 @@ internal fun kavitaProgressBook(book: BookSummary, progress: JSONObject): BookSu
         (current.toFloat() / total.toFloat() * 100f).coerceIn(0f, 100f)
     } }
     val completed = percent != null && percent >= 99.5f
+    val readerPageIndex = kavitaReaderPageIndex(page ?: 0)
     return book.copy(
-        progressLabel = page?.let { "Page $it" } ?: book.progressLabel,
-        progressPageIndex = page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
-        progressPercent = percent ?: book.progressPercent,
+        progressLabel = page?.let { "Page $it" },
+        progressPageIndex = readerPageIndex,
+        progressPercent = percent,
         readStatus = when {
             completed -> BookReadStatus.READ
             page != null -> BookReadStatus.READING
-            else -> book.readStatus ?: BookReadStatus.UNREAD
+            else -> BookReadStatus.UNREAD
         },
         isRead = completed
     )

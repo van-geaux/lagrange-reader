@@ -249,6 +249,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Retry works after a failed download.
 - [x] Interrupted downloads recover according to the provider contract.
 - [x] Downloaded content is stored at the expected local path.
+- [-] Audiobook download expansion is unavailable by provider contract; the UI must show an explicit unavailable result rather than a silent empty success.
 - [x] Download metadata persists after process recreation.
 - [x] Download status appears on the originating book and remains correct after reopening.
 - [x] Local books screen lists completed local copies.

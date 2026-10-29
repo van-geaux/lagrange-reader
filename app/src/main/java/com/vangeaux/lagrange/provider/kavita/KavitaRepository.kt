@@ -6,6 +6,7 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.ActiveReaderSession
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -48,6 +49,9 @@ internal fun mergeKavitaCachedBooks(
     .plus(localBooks)
     .distinctBy { it.libraryId to (it.fileId ?: it.id) }
     .withCurrentDownloads(downloads)
+
+internal fun kavitaHomeFallback(cached: HomeShelfData?, error: Exception): HomeShelfData =
+    cached ?: throw error
 
 internal class KavitaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
     private val appContext = context.applicationContext
@@ -251,7 +255,14 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     }
     override suspend fun loadHomeShelves(): HomeShelfData {
         val serverUrl = getServerUrl().orEmpty()
-        val shelves = homeModule.loadHomeShelves().withDownloadPaths(serverUrl)
+        val shelves = try {
+            homeModule.loadHomeShelves().withDownloadPaths(serverUrl)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            return kavitaHomeFallback(homeSnapshotStore.read(serverUrl), error)
+                .withDownloadPaths(serverUrl)
+        }
         homeSnapshotStore.write(serverUrl, shelves)
         cacheBooks(shelves.homeBooks())
         return shelves
@@ -280,7 +291,20 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         cacheBooks(listOf(resolved.book))
         return resolved
     }
-    override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? = detailModule.loadCachedBookDetail(book)
+    override suspend fun loadCachedBookDetail(book: BookSummary): BookDetailInfo? {
+        val serverUrl = getServerUrl().orEmpty()
+        val cached = browserSnapshotStore.read(serverUrl)
+            ?.booksByLibraryId
+            ?.values
+            ?.flatten()
+            ?.firstOrNull { candidate ->
+                candidate.id == book.id ||
+                    (book.fileId != null && candidate.fileId == book.fileId)
+            }
+            ?: return null
+        val resolved = withDownloadPaths(serverUrl, listOf(cached)).single()
+        return kavitaCachedBookDetail(resolved)
+    }
     override suspend fun setBookUserRating(book: BookSummary, rating: Int?): BookDetailInfo =
         detailModule.setBookUserRating(book, rating)
     override suspend fun loadBookCover(book: BookSummary): ByteArray? = coverModule.loadBookCover(book)

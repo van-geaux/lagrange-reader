@@ -114,7 +114,7 @@ internal fun kavitaFormat(rawFormat: String?, rawExtension: String?): String? {
     return when {
         value.contains("epub") -> "epub"
         value.contains("pdf") -> "pdf"
-        value.contains("cbz") || value.contains("zip") -> "cbz"
+        value.contains("cbz") -> "cbz"
         value.contains("cbr") || value.contains("rar") -> "cbr"
         value.contains("cb7") || value.contains("7z") -> "cb7"
         value.contains("m4b") -> "m4b"
@@ -127,9 +127,15 @@ internal fun kavitaFormat(rawFormat: String?, rawExtension: String?): String? {
         else -> rawExtension
             ?.substringAfterLast('.', missingDelimiterValue = rawExtension)
             ?.removePrefix(".")
-            ?.takeIf { it.isNotBlank() }
+            ?.lowercase(Locale.US)
+            ?.takeIf {
+                it in setOf("epub", "pdf", "cbz", "cbr", "cb7", "m4b", "m4a", "mp3", "flac", "opus", "ogg", "wav")
+            }
     }
 }
+
+internal fun kavitaFileId(file: JSONObject, chapterId: String): String =
+    file.optInt("id", -1).takeIf { it >= 0 }?.toString() ?: chapterId
 
 internal fun kavitaMediaKind(format: String?): MediaKind = when (format) {
     "epub" -> MediaKind.EPUB
@@ -403,7 +409,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                     coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                     progressLabel = projection.pagesRead.takeIf { it > 0 }?.let { "Page $it" },
                     progressPercent = progress,
-                    progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                    progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
                     seriesId = seriesId,
                     seriesName = name,
                     seriesIndex = projection.seriesIndex,
@@ -494,7 +500,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                             coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                             progressLabel = if (projection.pagesRead > 0) "Page ${projection.pagesRead}" else null,
                             progressPercent = progress,
-                            progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                            progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
                             seriesId = seriesId,
                             seriesName = seriesName,
                             seriesIndex = projection.seriesIndex,

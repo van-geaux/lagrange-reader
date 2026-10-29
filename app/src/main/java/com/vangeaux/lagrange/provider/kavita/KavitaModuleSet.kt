@@ -86,7 +86,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 storageScopeId: String?,
                 onProgress: (Float?) -> Unit
             ) = repository.downloadBook(book, storageScopeId, onProgress)
-            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = listOf(book)
+            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> =
+                kavitaDownloadFilesForBook(book)
             override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
             override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = repository.deleteLocalCopies(book)
         },
@@ -176,13 +177,10 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             maxDownloads: Int
         ): Int? {
             if (repository.getServerUrl() != expectedServerUrl) return null
-            val books = repository.loadBooks(libraryId).drop(startIndex).take(maxDownloads)
+            val page = repository.loadBooksPage(libraryId, startIndex)
+            val books = page.items
             books.forEach { repository.loadBookCover(it) }
-            return if (startIndex + books.size < repository.loadBooks(libraryId).size) {
-                startIndex + books.size
-            } else {
-                null
-            }
+            return (startIndex + 1).takeUnless { page.isComplete }
         }
 
         override suspend fun warmOfflineCacheBatch(
@@ -194,8 +192,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             includeCovers: Boolean
         ): OfflineCacheBatchResult? {
             if (repository.getServerUrl() != expectedServerUrl) return null
-            val allBooks = repository.loadBooks(libraryId)
-            val books = allBooks.drop(startIndex).take(maxItems)
+            val page = repository.loadBooksPage(libraryId, startIndex)
+            val books = page.items
             var downloaded = 0
             var skipped = 0
             var failed = 0
@@ -210,7 +208,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 }
             }
             return OfflineCacheBatchResult(
-                nextIndex = (startIndex + books.size).takeIf { it < allBooks.size },
+                nextIndex = (startIndex + 1).takeUnless { page.isComplete },
                 processed = books.size,
                 downloaded = downloaded,
                 skipped = skipped,

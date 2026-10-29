@@ -10,6 +10,22 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.time.Instant
 
+internal fun kavitaCachedBookDetail(book: BookSummary): BookDetailInfo {
+    val option = BookFileOption(
+        book = book,
+        filename = book.filename,
+        sizeBytes = null,
+        role = "PRIMARY"
+    )
+    return BookDetailInfo(
+        book = book,
+        pageCount = book.readerPageCount,
+        genres = book.genres,
+        fileCount = 1,
+        availableFiles = listOf(option)
+    )
+}
+
 internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : BookDetailModule {
     private val client = OkHttpClient()
 
@@ -42,7 +58,7 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
                 coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                 seriesName = kavitaChapterSeriesName(chapter, book.seriesName.orEmpty())
                     .takeIf { it.isNotBlank() },
-                progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
                 progressPercent = projection.pages?.let { pages ->
                     (projection.pagesRead.toFloat() / pages.toFloat() * 100f).coerceIn(0f, 100f)
                 } ?: book.progressPercent,
@@ -66,7 +82,7 @@ internal class KavitaBookDetailModuleImpl(private val auth: KavitaAuthModule) : 
                     add(
                         BookFileOption(
                             book = resolvedBook.copy(
-                                fileId = projection.id,
+                                fileId = kavitaFileId(file, projection.id),
                                 filename = file.optString("filePath")
                                     .takeIf { it.isNotBlank() }
                                     ?.substringAfterLast('/')

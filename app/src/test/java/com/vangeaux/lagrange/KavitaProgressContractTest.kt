@@ -4,6 +4,7 @@ import com.vangeaux.lagrange.provider.kavita.KavitaChapterContext
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterContext
 import com.vangeaux.lagrange.provider.kavita.kavitaProgressPayload
 import com.vangeaux.lagrange.provider.kavita.kavitaProgressBook
+import com.vangeaux.lagrange.provider.kavita.kavitaReaderPageIndex
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -64,6 +65,36 @@ class KavitaProgressContractTest {
 
         assertEquals(BookReadStatus.READ, projected.readStatus)
         assertTrue(projected.isRead)
+    }
+
+    @Test
+    fun zeroPageProgressClearsPreviouslyCompletedState() {
+        val book = BookSummary(
+            libraryId = "1",
+            id = "chapter:42",
+            fileId = "42",
+            title = "Chapter 1",
+            progressLabel = "Page 10",
+            progressPageIndex = 9,
+            progressPercent = 100f,
+            readStatus = BookReadStatus.READ,
+            isRead = true,
+            readerPageCount = 10
+        )
+
+        val projected = kavitaProgressBook(book, JSONObject("""{"pageNum":0}"""))
+
+        assertEquals(BookReadStatus.UNREAD, projected.readStatus)
+        assertNull(projected.progressLabel)
+        assertNull(projected.progressPageIndex)
+        assertNull(projected.progressPercent)
+        assertTrue(!projected.isRead)
+    }
+
+    @Test
+    fun kavitaPageCountUsesZeroBasedReaderIndex() {
+        assertEquals(24, kavitaReaderPageIndex(25))
+        assertNull(kavitaReaderPageIndex(0))
     }
 
     @Test
