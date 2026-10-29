@@ -136,6 +136,23 @@ internal fun komgaSeriesSearchPath(): String =
 internal fun komgaHomeSeriesPath(updated: Boolean): String =
     if (updated) "/api/v1/series/updated?page=0&size=8" else "/api/v1/series/new?page=0&size=8"
 
+internal fun komgaSeriesCatalogPage(
+    items: List<SeriesSummary>,
+    filter: SeriesCatalogFilter,
+    page: Int
+): SeriesCatalogPage {
+    val filtered = filterAndSortSeriesCatalog(items, filter)
+    val from = (page * PAGE_SIZE).coerceAtMost(filtered.size)
+    val to = (from + PAGE_SIZE).coerceAtMost(filtered.size)
+    return SeriesCatalogPage(
+        items = filtered.subList(from, to),
+        total = filtered.size,
+        page = page,
+        size = PAGE_SIZE,
+        jumpIndex = filtered.takeIf { page == 0 && filter.includeCounts }
+    )
+}
+
 private fun komgaFormat(format: String?, filename: String?): String? {
     val filenameExtension = filename?.substringAfterLast('.', "")?.lowercase(Locale.US)
     when (filenameExtension) {
@@ -984,10 +1001,7 @@ class KomgaSeriesModuleImpl(
                 }
             }
         }
-        val filtered = filterAndSortSeriesCatalog(items, effectiveFilter)
-        val from = (page * PAGE_SIZE).coerceAtMost(filtered.size)
-        val to = (from + PAGE_SIZE).coerceAtMost(filtered.size)
-        SeriesCatalogPage(filtered.subList(from, to), filtered.size, page, PAGE_SIZE)
+        komgaSeriesCatalogPage(items, effectiveFilter, page)
     }
 
     override suspend fun loadSeriesDetail(serverUrl: String, seriesId: String): SeriesDetailInfo? {

@@ -14,6 +14,8 @@ On 2026-10-09, the user confirmed the saved-session provider-switch path on Sams
 
 On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`. Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied, so no additional Kavita matrix cells are changed to `S` or treated as manually validated by this confirmation.
 
+On 2026-10-29, the user confirmed Komga Libraries → Browse displays books rather than Series cards on Samsung SM-S931B / Android 17 over ADB (`192.168.1.170:43851`) with `Lagrange-debug-202610292305.apk` (SHA-256 `9d542c319f742dbe4dc36cf223d183c01a01a8e55c072013cef319afbacf44f9`). This validates the Komga paginated library-book catalog surface under issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357).
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -62,7 +64,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Authentication | Session expiry recovery | Login/retry | S | V | Komga live expiry behavior still requires validation. |
 | Libraries | Library discovery | Library dropdown | S | S | Komga `/api/v1/libraries`. |
 | Libraries | Selected-library persistence | Library screen/profile | S | V | Verify per-provider persistence manually. |
-| Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`. |
+| Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`; user-confirmed in Libraries → Browse under issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357) with `Lagrange-debug-202610292305.apk`. |
 | Book catalog | Search | Search screen | S | V | Komga native `POST /api/v1/books/list` search is implemented; live-server/device validation remains pending. |
 | Book catalog | Book filters and sorting | Library/Search/More screens | S | S | User-confirmed on the issue-202 APK; genre, read state, progress, last-read, date, and existing format projections are applied locally after complete Komga paging. |
 | Home shelves | Currently reading | Home | S | S | Komga provider shelf request is implemented and previously checklist-validated. |

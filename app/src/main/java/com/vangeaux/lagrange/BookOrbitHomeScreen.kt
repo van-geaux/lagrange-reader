@@ -1133,6 +1133,8 @@ internal fun NativeLibraryBrowserScreen(
     userRatingAvailable: Boolean = true,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    libraryBookCatalogAvailable: Boolean = true,
+    seriesCatalogAvailable: Boolean = true,
     smartScopesLoader: suspend () -> List<SmartScope> = { emptyList() },
     smartScopesAvailable: Boolean = true,
     smartScopeSeriesCatalogLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -1194,8 +1196,8 @@ internal fun NativeLibraryBrowserScreen(
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
     }
-    LaunchedEffect(state.homeShelves.deferInitialCatalogLoad, destination) {
-        if (state.homeShelves.deferInitialCatalogLoad && destination == BrowserDestination.SERIES) {
+    LaunchedEffect(seriesCatalogAvailable, destination) {
+        if (!seriesCatalogAvailable && destination == BrowserDestination.SERIES) {
             destination = BrowserDestination.LIBRARY
         }
     }
@@ -1507,7 +1509,7 @@ internal fun NativeLibraryBrowserScreen(
             windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             MoreMenu(
-                seriesAvailable = !state.homeShelves.deferInitialCatalogLoad,
+                seriesAvailable = seriesCatalogAvailable,
                 smartScopesAvailable = smartScopesAvailable,
                 authorsAvailable = authorsAvailable,
                 onSeries = {
@@ -2163,6 +2165,7 @@ internal fun NativeLibraryBrowserScreen(
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
                     books = state.homeBooks,
+                    loadAllPages = false,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     scopeLoader = smartScopeSeriesCatalogLoader,
@@ -2388,6 +2391,7 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
+                    libraryBookCatalogAvailable = libraryBookCatalogAvailable,
                     seriesCatalogLoader = seriesCatalogLoader,
                     catalogImageLoader = catalogImageLoader,
                     localBooksLoader = localBooksLoader,
@@ -2829,6 +2833,7 @@ private fun SeriesCatalogScreen(
         ?.let(::seriesCatalogFilterFromStorage)
     var items by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
     var jumpIndexItems by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var hasProviderJumpIndex by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var total by remember(query, initialFilter, selectedScopeId) { mutableStateOf(0) }
     var isLoading by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var isRefreshing by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
@@ -2853,6 +2858,7 @@ private fun SeriesCatalogScreen(
         loadError = false
         items = emptyList()
         jumpIndexItems = emptyList()
+        hasProviderJumpIndex = false
         total = 0
         gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
@@ -2868,6 +2874,7 @@ private fun SeriesCatalogScreen(
         }.onSuccess { catalog ->
             items = catalog.items
             jumpIndexItems = catalog.jumpIndex ?: catalog.items
+            hasProviderJumpIndex = catalog.jumpIndex != null
             total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
             nextPage = 1
             seriesPageSize = catalog.size ?: seriesPageSize
@@ -2891,6 +2898,7 @@ private fun SeriesCatalogScreen(
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
                 jumpIndexItems = catalog.jumpIndex ?: jumpIndexItems
+                hasProviderJumpIndex = catalog.jumpIndex != null || hasProviderJumpIndex
                 total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
                 nextPage = 1
                 seriesPageSize = catalog.size ?: seriesPageSize
@@ -3129,7 +3137,11 @@ private fun SeriesCatalogScreen(
         LibraryJumpRail(
             targets = jumpTargets,
             direction = filter.direction,
-            enabledLabels = if (!loadAllPages) catalogJumpRailLabels(filter.direction).toSet() else null,
+            enabledLabels = if (!loadAllPages && !hasProviderJumpIndex) {
+                catalogJumpRailLabels(filter.direction).toSet()
+            } else {
+                jumpTargets.map { it.first }.toSet()
+            },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
@@ -3138,7 +3150,7 @@ private fun SeriesCatalogScreen(
                         jumpToSeriesIndex(index)
                     }
                 },
-                onUnavailableJump = if (!loadAllPages) {
+                onUnavailableJump = if (!loadAllPages && !hasProviderJumpIndex) {
                     { label -> scope.launch { jumpToSeriesLabel(label) } }
                 } else null
             )
@@ -7602,6 +7614,7 @@ private fun LibraryContentScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit,
+    libraryBookCatalogAvailable: Boolean,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     catalogImageLoader: suspend (String) -> ByteArray?,
     localBooksLoader: suspend () -> List<BookSummary>,
@@ -7796,11 +7809,11 @@ private fun LibraryContentScreen(
                     localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
                 )
-                LibraryTab.BROWSE -> if (state.homeShelves.deferInitialCatalogLoad) {
+                LibraryTab.BROWSE -> if (!libraryBookCatalogAvailable) {
                     SeriesCatalogScreen(
                         query = "",
                         initialFilter = SeriesCatalogFilter(libraryId = state.selectedLibraryId),
-                        persistenceKey = "kavita-library-series-${state.selectedLibraryId}",
+                        persistenceKey = "library-series-${state.selectedLibraryId}",
                         appPreferences = appPreferences,
                         onAppPreferencesChange = onAppPreferencesChange,
                         libraryOptions = state.libraries,

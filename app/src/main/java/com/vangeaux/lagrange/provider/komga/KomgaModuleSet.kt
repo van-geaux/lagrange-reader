@@ -155,6 +155,8 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
 
     val featureAvailability = ProviderFeatureAvailability(
         serverHostedSignIn = true,
+        libraryBookCatalog = true,
+        seriesCatalog = true,
         achievements = false,
         statistics = false,
         smartScopes = false,

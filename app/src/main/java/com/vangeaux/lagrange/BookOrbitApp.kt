@@ -363,6 +363,8 @@ private fun BookOrbitDestination(
             userRatingAvailable = coordinator.userRatingAvailable(),
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
+            libraryBookCatalogAvailable = coordinator.libraryBookCatalogAvailable(),
+            seriesCatalogAvailable = coordinator.seriesCatalogAvailable(),
             smartScopesLoader = coordinator::loadSmartScopes,
             smartScopesAvailable = coordinator.smartScopesAvailable(),
             smartScopeSeriesCatalogLoader = coordinator::loadSmartScopeSeriesCatalog,

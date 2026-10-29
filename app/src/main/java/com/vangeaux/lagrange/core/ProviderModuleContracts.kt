@@ -170,6 +170,8 @@ interface BackgroundCacheModule {
 
 data class ProviderFeatureAvailability(
     val serverHostedSignIn: Boolean = false,
+    val libraryBookCatalog: Boolean = true,
+    val seriesCatalog: Boolean = true,
     val achievements: Boolean = true,
     val statistics: Boolean = true,
     val smartScopes: Boolean = true,

@@ -32,6 +32,10 @@ Copy this file into this folder using the target server/provider name, for examp
 
 - User-confirmed on 9 October 2026 with `Lagrange-debug-202610092219.apk` (SHA-256 `a68513e7b4eeb16885cc0345fa9446a395ff675c39514d9b8a8c703d8bf95e69`) on Samsung SM-S931B / Android 16 over ADB (`192.168.1.170:42533`). The Komga profile opened successfully, remained active for five minutes, and switching back to BookOrbit restored the other provider's Home without showing login. The validation covers the saved-session provider-switch path in issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268); it does not claim validation of general token-expiry behavior outside provider switching.
 
+### Latest Komga Library Browse validation
+
+- User-confirmed on 29 October 2026 with `Lagrange-debug-202610292305.apk` (SHA-256 `9d542c319f742dbe4dc36cf223d183c01a01a8e55c072013cef319afbacf44f9`) on Samsung SM-S931B / Android 17 over ADB (`192.168.1.170:43851`). Komga Libraries → Browse displayed book cards from the native paginated book catalog rather than Series cards. This validates the Library → Browse book-catalog surface for issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357); it does not claim validation of unrelated Komga capabilities.
+
 Use these result markers for every item:
 
 - `[x] Pass`
@@ -122,7 +126,7 @@ Cross-library Home behavior:
 - [x] Selecting a library reloads the correct catalog. The user confirmed Libraries → Recommended now scopes Currently reading, Recently added books, Recently added series, Recently read books, and Local books to the selected library after issue #201; device/build identifiers were not supplied.
 - [x] Selected library state persists after navigation and app restart where supported.
 - [x] Switching libraries does not display books from the previous library. The user confirmed switching Libraries → Recommended replaces the previous library's shelf content after issue #201; device/build identifiers were not supplied.
-- [x] Books list loads the correct books, covers, metadata, pagination, and empty state.
+- [x] Books list loads the correct books, covers, metadata, pagination, and empty state. User-confirmed for Komga Libraries → Browse on 29 October 2026 with `Lagrange-debug-202610292305.apk` on Samsung SM-S931B / Android 17 (`192.168.1.170:43851`); the screen displayed books rather than Series cards.
 - [x] Book list refresh works.
 - [ ] Load more/paging reaches the correct end of the catalog.
 - [x] Offline/cached library behavior is correct. (Validated by user on 2026-10-04 with Lagrange 1.5.4, version code 25, APK `Lagrange-debug-202610042205.apk`, Samsung SM-S931B `RRGL4029FRB` over USB, after online catalog population followed by force-stop, airplane mode, and Wi-Fi disabled. Library, See all, and Series retained cached content.)
