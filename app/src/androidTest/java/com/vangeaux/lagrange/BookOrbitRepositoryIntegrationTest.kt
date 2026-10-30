@@ -1106,6 +1106,35 @@ class BookOrbitRepositoryIntegrationTest {
         }
     }
 
+    @Test
+    fun achievementsRequestSendsTheAppLanguageAsAcceptLanguage() = runBlocking {
+        try {
+            // Iterate the real AppLocale catalog instead of hard-coding English/Chinese, so a
+            // future AppLanguage entry is covered here automatically. The synthetic future-locale
+            // cases for the pure mapping live in BookOrbitAcceptLanguageTest.
+            val cases = AppLocale.languages.mapNotNull { language ->
+                language.localeOverride?.let { locale -> language.tag to locale }
+            }
+            assertTrue("AppLocale must expose at least one selectable language", cases.isNotEmpty())
+            for ((tag, expected) in cases) {
+                AppLocale.writeTag(context, tag)
+                server.enqueue(
+                    jsonResponse(
+                        """{"categories":[],"totalEarned":0,"totalAvailable":0}"""
+                    )
+                )
+
+                repository.loadAchievements()
+
+                val request = server.takeRequest(5, TimeUnit.SECONDS)!!
+                assertEquals("/api/v1/achievements", request.path)
+                assertEquals(expected, request.getHeader("Accept-Language"))
+            }
+        } finally {
+            AppLocale.writeTag(context, AppLocale.SYSTEM)
+        }
+    }
+
     private fun assertEquals(message: String, expected: Int, actual: Int, tolerance: Int) {
         assertTrue("$message: expected $expected±$tolerance, got $actual", kotlin.math.abs(expected - actual) <= tolerance)
     }
