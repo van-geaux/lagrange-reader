@@ -16,6 +16,8 @@ On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK
 
 On 2026-10-29, the user confirmed Komga Libraries → Browse displays books rather than Series cards on Samsung SM-S931B / Android 17 over ADB (`192.168.1.170:43851`) with `Lagrange-debug-202610292305.apk` (SHA-256 `9d542c319f742dbe4dc36cf223d183c01a01a8e55c072013cef319afbacf44f9`). This validates the Komga paginated library-book catalog surface under issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357).
 
+On 2026-10-30, the maintainer verified the Kavita selected-folder EPUB integrity path on Samsung SM-S931B / Android 17 over ADB (`100.90.237.107:45013`) with `Lagrange-debug-202610301648.apk` (SHA-256 `7fecacc03425c1ef6fb82bf0c715b6e9d4f542f630bb91fa1263c7b95adc4b29`) by downloading `Secrets of the Silent Witch, Vol. 4` into a user-selected SAF folder. The user confirmed that the fix works. This is narrower than full Kavita download validation and does not change the broader pending status.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -141,7 +143,7 @@ This provider is implemented but has not received complete authenticated device/
 | Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |
 | Chapter read mutation | V | `/api/Reader/mark-chapter-read` | Read action is exposed after manual validation. |
 | Chapter unread mutation | U | Kavita documents unread at series scope | Hidden/unavailable to avoid broad series mutation. |
-| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. |
+| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. A single selected-folder EPUB integrity path was verified on 2026-10-30; full Kavita download/format coverage remains pending. |
 | Offline cache and Local Books | V | Kavita browser snapshot, app-private chapter files, and provider-scoped DownloadStore records | Completed downloads reopen through Local Books; cache warming and disposable-cache controls are provider-routed. |
 | Provider/profile isolation | V | `KavitaModuleSet`, provider-scoped profile/session/download identity | Kavita state must not fall back to BookOrbit after a failed request or leak across profiles. |
 | Home shelves, authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
