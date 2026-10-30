@@ -68,7 +68,7 @@ On Home, Library, Search, Series, Authors, Genre, and Local books, verify:
 
 For book thumbnails on Home, Library, Search, Series, Authors, Genre, and Local books, verify that an untouched unread book shows a small yellow folded-corner marker at the top-right of its cover. Books with any reading progress, books marked read, and missing-server books must not show the marker. Confirm the marker does not change thumbnail dimensions, obscure the missing-book overlay, or become a separate click target, and that accessibility semantics identify the book as unread.
 
-Download EPUB, PDF, CBZ, CBR, and CB7 samples. Reopen valid local files with the network disabled. Connected CBR/CB7 should use server page extraction; downloaded CBR/CB7 should use the client-side RAR4/RAR5/7z extractor. Unsupported ebook formats must show the explicit unsupported-format state. Confirm no partial file is promoted after cancellation or failure.
+- Download EPUB, PDF, CBZ, CBR, and CB7 samples. Reopen valid local files with the network disabled. Connected CBR/CB7 should use server page extraction; downloaded CBR/CB7 should use the client-side RAR4/RAR5/7z extractor. For a Kavita EPUB downloaded into a user-selected SAF folder, confirm a file whose stream contains a stored directory data descriptor still promotes only when `META-INF/container.xml` is present, while an invalid archive remains failed. Unsupported ebook formats must show the explicit unsupported-format state. Confirm no partial file is promoted after cancellation or failure.
 
 ### Reader and media regression checks
 

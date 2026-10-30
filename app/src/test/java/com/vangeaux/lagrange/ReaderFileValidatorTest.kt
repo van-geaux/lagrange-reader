@@ -95,6 +95,17 @@ class ReaderFileValidatorTest {
     }
 
     @Test
+    fun `stream epub validator tolerates stored directory data descriptors`() {
+        val epub = malformedEpubWithStoredDirectoryDescriptor()
+
+        assertTrue(
+            ReaderFileValidator.isReadable(MediaKind.EPUB, epub.size.toLong()) {
+                ByteArrayInputStream(epub)
+            }
+        )
+    }
+
+    @Test
     fun `stream zip validation stops before expanding an oversized leading entry`() {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
@@ -136,4 +147,51 @@ class ReaderFileValidatorTest {
                 }
             }
         }.toByteArray()
+
+    private fun malformedEpubWithStoredDirectoryDescriptor(): ByteArray =
+        ByteArrayOutputStream().also { output ->
+            localEntry(output, "mimetype", 0, 0, "application/epub+zip".toByteArray())
+            localEntry(output, "META-INF/", 0x08, 0, byteArrayOf(), dataDescriptor = true)
+            localEntry(output, "META-INF/container.xml", 0, 0, "<container/>".toByteArray())
+        }.toByteArray()
+
+    private fun localEntry(
+        output: ByteArrayOutputStream,
+        name: String,
+        flags: Int,
+        method: Int,
+        data: ByteArray,
+        dataDescriptor: Boolean = false
+    ) {
+        val nameBytes = name.toByteArray()
+        output.write(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+        writeLe16(output, 20)
+        writeLe16(output, flags)
+        writeLe16(output, method)
+        writeLe16(output, 0)
+        writeLe16(output, 0)
+        writeLe32(output, 0)
+        writeLe32(output, if (dataDescriptor) 0 else data.size)
+        writeLe32(output, if (dataDescriptor) 0 else data.size)
+        writeLe16(output, nameBytes.size)
+        writeLe16(output, 0)
+        output.write(nameBytes)
+        output.write(data)
+        if (dataDescriptor) {
+            output.write(byteArrayOf(0x50, 0x4B, 0x07, 0x08))
+            writeLe32(output, 0)
+            writeLe32(output, 0)
+            writeLe32(output, 0)
+        }
+    }
+
+    private fun writeLe16(output: ByteArrayOutputStream, value: Int) {
+        output.write(value and 0xFF)
+        output.write((value ushr 8) and 0xFF)
+    }
+
+    private fun writeLe32(output: ByteArrayOutputStream, value: Int) {
+        writeLe16(output, value)
+        writeLe16(output, value ushr 16)
+    }
 }
